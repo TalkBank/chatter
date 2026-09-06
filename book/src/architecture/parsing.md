@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 05:28 EDT
+**Last updated:** 2026-09-06 05:35 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -199,7 +199,13 @@ Header parsing already returns input-relative
 diagnostics. Utterance, participant-entry and dependent-tier adapters use an
 owned `WrappedFragment`: its constructor records the actual input boundary as
 it assembles the source, and both the model projection and diagnostic sink use
-that boundary. Complete documents passed to the utterance adapter are recognized
+that boundary. Its diagnostic sink removes that prefix from both primary and
+secondary spans. Context is projected only when its text exactly matches the
+owned synthetic source; an independent context retains its own coordinates
+regardless of length. `cargo test -p talkbank-parser --lib api::fragment::tests`
+checks long inputs, related labels and independent context text. These adapters
+no longer use the legacy sink's length heuristic.
+Complete documents passed to the utterance adapter are recognized
 through generated typed CST traversal and receive no extra document wrapper.
 
 `cargo test -p talkbank-parser --test integration context_public_api` reproduces

@@ -1,8 +1,6 @@
 //! Own synthetic source and the coordinate translation derived while building it.
 
-use talkbank_model::{
-    ErrorSink, OffsetAdjustingErrorSink, ParseError, RebasedErrorSink, SpanShift,
-};
+use talkbank_model::{ErrorSink, ParseError, RebasedErrorSink, Span, SpanShift};
 
 /// One synthetic document, its borrowed caller input, and its document origin.
 /// The constructor records the input start from the assembled source, so model
@@ -47,6 +45,16 @@ impl<'input> WrappedFragment<'input> {
         value
     }
 
+    fn input_span(&self, span: Span) -> Span {
+        let prefix = self.input_start as u32;
+        let end = self.input.len() as u32;
+        Span::new(
+            span.start.saturating_sub(prefix).min(end),
+            span.end.saturating_sub(prefix).min(end),
+        )
+    }
+
+    /// Translate parser diagnostics before display enhancement rewrites labels.
     pub(crate) fn error_sink<'a, S: ErrorSink>(&'a self, inner: &'a S) -> impl ErrorSink + 'a {
         FragmentErrorSink {
             fragment: self,
@@ -61,9 +69,72 @@ struct FragmentErrorSink<'a, 'input, S> {
 }
 
 impl<S: ErrorSink> ErrorSink for FragmentErrorSink<'_, '_, S> {
-    fn report(&self, error: ParseError) {
+    fn report(&self, mut error: ParseError) {
+        error.location.span = self.fragment.input_span(error.location.span);
+        for label in &mut error.labels {
+            label.span = self.fragment.input_span(label.span);
+        }
+        if let Some(context) = &mut error.context
+            && context.source_text == self.fragment.source
+        {
+            context.span = self.fragment.input_span(context.span);
+            context.source_text = self.fragment.input.to_owned();
+        }
         let document = RebasedErrorSink::new(self.inner, self.fragment.document_offset as i32);
-        OffsetAdjustingErrorSink::new(&document, self.fragment.input_start, self.fragment.input)
-            .report(error);
+        document.report(error);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use talkbank_model::{
+        ErrorCode, ErrorCollector, ErrorContext, ErrorLabel, Severity, SourceLocation, Span,
+    };
+
+    #[test]
+    fn projects_full_source_context_and_related_labels_even_for_long_inputs() {
+        let input = "word ".repeat(100);
+        let fragment = WrappedFragment::new(&["@Begin\n"], &input, "\n@End", 200);
+        let mut error = ParseError::new(
+            ErrorCode::UnparsableContent,
+            Severity::Error,
+            SourceLocation::from_offsets(12, 16),
+            ErrorContext::new(fragment.source(), 12..16, "word"),
+            "example",
+        );
+        error
+            .labels
+            .push(ErrorLabel::new(Span::new(7, 11), "related word"));
+        let errors = ErrorCollector::new();
+        fragment.error_sink(&errors).report(error);
+        let errors = errors.into_vec();
+        assert_eq!(errors[0].location.span, Span::new(205, 209));
+        assert_eq!(errors[0].labels[0].span, Span::new(200, 204));
+        assert_eq!(
+            errors[0]
+                .context
+                .as_ref()
+                .map(|context| (context.source_text.as_str(), context.span)),
+            Some((input.as_str(), Span::new(5, 9)))
+        );
+    }
+
+    #[test]
+    fn preserves_independent_context_regardless_of_its_length() {
+        let fragment = WrappedFragment::new(&["prefix"], "x", "suffix", 200);
+        let context = ErrorContext::new("another source", 0..7, "another");
+        let error = ParseError::new(
+            ErrorCode::UnparsableContent,
+            Severity::Error,
+            SourceLocation::from_offsets(6, 7),
+            context.clone(),
+            "example",
+        );
+        let errors = ErrorCollector::new();
+        fragment.error_sink(&errors).report(error);
+        let errors = errors.into_vec();
+        assert_eq!(errors[0].location.span, Span::new(200, 201));
+        assert_eq!(errors[0].context, Some(context));
     }
 }

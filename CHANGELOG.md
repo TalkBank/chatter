@@ -54,6 +54,10 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Owned fragment wrappers project secondary labels with primary locations and
+  identify synthetic context by exact source text instead of a length heuristic.
+  Independent diagnostic context is preserved even when longer than the input.
+
 - Main-tier fragments reject trailing material instead of silently accepting
   their first tier. Aggregate spans exclude a synthetic final newline, while
   retaining caller-supplied LF and CRLF line endings.
