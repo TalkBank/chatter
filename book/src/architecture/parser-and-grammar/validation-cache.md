@@ -1,7 +1,7 @@
 # Validation Cache
 
 **Status:** Current
-**Last modified:** 2026-09-06 03:03 EDT
+**Last modified:** 2026-09-06 03:52 EDT
 
 The persistent CHAT validation cache, used by `chatter validate` and the
 desktop validation runner. The LSP maintains its own in-memory document cache. Distinct from the audio-task cache used by upstream
@@ -62,6 +62,12 @@ where `parser_kind IS NULL`; roundtrip uses a second partial index including
 `parser_kind` where it is non-NULL. `file_path` remains a maintenance index.
 
 ## Identity and handle states
+
+`CachePool::new(identity)` returns `Result<CachePool, CacheError>`. Callers handle
+that result before wrapping a successful pool in `Arc`; the removed
+`open_or_else` callback API is no longer needed. The CLI keeps the concrete
+opening error until presentation. A failed cache open leaves validation active
+and produces a structured warning in JSON mode, without writing prose to stderr.
 
 `CacheIdentity` owns a `RulesVersion` and the shared `ParserKind` vocabulary.
 `ValidationConfig::cache_identity()` derives both from the request's semantic

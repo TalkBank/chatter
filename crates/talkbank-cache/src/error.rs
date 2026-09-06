@@ -35,8 +35,8 @@ pub enum CacheError {
     /// Another process held the advisory init lock (taken around first-time
     /// database create + migrate) past the bounded acquisition deadline.
     /// Initialization deliberately fails typed here rather than blocking
-    /// indefinitely; callers such as [`crate::CachePool::open_or_else`]
-    /// degrade to running uncached.
+    /// indefinitely; callers of [`crate::CachePool::new`] can explicitly
+    /// handle this error by continuing uncached.
     #[error("Timed out waiting for cache initialization lock: {path}")]
     InitLockTimeout {
         /// Path to the lockfile beside the cache database.

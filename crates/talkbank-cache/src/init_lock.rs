@@ -21,7 +21,7 @@
 //! hang a caller indefinitely, whatever state another process left the
 //! lockfile or database in. If the deadline expires, acquisition fails with
 //! a typed error and the caller degrades (for the CLI,
-//! `CachePool::open_or_else` warns and runs uncached) instead of blocking.
+//! callers of `CachePool::new` can report the error and run uncached) instead of blocking.
 //!
 //! Implemented with `std::fs::File` locking (`try_lock` / `unlock`,
 //! stabilized in Rust 1.89): `flock(2)` semantics on Unix, `LockFileEx` on

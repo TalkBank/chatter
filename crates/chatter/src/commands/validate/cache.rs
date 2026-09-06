@@ -102,19 +102,8 @@ impl CacheEvent {
 
 /// What [`initialize_validation_cache`] did.
 ///
-/// A sum rather than `{ handle: Option<_>, events: Vec<_> }`, which was the
-/// first shape and permits a cell that cannot happen: a handle present
-/// ALONGSIDE an "initialize" failure event. `UnifiedCache::open_or_else_...`
-/// invokes its error callback exactly when it returns `None` and never
-/// otherwise, so today that combination is excluded by control flow inside one
-/// function, with nothing telling a later edit that it matters.
-///
-/// Writing the product out is the point: 2 handle states x 2 (an initialize
-/// failure was recorded, or not) is 4 cells, of which one is meaningless. The
-/// enum removes it rather than documenting it.
-///
-/// Note the failure case still carries an event: `Option<Self>` would have
-/// thrown the explanation away exactly when it is wanted.
+/// Successful initialization carries its handle and maintenance events. Failure
+/// carries the opening error directly, with no callback or missing-error state.
 pub(crate) enum CacheInit {
     /// The cache opened. Events describe maintenance done on the way.
     Opened {
@@ -122,7 +111,9 @@ pub(crate) enum CacheInit {
         events: Vec<CacheEvent>,
     },
     /// The cache did not open, and this says why. The run continues without it.
-    Unavailable { event: CacheEvent },
+    Unavailable {
+        error: talkbank_transform::CacheError,
+    },
 }
 
 impl CacheInit {
@@ -136,7 +127,13 @@ impl CacheInit {
     pub(crate) fn into_parts(self) -> (Option<ValidationCacheHandle>, Vec<CacheEvent>) {
         match self {
             Self::Opened { handle, events } => (Some(handle), events),
-            Self::Unavailable { event } => (None, vec![event]),
+            Self::Unavailable { error } => (
+                None,
+                vec![CacheEvent::MaintenanceFailed {
+                    operation: "initialize",
+                    error: error.to_string(),
+                }],
+            ),
         }
     }
 }
@@ -146,23 +143,9 @@ pub(crate) fn initialize_validation_cache(
     cache_refresh: CacheRefreshMode,
     identity: CacheIdentity,
 ) -> CacheInit {
-    let mut failure = None;
-    let opened = UnifiedCache::open_or_else(identity, |error| {
-        failure = Some(CacheEvent::MaintenanceFailed {
-            operation: "initialize",
-            error: error.to_string(),
-        });
-    });
-    let Some(cache) = opened else {
-        return CacheInit::Unavailable {
-            // The callback fires exactly when the open fails, so this is
-            // always `Some`. Falling back rather than unwrapping keeps the
-            // panic ban intact without inventing a different message.
-            event: failure.unwrap_or(CacheEvent::MaintenanceFailed {
-                operation: "initialize",
-                error: "the cache did not open and reported no reason".to_string(),
-            }),
-        };
+    let cache = match UnifiedCache::new(identity) {
+        Ok(cache) => Arc::new(cache),
+        Err(error) => return CacheInit::Unavailable { error },
     };
     let mut events = Vec::new();
 

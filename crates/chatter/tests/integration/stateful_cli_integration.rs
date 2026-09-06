@@ -177,6 +177,47 @@ fn audit_mode_overwrites_existing_output_file() -> Result<(), TestError> {
     Ok(())
 }
 
+/// Cache initialization failure must preserve validation and JSON diagnostics.
+#[test]
+fn unavailable_cache_preserves_json_validation_results() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let blocked = dir.path().join("cache-is-a-file");
+    fs::write(&blocked, "not a directory")?;
+    for (name, content, valid) in [
+        ("valid.cha", VALID_CHAT, true),
+        ("invalid.cha", INVALID_CHAT_MISSING_END, false),
+    ] {
+        let input = write_fixture(dir.path(), name, content)?;
+        let output = harness
+            .chatter_cmd()
+            .env("TALKBANK_CHAT_CACHE_DIR", &blocked)
+            .arg("validate")
+            .arg(&input)
+            .args(["--format", "json"])
+            .output()?;
+        assert_eq!(output.status.success(), valid, "{:?}", output);
+        assert!(output.stderr.is_empty(), "{:?}", output);
+        let records: Vec<Value> = stdout_string(&output)
+            .lines()
+            .map(serde_json::from_str)
+            .collect::<Result<_, _>>()?;
+        let warnings: Vec<_> = records
+            .iter()
+            .filter(|record| record["type"] == "cache" && record["action"] == "warning")
+            .collect();
+        assert_eq!(warnings.len(), 1, "{records:?}");
+        assert_eq!(warnings[0]["operation"], "initialize");
+        assert!(
+            warnings[0]["error"]
+                .as_str()
+                .is_some_and(|error| !error.is_empty())
+        );
+    }
+    assert_eq!(fs::read_to_string(blocked)?, "not a directory");
+    Ok(())
+}
+
 #[test]
 fn validate_force_respects_directory_boundaries_for_cache_clears() -> Result<(), TestError> {
     let harness = CliHarness::new()?;

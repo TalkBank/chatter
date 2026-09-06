@@ -103,20 +103,6 @@ impl CachePool {
         Self::with_directory(cache_location::default_cache_dir()?, identity)
     }
 
-    /// Open a shared cache, reporting failure through the caller's callback.
-    pub fn open_or_else(
-        identity: CacheIdentity,
-        on_error: impl FnOnce(&CacheError),
-    ) -> Option<Arc<Self>> {
-        match Self::new(identity) {
-            Ok(cache) => Some(Arc::new(cache)),
-            Err(error) => {
-                on_error(&error);
-                None
-            }
-        }
-    }
-
     /// Open a directory for one rule generation and parser namespace.
     pub fn with_directory(cache_dir: PathBuf, identity: CacheIdentity) -> Result<Self, CacheError> {
         let OpenedDatabase { pool, rt, db_path } = Self::open_directory_storage(&cache_dir)?;

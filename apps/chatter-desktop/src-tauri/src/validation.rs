@@ -94,9 +94,7 @@ pub fn validate_target_streaming_with_config(
 ///
 /// Open the default cache for the request's complete validation identity.
 pub fn initialize_cache(identity: talkbank_transform::CacheIdentity) -> Option<Arc<UnifiedCache>> {
-    UnifiedCache::open_or_else(identity, |error| {
-        eprintln!("Warning: Failed to initialize validation cache: {error}");
-    })
+    report_cache_open(UnifiedCache::new(identity))
 }
 
 /// Open an isolated cache directory for the same complete request identity.
@@ -104,7 +102,13 @@ pub fn initialize_cache_at(
     cache_dir: PathBuf,
     identity: talkbank_transform::CacheIdentity,
 ) -> Option<Arc<UnifiedCache>> {
-    match UnifiedCache::with_directory(cache_dir, identity) {
+    report_cache_open(UnifiedCache::with_directory(cache_dir, identity))
+}
+
+fn report_cache_open(
+    result: Result<UnifiedCache, talkbank_transform::CacheError>,
+) -> Option<Arc<UnifiedCache>> {
+    match result {
         Ok(cache) => Some(Arc::new(cache)),
         Err(error) => {
             eprintln!("Warning: Failed to initialize validation cache: {error}");

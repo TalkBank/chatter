@@ -11,6 +11,10 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Breaking:** removed `CachePool::open_or_else`; use `CachePool::new` and
+  handle its `Result` directly. Cache opening no longer splits failures between
+  an optional handle and a callback; the CLI retains the concrete opening error.
+
 - Validation caches include both parser implementation source fingerprints,
   closing stale verdict reuse after parser-only edits without a version bump.
   Shared build-only source hashing reads each crate's own packaged files.
