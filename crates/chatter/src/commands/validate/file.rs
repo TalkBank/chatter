@@ -138,8 +138,17 @@ pub fn validate_file(
     // cached.
     let rule_selection = build_rule_selection(strict_linkers);
     let presentation = build_presentation_policy(suppress);
-    let cache_init =
-        initialize_validation_cache(std::slice::from_ref(path), cache_refresh, &rule_selection);
+    let cache_init = initialize_validation_cache(
+        std::slice::from_ref(path),
+        cache_refresh,
+        talkbank_transform::CacheIdentity::new(
+            talkbank_transform::RulesVersion::current_with_rule_selection(
+                &rule_selection,
+                talkbank_transform::GRAMMAR_FINGERPRINT,
+            ),
+            talkbank_model::ParserKind::TreeSitter,
+        ),
+    );
     // This path has no `ValidationRenderer`: single-file validation predates
     // the streaming runtime and presents through its own output functions.
     // That duplication is the real defect here and is bigger than this change;

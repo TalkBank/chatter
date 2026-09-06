@@ -26,7 +26,7 @@ use super::cache_location;
 use super::cache_utils;
 use super::error::CacheError;
 use super::init_lock::InitLock;
-use super::rules_version::RulesVersion;
+use super::types::CacheIdentity;
 use super::types::CacheStats;
 use super::version_prune::{self, VersionPruneOutcome};
 use super::{maintenance_ops, roundtrip_ops, validation_ops};
@@ -44,14 +44,31 @@ use crate::{CacheOutcome, ValidationCache};
 /// opened with. Rows under any OTHER version are therefore unreachable to it,
 /// and opening prunes all but one generation of them; see
 /// [`Self::version_prune`].
-pub struct CachePool {
+pub struct CachePool<S = ValidationScope> {
     pool: SqlitePool,
     rt: blocking::ConfinedRuntime,
-    /// Cache-compatibility version bound into every row this pool reads/writes.
-    rules_version: RulesVersion,
-    /// What the reachability prune did when this pool was opened, so the caller
-    /// can tell an operator rather than reclaiming 190 MB in silence.
+    scope: S,
+}
+
+/// Admitted validation namespace and the retention result from opening it.
+/// Only a validation cache can serve or record validation/roundtrip verdicts.
+pub struct ValidationScope {
+    identity: CacheIdentity,
     version_prune: VersionPruneOutcome,
+}
+
+/// Administrative access carries no validation generation or parser identity.
+/// It cannot serve verdicts or prune generations based on a guessed identity.
+pub struct MaintenanceScope;
+
+/// A cache handle restricted to statistics and explicit maintenance operations.
+pub type MaintenanceCache = CachePool<MaintenanceScope>;
+
+/// Storage admitted through the initialization lock and migrations.
+struct OpenedDatabase {
+    pool: SqlitePool,
+    rt: blocking::ConfinedRuntime,
+    db_path: PathBuf,
 }
 
 /// The runtime every pool bridges its async database work through.
@@ -79,47 +96,17 @@ fn confined_runtime() -> Result<blocking::ConfinedRuntime, CacheError> {
 // -- CachePool constructors --------------------------------------------------
 
 impl CachePool {
-    /// Create pool at default location (~/.cache/talkbank-chat).
-    ///
-    /// Keyed to the validation rule set compiled into this binary
-    /// ([`RulesVersion::current`]).
-    pub fn new() -> Result<Self, CacheError> {
-        let cache_dir = cache_location::default_cache_dir()?;
-        Self::with_directory(cache_dir)
+    /// Open the default directory for a fully specified validation identity.
+    pub fn new(identity: CacheIdentity) -> Result<Self, CacheError> {
+        Self::with_directory(cache_location::default_cache_dir()?, identity)
     }
 
-    /// Open the default cache, `Arc`-wrapped for sharing across worker
-    /// threads/validation runs, degrading to `None` on failure instead of
-    /// propagating the error.
-    ///
-    /// `on_error` is invoked with the failure so the caller can present it
-    /// however fits their context (a CLI wants an unconditional `eprintln!`
-    /// warning; other contexts may prefer `tracing::warn!` or silence). This
-    /// exists so every "open the cache or degrade gracefully" call site
-    /// shares the same construction and `Option`-collapsing logic instead of
-    /// each hand-rolling the same `match`.
-    pub fn open_or_else(on_error: impl FnOnce(&CacheError)) -> Option<Arc<Self>> {
-        Self::open_or_else_with_rules_version(RulesVersion::current(), on_error)
-    }
-
-    /// Open the default cache keyed to an explicit [`RulesVersion`],
-    /// `Arc`-wrapped for sharing across worker threads/validation runs,
-    /// degrading to `None` on failure. Same error-reporting contract as
-    /// [`Self::open_or_else`] (which is now expressed in terms of this
-    /// method, passing [`RulesVersion::current`]).
-    ///
-    /// Exists so a caller whose active `RuleSelection` turns on opt-in checks
-    /// (which changes which files count as Valid) can key the pool to a version
-    /// that reflects that, via
-    /// [`RulesVersion::current_with_rule_selection`], instead of always
-    /// deriving the version from the compiled-in rule set alone.
-    pub fn open_or_else_with_rules_version(
-        rules_version: RulesVersion,
+    /// Open a shared cache, reporting failure through the caller's callback.
+    pub fn open_or_else(
+        identity: CacheIdentity,
         on_error: impl FnOnce(&CacheError),
     ) -> Option<Arc<Self>> {
-        match cache_location::default_cache_dir()
-            .and_then(|cache_dir| Self::with_directory_and_rules_version(cache_dir, rules_version))
-        {
+        match Self::new(identity) {
             Ok(cache) => Some(Arc::new(cache)),
             Err(error) => {
                 on_error(&error);
@@ -128,42 +115,9 @@ impl CachePool {
         }
     }
 
-    /// Create pool at specified directory, keyed to the current rule set.
-    pub fn with_directory(cache_dir: PathBuf) -> Result<Self, CacheError> {
-        Self::with_directory_and_rules_version(cache_dir, RulesVersion::current())
-    }
-
-    /// Create pool at a directory keyed to an explicit [`RulesVersion`].
-    ///
-    /// Production callers use [`Self::with_directory`] (which derives the
-    /// version from the active rule set). This variant exists so tests can
-    /// stand up two caches over the same directory under different rule
-    /// versions to exercise rule-change invalidation.
-    pub fn with_directory_and_rules_version(
-        cache_dir: PathBuf,
-        rules_version: RulesVersion,
-    ) -> Result<Self, CacheError> {
-        std::fs::create_dir_all(&cache_dir).map_err(|source| CacheError::Io {
-            path: cache_dir.display().to_string(),
-            source,
-        })?;
-
-        let db_path = cache_location::cache_db_path(&cache_dir);
-
-        let rt = confined_runtime()?;
-
-        // Serialize the one-time create + WAL setup + migrate against every
-        // concurrent opener (other threads AND other processes) with an
-        // exclusive advisory file lock beside the database. Exactly one
-        // opener initializes; the rest wait boundedly, then connect to a
-        // ready database where the migrator no-ops. See `init_lock` module
-        // docs for the race this closes and the incident history.
-        let init_lock = InitLock::acquire(&cache_dir)?;
-        let pool = rt.block_on(Self::open_file_pool(&db_path))?;
-        // Release before maintenance: the lock guards initialization only.
-        // `clean_expired` is an ordinary write, serialized like any other
-        // by WAL + busy_timeout, and may be slow on a large cache.
-        drop(init_lock);
+    /// Open a directory for one rule generation and parser namespace.
+    pub fn with_directory(cache_dir: PathBuf, identity: CacheIdentity) -> Result<Self, CacheError> {
+        let OpenedDatabase { pool, rt, db_path } = Self::open_directory_storage(&cache_dir)?;
 
         // Run expired entry cleanup eagerly so DB is ready before worker threads start.
         rt.block_on(Self::clean_expired(&pool))?;
@@ -174,32 +128,21 @@ impl CachePool {
         let version_prune = rt.block_on(version_prune::prune_unreachable_versions(
             &pool,
             Some(db_path.as_path()),
-            &rules_version,
+            identity.rules_version(),
         ))?;
 
         Ok(Self {
             pool,
             rt,
-            rules_version,
-            version_prune,
+            scope: ValidationScope {
+                identity,
+                version_prune,
+            },
         })
     }
 
-    /// Create in-memory pool for testing or disabled mode.
-    ///
-    /// Uses `max_connections(1)` because sqlx in-memory SQLite creates a
-    /// separate database per connection, pool of 1 ensures a shared database.
-    /// Keyed to the current rule set.
-    pub fn in_memory() -> Result<Self, CacheError> {
-        Self::in_memory_with_rules_version(RulesVersion::current())
-    }
-
-    /// Create an in-memory pool keyed to an explicit [`RulesVersion`].
-    ///
-    /// Test-support counterpart of [`Self::in_memory`]; see
-    /// [`Self::with_directory_and_rules_version`] for why an injected version
-    /// matters.
-    pub fn in_memory_with_rules_version(rules_version: RulesVersion) -> Result<Self, CacheError> {
+    /// Create a single-connection in-memory cache for an explicit identity.
+    pub fn in_memory(identity: CacheIdentity) -> Result<Self, CacheError> {
         let rt = confined_runtime()?;
 
         let pool = rt.block_on(async {
@@ -223,11 +166,39 @@ impl CachePool {
         Ok(Self {
             pool,
             rt,
-            rules_version,
-            // An in-memory database is created empty on every open, so there is
-            // never anything unreachable in it to prune.
-            version_prune: VersionPruneOutcome::NothingUnreachable,
+            scope: ValidationScope {
+                identity,
+                version_prune: VersionPruneOutcome::NothingUnreachable,
+            },
         })
+    }
+}
+
+impl<S> CachePool<S> {
+    fn open_directory_storage(cache_dir: &Path) -> Result<OpenedDatabase, CacheError> {
+        std::fs::create_dir_all(cache_dir).map_err(|source| CacheError::Io {
+            path: cache_dir.display().to_string(),
+            source,
+        })?;
+
+        let db_path = cache_location::cache_db_path(cache_dir);
+
+        let rt = confined_runtime()?;
+
+        // Serialize the one-time create + WAL setup + migrate against every
+        // concurrent opener (other threads AND other processes) with an
+        // exclusive advisory file lock beside the database. Exactly one
+        // opener initializes; the rest wait boundedly, then connect to a
+        // ready database where the migrator no-ops. See `init_lock` module
+        // docs for the race this closes and the incident history.
+        let init_lock = InitLock::acquire(cache_dir)?;
+        let pool = rt.block_on(Self::open_file_pool(&db_path))?;
+        // Release before maintenance: the lock guards initialization only.
+        // `clean_expired` is an ordinary write, serialized like any other
+        // by WAL + busy_timeout, and may be slow on a large cache.
+        drop(init_lock);
+
+        Ok(OpenedDatabase { pool, rt, db_path })
     }
 
     /// Open a file-backed pool with WAL mode + PRAGMAs, applying migrations.
@@ -310,18 +281,6 @@ impl CachePool {
         }
     }
 
-    /// What the reachability prune did when this pool was opened.
-    ///
-    /// Exposed rather than logged from in here: a library that prints to a
-    /// user's terminal has decided something the caller owns, and the CLI, the
-    /// desktop app and a test each want to present this differently. Silence is
-    /// not an option though, which is why it is a value the caller must go out
-    /// of its way to ignore: a 190 MB reclaim nobody is told about reads as a
-    /// fix that did nothing.
-    pub fn version_prune(&self) -> &VersionPruneOutcome {
-        &self.version_prune
-    }
-
     /// Clean up expired cache entries (older than 30 days).
     async fn clean_expired(pool: &SqlitePool) -> Result<(), CacheError> {
         let now_secs = cache_utils::now_secs()?;
@@ -339,6 +298,20 @@ impl CachePool {
 
         Ok(())
     }
+}
+
+impl CachePool {
+    /// What the reachability prune did when this pool was opened.
+    ///
+    /// Exposed rather than logged from in here: a library that prints to a
+    /// user's terminal has decided something the caller owns, and the CLI, the
+    /// desktop app and a test each want to present this differently. Silence is
+    /// not an option though, which is why it is a value the caller must go out
+    /// of its way to ignore: a 190 MB reclaim nobody is told about reads as a
+    /// fix that did nothing.
+    pub fn version_prune(&self) -> &VersionPruneOutcome {
+        &self.scope.version_prune
+    }
 
     // ==================== Validation Operations ====================
 
@@ -346,7 +319,7 @@ impl CachePool {
     pub fn get_validation(&self, path: &Path, check_alignment: bool) -> Option<bool> {
         self.rt.block_on(validation_ops::get_validation(
             &self.pool,
-            &self.rules_version,
+            &self.scope.identity,
             path,
             check_alignment,
         ))
@@ -361,7 +334,7 @@ impl CachePool {
     ) -> Result<(), CacheError> {
         self.rt.block_on(validation_ops::set_validation(
             &self.pool,
-            &self.rules_version,
+            &self.scope.identity,
             path,
             check_alignment,
             valid,
@@ -371,18 +344,12 @@ impl CachePool {
     // ==================== Roundtrip Operations ====================
 
     /// Get cached roundtrip result: `Some(true)` = passed, `Some(false)` = failed, `None` = miss.
-    pub fn get_roundtrip(
-        &self,
-        path: &Path,
-        check_alignment: bool,
-        parser_kind: &str,
-    ) -> Option<bool> {
+    pub fn get_roundtrip(&self, path: &Path, check_alignment: bool) -> Option<bool> {
         self.rt.block_on(roundtrip_ops::get_roundtrip(
             &self.pool,
-            &self.rules_version,
+            &self.scope.identity,
             path,
             check_alignment,
-            parser_kind,
         ))
     }
 
@@ -391,19 +358,19 @@ impl CachePool {
         &self,
         path: &Path,
         check_alignment: bool,
-        parser_kind: &str,
         passed: bool,
     ) -> Result<(), CacheError> {
         self.rt.block_on(roundtrip_ops::set_roundtrip(
             &self.pool,
-            &self.rules_version,
+            &self.scope.identity,
             path,
             check_alignment,
-            parser_kind,
             passed,
         ))
     }
+}
 
+impl<S> CachePool<S> {
     // ==================== Maintenance Operations ====================
 
     /// Clear cache entries for files matching a path prefix.
@@ -441,9 +408,10 @@ impl CachePool {
 
     /// Get cache statistics.
     pub fn stats(&self) -> Result<CacheStats, CacheError> {
+        let pool = &self.pool;
         self.rt.block_on(async {
             let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM file_cache")
-                .fetch_one(&self.pool)
+                .fetch_one(pool)
                 .await
                 .map_err(|source| CacheError::Database { source })?;
 
@@ -453,6 +421,24 @@ impl CachePool {
                 total_entries: row.0 as usize,
                 cache_dir,
             })
+        })
+    }
+}
+
+impl MaintenanceCache {
+    /// Open the default cache without guessing a validation namespace.
+    pub fn open() -> Result<Self, CacheError> {
+        Self::open_directory(cache_location::default_cache_dir()?)
+    }
+
+    /// Open a directory without expiration or generation pruning. Migrations
+    /// still run under the initialization lock before queries are permitted.
+    pub fn open_directory(cache_dir: PathBuf) -> Result<Self, CacheError> {
+        let OpenedDatabase { pool, rt, .. } = Self::open_directory_storage(&cache_dir)?;
+        Ok(Self {
+            pool,
+            rt,
+            scope: MaintenanceScope,
         })
     }
 }
@@ -478,13 +464,8 @@ impl ValidationCache for CachePool {
     }
 
     /// Returns roundtrip outcome.
-    fn get_roundtrip(
-        &self,
-        path: &Path,
-        check_alignment: bool,
-        parser_kind: &str,
-    ) -> Option<CacheOutcome> {
-        CachePool::get_roundtrip(self, path, check_alignment, parser_kind).map(|passed| {
+    fn get_roundtrip(&self, path: &Path, check_alignment: bool) -> Option<CacheOutcome> {
+        CachePool::get_roundtrip(self, path, check_alignment).map(|passed| {
             if passed {
                 CacheOutcome::Valid
             } else {
@@ -498,17 +479,10 @@ impl ValidationCache for CachePool {
         &self,
         path: &Path,
         check_alignment: bool,
-        parser_kind: &str,
         outcome: CacheOutcome,
     ) -> Result<(), String> {
-        CachePool::set_roundtrip(
-            self,
-            path,
-            check_alignment,
-            parser_kind,
-            outcome == CacheOutcome::Valid,
-        )
-        .map_err(|err| err.to_string())
+        CachePool::set_roundtrip(self, path, check_alignment, outcome == CacheOutcome::Valid)
+            .map_err(|err| err.to_string())
     }
 }
 

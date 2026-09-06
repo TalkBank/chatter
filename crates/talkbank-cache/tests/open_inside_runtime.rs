@@ -37,8 +37,17 @@ fn cache_opens_from_within_a_tokio_runtime() {
     let _ = std::fs::remove_dir_all(&dir);
 
     let outer = tokio::runtime::Runtime::new().expect("outer runtime");
-    let outcome =
-        outer.block_on(async { std::panic::catch_unwind(|| UnifiedCache::with_directory(dir)) });
+    let outcome = outer.block_on(async {
+        std::panic::catch_unwind(|| {
+            UnifiedCache::with_directory(
+                dir,
+                talkbank_cache::CacheIdentity::new(
+                    talkbank_cache::RulesVersion::current(),
+                    talkbank_model::ParserKind::TreeSitter,
+                ),
+            )
+        })
+    });
 
     match outcome {
         Ok(Ok(_)) => {}

@@ -24,11 +24,10 @@ use crate::protocol::commands::{
     ExportFormat, ExportResultsRequest, OpenInClanRequest, ParserKindRequest, ValidateRequest,
 };
 use crate::validation::{
-    initialize_cache_at_with_rules_version, initialize_cache_with_rules_version,
-    validate_target_streaming_with_config,
+    initialize_cache, initialize_cache_at, validate_target_streaming_with_config,
 };
 use talkbank_transform::validation_runner::ValidationConfig;
-use talkbank_transform::{GRAMMAR_FINGERPRINT, RulesVersion, UnifiedCache};
+use talkbank_transform::{CacheIdentity, UnifiedCache};
 
 /// Shared state: cancel sender for the current validation run, and the
 /// on-disk validation cache pools opened so far this app session.
@@ -48,12 +47,12 @@ use talkbank_transform::{GRAMMAR_FINGERPRINT, RulesVersion, UnifiedCache};
 /// used to open exactly ONE `RulesVersion::current()` pool for the app's
 /// whole lifetime, so toggling "Strict linkers" in the settings panel and
 /// re-validating the same file could silently reuse a verdict computed
-/// under the OTHER setting. [`Self::cache_for_rules`] is the seam that
-/// fixes this, using the SAME [`RulesVersion::current_with_rule_selection`]
+/// under the OTHER setting. [`Self::cache_for_config`] is the seam that
+/// fixes this, using the SAME [`ValidationConfig::cache_identity`]
 /// composition the CLI uses (`crates/chatter/src/commands/validate/cache.rs`),
 /// not a second mechanism.
 ///
-/// Pools are opened lazily and memoized per distinct [`RulesVersion`]:
+/// Pools are opened lazily and memoized per distinct [`CacheIdentity`]:
 /// opening one costs a SQLite pool + a dedicated tokio runtime, so a request
 /// under a config already seen this session reuses the pool (the same "open
 /// once" behavior the old single-cache design had when only one config
@@ -65,7 +64,7 @@ pub struct ValidationState {
     /// Explicit cache root for test isolation; `None` uses the platform
     /// default (or `TALKBANK_CHAT_CACHE_DIR`). See [`Self::new_at`].
     cache_dir: Option<PathBuf>,
-    caches: DashMap<RulesVersion, Arc<UnifiedCache>>,
+    caches: DashMap<CacheIdentity, Arc<UnifiedCache>>,
 }
 
 impl ValidationState {
@@ -89,32 +88,28 @@ impl ValidationState {
         }
     }
 
-    /// Return the cache pool keyed to the request's active RULE SELECTION AND
-    /// the grammar compiled into this binary, opening and memoizing a new
-    /// pool on first use for that combination. See the struct docs for why
+    /// Return the cache pool keyed to the request's active rules, compiled
+    /// grammar, and parser, opening and memoizing a pool on first use. See the struct docs for why
     /// this exists and what it fixes; the parser dimension closes the same
     /// stale-verdict shape one dimension over (a grammar change alters what
     /// parses, hence what validates, exactly like a rule-set or
     /// strict-linkers change does).
-    pub fn cache_for_rules(
-        &self,
-        rules: &talkbank_model::RuleSelection,
-    ) -> Option<Arc<UnifiedCache>> {
-        let rules_version = RulesVersion::current_with_rule_selection(rules, GRAMMAR_FINGERPRINT);
-        if let Some(existing) = self.caches.get(&rules_version) {
+    pub fn cache_for_config(&self, config: &ValidationConfig) -> Option<Arc<UnifiedCache>> {
+        let identity = config.cache_identity();
+        if let Some(existing) = self.caches.get(&identity) {
             return Some(Arc::clone(existing.value()));
         }
 
         let opened = match &self.cache_dir {
-            Some(dir) => initialize_cache_at_with_rules_version(dir.clone(), rules_version.clone()),
-            None => initialize_cache_with_rules_version(rules_version.clone()),
+            Some(dir) => initialize_cache_at(dir.clone(), identity.clone()),
+            None => initialize_cache(identity.clone()),
         }?;
         // A concurrent first-use race can open two pools for the same
         // version; both are equally valid (same on-disk DB, same version
         // column), so whichever `insert` lands last simply wins the memo
         // slot. No mutex is worth adding to prevent that harmless
         // duplication.
-        self.caches.insert(rules_version, Arc::clone(&opened));
+        self.caches.insert(identity, Arc::clone(&opened));
         Some(opened)
     }
 }
@@ -206,10 +201,10 @@ fn start_validation(
 
     let config = ValidationConfig::from(&request);
     // The cache pool MUST be selected from THIS request's active rule
-    // selection, via the same seam `cache_for_rules` composes the cache key
+    // selection, via the same seam `cache_for_config` composes the cache key
     // from (`RulesVersion::current_with_rule_selection`), not a single pool
     // opened once at app startup: see `ValidationState`'s docs for why.
-    let cache = state.cache_for_rules(&config.rules);
+    let cache = state.cache_for_config(&config);
     let (rx, cancel_tx) =
         validate_target_streaming_with_config(request.path.into(), config, cache)?;
 

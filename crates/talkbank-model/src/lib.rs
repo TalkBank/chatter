@@ -62,6 +62,7 @@ pub mod generated;
 pub mod indices;
 pub mod model;
 pub mod parser_api;
+pub use parser_api::ParserKind;
 pub mod pipeline;
 pub mod text_types;
 pub mod validation;

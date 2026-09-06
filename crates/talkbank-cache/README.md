@@ -1,7 +1,7 @@
 # talkbank-cache
 
 **Status:** Current
-**Last modified:** 2026-07-22 11:19 EDT
+**Last modified:** 2026-09-06 01:54 EDT
 
 SQLite-backed pass/fail cache for CHAT validation and round-trip results.
 
@@ -29,13 +29,26 @@ Key capabilities:
   hanging. Steady-state reads and writes are serialized by SQLite WAL
   mode plus a busy timeout on every connection.
 
+A validation `CachePool` requires a `CacheIdentity` containing a rule generation
+and parser. The parser is a row namespace, so switching backends does not spend
+another retained build generation. Validation and roundtrip methods use the
+bound identity; roundtrip callers no longer pass an independent parser string.
+Production callers obtain the identity from `ValidationConfig::cache_identity`
+in `talkbank-transform`. The example below uses an explicit test generation.
+
+`MaintenanceCache` exposes statistics and explicit maintenance without verdict
+methods, expiration cleanup or generation pruning. Both handle types share the
+same locked initialization procedure. Older parser-unqualified validation rows
+are cache misses; they remain subject to ordinary expiration/version cleanup.
+
 ## Usage
 
 ```rust,no_run
 use std::path::Path;
-use talkbank_cache::{CachePool, ValidationCache};
+use talkbank_cache::{CacheIdentity, CachePool, ParserKind, RulesVersion, ValidationCache};
 
-let cache = CachePool::in_memory().expect("cache opens");
+let identity = CacheIdentity::new(RulesVersion::for_testing("example"), ParserKind::TreeSitter);
+let cache = CachePool::in_memory(identity).expect("cache opens");
 assert_eq!(cache.get(Path::new("example.cha"), false), None);
 ```
 

@@ -5,7 +5,7 @@
 //! useful in CI dashboards or monitoring scripts that track cache freshness.
 
 use serde::{Deserialize, Serialize};
-use talkbank_transform::UnifiedCache;
+use talkbank_transform::MaintenanceCache;
 
 /// Serializable cache statistics in the format emitted by `talkbank cache stats --json`.
 ///
@@ -28,7 +28,7 @@ pub struct CacheStatistics {
 /// The manual encourages periodic cache inspections when the corpus mutates; this command emits either
 /// a human-friendly table or JSON that matches the schema described in the documentation.
 pub fn cache_stats(json: bool) {
-    let cache = match UnifiedCache::new() {
+    let cache = match MaintenanceCache::open() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error: Failed to open cache: {}", e);

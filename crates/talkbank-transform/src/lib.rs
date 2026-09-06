@@ -149,8 +149,9 @@ pub use self::validation_runner::{
 };
 #[cfg(feature = "validation-runner")]
 pub use talkbank_cache::{
-    CACHE_DIR_ENV, CacheError, CachePool, CacheStats, RulesVersion, SpaceReclaimed, UnifiedCache,
-    VacuumSkipped, VersionPruneOutcome, VersionPruneReport, cache_db_path, default_cache_dir,
+    CACHE_DIR_ENV, CacheError, CacheIdentity, CachePool, CacheStats, MaintenanceCache,
+    RulesVersion, SpaceReclaimed, UnifiedCache, VacuumSkipped, VersionPruneOutcome,
+    VersionPruneReport, cache_db_path, default_cache_dir,
 };
 // Re-exported alongside the cache types (rather than unconditionally at the
 // crate root) because its only use is composing a `RulesVersion`: a caller

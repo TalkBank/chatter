@@ -33,7 +33,14 @@ fn seed_entries(cache: &CachePool, dir: &Path, count: usize) {
 fn clear_prefix_is_bulk_not_per_file() {
     let cache_dir = tempdir().unwrap();
     let data_dir = tempdir().unwrap();
-    let cache = CachePool::with_directory(cache_dir.path().to_path_buf()).unwrap();
+    let cache = CachePool::with_directory(
+        cache_dir.path().to_path_buf(),
+        talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ),
+    )
+    .unwrap();
 
     seed_entries(&cache, data_dir.path(), 4000);
 
@@ -76,7 +83,14 @@ fn clear_prefix_respects_path_component_boundaries() {
     std::fs::create_dir_all(&inside).unwrap();
     std::fs::create_dir_all(&sibling).unwrap();
 
-    let cache = CachePool::with_directory(cache_dir.path().to_path_buf()).unwrap();
+    let cache = CachePool::with_directory(
+        cache_dir.path().to_path_buf(),
+        talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ),
+    )
+    .unwrap();
     let in_file = inside.join("kept.cha");
     let out_file = sibling.join("outside.cha");
     std::fs::write(&in_file, b"@UTF8\n").unwrap();

@@ -37,6 +37,9 @@
 //! - [`CacheOutcome`] is the pass/fail enum stored in the cache
 //! - [`CacheStats`] exposes coarse cache statistics for reporting and tests
 //!
+//! Validation constructors require a `CacheIdentity`. `MaintenanceCache` has no
+//! verdict methods and never performs validation-generation pruning.
+//!
 //! # Common entry points
 //!
 //! - [`CachePool::new`] opens the default OS cache directory
@@ -47,9 +50,10 @@
 //!
 //! ```rust
 //! use std::path::Path;
-//! use talkbank_cache::{CachePool, ValidationCache};
+//! use talkbank_cache::{CacheIdentity, CachePool, ParserKind, RulesVersion, ValidationCache};
 //!
-//! let cache = CachePool::in_memory().expect("cache opens");
+//! let identity = CacheIdentity::new(RulesVersion::for_testing("example"), ParserKind::TreeSitter);
+//! let cache = CachePool::in_memory(identity).expect("cache opens");
 //! assert_eq!(cache.get(Path::new("example.cha"), false), None);
 //! ```
 //!
@@ -81,12 +85,13 @@ mod validation_ops;
 mod cache_impl;
 
 // Re-export public API
-pub use cache_impl::CachePool;
+pub use cache_impl::{CachePool, MaintenanceCache, MaintenanceScope, ValidationScope};
 pub use cache_location::{CACHE_DIR_ENV, cache_db_path, default_cache_dir};
 pub use error::CacheError;
 pub use rules_version::RulesVersion;
+pub use talkbank_model::ParserKind;
 pub use trait_def::{CacheOutcome, ValidationCache};
-pub use types::CacheStats;
+pub use types::{CacheIdentity, CacheStats};
 pub use version_prune::{SpaceReclaimed, VacuumSkipped, VersionPruneOutcome, VersionPruneReport};
 
 /// Backward-compatible alias. Prefer `CachePool` in new code.

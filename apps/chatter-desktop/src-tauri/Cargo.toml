@@ -64,6 +64,7 @@ talkbank-model = { workspace = true }
 send2clan = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 # Recursive walk of corpus/reference/ in validation_bridge.rs, so the
 # reference-corpus integration test derives its expected file count from
 # disk instead of hardcoding a literal that breaks on every fixture add.

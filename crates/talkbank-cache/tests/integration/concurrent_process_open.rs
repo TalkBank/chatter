@@ -79,7 +79,14 @@ fn race_child_open_cache() {
     }
 
     // The race under test: open (create + migrate) the shared fresh cache.
-    let cache = CachePool::with_directory(cache_dir).expect("concurrent cache open must succeed");
+    let cache = CachePool::with_directory(
+        cache_dir,
+        talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ),
+    )
+    .expect("concurrent cache open must succeed");
 
     // Exercise a write + read so the pool is actually usable, not merely
     // constructed.

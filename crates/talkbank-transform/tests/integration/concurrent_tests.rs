@@ -96,7 +96,13 @@ fn test_config(jobs: usize) -> ValidationConfig {
 #[test]
 fn concurrent_cache_writes() {
     let dir = tempfile::tempdir().expect("create temp dir");
-    let cache = Arc::new(CachePool::in_memory().expect("create in-memory cache"));
+    let cache = Arc::new(
+        CachePool::in_memory(talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ))
+        .expect("create in-memory cache"),
+    );
 
     let handles: Vec<_> = (0..4)
         .map(|thread_id| {
@@ -136,7 +142,13 @@ fn concurrent_cache_writes() {
 #[test]
 fn concurrent_cache_read_write() {
     let dir = tempfile::tempdir().expect("create temp dir");
-    let cache = Arc::new(CachePool::in_memory().expect("create in-memory cache"));
+    let cache = Arc::new(
+        CachePool::in_memory(talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ))
+        .expect("create in-memory cache"),
+    );
 
     // Pre-create all files so the writer can use them.
     let entry_count = 100;
@@ -198,7 +210,13 @@ fn concurrent_cache_read_write() {
 #[test]
 fn concurrent_cache_clear_during_write() {
     let dir = tempfile::tempdir().expect("create temp dir");
-    let cache = Arc::new(CachePool::in_memory().expect("create in-memory cache"));
+    let cache = Arc::new(
+        CachePool::in_memory(talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ))
+        .expect("create in-memory cache"),
+    );
 
     let writer_cache = Arc::clone(&cache);
     let dir_path = dir.path().to_path_buf();
@@ -243,7 +261,13 @@ fn concurrent_cache_clear_during_write() {
 #[test]
 fn concurrent_cache_stats_consistency() {
     let dir = tempfile::tempdir().expect("create temp dir");
-    let cache = Arc::new(CachePool::in_memory().expect("create in-memory cache"));
+    let cache = Arc::new(
+        CachePool::in_memory(talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ))
+        .expect("create in-memory cache"),
+    );
 
     let threads_count = 4u32;
     let entries_per_thread = 25u32;
@@ -281,7 +305,13 @@ fn concurrent_cache_stats_consistency() {
 #[test]
 fn concurrent_cache_different_paths() {
     let dir = tempfile::tempdir().expect("create temp dir");
-    let cache = Arc::new(CachePool::in_memory().expect("create in-memory cache"));
+    let cache = Arc::new(
+        CachePool::in_memory(talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ))
+        .expect("create in-memory cache"),
+    );
 
     let threads_count = 4u32;
     let entries_per_thread = 20u32;
@@ -649,7 +679,11 @@ fn stress_100_files_parallel() {
 #[ignore]
 fn stress_cache_1000_entries() {
     let dir = tempfile::tempdir().expect("create temp dir");
-    let cache = CachePool::in_memory().expect("create in-memory cache");
+    let cache = CachePool::in_memory(talkbank_cache::CacheIdentity::new(
+        talkbank_cache::RulesVersion::current(),
+        talkbank_model::ParserKind::TreeSitter,
+    ))
+    .expect("create in-memory cache");
 
     let entry_count = 1000;
     let paths: Vec<_> = (0..entry_count)

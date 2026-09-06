@@ -71,9 +71,12 @@ fn validation_result_is_not_served_across_a_rules_version_change() {
 
     // --- Run 1: validate under the OLD rule set, cache "Valid" ---
     {
-        let cache = CachePool::with_directory_and_rules_version(
+        let cache = CachePool::with_directory(
             cache_dir.path().to_path_buf(),
-            rules_before.clone(),
+            talkbank_cache::CacheIdentity::new(
+                rules_before.clone(),
+                talkbank_model::ParserKind::TreeSitter,
+            ),
         )
         .expect("open cache under old rules version");
         cache
@@ -90,9 +93,9 @@ fn validation_result_is_not_served_across_a_rules_version_change() {
 
     // --- Run 2: the rule set has changed; the OLD "Valid" must NOT be served ---
     {
-        let cache = CachePool::with_directory_and_rules_version(
+        let cache = CachePool::with_directory(
             cache_dir.path().to_path_buf(),
-            rules_after,
+            talkbank_cache::CacheIdentity::new(rules_after, talkbank_model::ParserKind::TreeSitter),
         )
         .expect("open cache under new rules version");
 
@@ -147,9 +150,12 @@ fn validation_result_is_not_served_across_a_parser_fingerprint_change() {
 
     // --- Run 1: validate under the OLD grammar, cache "Valid" ---
     {
-        let cache = CachePool::with_directory_and_rules_version(
+        let cache = CachePool::with_directory(
             cache_dir.path().to_path_buf(),
-            rules_before_grammar_change.clone(),
+            talkbank_cache::CacheIdentity::new(
+                rules_before_grammar_change.clone(),
+                talkbank_model::ParserKind::TreeSitter,
+            ),
         )
         .expect("open cache under old parser fingerprint");
         cache
@@ -165,9 +171,12 @@ fn validation_result_is_not_served_across_a_parser_fingerprint_change() {
 
     // --- Run 2: the grammar has changed; the OLD "Valid" must NOT be served ---
     {
-        let cache = CachePool::with_directory_and_rules_version(
+        let cache = CachePool::with_directory(
             cache_dir.path().to_path_buf(),
-            rules_after_grammar_change,
+            talkbank_cache::CacheIdentity::new(
+                rules_after_grammar_change,
+                talkbank_model::ParserKind::TreeSitter,
+            ),
         )
         .expect("open cache under new parser fingerprint");
 

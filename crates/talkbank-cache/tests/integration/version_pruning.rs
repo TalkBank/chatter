@@ -50,9 +50,11 @@ fn write_temp_cha(dir: &std::path::Path, name: &str, content: &str) -> std::path
 
 /// Open a cache under `version`, write one validation row, and close it.
 fn seed_version(cache_dir: &std::path::Path, file: &std::path::Path, version: &RulesVersion) {
-    let cache =
-        CachePool::with_directory_and_rules_version(cache_dir.to_path_buf(), version.clone())
-            .expect("open cache to seed a version");
+    let cache = CachePool::with_directory(
+        cache_dir.to_path_buf(),
+        talkbank_cache::CacheIdentity::new(version.clone(), talkbank_model::ParserKind::TreeSitter),
+    )
+    .expect("open cache to seed a version");
     cache
         .set_validation(file, false, true)
         .expect("write a validation row");
@@ -79,9 +81,11 @@ fn opening_a_cache_drops_rows_no_reader_can_ever_bind() {
 
     // Opening under the current version prunes what has fallen outside the
     // window: `old` is now two generations back.
-    let cache =
-        CachePool::with_directory_and_rules_version(cache_dir.path().to_path_buf(), current)
-            .expect("open cache under the current version");
+    let cache = CachePool::with_directory(
+        cache_dir.path().to_path_buf(),
+        talkbank_cache::CacheIdentity::new(current, talkbank_model::ParserKind::TreeSitter),
+    )
+    .expect("open cache under the current version");
 
     match cache.version_prune() {
         VersionPruneOutcome::NothingUnreachable => {
@@ -107,9 +111,15 @@ fn opening_a_cache_drops_rows_no_reader_can_ever_bind() {
     // one grace generation is still warm, and everything older is gone for
     // good rather than merely invisible.
     let reachable = |version: &RulesVersion| {
-        CachePool::with_directory_and_rules_version(cache_dir.path().to_path_buf(), version.clone())
-            .expect("reopen cache")
-            .get_validation(&file_path, false)
+        CachePool::with_directory(
+            cache_dir.path().to_path_buf(),
+            talkbank_cache::CacheIdentity::new(
+                version.clone(),
+                talkbank_model::ParserKind::TreeSitter,
+            ),
+        )
+        .expect("reopen cache")
+        .get_validation(&file_path, false)
     };
     assert_eq!(
         reachable(&previous),
@@ -141,9 +151,11 @@ fn opening_a_cache_that_holds_only_reachable_rows_deletes_nothing() {
 
     // Reopening finds exactly the current version plus its one grace
     // generation, so there is nothing to delete and no VACUUM to pay for.
-    let cache =
-        CachePool::with_directory_and_rules_version(cache_dir.path().to_path_buf(), current)
-            .expect("reopen under the current version");
+    let cache = CachePool::with_directory(
+        cache_dir.path().to_path_buf(),
+        talkbank_cache::CacheIdentity::new(current, talkbank_model::ParserKind::TreeSitter),
+    )
+    .expect("reopen under the current version");
     match cache.version_prune() {
         VersionPruneOutcome::NothingUnreachable => {}
         VersionPruneOutcome::Pruned(report) => panic!(
@@ -156,4 +168,53 @@ fn opening_a_cache_that_holds_only_reachable_rows_deletes_nothing() {
         Some(true),
         "the current version's own rows must survive its prune"
     );
+}
+
+/// Parser namespaces must coexist inside the two retained semantic versions.
+/// Administrative opens must not introduce a third, fabricated generation.
+#[test]
+fn parser_rotation_and_maintenance_preserve_both_live_rule_generations() {
+    use talkbank_cache::{CacheIdentity, MaintenanceCache};
+    use talkbank_model::ParserKind;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cache_dir = dir.path().join("cache");
+    let file = write_temp_cha(dir.path(), "identity.cha", "@UTF8\n@Begin\n@End\n");
+    let versions = [
+        RulesVersion::for_testing("default-rules"),
+        RulesVersion::for_testing("strict-rules"),
+    ];
+    for version in &versions {
+        for parser in [ParserKind::TreeSitter, ParserKind::Re2c] {
+            let cache = CachePool::with_directory(
+                cache_dir.clone(),
+                CacheIdentity::new(version.clone(), parser),
+            )
+            .unwrap();
+            let valid = parser == ParserKind::TreeSitter;
+            cache.set_validation(&file, false, valid).unwrap();
+            cache.set_roundtrip(&file, false, !valid).unwrap();
+        }
+    }
+    for _ in 0..3 {
+        let maintenance = MaintenanceCache::open_directory(cache_dir.clone()).unwrap();
+        assert_eq!(maintenance.stats().unwrap().total_entries, 8);
+        drop(maintenance);
+        for version in &versions {
+            for parser in [ParserKind::TreeSitter, ParserKind::Re2c] {
+                let cache = CachePool::with_directory(
+                    cache_dir.clone(),
+                    CacheIdentity::new(version.clone(), parser),
+                )
+                .unwrap();
+                let valid = parser == ParserKind::TreeSitter;
+                assert_eq!(cache.get_validation(&file, false), Some(valid));
+                assert_eq!(cache.get_roundtrip(&file, false), Some(!valid));
+                assert!(matches!(
+                    cache.version_prune(),
+                    VersionPruneOutcome::NothingUnreachable
+                ));
+            }
+        }
+    }
 }

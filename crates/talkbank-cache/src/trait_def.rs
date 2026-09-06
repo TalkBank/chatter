@@ -30,12 +30,7 @@ pub trait ValidationCache: Send + Sync {
     /// Get cached roundtrip result, or `None` on cache miss.
     ///
     /// Default implementation returns `None` (no caching).
-    fn get_roundtrip(
-        &self,
-        _path: &Path,
-        _check_alignment: bool,
-        _parser_kind: &str,
-    ) -> Option<CacheOutcome> {
+    fn get_roundtrip(&self, _path: &Path, _check_alignment: bool) -> Option<CacheOutcome> {
         None
     }
 
@@ -46,7 +41,6 @@ pub trait ValidationCache: Send + Sync {
         &self,
         _path: &Path,
         _check_alignment: bool,
-        _parser_kind: &str,
         _outcome: CacheOutcome,
     ) -> Result<(), String> {
         Ok(())

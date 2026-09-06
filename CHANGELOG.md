@@ -11,6 +11,11 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Breaking:** validation-cache constructors require `CacheIdentity` (rules and
+  parser), and roundtrip cache methods use that bound identity instead of a
+  parser string. `ParserKind` is shared from `talkbank-model` and re-exported.
+  `MaintenanceCache` exposes administrative operations without verdict methods.
+
 - **Breaking:** re2c prefix tokens carry `PrefixToken` payload/separator state.
   AST header lines, main tiers and `DependentTierEntryParsed` retain separator
   provenance. Access a prefix payload with `text()`; file AST snapshots reflect
@@ -34,6 +39,11 @@ version and are listed under "Changed" / "Removed".
   reflect this category; serialized CHAT model output retains its shape.
 
 ### Fixed
+
+- Validation cache rows are isolated by parser in both CLI and desktop. Switching
+  parser/rule combinations no longer risks serving another parser's verdict or
+  consumes extra retained generations. Maintenance opens do not prune rule
+  generations or expire rows merely to display statistics.
 
 - re2c records trailing separator spaces across headers and tiers. The shared
   validator reports E758 outside CA, and serialization canonicalizes separators

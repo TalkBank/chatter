@@ -35,8 +35,14 @@ fn concurrent_opens_on_fresh_cache_dir_all_succeed() {
             thread::spawn(move || -> Result<(), String> {
                 // Line every opener up so they hit migration at the same instant.
                 barrier.wait();
-                let cache =
-                    CachePool::with_directory(cache_dir).map_err(|e| format!("open: {e}"))?;
+                let cache = CachePool::with_directory(
+                    cache_dir,
+                    talkbank_cache::CacheIdentity::new(
+                        talkbank_cache::RulesVersion::current(),
+                        talkbank_model::ParserKind::TreeSitter,
+                    ),
+                )
+                .map_err(|e| format!("open: {e}"))?;
                 // Also exercise a write + read so the pool is actually usable,
                 // not merely constructed.
                 cache

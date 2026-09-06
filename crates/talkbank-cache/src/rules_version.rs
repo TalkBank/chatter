@@ -46,7 +46,7 @@
 //! into the composed version. The caller supplying it (the CLI, the desktop
 //! app) already depends on both `talkbank-parser` (transitively or
 //! directly) and `talkbank-cache`, which is exactly the seam
-//! `crate::CachePool::with_directory_and_rules_version` exists for. Making
+//! `crate::CachePool::with_directory` exists for. Making
 //! the parameter mandatory, rather than optional or defaulted, is
 //! deliberate: a caller cannot construct a production `RulesVersion` while
 //! forgetting the parser dimension, because there is no overload that
@@ -97,15 +97,10 @@ impl RulesVersion {
     /// deliberately WITHOUT a parser/grammar dimension.
     ///
     /// Combines the cache crate's package version with the active validation
-    /// rule-set fingerprint from `talkbank-model`. Production callers use
-    /// this only for operations that never serve a validation VERDICT and so
-    /// are not exposed to the PARSE-behaviour gap described in the module
-    /// doc comment: [`crate::CachePool::new`] and
-    /// [`crate::CachePool::with_directory`] back administrative commands
-    /// (`chatter cache stats`, `chatter cache clear`) whose queries do not
-    /// filter by `version` at all. Any caller that serves a pass/fail
-    /// verdict back to a user MUST use [`Self::current_with_rule_selection`]
-    /// instead, which requires a parser fingerprint.
+    /// rule-set fingerprint from `talkbank-model`. This baseline is useful for
+    /// storage tests. Production validation uses [`Self::current_with_rule_selection`]
+    /// with its required grammar fingerprint; administrative callers instead
+    /// open [`crate::MaintenanceCache`] without a rule generation at all.
     pub fn current() -> Self {
         let fingerprint = talkbank_model::validation_rules_fingerprint();
         Self(format!(

@@ -1,10 +1,10 @@
 # Validation Cache
 
 **Status:** Current
-**Last modified:** 2026-08-03 17:28 EDT
+**Last modified:** 2026-09-06 01:54 EDT
 
-The CHAT-core validation cache, used by `chatter validate` and the
-LSP server. Distinct from the audio-task cache used by upstream
+The persistent CHAT validation cache, used by `chatter validate` and the
+desktop validation runner. The LSP maintains its own in-memory document cache. Distinct from the audio-task cache used by upstream
 `batchalign3` for FA / UTR ASR / media conversion (documented
 separately in that project): this cache stores **parse + validate**
 results keyed by file path + options.
@@ -16,7 +16,7 @@ results keyed by file path + options.
 ```mermaid
 flowchart TD
     req["Validation request\n(path + options)"]
-    key["Cache key\n(path_hash + RulesVersion + check_alignment + parser_kind)"]
+    key["Cache key\n(path/parser namespace + RulesVersion + check_alignment)"]
     db["SQLite WAL\n~/.cache/talkbank-chat/\ntalkbank-cache.db"]
     hit["Cache hit\n→ return stored result"]
     miss["Cache miss\n→ parse + validate + store"]
@@ -35,7 +35,7 @@ flowchart TD
 | Pool size | 16 connections | Matches validation worker count |
 | `mmap` | 256 MB | Fast random access for 95k+ entries |
 | Invalidation | Rules-version field + content hash + 30-day TTL | Rule-set or schema changes auto-invalidate; content edits invalidate per-file; stale entries pruned |
-| Reachability prune | On open: keep the opening version plus one predecessor | Rows under any other version can never be bound again; without this the file grew by a corpus per release |
+| Reachability prune | On validation open: keep the opening version plus one predecessor | Rows under any other version can never be bound again; without this the file grew by a corpus per release |
 | Bridge | Embedded single-threaded tokio runtime, entered only via `blocking::block_on` | Sync workers block on async SQLite. Never `Runtime::block_on` directly: a caller that is itself driving a runtime (a Tauri `async fn` command) would nest one runtime in another and panic, which is what stopped the desktop app validating anything between v0.6.0 and v0.8.0. Such a call is run on a thread with no ambient runtime instead |
 | Init serialization | Advisory file lock (`talkbank-cache.init.lock`) | Exactly one opener performs first-time create + migrate; see below |
 
@@ -46,7 +46,7 @@ flowchart TD
 
 | Column | Role |
 |---|---|
-| `path_hash` | BLAKE3 hash of the resolved path (part of the lookup key) |
+| `path_hash` | Resolved-path hash plus an operation/parser suffix (`validation:tree-sitter` or `validation:re2c` for validation) |
 | `file_path` | Resolved file path, indexed for path-based maintenance ops |
 | `content_hash` | Hash of the file content; mismatch invalidates the entry |
 | `version` | Cache-compatibility version (`RulesVersion`): the cache crate version folded together with a fingerprint of the active validation rule set. A mismatch invalidates the entry |
@@ -55,11 +55,36 @@ flowchart TD
 | `is_valid` | Cached validation outcome (0/1) |
 | `roundtrip_tested` | Whether roundtrip equivalence was checked |
 | `roundtrip_passed` | Roundtrip result when tested |
-| `parser_kind` | Parser backend (tree-sitter or re2c) |
+| `parser_kind` | Roundtrip backend discriminator; NULL for validation, whose parser is in `path_hash` |
 
-The lookup key is the compound unique index
-`(path_hash, version, check_alignment, parser_kind)`; `file_path` is a
-secondary index used by maintenance operations (orphan pruning, etc.).
+Validation uses a partial unique index on `(path_hash, version, check_alignment)`
+where `parser_kind IS NULL`; roundtrip uses a second partial index including
+`parser_kind` where it is non-NULL. `file_path` remains a maintenance index.
+
+## Identity and handle states
+
+`CacheIdentity` owns a `RulesVersion` and the shared `ParserKind` vocabulary.
+`ValidationConfig::cache_identity()` derives both from the request's semantic
+configuration, excluding suppression and display policy. Every validation-cache
+constructor requires this identity. Validation and roundtrip operations use the
+bound parser, so an independent string argument cannot select another backend.
+The desktop memoizes by this complete identity, including the parser toggle.
+
+Parser choice is in the row namespace, not the retained generation. Rotating
+default/strict rules across both parsers therefore keeps four configurations
+inside the two-generation window. The CLI regression reproduces a real
+cross-backend cache hit; desktop and SQLite regressions verify separate hits,
+contradictory stored verdicts, and repeated rotations without eviction.
+
+`MaintenanceCache` is a distinct `CachePool` state. It can inspect statistics or
+perform explicit clear/purge operations but has no validation/roundtrip methods.
+Opening it runs locked initialization/migrations, without automatic expiration
+or generation pruning. Statistics no longer invent an administrative validation
+generation that can displace one of the real retained generations.
+
+Old validation rows used the unqualified `validation` suffix. They are never
+served through the new namespace and remain eligible for normal age/generation
+cleanup. No migration rewrites an old row to claim an unknown parser identity.
 
 ## Concurrent initialization
 

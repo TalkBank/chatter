@@ -34,7 +34,14 @@ use talkbank_cache::UnifiedCache;
 fn scratch_cache(name: &str) -> (UnifiedCache, PathBuf) {
     let dir = std::env::temp_dir().join(name);
     let _ = std::fs::remove_dir_all(&dir);
-    let cache = UnifiedCache::with_directory(dir.clone()).expect("open cache");
+    let cache = UnifiedCache::with_directory(
+        dir.clone(),
+        talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ),
+    )
+    .expect("open cache");
     (cache, dir)
 }
 
@@ -148,7 +155,11 @@ fn every_maintenance_operation_works_from_inside_a_runtime() {
 #[test]
 fn an_in_memory_cache_opens_and_drops_inside_a_runtime() {
     inside_a_runtime("in_memory + drop", || {
-        let cache = UnifiedCache::in_memory().expect("in_memory inside a runtime");
+        let cache = UnifiedCache::in_memory(talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current(),
+            talkbank_model::ParserKind::TreeSitter,
+        ))
+        .expect("in_memory inside a runtime");
         drop(cache);
     });
 }
@@ -165,7 +176,14 @@ fn a_file_backed_cache_opens_and_drops_inside_a_runtime() {
     let dir = std::env::temp_dir().join("chatter-cache-drop-probe");
     let _ = std::fs::remove_dir_all(&dir);
     inside_a_runtime("with_directory + drop", || {
-        let cache = UnifiedCache::with_directory(dir.clone()).expect("open inside a runtime");
+        let cache = UnifiedCache::with_directory(
+            dir.clone(),
+            talkbank_cache::CacheIdentity::new(
+                talkbank_cache::RulesVersion::current(),
+                talkbank_model::ParserKind::TreeSitter,
+            ),
+        )
+        .expect("open inside a runtime");
         drop(cache);
     });
     let _ = std::fs::remove_dir_all(&dir);

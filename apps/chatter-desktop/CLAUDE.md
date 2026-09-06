@@ -1,7 +1,7 @@
 # CLAUDE.md, Chatter Desktop App
 
 **Status:** Current
-**Last updated:** 2026-08-27 13:44 EDT
+**Last updated:** 2026-09-06 01:57 EDT
 
 ## Overview
 
@@ -81,7 +81,7 @@ streaming entrypoints the CLI uses, with a real cache instance.
 
 | Feature | CLI implementation | Desktop status |
 |---------|--------------------|-----------------|
-| **On-disk validation cache** | `Arc<UnifiedCache>` constructed via `UnifiedCache::new()`, passed to the streaming entrypoints | **Implemented**: same construction, same entrypoints, for both directory and single-file targets |
+| **On-disk validation cache** | `Arc<UnifiedCache>` constructed with `ValidationConfig::cache_identity()`, passed to the streaming entrypoints | **Implemented**: same construction, same entrypoints, for both directory and single-file targets |
 | **`@Media`-filename check (E531)** | Runs via the shared worker loop's file-stem dispatch | **Implemented** for single-file targets (previously skipped entirely) |
 | **`--roundtrip` / `--parser re2c` / `--strict-linkers` / `--jobs`** | CLI flags map onto `ValidationConfig` fields | **Implemented**: a settings popover (`ValidationSettingsPanel`) sends the same fields through `ValidateRequest` |
 | **Stats accounting (valid/invalid/cache-hit counts)** | Shared `ValidationStats` accumulator | **Implemented** for both targets (previously hand-rolled for single files) |

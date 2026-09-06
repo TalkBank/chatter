@@ -11,7 +11,7 @@ use std::path::Path;
 
 use super::cache_utils::{get_cache_key_with_suffix, get_content_hash, now_secs};
 use super::error::CacheError;
-use super::rules_version::RulesVersion;
+use super::types::CacheIdentity;
 
 /// Get cached roundtrip result: `Some(true)` = passed, `Some(false)` = failed, `None` = not cached.
 ///
@@ -19,12 +19,11 @@ use super::rules_version::RulesVersion;
 /// produced under a different validation rule set is a cache MISS.
 pub async fn get_roundtrip(
     pool: &SqlitePool,
-    rules_version: &RulesVersion,
+    identity: &CacheIdentity,
     path: &Path,
     check_alignment: bool,
-    parser_kind: &str,
 ) -> Option<bool> {
-    let key = get_cache_key_with_suffix(path, parser_kind);
+    let key = get_cache_key_with_suffix(path, identity.parser().cache_label());
     let current_hash = get_content_hash(path).ok()?;
     let alignment_val: i32 = if check_alignment { 1 } else { 0 };
 
@@ -34,9 +33,9 @@ pub async fn get_roundtrip(
          WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind = ?4",
     )
     .bind(&key)
-    .bind(rules_version.as_str())
+    .bind(identity.rules_version().as_str())
     .bind(alignment_val)
-    .bind(parser_kind)
+    .bind(identity.parser().cache_label())
     .fetch_optional(pool)
     .await
     .ok()?;
@@ -62,13 +61,12 @@ pub async fn get_roundtrip(
 /// query carrying the same validation rule set.
 pub async fn set_roundtrip(
     pool: &SqlitePool,
-    rules_version: &RulesVersion,
+    identity: &CacheIdentity,
     path: &Path,
     check_alignment: bool,
-    parser_kind: &str,
     passed: bool,
 ) -> Result<(), CacheError> {
-    let key = get_cache_key_with_suffix(path, parser_kind);
+    let key = get_cache_key_with_suffix(path, identity.parser().cache_label());
     let content_hash = get_content_hash(path)?;
     let path_str = path.to_string_lossy().to_string();
     let alignment_val: i32 = if check_alignment { 1 } else { 0 };
@@ -84,12 +82,12 @@ pub async fn set_roundtrip(
     .bind(&key)
     .bind(&path_str)
     .bind(&content_hash)
-    .bind(rules_version.as_str())
+    .bind(identity.rules_version().as_str())
     .bind(now)
     .bind(alignment_val)
     .bind(passed_val) // is_valid mirrors roundtrip result
     .bind(passed_val)
-    .bind(parser_kind)
+    .bind(identity.parser().cache_label())
     .execute(pool)
     .await
     .map_err(|source| CacheError::Database { source })?;
@@ -125,12 +123,15 @@ mod tests {
         )
         .expect("write test chat file");
 
-        let rules = RulesVersion::for_testing("test-rules");
+        let identity = CacheIdentity::new(
+            crate::RulesVersion::for_testing("test-rules"),
+            talkbank_model::ParserKind::TreeSitter,
+        );
 
-        set_roundtrip(&pool, &rules, &file_path, false, "tree-sitter", false)
+        set_roundtrip(&pool, &identity, &file_path, false, false)
             .await
             .expect("cache first roundtrip result");
-        set_roundtrip(&pool, &rules, &file_path, false, "tree-sitter", true)
+        set_roundtrip(&pool, &identity, &file_path, false, true)
             .await
             .expect("replace roundtrip result");
 
@@ -140,7 +141,7 @@ mod tests {
              WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind = ?4",
         )
         .bind(&key)
-        .bind(rules.as_str())
+        .bind(identity.rules_version().as_str())
         .bind(0_i32)
         .bind("tree-sitter")
         .fetch_one(&pool)
@@ -152,7 +153,7 @@ mod tests {
             "cache should keep exactly one row per roundtrip key"
         );
         assert_eq!(
-            get_roundtrip(&pool, &rules, &file_path, false, "tree-sitter").await,
+            get_roundtrip(&pool, &identity, &file_path, false).await,
             Some(true),
             "latest roundtrip result should win"
         );

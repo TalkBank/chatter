@@ -11,11 +11,7 @@ use std::path::Path;
 
 use super::cache_utils::{get_cache_key_with_suffix, get_content_hash, now_secs};
 use super::error::CacheError;
-use super::rules_version::RulesVersion;
-
-/// Suffix that distinguishes a validation cache key from a roundtrip one for
-/// the same path. Validation rows always carry `parser_kind IS NULL`.
-const VALIDATION_KEY_SUFFIX: &str = "validation";
+use super::types::CacheIdentity;
 
 /// Get cached validation result: `Some(true)` = valid, `Some(false)` = invalid, `None` = not cached.
 ///
@@ -23,11 +19,11 @@ const VALIDATION_KEY_SUFFIX: &str = "validation";
 /// under a different validation rule set is a cache MISS, not a stale hit.
 pub async fn get_validation(
     pool: &SqlitePool,
-    rules_version: &RulesVersion,
+    identity: &CacheIdentity,
     path: &Path,
     check_alignment: bool,
 ) -> Option<bool> {
-    let key = get_cache_key_with_suffix(path, VALIDATION_KEY_SUFFIX);
+    let key = get_cache_key_with_suffix(path, identity.validation_suffix());
     let current_hash = get_content_hash(path).ok()?;
     let alignment_val: i32 = if check_alignment { 1 } else { 0 };
 
@@ -38,7 +34,7 @@ pub async fn get_validation(
          WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind IS NULL",
     )
     .bind(&key)
-    .bind(rules_version.as_str())
+    .bind(identity.rules_version().as_str())
     .bind(alignment_val)
     .fetch_optional(pool)
     .await
@@ -60,12 +56,12 @@ pub async fn get_validation(
 /// query carrying the same validation rule set.
 pub async fn set_validation(
     pool: &SqlitePool,
-    rules_version: &RulesVersion,
+    identity: &CacheIdentity,
     path: &Path,
     check_alignment: bool,
     valid: bool,
 ) -> Result<(), CacheError> {
-    let key = get_cache_key_with_suffix(path, VALIDATION_KEY_SUFFIX);
+    let key = get_cache_key_with_suffix(path, identity.validation_suffix());
     let content_hash = get_content_hash(path)?;
     let path_str = path.to_string_lossy().to_string();
     let alignment_val: i32 = if check_alignment { 1 } else { 0 };
@@ -81,7 +77,7 @@ pub async fn set_validation(
     .bind(&key)
     .bind(&path_str)
     .bind(&content_hash)
-    .bind(rules_version.as_str())
+    .bind(identity.rules_version().as_str())
     .bind(now)
     .bind(alignment_val)
     .bind(valid_val)
@@ -120,18 +116,21 @@ mod tests {
         )
         .expect("write test chat file");
 
-        let rules = RulesVersion::for_testing("test-rules");
+        let identity = CacheIdentity::new(
+            crate::RulesVersion::for_testing("test-rules"),
+            talkbank_model::ParserKind::TreeSitter,
+        );
 
         // Cache contradictory outcomes for the same file but different alignment modes.
-        set_validation(&pool, &rules, &file_path, false, false)
+        set_validation(&pool, &identity, &file_path, false, false)
             .await
             .expect("cache unaligned result");
-        set_validation(&pool, &rules, &file_path, true, true)
+        set_validation(&pool, &identity, &file_path, true, true)
             .await
             .expect("cache aligned result");
 
-        let aligned = get_validation(&pool, &rules, &file_path, true).await;
-        let unaligned = get_validation(&pool, &rules, &file_path, false).await;
+        let aligned = get_validation(&pool, &identity, &file_path, true).await;
+        let unaligned = get_validation(&pool, &identity, &file_path, false).await;
 
         assert_eq!(
             aligned,
@@ -157,22 +156,25 @@ mod tests {
         )
         .expect("write test chat file");
 
-        let rules = RulesVersion::for_testing("test-rules");
+        let identity = CacheIdentity::new(
+            crate::RulesVersion::for_testing("test-rules"),
+            talkbank_model::ParserKind::TreeSitter,
+        );
 
-        set_validation(&pool, &rules, &file_path, false, false)
+        set_validation(&pool, &identity, &file_path, false, false)
             .await
             .expect("cache first result");
-        set_validation(&pool, &rules, &file_path, false, true)
+        set_validation(&pool, &identity, &file_path, false, true)
             .await
             .expect("replace cached result");
 
-        let key = get_cache_key_with_suffix(&file_path, VALIDATION_KEY_SUFFIX);
+        let key = get_cache_key_with_suffix(&file_path, identity.validation_suffix());
         let row_count: (i64,) = sqlx::query_as(
             "SELECT COUNT(*) FROM file_cache
              WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind IS NULL",
         )
         .bind(&key)
-        .bind(rules.as_str())
+        .bind(identity.rules_version().as_str())
         .bind(0_i32)
         .fetch_one(&pool)
         .await
@@ -183,9 +185,30 @@ mod tests {
             "cache should keep exactly one row per validation key"
         );
         assert_eq!(
-            get_validation(&pool, &rules, &file_path, false).await,
+            get_validation(&pool, &identity, &file_path, false).await,
             Some(true),
             "latest validation result should win"
         );
+    }
+
+    #[tokio::test]
+    async fn legacy_parser_unqualified_rows_are_never_served() {
+        let pool = test_pool().await;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("legacy.cha");
+        std::fs::write(&path, "cached source bytes").unwrap();
+        let identity = CacheIdentity::new(
+            crate::RulesVersion::for_testing("same-generation"),
+            talkbank_model::ParserKind::TreeSitter,
+        );
+        set_validation(&pool, &identity, &path, false, true)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE file_cache SET path_hash = ?1")
+            .bind(get_cache_key_with_suffix(&path, "validation"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(get_validation(&pool, &identity, &path, false).await, None);
     }
 }

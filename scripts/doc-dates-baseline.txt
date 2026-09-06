@@ -22,7 +22,6 @@ book/src/architecture/grammar.md
 book/src/architecture/memory-and-ownership.md
 book/src/architecture/overlap-binding.md
 book/src/architecture/parser-and-grammar/ca-terminator-resolution.md
-book/src/architecture/parser-and-grammar/validation-cache.md
 book/src/chat-format/headers.md
 book/src/chat-format/mor-tier.md
 book/src/chat-format/overview.md

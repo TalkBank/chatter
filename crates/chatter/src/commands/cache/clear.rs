@@ -7,7 +7,7 @@
 //! be removed.
 
 use std::path::PathBuf;
-use talkbank_transform::UnifiedCache;
+use talkbank_transform::MaintenanceCache;
 
 /// Clear validation cache entries for a more reproducible `talkbank validate` run.
 ///
@@ -40,7 +40,7 @@ pub fn cache_clear(all: bool, prefix: Option<PathBuf>, dry_run: bool) {
         std::process::exit(1);
     }
 
-    let cache = match UnifiedCache::new() {
+    let cache = match MaintenanceCache::open() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error: Failed to open cache: {}", e);

@@ -6,27 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-/// Which parser backend to use for validation.
-///
-/// Tree-sitter is the default and supports incremental reparsing (used by LSP).
-/// Re2c is a DFA-based parser that is faster for batch validation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ParserKind {
-    /// Tree-sitter parser (default, supports incremental reparsing).
-    TreeSitter,
-    /// Re2c DFA parser (faster batch validation, no incremental support).
-    Re2c,
-}
-
-impl ParserKind {
-    /// Label used for cache keys (must be stable across runs).
-    pub fn cache_label(self) -> &'static str {
-        match self {
-            ParserKind::TreeSitter => "tree-sitter",
-            ParserKind::Re2c => "re2c",
-        }
-    }
-}
+pub use talkbank_model::ParserKind;
 
 /// How a validation run may use the cache.
 ///
@@ -95,7 +75,7 @@ pub struct ValidationConfig {
     pub parser_kind: ParserKind,
 
     /// WHICH RULES RUN: the rule set the worker validates against, and the
-    /// only part of this configuration the cache key is derived from.
+    /// semantic rule component of the cache identity, alongside `parser_kind`.
     ///
     /// Deliberately separate from [`Self::presentation`]. v0.6.0 held both in
     /// one value and keyed the cache on all of it, so a `--suppress` list
@@ -126,5 +106,18 @@ impl Default for ValidationConfig {
             rules: talkbank_model::RuleSelection::default(),
             presentation: crate::PresentationPolicy::default(),
         }
+    }
+}
+
+impl ValidationConfig {
+    /// Bind the actual parser and semantic rules without presentation policy.
+    pub fn cache_identity(&self) -> talkbank_cache::CacheIdentity {
+        talkbank_cache::CacheIdentity::new(
+            talkbank_cache::RulesVersion::current_with_rule_selection(
+                &self.rules,
+                crate::GRAMMAR_FINGERPRINT,
+            ),
+            self.parser_kind,
+        )
     }
 }

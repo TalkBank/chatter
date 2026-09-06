@@ -105,13 +105,9 @@ pub(super) fn worker_loop<C>(
 
                     // If roundtrip is requested, check roundtrip cache too
                     if config.roundtrip {
-                        let roundtrip_cached = cache.as_ref().and_then(|c| {
-                            c.get_roundtrip(
-                                &file_path,
-                                config.check_alignment,
-                                config.parser_kind.cache_label(),
-                            )
-                        });
+                        let roundtrip_cached = cache
+                            .as_ref()
+                            .and_then(|c| c.get_roundtrip(&file_path, config.check_alignment));
                         if let Some(rt_outcome) = roundtrip_cached {
                             let rt_passed = rt_outcome == CacheOutcome::Valid;
                             let status = if rt_passed {
@@ -298,13 +294,9 @@ where
 {
     // Check roundtrip cache first
     if config.cache.allows_reads()
-        && let Some(rt_outcome) = cache.as_ref().and_then(|c| {
-            c.get_roundtrip(
-                file_path,
-                config.check_alignment,
-                config.parser_kind.cache_label(),
-            )
-        })
+        && let Some(rt_outcome) = cache
+            .as_ref()
+            .and_then(|c| c.get_roundtrip(file_path, config.check_alignment))
     {
         let rt_passed = rt_outcome == CacheOutcome::Valid;
         // Emit roundtrip event
@@ -341,12 +333,8 @@ where
     };
     if config.cache.allows_writes()
         && let Some(cache_ref) = cache.as_ref()
-        && let Err(e) = cache_ref.set_roundtrip(
-            file_path,
-            config.check_alignment,
-            config.parser_kind.cache_label(),
-            roundtrip_outcome,
-        )
+        && let Err(e) =
+            cache_ref.set_roundtrip(file_path, config.check_alignment, roundtrip_outcome)
     {
         tracing::warn!(file = ?file_path, error = %e, "Failed to cache roundtrip result");
     }

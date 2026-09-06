@@ -53,7 +53,7 @@ use talkbank_transform::validation_runner::ValidationConfig;
 
 /// Test-only convenience wrapper: production always threads an explicit
 /// config and a cache pool selected for that config's active rule set (see
-/// `ValidationState::cache_for_rules` in `commands.rs`), but most tests here
+/// `ValidationState::cache_for_config` in `commands.rs`), but most tests here
 /// don't care about either, so this uses the default rule configuration with a
 /// two-worker test-only limit.
 ///
@@ -73,7 +73,10 @@ fn validate_target_streaming(
         jobs: Some(2),
         ..ValidationConfig::default()
     };
-    validate_target_streaming_with_config(target, config, initialize_cache_at(test_cache_dir()))
+    {
+        let cache = initialize_cache_at(test_cache_dir(), config.cache_identity());
+        validate_target_streaming_with_config(target, config, cache)
+    }
 }
 
 /// A cache root private to this test binary, so a test run can never touch the
@@ -149,12 +152,10 @@ fn collect_events_with_cache(target: &Path, cache_dir: &Path) -> Vec<FrontendEve
         jobs: Some(2),
         ..ValidationConfig::default()
     };
-    let (rx, _cancel_tx) = validate_target_streaming_with_config(
-        target.to_path_buf(),
-        config,
-        initialize_cache_at(cache_dir.to_path_buf()),
-    )
-    .expect("desktop validation should start");
+    let cache = initialize_cache_at(cache_dir.to_path_buf(), config.cache_identity());
+    let (rx, _cancel_tx) =
+        validate_target_streaming_with_config(target.to_path_buf(), config, cache)
+            .expect("desktop validation should start");
 
     let mut events = Vec::new();
     while let Ok(event) = rx.recv() {
@@ -1070,7 +1071,7 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
 /// this test is that fix's desktop-side counterpart.
 ///
 /// Drives `ValidationState` exactly the way the `validate` Tauri command
-/// does (`cache_for_rules` then `validate_target_streaming_with_config`),
+/// does (`cache_for_config` then `validate_target_streaming_with_config`),
 /// which is the highest boundary reachable in this crate without adding
 /// Tauri's `test` feature and a mocked `AppHandle`/window (this crate has
 /// no precedent for that anywhere; the actual `#[tauri::command] async fn
@@ -1114,7 +1115,7 @@ fn cache_does_not_leak_a_verdict_across_strict_linkers_toggle() {
     };
 
     let run = |config: ValidationConfig| -> Vec<FrontendEvent> {
-        let cache = state.cache_for_rules(&config.rules);
+        let cache = state.cache_for_config(&config);
         let (rx, _cancel_tx) =
             validate_target_streaming_with_config(fixture.clone(), config, cache)
                 .expect("desktop validation should start");
@@ -1189,7 +1190,7 @@ fn a_run_starts_when_the_caller_is_driving_an_async_runtime() {
 
     // The load-bearing part: this mirrors what Tauri does to `validate`.
     let started = tauri::async_runtime::block_on(async {
-        let cache = state.cache_for_rules(&config.rules);
+        let cache = state.cache_for_config(&config);
         chatter_desktop_lib::validation::validate_target_streaming_with_config(
             PathBuf::from(&request.path),
             config,
@@ -1216,3 +1217,6 @@ fn a_run_starts_when_the_caller_is_driving_an_async_runtime() {
 
     let _ = std::fs::remove_dir_all(&cache_dir);
 }
+
+#[path = "validation_bridge/parser_identity.rs"]
+mod parser_identity;

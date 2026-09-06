@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use talkbank_transform::{GRAMMAR_FINGERPRINT, RulesVersion, UnifiedCache, VersionPruneOutcome};
+use talkbank_transform::{CacheIdentity, UnifiedCache, VersionPruneOutcome};
 
 use crate::commands::CacheRefreshMode;
 
@@ -21,29 +21,12 @@ pub(crate) type ValidationCacheHandle = Arc<UnifiedCache>;
 /// without changing the rule list: a 994-file measurement served 993 stale
 /// verdicts from the previous build and reported near-zero impact.
 ///
-/// `rules` is the SAME [`talkbank_model::RuleSelection`] the run will hand to
-/// the worker for actual validation. Threading the identical value through
-/// here, rather than re-deriving a summary of it, is what keeps the cache key
-/// and the validation behaviour from ever disagreeing: it is folded into the
-/// pool's [`RulesVersion`] via [`RulesVersion::current_with_rule_selection`],
-/// so a verdict produced under one rule set is never served to a run with a
-/// different one.
+/// The caller supplies the identity derived from its actual validation config:
+/// rule/build generation and parser namespace, excluding presentation policy.
+/// The parser belongs in the row key, not the retained-version window. One
+/// binary's default/strict rules and two parser choices therefore retain both
+/// rule generations without a cold rotation. See `ValidationConfig::cache_identity`.
 ///
-/// What is deliberately ABSENT is the run's presentation policy (`--suppress`
-/// and severity remapping). v0.6.0 folded it in, which gave every distinct
-/// suppression set its own private cache and re-validated a 106,000-file corpus
-/// from cold on the second run. It is not merely omitted here: this function
-/// cannot be handed one, because `RulesVersion::current_with_rule_selection`
-/// does not accept one and `talkbank-cache` cannot name the type.
-///
-/// The PARSE dimension is folded in too: `RulesVersion::current_with_config`
-/// takes `talkbank_transform::GRAMMAR_FINGERPRINT` (re-exported from the
-/// grammar crate via `talkbank-parser`) as a mandatory parameter, so a
-/// verdict produced under one compiled-in grammar is never served back to a
-/// binary built against a different one. This CLI already depends on both
-/// the parser and the cache, which is exactly the seam
-/// `RulesVersion::current_with_config`'s doc comment names as the intended
-/// place to close that gap.
 /// A fact about what cache maintenance did.
 ///
 /// # Why these are returned rather than printed
@@ -161,11 +144,10 @@ impl CacheInit {
 pub(crate) fn initialize_validation_cache(
     files: &[std::path::PathBuf],
     cache_refresh: CacheRefreshMode,
-    rules: &talkbank_model::RuleSelection,
+    identity: CacheIdentity,
 ) -> CacheInit {
     let mut failure = None;
-    let rules_version = RulesVersion::current_with_rule_selection(rules, GRAMMAR_FINGERPRINT);
-    let opened = UnifiedCache::open_or_else_with_rules_version(rules_version, |error| {
+    let opened = UnifiedCache::open_or_else(identity, |error| {
         failure = Some(CacheEvent::MaintenanceFailed {
             operation: "initialize",
             error: error.to_string(),

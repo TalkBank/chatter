@@ -685,7 +685,7 @@ fn test_cache_clear_all() -> Result<(), TestError> {
 /// backends happened to agree about this construct, which is exactly when the
 /// key is still wrong and nobody notices.
 ///
-/// # Why this is `#[ignore]` rather than fixed
+/// # Why parser identity is a row namespace
 ///
 /// The obvious fix, folding the backend label into the `version` string, was
 /// implemented and then REVERTED because it is measurably worse than the bug.
@@ -698,19 +698,13 @@ fn test_cache_clear_all() -> Result<(), TestError> {
 /// EVERY run gets zero cache hits and deletes a full generation plus a VACUUM.
 /// That is the shape v0.6.0 was pulled over.
 ///
-/// The parser dimension belongs in the ROW KEY (the `path_hash` suffix), which
-/// is how roundtrip rows already separate backends
-/// (`roundtrip_ops`, `get_cache_key_with_suffix`). That keeps live versions at
-/// two, needs no cold rotation, and retires the duplicate `parser_kind` column
-/// that validation rows currently bind `IS NULL`. It requires threading the
-/// backend onto the `UnifiedCache` handle, which is why it is not folded into
-/// the change that found it.
-///
-/// The same bug is live in the desktop (`commands.rs`, `cache_for_rules`),
-/// which exposes a backend toggle and memoizes one pool per `RulesVersion`, so
-/// switching backends mid-session serves the other backend's verdicts.
+/// The fix binds `CacheIdentity` to the pool and namespaces validation row
+/// keys by its `ParserKind`. Roundtrip operations use that same identity.
+/// `ValidationConfig` derives it from the actual request; the desktop memoizes
+/// by that complete identity. No parser choice consumes another retained build
+/// generation. A storage regression rotates both parsers across both rule
+/// generations and opens maintenance handles between cycles.
 #[test]
-#[ignore = "records a live bug: the validation cache key omits the parser backend. The obvious fix (folding the backend into the version string) is UNSAFE and measured to be worse than the bug; see the note above. Un-ignore when the parser moves into the row key instead."]
 fn a_row_written_by_one_parser_never_serves_the_other() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let dir = tempdir()?;
