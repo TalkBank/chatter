@@ -7,10 +7,11 @@ it. The desktop BUNDLE version (the .dmg / .exe / .deb filenames and the install
 app) ALSO inherits from that crate version: `tauri.conf.json` deliberately carries
 NO "version" field, so Tauri falls back to the crate's `Cargo.toml` version. That
 removal is what keeps the bundle from drifting, so this script does NOT read or
-write `tauri.conf.json`. Two files still carry a literal copy of the version and
+write `tauri.conf.json`. The npm manifests and changelog carry literal copies and
 must never drift from it:
 
   * apps/chatter-desktop/package.json  "version"  (the npm side)
+  * apps/chatter-desktop/package-lock.json  root and packages[""].version
   * CHANGELOG.md                       a `## [X.Y.Z]` section AND its
                                        matching `[X.Y.Z]:` link reference
 
@@ -19,10 +20,10 @@ manifest) takes its version from the git TAG, while the bundle takes its version
 from the crate version. The first v0.1.1 desktop release shipped a bundle/manifest
 mismatch (bundle 0.1.0, manifest 0.1.1) back when `tauri.conf.json` carried its own
 version; removing that field fixed the bundle side. This gate guards the literal
-copies that remain (the npm `package.json` and the CHANGELOG section) so a missed
+copies that remain (the npm manifest/lockfile and the CHANGELOG section) so a missed
 edit is a hard failure instead of something a releaser has to remember.
 
-The workspace-dependencies table is a third carrier: every internal crate's
+The workspace-dependencies table also carries version copies: every internal crate's
 `path = "crates/...", version = "X.Y.Z"` pin (kept literal for crates.io
 publication readiness) must match the workspace version, or `cargo check`
 fails the moment the workspace version moves. `--bump` rewrites them; the
@@ -38,7 +39,7 @@ Usage:
   sync-app-version.py --release-tag vX.Y.Z    # also assert the tag equals the version
 
 The point: bumping the app version is ONE command (`just release-bump X.Y.Z`,
-which runs `--bump` and refreshes both lockfiles) plus a human-written
+which runs `--bump` and refreshes both Rust lockfiles) plus a human-written
 CHANGELOG section; the `--check` gate makes a missed file a hard failure, and
 `--release-tag` makes a tag that disagrees with the bundle a hard failure at
 release time.
@@ -57,11 +58,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 CARGO = REPO / "Cargo.toml"
 PACKAGE_JSON = REPO / "apps" / "chatter-desktop" / "package.json"
+PACKAGE_LOCK = PACKAGE_JSON.with_name("package-lock.json")
 CHANGELOG = REPO / "CHANGELOG.md"
-
-# A 2-space-indented top-level `"version": "..."` line, the shape package.json
-# uses. Anchoring to the indent avoids matching a nested object's version.
-JSON_VERSION_RE = re.compile(r'(?m)^(  "version"\s*:\s*")[^"]+(")')
 
 # The canonical `[workspace.package] version` line in the root Cargo.toml.
 WORKSPACE_VERSION_RE = re.compile(
@@ -89,20 +87,6 @@ def canonical_version() -> str:
     return ver.group(1)
 
 
-def json_version(path: Path) -> str:
-    """The top-level "version" of a JSON file (validates that it parses)."""
-    return json.loads(path.read_text())["version"]
-
-
-def set_json_version(path: Path, version: str) -> None:
-    """Rewrite only the top-level "version" line, preserving all other bytes."""
-    text = path.read_text()
-    new, n = JSON_VERSION_RE.subn(rf"\g<1>{version}\g<2>", text, count=1)
-    if n != 1:
-        sys.exit(f'error: no top-level "version" field in {path}')
-    path.write_text(new)
-
-
 class Fixability(Enum):
     """Whether `--fix` can repair one drift item, or a human must."""
 
@@ -126,6 +110,33 @@ class Drift:
 
     message: str
     fixability: Fixability
+
+
+@dataclass(frozen=True)
+class JsonVersionFile:
+    """One npm document and the version fields it owns, read and written together."""
+
+    path: Path
+    locations: tuple[tuple[str, ...], ...]
+
+    def synchronize(self, version: str, fix: bool) -> list[Drift]:
+        document = json.loads(self.path.read_text())
+        drift: list[Drift] = []
+        for location in self.locations:
+            parent = document
+            for key in location[:-1]:
+                parent = parent[key]
+            field = location[-1]
+            have = parent[field]
+            if have != version:
+                drift.append(Drift(
+                    f"{self.path.relative_to(REPO)} {location!r}  {have} -> {version}",
+                    Fixability.AUTO,
+                ))
+                parent[field] = version
+        if fix and drift:
+            self.path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
+        return drift
 
 
 def changelog_gaps(version: str) -> list[str]:
@@ -168,7 +179,7 @@ def bump_canonical(version: str) -> None:
     """Set `[workspace.package] version` and every internal path-dep pin.
 
     The path-dep pins live in the same Cargo.toml, so one read-modify-write
-    covers both; the remaining literal copies (package.json) then follow via
+    covers both; the remaining literal copies (npm manifest and lockfile) then follow via
     the ordinary fix pass against the new canonical version.
     """
     if not SEMVER_RE.match(version):
@@ -186,12 +197,11 @@ def process(fix: bool, release_tag: str | None, changelog_reminder_only: bool = 
     want = canonical_version()
     drift: list[Drift] = []
 
-    for path in (PACKAGE_JSON,):
-        have = json_version(path)
-        if have != want:
-            drift.append(Drift(f"{path.relative_to(REPO)}  {have} -> {want}", Fixability.AUTO))
-            if fix:
-                set_json_version(path, want)
+    for document in (
+        JsonVersionFile(PACKAGE_JSON, (("version",),)),
+        JsonVersionFile(PACKAGE_LOCK, (("version",), ("packages", "", "version"))),
+    ):
+        drift.extend(document.synchronize(want, fix))
 
     gaps = changelog_gaps(want)
     if gaps:

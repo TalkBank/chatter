@@ -1,7 +1,7 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-09-05 20:37 EDT
+**Last updated:** 2026-09-06 05:47 EDT
 
 ## Pre-Merge Verification
 
@@ -44,7 +44,11 @@ drift CI would have caught). The procedure:
 
 1. `just release-bump X.Y.Z` rewrites the canonical
    `[workspace.package] version`, every `path = "crates/…"` pin, and
-   `package.json`, then refreshes both lockfiles (root + `spec/`).
+   `package.json` and both root-version fields in `package-lock.json`, then
+   refreshes both Rust lockfiles (root + `spec/`).
+   The app-version check exercises this command against temporary manifests
+   and lockfiles before checking the checkout, including independent drift in
+   each lockfile version and preservation of dependency versions.
 2. Write the `## [X.Y.Z]` CHANGELOG section (the one deliberately manual
    step; every gate enforces its presence).
 3. Format, run `just release-lint` and `just gate`, then squash the commits

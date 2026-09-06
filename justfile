@@ -196,7 +196,7 @@ rust-sync:
 rust-sync-check:
     python3 scripts/sync-rust-versions.py --check
 
-# Sync the app version (package.json) to the canonical [workspace.package]
+# Sync the app version (npm manifest and lockfile) to the canonical [workspace.package]
 # version in Cargo.toml. Run after bumping the version. (tauri.conf.json has no
 # version field by design; the desktop bundle inherits the crate version.)
 app-sync:
@@ -204,10 +204,11 @@ app-sync:
 
 # Verify the app version is in sync everywhere (CI-style; non-mutating).
 app-sync-check:
+    python3 -m unittest scripts/test_sync_app_version.py
     python3 scripts/sync-app-version.py --check
 
 # Bump the release version EVERYWHERE in one command: the canonical
-# [workspace.package] version, all internal path-dep pins, package.json, and
+# [workspace.package] version, all internal path-dep pins, npm manifests, and
 # both lockfiles. The one remaining manual step (deliberately) is writing the
 # `## [X.Y.Z]` CHANGELOG section; the check gates enforce it. Then: commit,
 # `just push`, wait for CI, `just release-tag X.Y.Z`.

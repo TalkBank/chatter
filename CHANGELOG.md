@@ -9,6 +9,8 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-06
+
 ### Changed
 
 - **Breaking:** removed `CachePool::open_or_else`; use `CachePool::new` and
@@ -54,13 +56,18 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Release bumping updates and checks both desktop npm lockfile version fields.
+  Dependency versions remain unchanged; CLI regression checks run in the fast
+  app-version gate.
+
 - Owned fragment wrappers project secondary labels with primary locations and
   identify synthetic context by exact source text instead of a length heuristic.
   Independent diagnostic context is preserved even when longer than the input.
 
 - Main-tier fragments reject trailing material instead of silently accepting
   their first tier. Aggregate spans exclude a synthetic final newline, while
-  retaining caller-supplied LF and CRLF line endings.
+  retaining caller-supplied LF and CRLF line endings. Root-admission diagnostics
+  now describe the required source shape without raw CST-kind wording.
 
 - Fragment APIs no longer subtract obsolete word/main-tier wrapper lengths or
   subtract caller offsets from diagnostics. Synthetic utterance, participant
@@ -2601,7 +2608,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/TalkBank/chatter/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/TalkBank/chatter/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/TalkBank/chatter/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/TalkBank/chatter/compare/v0.17.0...v0.18.0
