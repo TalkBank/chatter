@@ -1,7 +1,7 @@
 # `talkbank-lsp`, Language Server
 
 **Status:** Current
-**Last updated:** 2026-08-27 00:33 EDT
+**Last updated:** 2026-09-06
 
 Guidance for Claude Code when working inside `crates/talkbank-lsp/`. Read the
 workspace-level `CLAUDE.md` (at the chatter repo root) first; this file layers
@@ -23,7 +23,7 @@ LSP-capable editor). The crate is a **thin protocol adapter** over
 
 - LSP request routing (`backend/`)
 - Incremental document state (`backend/documents.rs`)
-- Validation cache (`backend/validation_cache.rs`)
+- Source-bound analysis (`backend/diagnostics/analysis.rs`)
 - Per-feature handlers (`backend/features/`)
 - Hover / alignment presentation (`alignment/tier_hover/`, `alignment/formatters/`)
 - `%gra` dependency-graph DOT rendering (`graph/`)
@@ -157,7 +157,7 @@ crates/talkbank-lsp/
 │   │   ├── mod.rs              # LanguageServer impl (tower-lsp trait)
 │   │   ├── capabilities.rs     # ServerCapabilities advertisement
 │   │   ├── documents.rs        # DocumentState, incremental text sync
-│   │   ├── validation_cache.rs # grouped-by-scope error cache
+│   │   ├── diagnostics/       # source-bound analysis and publication
 │   │   ├── requests.rs         # request routing dispatch
 │   │   ├── participants.rs     # `talkbank/getParticipants`, formatIdLine
 │   │   ├── chat_ops/           # filterDocument, getSpeakers, scopedFind, getUtterances

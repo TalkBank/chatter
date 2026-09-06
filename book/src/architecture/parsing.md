@@ -278,9 +278,8 @@ diagnostic backstop covers the entire source. This prevents trailing text after
 error precedes an otherwise complete document. Private fields prevent callers
 from combining a document with an unrelated diagnostic scope.
 
-Only `DocumentRoot::into_clean` can produce `CleanDocument`, the structural proof
-required by the LSP's incremental reuse path. It rejects recovered sources and
-clean fragments alike. The proof establishes syntax completeness, not semantic
+Only `DocumentRoot::into_clean` can produce `CleanDocument`, a structural proof
+that rejects recovered sources and clean fragments alike. The proof establishes syntax completeness, not semantic
 validity; shared validation still owns required headers and other CHAT rules.
 
 At EOF, lowering retains a generated `MainTierNode` stranded outside its line
@@ -317,3 +316,38 @@ flowchart TD
 ## Parser String Handling
 
 The tree-sitter parser constructs owned model types (e.g., `MorWord`, `GrammaticalRelation`) directly from CST text. String-heavy types like `PosCategory` and `MorStem` use `Arc<str>` interning to avoid redundant allocations for repeated values. Short strings in model newtypes use `SmolStr` for inline storage up to 23 bytes.
+
+
+### Editor source revisions
+
+The LSP stores one `DocumentAnalysis` owning exact source bytes, a tree-sitter
+CST, the lowered model, and diagnostics. Its constructor is the only route to
+those artifacts. Reusing the CST first applies an `InputEdit` computed from its
+own prior source, so debounced intermediate edits cannot substitute the wrong
+baseline. Both the edit boundaries and tree-sitter columns use UTF-8 bytes;
+LSP wire positions remain UTF-16.
+
+Each changed analysis lowers the model and calls `ChatFile::validate_with_alignment`
+in full. Previous header errors or absolute AST spans are not copied into a new
+revision. This removes the independent cache maps and custom validation sequence
+that missed deleted headers and file-level checks. Tree-sitter incrementality
+and whole-analysis reuse for identical source remain. More selective semantic
+reuse needs an explicit dependency and span-identity design plus measurements.
+
+Feature requests during debounce admit cached models/trees only for identical
+source, otherwise parsing the requested text transiently. Pull diagnostics use
+the same analysis constructor as pushed diagnostics. A replaced or closed
+revision cannot commit its analysis, and push results carry the editor version.
+No cache guard crosses asynchronous publication.
+
+The existing stdio integration binary checks fresh-open/edit parity, skipped
+revisions and requests during debounce. Its process owner handles shutdown and
+cleanup; the message inbox preserves interleaved notifications while awaiting
+responses. This catches production orchestration errors that isolated tree
+splicing helpers could not.
+
+For a local computation measurement, run the ignored `measure_analysis_latency`
+library test with `--ignored --nocapture`. Optionally set
+`TALKBANK_LSP_BENCH_SOURCE` to an existing transcript; it is read without changes.
+Record build profile and distinguish computation from the 250 ms debounce.
+The benchmark is intentionally excluded from CI and sets no timing threshold.

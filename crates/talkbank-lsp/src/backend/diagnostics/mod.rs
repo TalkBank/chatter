@@ -10,11 +10,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-mod cache_builder;
+mod analysis;
 mod conversion;
 mod related_info;
 mod text_diff;
 mod validation_orchestrator;
 
 // Re-export public API
-pub(crate) use validation_orchestrator::{ValidationResources, validate_and_publish};
+pub(crate) use validation_orchestrator::{document_diagnostics, validate_and_publish};
+
+pub(crate) use analysis::DocumentAnalysis;

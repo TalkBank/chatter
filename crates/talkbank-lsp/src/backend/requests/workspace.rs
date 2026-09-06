@@ -15,7 +15,7 @@ pub(super) async fn handle_workspace_symbol(
     for entry in backend.documents.iter() {
         let uri = entry.key();
         let doc = entry.value();
-        let symbols = features::workspace_symbols_for_document(uri, doc, query);
+        let symbols = features::workspace_symbols_for_document(uri, &doc.source, query);
         all_symbols.extend(symbols);
     }
 

@@ -19,11 +19,9 @@ pub mod error;
 mod execute_command_args;
 pub(crate) mod execute_commands;
 pub mod features;
-pub mod incremental;
 pub(crate) mod language_services;
 pub(crate) mod participants;
 pub mod utils;
-pub mod validation_cache;
 
 mod capabilities;
 mod documents;
@@ -219,19 +217,16 @@ impl LanguageServer for Backend {
         params: DocumentDiagnosticParams,
     ) -> Result<DocumentDiagnosticReportResult> {
         let uri = params.text_document.uri;
-        let items = self
-            .last_diagnostics
-            .get(&uri)
-            .map(|entry| entry.value().clone())
-            .unwrap_or_default();
+        let report = diagnostics::document_diagnostics(self, &uri)?;
+        let (result_id, items) = match report {
+            Some(report) => (Some(report.version.to_string()), report.items),
+            None => (None, Vec::new()),
+        };
 
         Ok(DocumentDiagnosticReportResult::Report(
             DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                 related_documents: None,
-                full_document_diagnostic_report: FullDocumentDiagnosticReport {
-                    result_id: None,
-                    items,
-                },
+                full_document_diagnostic_report: FullDocumentDiagnosticReport { result_id, items },
             }),
         ))
     }
@@ -241,20 +236,27 @@ impl LanguageServer for Backend {
         &self,
         _params: WorkspaceDiagnosticParams,
     ) -> Result<WorkspaceDiagnosticReportResult> {
-        let items: Vec<WorkspaceDocumentDiagnosticReport> = self
-            .last_diagnostics
+        // Drop document-map guards before analysis re-enters the same map.
+        let uris: Vec<_> = self
+            .documents
             .iter()
-            .map(|entry| {
-                WorkspaceDocumentDiagnosticReport::Full(WorkspaceFullDocumentDiagnosticReport {
-                    uri: entry.key().clone(),
-                    version: None,
-                    full_document_diagnostic_report: FullDocumentDiagnosticReport {
-                        result_id: None,
-                        items: entry.value().clone(),
-                    },
-                })
-            })
+            .map(|entry| entry.key().clone())
             .collect();
+        let mut items = Vec::new();
+        for uri in uris {
+            if let Some(report) = diagnostics::document_diagnostics(self, &uri)? {
+                items.push(WorkspaceDocumentDiagnosticReport::Full(
+                    WorkspaceFullDocumentDiagnosticReport {
+                        uri,
+                        version: Some(i64::from(report.version)),
+                        full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                            result_id: Some(report.version.to_string()),
+                            items: report.items,
+                        },
+                    },
+                ));
+            }
+        }
 
         Ok(WorkspaceDiagnosticReportResult::Report(
             WorkspaceDiagnosticReport { items },

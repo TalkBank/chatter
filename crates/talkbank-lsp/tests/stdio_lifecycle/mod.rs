@@ -1,5 +1,7 @@
 //! Exercise the actual executable with the editor's stdin pipe kept open.
 
+use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
@@ -7,12 +9,15 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+mod diagnostics;
+
 const DEADLINE: Duration = Duration::from_secs(10);
 
 struct Editor {
     process: Child,
     input: Option<ChildStdin>,
     messages: Receiver<Value>,
+    pending: RefCell<VecDeque<Value>>,
 }
 
 impl Editor {
@@ -55,6 +60,7 @@ impl Editor {
             process,
             input,
             messages,
+            pending: RefCell::new(VecDeque::new()),
         }
     }
 
@@ -66,17 +72,28 @@ impl Editor {
         input.flush().unwrap();
     }
 
-    fn response(&self, id: u64) -> Value {
+    // Preserve interleaved notifications while awaiting a response, and vice
+    // versa. Transport scheduling must not make the test silently lose events.
+    fn message_matching(&self, matches: impl Fn(&Value) -> bool) -> Value {
+        let mut pending = self.pending.borrow_mut();
+        if let Some(index) = pending.iter().position(&matches) {
+            return pending.remove(index).unwrap();
+        }
         let deadline = Instant::now() + DEADLINE;
         loop {
             let message = self
                 .messages
                 .recv_timeout(deadline.saturating_duration_since(Instant::now()))
                 .unwrap();
-            if message.get("id") == Some(&json!(id)) {
+            if matches(&message) {
                 return message;
             }
+            pending.push_back(message);
         }
+    }
+
+    fn response(&self, id: u64) -> Value {
+        self.message_matching(|message| message.get("id") == Some(&json!(id)))
     }
 
     fn initialize(&mut self) {

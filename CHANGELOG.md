@@ -11,10 +11,14 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- LSP backend cache fields are replaced by a private source-bound analysis.
+  The unused public incremental-splice and validation-cache modules are removed.
+  Syntax reuse remains incremental; models and validation results are rebuilt
+  together using the shared model validator.
+
 - `DocumentRoot` is a private-field classification with method accessors rather
   than a publicly constructible enum. `into_clean` produces `CleanDocument`
-  only when the complete source has no syntax recovery; the LSP requires this
-  proof before reusing incremental validation.
+  only when the complete source has no syntax recovery.
 
 - re2c parsed header lines carry `HeaderProvenance` in place of a standalone
   separator field, and box their header payload. The owned lexer extent now
@@ -24,6 +28,15 @@ version and are listed under "Changed" / "Removed".
   of discarding the full lexical extent. This changes their Rust payload types.
 
 ### Fixed
+
+- LSP diagnostics after edits now agree with fresh-open text, including deleted
+  headers, recovery suffixes, Unicode edits and skipped debounce revisions.
+  Tree-sitter edits use the cached tree's own source and UTF-8 byte coordinates.
+  Feature and pull-diagnostic requests cannot reuse another revision's spans.
+  Published diagnostics carry editor versions; obsolete analyses are discarded.
+- LSP validation includes shared file-level rules such as E752 instead of a
+  separate incomplete validation sequence. Protocol regression tests share the
+  existing executable harness, preserving interleaved responses/notifications.
 
 - Recovery before or after a complete document receives localized diagnostics
   without discarding the document. A complete final main tier stranded outside

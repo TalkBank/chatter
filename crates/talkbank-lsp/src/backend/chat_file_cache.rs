@@ -15,13 +15,12 @@ use tower_lsp::lsp_types::Url;
 
 use crate::backend::LspBackendError;
 use crate::backend::documents;
-use crate::backend::state::{Backend, ParseState};
+use crate::backend::state::Backend;
 
 /// Return a parsed [`ChatFile`] for `uri`, reparsing `doc` on cache miss.
 ///
-/// Emits a `tracing::debug!` when a cache hit is being served from a
-/// stale baseline so operators can observe KIB-013 occurrences without
-/// touching each feature handler (see [`Backend::parse_state`]).
+/// Cached models are admitted only for identical source. During debounce or
+/// recovery, reparsing the requested source preserves current byte positions.
 ///
 /// A [`talkbank_parser::ParseProduct::Built`] is returned as `Ok` even
 /// when it carries diagnostics: per this crate's degrade-gracefully
@@ -35,14 +34,10 @@ pub(crate) fn load_chat_file(
     uri: &Url,
     doc: &str,
 ) -> Result<Arc<ChatFile>, LspBackendError> {
-    if let Some(cached) = backend.chat_files.get(uri) {
-        if backend.parse_state(uri) == ParseState::StaleBaseline {
-            tracing::debug!(
-                uri = %uri,
-                "serving feature request from stale %mor baseline (KIB-013)",
-            );
-        }
-        return Ok(Arc::clone(cached.value()));
+    if let Some(cached) = backend.analyses.get(uri)
+        && let Some(current) = cached.for_source(doc)
+    {
+        return Ok(current.file());
     }
 
     match backend

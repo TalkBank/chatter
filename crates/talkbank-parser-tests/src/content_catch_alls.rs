@@ -88,7 +88,6 @@ pub const UNPROTECTED: &[&str] = &[
     "crates/chatter/src/commands/alignment/helpers.rs",
     "crates/talkbank-lsp/src/alignment/finders.rs",
     "crates/talkbank-lsp/src/alignment/formatters/content.rs",
-    "crates/talkbank-lsp/src/backend/diagnostics/cache_builder.rs",
     "crates/talkbank-lsp/src/backend/requests/alignment_sidecar.rs",
     "crates/talkbank-model/src/model/file/utterance/accessors.rs",
     "crates/talkbank-parser-re2c/src/parser/entry_points.rs",

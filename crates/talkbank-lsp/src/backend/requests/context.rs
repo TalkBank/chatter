@@ -29,20 +29,20 @@ pub(super) fn get_chat_file(
     chat_file_cache::load_chat_file(backend, uri, doc)
 }
 
-/// Return a parse tree, reparsing and caching it on cache miss.
+/// Return a current-source tree; transient request parses never advance the
+/// authoritative analysis baseline during a debounce interval.
 pub(super) fn get_parse_tree(backend: &Backend, uri: &Url, doc: &str) -> Option<Tree> {
-    if let Some(tree) = backend.parse_trees.get(uri) {
-        return Some(tree.clone());
+    if let Some(analysis) = backend.analyses.get(uri)
+        && let Some(current) = analysis.for_source(doc)
+    {
+        return current.tree();
     }
 
     match backend
         .language_services
         .with_parser(|parser| parser.parse_tree_incremental(doc, None))
     {
-        Ok(Ok(tree)) => {
-            backend.parse_trees.insert(uri.clone(), tree.clone());
-            Some(tree)
-        }
+        Ok(Ok(tree)) => Some(tree),
         _ => None,
     }
 }
