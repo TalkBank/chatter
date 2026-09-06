@@ -9,6 +9,17 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-09-06
+
+### Fixed
+
+- The standalone LSP exits after the editor's `exit` notification even when
+  the editor keeps stdin open. A completed shutdown permits exit code 0;
+  exit before a successful shutdown returns code 1. Protocol completion now
+  stops the transport, and runtime teardown does not wait on Tokio's
+  uncancellable stdin reader. Process-level regression tests cover the actual
+  binary, rejected shutdown, early exit, and EOF.
+
 ## [0.20.0] - 2026-09-06
 
 ### Changed
@@ -2608,7 +2619,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.20.1...HEAD
+[0.20.1]: https://github.com/TalkBank/chatter/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/TalkBank/chatter/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/TalkBank/chatter/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/TalkBank/chatter/compare/v0.18.0...v0.18.1

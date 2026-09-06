@@ -5,7 +5,7 @@
 
 fn main() {
     if let Err(err) = talkbank_lsp::run_stdio_server() {
-        eprintln!("Error: failed to start language server: {err}");
+        eprintln!("Error: language server: {err}");
         std::process::exit(1);
     }
 }

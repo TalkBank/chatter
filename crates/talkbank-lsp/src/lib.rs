@@ -56,28 +56,31 @@ mod editor_target;
 pub mod graph;
 pub mod highlight;
 pub mod semantic_tokens;
+mod stdio;
 
 #[cfg(test)]
 mod test_fixtures;
 
-use backend::Backend;
-use tower_lsp::{LspService, Server};
-
 /// Serve the TalkBank language server over standard input/output inside the
 /// current Tokio runtime.
+///
+/// Returns on LSP `exit` without requiring EOF. The caller owns runtime teardown;
+/// Tokio's uncancellable stdin read must not be joined when exiting the process.
+/// Use [`run_stdio_server`] for the standalone process lifecycle.
 pub async fn serve_stdio() {
-    let (service, socket) = LspService::new(Backend::new);
-    Server::new(tokio::io::stdin(), tokio::io::stdout(), socket)
-        .serve(service)
-        .await;
+    let _ = stdio::serve().await;
 }
 
 /// Create a Tokio runtime and serve the TalkBank language server over stdio.
 ///
 /// This is the reusable entrypoint for the standalone `talkbank-lsp` binary.
 pub fn run_stdio_server() -> std::io::Result<()> {
-    tokio::runtime::Runtime::new()?.block_on(async {
-        serve_stdio().await;
-        Ok(())
-    })
+    let runtime = tokio::runtime::Runtime::new()?;
+    let result = runtime.block_on(stdio::serve());
+    // Tokio stdin uses an uncancellable blocking read. At this process entry
+    // point, the LSP lifecycle has ended; waiting for that read would deadlock
+    // editors that retain their pipe until the child exits. Async tasks are
+    // cancelled, and the process reclaims the remaining blocking input thread.
+    runtime.shutdown_background();
+    result
 }

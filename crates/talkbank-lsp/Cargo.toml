@@ -27,6 +27,7 @@ talkbank-parser = { workspace = true }
 thiserror = { workspace = true } #unified
 tokio = { workspace = true }
 tower-lsp = { workspace = true }
+tower-service = { workspace = true }
 tracing = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-talkbank = { workspace = true }

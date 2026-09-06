@@ -1,4 +1,4 @@
-//! Integration tests for byte-offset and LSP position conversion helpers.
+//! Integration tests for positions and the standalone LSP process lifecycle.
 
 // Integration test targets compile as separate crates; the
 // `cfg_attr(test, ...)` allow at lib.rs's crate root does not apply
@@ -11,6 +11,7 @@
 )]
 
 mod position_conversion;
+mod stdio_lifecycle;
 
 mod ascii {
     include!("position_conversion/ascii.rs");

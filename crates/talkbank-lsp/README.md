@@ -1,7 +1,7 @@
 # talkbank-lsp
 
 **Status:** Current
-**Last modified:** 2026-06-15 20:54 EDT
+**Last modified:** 2026-09-06 06:32 EDT
 
 [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) implementation for [CHAT format](https://talkbank.org/0info/manuals/CHAT.html).
 
@@ -38,6 +38,35 @@ talkbank-lsp
 ```
 
 The server communicates over stdio using the standard LSP JSON-RPC protocol.
+
+## Lifecycle verification
+
+The editor sends `shutdown`, waits for its response, then sends `exit`.
+The standalone server exits with code 0 after successful shutdown and code 1
+when `exit` arrives without successful shutdown. The editor may retain its
+stdin pipe until the child exits; EOF is not required for this handshake.
+The protocol contract is defined by the
+[LSP lifecycle specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#exit).
+
+Run the process-level regressions against the locally built executable:
+
+```bash
+cargo test -p talkbank-lsp --test position_conversion_tests stdio_lifecycle
+```
+
+These tests are part of the normal workspace gate. They cover the successful
+handshake, exit before initialization or shutdown, rejected shutdown, and EOF,
+with bounded waits and cleanup of child processes on failure. They join the
+existing integration target to avoid another test binary.
+
+`stdio::LifecycleService` observes successful shutdown and exit at the protocol
+service boundary. Its closed session states prevent a rejected or late shutdown
+from granting successful exit. Completion wakes the transport even while its
+reader is idle. The standalone entrypoint then calls `shutdown_background`:
+[Tokio stdin uses a blocking read that cannot be cancelled](https://docs.rs/tokio/latest/tokio/io/fn.stdin.html),
+so joining runtime threads before process exit can hang indefinitely. This is
+a process-entrypoint policy, not a timeout added to request handlers. Embedders
+using `serve_stdio` remain responsible for their runtime's teardown.
 
 ## License
 
