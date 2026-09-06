@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-06 00:41 EDT
+**Last updated:** 2026-09-06 00:56 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -137,7 +137,12 @@ The file-level E757 spacing check uses the same classified categories for
 closing annotations and retraces. It reads adjacent tokens from `LexedSource`
 and reports the following word's complete lexer span when the code is glued to
 that word. The specification includes both glued examples and a spaced control;
-the cross-backend gate checks those generated cases. The internal AST snapshot
+the cross-backend gate checks those generated cases. The same located-token pass
+rejects replacements glued to rich or reconstructed words with E375/E316, matching
+`word_with_optional_annotations` and CHECK 161. The bracket-location boundary
+test compares both backends against the violation and its spaced legal control.
+Canonical closing-bracket recovery excludes absorbed trailing whitespace from
+its highlight and builds its context from the original source. The internal AST snapshot
 changes to show the category, while reference-corpus model equivalence guards
 serialized CHAT behavior.
 

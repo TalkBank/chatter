@@ -1465,6 +1465,13 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E375.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E376.md",
       "example": 1,
       "parse": [

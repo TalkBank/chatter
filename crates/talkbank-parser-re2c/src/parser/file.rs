@@ -116,15 +116,41 @@ fn report_pause_glued_to_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink)
     }
 }
 
-/// Report E757 using the annotation category already admitted by the parser.
-/// Rich scoped tokens close a bracket just as retraces do. Lexer locations
-/// remain paired with their tokens, so the diagnostic names the glued word.
-fn report_code_glued_to_following_content(lexed: &super::LexedSource<'_>, errors: &impl ErrorSink) {
+/// Report missing separators at source-located annotation boundaries.
+/// Replacements require whitespace before their opening bracket (E375/E316);
+/// rich scoped annotations and retraces require it before a following word
+/// (E757). Lexer locations stay paired with the admitted token categories.
+fn report_annotation_spacing(lexed: &super::LexedSource<'_>, errors: &impl ErrorSink) {
     let range = 0..lexed.tokens().len();
     for ((left, _), (right, span)) in lexed
         .located(range.clone())
         .zip(lexed.located(range).skip(1))
     {
+        // A replacement is a separate token after a word, including a word
+        // assembled from sub-tokens. Recovery retains the AST, but the missing
+        // separator violates word_with_optional_annotations (CHECK 161).
+        if matches!(right, Token::Replacement(_))
+            && (matches!(left, Token::Word { .. })
+                || super::classify::is_word_token(TokenDiscriminants::from(left)))
+        {
+            errors.report(ParseError::new(
+                talkbank_model::ErrorCode::ContentAnnotationParseError,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::from_offsets(span.end - 1, span.end),
+                None,
+                "Replacement annotation must be separated from its word by whitespace",
+            ));
+            // The canonical grammar also reports the opening bracket as
+            // unparsable content. These endpoints come from the complete
+            // replacement match, not a search through reconstructed text.
+            errors.report(ParseError::new(
+                talkbank_model::ErrorCode::UnparsableContent,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::from_offsets(span.start, span.start + 1),
+                None,
+                "Replacement begins without the required preceding whitespace",
+            ));
+        }
         let closes_a_code = matches!(left, Token::RightBracket(_))
             || matches!(
                 super::classify::token_to_parsed_annotation(left.clone()),
@@ -295,7 +321,7 @@ pub(crate) fn parse_file_with_errors<'a>(
     report_space_inside_angle_group(tokens, errors);
     report_pause_glued_to_word(tokens, errors);
     report_pause_glued_to_following_content(tokens, errors);
-    report_code_glued_to_following_content(lexed, errors);
+    report_annotation_spacing(lexed, errors);
     report_leading_space_on_main_tier(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();

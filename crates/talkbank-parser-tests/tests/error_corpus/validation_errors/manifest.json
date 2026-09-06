@@ -1277,6 +1277,13 @@
       "source_spec": "spec/errors/E375.md"
     },
     {
+      "fixture": "E375_4.cha",
+      "code": "E375",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E375.md"
+    },
+    {
       "fixture": "E376_1.cha",
       "code": "E376",
       "claim": "violates",

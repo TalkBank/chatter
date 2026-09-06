@@ -573,3 +573,62 @@ fn malformed_tier_prefixes_report_the_complete_source_line() {
         }
     }
 }
+
+/// Preserve the canonical recovery locations, as well as rejecting the syntax.
+#[test]
+fn glued_replacement_diagnostics_match_the_canonical_bracket_locations() {
+    use talkbank_model::{ChatParser, ErrorCode, Span};
+    use talkbank_spec_vocabulary::frontmatter::Claim;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
+    let spec = specs
+        .iter()
+        .find(|spec| spec.filename == "E375.md")
+        .unwrap();
+    let canonical = TreeSitterParser::new().unwrap();
+    let re2c = talkbank_parser_re2c::Re2cParser::new();
+    fn diagnostics(parser: &impl ChatParser, source: &str) -> Vec<(String, Span)> {
+        let errors = ErrorCollector::new();
+        let _ = parser.parse_chat_file(source, 0, &errors);
+        let mut result: Vec<_> = errors
+            .into_vec()
+            .into_iter()
+            .filter(|error| {
+                matches!(
+                    error.code,
+                    ErrorCode::UnparsableContent | ErrorCode::ContentAnnotationParseError
+                )
+            })
+            .map(|error| (error.code.to_string(), error.location.span))
+            .collect();
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result
+    }
+    let examples: Vec<_> = spec
+        .examples()
+        .iter()
+        .filter(|example| example.chat.as_str().contains("[: foo]"))
+        .collect();
+    assert_eq!(
+        examples.len(),
+        2,
+        "the source spec must retain the violation and its legal control"
+    );
+    for example in examples {
+        let source = example.chat.as_str();
+        let expected = diagnostics(&canonical, source);
+        assert_eq!(
+            expected.len(),
+            if matches!(example.claim, Claim::Violates) {
+                2
+            } else {
+                0
+            }
+        );
+        assert_eq!(diagnostics(&re2c, source), expected);
+    }
+}

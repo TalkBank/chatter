@@ -354,11 +354,16 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
     }
     // Closing bracket fragment "] word", other half of a broken annotation
     if error_text.trim_start().starts_with(']') {
+        // Recovery may absorb following whitespace into the ERROR node. It
+        // is not part of the malformed content being highlighted. Keep both
+        // the diagnostic and its context in the original source coordinates.
+        let content = error_text.trim_end();
+        let content_end = error_node.start_byte() + content.len();
         return ParseError::new(
             ErrorCode::ContentAnnotationParseError,
             Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
+            SourceLocation::from_offsets(error_node.start_byte(), content_end),
+            ErrorContext::new(source, error_node.start_byte()..content_end, content),
             "Unexpected ']', possibly part of a malformed bracket annotation".to_string(),
         )
         .with_suggestion(

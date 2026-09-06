@@ -27,6 +27,11 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- re2c rejects a replacement glued to its word with E375/E316, using the
+  original bracket locations. A spaced replacement remains valid. The canonical
+  parser's malformed closing-bracket highlight excludes absorbed trailing
+  whitespace and uses the original source for its diagnostic context.
+
 - re2c reports E602 for malformed dependent-tier separators even when content
   follows the label, including a space in place of the required tab. Recovery
   uses the lexer-classified prefix and locates the complete malformed line;
