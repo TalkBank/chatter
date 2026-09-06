@@ -40,6 +40,11 @@ impl<'input> WrappedFragment<'input> {
         &self.source
     }
 
+    /// Whether a CST node starts in the caller's input rather than scaffolding.
+    pub(crate) fn contains_input_start(&self, byte: usize) -> bool {
+        (self.input_start..self.input_start + self.input.len()).contains(&byte)
+    }
+
     pub(crate) fn rebase<T: SpanShift>(&self, mut value: T) -> T {
         value.shift_spans_after(0, self.document_offset as i32 - self.input_start as i32);
         value

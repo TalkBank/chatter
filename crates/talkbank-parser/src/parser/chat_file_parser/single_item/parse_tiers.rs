@@ -7,11 +7,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use talkbank_model::{
-    ErrorCode, ErrorCollector, ErrorContext, OffsetAdjustingErrorSink, ParseError, ParseErrors,
-    Severity, SourceLocation, Span, SpanShift,
+    ErrorCode, ErrorCollector, ErrorContext, ParseError, ParseErrors, Severity, SourceLocation,
+    Span,
 };
 
 use super::TreeSitterParser;
+use crate::api::fragment::WrappedFragment;
 use crate::error::ParseResult;
 use crate::model::DependentTier;
 
@@ -61,17 +62,17 @@ pub fn parse_tiers(parser: &TreeSitterParser, input: &str) -> ParseResult<Depend
     //   SUFFIX = "\n@End"
     //
     // ERROR HANDLING:
-    // - OffsetAdjustingErrorSink: Adjusts error spans from wrapper coordinate space to input coordinate space
+    // - WrappedFragment owns the source and its coordinate projection
     // - tier_sink: Collects errors to check if parsing succeeded
     let prefix = "@UTF8\n@Begin\n*CHI:\ta b c d e f g h i j k l m n o p q r s t u v w x y z .\n";
-    let wrapped = format!("{}{}\n@End", prefix, input);
+    let fragment = WrappedFragment::new(&[prefix], input, "\n@End", 0);
 
-    // Use OffsetAdjustingErrorSink to fix error offsets
+    // Project diagnostics through the same owner that will rebase the model.
     let tier_sink = ErrorCollector::new();
-    let offset = prefix.len();
-    let adjusting_sink = OffsetAdjustingErrorSink::new(&tier_sink, offset, input);
+    let adjusting_sink = fragment.error_sink(&tier_sink);
 
-    let file = parser.parse_chat_file_streaming(&wrapped, &adjusting_sink);
+    let file = parser.parse_chat_file_streaming(fragment.source(), &adjusting_sink);
+    drop(adjusting_sink);
     let error_vec = tier_sink.into_vec();
 
     // Extract the dependent tier from the parsed file
@@ -79,13 +80,7 @@ pub fn parse_tiers(parser: &TreeSitterParser, input: &str) -> ParseResult<Depend
     // since the tier content itself may have parsed successfully.
     if let Some(utterance) = file.utterances().next() {
         if let Some(entry) = utterance.dependent_tiers.first() {
-            // Tier was extracted successfully
-            // Adjust spans: remove wrapper offset so spans are relative to input (0-based)
-            let mut adjusted_tier = entry.tier.clone();
-            let prefix_len = prefix.len();
-            adjusted_tier.shift_spans_after(0, -(prefix_len as i32));
-
-            Ok(adjusted_tier)
+            Ok(fragment.rebase(entry.tier.clone()))
         } else {
             // No dependent tier found - this means parsing actually failed
             if error_vec.is_empty() {

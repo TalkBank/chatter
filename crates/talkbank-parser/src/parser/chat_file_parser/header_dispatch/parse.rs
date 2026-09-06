@@ -7,6 +7,7 @@
 
 use super::super::header_parser::parse_header_node;
 use super::finder::find_header_node_in_tree;
+use crate::api::fragment::WrappedFragment;
 use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
     Severity, SourceLocation,
@@ -58,17 +59,19 @@ impl TreeSitterParser {
         }
 
         const PRE_BEGIN_PREFIX: &str = "@UTF8\n";
-        const PRE_BEGIN_SUFFIX: &str = "@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@End\n";
+        const PRE_BEGIN_SUFFIX: &str = "\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n@End\n";
         const POST_BEGIN_PREFIX: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n";
-        const POST_BEGIN_SUFFIX: &str = "@End\n";
+        const POST_BEGIN_SUFFIX: &str = "\n@End\n";
 
-        let pre_begin_wrapped = format!("{}{}\n{}", PRE_BEGIN_PREFIX, input, PRE_BEGIN_SUFFIX);
-        let post_begin_wrapped = format!("{}{}\n{}", POST_BEGIN_PREFIX, input, POST_BEGIN_SUFFIX);
+        let pre_begin_wrapped =
+            WrappedFragment::new(&[PRE_BEGIN_PREFIX], input, PRE_BEGIN_SUFFIX, 0);
+        let post_begin_wrapped =
+            WrappedFragment::new(&[POST_BEGIN_PREFIX], input, POST_BEGIN_SUFFIX, 0);
 
-        let try_parse = |wrapped: &str,
-                         header_index: usize,
-                         input_offset: usize|
+        let try_parse = |fragment: &WrappedFragment<'_>,
+                         header_index: usize|
          -> ParseResult<Header> {
+            let wrapped = fragment.source();
             let tree = self
                 .parser
                 .borrow_mut()
@@ -104,8 +107,7 @@ impl TreeSitterParser {
             // not from the wrapper prefix/suffix. Without this check, when the
             // input header parses as ERROR (e.g. @Participants before @Begin),
             // the finder returns a wrapper header at the same index.
-            let input_end = input_offset + input.len();
-            if header_node.start_byte() < input_offset || header_node.start_byte() >= input_end {
+            if !fragment.contains_input_start(header_node.start_byte()) {
                 let mut errors = ParseErrors::new();
                 errors.push(
                     ParseError::new(
@@ -121,10 +123,9 @@ impl TreeSitterParser {
             }
 
             // Dispatch to appropriate header parser
-            // Use OffsetAdjustingErrorSink to ensure errors are relative to input, not wrapper
-            use crate::error::OffsetAdjustingErrorSink;
+            // The source owner projects diagnostics into the caller's input.
             let inner_sink = ErrorCollector::new();
-            let error_sink = OffsetAdjustingErrorSink::new(&inner_sink, input_offset, input);
+            let error_sink = fragment.error_sink(&inner_sink);
             let header = if header_node.is_error() {
                 error_sink.report(ParseError::new(
                     ErrorCode::MalformedWordContent,
@@ -208,6 +209,7 @@ impl TreeSitterParser {
                 }
             };
 
+            drop(error_sink);
             let parse_errors = inner_sink.into_vec();
             if !parse_errors.is_empty() {
                 let mut errors = ParseErrors::new();
@@ -218,12 +220,12 @@ impl TreeSitterParser {
             Ok(header)
         };
 
-        let pre_begin_attempt = try_parse(&pre_begin_wrapped, 1, PRE_BEGIN_PREFIX.len());
+        let pre_begin_attempt = try_parse(&pre_begin_wrapped, 1);
         if pre_begin_attempt.is_ok() {
             return pre_begin_attempt;
         }
 
-        let post_begin_attempt = try_parse(&post_begin_wrapped, 5, POST_BEGIN_PREFIX.len());
+        let post_begin_attempt = try_parse(&post_begin_wrapped, 5);
         match (pre_begin_attempt, post_begin_attempt) {
             (Ok(header), _) => Ok(header),
             (Err(_), Ok(header)) => Ok(header),

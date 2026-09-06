@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 05:35 EDT
+**Last updated:** 2026-09-06 07:29 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -183,10 +183,9 @@ let main_tier = parser.parse_main_tier_fragment(tier_text, document_offset, &err
 Fragment parsing adds the caller's offset to model spans and
 diagnostic document locations. `RebasedErrorSink` owns the diagnostic
 translation for both backends. A diagnostic's `ErrorContext` owns its own
-source text, so its highlight remains relative to that text. The wrapper
-removal adapter, `OffsetAdjustingErrorSink`, instead subtracts a synthetic
-prefix and conditionally clips wrapper context; it is not a document rebasing
-operation.
+source text, so its highlight remains relative to that text. Wrapper removal
+is a separate operation owned by `WrappedFragment`; it projects the synthetic
+source before applying any document origin.
 
 Word and main-tier fragments use the multi-root grammar directly, so there is
 no synthetic prefix to subtract. `MainTierFragment` admits a typed main-tier
@@ -195,8 +194,8 @@ or unexpected content. Lowering consumes that proof together with the original
 input, clipping the aggregate tier/content spans to exclude an appended line
 terminator. LF and CRLF supplied by the caller remain part of those spans.
 Trailing garbage or another tier cannot be silently ignored.
-Header parsing already returns input-relative
-diagnostics. Utterance, participant-entry and dependent-tier adapters use an
+Header, utterance, participant-entry and dependent-tier adapters, including
+the standalone `parse_header` and `parse_tiers` entry points, use an
 owned `WrappedFragment`: its constructor records the actual input boundary as
 it assembles the source, and both the model projection and diagnostic sink use
 that boundary. Its diagnostic sink removes that prefix from both primary and
@@ -204,7 +203,11 @@ secondary spans. Context is projected only when its text exactly matches the
 owned synthetic source; an independent context retains its own coordinates
 regardless of length. `cargo test -p talkbank-parser --lib api::fragment::tests`
 checks long inputs, related labels and independent context text. These adapters
-no longer use the legacy sink's length heuristic.
+no longer use the legacy sink's length heuristic. Header dispatch also asks
+that owner whether a located node starts inside the caller's input, removing
+the independently supplied wrapper-prefix length. This check does not yet
+prove that the header consumes all the input; complete header admission is a
+separate remaining boundary improvement.
 Complete documents passed to the utterance adapter are recognized
 through generated typed CST traversal and receive no extra document wrapper.
 
@@ -220,8 +223,9 @@ and offsets zero and 200. Unsupported-line recovery must identify each skipped
 line, retain following utterances, and preserve the diagnostic's local source
 highlight. The existing `usize` to signed span-displacement conversions still
 need an offset representability review; these controls do not prove large-offset
-safety. Secondary labels and context clipping in the legacy wrapper-removal sink
-also remain separate review items.
+safety. The legacy `OffsetAdjustingErrorSink` remains exported by the model
+crate for compatibility, but the tree-sitter parser has no remaining callers.
+Its eventual removal is separate from migrating these owned parser paths.
 
 ### AST Structure
 
