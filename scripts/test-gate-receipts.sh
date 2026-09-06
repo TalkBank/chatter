@@ -11,6 +11,10 @@ cd "$fixture/repo"
 git config user.name 'Gate Test'
 git config user.email 'gate@example.invalid'
 git config core.hooksPath "$fixture/empty-hooks"
+# Tracked files stay part of a commit even if a later ignore rule matches.
+printf 'local-settings.txt\n' > .gitignore
+printf 'tracked settings\n' > local-settings.txt
+git add -f local-settings.txt
 printf 'old\n' > source.txt
 git add -A
 git commit -qm old

@@ -22,7 +22,12 @@ set -euo pipefail
 idx=$(mktemp)
 rm -f "$idx"
 trap 'rm -f "$idx"' EXIT
+# Seed from the real index's tracked paths, including forced additions that
+# match ignore rules. An empty index would silently omit those committed files.
+# Only the temporary index is populated or staged; the user's staging is intact.
+seed_tree="$(git write-tree)"
 export GIT_INDEX_FILE="$idx"
+git read-tree "$seed_tree"
 git add -A
 stamp=$(git write-tree)
 case "$stamp" in
