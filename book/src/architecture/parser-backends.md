@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-06 00:56 EDT
+**Last updated:** 2026-09-06 01:13 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -164,6 +164,19 @@ utterance diagnostics. Remaining fragment entry points that do not yet produce
 diagnostics are still a separate parity gap. The postcode boundary test loads
 the authored E363 examples and checks actual token spans, nonzero offsets,
 recovered tier content and canonical-parser normalization.
+
+### Morphology admission and recovery
+
+The morphology lexer distinguishes the stricter first lemma character from its
+continuation characters and requires content after each feature separator.
+The parser splits an admitted token without inventing an empty lemma fallback.
+On failed `%mor` parsing, `RejectedMorTier` retains raw tokens and reports E600
+at construction, alongside the primary syntax diagnostic. It cannot convert to
+a model tier or masquerade as an unsupported dependent tier. Utterance lowering
+retains morphology taint so alignment does not treat the dropped tier as clean.
+The authored E316 examples and a legal lemma/feature control exercise this path.
+This does not change the grammar's allowance for angle brackets inside a lemma;
+it rejects the forbidden leading angle bracket shown by the source examples.
 
 ### Dependent-tier prefix admission
 

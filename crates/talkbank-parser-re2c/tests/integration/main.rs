@@ -33,6 +33,7 @@ mod golden_parse;
 mod lexer_tests;
 mod media_whitespace_provenance;
 mod model_study;
+mod mor_admission;
 mod parser_fixtures;
 mod postcode_admission;
 mod quick_divergence_check;

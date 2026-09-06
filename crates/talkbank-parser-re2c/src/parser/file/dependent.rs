@@ -10,8 +10,8 @@ use talkbank_model::{ErrorSink, ParseError, Span};
 /// Parse dependent tiers following a main tier.
 ///
 /// When a tier-specific chumsky parser fails, the error is reported
-/// and the tier falls back to a generic text tier (preserving the raw
-/// content for downstream inspection).
+/// and raw content is retained for inspection. Rejected morphology has its
+/// own recovery state, distinct from a valid generic text tier.
 pub(super) fn parse_dependent_tiers<'a>(
     lexed: &LexedSource<'a>,
     pos: &mut usize,
@@ -112,7 +112,17 @@ pub(super) fn parse_dependent_tiers<'a>(
                             &format!("failed to parse {prefix_text} tier content"),
                         );
                     }
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
+                    if prefix_text == "%mor:\t" {
+                        let (_, last_span) = lexed.token_at(content_end - 1);
+                        dep_tiers.push(DependentTierParsed::RejectedMor(RejectedMorTier::report(
+                            prefix,
+                            tier_tokens,
+                            Span::from_usize(prefix_span.start, last_span.end),
+                            errors,
+                        )));
+                    } else {
+                        dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
+                    }
                 }
             }
         } else if prefix_text.starts_with("%pho") {

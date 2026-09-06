@@ -11,6 +11,9 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Breaking:** re2c dependent-tier AST adds `RejectedMor`, retaining raw input
+  after failed morphology admission without fabricating a model tier.
+
 - **Breaking:** re2c `Token::TierPrefix` denotes a complete colon-tab prefix;
   the new `IncompleteTierPrefix` variant identifies recovery from a bare label.
 
@@ -26,6 +29,10 @@ version and are listed under "Changed" / "Removed".
   reflect this category; serialized CHAT model output retains its shape.
 
 ### Fixed
+
+- re2c enforces morphological lemma starts and nonempty features at lexing.
+  Rejected `%mor` reports E316/E600 and preserves morphology taint instead of
+  converting to an unsupported tier with E605.
 
 - re2c rejects a replacement glued to its word with E375/E316, using the
   original bracket locations. A spaced replacement remains valid. The canonical

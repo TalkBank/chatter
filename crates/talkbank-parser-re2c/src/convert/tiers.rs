@@ -97,6 +97,12 @@ pub fn utterance_to_model(
         .iter()
         .filter_map(|tier| dependent_tier_to_model(tier, source))
         .collect();
+    let mut parse_health = talkbank_model::model::ParseHealthState::Clean;
+    for tier in &u.dependent_tiers {
+        if matches!(tier, ast::DependentTierParsed::RejectedMor(_)) {
+            parse_health.taint(talkbank_model::model::ParseHealthTier::Mor);
+        }
+    }
     talkbank_model::model::Utterance {
         preceding_headers: Default::default(),
         main,
@@ -108,13 +114,9 @@ pub fn utterance_to_model(
         dependent_tiers: dep_tiers.into_iter().map(DependentTierEntry::new).collect(),
         alignments: None,
         alignment_diagnostics: Vec::new(),
-        // re2c's lexer never fails and this runs on a fully-parsed AST utterance;
-        // individual unconvertible tiers are dropped above and surfaced by the
-        // cross-tier validators. Establish Clean provenance so the alignment
-        // checks actually run (an Unknown default makes every cross-tier check
-        // skip with an E600 "provenance unknown" warning, leaving re2c with a far
-        // weaker validation surface than the tree-sitter parser).
-        parse_health: talkbank_model::model::ParseHealthState::Clean,
+        // Rejected morphology remains tainted even though there is no model
+        // tier to convert. Do not align other tiers against recovered absence.
+        parse_health,
         utterance_language: Default::default(),
         language_metadata: Default::default(),
     }
@@ -131,6 +133,7 @@ pub fn dependent_tier_to_model(
     source: SourceText<'_>,
 ) -> Option<talkbank_model::model::DependentTier> {
     Some(match tier {
+        ast::DependentTierParsed::RejectedMor(_) => return None,
         ast::DependentTierParsed::Mor(mor) => {
             talkbank_model::model::DependentTier::Mor(MorTier::try_from(mor).ok()?)
         }

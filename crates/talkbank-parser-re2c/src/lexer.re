@@ -1083,21 +1083,16 @@ impl<'a> Iterator for Lexer<'a> {
         // NOT: MorPos, Pipe, MorSegment, MorTilde, MorPos, Pipe, MorSegment, Hyphen, ...
         // ═══════════════════════════════════════════════════════
 
-        // Rich MorWord token: POS|lemma[-feature]*
-        // Matches: chars-before-pipe | chars-after-pipe[-chars]*
-        // The entire POS|lemma-feat-feat is one token.
-        // Tags mark the pipe position for zero-copy POS/lemma extraction.
-        // RICH MorWord: POS|lemma-feat1-feat2
-        //
-        // The ENTIRE POS|lemma[-feat]* is one token. We match:
-        //   POS chars: grammar.js mor_pos (no . ? ! | + ~ $ # @ % = & [] <> () - , space)
-        //   | pipe
-        //   Rest: everything until space, ., ?, |, +, ~ or newline
-        //         (includes - for features, ! for Basque derivational boundaries, etc.)
-        //
-        // grammar.js splits mor_lemma from mor_feature at -, but we capture
-        // the whole thing as one rich token. The parser splits on | and -.
-        <MOR_CONTENT> [^\x00.?!|+~$#@%=&[\]<>()\-,; \t\r\n\u201C\u201D]+ @t1 "|" @t2 [^\x00.?|+~ \t\r\n\u201C\u201D]+ {
+        // One rich token for grammar.js mor_word = mor_pos "|" mor_lemma
+        // mor_feature*. The lemma's FIRST character has stricter admission
+        // than later characters; treating all payload bytes alike admitted
+        // legacy angle-bracket prefixes such as noun|<sos>tos (E316).
+        // Features require a value after every hyphen. Interior !, = and
+        // commas remain opaque lemma/feature content as in the grammar.
+        mor_lemma_first = [^\x00.?!|+~$#@%=&[\]<>()\- \t\r\n\u201C\u201D];
+        mor_lemma_rest = [^\x00.?|+~\- \t\r\n];
+        mor_feature = "-" mor_lemma_rest+;
+        <MOR_CONTENT> [^\x00.?!|+~$#@%=&[\]<>()\-,; \t\r\n\u201C\u201D]+ @t1 "|" @t2 mor_lemma_first mor_lemma_rest* mor_feature* {
             let end = self.cursor;
             return Some((Token::MorWord {
                 pos: &yyinput[start..self.t1],

@@ -71,11 +71,11 @@ pub fn mor_word_parser<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, MorWordParsed<'a>> + Clone {
     select! {
         Token::MorWord { pos, lemma_features } => {
-            let mut parts = lemma_features.splitn(2, '-');
-            let lemma = parts.next().unwrap_or("");
-            let features: Vec<&str> = match parts.next() {
-                Some(feat_str) => feat_str.split('-').collect(),
-                None => vec![],
+            // The rich token admits a nonempty lemma and nonempty feature
+            // values. No fallback empty lemma can be fabricated here.
+            let (lemma, features) = match lemma_features.split_once('-') {
+                Some((lemma, feature_text)) => (lemma, feature_text.split('-').collect()),
+                None => (lemma_features, Vec::new()),
             };
             MorWordParsed { pos, lemma, features }
         },

@@ -196,9 +196,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E316.md#3", Conflicting),
     ("E316.md#4", Conflicting),
     ("E316.md#5", Conflicting),
-    ("E316.md#6", Conflicting),
-    ("E316.md#7", Re2cSilent),
-    ("E316.md#8", Conflicting),
     ("E324.md#0", Conflicting),
     ("E326.md", Conflicting),
     // These four arrived on 2026-08-11 without any parser change: E342_auto.md
@@ -237,6 +234,5 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E758.md#2", Re2cSilent),
     ("E758.md#3", Re2cSilent),
     ("E758.md#4", Re2cExtra),
-    ("E760.md#0", Conflicting),
-    ("E760.md#1", Conflicting),
+    ("E760.md#0", Re2cIncomplete),
 ];

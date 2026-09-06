@@ -5,6 +5,9 @@
 use crate::token::Token;
 use serde::Serialize;
 
+mod rejected_tier;
+pub use rejected_tier::RejectedMorTier;
+
 mod word;
 pub use word::{
     CaDelimiterKind, CaElementKind, OverlapKind, ParsedAnnotation, ParsedLangSuffix,
@@ -536,6 +539,8 @@ pub struct Utterance<'a> {
 /// A parsed dependent tier.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum DependentTierParsed<'a> {
+    /// Rejected morphological syntax, retained only for raw AST inspection.
+    RejectedMor(RejectedMorTier<'a>),
     Mor(MorTier<'a>),
     Gra(GraTier<'a>),
     Pho(PhoTier<'a>),

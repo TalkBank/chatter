@@ -903,6 +903,13 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E316.md",
+      "example": 10,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E319.md",
       "example": 1,
       "parse": [

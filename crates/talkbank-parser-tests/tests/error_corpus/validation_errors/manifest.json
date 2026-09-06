@@ -709,6 +709,13 @@
       "source_spec": "spec/errors/E316.md"
     },
     {
+      "fixture": "E316_10.cha",
+      "code": "E316",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316.md"
+    },
+    {
       "fixture": "E316_2.cha",
       "code": "E316",
       "claim": "violates",
