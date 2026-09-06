@@ -31,9 +31,12 @@ use std::process::Command;
 /// receipt from the developer's machine. axoupdater reads the receipt from
 /// `$XDG_CONFIG_HOME/<app>/` or `~/.config/<app>/`, so pointing both `HOME` and
 /// `XDG_CONFIG_HOME` at an empty dir guarantees the no-receipt path.
-fn isolated_home(tag: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("chatter-update-{tag}-{}", std::process::id()));
-    std::fs::create_dir_all(dir.join(".config")).expect("create isolated home dir");
+fn isolated_home(tag: &str) -> tempfile::TempDir {
+    let dir = tempfile::Builder::new()
+        .prefix(&format!("chatter-update-{tag}-"))
+        .tempdir()
+        .expect("create isolated home");
+    std::fs::create_dir_all(dir.path().join(".config")).expect("create isolated home dir");
     dir
 }
 
@@ -82,11 +85,10 @@ fn update_without_install_receipt_fails_gracefully() {
     let home = isolated_home("noreceipt");
     let out = Command::new(env!("CARGO_BIN_EXE_chatter"))
         .arg("update")
-        .env("HOME", &home)
-        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .env("HOME", home.path())
+        .env("XDG_CONFIG_HOME", home.path().join(".config"))
         .output()
         .expect("failed to run chatter update");
-    let _ = std::fs::remove_dir_all(&home);
 
     assert!(
         !out.status.success(),
@@ -115,14 +117,21 @@ fn update_without_install_receipt_fails_gracefully() {
 fn update_does_not_delegate_to_a_sibling_updater_binary() {
     use std::os::unix::fs::PermissionsExt;
 
-    let dir = isolated_home("nodelegate");
+    let original = std::path::Path::new(env!("CARGO_BIN_EXE_chatter"));
+    // Keep the temporary directory on the artifact's filesystem so hard-link
+    // creation cannot fail across mounts. Its owner cleans up on panic too.
+    let home = tempfile::Builder::new()
+        .prefix("chatter-update-nodelegate-")
+        .tempdir_in(original.parent().expect("artifact parent"))
+        .expect("create executable home");
+    let dir = home.path();
 
-    // Run a COPY of chatter from the temp dir so current_exe().parent() is the
-    // directory we control (where the old launcher checked first).
-    let chatter_copy = dir.join("chatter");
-    std::fs::copy(env!("CARGO_BIN_EXE_chatter"), &chatter_copy).expect("copy chatter");
-    std::fs::set_permissions(&chatter_copy, std::fs::Permissions::from_mode(0o755))
-        .expect("chmod chatter copy");
+    // current_exe().parent() must be the directory we control. An immutable
+    // hard link relocates it without opening a writable copy. Copy-and-exec
+    // produced ETXTBSY under parallel Linux CI. Never
+    // chmod this link: its inode and permissions belong to Cargo's artifact.
+    let relocated = dir.join("chatter");
+    std::fs::hard_link(original, &relocated).expect("link chatter on the same filesystem");
 
     // Fake updater siblings that record their own invocation via a sentinel
     // file. Stage BOTH the cargo-dist standalone-updater name (`<package>-update`)
@@ -145,16 +154,21 @@ fn update_does_not_delegate_to_a_sibling_updater_binary() {
             .expect("chmod fake sibling updater");
     }
 
-    let _ = Command::new(&chatter_copy)
+    let output = Command::new(&relocated)
         .arg("update")
-        .env("PATH", &dir) // the only place a sibling could be discovered
-        .env("HOME", &dir) // no install receipt -> in-process update no-ops gracefully
+        .env("PATH", dir) // the only place a sibling could be discovered
+        .env("HOME", dir) // no install receipt -> in-process update refuses gracefully
         .env("XDG_CONFIG_HOME", dir.join(".config"))
         .output()
         .expect("failed to run chatter update");
 
+    assert!(!output.status.success(), "no receipt must refuse an update");
+    let message = crate::common::combined_output(&output).to_lowercase();
+    assert!(
+        message.contains("install") || message.contains("releases") || message.contains("receipt"),
+        "expected a no-receipt refusal, not a failed process launch: {message}"
+    );
     let delegated = sentinel.exists();
-    let _ = std::fs::remove_dir_all(&dir);
 
     assert!(
         !delegated,
