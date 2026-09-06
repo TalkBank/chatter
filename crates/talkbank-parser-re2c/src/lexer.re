@@ -251,9 +251,10 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         }
 
-        // grammar.js: newline = /[\r\n]+/
-        // End of line resets to INITIAL.
-        <*> [\r\n]+ => INITIAL {
+        // grammar.js: newline = /\r\n|[\r\n]/
+        // One logical line break: fusing a run erases blank-line structure.
+        // End of line resets to INITIAL; continuations remain the rule above.
+        <*> ("\r\n" | [\r\n]) => INITIAL {
             emit!(Newline);
         }
 

@@ -2742,6 +2742,27 @@
       "source_spec": "spec/errors/E747.md"
     },
     {
+      "fixture": "E747_2.cha",
+      "code": "E747",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E747.md"
+    },
+    {
+      "fixture": "E747_3.cha",
+      "code": "E747",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E747.md"
+    },
+    {
+      "fixture": "E747_4.cha",
+      "code": "E747",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E747.md"
+    },
+    {
       "fixture": "E748_1.cha",
       "code": "E748",
       "claim": "violates",

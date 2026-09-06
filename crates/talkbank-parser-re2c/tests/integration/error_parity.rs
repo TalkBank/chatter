@@ -491,3 +491,46 @@ fn participants_recovery_preserves_entries_and_fragment_locations() {
         talkbank_model::Span::from_usize(comma, comma + 1)
     );
 }
+
+/// Wire behavior: both backends must preserve utterances and locate the same
+/// blank logical line across the line-ending forms declared by the spec.
+#[test]
+fn blank_line_recovery_matches_for_each_spec_line_ending() {
+    use talkbank_model::{ChatParser, ErrorCode};
+    use talkbank_spec_vocabulary::frontmatter::Claim;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
+    let spec = specs
+        .iter()
+        .find(|spec| spec.filename == "E747.md")
+        .unwrap();
+    let canonical = TreeSitterParser::new().unwrap();
+    let re2c = talkbank_parser_re2c::Re2cParser::new();
+    fn parse<P: ChatParser>(parser: &P, input: &str) -> Vec<talkbank_model::Span> {
+        let errors = ErrorCollector::new();
+        let talkbank_model::ParseOutcome::Parsed(file) = parser.parse_chat_file(input, 0, &errors)
+        else {
+            panic!("blank-line recovery must preserve the parsed document");
+        };
+        assert_eq!(file.utterances().count(), 2);
+        errors
+            .into_vec()
+            .into_iter()
+            .filter(|error| error.code == ErrorCode::BlankLineNotAllowed)
+            .map(|error| error.location.span)
+            .collect()
+    }
+    for example in spec.examples() {
+        let canonical_spans = parse(&canonical, example.chat.as_str());
+        let re2c_spans = parse(&re2c, example.chat.as_str());
+        let expected = usize::from(matches!(example.claim, Claim::Violates));
+        for (backend, spans) in [("tree-sitter", &canonical_spans), ("re2c", &re2c_spans)] {
+            assert_eq!(spans.len(), expected, "{backend}: {:?}", example.chat);
+        }
+        assert_eq!(canonical_spans, re2c_spans, "{:?}", example.chat);
+    }
+}

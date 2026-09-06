@@ -503,9 +503,15 @@ pub(crate) fn parse_file_with_errors<'a>(
                 }
             }
 
-            // Skip structural tokens
+            // A line break not consumed by a header or utterance is a blank
+            // line, unless malformed-line recovery left its terminator here.
+            TokenDiscriminants::Newline => {
+                lexed.report_blank_line(pos, errors);
+                pos += 1;
+            }
+
+            // Skip remaining structural tokens
             TokenDiscriminants::Whitespace
-            | TokenDiscriminants::Newline
             | TokenDiscriminants::Continuation
             | TokenDiscriminants::BOM => {
                 pos += 1;

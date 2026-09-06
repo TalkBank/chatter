@@ -211,8 +211,17 @@ fn render_spec(spec: &ErrorSpec, placement: SpecPlacement) -> String {
         output.push_str(&format!("{} Examples\n\n", placement.section()));
         for (i, example) in error.examples.iter().enumerate() {
             output.push_str(&format!("{} Example {}\n\n", placement.subsection(), i + 1));
+            // Presentation only: the validation corpus consumes the original
+            // input. Rendering raw CR would hide lone-CR line structure and
+            // create trailing control characters in the published Markdown.
+            let display = if example.input.contains('\r') {
+                output.push_str("> Line endings are displayed as LF; the fixture preserves the original bytes.\n\n");
+                std::borrow::Cow::Owned(example.input.replace("\r\n", "\n").replace('\r', "\n"))
+            } else {
+                std::borrow::Cow::Borrowed(example.input.as_str())
+            };
             output.push_str("```chat\n");
-            output.push_str(&example.input);
+            output.push_str(&display);
             output.push_str("\n```\n\n");
             // NO `**Error**:` line: it printed a field no spec file can
             // declare. See `ErrorDefinition::chat_rule` for the whole story.
@@ -360,6 +369,28 @@ mod tests {
             Some((code, code_specs)) => generate_error_page(code, code_specs),
             None => String::from("<no specs grouped>"),
         }
+    }
+
+    /// Markdown presentation must not embed control-character line endings;
+    /// the source-backed fixture renderer separately preserves those bytes.
+    #[test]
+    fn carriage_return_examples_render_as_readable_markdown() {
+        let registry = crate::test_registry::declaring(&[("E747", Status::Implemented)]);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../errors/E747.md");
+        let source = std::fs::read_to_string(&path).expect("E747 spec exists");
+        let spec = ErrorSpec::from_frontmatter(&path, &source, &registry).expect("E747 loads");
+        assert!(
+            spec.error
+                .examples
+                .iter()
+                .any(|example| example.input.contains('\r'))
+        );
+        let page = page_for(vec![spec]);
+        assert!(
+            !page.contains('\r'),
+            "Markdown must use display line breaks"
+        );
+        assert!(page.contains("the fixture preserves the original bytes"));
     }
 
     /// Active-status pages should advertise themselves as enforced, and state

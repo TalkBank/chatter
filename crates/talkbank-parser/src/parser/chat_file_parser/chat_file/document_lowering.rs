@@ -440,8 +440,8 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 // span-adjacency rules; the malformed line already carries
                 // its own diagnostics.
                 let start = node.start_byte();
-                let at_line_boundary =
-                    start == 0 || self.source.as_bytes().get(start - 1) == Some(&b'\n');
+                let at_line_boundary = start == 0
+                    || matches!(self.source.as_bytes().get(start - 1), Some(b'\r' | b'\n'));
                 if at_line_boundary {
                     self.errors.report(ParseError::new(
                         ErrorCode::BlankLineNotAllowed,

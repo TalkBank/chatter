@@ -3294,6 +3294,31 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E747.md",
+      "example": 2,
+      "parse": [
+        "E747"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E747.md",
+      "example": 3,
+      "parse": [
+        "E747"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E747.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E748.md",
       "example": 1,
       "parse": [

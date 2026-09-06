@@ -30,6 +30,26 @@ impl<'source> LexedSource<'source> {
         &self.tokens
     }
 
+    /// Diagnose a standalone newline selected by the file dispatcher. A
+    /// newline left behind after recovery on a nonempty line is not blank.
+    pub(crate) fn report_blank_line(&self, index: usize, errors: &impl talkbank_model::ErrorSink) {
+        let span = &self.spans[index];
+        if span.start == 0
+            || matches!(
+                self.source.as_bytes().get(span.start - 1),
+                Some(b'\r' | b'\n')
+            )
+        {
+            errors.report(talkbank_model::ParseError::new(
+                talkbank_model::ErrorCode::BlankLineNotAllowed,
+                talkbank_model::Severity::Error,
+                talkbank_model::SourceLocation::from_offsets(span.start, span.end),
+                None,
+                "Blank lines are not allowed",
+            ));
+        }
+    }
+
     /// A range selected by the file parser's token cursor retains its locations.
     pub(crate) fn located(
         &self,

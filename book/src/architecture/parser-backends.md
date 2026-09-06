@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-05 22:36 EDT
+**Last updated:** 2026-09-05 23:01 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -116,6 +116,13 @@ instead of reparsing raw header tokens, and header fragments forward the
 same diagnostics with the caller's offset. The internal AST snapshot records
 this distinction; it does not define a serialized CHAT format change.
 
+The re2c newline token represents one LF, CRLF or lone CR, matching the
+canonical grammar. It no longer fuses consecutive breaks and loses blank-line
+structure. Source-aware file dispatch reports an unconsumed blank newline at
+its lexer span. Generated error fixtures preserve their exact line-ending
+bytes in Git; published Markdown normalizes display line breaks and labels
+that presentation change.
+
 ### Not ready as a validity authority
 
 **A clean `--parser re2c` run is not evidence that a file is valid.** The
@@ -125,7 +132,6 @@ spec parity gate records these cases individually in
 
 | Spec case | Missing behavior in re2c |
 |---|---|
-| `E747.md` | Report a blank line between utterances |
 | `E363.md#0` | Report a postcode containing only spaces |
 | `E375.md#1` | Report a replacement annotation glued to its word |
 
@@ -163,7 +169,10 @@ models and serialized output. The error-spec gate
 `backends_diverge_only_where_recorded` separately compares diagnostic code
 sets against a named, bidirectional baseline: a newly divergent case fails,
 and a resolved case must be removed from that baseline. This change removes
-E550 after file and fragment participant recovery agree.
+E550 after file and fragment participant recovery agree. E747 is also closed:
+both lexers preserve single logical line breaks, and both parsers locate a
+blank line under LF, CRLF and lone-CR endings while retaining its surrounding
+utterances.
 
 A passing baseline means that disagreements are accounted for, not that
 both backends meet every spec. The harness distinguishes backend agreement

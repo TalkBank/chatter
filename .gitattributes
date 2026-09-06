@@ -6,3 +6,7 @@
 # windows-latest cross-platform leg. Forcing LF on checkout fixes it; `text=auto`
 # lets git leave genuinely binary files untouched.
 * text=auto eol=lf
+
+# Generated validation fixtures are exact spec inputs. CRLF and lone-CR
+# examples exercise parser behavior, so Git must preserve their actual bytes.
+crates/talkbank-parser-tests/tests/error_corpus/validation_errors/*.cha -text whitespace=cr-at-eol

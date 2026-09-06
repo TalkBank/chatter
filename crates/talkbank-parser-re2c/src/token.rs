@@ -13,7 +13,7 @@ pub enum Token<'a> {
     // ── Structure ───────────────────────────────────────────
     /// BOM (byte order mark) at start of file.
     BOM(&'a str),
-    /// Newline(s): /[\r\n]+/
+    /// One logical line break: /\r\n|[\r\n]/.
     Newline(&'a str),
     /// Continuation: /[\r\n]+\t/ (newline followed by tab)
     Continuation(&'a str),

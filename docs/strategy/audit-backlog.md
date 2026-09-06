@@ -1,7 +1,7 @@
 # Pre-Release Audit Backlog
 
 **Status:** Current
-**Last updated:** 2026-07-28 09:28 EDT
+**Last updated:** 2026-09-05 22:56 EDT
 
 P2 (non-release-blocking) findings deferred from the v0.1.0 audit
 passes, plus the security-advisory triage. P0/P1 items are fixed in
@@ -81,6 +81,41 @@ expected rather than neglected.
 
 Verified with `gh api repos/TalkBank/chatter/dependabot/alerts` and
 `npm ls <pkg>` in `apps/chatter-desktop`, 2026-07-28.
+
+## Re-triage 2026-09-05 (0.19.0)
+
+The current Dependabot response has two open alerts. The July statement that
+none has a fix and none reaches a shipped platform is historical: 0.19.0
+ships Linux desktop artifacts, and GLib has a patched newer API line.
+
+| Package | Current path and scope | Disposition |
+|---|---|---|
+| `extract-zip` 2.0.1, high | `@wdio/utils` -> `@puppeteer/browsers`; development browser-download tooling | No patched version reported; not bundled as desktop runtime JavaScript. Treat downloaded browser archives as the affected input boundary. |
+| `glib` 0.18.5, medium | Tauri 2.11.5 -> GTK 0.18/WebKit; included in the Linux desktop dependency graph | Patched in 0.20.0, which is outside GTK 0.18's compatible dependency line. A direct version override would not migrate that stack. |
+
+The [GLib advisory](https://rustsec.org/advisories/RUSTSEC-2024-0429.html)
+concerns `VariantStrIter` iteration, where a C out-pointer is passed with
+incorrect mutability. It can become a null-pointer crash under optimization.
+The local production-source review found no callers of `array_iter_str` or
+`VariantStrIter` in this project's application code or downloaded dependency
+sources outside GLib's own implementation/tests. That is bounded source
+inspection, not proof of runtime unreachability or a claim that the dependency
+is patched. Keep this open for a compatible upstream fix or a reviewed GTK
+stack migration; do not represent it as absent from Linux artifacts.
+
+The [extract-zip advisory](https://github.com/advisories/GHSA-jmr9-qjv8-65gv)
+describes symlink path traversal while extracting an archive. The affected
+package is marked `dev` in the desktop lockfile and arrives through WebdriverIO,
+not the shipped frontend dependency graph. No forced dependency substitution
+or local fork was introduced for either alert.
+
+Reproduce the dependency-scope checks with:
+
+```bash
+cargo tree --locked --target x86_64-unknown-linux-gnu -i glib@0.18.5
+npm explain extract-zip --prefix apps/chatter-desktop
+gh api repos/TalkBank/chatter/dependabot/alerts
+```
 
 ### Note for the cutover
 

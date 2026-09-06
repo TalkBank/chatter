@@ -235,7 +235,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E602.md#1", Re2cSilent),
     ("E709.md", Conflicting),
     ("E710.md", Conflicting),
-    ("E747.md", Re2cSilent),
     ("E756.md#0", Re2cIncomplete),
     ("E757.md#1", Re2cSilent),
     ("E757.md#2", Re2cSilent),
