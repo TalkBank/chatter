@@ -55,8 +55,9 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, BeginHeaderNode, EndHeaderNode, FullDocumentChild1Choice, FullDocumentChildren,
-    LineChoice, LineNode, NodeSlot, Utf8HeaderNode, extract_line,
+    AsRawNode, BeginHeaderNode, EndHeaderNode, FromNodeKind, FullDocumentChild1Choice,
+    FullDocumentChildren, LineChoice, LineNode, MainTierNode, NodeSlot, Utf8HeaderNode,
+    extract_line,
 };
 use crate::model::{Header, Line};
 use crate::node_types::{BLANK_LINE, PRE_BEGIN_HEADER, UNSUPPORTED_LINE};
@@ -64,7 +65,9 @@ use crate::parser::ChildCapacity;
 use crate::parser::chat_file_parser::header_parser::{
     handle_pre_begin_header, helpers::header_separator, parse_header_node,
 };
-use crate::parser::chat_file_parser::utterance_parser::parse_utterance_node;
+use crate::parser::chat_file_parser::utterance_parser::{
+    parse_recovered_main_tier, parse_utterance_node,
+};
 use crate::parser::tree_parsing::parser_helpers::{
     analyze_error_node, analyze_line_error, collect_recovery_nodes, is_pre_begin_header,
 };
@@ -158,14 +161,22 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         // child_4: @End anchor.
         self.lower_end_anchor(children.child_4.slot());
 
-        // The carrier's `unexpected` sink holds any direct `full_document` child
-        // that filled no grammar position. Surface it as the SAME recovery
-        // diagnostic the whole-tree backstop emits; the backstop's span-dedup
-        // suppresses the duplicate (WATCH-ITEM below). For valid CHAT and for the
-        // recovery fixtures this sink is empty, so this is a no-op today; it is
-        // the per-carrier mechanism that lets the whole-tree backstop be deleted
-        // once every region surfaces its own recovery (migration Task D).
-        self.surface_unexpected(&children.unexpected);
+        // Missing @End can strand the complete final main tier outside a line
+        // wrapper. Admit that typed EOF construct and reuse normal utterance
+        // construction; arbitrary unexpected content still receives diagnostics.
+        for node in &children.unexpected {
+            if node.end_byte() == self.source.len()
+                && let Some(main) = MainTierNode::from_node(*node)
+            {
+                if let ParseOutcome::Parsed(utterance) =
+                    parse_recovered_main_tier(main, self.source, self.errors)
+                {
+                    self.lines.push(Line::utterance(utterance));
+                }
+            } else {
+                self.surface_unexpected(std::slice::from_ref(node));
+            }
+        }
     }
 
     /// Push a header `Line` for an anchor node at its exact span.

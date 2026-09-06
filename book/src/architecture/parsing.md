@@ -267,13 +267,30 @@ test checks retained utterances, exact diagnostics, and EOF locations at zero,
 nonzero and maximum representable document origins.
 
 Recovery-wrapper suppression requires a private `DocumentRecoveryWrapper`
-proof: every direct child must be a generated document construct or separately
-reported recovery. A recognizable header beside malformed raw header tokens
-cannot suppress E316. At EOF, an exact simple main-tier token sequence also
-qualifies when its final newline is absent; the existing E502 example exercises
-both newline forms. This diagnostic classification does not guarantee that
-every flattened recovery tail has been retained in the model. Broader recovery
-root and tail ownership remain separate work.
+proof at the document position: every direct child must be a generated document
+construct or separately reported recovery. A recognizable header beside malformed
+raw tokens, or a stray header beside a complete document, cannot suppress E316.
+
+`DocumentRoot` owns both the original syntax root and the selected document.
+Lowering finds a complete document even after a recovery sibling, while the
+diagnostic backstop covers the entire source. This prevents trailing text after
+`@End` from validating clean and avoids missing-header cascades when a leading
+error precedes an otherwise complete document. Private fields prevent callers
+from combining a document with an unrelated diagnostic scope.
+
+Only `DocumentRoot::into_clean` can produce `CleanDocument`, the structural proof
+required by the LSP's incremental reuse path. It rejects recovered sources and
+clean fragments alike. The proof establishes syntax completeness, not semantic
+validity; shared validation still owns required headers and other CHAT rules.
+
+At EOF, lowering retains a generated `MainTierNode` stranded outside its line
+wrapper by reusing the normal utterance builder and parse-health transition.
+Flattened token sequences without a final newline remain a separate retention
+case: the recovery backstop can recognize the exact simple terminal sequence
+and defer E502 to validation without proving that its speech reached the model.
+The existing E502 example covers diagnostics in both newline forms; the
+`document_root` parser tests additionally check retained speech, leading and
+trailing recovery regions, and clean-document admission.
 
 ### AST Structure
 

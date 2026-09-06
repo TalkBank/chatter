@@ -22,9 +22,9 @@
 //! 5. [`collect_utterance_line_indices`] maps the surviving utterances back to
 //!    their line positions in the document.
 
-use talkbank_parser::DocumentRoot;
+use talkbank_parser::CleanDocument;
 use talkbank_parser::generated_traversal::{AsRawNode, FromNodeKind, UtteranceNode};
-use tree_sitter::{Range as TsRange, Tree};
+use tree_sitter::Range as TsRange;
 
 use talkbank_model::model::ChatFile;
 
@@ -107,7 +107,7 @@ fn is_context_affecting_header(kind: &str) -> bool {
 
 /// Collect utterance CST nodes in order and classify the header change.
 pub fn collect_utterances_and_header_changes<'a>(
-    tree: &'a Tree,
+    document: CleanDocument<'a>,
     changed_ranges: &[TsRange],
 ) -> (Vec<UtteranceNode<'a>>, HeaderChange) {
     // Typed, because this function is where "is this an utterance?" is DECIDED.
@@ -118,10 +118,9 @@ pub fn collect_utterances_and_header_changes<'a>(
     // (start_byte, end_byte, context_affecting)
     let mut header_ranges: Vec<(usize, usize, bool)> = Vec::new();
 
-    // The THIRD copy of this navigation until 2026-08-26, and the one that
-    // searched all children rather than taking the first. `DocumentRoot` owns
-    // it, and its `node()` is the same fallback-to-root this had, stated once.
-    let doc_node = DocumentRoot::classify(tree).node();
+    // The caller must admit the entire source as a clean document before
+    // cached headers or utterance validation can be reused.
+    let doc_node = document.node().raw_node();
     let mut cursor = doc_node.walk();
     for child in doc_node.children(&mut cursor) {
         if child.is_missing() || child.is_error() {
@@ -383,7 +382,12 @@ mod tests {
         let diff_start = compute_diff_start(old_text, new_text);
 
         let changed_ranges: Vec<TsRange> = old_tree.changed_ranges(&new_tree).collect();
-        let (new_utterances, _) = collect_utterances_and_header_changes(&new_tree, &changed_ranges);
+        let (new_utterances, _) = collect_utterances_and_header_changes(
+            talkbank_parser::DocumentRoot::classify(&new_tree)
+                .into_clean()
+                .expect("clean fixture document"),
+            &changed_ranges,
+        );
 
         assert_eq!(new_utterances.len(), 2);
         let result = detect_utterance_splice(&new_utterances, diff_start, 1);
@@ -399,7 +403,12 @@ mod tests {
         let diff_start = compute_diff_start(old_text, new_text);
 
         let changed_ranges: Vec<TsRange> = old_tree.changed_ranges(&new_tree).collect();
-        let (new_utterances, _) = collect_utterances_and_header_changes(&new_tree, &changed_ranges);
+        let (new_utterances, _) = collect_utterances_and_header_changes(
+            talkbank_parser::DocumentRoot::classify(&new_tree)
+                .into_clean()
+                .expect("clean fixture document"),
+            &changed_ranges,
+        );
 
         assert_eq!(new_utterances.len(), 2);
         let result = detect_utterance_splice(&new_utterances, diff_start, 1);
@@ -415,7 +424,12 @@ mod tests {
         let diff_start = compute_diff_start(old_text, new_text);
 
         let changed_ranges: Vec<TsRange> = old_tree.changed_ranges(&new_tree).collect();
-        let (new_utterances, _) = collect_utterances_and_header_changes(&new_tree, &changed_ranges);
+        let (new_utterances, _) = collect_utterances_and_header_changes(
+            talkbank_parser::DocumentRoot::classify(&new_tree)
+                .into_clean()
+                .expect("clean fixture document"),
+            &changed_ranges,
+        );
 
         assert_eq!(new_utterances.len(), 1);
         let result = detect_utterance_splice(&new_utterances, diff_start, 2);
@@ -431,7 +445,12 @@ mod tests {
         let diff_start = compute_diff_start(old_text, new_text);
 
         let changed_ranges: Vec<TsRange> = old_tree.changed_ranges(&new_tree).collect();
-        let (new_utterances, _) = collect_utterances_and_header_changes(&new_tree, &changed_ranges);
+        let (new_utterances, _) = collect_utterances_and_header_changes(
+            talkbank_parser::DocumentRoot::classify(&new_tree)
+                .into_clean()
+                .expect("clean fixture document"),
+            &changed_ranges,
+        );
 
         // Count diff is +2, not ±1, should return None
         let result = detect_utterance_splice(&new_utterances, diff_start, 1);

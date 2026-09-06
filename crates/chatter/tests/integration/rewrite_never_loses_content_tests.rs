@@ -67,7 +67,7 @@ fn normalize_refuses_a_file_it_would_empty() -> Result<(), TestError> {
 /// population least able to afford silent loss. `chatter validate` reports
 /// E502 on it; `normalize` never consulted that and wrote the short model.
 #[test]
-fn normalize_refuses_to_drop_the_last_utterance_of_a_truncated_file() -> Result<(), TestError> {
+fn normalize_preserves_the_last_typed_utterance_of_a_truncated_file() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
     let source = format!("{HEADER}*CHI:\tone .\n*CHI:\ttwo .\n*CHI:\tthree .\n");
     let path = write_fixture(harness.home_dir(), "truncated.cha", &source)?;
@@ -76,8 +76,26 @@ fn normalize_refuses_to_drop_the_last_utterance_of_a_truncated_file() -> Result<
     let rendered = combined_output(&output);
 
     assert!(
+        output.status.success(),
+        "the recovered complete main tier permits lossless normalization:\n{rendered}"
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), source);
+    Ok(())
+}
+
+/// Without a final newline the last tier can still be flattened into tokens.
+/// Until that distinct recovery shape is retained, the source-coverage guard
+/// must continue refusing to serialize a shortened model.
+#[test]
+fn normalize_refuses_to_drop_a_flattened_terminal_utterance() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let source = format!("{HEADER}*CHI:\tone .\n*CHI:\ttwo .\n*CHI:\tthree .");
+    let path = write_fixture(harness.home_dir(), "flattened.cha", &source)?;
+    let output = harness.run_output(&["normalize", path.to_str().unwrap()])?;
+    let rendered = combined_output(&output);
+    assert!(
         !output.status.success(),
-        "normalize dropped an utterance and reported success:\n{rendered}"
+        "must refuse content loss:\n{rendered}"
     );
     assert!(
         rendered.contains("three"),

@@ -1,137 +1,212 @@
-//! Where the document is in a parse tree, decided once.
+//! One classification owns document lowering and whole-input diagnostics.
 //!
-//! The CHAT grammar is multi-root: `tree.root_node()` is a `source_file`
-//! wrapper whose first child is the `full_document`. When the document rule
-//! fails to complete, a missing `@End` being the common case, tree-sitter emits
-//! an ERROR in its place carrying the document's children in the order the rule
-//! expects, which is exactly what the recovery-aware reconstruction consumes.
-//!
-//! Three call sites navigated to that node independently: the file parser, the
-//! LSP's incremental reparse, and a test helper whose comment said it navigated
-//! "exactly as the production entry point does", which is a prose assertion that
-//! two copies agree. All three ended in `.unwrap_or(root)`, so "no document
-//! here" and "the document IS the root" arrived downstream as the same value.
+//! Tree-sitter can place recovery siblings before or after a complete document.
+//! Selecting the first source child loses a later document; examining only the
+//! selected document loses errors outside it. Keep both scopes in one owner.
 
 use crate::generated_traversal::{
     FromNodeKind, FullDocumentChildren, FullDocumentNode, extract_full_document,
     extract_full_document_from_error_recovery,
 };
+use crate::node_types::SOURCE_FILE;
 use tree_sitter::{Node, Tree};
 
-/// What the document turned out to be.
+/// The document position and its complete syntax-error scope, classified once.
 ///
-/// Carrying the reconstructed children rather than a flag is what stops the
-/// question being asked twice: `Recovered` exists BECAUSE the reconstruction
-/// succeeded, so nothing downstream re-tests `is_error` to decide whether to
-/// try it.
-// `Recovered` is about 368 bytes against `Complete`'s 64, because it carries
-// the whole reconstructed `FullDocumentChildren` carrier rather than a node.
-// Boxing it is the lint's cure and is wrong here: this enum is built ONCE per
-// file parse by `classify`, matched immediately at all three call sites, and
-// never stored in a collection, so the box would buy an allocation and a
-// pointer hop per parse to avoid moving 368 bytes once. Revisit if a caller
-// ever holds many of these at a time.
+/// Private fields prevent combining a document with an unrelated syntax root.
+/// Construct through [`Self::classify`]; use [`Self::node`] for document-local
+/// traversal and [`Self::into_children`] for lowering.
+#[derive(Debug)]
+pub struct DocumentRoot<'tree> {
+    syntax_root: Node<'tree>,
+    document: DocumentShape<'tree>,
+}
+
+/// A complete document with no recovery anywhere in its source tree.
+/// Only whole-source classification can admit this incremental-reuse proof.
+#[derive(Debug)]
+pub struct CleanDocument<'tree>(FullDocumentNode<'tree>);
+
+impl<'tree> CleanDocument<'tree> {
+    /// The complete document's typed CST node.
+    pub fn node(self) -> FullDocumentNode<'tree> {
+        self.0
+    }
+}
+
+// This short-lived classification is built once and consumed immediately.
+// Boxing the recovered carrier would add a per-document allocation to avoid
+// moving it once; it is not stored in a collection.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
-pub enum DocumentRoot<'tree> {
-    /// A complete `full_document`.
+enum DocumentShape<'tree> {
     Complete {
-        /// The node itself, for whole-tree questions.
         node: Node<'tree>,
-        /// The document, classified.
         document: FullDocumentNode<'tree>,
     },
-    /// The ERROR tree-sitter emitted IN PLACE of a `full_document`, with the
-    /// document's children reconstructed from it.
     Recovered {
-        /// The ERROR node, for whole-tree questions.
         node: Node<'tree>,
-        /// The document's children, recovered from under the ERROR.
         children: FullDocumentChildren<'tree>,
     },
-    /// Neither: a `source_file` with no document child, which is what a fragment
-    /// or a file of some other shape parses to. There is nothing
-    /// document-shaped, and matching this node's children against
-    /// `full_document`'s shape would report findings about a shape it does not
-    /// have.
     NotADocument {
-        /// The root, for whole-tree questions.
         node: Node<'tree>,
     },
 }
 
 impl<'tree> DocumentRoot<'tree> {
-    /// Locate and classify the document in `tree`.
+    /// Admit incremental reuse only for a complete, recovery-free source.
+    /// A clean fragment is not a document and cannot reuse cached headers.
+    #[must_use]
+    pub fn into_clean(self) -> Option<CleanDocument<'tree>> {
+        if self.syntax_root.has_error() {
+            return None;
+        }
+        match self.document {
+            DocumentShape::Complete { document, .. } => Some(CleanDocument(document)),
+            DocumentShape::Recovered { .. } | DocumentShape::NotADocument { .. } => None,
+        }
+    }
+
+    /// Locate a complete document even when recovery precedes it.
     ///
-    /// # It descends into `source_file`'s first child WHATEVER that child is
-    ///
-    /// The navigations this replaced descended only when the child was a
-    /// `full_document`, and fell back to the `source_file` otherwise. That
-    /// fallback is why the lowering used to walk a `source_file`'s children
-    /// against `full_document`'s shape.
-    ///
-    /// Missing `@UTF8` alone now leaves a complete document with an absent
-    /// optional encoding slot; shared validation owns E503. Actual structural
-    /// recovery still enters through `Recovered`. Selecting a single child
-    /// does not account for additional recovery siblings at the source root;
-    /// that broader ownership question is separate from document admission.
+    /// The source grammar selects one document or fragment. A complete
+    /// document takes precedence over a recovery sibling; otherwise preserve
+    /// the existing recovery classification at the document position. Every
+    /// path retains the original syntax root for whole-input diagnostics.
     #[must_use]
     pub fn classify(tree: &'tree Tree) -> Self {
-        let ts_root = tree.root_node();
-        // `source_file` is the multi-root wrapper; the document is its first
-        // child. A tree parsed at another entry point is its own root.
-        let node = match ts_root.child(0) {
-            Some(child) if ts_root.kind() == "source_file" => child,
-            Some(_) | None => ts_root,
+        let syntax_root = tree.root_node();
+        if syntax_root.kind() == SOURCE_FILE {
+            let mut cursor = syntax_root.walk();
+            for child in syntax_root.children(&mut cursor) {
+                if let Some(document) = FullDocumentNode::from_node(child) {
+                    return Self {
+                        syntax_root,
+                        document: DocumentShape::Complete {
+                            node: child,
+                            document,
+                        },
+                    };
+                }
+            }
+        }
+        let node = match syntax_root.child(0) {
+            Some(child) if syntax_root.kind() == SOURCE_FILE => child,
+            Some(_) | None => syntax_root,
         };
-        Self::of_node(node)
+        Self {
+            syntax_root,
+            document: Self::of_node(node),
+        }
     }
 
-    /// Classify a node already known to be where the document should be.
-    #[must_use]
-    fn of_node(node: Node<'tree>) -> Self {
+    fn of_node(node: Node<'tree>) -> DocumentShape<'tree> {
         if let Some(document) = FullDocumentNode::from_node(node) {
-            return Self::Complete { node, document };
+            return DocumentShape::Complete { node, document };
         }
         match extract_full_document_from_error_recovery(node) {
-            Some(children) => Self::Recovered { node, children },
-            None => Self::NotADocument { node },
+            Some(children) => DocumentShape::Recovered { node, children },
+            None => DocumentShape::NotADocument { node },
         }
     }
 
-    /// The node every whole-tree question is asked of: emptiness, the recovery
-    /// backstop, the child count.
+    /// The selected document or recovery node for document-local traversal.
+    /// This scope deliberately excludes recovery siblings; diagnostics use the
+    /// separately retained whole syntax root.
     #[must_use]
     pub fn node(&self) -> Node<'tree> {
-        match self {
-            Self::Complete { node, .. }
-            | Self::Recovered { node, .. }
-            | Self::NotADocument { node } => *node,
+        match &self.document {
+            DocumentShape::Complete { node, .. }
+            | DocumentShape::Recovered { node, .. }
+            | DocumentShape::NotADocument { node } => *node,
         }
     }
 
-    /// Whether the parser had to RECOVER at the document position.
-    ///
-    /// Replaces a separately-computed `root_node.is_error()`, which was the same
-    /// fact derived a second way 35 lines from its use, and had to agree with
-    /// whether the recovery reconstruction was attempted.
+    /// The original tree root, including recovery outside the document.
+    pub(crate) fn syntax_root(&self) -> Node<'tree> {
+        self.syntax_root
+    }
+
+    /// Whether the document position required structural recovery.
     #[must_use]
     pub fn recovered_at_root(&self) -> bool {
-        matches!(self, Self::Recovered { .. })
+        matches!(self.document, DocumentShape::Recovered { .. })
     }
 
-    /// The document's children to lower, or nothing when there is no document.
-    ///
-    /// `Complete` and `Recovered` are one answer here on purpose: a document
-    /// reconstructed from the ERROR standing in for one has the same type and
-    /// the same content as a complete one, and which it was is already on
-    /// [`Self::recovered_at_root`].
+    /// The admitted document children to lower, or no document-shaped content.
     #[must_use]
     pub fn into_children(self) -> Option<FullDocumentChildren<'tree>> {
-        match self {
-            Self::Complete { document, .. } => Some(extract_full_document(document)),
-            Self::Recovered { children, .. } => Some(children),
-            Self::NotADocument { .. } => None,
+        match self.document {
+            DocumentShape::Complete { document, .. } => Some(extract_full_document(document)),
+            DocumentShape::Recovered { children, .. } => Some(children),
+            DocumentShape::NotADocument { .. } => None,
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use talkbank_model::{ErrorCode, ErrorCollector, Span};
+
+    const DOCUMENT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|test|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
+
+    #[test]
+    fn recovery_siblings_preserve_the_document_and_remain_diagnostic() {
+        let cases = [
+            (
+                format!("{DOCUMENT}oops"),
+                DOCUMENT.len(),
+                DOCUMENT.len() + 4,
+            ),
+            (format!("@End\n{DOCUMENT}"), 0, 5),
+        ];
+        let parser = TreeSitterParser::new().expect("grammar loads");
+        for (input, start, end) in cases {
+            let tree = parser.parse_tree_incremental(&input, None).expect("tree");
+            let root = DocumentRoot::classify(&tree);
+            assert_eq!(root.node().kind(), "full_document");
+            assert_eq!(root.syntax_root().byte_range(), 0..input.len());
+            assert!(
+                root.into_clean().is_none(),
+                "recovery cannot reuse cached validation"
+            );
+            let errors = ErrorCollector::new();
+            let file = parser.parse_chat_file_streaming(&input, &errors);
+            assert_eq!(file.utterances().count(), 1, "{input:?}");
+            let errors = errors.to_vec();
+            assert_eq!(errors.len(), 1, "{errors:?}");
+            assert_eq!(errors[0].code, ErrorCode::UnparsableContent);
+            assert_eq!(
+                errors[0].location.span,
+                Span::new(
+                    start.try_into().expect("small fixture"),
+                    end.try_into().expect("small fixture")
+                ),
+            );
+        }
+    }
+
+    #[test]
+    fn genuine_document_recovery_still_defers_missing_end_to_validation() {
+        let parser = TreeSitterParser::new().expect("grammar loads");
+        for input in [DOCUMENT, DOCUMENT.trim_end_matches("@End\n")] {
+            let tree = parser.parse_tree_incremental(input, None).expect("tree");
+            assert_eq!(
+                DocumentRoot::classify(&tree).into_clean().is_some(),
+                input == DOCUMENT
+            );
+            let errors = ErrorCollector::new();
+            let file = parser.parse_chat_file_streaming(input, &errors);
+            assert_eq!(file.utterances().count(), 1);
+            assert!(errors.to_vec().is_empty(), "{:?}", errors.to_vec());
+        }
+        let fragment = parser
+            .parse_tree_incremental("hello", None)
+            .expect("fragment tree");
+        assert!(!fragment.root_node().has_error());
+        assert!(DocumentRoot::classify(&fragment).into_clean().is_none());
     }
 }

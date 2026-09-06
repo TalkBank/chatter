@@ -11,6 +11,11 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- `DocumentRoot` is a private-field classification with method accessors rather
+  than a publicly constructible enum. `into_clean` produces `CleanDocument`
+  only when the complete source has no syntax recovery; the LSP requires this
+  proof before reusing incremental validation.
+
 - re2c parsed header lines carry `HeaderProvenance` in place of a standalone
   separator field, and box their header payload. The owned lexer extent now
   reaches model header spans; boxing keeps the file-line enum compact.
@@ -19,6 +24,11 @@ version and are listed under "Changed" / "Removed".
   of discarding the full lexical extent. This changes their Rust payload types.
 
 ### Fixed
+
+- Recovery before or after a complete document receives localized diagnostics
+  without discarding the document. A complete final main tier stranded outside
+  its line wrapper when `@End` is missing is retained through normal utterance
+  construction.
 
 - Documents missing `@UTF8` retain their headers and utterances and report
   E503, without cascades claiming present headers are absent. Both parsers

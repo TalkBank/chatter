@@ -271,6 +271,7 @@ pub(super) fn parse_lines_with_old_tree(
     // One owner of "where is the document, and what did it turn out to be".
     let root = DocumentRoot::classify(&tree);
     let root_node = root.node();
+    let syntax_root = root.syntax_root();
 
     // Check if the root node itself has errors AND is empty (e.g., empty file)
     if root_node.has_error() && root_node.child_count() == 0 {
@@ -356,10 +357,10 @@ pub(super) fn parse_lines_with_old_tree(
     // ERROR uses a structurally proven dedicated code when available and E316
     // otherwise; MISSING uses E342. The parser still produced an AST; this only
     // reports, honoring lenient recovery while enforcing "recovery is not validity".
-    if root_node.has_error() {
+    if syntax_root.has_error() {
         let reported = collector.to_vec();
         let mut candidates = Vec::new();
-        collect_recovery_nodes(root_node, input, &mut candidates);
+        collect_recovery_nodes(syntax_root, input, &mut candidates);
         for candidate in candidates {
             // Widen a zero-width MISSING span to one byte so it can intersect a
             // reported span that merely touches its point. A candidate already

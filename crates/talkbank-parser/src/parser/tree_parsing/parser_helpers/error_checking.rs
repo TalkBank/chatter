@@ -294,6 +294,14 @@ impl<'tree> DocumentRecoveryWrapper<'tree> {
         if !node.is_error() {
             return None;
         }
+        // Missing-header validation can replace a wrapper diagnostic only at
+        // the document position. A stray header beside a complete document is
+        // an error in its own right, even if every child looks structural.
+        if let Some(parent) = node.parent()
+            && (parent.kind() != crate::node_types::SOURCE_FILE || parent.child_count() != 1)
+        {
+            return None;
+        }
         let mut has_structure = false;
         let mut cursor = node.walk();
         let mut children = node.children(&mut cursor);

@@ -31,6 +31,7 @@ use talkbank_model::model::FileStem;
 use talkbank_model::model::TranscriptName;
 use talkbank_model::model::{ChatFile, Line};
 use talkbank_model::{ErrorCollector, Severity};
+use talkbank_parser::DocumentRoot;
 use tower_lsp::Client;
 use tower_lsp::lsp_types::*;
 use tracing::debug;
@@ -133,9 +134,11 @@ pub(crate) async fn validate_and_publish(
                 None => 0,
             };
 
-            if let Some(mut chat_file) = old_chat_file {
+            if let Some(mut chat_file) = old_chat_file
+                && let Some(document) = DocumentRoot::classify(new_tree).into_clean()
+            {
                 let (utterance_nodes, header_change) =
-                    collect_utterances_and_header_changes(new_tree, &changed_ranges);
+                    collect_utterances_and_header_changes(document, &changed_ranges);
                 let utterance_count = chat_file.utterances().count();
 
                 // When falling through to full fallback, headers can be reused

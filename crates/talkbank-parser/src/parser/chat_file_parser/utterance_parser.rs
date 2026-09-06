@@ -149,10 +149,21 @@ pub fn parse_utterance_node(
     // The phase ends here: the construction wrapper is unwrapped exactly once,
     // where the finished utterance leaves this function.
     match utterance_builder {
-        Some(UtteranceUnderConstruction(mut utterance)) => {
-            utterance.parse_health = parse_health.into_state();
-            ParseOutcome::parsed(utterance)
-        }
+        Some(utterance) => ParseOutcome::parsed(utterance.finish(parse_health)),
+        None => ParseOutcome::rejected(),
+    }
+}
+
+/// Recover a complete main tier whose enclosing utterance/line wrappers were
+/// lost at document EOF. Reuse the normal builder and parse-health transition.
+pub(super) fn parse_recovered_main_tier(
+    main: MainTierNode<'_>,
+    input: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<Utterance> {
+    let mut health = ParseHealth::untainted();
+    match build_main_tier_from_node(main, input, errors, &mut health) {
+        Some(utterance) => ParseOutcome::parsed(utterance.finish(health)),
         None => ParseOutcome::rejected(),
     }
 }
@@ -209,6 +220,13 @@ fn build_main_tier_from_node(
 /// diagnostic saying so.
 #[derive(Debug)]
 struct UtteranceUnderConstruction(Utterance);
+
+impl UtteranceUnderConstruction {
+    fn finish(mut self, health: ParseHealth) -> Utterance {
+        self.0.parse_health = health.into_state();
+        self.0
+    }
+}
 
 /// Attach one dependent-tier to the in-progress utterance from its typed
 /// [`UtteranceChild1Choice`] (the `dependent_tier` supertype already classified
