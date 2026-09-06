@@ -63,14 +63,14 @@ expression: "(main, errors.into_vec())"
                 content_span: Some(
                     Span {
                         start: 5,
-                        end: 14,
+                        end: 13,
                     },
                 ),
                 language_code_span: None,
             },
             span: Span {
                 start: 0,
-                end: 14,
+                end: 13,
             },
             speaker_span: Span {
                 start: 1,

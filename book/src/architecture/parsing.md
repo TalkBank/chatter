@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 05:21 EDT
+**Last updated:** 2026-09-06 05:28 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -189,7 +189,13 @@ prefix and conditionally clips wrapper context; it is not a document rebasing
 operation.
 
 Word and main-tier fragments use the multi-root grammar directly, so there is
-no synthetic prefix to subtract. Header parsing already returns input-relative
+no synthetic prefix to subtract. `MainTierFragment` admits a typed main-tier
+node only when it covers the complete parse source and the root has no extra
+or unexpected content. Lowering consumes that proof together with the original
+input, clipping the aggregate tier/content spans to exclude an appended line
+terminator. LF and CRLF supplied by the caller remain part of those spans.
+Trailing garbage or another tier cannot be silently ignored.
+Header parsing already returns input-relative
 diagnostics. Utterance, participant-entry and dependent-tier adapters use an
 owned `WrappedFragment`: its constructor records the actual input boundary as
 it assembles the source, and both the model projection and diagnostic sink use

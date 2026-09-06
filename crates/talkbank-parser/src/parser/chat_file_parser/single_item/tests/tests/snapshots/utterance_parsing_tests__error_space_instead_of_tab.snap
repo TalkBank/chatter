@@ -29,7 +29,7 @@ Err(
                     },
                 ),
                 labels: [],
-                message: "Expected source_file root, got 'ERROR'",
+                message: "Expected source_file root",
                 suggestion: None,
                 help_url: Some(
                     "https://talkbank.org/errors/E330",

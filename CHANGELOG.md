@@ -54,6 +54,10 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Main-tier fragments reject trailing material instead of silently accepting
+  their first tier. Aggregate spans exclude a synthetic final newline, while
+  retaining caller-supplied LF and CRLF line endings.
+
 - Fragment APIs no longer subtract obsolete word/main-tier wrapper lengths or
   subtract caller offsets from diagnostics. Synthetic utterance, participant
   and dependent-tier wrappers own their input boundary for model and error

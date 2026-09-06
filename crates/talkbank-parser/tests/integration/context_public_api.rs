@@ -200,3 +200,43 @@ fn utterance_coordinates_follow_the_actual_source_form() {
         }
     }
 }
+
+#[test]
+fn main_tier_fragment_spans_end_with_the_callers_source() {
+    let p = parser();
+    for input in ["*CHI:\thello .", "*CHI:\thello .\n", "*CHI:\thello .\r\n"] {
+        for offset in [0, 200] {
+            let errors = ErrorCollector::new();
+            let main = p
+                .parse_main_tier_fragment(input, offset, &errors)
+                .into_option()
+                .unwrap();
+            assert_eq!(
+                main.span,
+                talkbank_model::Span::from_usize(offset, offset + input.len()),
+                "{input:?}"
+            );
+            assert_eq!(
+                main.content.content_span.unwrap().end as usize,
+                offset + input.len()
+            );
+            assert!(errors.is_empty());
+        }
+    }
+}
+
+#[test]
+fn main_tier_fragment_rejects_unconsumed_source() {
+    let p = parser();
+    for input in [
+        "*CHI:\thello .\ntrailing garbage\n",
+        "*CHI:\thello .\n*CHI:\tmore .\n",
+    ] {
+        let errors = ErrorCollector::new();
+        assert!(
+            p.parse_main_tier_fragment(input, 0, &errors).is_rejected(),
+            "{input:?}"
+        );
+        assert!(!errors.is_empty());
+    }
+}

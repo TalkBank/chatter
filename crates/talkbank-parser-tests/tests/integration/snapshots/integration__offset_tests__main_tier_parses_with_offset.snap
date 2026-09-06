@@ -93,14 +93,14 @@ Some(
             content_span: Some(
                 Span {
                     start: 205,
-                    end: 220,
+                    end: 219,
                 },
             ),
             language_code_span: None,
         },
         span: Span {
             start: 200,
-            end: 220,
+            end: 219,
         },
         speaker_span: Span {
             start: 201,

@@ -94,14 +94,14 @@ expression: "(is_semantically_equal, main1, main2)"
             content_span: Some(
                 Span {
                     start: 105,
-                    end: 120,
+                    end: 119,
                 },
             ),
             language_code_span: None,
         },
         span: Span {
             start: 100,
-            end: 120,
+            end: 119,
         },
         speaker_span: Span {
             start: 101,
@@ -201,14 +201,14 @@ expression: "(is_semantically_equal, main1, main2)"
             content_span: Some(
                 Span {
                     start: 105,
-                    end: 120,
+                    end: 119,
                 },
             ),
             language_code_span: None,
         },
         span: Span {
             start: 100,
-            end: 120,
+            end: 119,
         },
         speaker_span: Span {
             start: 101,
