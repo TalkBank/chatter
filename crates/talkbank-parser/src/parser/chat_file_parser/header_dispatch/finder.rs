@@ -9,9 +9,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#End_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#UTF8_Header>
 
-use crate::error::{
-    ErrorCode, ErrorContext, ParseError, ParseErrors, ParseResult, Severity, SourceLocation,
-};
 use crate::node_types::*;
 use crate::parser::tree_parsing::parser_helpers::{is_header, is_pre_begin_header};
 use tree_sitter::Node;
@@ -24,7 +21,7 @@ use tree_sitter::Node;
 /// 2. LINE nodes (search inside for headers)
 /// 3. HEADER wrapper nodes (unwrap to inner child)
 /// 4. Direct concrete header nodes (utf8_header, begin_header, end_header, etc.)
-pub(super) fn find_header_node_in_tree(root: Node, index: usize) -> ParseResult<Node> {
+pub(super) fn find_header_node_in_tree(root: Node, index: usize) -> Result<Node, HeaderNotFound> {
     let mut found_count = 0;
 
     for i in 0..root.child_count() {
@@ -103,19 +100,16 @@ pub(super) fn find_header_node_in_tree(root: Node, index: usize) -> ParseResult<
         }
     }
 
-    let mut errors = ParseErrors::new();
-    errors.push(
-        ParseError::new(
-            ErrorCode::TierValidationError,
-            Severity::Error,
-            SourceLocation::at_offset(0),
-            ErrorContext::new("", 0..0, ""),
-            format!(
-                "Tier validation error: header at index {} not found in CST (only {} headers present)",
-                index, found_count
-            ),
-        )
-        .with_suggestion("Check that all header lines are well-formed and appear before utterances"),
-    );
-    Err(errors)
+    Err(HeaderNotFound { index, found_count })
+}
+
+/// A lookup failure carries facts about the tree, never invented source text.
+/// The fragment caller supplies the diagnostic's actual source and coordinates.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "Tier validation error: header at index {index} not found in CST (only {found_count} headers present)"
+)]
+pub(super) struct HeaderNotFound {
+    index: usize,
+    found_count: usize,
 }

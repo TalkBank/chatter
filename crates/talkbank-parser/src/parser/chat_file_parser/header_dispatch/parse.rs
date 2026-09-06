@@ -101,7 +101,20 @@ impl TreeSitterParser {
             } else {
                 ts_root
             };
-            let header_node = find_header_node_in_tree(root, header_index)?;
+            let header_node = find_header_node_in_tree(root, header_index).map_err(|failure| {
+                ParseErrors::from(vec![
+                    ParseError::new(
+                        ErrorCode::TierValidationError,
+                        Severity::Error,
+                        SourceLocation::from_offsets(0, input.len()),
+                        ErrorContext::new(input, 0..input.len(), "header"),
+                        failure.to_string(),
+                    )
+                    .with_suggestion(
+                        "Check that all header lines are well-formed and appear before utterances",
+                    ),
+                ])
+            })?;
 
             // Verify the found header node is within the input's byte range,
             // not from the wrapper prefix/suffix. Without this check, when the

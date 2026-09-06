@@ -61,6 +61,32 @@ fn direct_fragment_diagnostics_add_the_document_origin() {
     });
 }
 
+#[test]
+fn unlocated_header_reports_the_callers_source_and_origin() {
+    let p = parser();
+    // This malformed line prevents the wrapper's header lookup from finding
+    // the requested CST node. That failure still belongs to this input.
+    let input = format!("@Languages:\t{}a", "eng, ".repeat(60));
+    for offset in [0, 200] {
+        let errors = ErrorCollector::new();
+        assert!(
+            p.parse_header_fragment(&input, offset, &errors)
+                .is_rejected()
+        );
+        let errors = errors.into_vec();
+        assert!(!errors.is_empty());
+        for error in errors {
+            assert_eq!(
+                error.location.span,
+                talkbank_model::Span::from_usize(offset, offset + input.len())
+            );
+            let context = error.context.expect("diagnostic source");
+            assert_eq!(context.source_text, input);
+            assert_eq!(context.span, talkbank_model::Span::from(0..input.len()));
+        }
+    }
+}
+
 fn check_fragment_diagnostics(input: &str, parse: impl Fn(usize, &ErrorCollector)) {
     let local = ErrorCollector::new();
     parse(0, &local);

@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 07:29 EDT
+**Last updated:** 2026-09-06 08:14 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -208,6 +208,13 @@ that owner whether a located node starts inside the caller's input, removing
 the independently supplied wrapper-prefix length. This check does not yet
 prove that the header consumes all the input; complete header admission is a
 separate remaining boundary improvement.
+Header lookup failures carry tree facts in `HeaderNotFound`, rather than
+constructing a parse error with invented empty context. The fragment caller
+attaches the real input and its full span; public fragment rebasing then adds
+the document origin to the location while leaving that context local. The
+`context_public_api::unlocated_header_reports_the_callers_source_and_origin`
+regression exercises this failure through the public API at origins zero and
+200.
 Complete documents passed to the utterance adapter are recognized
 through generated typed CST traversal and receive no extra document wrapper.
 
