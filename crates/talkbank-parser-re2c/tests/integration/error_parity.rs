@@ -122,35 +122,12 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::gate::{GateOutcome, listing, report};
 
 use baseline::KNOWN_DIVERGENCES;
-use model::{CaseReport, ConformanceTally, Divergence, DivergingCase, Reported};
+use model::{CaseReport, ConformanceTally, Divergence, DivergingCase};
 use spec_corpus::{SpecCorpus, load_spec_corpus};
-use talkbank_model::model::TranscriptName;
 
 // ---------------------------------------------------------------------------
 // Running both backends
 // ---------------------------------------------------------------------------
-
-/// Validate one input with one backend and keep only the codes.
-///
-/// Shared by both backends so that HOW a run is measured is written once. It
-/// had been written twice, differing in one line, in the very function whose
-/// output exists to detect the two backends drifting apart.
-///
-/// `into_vec` rather than `to_vec`: the collector dies on the next line, and
-/// `to_vec` deep-clones every `ParseError`, each carrying a message `String`
-/// and an optional context holding two more, to read one `Copy` field off it.
-fn codes_from(lower: impl FnOnce(&ErrorCollector) -> talkbank_model::model::ChatFile) -> Reported {
-    let errors = ErrorCollector::new();
-    let mut file = lower(&errors);
-    file.validate_with_alignment(&errors, TranscriptName::Anonymous);
-    Reported::of(
-        errors
-            .into_vec()
-            .into_iter()
-            .map(|error| error.code)
-            .collect(),
-    )
-}
 
 /// Parse and validate every case with each backend, in one pass.
 ///
@@ -170,10 +147,11 @@ fn measure(corpus: &SpecCorpus) -> Result<Vec<CaseReport>, String> {
         .map(|case| CaseReport {
             label: case.label.clone(),
             expected: case.expected.clone(),
-            tree_sitter: codes_from(|errors| parser.parse_chat_file_streaming(&case.input, errors)),
-            re2c: codes_from(|errors| {
-                let parsed =
-                    talkbank_parser_re2c::parser::parse_chat_file_streaming(&case.input, errors);
+            tree_sitter: case
+                .input
+                .measure_with(|input, errors| parser.parse_chat_file_streaming(input, errors)),
+            re2c: case.input.measure_with(|input, errors| {
+                let parsed = talkbank_parser_re2c::parser::parse_chat_file_streaming(input, errors);
                 talkbank_parser_re2c::convert::chat_file_to_model(&parsed, &errors)
             }),
         })
@@ -440,7 +418,8 @@ fn re2c_never_panics_on_invalid_input() -> Result<(), String> {
     let corpus = load_spec_corpus()?;
     for case in &corpus.cases {
         let errors = ErrorCollector::new();
-        let parsed = talkbank_parser_re2c::parser::parse_chat_file_streaming(&case.input, &errors);
+        let parsed =
+            talkbank_parser_re2c::parser::parse_chat_file_streaming(case.input.text(), &errors);
         let _file = talkbank_parser_re2c::convert::chat_file_to_model(&parsed, &errors);
     }
     println!(

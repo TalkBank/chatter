@@ -339,7 +339,8 @@ pub struct ExampleFrontmatter {
 pub enum Claim {
     /// This input breaks THIS spec's rule.
     Violates,
-    /// Valid CHAT that looks like a violation; the own code must not fire.
+    /// Does not violate this rule: the own code must not fire.
+    /// Other diagnostics may still apply; this does not establish clean parsing.
     Legal,
     /// Breaks this rule, but chatter reports the listed code(s) today.
     SubsumedBy(SubsumptionTargets),

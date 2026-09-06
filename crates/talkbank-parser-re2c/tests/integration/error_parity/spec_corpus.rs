@@ -6,10 +6,13 @@
 
 use std::collections::BTreeSet;
 
-use talkbank_model::ErrorCode;
+use std::path::PathBuf;
+use talkbank_model::model::{ChatFile, TranscriptName};
+use talkbank_model::{ErrorCode, ErrorCollector};
 use talkbank_parser_tests::error_specs::{self, Status};
+use talkbank_spec_vocabulary::frontmatter::ExampleFrontmatter;
 
-use super::model::{Expected, SpecLabel};
+use super::model::{Expected, Reported, SpecLabel};
 
 // ---------------------------------------------------------------------------
 // Reading the spec suite
@@ -18,8 +21,48 @@ use super::model::{Expected, SpecLabel};
 /// One example from a spec file: the input, and what it must produce.
 pub(super) struct SpecCase {
     pub(super) label: SpecLabel,
-    pub(super) input: String,
+    pub(super) input: SpecInput,
     pub(super) expected: Expected,
+}
+
+/// A spec's CHAT bytes and declared source travel through measurement together.
+/// A filename-dependent rule must not become anonymous when loading the corpus.
+pub(super) struct SpecInput {
+    text: String,
+    source: Option<PathBuf>,
+}
+
+impl SpecInput {
+    fn from_example(example: &ExampleFrontmatter) -> Self {
+        Self {
+            text: example.chat.as_str().to_owned(),
+            source: example.source.as_ref().map(PathBuf::from),
+        }
+    }
+
+    pub(super) fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub(super) fn measure_with(
+        &self,
+        lower: impl FnOnce(&str, &ErrorCollector) -> ChatFile,
+    ) -> Reported {
+        let errors = ErrorCollector::new();
+        let mut file = lower(&self.text, &errors);
+        let name = self
+            .source
+            .as_deref()
+            .map_or(TranscriptName::Anonymous, TranscriptName::for_path);
+        file.validate_with_alignment(&errors, name);
+        Reported::of(
+            errors
+                .into_vec()
+                .into_iter()
+                .map(|error| error.code)
+                .collect(),
+        )
+    }
 }
 
 /// Everything `spec/errors` yielded, with every skip NAMED.
@@ -134,7 +177,7 @@ pub(super) fn load_spec_corpus() -> Result<SpecCorpus, String> {
             match expected_for(example, spec.declared_code(), &filename)? {
                 Some(expected) => corpus.cases.push(SpecCase {
                     label,
-                    input: example.chat.as_str().to_owned(),
+                    input: SpecInput::from_example(example),
                     expected,
                 }),
                 // A `legal` claim asserts an absence, which this harness
@@ -152,5 +195,45 @@ pub(super) fn load_spec_corpus() -> Result<SpecCorpus, String> {
             error_specs::spec_dir(repo_root).display()
         )),
         Some(_) => Ok(corpus),
+    }
+}
+
+/// Exercise the real measurement seam: omitted or matching source names must
+/// not fabricate E531, while the spec's declared mismatching name must enable it.
+#[test]
+fn declared_source_controls_filename_validation() {
+    use super::model::Conformance;
+    let corpus = load_spec_corpus().unwrap();
+    let mut case = corpus
+        .cases
+        .into_iter()
+        .find(|case| case.label.to_string() == "E531.md")
+        .unwrap();
+    let declared = case.input.source.take().expect("E531 declares its source");
+    let canonical = talkbank_parser::TreeSitterParser::new().unwrap();
+    for (source, expected) in [
+        (None, Conformance::Misses),
+        (Some(PathBuf::from("different.cha")), Conformance::Misses),
+        (Some(declared), Conformance::Meets),
+    ] {
+        case.input.source = source;
+        let reports = [
+            case.input
+                .measure_with(|text, errors| canonical.parse_chat_file_streaming(text, errors)),
+            case.input
+                .measure_with(talkbank_parser_re2c::parser::parse_chat_file_to_model),
+        ];
+        for reported in reports {
+            let observed = Conformance::of(&case.expected, &reported);
+            assert!(
+                matches!(
+                    (&expected, observed),
+                    (Conformance::Meets, Conformance::Meets)
+                        | (Conformance::Misses, Conformance::Misses)
+                ),
+                "source {:?}: {reported}",
+                case.input.source
+            );
+        }
     }
 }

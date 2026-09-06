@@ -1,7 +1,7 @@
 # Spec System
 
 **Status:** Current
-**Last modified:** 2026-09-05 16:52 EDT
+**Last modified:** 2026-09-06 04:19 EDT
 
 `spec/` is the source of truth for what CHAT is and for what chatter rejects.
 Tests, fixtures and error documentation are GENERATED from it. You change the
@@ -103,7 +103,7 @@ DOES, which a type cannot.
 | Field | Effect |
 |-------|--------|
 | `code` | The code the spec DOCUMENTS; names the generated tests, and is resolved against `spec/codes/error-codes.toml` at load, so a spec naming an unregistered code does not load. |
-| `name` | THIS FILE's short name, published as the page's title. Per file, not per code: `E241`'s two specs and `E519`'s three all differ, legitimately. |
+| `name` | The human-readable title used in generated error documentation. |
 | `status_note` | A human's adjudication of the code's current state. Prose, published nowhere, read by people. |
 | `example.chat` | The input itself, a whole CHAT file. Required: an example without one is not an example. |
 | `example.source` | The fixture the example came from. **Its stem NAMES the transcript**, see below. |
@@ -261,8 +261,17 @@ header's filename to match the transcript's stem. The example runner therefore
 names each transcript after the stem of its `source`, and an example with no
 `source` is anonymous, so those rules do not run for it.
 
-This field was parsed by nothing until 2026-08-11, which is why E531's spec
-could not be verified and was reported as failing rather than as untestable.
+The backend-parity harness also preserves this context: its input owns both
+CHAT text and the declared source path, and performs contextual validation for
+either parser. Dropping the source previously made both backends appear to miss
+E531 despite their agreement. A measurement regression now checks mismatching,
+matching, and anonymous source names through both backends.
+
+A `legal` claim asserts absence of this spec's own code. It does not assert that
+other rules accept the input or that parsing required no recovery. For example,
+E758's malformed-content controls retain their content diagnostics while proving
+there is no space directly after the tab. Serialization-equivalence assertions
+must distinguish clean parsing from recovery.
 
 ## The observation snapshot
 
