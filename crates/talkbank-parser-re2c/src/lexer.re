@@ -12,7 +12,7 @@ pub type LexerSpan = std::ops::Range<usize>;
 
 /// State for our lexer.
 pub struct Lexer<'a> {
-    /// String with NUL sentinel.
+    /// Borrowed source text; an optional legacy NUL sentinel is accepted.
     pub nul_terminated: &'a str,
 
     /// Used by generated lexer for conditions.
@@ -93,7 +93,7 @@ impl<'a> Iterator for Lexer<'a> {
         re2c:tags = 1;
         re2c:yyfill:enable = 0;
         re2c:YYCTYPE = "u8";
-        re2c:YYPEEK = "*buffer.get_unchecked(self.cursor)";
+        re2c:YYPEEK = "buffer.get(self.cursor).copied().unwrap_or(0)";
         re2c:YYSKIP = "self.cursor += 1;";
         re2c:YYBACKUP = "self.marker = self.cursor;";
         re2c:YYRESTORE = "self.cursor = self.marker;";

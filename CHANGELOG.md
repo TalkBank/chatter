@@ -9,6 +9,111 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-05
+
+### Changed
+
+- **Breaking:** the LLM response cache has one owning handle per path across
+  processes. Share the handle across threads and drop it before reopening.
+  `CacheError` distinguishes a busy cache and a visible replacement whose
+  final directory sync failed.
+
+- **Breaking:** removed `SinToken::new_unchecked`; use checked `SinToken::new`.
+  `SinTier::from_tokens` now returns `Result<SinTier, EmptyText>`. re2c's
+  `SinTierParsed` and `SinItemParsed` own checked `SinToken` values and no
+  longer take a source lifetime parameter.
+
+- **Breaking:** re2c AST word `raw_text` is now `Cow<str>`, distinguishing
+  borrowed source from owned reconstructed text. Parser combinators separate
+  source and token-storage lifetimes.
+
+- **Breaking:** re2c's `sin_tier_from_text` returns `ParseOutcome<SinTier>`;
+  malformed fragments can no longer appear as successfully parsed empty tiers.
+
+- **Breaking: diagnostic enrichment takes a source-bound index.** Replace
+  `enhance_errors_with_line_map(errors, source, map)` with
+  `enhance_errors_with_index(errors, &SourceIndex::new(source))`, or retain
+  one `SourceIndex` for repeated batches. Its immutable borrow prevents source
+  edits while the index is used; callers cannot pair another file's line
+  boundaries with the source and trigger a UTF-8 slicing panic. The existing
+  `enhance_errors_with_source` convenience API retains its signature.
+
+### Fixed
+
+- LLM response-cache writes now prepare, flush, and atomically publish snapshots
+  before updating memory. Failed writes preserve old entries; concurrent puts
+  cannot publish stale snapshots. Unix builds also confirm directory durability.
+
+- Both parsers now share source-bound control-character checking before parsing.
+  re2c no longer silently accepts forbidden controls in free-text tiers; the
+  lexical diagnostic retains its original source and exact byte range.
+
+- E212 spec coverage now demonstrates its reachable CA-mode word-category
+  boundary, alongside legal controls. Its existing implementation is marked
+  implemented, replacing the misleading legal-only deferred fixture.
+
+- Utterance validation now reaches bare and grouped `%sin` tokens admitted
+  through JSON, reporting empty text at the tier's span. Both parsers construct
+  tokens through the checked constructor; the duplicate unchecked path is gone.
+
+- re2c parsing no longer leaks copied source, token arrays, recovery buffers,
+  or reconstructed words. The lexer safely handles unpadded input at EOF, and
+  word-fragment conversion retains spans from the caller's original source.
+
+- re2c `%sin` fragment parsing now uses the whole-file grammar, preserving
+  single-token gesture groups and rejecting unclosed groups with a diagnostic.
+  The duplicate whitespace parser and its independent group state are removed.
+
+- Diagnostic line/column lookup no longer caches by source address and length,
+  which returned stale positions after same-length edits or allocation reuse.
+  One-off lookup scans without allocation; indexed batches retain logarithmic
+  lookups without retaining a hidden source copy or thread-local cache.
+
+- Foundation publication checks now cover every workspace crate outside the
+  approved first wave. `talkbank-llm` is explicitly held back; a metadata-only
+  mode checks manifests and dependencies without packaging or registry access.
+
+- Generated fixture and documentation directories now retain unchanged files
+  and prune only obsolete output through an ownership capability. Conflicting
+  ownership, nested human content and symlinks are refused before pruning.
+
+- Spec regeneration preserves unchanged outputs in shared directories, including
+  generated model code and Rust test bodies, while still removing explicitly
+  retired files. Progress counts now report actual writes.
+
+- Tree-sitter generation now stages all grammar artifacts and preserves
+  unchanged files. The grammar currency check no longer rewrites source files,
+  and also checks generated C headers.
+
+- Node-type, traversal and conformance-inventory regeneration now preserves
+  unchanged files and publishes changed output only after the generator
+  succeeds. A failing generator no longer truncates those committed Rust files.
+
+- Removed an unnecessary schema rewrite that treated valid Draft 2020-12
+  `$ref` siblings as invalid and could modify literal schema data. Generated
+  schemas now retain schemars' structure; enum tags and referenced payloads
+  remain jointly validated.
+
+- Schema generation now preserves unchanged files and runs only when explicitly
+  requested by `just schema-gen` or `just regen`. Ordinary tests no longer
+  rewrite a compile-time dependency and trigger avoidable recompilation.
+  Schema currency failures report the repair command without dumping the
+  complete schema.
+
+- `to-json --skip-schema-validation` retains the transcript name and requested
+  CHAT checks, including E531 for mismatched media filenames. Single-file and
+  directory conversion now share one named parsing path before schema policy
+  selects serialization.
+- Directory JSON conversion prints individual parse/validation diagnostics
+  and exits with failure when any file fails; successfully converted sibling
+  files remain available.
+
+### Added
+
+- `JsonSchemaPolicy` and `chat_to_json_with_schema_policy` let library callers
+  select JSON Schema validation independently of CHAT validation and transcript
+  identity. Existing conversion functions retain their signatures.
+
 ## [0.18.1] - 2026-09-05
 
 ### Added
@@ -2374,7 +2479,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.18.1...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/TalkBank/chatter/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/TalkBank/chatter/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/TalkBank/chatter/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/TalkBank/chatter/compare/v0.16.0...v0.17.0

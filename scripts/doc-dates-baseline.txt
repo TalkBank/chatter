@@ -16,7 +16,6 @@ book/src/architecture/bullet-validation.md
 book/src/architecture/chat-model/wide-structs.md
 book/src/architecture/cli-startup-and-stack.md
 book/src/architecture/crate-reference.md
-book/src/architecture/errors-and-validation/check-parity-audit.md
 book/src/architecture/errors-and-validation/error-diagnostics-ux.md
 book/src/architecture/grammar-governance.md
 book/src/architecture/grammar.md
@@ -35,7 +34,6 @@ book/src/chat-format/word-internals.md
 book/src/chat-format/word-syntax.md
 book/src/chatter/integrating/diagnostic-contract.md
 book/src/chatter/integrating/json-output.md
-book/src/chatter/integrating/json-schema.md
 book/src/chatter/user-guide/batch-workflows.md
 book/src/chatter/user-guide/chat-processing-playbook.md
 book/src/chatter/user-guide/ci-integration.md
@@ -43,7 +41,6 @@ book/src/chatter/user-guide/clan-line-numbering.md
 book/src/contributing/chat-processing-playbook.md
 book/src/contributing/coding-standards-extended.md
 book/src/contributing/compile-times.md
-book/src/contributing/crates-io-publication.md
 book/src/contributing/desktop-testing.md
 book/src/contributing/documentation-architecture.md
 book/src/contributing/reference-corpus.md

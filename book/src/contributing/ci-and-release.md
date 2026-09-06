@@ -1,40 +1,36 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-08-27 14:04 EDT
+**Last updated:** 2026-09-05 20:37 EDT
 
 ## Pre-Merge Verification
 
-Use the concrete local verification commands from [Setup](setup.md) and
-[Developer Verification Checks](dev-checks.md):
+Run the shared local gate from [Developer Verification Checks](dev-checks.md):
 
 ```bash
-cargo fmt --all -- --check
-cargo build --workspace --all-targets --locked
-cargo test --workspace
-cargo test --doc
+just gate
 ```
 
-Then rely on GitHub Actions CI as the authoritative shared signal before you
-announce a change as ready.
+This runs the checks used by per-push CI, including doctests, both Rust
+workspaces, generated-artifact currency, and the book. Wait for GitHub Actions
+on the exact pushed commit before announcing it as ready. Release-only checks
+run separately through `just release-lint`.
 
 ## Generated artifact drift
 
-Generated artifacts are still important, but the old root wrappers from the
-predecessor workspace are not yet ported into this repo. In practice:
-
-- regenerate only the affected spec/symbol outputs,
-- do not hand-edit generated artifacts,
-- and run the surface-specific verification commands that match the change.
+After changing grammar, spec, or a registry, run `just regen`, then `just test`.
+The regeneration recipe builds derived artifacts in dependency order; currency
+tests detect stale output. Never hand-edit generated artifacts.
 
 See [Spec Workflow](spec-workflow.md) and `spec/CLAUDE.md` for the current
 source-of-truth guidance.
 
 ## Release Process
 
-`TalkBank/chatter` is the public release source of truth: `release.yml`
-(cargo-dist) publishes the signed GitHub Releases for the CLI and the desktop
-app.
+`TalkBank/chatter` is the public release source of truth. `release.yml`
+(cargo-dist) creates the GitHub Release and CLI artifacts;
+`release-desktop.yml` adds the desktop installers. Signing differs by platform
+as described below.
 
 ### Cutting a release: the two-command procedure
 
@@ -51,7 +47,11 @@ drift CI would have caught). The procedure:
    `package.json`, then refreshes both lockfiles (root + `spec/`).
 2. Write the `## [X.Y.Z]` CHANGELOG section (the one deliberately manual
    step; every gate enforces its presence).
-3. Commit and `just push`, then wait for CI on that commit.
+3. Format, run `just release-lint` and `just gate`, then squash the commits
+   since the previous release tag into one release commit whose message is the
+   CHANGELOG section. Verify the gate on the squashed tree and, with maintainer
+   authorization, push and wait for CI on that commit. The content stamp survives
+   a squash that leaves the checked bytes unchanged.
 4. `just release-tag X.Y.Z` tags and pushes `vX.Y.Z`, refusing on a dirty
    tree, an unpushed HEAD, any version-copy drift, a missing CHANGELOG
    section, or CI/Cross-platform not yet green on the exact tagged commit.

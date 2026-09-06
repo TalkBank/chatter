@@ -156,8 +156,8 @@ mod sin_alignment_tests {
         );
 
         let sin = SinTier::new(vec![
-            SinItem::Token(SinToken::new_unchecked("g:toy:dpoint")),
-            SinItem::Token(SinToken::new_unchecked("0")),
+            SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
+            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
         ]);
 
         let alignment = align_main_to_sin(&main, &sin);
@@ -181,8 +181,8 @@ mod sin_alignment_tests {
         );
 
         let sin = SinTier::new(vec![
-            SinItem::Token(SinToken::new_unchecked("g:toy:dpoint")),
-            SinItem::Token(SinToken::new_unchecked("0")),
+            SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
+            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
         ]);
 
         let alignment = align_main_to_sin(&main, &sin);
@@ -205,8 +205,8 @@ mod sin_alignment_tests {
         );
 
         let sin = SinTier::new(vec![
-            SinItem::Token(SinToken::new_unchecked("g:toy:dpoint")),
-            SinItem::Token(SinToken::new_unchecked("0")),
+            SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
+            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
         ]);
 
         let alignment = align_main_to_sin(&main, &sin);
@@ -232,10 +232,10 @@ mod sin_alignment_tests {
         );
 
         let sin = SinTier::new(vec![
-            SinItem::Token(SinToken::new_unchecked("0")),
-            SinItem::Token(SinToken::new_unchecked("0")),
-            SinItem::Token(SinToken::new_unchecked("0")),
-            SinItem::Token(SinToken::new_unchecked("0")),
+            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
+            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
+            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
+            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
         ]);
 
         let alignment = align_main_to_sin(&main, &sin);
@@ -256,9 +256,9 @@ mod sin_alignment_tests {
             Terminator::Period { span: Span::DUMMY },
         );
 
-        let sin = SinTier::new(vec![SinItem::Token(SinToken::new_unchecked(
-            "g:toy:dpoint",
-        ))]);
+        let sin = SinTier::new(vec![SinItem::Token(
+            SinToken::new("g:toy:dpoint").expect("nonempty test token"),
+        )]);
 
         let alignment = align_main_to_sin(&main, &sin);
 

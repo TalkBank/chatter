@@ -118,16 +118,16 @@ pub(crate) fn convert_pho_tier(
 }
 
 /// Convert our parsed SinTier to model SinTier.
-pub(crate) fn convert_sin_tier(sin: &ast::SinTierParsed<'_>) -> talkbank_model::model::SinTier {
-    use talkbank_model::model::dependent_tier::sin::{SinGroupGestures, SinItem, SinToken};
+pub(crate) fn convert_sin_tier(sin: &ast::SinTierParsed) -> talkbank_model::model::SinTier {
+    use talkbank_model::model::dependent_tier::sin::{SinGroupGestures, SinItem};
     let items: Vec<SinItem> = sin
         .items
         .iter()
         .map(|item| match item {
-            ast::SinItemParsed::Token(s) => SinItem::Token(SinToken::new_unchecked(s)),
-            ast::SinItemParsed::Group(words) => SinItem::SinGroup(SinGroupGestures::new(
-                words.iter().map(SinToken::new_unchecked).collect(),
-            )),
+            ast::SinItemParsed::Token(s) => SinItem::Token(s.clone()),
+            ast::SinItemParsed::Group(words) => {
+                SinItem::SinGroup(SinGroupGestures::new(words.clone()))
+            }
         })
         .collect();
     talkbank_model::model::SinTier::new(items)
@@ -212,38 +212,20 @@ pub fn to_sit_tier(parsed: &ast::TextTierParsed<'_>) -> SitTier {
     SitTier::new(text_tier_to_bullet_content(parsed))
 }
 
-/// Parse %sin tier content and convert to model SinTier.
-pub fn sin_tier_from_text(input: &str) -> talkbank_model::model::SinTier {
-    use talkbank_model::model::dependent_tier::sin::{SinGroupGestures, SinItem, SinToken};
-    // Simple word-based parsing: split on whitespace, handle 〔groups〕
-    let mut items = Vec::new();
-    let mut in_group = false;
-    let mut group_words = Vec::new();
-    for word in input.split_whitespace() {
-        if word.starts_with('\u{3014}') {
-            // 〔 group start
-            in_group = true;
-            let text = word.trim_start_matches('\u{3014}');
-            if !text.is_empty() {
-                group_words.push(SinToken::new_unchecked(text));
-            }
-        } else if word.ends_with('\u{3015}') {
-            // 〕 group end
-            let text = word.trim_end_matches('\u{3015}');
-            if !text.is_empty() {
-                group_words.push(SinToken::new_unchecked(text));
-            }
-            items.push(SinItem::SinGroup(SinGroupGestures::new(std::mem::take(
-                &mut group_words,
-            ))));
-            in_group = false;
-        } else if in_group {
-            group_words.push(SinToken::new_unchecked(word));
-        } else {
-            items.push(SinItem::Token(SinToken::new_unchecked(word)));
-        }
+/// Parse a `%sin` fragment through the same grammar used for whole files.
+/// Malformed groups are rejected rather than silently discarded.
+pub fn sin_tier_from_text(
+    input: &str,
+) -> talkbank_model::ParseOutcome<talkbank_model::model::SinTier> {
+    use chumsky::Parser as _;
+    let tokens = crate::parser::lex_to_tokens(input, crate::lexer::COND_SIN_CONTENT);
+    match crate::parser::dependent_tiers::sin_tier_parser()
+        .parse(tokens.as_slice())
+        .into_result()
+    {
+        Ok(parsed) => talkbank_model::ParseOutcome::parsed(convert_sin_tier(&parsed)),
+        Err(_) => talkbank_model::ParseOutcome::rejected(),
     }
-    talkbank_model::model::SinTier::new(items)
 }
 
 /// Parse `%wor` tier content and convert to a model `WorTier`.
@@ -266,13 +248,11 @@ pub fn sin_tier_from_text(input: &str) -> talkbank_model::model::SinTier {
 pub fn wor_tier_from_input(input: &str) -> Option<WorTier> {
     use chumsky::Parser as _;
 
-    // The leaked source, not `input`: the lexer copies, so the caller's string
-    // is a different allocation and would place nothing.
     let (tokens, source) =
         crate::parser::lex_to_tokens_and_source(input, crate::lexer::COND_MAIN_CONTENT);
     let source = crate::source_text::SourceText::new(source);
     crate::parser::dependent_tiers::wor_tier_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .ok()
         .map(|parsed| crate::convert::tiers::wor_tier_to_model(&parsed, source))

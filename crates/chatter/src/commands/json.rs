@@ -70,17 +70,13 @@ pub fn chat_to_json(
     // Schema validation is now integrated into the pipeline (unless skipped)
     let json = {
         let _span = span!(Level::DEBUG, "pipeline").entered();
-        let result = if skip_schema_validation {
-            debug!("Skipping JSON Schema validation (--skip-schema-validation)");
-            talkbank_transform::chat_to_json_unvalidated(&content, options, pretty)
-        } else {
-            talkbank_transform::chat_to_json_named(
-                &content,
-                options,
-                pretty,
-                TranscriptName::for_path(input),
-            )
-        };
+        let result = talkbank_transform::chat_to_json_with_schema_policy(
+            &content,
+            options,
+            pretty,
+            TranscriptName::for_path(input),
+            talkbank_transform::JsonSchemaPolicy::from_skip_flag(skip_schema_validation),
+        );
         match result {
             Ok(json_str) => {
                 debug!("Pipeline successful, {} bytes", json_str.len());
@@ -345,6 +341,9 @@ pub fn chat_to_json_directory(
     eprintln!(
         "Done: {conv} converted, {skip} up-to-date, {fail} failed, {pruned} pruned (of {total} total)"
     );
+    if fail > 0 {
+        std::process::exit(1);
+    }
 }
 
 /// Convert a single .cha file to .json under the output directory.
@@ -398,16 +397,13 @@ fn convert_one_file(
     }
 
     // Convert
-    let json = if skip_schema_validation {
-        talkbank_transform::chat_to_json_unvalidated(&content, options, pretty)
-    } else {
-        talkbank_transform::chat_to_json_named(
-            &content,
-            options,
-            pretty,
-            TranscriptName::for_path(cha_path),
-        )
-    };
+    let json = talkbank_transform::chat_to_json_with_schema_policy(
+        &content,
+        options,
+        pretty,
+        TranscriptName::for_path(cha_path),
+        talkbank_transform::JsonSchemaPolicy::from_skip_flag(skip_schema_validation),
+    );
 
     match json {
         Ok(json_str) => {
@@ -428,6 +424,15 @@ fn convert_one_file(
         }
         Err(e) => {
             eprintln!("ERROR: {}: {e}", cha_path.display());
+            match &e {
+                talkbank_transform::PipelineError::Validation(errors) => {
+                    print_errors(cha_path, &content, errors);
+                }
+                talkbank_transform::PipelineError::Parse(errors) => {
+                    print_errors(cha_path, &content, &errors.errors);
+                }
+                _ => {}
+            }
             // Remove stale json if it exists
             let _ = fs::remove_file(&json_path);
             failed.fetch_add(1, Ordering::Relaxed);

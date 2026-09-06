@@ -144,7 +144,7 @@ fn fold_phonetic(content_items: Vec<WordContent>) -> Vec<WordContent> {
 /// `raw_text` into a FRESH allocation, so it cannot be placed and keeps
 /// `Span::DUMMY`; see the note at the span assignment below.
 pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>) -> Word {
-    let raw = w.raw_text;
+    let raw = w.raw_text.as_ref();
     let cleaned = compute_cleaned_text(&w.body);
 
     let content_items: Vec<WordContent> = w.body.iter().map(body_item_to_word_content).collect();
@@ -236,15 +236,15 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>
     //
     // `None` has TWO causes and only one of them is a caller error. The caller
     // may have paired this word with a source it did not come from; or the
-    // word came from `subtoken_word`, which rebuilds `raw_text` by leaking a
-    // fresh concatenation of its tokens' display forms, so the string is a
+    // word came from `subtoken_word`, which rebuilds `raw_text` as an owned
+    // concatenation of its tokens' display forms, so the string is a
     // different allocation and can never be placed. The second is a real gap:
     // such words keep `Span::DUMMY`, which silently disables span-keyed rules
     // and renders surviving diagnostics at byte 0 of the FILE. Fixing it needs
     // the lexer's own byte range, which `parser/mod.rs` discards; pointer
     // arithmetic cannot reach it. Leaving the span untouched is the honest
     // answer here, not a fabricated position.
-    if let Some(span) = source.span_of(w.raw_text) {
+    if let Some(span) = source.span_of(w.raw_text.as_ref()) {
         word = word.with_span(span);
     }
 
@@ -579,20 +579,7 @@ fn annotated_span(
 /// Used for replacement words which may have internal structure (compounds, etc.)
 pub(crate) fn parse_word_to_model(text: &str) -> Word {
     if let Some(parsed) = crate::parser::parse_word(text) {
-        // EVERY SPAN FROM THIS PATH IS ABSENT, and that is the honest outcome
-        // rather than the intended one. `parse_word` leaks its own NUL-padded
-        // copy of the input and does not hand it back, so the AST's slices
-        // borrow from an allocation the caller cannot name. `text` below is a
-        // DIFFERENT allocation, and `SourceText::span_of` refuses a slice that
-        // does not lie inside the source it was given, so it answers `None`
-        // for every one and the word arrives unplaced.
-        //
-        // This comment previously claimed the opposite, that passing `text`
-        // "would LOOK right and place nothing, which is worse than saying so
-        // here", directly above the line that passes `text`. The refusal is
-        // what keeps it safe: nothing is fabricated, the spans are simply
-        // missing. Giving `parse_word` a way to return its source is the fix,
-        // and it is the same change the retrace spans need.
+        // The AST borrows this fragment, so spans are relative to `text`.
         word_from_parsed(&parsed, SourceText::new(text))
     } else {
         Word::simple(text)

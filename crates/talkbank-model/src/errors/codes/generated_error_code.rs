@@ -76,7 +76,6 @@ pub enum ErrorCode {
     IllegalReplacementForFragment,
     /// Invalid word format.
     #[code("E212")]
-    #[status(planned)]
     InvalidWordFormat,
     /// Untranscribed marker in replacement (deprecated: use E391).
     #[code("E213")]
@@ -113,7 +112,6 @@ pub enum ErrorCode {
     StressNotBeforeSpokenMaterial,
     /// Lengthening marker not placed after spoken material.
     #[code("E246")]
-    #[status(planned)]
     LengtheningNotAfterSpokenMaterial,
     /// Multiple primary stress markers in one word.
     #[code("E247")]
@@ -129,7 +127,6 @@ pub enum ErrorCode {
     SecondaryStressWithoutPrimary,
     /// Word content text is empty.
     #[code("E251")]
-    #[status(planned)]
     EmptyWordContentText,
     /// Syllable pause not between spoken material.
     #[code("E252")]

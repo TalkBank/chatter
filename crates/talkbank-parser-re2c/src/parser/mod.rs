@@ -17,31 +17,20 @@ pub use entry_points::*;
 use crate::lexer::Lexer;
 use crate::token::Token;
 
-/// Lex input text into a leaked token slice for chumsky parsers.
-///
-/// NUL-pads and leaks the input string, then collects lexer output into
-/// a leaked slice. Both are leaked so `&'a [Token<'a>]` has a stable
-/// lifetime for chumsky's `Input` trait.
-pub(crate) fn lex_to_tokens<'a>(input: &str, start_condition: usize) -> &'a [Token<'a>] {
-    let (tokens, _) = lex_to_tokens_and_source(input, start_condition);
-    tokens
+/// Token storage may be shorter lived than the source borrowed by each token.
+pub(crate) type Tokens<'tokens, 'source> = &'tokens [Token<'source>];
+
+/// Lex borrowed source into temporary token storage.
+pub(crate) fn lex_to_tokens(input: &str, start_condition: usize) -> Vec<Token<'_>> {
+    Lexer::new(input, start_condition)
+        .map(|(token, _)| token)
+        .collect()
 }
 
-/// Lex input and return both the token slice and the leaked source string.
-///
-/// The leaked source (minus trailing NUL) can be reused as `ChatFile.source`,
-/// avoiding a second `Box::leak` in entry points.
-pub(crate) fn lex_to_tokens_and_source<'a>(
+/// Return temporary tokens together with their original borrowed source.
+pub(crate) fn lex_to_tokens_and_source(
     input: &str,
     start_condition: usize,
-) -> (&'a [Token<'a>], &'a str) {
-    let mut padded = input.to_string();
-    padded.push('\0');
-    let padded: &'a str = Box::leak(padded.into_boxed_str());
-    let lexer = Lexer::new(padded, start_condition);
-    let tokens: Vec<Token<'a>> = lexer.map(|(tok, _span)| tok).collect();
-    let token_slice = Box::leak(tokens.into_boxed_slice());
-    // Source is the padded string minus the NUL sentinel
-    let source = &padded[..padded.len() - 1];
-    (token_slice, source)
+) -> (Vec<Token<'_>>, &str) {
+    (lex_to_tokens(input, start_condition), input)
 }

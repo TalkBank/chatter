@@ -80,11 +80,11 @@ pub use collectors::{ErrorCollector, ParseTracker};
 pub use config::RuleSelection;
 pub use context::ErrorContext;
 pub use diagnostic_kind::{DiagnosticKind, ValidationProfile, kind_of, severity};
-pub use enhance::{enhance_errors_with_line_map, enhance_errors_with_source};
+pub use enhance::{enhance_errors_with_index, enhance_errors_with_source};
 #[cfg(feature = "channels")]
 pub use error_sink::ChannelErrorSink;
 pub use error_sink::{ErrorSink, NullErrorSink};
-pub use line_map::LineMap;
+pub use line_map::{LineMap, SourceIndex};
 pub use offset_adjusting_sink::OffsetAdjustingErrorSink;
 pub use parse_error::ParseError;
 pub use parse_errors::{ParseErrors, ParseResult};

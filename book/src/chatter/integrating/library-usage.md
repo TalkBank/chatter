@@ -1,7 +1,7 @@
 # Library Usage
 
 **Status:** Current
-**Last updated:** 2026-09-04 06:45 EDT
+**Last updated:** 2026-09-05 11:27 EDT
 
 The TalkBank Rust crates can be used as dependencies in your own Rust
 projects for parsing, validating, and manipulating CHAT files. This page
@@ -208,7 +208,7 @@ assert!(json.contains("\"speaker\""));
 ```
 
 The schema for `ChatFile` lives at `schema/chat-file.schema.json` and is
-regenerated from the Rust types via `cargo test -p talkbank-transform --tests generate_schema`. For arbitrary
+regenerated from the Rust types via `just schema-gen`. For arbitrary
 serde values (not just `ChatFile`), `to_json_unvalidated` /
 `to_json_pretty_unvalidated` work the same way without the schema step.
 

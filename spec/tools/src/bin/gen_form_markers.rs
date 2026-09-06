@@ -43,7 +43,7 @@ fn main() -> Result<()> {
         "\nTwo follow-ups this generator cannot do for you:\n\
          \x20 1. regenerate the vendored re2c lexer: `just verify-vendored-lexer`\n\
          \x20 2. regenerate the JSON Schema if the model's shape or docs moved:\n\
-         \x20    cargo test -p talkbank-transform --tests generate_schema"
+         \x20    just schema-gen"
     );
 
     Ok(())

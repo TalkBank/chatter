@@ -112,7 +112,7 @@ impl Resolved {
                 if self
                     .helpers
                     .iter()
-                    .any(|helper| test.shape_blanked.0.contains(&format!("{helper}(")))
+                    .any(|helper| calls_helper(&test.shape_blanked, helper))
                 {
                     continue;
                 }
@@ -304,6 +304,21 @@ fn can_fail(body: &BlankedShape) -> bool {
         || body.contains("Err(")
         || body.contains(")?")
         || body.contains("?;")
+}
+
+/// Identify a lexical call, excluding function declarations and longer names.
+/// This remains a source heuristic, not Rust name resolution.
+fn calls_helper(body: &BlankedShape, helper: &str) -> bool {
+    body.0.match_indices(helper).any(|(at, name)| {
+        let before = &body.0[..at];
+        let after = &body.0[at + name.len()..];
+        let inside_identifier = before
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_alphanumeric() || c == '_');
+        let declaration = before.split_whitespace().next_back() == Some("fn");
+        !inside_identifier && !declaration && after.trim_start().starts_with('(')
+    })
 }
 
 /// Every function name in `blanked` whose own body can fail.
@@ -510,5 +525,35 @@ impl Gate for DuplicateTestGate {
         } else {
             Err(sections)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Scanned, SourceFile, blank_literals};
+
+    #[test]
+    fn helper_declaration_is_not_a_call() {
+        let original = r#"
+            fn report() { panic!("helper failed"); }
+            #[test]
+            fn compile_only() {
+                struct Handler;
+                impl Handler { fn report(&self) {} }
+            }
+            #[test]
+            fn invokes_helper() { report (); }
+        "#;
+        let scan = Scanned {
+            files: vec![SourceFile {
+                path: "example.rs".to_owned(),
+                original: original.to_owned(),
+                blanked: blank_literals(original),
+            }],
+            unreadable: vec![],
+        };
+        let found = scan.resolve().vacuous();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "compile_only");
     }
 }

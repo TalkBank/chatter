@@ -17,7 +17,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E208](E208.md) | Empty replacement | Invalidity | word | ✅ |
 | [E209](E209.md) | Word has no spoken content | Invalidity | word | ✅ |
 | [E210](E210.md) | Deprecated, replaced by E387 | Invalidity | word | ? |
-| [E212](E212.md) | Invalid word format | Invalidity | word | ⏳ |
+| [E212](E212.md) | Invalid word format | Invalidity | word | ✅ |
 | [E213](E213.md) | Deprecated, replaced by E391 | Invalidity | word | ? |
 | [E220](E220.md) | Illegal digits in word content | Invalidity | word | ✅ |
 | [E230](E230.md) | Unbalanced CA delimiter | Invalidity | word | ✅ |
@@ -29,12 +29,12 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E243](E243.md) | Pipe character in main-tier word text | Invalidity | word | ✅ |
 | [E244](E244.md) | Consecutive stress markers in word | Invalidity | word | ✅ |
 | [E245](E245.md) | Stress marker without following spoken material | Invalidity | word | ✅ |
-| [E246](E246.md) | Lengthening marker not after spoken material | Invalidity | word | ⏳ |
+| [E246](E246.md) | Lengthening marker not after spoken material | Invalidity | word | ✅ |
 | [E247](E247.md) | Multiple primary stress markers in one word | Invalidity | word | ✅ |
 | [E248](E248.md) | Bare @s shortcut in tertiary language context | Invalidity | word | ✅ |
 | [E249](E249.md) | Bare @s shortcut with no secondary language | Invalidity | word | ✅ |
 | [E250](E250.md) | Secondary stress without primary stress | Invalidity | word | ✅ |
-| [E251](E251.md) | Empty word content text | Invalidity | word | ⏳ |
+| [E251](E251.md) | Empty word content text | Invalidity |  | ✅ |
 | [E252](E252.md) | Syntax error - caret at word start | Invalidity | word | ✅ |
 | [E253](E253.md) | Empty word content | Invalidity | word | ✅ |
 | [E255](E255.md) | Whole-utterance language switch should use precode | Invalidity | utterance | ✅ |
@@ -69,7 +69,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E331](E331.md) | UnexpectedNodeInContext | Invalidity | utterance | ⏳ |
 | [E340](E340.md) | UnknownBaseContent | Invalidity |  | ✅ |
 | [E341](E341.md) | UnbalancedQuotationCrossUtterance | Invalidity | utterance | ⏳ |
-| [E342](E342.md) | Missing required element (recovery placeholder) | Invalidity | utterance | ✅ |
+| [E342](E342.md) | Missing required element (recovery placeholder) | Invalidity | word, utterance | ✅ |
 | [E344](E344.md) | Quotation-precedes terminator without a quoted linker | Invalidity | utterance | ⏳ |
 | [E346](E346.md) | Quoted-utterance linker outside a quotation sequence | Invalidity | utterance | ⏳ |
 | [E347](E347.md) | Unbalanced cross-speaker overlap (indexed markers) | Invalidity | utterance | ✅ |

@@ -112,14 +112,23 @@ fn media_filename_mismatch_is_rejected_via_to_json() -> Result<(), TestError> {
     let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
     let path = write_fixture(dir.path(), "session.cha", &fixture_with_media("elsewhere"))?;
 
-    let mut cmd = harness.chatter_cmd();
-    cmd.arg("to-json").arg(&path);
-    let text = combined_output(&cmd.output()?);
-    assert!(
-        text.contains("E531"),
-        "`to-json` must run the @Media filename match; it silently skipped it \
-         until the transcript's name became a parameter. Got:\n{text}"
-    );
+    for skip_schema in [false, true] {
+        let mut cmd = harness.chatter_cmd();
+        cmd.arg("to-json").arg(&path);
+        if skip_schema {
+            cmd.arg("--skip-schema-validation");
+        }
+        let output = cmd.output()?;
+        let text = combined_output(&output);
+        assert!(
+            !output.status.success(),
+            "mismatched media must fail: {text}"
+        );
+        assert!(
+            text.contains("E531"),
+            "schema policy must preserve E531: {text}"
+        );
+    }
     Ok(())
 }
 
@@ -130,12 +139,63 @@ fn matching_media_filename_is_accepted_via_to_json() -> Result<(), TestError> {
     let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
     let path = write_fixture(dir.path(), "session.cha", &fixture_with_media("session"))?;
 
-    let mut cmd = harness.chatter_cmd();
-    cmd.arg("to-json").arg(&path);
-    let text = combined_output(&cmd.output()?);
-    assert!(
-        !text.contains("E531"),
-        "a matching @Media filename must not emit E531 from `to-json`, got:\n{text}"
-    );
+    for skip_schema in [false, true] {
+        let mut cmd = harness.chatter_cmd();
+        cmd.arg("to-json").arg(&path);
+        if skip_schema {
+            cmd.arg("--skip-schema-validation");
+        }
+        let output = cmd.output()?;
+        let text = combined_output(&output);
+        assert!(
+            output.status.success(),
+            "matching media must convert: {text}"
+        );
+        assert!(
+            !text.contains("E531"),
+            "matching media must stay valid: {text}"
+        );
+    }
+    Ok(())
+}
+
+/// Directory conversion must preserve each source filename under both schema policies.
+#[test]
+fn directory_to_json_preserves_filename_checks_when_schema_is_skipped() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    let input = dir.path().join("input");
+    std::fs::create_dir(&input)?;
+    write_fixture(&input, "session.cha", &fixture_with_media("elsewhere"))?;
+    write_fixture(&input, "matching.cha", &fixture_with_media("matching"))?;
+    for skip_schema in [false, true] {
+        let output = dir.path().join(format!("output-{skip_schema}"));
+        let mut cmd = harness.chatter_cmd();
+        cmd.arg("to-json")
+            .arg(&input)
+            .arg("--output-dir")
+            .arg(&output);
+        if skip_schema {
+            cmd.arg("--skip-schema-validation");
+        }
+        let result = cmd.output()?;
+        let text = combined_output(&result);
+        assert!(
+            !result.status.success(),
+            "partial conversion must fail: {text}"
+        );
+        assert!(
+            text.contains("E531"),
+            "directory conversion must report E531: {text}"
+        );
+        assert!(
+            !output.join("session.json").exists(),
+            "invalid transcript was written"
+        );
+        assert!(
+            output.join("matching.json").is_file(),
+            "valid transcript was lost: {text}"
+        );
+    }
     Ok(())
 }

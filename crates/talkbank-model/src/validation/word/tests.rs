@@ -601,26 +601,27 @@ fn test_e253_non_empty_word_content_list() {
     );
 }
 
-/// Rejects empty `WordText` elements inside an otherwise populated word.
-///
-/// This catches silent empty segments that can break alignment and morphology
-/// indexing, and should emit `E251`.
+/// Deserialization admits empty text; validation must reject all three textual
+/// content variants, while accepting their non-empty counterparts.
 #[test]
-fn test_e251_empty_word_content_text() -> Result<(), String> {
-    // Word with empty Text content
-    let empty_text: WordText = serde_json::from_str("\"\"")
-        .map_err(|err| format!("Failed to deserialize empty WordText: {err}"))?;
-    let word = Word::new_unchecked("test", "test").with_content(vec![
-        WordContent::Text(empty_text),
-        WordContent::Text(WordText::new_unchecked("test")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E251"),
-        "Expected E251 error for empty word content text, got: {:#?}",
-        errors
-    );
+fn test_e251_deserialized_word_content() -> Result<(), serde_json::Error> {
+    for kind in ["text", "phonetic", "shortening"] {
+        for text in ["", "test"] {
+            let content: WordContent = serde_json::from_value(serde_json::json!({
+                "type": kind,
+                "content": text,
+            }))?;
+            let errors = ErrorCollector::new();
+            content.validate(&ValidationContext::new(), &errors);
+            let codes: Vec<_> = errors.into_vec().into_iter().map(|e| e.code).collect();
+            let expected = if text.is_empty() {
+                vec![crate::ErrorCode::EmptyWordContentText]
+            } else {
+                vec![]
+            };
+            assert_eq!(codes, expected, "{kind} content {text:?}");
+        }
+    }
     Ok(())
 }
 

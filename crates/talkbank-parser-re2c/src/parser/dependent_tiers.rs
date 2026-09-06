@@ -20,17 +20,18 @@ use super::classify::is_terminator;
 use super::main_tier;
 
 /// Chumsky input type: a slice of tokens borrowed from the lexer output.
-type Tokens<'a> = &'a [Token<'a>];
+use super::Tokens;
 
 /// Whitespace/continuation combinator, skips structural whitespace tokens.
-pub(super) fn ws<'a>() -> impl Parser<'a, Tokens<'a>, ()> + Clone {
+pub(super) fn ws<'tokens, 'a: 'tokens>() -> impl Parser<'tokens, Tokens<'tokens, 'a>, ()> + Clone {
     select! { Token::Whitespace(_) => (), Token::Continuation(_) => () }
         .repeated()
         .ignored()
 }
 
 /// Optional trailing newline, consumes a Newline token if present.
-pub(super) fn opt_newline<'a>() -> impl Parser<'a, Tokens<'a>, ()> + Clone {
+pub(super) fn opt_newline<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ()> + Clone {
     select! { Token::Newline(_) => () }.or_not().ignored()
 }
 
@@ -40,7 +41,8 @@ pub(super) fn opt_newline<'a>() -> impl Parser<'a, Tokens<'a>, ()> + Clone {
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a `%gra` tier body: whitespace-separated `GraRelation` tokens.
-pub fn gra_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, GraTier<'a>> + Clone {
+pub fn gra_tier_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, GraTier<'a>> + Clone {
     let relation = select! {
         Token::GraRelation { index, head, relation } => GraRelationParsed {
             index, head, relation,
@@ -65,7 +67,8 @@ pub fn gra_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, GraTier<'a>> + Clone
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a single `MorWord` token into `MorWordParsed`.
-pub fn mor_word_parser<'a>() -> impl Parser<'a, Tokens<'a>, MorWordParsed<'a>> + Clone {
+pub fn mor_word_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, MorWordParsed<'a>> + Clone {
     select! {
         Token::MorWord { pos, lemma_features } => {
             let mut parts = lemma_features.splitn(2, '-');
@@ -80,7 +83,8 @@ pub fn mor_word_parser<'a>() -> impl Parser<'a, Tokens<'a>, MorWordParsed<'a>> +
 }
 
 /// Parse a `%mor` item: main word + optional post-clitics (~word~word).
-fn mor_item_parser<'a>() -> impl Parser<'a, Tokens<'a>, MorItem<'a>> + Clone {
+fn mor_item_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, MorItem<'a>> + Clone {
     let tilde = select! { Token::MorTilde(_) => () };
     let clitic = tilde.ignore_then(mor_word_parser());
 
@@ -90,7 +94,8 @@ fn mor_item_parser<'a>() -> impl Parser<'a, Tokens<'a>, MorItem<'a>> + Clone {
 }
 
 /// Parse a `%mor` tier body: mor items, optional terminator.
-pub fn mor_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, MorTier<'a>> + Clone {
+pub fn mor_tier_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, MorTier<'a>> + Clone {
     let terminator = select! {
         tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
     };
@@ -112,7 +117,8 @@ pub fn mor_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, MorTier<'a>> + Clone
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a single phonological word (possibly compound with +).
-fn pho_word_parser<'a>() -> impl Parser<'a, Tokens<'a>, PhoWordParsed<'a>> + Clone {
+fn pho_word_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, PhoWordParsed<'a>> + Clone {
     let pho_word = select! { Token::PhoWord(s) => s };
     let plus = select! { Token::PhoPlus(_) => () };
 
@@ -126,7 +132,8 @@ fn pho_word_parser<'a>() -> impl Parser<'a, Tokens<'a>, PhoWordParsed<'a>> + Clo
 }
 
 /// Parse a `%pho` tier body.
-pub fn pho_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, PhoTier<'a>> + Clone {
+pub fn pho_tier_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, PhoTier<'a>> + Clone {
     let terminator = select! {
         tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
     };
@@ -176,11 +183,13 @@ pub fn pho_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, PhoTier<'a>> + Clone
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a `%sin` tier body.
-pub fn sin_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, SinTierParsed<'a>> + Clone {
+pub fn sin_tier_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, SinTierParsed> + Clone {
     let sin_word = select! {
         Token::SinWord(s) => s,
         Token::Zero(s) => s,
-    };
+    }
+    .try_map(|text, _| talkbank_model::model::SinToken::new(text).map_err(|_| Default::default()));
 
     let group_begin = select! { Token::SinGroupBegin(_) => () };
     let group_end = select! { Token::SinGroupEnd(_) => () };
@@ -202,7 +211,8 @@ pub fn sin_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, SinTierParsed<'a>> +
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a text tier body (text_with_bullets).
-pub fn text_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, TextTierParsed<'a>> + Clone {
+pub fn text_tier_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, TextTierParsed<'a>> + Clone {
     let segment = select! {
         Token::TextSegment(s) => TextTierSegment::Text(s),
         tok @ Token::MediaBullet { .. } => TextTierSegment::Bullet(tok),
@@ -229,7 +239,8 @@ pub fn text_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, TextTierParsed<'a>>
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a timing bullet and extract (start_ms, end_ms).
-fn timing_bullet<'a>() -> impl Parser<'a, Tokens<'a>, (u64, u64)> + Clone {
+fn timing_bullet<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, (u64, u64)> + Clone {
     select! {
         Token::MediaBullet { start_time, end_time, .. } => {
             let (s, e) = crate::convert::bullet_times(start_time, end_time);
@@ -239,7 +250,8 @@ fn timing_bullet<'a>() -> impl Parser<'a, Tokens<'a>, (u64, u64)> + Clone {
 }
 
 /// Parse a `%wor` tier body: words with optional timing bullets.
-pub fn wor_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, WorTierParsed<'a>> + Clone {
+pub fn wor_tier_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, WorTierParsed<'a>> + Clone {
     let terminator = select! {
         tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
     };
@@ -286,7 +298,7 @@ pub fn wor_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, WorTierParsed<'a>> +
                 ContentItem::Action { zero, .. } => WorItemParsed::Word {
                     word: WordWithAnnotations {
                         category: Some(WordCategory::Omission),
-                        raw_text: zero,
+                        raw_text: zero.into(),
                         ..WordWithAnnotations::default()
                     },
                     bullet,

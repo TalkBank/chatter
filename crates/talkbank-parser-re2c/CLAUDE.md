@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-27 00:33 EDT
+**Last modified:** 2026-09-05 20:06 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -29,7 +29,7 @@ re2c DFA Lexer  -->  Chumsky Combinators  -->  AST  -->  talkbank-model
 **Two-stage pipeline:**
 1. **Lexer** (`lexer.re`), re2c DFA produces rich tokens with tagged field extraction.
 2. **Parser** (`parser/`), chumsky combinators consume `&[Token]` and produce AST types.
-3. **Conversion** (`convert.rs`), `From` impls map AST to talkbank-model. Source-free (AST is self-contained via `raw_text` fields).
+3. **Conversion** (`convert.rs`), `From` impls map AST to talkbank-model. Source-aware conversions use `SourceText` to place original input slices.
 
 ### Parser Module Structure
 
@@ -49,7 +49,7 @@ src/parser/
 
 **Chumsky** (pinned in `Cargo.toml`). Token-stream input via `&[Token<'a>]`. The `select!` macro matches token variants by value. `recursive()` handles nested groups/quotations.
 
-**Leaked allocations.** `lex_to_tokens()` NUL-pads the input, leaks it, lexes to `Vec<Token>`, leaks that too. This gives chumsky a `&'a [Token<'a>]` with a stable lifetime. Acceptable for a testing/validation tool.
+**Borrowed source, temporary tokens.** Parser signatures separate `'tokens` from `'source`. The lexer borrows the caller's input and treats end-of-buffer as NUL without padding or unchecked reads. Local token and recovery vectors are dropped after parsing. `WordWithAnnotations::raw_text` is `Cow<str>`: borrowed for rich tokens, owned for reconstructed subtoken words. Never leak allocations to extend a lifetime.
 
 **Imperative file parser.** The file-level parser (`file.rs`) uses an imperative loop rather than chumsky because dependent tier dispatch is prefix-text-based (`%mor:` vs `%gra:` etc.), which doesn't map to chumsky's token-variant matching.
 
@@ -133,7 +133,7 @@ re2c conditions are numbered states that change what rules are active:
 - Token-level: `parse_word`, `parse_mor_word`, `parse_gra_relation`
 - Tier-level: `parse_mor_tier`, `parse_gra_tier`, `parse_pho_tier`, plus all text tiers
 
-Conversion functions in `convert.rs` are source-free, all use `From` impls or take only AST types.
+Conversion functions in `convert/` use typed AST data and, where spans are recovered, `SourceText` borrowed from the same input.
 
 ## Performance
 
@@ -155,7 +155,7 @@ cargo test -p talkbank-parser-re2c -j 1   # fallback
 
 Requires `re2rust` (part of re2c) on PATH: `brew install re2c`.
 
-The build script (`build.rs`) runs `re2rust` on `src/lexer.re` -> `OUT_DIR/lexer.rs`. Edit `lexer.re`, not generated output. Use `\x00` (not `\0`) for NUL, re2c treats `\0` as octal prefix.
+The build script (`build.rs`) copies the vendored `src/generated/lexer.rs` into `OUT_DIR`. Edit `lexer.re`, regenerate with the exact `re2rust --no-unsafe` command documented in `build.rs`, and run `just verify-vendored-lexer`. Never edit generated output. Use `\x00` (not `\0`) for NUL, re2c treats `\0` as octal prefix.
 
 ## Testing
 

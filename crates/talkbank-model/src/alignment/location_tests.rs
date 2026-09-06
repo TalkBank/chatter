@@ -104,9 +104,9 @@ fn test_sin_alignment_error_has_proper_location() {
     )
     .with_span(Span::from_usize(0, 20)); // *CHI: one two .
 
-    let sin = SinTier::new(vec![SinItem::Token(SinToken::new_unchecked(
-        "g:toy:dpoint",
-    ))])
+    let sin = SinTier::new(vec![SinItem::Token(
+        SinToken::new("g:toy:dpoint").expect("nonempty test token"),
+    )])
     .with_span(Span::from_usize(21, 45)); // %sin: g:toy:dpoint
 
     let alignment = align_main_to_sin(&main, &sin);
@@ -139,8 +139,8 @@ fn test_sin_alignment_error_too_many_has_proper_location() {
     .with_span(Span::from_usize(0, 15)); // *CHI: one .
 
     let sin = SinTier::new(vec![
-        SinItem::Token(SinToken::new_unchecked("g:toy:dpoint")),
-        SinItem::Token(SinToken::new_unchecked("0")),
+        SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
+        SinItem::Token(SinToken::new("0").expect("nonempty test token")),
     ])
     .with_span(Span::from_usize(16, 45)); // %sin: g:toy:dpoint 0
 

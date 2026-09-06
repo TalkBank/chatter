@@ -123,8 +123,6 @@ impl ChatParser for Re2cParser {
         _errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelUtterance> {
         let parsed = crate::parser::parse_chat_file(input);
-        // `parsed.source`, not `input`: the lexer leaks a copy and the AST's
-        // slices borrow from THAT, so the caller's string places nothing.
         let source = crate::source_text::SourceText::new(parsed.source);
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line {
@@ -253,9 +251,24 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<talkbank_model::model::SinTier> {
-        ParseOutcome::parsed(shifted(crate::convert::sin_tier_from_text(input), offset))
+        match crate::convert::sin_tier_from_text(input) {
+            ParseOutcome::Parsed(tier) => ParseOutcome::parsed(shifted(tier, offset)),
+            ParseOutcome::Rejected => {
+                errors.report(talkbank_model::ParseError::new(
+                    talkbank_model::ErrorCode::UnparsableContent,
+                    talkbank_model::Severity::Error,
+                    talkbank_model::SourceLocation::from_offsets(
+                        offset,
+                        offset.saturating_add(input.len()),
+                    ),
+                    talkbank_model::ErrorContext::new(input, 0..input.len(), input),
+                    "Failed to parse %sin tier content",
+                ));
+                ParseOutcome::rejected()
+            }
+        }
     }
 
     fn parse_act_tier(
@@ -369,8 +382,6 @@ impl ChatParser for Re2cParser {
         _errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelDependentTier> {
         let parsed = crate::parser::parse_chat_file(input);
-        // `parsed.source` is the LEAKED copy the AST borrows from; `input` is a
-        // different allocation and would place nothing.
         let source = crate::source_text::SourceText::new(parsed.source);
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line

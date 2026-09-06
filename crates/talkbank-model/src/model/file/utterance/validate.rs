@@ -187,6 +187,9 @@ impl Validate for Utterance {
         // a new tier variant stops compiling there rather than silently
         // escaping this rule. This loop only asks.
         for entry in &self.dependent_tiers {
+            if let DependentTier::Sin(tier) = &entry.tier {
+                tier.validate(context, errors);
+            }
             if let Some(span) = entry.tier.empty_content_span() {
                 crate::validation::check_dependent_tier_content(entry.kind(), span, errors);
             }

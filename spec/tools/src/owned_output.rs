@@ -22,10 +22,10 @@
 //!
 //! # The rule
 //!
-//! A generator OWNS its output directory outright and may clear it wholesale,
-//! which is safe precisely because nothing else is in it. Ownership is claimed
-//! by a marker file, and [`clear_owned`] REFUSES to clear a directory that does
-//! not carry one. Pointing a generator at a shared or hand-maintained tree then
+//! A generator OWNS its output directory outright and may remove stale files.
+//! Ownership is claimed by a marker file; [`GeneratedDir`] refuses an existing
+//! directory without that marker or with a human-authored claim. Pointing a
+//! generator at a shared or hand-maintained tree then
 //! fails loudly instead of deleting someone's work.
 //!
 //! The marker states the rule in situ, so a reader who finds the directory does
@@ -33,7 +33,7 @@
 //!
 //! # The dual, and why it is the same module
 //!
-//! [`clear_owned`] protects a HUMAN's files from a generator that was pointed at
+//! [`GeneratedDir`] protects a HUMAN's files from a generator that was pointed at
 //! the wrong directory. [`WritableDir`] protects the same files from a generator
 //! that was pointed at the RIGHT directory and should not have been writing at
 //! all.
@@ -64,46 +64,96 @@ pub const OWNERSHIP_MARKER: &str = ".generated-output-dir";
 
 /// Contents of the marker file.
 const MARKER_BODY: &str = "\
-This directory is GENERATED and is deleted in full on every generator run.
+This directory is GENERATED. Obsolete files are removed during regeneration.
 Do not put anything here by hand: it will be silently lost.
 
 Hand-maintained files belong in a sibling directory that no generator writes to.
 ";
 
-/// Clear `dir` so a generator can rewrite it, refusing any directory it does
-/// not own.
+/// Permission to prune an exclusively generated directory.
 ///
-/// On success the directory exists, is empty apart from the ownership marker,
-/// and is ready to be written into. A directory that does not yet exist is
-/// created and claimed, which is what makes a first run work.
-///
-/// # Errors
-///
-/// Fails when `dir` exists without the [`OWNERSHIP_MARKER`], which means it is
-/// shared or hand-maintained and clearing it would destroy work. The message
-/// names the directory and explains how to reserve one.
-pub fn clear_owned(dir: &Path) -> Result<()> {
-    if dir.exists() {
-        if !dir.join(OWNERSHIP_MARKER).exists() {
+/// Constructed only after rejecting human ownership and checking the generated
+/// marker. The old untyped wholesale-clear operation is deliberately absent.
+#[derive(Debug)]
+pub struct GeneratedDir {
+    writable: WritableDir,
+}
+
+impl GeneratedDir {
+    /// Claim a new directory, or verify an existing generated directory.
+    ///
+    /// # Errors
+    /// Refuses human-owned, ambiguously owned and existing unmarked directories.
+    pub fn claim(dir: &Path) -> Result<Self> {
+        let writable = WritableDir::claim(dir)?;
+        let marker = dir.join(OWNERSHIP_MARKER);
+        for path in [dir, marker.as_path()] {
+            match std::fs::symlink_metadata(path) {
+                Ok(metadata) if metadata.file_type().is_symlink() => {
+                    bail!(
+                        "refusing linked generated ownership path: {}",
+                        path.display()
+                    );
+                }
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("checking generated ownership {}", path.display())
+                    });
+                }
+            }
+        }
+        if dir.exists() && !marker.is_file() {
             bail!(
-                "refusing to clear {}: no `{}` marker, so this directory may hold work \
-                 that is not generated output.\n\
-                 \n\
-                 Point the generator at a directory reserved for its output, or, if this \
-                 one really is exclusively generated, claim it by creating a `{}` file in it.",
+                "refusing to prune {}: no `{}` marker, so this directory may hold work that is not generated output",
                 dir.display(),
-                OWNERSHIP_MARKER,
                 OWNERSHIP_MARKER
             );
         }
-        std::fs::remove_dir_all(dir)
-            .with_context(|| format!("clearing generated output directory {}", dir.display()))?;
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("creating generated output directory {}", dir.display()))?;
+        match std::fs::read(&marker) {
+            Ok(existing) if existing == MARKER_BODY.as_bytes() => {}
+            Ok(_) => std::fs::write(&marker, MARKER_BODY)?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::write(&marker, MARKER_BODY)?;
+            }
+            Err(error) => return Err(error).context("reading generated ownership marker"),
+        }
+        Ok(Self { writable })
     }
-    std::fs::create_dir_all(dir)
-        .with_context(|| format!("creating generated output directory {}", dir.display()))?;
-    std::fs::write(dir.join(OWNERSHIP_MARKER), MARKER_BODY)
-        .with_context(|| format!("writing the ownership marker in {}", dir.display()))?;
-    Ok(())
+
+    /// Remove only files that the producer no longer expects, retaining markers.
+    ///
+    /// # Errors
+    /// Refuses symlinks and nested human-owned content before deleting any file;
+    /// propagates directory traversal and removal failures.
+    pub fn retain(&self, keep: impl Fn(&Path) -> bool) -> Result<()> {
+        let root = &self.writable.dir;
+        let mut stale = Vec::new();
+        for entry in walkdir::WalkDir::new(root) {
+            let entry = entry.with_context(|| format!("walking {}", root.display()))?;
+            if entry.file_type().is_symlink() || entry.file_name() == HUMAN_AUTHORED_MARKER {
+                bail!(
+                    "refusing to prune protected or linked content: {}",
+                    entry.path().display()
+                );
+            }
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let relative = entry.path().strip_prefix(root)?;
+            if relative != Path::new(OWNERSHIP_MARKER) && !keep(relative) {
+                stale.push(entry.into_path());
+            }
+        }
+        for path in stale {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("removing obsolete generated file {}", path.display()))?;
+        }
+        Ok(())
+    }
 }
 
 /// Marker naming a directory as human-authored source that no generator writes.
@@ -276,15 +326,55 @@ mod tests {
     }
 
     #[test]
-    fn claims_and_clears_a_new_directory() -> Result<()> {
+    fn pruning_refuses_protected_entries_before_removing_stale_files() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let dir = root.path().join("generated");
+        let owned = GeneratedDir::claim(&dir)?;
+        let stale = dir.join("stale.txt");
+        std::fs::write(&stale, "retain until scan succeeds")?;
+        let nested = dir.join("manual");
+        std::fs::create_dir(&nested)?;
+        mark_human_authored(&nested)?;
+        assert!(owned.retain(|_| false).is_err());
+        assert!(stale.exists());
+        #[cfg(unix)]
+        {
+            std::fs::remove_dir_all(&nested)?;
+            let outside = root.path().join("outside.txt");
+            std::fs::write(&outside, "not generated")?;
+            std::os::unix::fs::symlink(&outside, dir.join("linked.txt"))?;
+            assert!(owned.retain(|_| false).is_err());
+            assert!(stale.exists());
+            assert_eq!(std::fs::read_to_string(outside)?, "not generated");
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn claim_refuses_linked_marker_without_overwriting_its_target() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let dir = root.path().join("generated");
+        std::fs::create_dir(&dir)?;
+        let outside = root.path().join("outside.txt");
+        std::fs::write(&outside, "not generated")?;
+        std::os::unix::fs::symlink(&outside, dir.join(OWNERSHIP_MARKER))?;
+        let claim = GeneratedDir::claim(&dir);
+        assert_eq!(std::fs::read_to_string(outside)?, "not generated");
+        assert!(claim.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn claims_and_prunes_a_new_directory() -> Result<()> {
         let root = tempfile::tempdir()?;
         let dir = root.path().join("generated");
 
-        clear_owned(&dir)?;
+        GeneratedDir::claim(&dir)?.retain(|_| false)?;
         assert!(dir.join(OWNERSHIP_MARKER).exists());
 
         std::fs::write(dir.join("stale.txt"), "old")?;
-        clear_owned(&dir)?;
+        GeneratedDir::claim(&dir)?.retain(|_| false)?;
         assert!(
             !dir.join("stale.txt").exists(),
             "stale output must be cleared"
@@ -304,7 +394,7 @@ mod tests {
         let precious = dir.join("marker_density.txt");
         std::fs::write(&precious, "1468 lines of mined corpus data")?;
 
-        let error = clear_owned(&dir).expect_err("an unmarked directory must be refused");
+        let error = GeneratedDir::claim(&dir).expect_err("an unmarked directory must be refused");
         assert!(precious.exists(), "the hand-maintained file must survive");
         assert!(
             error.to_string().contains(OWNERSHIP_MARKER),

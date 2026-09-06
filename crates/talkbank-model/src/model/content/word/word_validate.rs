@@ -68,7 +68,7 @@ impl crate::validation::Validate for Word {
         structure::check_compound_markers(self, errors);
 
         // E244-E247, E250: Check prosodic marker placement and semantics
-        structure::check_prosodic_markers(self, errors);
+        structure::ProsodicWord::of(self).check(errors);
 
         // E762: the prefix marker `#` may not stand alone or open a word.
         // Language-independent, so it runs outside the language block below:

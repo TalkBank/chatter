@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-09-04 22:14 EDT
+**Last modified:** 2026-09-05 16:59 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
@@ -61,6 +61,60 @@ needs measurements on a clean and a warm target and must demonstrate that it
 does not recreate that first-execution burst. Full Disk Access is unrelated to
 repository build artifacts, and Developer Tools permission is not a remedy for
 an oversized Cargo target directory.
+
+The 2026-09-05 follow-up tested nextest 0.9.143 on the generators library's
+51 tests in one binary, with four workers. Two alternating warm runs took
+0.437/0.385 seconds with Cargo and 0.658/0.614 seconds with nextest, including
+Cargo startup. Both runners passed; neither rebuilt the tests. This small
+suite gives no reason to change the default runner. It does not establish
+performance for the full workspace or for newly compiled binaries. The trial
+used a standalone downloaded executable and changed no repository runner
+configuration. Reproduce the comparison by alternating:
+
+```bash
+/usr/bin/time -p cargo test --manifest-path spec/Cargo.toml -p generators --lib --locked
+/usr/bin/time -p cargo nextest run --manifest-path spec/Cargo.toml -p generators --lib --locked --test-threads 4 --status-level fail --final-status-level fail
+```
+
+The [nextest macOS guide](https://www.nexte.st/docs/installation/macos/)
+separately describes XProtect startup overhead and Developer Tools permission.
+That mechanism matters when launching even trivial tests is slow; it does not
+explain time spent enumerating hundreds of thousands of build artifacts.
+
+## Regeneration must preserve unchanged outputs
+
+The generators stage command output, publish only changed bytes and prune only
+obsolete files in exclusively owned directories. An unchanged `just regen`
+must leave generated Rust, C and fixture modification times alone, so Cargo
+does not rebuild merely because a generator ran. On 2026-09-05, a no-op
+regeneration preserved bytes and nanosecond modification times of all 3,815
+tracked files, took 8.177 seconds and compiled nothing. The following
+`just test` took 10.625 seconds with no compilation: 2,985 passed, 61 ignored,
+across 34 test harnesses. These are warm measurements, not clean-build timings.
+
+To reproduce the preservation check, snapshot tracked files before and after
+`just regen` without editing or staging files between the snapshots:
+
+```bash
+python3 - <<'PY'
+import hashlib
+from pathlib import Path
+import subprocess
+
+paths = [Path(p) for p in subprocess.check_output(
+    ["git", "ls-files", "-z"]).decode().split("\0") if p and Path(p).is_file()]
+def snapshot():
+    return {p: (hashlib.sha256(p.read_bytes()).digest(), p.stat().st_mtime_ns)
+            for p in paths}
+before = snapshot()
+subprocess.run(["just", "regen"], check=True)
+after = snapshot()
+changed = [str(p) for p in paths if before[p] != after[p]]
+assert not changed, changed
+print(f"Preserved contents and modification times of {len(paths)} files")
+PY
+/usr/bin/time -p just test
+```
 
 ## One integration binary per crate
 

@@ -19,7 +19,7 @@ use super::dependent_tiers::{opt_newline, ws};
 use super::word_body::parse_word_body;
 
 /// Chumsky input type.
-type Tokens<'a> = &'a [Token<'a>];
+use super::Tokens;
 
 /// Produce the display form of a token, preserving structural delimiters.
 ///
@@ -46,7 +46,8 @@ fn display_text(tok: &Token<'_>) -> String {
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a single annotation token into `ParsedAnnotation`.
-fn annotation<'a>() -> impl Parser<'a, Tokens<'a>, ParsedAnnotation<'a>> + Clone {
+fn annotation<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ParsedAnnotation<'a>> + Clone {
     any().try_map(|tok: Token<'a>, _span| {
         token_to_parsed_annotation(tok).ok_or_else(Default::default)
     })
@@ -54,7 +55,8 @@ fn annotation<'a>() -> impl Parser<'a, Tokens<'a>, ParsedAnnotation<'a>> + Clone
 
 /// Parse trailing annotations: optional whitespace then annotations.
 /// Replaces the 4 duplicate save-pos/skip-ws/check-annotation loops.
-fn trailing_annotations<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ParsedAnnotation<'a>>> + Clone {
+fn trailing_annotations<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<ParsedAnnotation<'a>>> + Clone {
     ws().ignore_then(annotation())
         .repeated()
         .collect::<Vec<_>>()
@@ -65,7 +67,8 @@ fn trailing_annotations<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ParsedAnnotatio
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a pause token.
-fn pause<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn pause<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
         Token::PauseLong(_) => ContentItem::Pause(crate::ast::PauseKindParsed::Long),
         Token::PauseMedium(_) => ContentItem::Pause(crate::ast::PauseKindParsed::Medium),
@@ -78,7 +81,8 @@ fn pause<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
 ///
 /// Routed through `SeparatorKindParsed::from_token`, the one owner of which
 /// token is which separator, rather than repeating that list here.
-fn separator<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn separator<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     any().try_map(|tok: Token<'a>, _span| {
         // `_span` is chumsky's index into the TOKEN slice, not a byte range,
         // so it cannot give a source position; the token's own text can, and
@@ -95,7 +99,8 @@ fn separator<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
 }
 
 /// Parse an overlap point token.
-fn overlap_point<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn overlap_point<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
         Token::OverlapTopBegin(s) => overlap_item(OverlapKind::TopBegin, s),
         Token::OverlapTopEnd(s) => overlap_item(OverlapKind::TopEnd, s),
@@ -105,7 +110,8 @@ fn overlap_point<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
 }
 
 /// Parse structural marker tokens (underlines, long features, nonvocals).
-fn structural_markers<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn structural_markers<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
         Token::UnderlineBegin(_) => ContentItem::UnderlineBegin,
         Token::UnderlineEnd(_) => ContentItem::UnderlineEnd,
@@ -118,19 +124,22 @@ fn structural_markers<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Cl
 }
 
 /// Parse a freecode annotation.
-fn freecode<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn freecode<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! { Token::Freecode(s) => ContentItem::Freecode(s) }
 }
 
 /// Parse an other-spoken-event: &*SPK:word
-fn other_spoken_event<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn other_spoken_event<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
         Token::OtherSpokenEvent { speaker, text } => ContentItem::OtherSpokenEvent { speaker, text }
     }
 }
 
 /// Parse inline media bullet (within content, not utterance-end).
-fn inline_media_bullet<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn inline_media_bullet<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
         Token::MediaBullet { start_time, end_time, .. } => ContentItem::MediaBullet {
             start: start_time,
@@ -147,7 +156,8 @@ fn inline_media_bullet<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + C
 /// This production exists solely so the re2c side can carry the invalid
 /// construct far enough to report E759 with a useful message, which is what
 /// the tree-sitter side does through its error nodes.
-fn bare_annotation<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn bare_annotation<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     any().try_map(|tok: Token<'a>, _span| {
         token_to_parsed_annotation(tok)
             .map(ContentItem::OrphanAnnotation)
@@ -160,7 +170,8 @@ fn bare_annotation<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a rich `Token::Word` into a `ContentItem` (Word or Retrace).
-pub fn rich_word<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+pub fn rich_word<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
         Token::Word { raw_text, prefix, body, form_marker, lang_suffix, pos_tag } =>
             (raw_text, prefix, body, form_marker, lang_suffix, pos_tag),
@@ -188,7 +199,7 @@ pub fn rich_word<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
                 lang,
                 pos_tag,
                 annotations,
-                raw_text,
+                raw_text: raw_text.into(),
             };
             word_to_content_item(word)
         },
@@ -202,7 +213,8 @@ pub fn rich_word<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
 /// Parse a word from individual sub-tokens (WordSegment, prefixes, CA markers, etc.).
 /// Used when the lexer emits sub-tokens instead of a single rich Word token.
 /// This path fires for inputs where the rich Word regex (`w_body`) doesn't match.
-pub fn subtoken_word<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+pub fn subtoken_word<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     // A word token: any token that is_word_token accepts
     let word_tok = select! {
         tok if is_word_token(TokenDiscriminants::from(&tok)) => tok,
@@ -225,7 +237,7 @@ pub fn subtoken_word<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clo
             // Token::text() strips delimiters (e.g., Shortening("x") → "x"),
             // so we use display_text() which preserves them ("(x)").
             let raw_text_owned: String = toks.iter().map(display_text).collect();
-            let raw_text: &str = Box::leak(raw_text_owned.into_boxed_str());
+            let raw_text: std::borrow::Cow<'_, str> = std::borrow::Cow::Owned(raw_text_owned);
 
             for tok in toks {
                 match tok {
@@ -381,7 +393,8 @@ pub fn subtoken_word<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clo
 /// `I know it &=laughs [//] you were good .`, a shape attested six times in the
 /// corpora. Lower it faithfully and let validation judge, which is the same
 /// rule the retrace work settled on everywhere else.
-fn event<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
+fn event<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! { tok @ Token::Event(_) => tok }
         .then(trailing_annotations())
         .map(|(event_tok, annotations)| {
@@ -403,7 +416,8 @@ fn event<'a>() -> impl Parser<'a, Tokens<'a>, ContentItem<'a>> + Clone {
 ///
 /// Returns a parser that produces `Vec<ContentItem>`, the content items
 /// of a tier body (main tier or inside groups/quotations).
-pub fn contents_parser<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ContentItem<'a>>> + Clone {
+pub fn contents_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<ContentItem<'a>>> + Clone {
     recursive(|contents| {
         // Group: < contents > annotations
         let group = select! { Token::LessThan(_) => () }
@@ -492,14 +506,16 @@ pub fn contents_parser<'a>() -> impl Parser<'a, Tokens<'a>, Vec<ContentItem<'a>>
 // ═══════════════════════════════════════════════════════════
 
 /// Parse a terminator token.
-fn terminator<'a>() -> impl Parser<'a, Tokens<'a>, Token<'a>> + Clone {
+fn terminator<'tokens, 'a: 'tokens>() -> impl Parser<'tokens, Tokens<'tokens, 'a>, Token<'a>> + Clone
+{
     select! {
         tok if is_terminator(Some(TokenDiscriminants::from(&tok))) => tok,
     }
 }
 
 /// Parse postcodes: [+ code] tokens.
-fn postcodes<'a>() -> impl Parser<'a, Tokens<'a>, Vec<Token<'a>>> + Clone {
+fn postcodes<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<Token<'a>>> + Clone {
     select! { tok @ Token::Postcode(_) => tok }
         .padded_by(ws())
         .repeated()
@@ -511,7 +527,8 @@ fn postcodes<'a>() -> impl Parser<'a, Tokens<'a>, Vec<Token<'a>>> + Clone {
 // ═══════════════════════════════════════════════════════════
 
 /// Parse linkers: repeat1(linker whitespace*)
-fn linkers<'a>() -> impl Parser<'a, Tokens<'a>, Vec<Token<'a>>> + Clone {
+fn linkers<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<Token<'a>>> + Clone {
     select! {
         tok if is_linker(Some(TokenDiscriminants::from(&tok))) => tok,
     }
@@ -528,7 +545,8 @@ fn linkers<'a>() -> impl Parser<'a, Tokens<'a>, Vec<Token<'a>>> + Clone {
 ///   contents,
 ///   utterance_end
 /// )
-pub fn tier_body_parser<'a>() -> impl Parser<'a, Tokens<'a>, TierBody<'a>> + Clone {
+pub fn tier_body_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, TierBody<'a>> + Clone {
     let langcode = select! { tok @ Token::Langcode(_) => tok }.then_ignore(ws());
 
     // Utterance end: optional(terminator), optional(postcodes), optional(media_bullet), newline
@@ -559,7 +577,8 @@ pub fn tier_body_parser<'a>() -> impl Parser<'a, Tokens<'a>, TierBody<'a>> + Clo
 /// Parse a complete main tier line.
 ///
 /// grammar.js: main_tier = seq(star, speaker, colon, tab, tier_body)
-pub fn main_tier_parser<'a>() -> impl Parser<'a, Tokens<'a>, MainTier<'a>> + Clone {
+pub fn main_tier_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, MainTier<'a>> + Clone {
     let star = select! { Token::Star(_) => () };
     let speaker = select! { tok @ Token::Speaker(_) => tok };
     let tier_sep = select! { Token::TierSep(_) => () };

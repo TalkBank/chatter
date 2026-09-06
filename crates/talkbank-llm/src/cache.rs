@@ -1,12 +1,16 @@
 //! Persistent response cache for the HTTP judgment provider.
 //!
-//! Same design as the sibling Python `talkbank_llm.ResponseCache`: a JSON
-//! object file mapping request-hash keys to raw response bodies, rewritten
-//! on every put so a crashed batch loses at most the in-flight entry.
+//! A JSON object maps request hashes to raw response bodies. Writes prepare a
+//! complete snapshot, flush a same-directory temporary file, atomically replace
+//! the live file, then publish memory. One handle owns the cache path across
+//! processes; share that handle across threads instead of opening it again.
 //! Everything that affects the answer (endpoint, model, rendered prompt) is
 //! folded into the key by the caller, borrowing `talkbank-cache`'s
 //! versioned-key discipline: stale entries MISS, they are never served.
 
+mod publication;
+
+use publication::{ExclusiveCache, PreparedSnapshot};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -30,6 +34,23 @@ pub enum CacheError {
         /// The parse failure, in human-readable form.
         reason: String,
     },
+    /// Another handle or process owns this cache path.
+    #[error("cache is already open: {path}; share the existing handle or close it first")]
+    InUse {
+        /// Canonical path already owned by another handle.
+        path: PathBuf,
+    },
+    /// Replacement is visible in memory and on disk, but directory sync failed.
+    #[error(
+        "cache replacement is visible at {path}, but durability could not be confirmed: {source}"
+    )]
+    PublishedNotDurable {
+        /// Destination where the replacement is already visible.
+        path: PathBuf,
+        /// Failure while confirming directory durability.
+        #[source]
+        source: std::io::Error,
+    },
     /// Reading or writing the cache file failed.
     #[error("cache io on {path}: {source}")]
     Io {
@@ -43,14 +64,17 @@ pub enum CacheError {
 
 /// Request-hash keyed, write-through, JSON-file response cache.
 ///
-/// Holds every entry in memory (a `Mutex<BTreeMap>`) and rewrites the whole
-/// file on every [`ResponseCache::put`], so a crash mid-batch loses at most
-/// the in-flight entry, never previously cached ones. `BTreeMap` (rather
-/// than `HashMap`) keeps the serialized file byte-stable across runs for
-/// the same entry set, useful for diffing a committed or shared cache.
+/// Holds entries in a `Mutex<BTreeMap>` and publishes one complete snapshot per
+/// put. The mutex spans preparation through publication, preventing stale
+/// snapshots from overwriting newer writes. An OS lock rejects a second opener
+/// across threads and processes. Drop the handle before reopening the path.
+///
+/// File contents are flushed before replacement. Unix also syncs the parent
+/// directory; Windows has no portable directory-sync guarantee here. The old
+/// live file is never truncated. Lockfiles remain on disk after handle drop.
 #[derive(Debug)]
 pub struct ResponseCache {
-    path: CachePath,
+    owner: ExclusiveCache,
     entries: Mutex<BTreeMap<String, String>>,
 }
 
@@ -59,23 +83,24 @@ impl ResponseCache {
     /// that exists but does not parse as a JSON string-to-string object is
     /// [`CacheError::Corrupt`] (fail closed, never silently bypassed).
     pub fn open(path: CachePath) -> Result<Self, CacheError> {
-        let entries = match std::fs::read_to_string(&path.0) {
+        let owner = ExclusiveCache::acquire(path)?;
+        let entries = match std::fs::read_to_string(owner.path()) {
             Ok(text) => serde_json::from_str::<BTreeMap<String, String>>(&text).map_err(|e| {
                 CacheError::Corrupt {
-                    path: path.0.clone(),
+                    path: owner.path().to_owned(),
                     reason: e.to_string(),
                 }
             })?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
             Err(e) => {
                 return Err(CacheError::Io {
-                    path: path.0.clone(),
+                    path: owner.path().to_owned(),
                     source: e,
                 });
             }
         };
         Ok(Self {
-            path,
+            owner,
             entries: Mutex::new(entries),
         })
     }
@@ -84,30 +109,20 @@ impl ResponseCache {
     pub fn get(&self, key: &str) -> Option<String> {
         match self.entries.lock() {
             Ok(map) => map.get(key).cloned(),
-            // A poisoned lock means another thread panicked mid-update;
-            // treat as a miss so the caller re-fetches rather than
-            // propagating the panic.
+            // Staging never mutates this map; recovering a poisoned lock
+            // still reads the last snapshot published to disk.
             Err(poisoned) => poisoned.into_inner().get(key).cloned(),
         }
     }
 
-    /// Insert `key` -> `body` and persist the whole cache immediately
-    /// (write-through, crash-safe like the Python sibling cache).
+    /// Persist a replacement snapshot, then make it visible to lookups.
+    /// Before rename, failures preserve disk and memory. A post-rename directory
+    /// sync failure returns `PublishedNotDurable`: the new entry is visible,
+    /// while crash durability remains unconfirmed.
     pub fn put(&self, key: &str, body: String) -> Result<(), CacheError> {
-        let serialized = {
-            let mut map = match self.entries.lock() {
-                Ok(map) => map,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            map.insert(key.to_string(), body);
-            serde_json::to_string(&*map).map_err(|e| CacheError::Corrupt {
-                path: self.path.0.clone(),
-                reason: e.to_string(),
-            })?
-        };
-        std::fs::write(&self.path.0, serialized).map_err(|e| CacheError::Io {
-            path: self.path.0.clone(),
-            source: e,
-        })
+        PreparedSnapshot::new(self, key, body)
+            .stage()?
+            .publish()?
+            .confirm_durability()
     }
 }

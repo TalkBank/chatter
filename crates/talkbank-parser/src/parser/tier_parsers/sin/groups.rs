@@ -65,8 +65,8 @@ pub(super) fn extract_sin_group_items(
     match children.content.slot() {
         NodeSlot::Present(SinGroupChoice::SinWord(sin_word)) => {
             let text = extract_utf8_text(sin_word.raw_node(), source, errors, "sin_word", "");
-            if !text.is_empty() {
-                vec![SinItem::Token(SinToken::new_unchecked(text))]
+            if let Ok(token) = SinToken::new(text) {
+                vec![SinItem::Token(token)]
             } else {
                 vec![]
             }
@@ -110,8 +110,8 @@ pub(super) fn extract_sin_group_items(
 /// text is decoded and emitted as one `SinItem::Token`, or nothing when empty.
 fn fallback_group_as_token(node: Node, source: &str, errors: &impl ErrorSink) -> Vec<SinItem> {
     let text = extract_utf8_text(node, source, errors, "sin_item", "");
-    if !text.is_empty() {
-        vec![SinItem::Token(SinToken::new_unchecked(text))]
+    if let Ok(token) = SinToken::new(text) {
+        vec![SinItem::Token(token)]
     } else {
         vec![]
     }
@@ -219,8 +219,8 @@ fn push_sin_token<'tree>(
     match slot {
         NodeSlot::Present(sin_word) => {
             let text = extract_utf8_text(sin_word.raw_node(), source, errors, "sin_word", "");
-            if !text.is_empty() {
-                tokens.push(SinToken::new_unchecked(text));
+            if let Ok(token) = SinToken::new(text) {
+                tokens.push(token);
             }
         }
         NodeSlot::Missing(raw) => {

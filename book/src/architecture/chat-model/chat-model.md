@@ -1,7 +1,7 @@
 # CHAT Data Model
 
 **Status:** Current
-**Last updated:** 2026-09-04 06:45 EDT
+**Last updated:** 2026-09-05 11:27 EDT
 
 The `talkbank-model` crate defines the typed AST for CHAT files. Every
 other crate, parser, transform, CLAN, CLI, LSP, and the entire batchalign
@@ -348,7 +348,7 @@ For the alignment algorithms themselves, see
 - **JSON**: all model types implement `Serialize`/`Deserialize`. Format
   per the [JSON Schema](../../chatter/integrating/json-schema.md).
 - **JSON Schema**: derived via `JsonSchema`. Run
-  `cargo test -p talkbank-transform --tests generate_schema` to regenerate
+  `just schema-gen` to regenerate
   `schema/chat-file.schema.json`.
 
 ## Memory and Interning

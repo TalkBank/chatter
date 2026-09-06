@@ -58,6 +58,22 @@ pub fn chat_to_json(
     chat_to_json_named(content, options, pretty, TranscriptName::Anonymous)
 }
 
+/// JSON Schema checking is independent of CHAT validation and transcript identity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JsonSchemaPolicy {
+    /// Check serialized JSON against the embedded CHAT schema.
+    Validate,
+    /// Serialize without checking JSON Schema; preserve requested CHAT checks.
+    Skip,
+}
+
+impl JsonSchemaPolicy {
+    /// Admit the CLI's schema-only opt-out without changing parse options.
+    pub const fn from_skip_flag(skip: bool) -> Self {
+        if skip { Self::Skip } else { Self::Validate }
+    }
+}
+
 /// Convert CHAT to JSON for a transcript whose name is known.
 ///
 /// The name decides whether the rules comparing the transcript against its own
@@ -72,19 +88,28 @@ pub fn chat_to_json_named(
     pretty: bool,
     name: TranscriptName<'_>,
 ) -> Result<String, PipelineError> {
+    chat_to_json_with_schema_policy(content, options, pretty, name, JsonSchemaPolicy::Validate)
+}
+
+/// Convert a named transcript, selecting JSON Schema checks after CHAT parsing.
+/// Both schema policies use the same transcript identity and CHAT validation.
+pub fn chat_to_json_with_schema_policy(
+    content: &str,
+    options: ParseValidateOptions,
+    pretty: bool,
+    name: TranscriptName<'_>,
+    schema: JsonSchemaPolicy,
+) -> Result<String, PipelineError> {
     let parser = talkbank_parser::TreeSitterParser::new()
         .map_err(|e| PipelineError::ParserCreation(format!("{e}")))?;
     let chat_file = super::parse::parse_and_validate_named(&parser, content, options, name)?;
-
-    // Serialize to JSON with schema validation
-    let json = if pretty {
-        to_json_pretty_validated(&chat_file)
-    } else {
-        to_json_validated(&chat_file)
+    match (schema, pretty) {
+        (JsonSchemaPolicy::Validate, true) => to_json_pretty_validated(&chat_file),
+        (JsonSchemaPolicy::Validate, false) => to_json_validated(&chat_file),
+        (JsonSchemaPolicy::Skip, true) => to_json_pretty_unvalidated(&chat_file),
+        (JsonSchemaPolicy::Skip, false) => to_json_unvalidated(&chat_file),
     }
-    .map_err(|e| PipelineError::JsonSerialization(e.to_string()))?;
-
-    Ok(json)
+    .map_err(|e| PipelineError::JsonSerialization(e.to_string()))
 }
 
 /// Parse, validate, and serialize to JSON WITHOUT schema validation.
@@ -114,18 +139,13 @@ pub fn chat_to_json_unvalidated(
     options: ParseValidateOptions,
     pretty: bool,
 ) -> Result<String, PipelineError> {
-    // Parse and validate
-    let chat_file = parse_and_validate(content, options)?;
-
-    // Serialize to JSON WITHOUT schema validation
-    let json = if pretty {
-        to_json_pretty_unvalidated(&chat_file)
-    } else {
-        to_json_unvalidated(&chat_file)
-    }
-    .map_err(|e| PipelineError::JsonSerialization(e.to_string()))?;
-
-    Ok(json)
+    chat_to_json_with_schema_policy(
+        content,
+        options,
+        pretty,
+        TranscriptName::Anonymous,
+        JsonSchemaPolicy::Skip,
+    )
 }
 
 /// Parse and rewrite CHAT into canonical serialized form.

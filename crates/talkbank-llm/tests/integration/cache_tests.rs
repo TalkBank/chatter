@@ -53,6 +53,7 @@ fn cache_roundtrips_across_reopen() {
     let path = dir.path().join("llm-cache.json");
     let cache = ResponseCache::open(CachePath(path.clone())).expect("open");
     cache.put("k1", "v1".to_string()).expect("put");
+    drop(cache);
     let reopened = ResponseCache::open(CachePath(path)).expect("reopen");
     assert_eq!(reopened.get("k1").as_deref(), Some("v1"));
 }
@@ -104,4 +105,90 @@ fn second_judge_call_is_served_from_cache() {
     let second = provider.judge(&req).expect("second judge");
     assert_eq!(first.merge_applicable, second.merge_applicable);
     mock.assert_calls(1); // the second call never reached the server
+}
+
+/// A failed disk write must not turn a later lookup into an uncommitted hit.
+#[test]
+fn failed_put_preserves_memory_and_existing_disk_entries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let active = dir.path().join("active");
+    let retained = dir.path().join("retained");
+    std::fs::create_dir(&active).expect("create cache directory");
+    let cache = ResponseCache::open(CachePath(active.join("cache.json"))).expect("open");
+    cache
+        .put("old", "retained response".into())
+        .expect("initial put");
+    let before = std::fs::read(active.join("cache.json")).expect("read old cache");
+    std::fs::rename(&active, &retained).expect("make destination unavailable");
+
+    assert!(cache.put("new", "uncommitted response".into()).is_err());
+    assert_eq!(
+        cache.get("new"),
+        None,
+        "failed writes cannot publish memory hits"
+    );
+    assert_eq!(cache.get("old").as_deref(), Some("retained response"));
+    assert_eq!(std::fs::read(retained.join("cache.json")).unwrap(), before);
+}
+
+/// A second handle must not load a stale snapshot and later overwrite the owner.
+#[test]
+fn a_second_cache_owner_is_rejected_until_the_first_drops() {
+    const PROBE: &str = "TALKBANK_LLM_TEST_LOCK_PROBE";
+    if let Some(path) = std::env::var_os(PROBE) {
+        assert!(matches!(
+            ResponseCache::open(CachePath(path.into())),
+            Err(talkbank_llm::CacheError::InUse { .. })
+        ));
+        return;
+    }
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("cache.json");
+    let first = ResponseCache::open(CachePath(path.clone())).expect("first owner");
+    assert!(ResponseCache::open(CachePath(path.clone())).is_err());
+    let status = std::process::Command::new(std::env::current_exe().expect("test executable"))
+        .args([
+            "--exact",
+            "cache_tests::a_second_cache_owner_is_rejected_until_the_first_drops",
+        ])
+        .env(PROBE, &path)
+        .status()
+        .expect("run independent opener");
+    assert!(status.success(), "another process must be rejected too");
+    drop(first);
+    assert!(ResponseCache::open(CachePath(path)).is_ok());
+}
+
+/// Concurrent puts must retain every completed update on disk, in key order.
+#[test]
+fn simultaneous_writers_publish_every_entry() {
+    use std::collections::BTreeMap;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("cache.json");
+    let cache = ResponseCache::open(CachePath(path.clone())).expect("open");
+    let start = std::sync::Barrier::new(16);
+    std::thread::scope(|scope| {
+        for index in 0..16 {
+            let cache = &cache;
+            let start = &start;
+            scope.spawn(move || {
+                start.wait();
+                cache
+                    .put(&format!("key-{index:02}"), format!("response-{index}"))
+                    .expect("put");
+            });
+        }
+    });
+    let expected: BTreeMap<_, _> = (0..16)
+        .map(|index| (format!("key-{index:02}"), format!("response-{index}")))
+        .collect();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        serde_json::to_string(&expected).unwrap()
+    );
+    drop(cache);
+    let reopened = ResponseCache::open(CachePath(path)).expect("reopen");
+    for (key, value) in expected {
+        assert_eq!(reopened.get(&key), Some(value));
+    }
 }

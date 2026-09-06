@@ -135,6 +135,12 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     // generic E321 there, the same Conflicting shape as `#0`.
     ("E242.md#1", Conflicting),
     ("E245.md", Re2cExtra),
+    // E251's historical `@s:eng` sample became measured when its status moved
+    // from planned to model-only. Tree-sitter reports E255/E342; re2c recovers
+    // an empty word and reports E209/E253/E255. Neither emits E251. Retain the
+    // sample and expose the existing recovery discrepancy while correcting
+    // the model-boundary classification; this is not a parser parity claim.
+    ("E342.md#2", Conflicting),
     // `#0` since 2026-09-01, when E252, E253, E301, E306 and E307 were
     // rewritten from auto-generated stubs into stated rules and gained a
     // second example each; a bare name addresses a single-example spec. The
@@ -184,7 +190,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E313.md#0", Conflicting),
     ("E314.md#0", Conflicting),
     ("E315.md#0", Conflicting),
-    ("E315.md#1", Re2cSilent),
     ("E316.md#0", Conflicting),
     ("E316.md#1", Conflicting),
     ("E316.md#2", Conflicting),

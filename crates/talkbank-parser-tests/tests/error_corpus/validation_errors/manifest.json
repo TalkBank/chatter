@@ -111,8 +111,22 @@
     {
       "fixture": "E212_1.cha",
       "code": "E212",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E212.md"
+    },
+    {
+      "fixture": "E212_2.cha",
+      "code": "E212",
       "claim": "violates",
-      "status": "not_implemented",
+      "status": "implemented",
+      "source_spec": "spec/errors/E212.md"
+    },
+    {
+      "fixture": "E212_3.cha",
+      "code": "E212",
+      "claim": "legal",
+      "status": "implemented",
       "source_spec": "spec/errors/E212.md"
     },
     {
@@ -242,8 +256,33 @@
     {
       "fixture": "E246_1.cha",
       "code": "E246",
+      "claim": {
+        "subsumed_by": [
+          "E765"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E246.md"
+    },
+    {
+      "fixture": "E246_2.cha",
+      "code": "E246",
       "claim": "violates",
-      "status": "not_implemented",
+      "status": "implemented",
+      "source_spec": "spec/errors/E246.md"
+    },
+    {
+      "fixture": "E246_3.cha",
+      "code": "E246",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E246.md"
+    },
+    {
+      "fixture": "E246_4.cha",
+      "code": "E246",
+      "claim": "legal",
+      "status": "implemented",
       "source_spec": "spec/errors/E246.md"
     },
     {
@@ -287,13 +326,6 @@
       "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E250.md"
-    },
-    {
-      "fixture": "E251_1.cha",
-      "code": "E251",
-      "claim": "violates",
-      "status": "not_implemented",
-      "source_spec": "spec/errors/E251.md"
     },
     {
       "fixture": "E252_1.cha",
@@ -875,6 +907,13 @@
     },
     {
       "fixture": "E342_2.cha",
+      "code": "E342",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E342.md"
+    },
+    {
+      "fixture": "E342_3.cha",
       "code": "E342",
       "claim": "violates",
       "status": "implemented",

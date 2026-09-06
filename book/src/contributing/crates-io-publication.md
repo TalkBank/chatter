@@ -1,7 +1,7 @@
 # Crates.io Publication
 
 **Status:** Current
-**Last updated:** 2026-06-21 21:33 EDT
+**Last updated:** 2026-09-05 17:04 EDT
 
 ## Scope
 
@@ -23,14 +23,19 @@ Wave 1A is:
 `talkbank-transform` has a **runtime dependency** on it. Holding it back would
 make `talkbank-transform` unpublishable.
 
-The current Wave 1B hold-backs are explicitly marked `publish = false`:
+Every workspace package outside Wave 1A must be explicitly marked
+`publish = false`. The check derives this complement from Cargo metadata,
+so a newly added crate cannot silently escape the publication decision.
+Application/API hold-backs include:
 
 - `send2clan`
 - `chatter`
 - `talkbank-lsp`
+- `talkbank-llm`
 
 They stay blocked until their support contract, install story, and user-facing
-docs are ready.
+docs are ready. Internal test, vocabulary, desktop and task-runner packages
+are also checked; the script prints the complete current hold-back set.
 
 ## What the repo now automates
 
@@ -39,6 +44,7 @@ Two repo-native entry points cover the first-wave foundations:
 | Surface | Purpose |
 |---------|---------|
 | `just crates-io-foundation-check` | Local preflight for first-wave crates.io readiness |
+| `bash scripts/release/check-foundation-publication-readiness.sh --metadata-only` | Fast manifest, dependency and hold-back review without packaging or registry access |
 | `.github/workflows/crates-io-foundation.yml` | CI enforcement for first-wave metadata, package surfaces, hold-backs, and publish order |
 
 The readiness check enforces:
@@ -48,9 +54,13 @@ The readiness check enforces:
 - readme-file existence
 - package assembly for every first-wave crate via `cargo package --list`
 - the first-wave runtime dependency graph
-- `publish = false` guards on Wave 1B crates
+- `publish = false` guards on every workspace crate outside Wave 1A
 - a real `cargo publish --dry-run` for the standalone `tree-sitter-talkbank`
   crate
+
+The metadata-only mode uses locked Cargo metadata and reads README paths. It
+does not validate assembled package contents or registry resolution and cannot
+replace the full pre-publication check.
 
 ## Important limitation: Cargo cannot fully dry-run the bootstrap wave
 

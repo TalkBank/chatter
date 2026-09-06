@@ -119,6 +119,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 pub mod bug_annotations;
+/// Evidence-aware curated CHECK mapping report.
+pub mod check_mapping_audit;
 
 pub mod check_error_map;
 pub mod conformance_inventory;

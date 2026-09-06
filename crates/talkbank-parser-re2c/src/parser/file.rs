@@ -23,7 +23,7 @@ use super::dependent_tiers;
 use super::main_tier;
 
 /// Parse a complete CHAT file with no error reporting.
-pub fn parse_file<'a>(tokens: &'a [Token<'a>], source: &'a str) -> ChatFile<'a> {
+pub fn parse_file<'a>(tokens: &[Token<'a>], source: &'a str) -> ChatFile<'a> {
     parse_file_with_errors(tokens, source, &NullErrorSink)
 }
 
@@ -292,10 +292,10 @@ fn report_leading_zero_bullet_times<'a>(tokens: &[Token<'a>], errors: &impl Erro
     }
 }
 
-/// Parse a complete CHAT file from a leaked token slice, reporting
+/// Parse a complete CHAT file from a temporary token slice, reporting
 /// parse failures to the given error sink.
 pub fn parse_file_with_errors<'a>(
-    tokens: &'a [Token<'a>],
+    tokens: &[Token<'a>],
     source: &'a str,
     errors: &impl ErrorSink,
 ) -> ChatFile<'a> {
@@ -387,14 +387,11 @@ pub fn parse_file_with_errors<'a>(
                 // item. One `scan_main_tier_line` pass finds both, keeping the
                 // valid-line fast path to a single no-allocation scan. Only
                 // when something must be stripped do we make one more pass
-                // that both reports and builds the filtered stream. chumsky
-                // ties the input-slice lifetime to the parsed output, so the
-                // filtered stream must outlive 'a; we leak it the way this
-                // crate already leaks its token storage (see
-                // `lex_to_tokens`). The leak is bounded to invalid input,
-                // never the valid-file fast path.
+                // that both reports and builds the filtered stream. Token
+                // storage is independent of source lifetime, so this recovery
+                // buffer is dropped after parsing while the AST borrows source.
                 let scan = scan_main_tier_line(main_tier_tokens);
-                let tier_input: &'a [Token<'a>] = if scan.has_curly_quote
+                let tier_input: std::borrow::Cow<'_, [Token<'a>]> = if scan.has_curly_quote
                     || !scan.misplaced_linkers.is_empty()
                 {
                     // The indices come out of the scan in ascending order and
@@ -439,13 +436,13 @@ pub fn parse_file_with_errors<'a>(
                             filtered.push(tok.clone());
                         }
                     }
-                    Box::leak(filtered.into_boxed_slice())
+                    std::borrow::Cow::Owned(filtered)
                 } else {
-                    main_tier_tokens
+                    std::borrow::Cow::Borrowed(main_tier_tokens)
                 };
 
                 match main_tier::main_tier_parser()
-                    .parse(tier_input)
+                    .parse(tier_input.as_ref())
                     .into_result()
                 {
                     Ok(main_tier) => {
@@ -552,7 +549,7 @@ pub fn parse_file_with_errors<'a>(
 /// and the tier falls back to a generic text tier (preserving the raw
 /// content for downstream inspection).
 fn parse_dependent_tiers<'a>(
-    tokens: &'a [Token<'a>],
+    tokens: &[Token<'a>],
     pos: &mut usize,
     errors: &impl ErrorSink,
 ) -> Vec<DependentTierParsed<'a>> {

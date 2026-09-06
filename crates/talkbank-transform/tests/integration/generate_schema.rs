@@ -18,11 +18,10 @@
 //! or shape change, regenerate the committed file with:
 //!
 //! ```bash
-//! cargo test --tests generate_schema -- --nocapture
+//! just schema-gen
 //! ```
 //!
-//! (In this virtual workspace `cargo test -p talkbank-transform --test
-//! generate_schema` also works.)
+//! Ordinary tests check schema currency without rewriting the file.
 
 #[path = "generate_schema/generate.rs"]
 mod generate;

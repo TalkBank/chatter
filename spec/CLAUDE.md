@@ -1,7 +1,7 @@
 # spec, CHAT Specification
 
 **Status:** Current
-**Last modified:** 2026-09-04 16:20 EDT
+**Last modified:** 2026-09-05 16:52 EDT
 
 ## Read the book first
 
@@ -55,10 +55,10 @@ grammar/test/corpus/
 `tree-sitter test` recurses, and test names come from each file's `====`
 header rather than its path, so the split costs nothing and renames nothing.
 
-This is organization, not a rule to remember. The generator wipes its own
-directory wholesale, which is safe precisely because nothing else is in it,
-and it **refuses to clear any directory lacking its `.generated-output-dir`
-marker**. Pointing `--output-dir` at a shared or hand-maintained tree fails
+This is organization, not a rule to remember. The generator retains unchanged output and prunes obsolete files in its own
+directory. It **refuses to prune an existing directory lacking its
+`.generated-output-dir` marker**, conflicting or nested human ownership, and
+symlinked entries. Pointing `--output-dir` at a shared or hand-maintained tree fails
 loudly instead of deleting work. The marker file says the same thing in situ,
 so a reader who finds the directory does not need this page.
 
@@ -76,7 +76,7 @@ hand-maintained tests in `manual/`.
 |----------|---------|
 | `spec/constructs/` | Valid CHAT examples with expected CSTs |
 | `spec/errors/` | Invalid (or boundary-legal) CHAT examples, each with a CLAIM |
-| → `grammar/test/corpus/generated/` | Generated tree-sitter tests (wiped each run) |
+| → `grammar/test/corpus/generated/` | Generated tree-sitter tests (obsolete files pruned) |
 | `grammar/test/corpus/manual/` | Hand-maintained tree-sitter tests (never generated) |
 | → `crates/talkbank-parser-tests/tests/integration/generated/` | Generated Rust parser tests |
 | → `crates/talkbank-parser-tests/tests/error_corpus/validation_errors/` | Validation fixtures + `manifest.json` (data-driven runner) |

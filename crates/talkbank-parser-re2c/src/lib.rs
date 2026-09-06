@@ -103,17 +103,9 @@ use token::LexResult;
 /// Lex a line starting from a given condition. Returns `LexResult`
 /// with tokens and error-checking utilities.
 ///
-/// The input should be NUL-terminated or will be padded internally.
+/// Tokens borrow the caller's source without copying or retaining it.
 pub fn lex_line(input: &str, condition: usize) -> LexResult<'_> {
-    // Ensure NUL-terminated
-    let padded: &str = if input.ends_with('\0') {
-        input
-    } else {
-        let mut s = input.to_string();
-        s.push('\0');
-        Box::leak(s.into_boxed_str())
-    };
-    let tokens: Vec<_> = lexer::Lexer::new(padded, condition).collect();
+    let tokens = lexer::Lexer::new(input, condition).collect();
     LexResult { tokens }
 }
 

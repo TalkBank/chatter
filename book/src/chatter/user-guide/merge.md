@@ -1,7 +1,7 @@
 # Merge (`chatter merge`)
 
 **Status:** Draft
-**Last modified:** 2026-08-30 15:12 EDT
+**Last modified:** 2026-09-05 20:31 EDT
 
 `chatter merge` combines two CHAT transcripts that cover the same media
 recording into one. The caller designates which speakers' utterances are
@@ -377,6 +377,19 @@ Absent flag and env variable means uncached, today's default behavior.
 `chatter batch` threads `--llm-cache` to every per-session `chatter
 pipeline` subprocess it spawns, so one cache file accumulates entries
 across the whole batch.
+
+Only one process may open a cache file at a time. Finish the current run before
+starting another with the same cache, or use separate cache paths. Library
+callers should share one `ResponseCache` handle across threads. The normal
+batch driver runs its subprocesses sequentially and releases ownership between
+sessions.
+
+Writes replace a flushed temporary file rather than truncating live responses.
+A failed write before replacement preserves both existing disk entries and
+lookup results. Unix builds also sync the parent directory; if that final sync
+fails, the error explicitly says the replacement is visible but durability is
+unconfirmed. Windows builds flush the file before replacement without claiming
+portable directory-sync durability.
 
 #### Session-context JSON (`--session-context`)
 

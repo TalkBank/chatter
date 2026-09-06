@@ -285,7 +285,12 @@ fn is_secondary_stress(marker_type: WordStressMarkerType) -> bool {
     matches!(marker_type, WordStressMarkerType::Secondary)
 }
 
-/// Validate prosodic marker placement in word content.
+/// Word content measured for prosodic placement checks.
+///
+/// Construction makes one linear pass; checking makes one more with constant-
+/// time neighbor queries, plus the cost of emitted diagnostics. The former
+/// per-marker prefix/suffix scans were quadratic on marker-heavy words.
+/// The immutable borrow prevents mutation between measurement and checking.
 ///
 /// Rules:
 /// - E244: Multiple consecutive stress markers are invalid (ˈˌtest)
@@ -294,97 +299,151 @@ fn is_secondary_stress(marker_type: WordStressMarkerType) -> bool {
 /// - E247: Only one primary stress per word allowed
 /// - E250: Secondary stress requires primary stress in the same word
 /// - E252: Syllable pause (^) must be between spoken material
-pub(crate) fn check_prosodic_markers(word: &Word, errors: &impl ErrorSink) {
-    let content = word.content();
+pub(crate) struct ProsodicWord<'a> {
+    word: &'a Word,
+    spoken: SpokenExtent,
+    primary_stress_count: usize,
+    secondary_stress_count: usize,
+}
 
-    // Count stress markers for E247 and E250
-    let mut primary_stress_count = 0;
-    let mut secondary_stress_count = 0;
+/// The first and last spoken segments, measured from the borrowed word.
+/// Absence is distinct from a segment at index zero.
+enum SpokenExtent {
+    Absent,
+    Present { first: usize, last: usize },
+}
 
-    for item in content.iter() {
-        if let WordContent::StressMarker(marker) = item {
-            if is_primary_stress(marker.marker_type) {
-                primary_stress_count += 1;
-            } else if is_secondary_stress(marker.marker_type) {
-                secondary_stress_count += 1;
+impl SpokenExtent {
+    fn precedes(&self, index: usize) -> bool {
+        matches!(self, Self::Present { first, .. } if *first < index)
+    }
+
+    fn follows(&self, index: usize) -> bool {
+        matches!(self, Self::Present { last, .. } if *last > index)
+    }
+}
+
+impl<'a> ProsodicWord<'a> {
+    /// Measure once; private fields tie every fact to this immutable word.
+    /// Each marker can then ask about both neighbors in constant time.
+    pub(crate) fn of(word: &'a Word) -> Self {
+        let mut spoken = SpokenExtent::Absent;
+        let mut primary_stress_count = 0;
+        let mut secondary_stress_count = 0;
+        for (index, item) in word.content().iter().enumerate() {
+            if is_spoken_material(item) {
+                match &mut spoken {
+                    SpokenExtent::Absent => {
+                        spoken = SpokenExtent::Present {
+                            first: index,
+                            last: index,
+                        };
+                    }
+                    SpokenExtent::Present { last, .. } => *last = index,
+                }
             }
+            if let WordContent::StressMarker(marker) = item {
+                if is_primary_stress(marker.marker_type) {
+                    primary_stress_count += 1;
+                } else if is_secondary_stress(marker.marker_type) {
+                    secondary_stress_count += 1;
+                }
+            }
+        }
+        Self {
+            word,
+            spoken,
+            primary_stress_count,
+            secondary_stress_count,
         }
     }
 
-    // E247: Only one primary stress per word
-    if primary_stress_count > 1 {
-        errors.report(
-            ParseError::new(
-                ErrorCode::MultiplePrimaryStress,
-                Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                format!(
-                    "Word has {} primary stress markers, but only one is allowed",
-                    primary_stress_count
-                ),
-            )
-            .with_suggestion("A word can have at most one primary stress (ˈ)"),
-        );
-    }
+    /// Consume measured evidence and emit the existing prosodic diagnostics.
+    pub(crate) fn check(self, errors: &impl ErrorSink) {
+        let Self {
+            word,
+            spoken,
+            primary_stress_count,
+            secondary_stress_count,
+        } = self;
+        let content = word.content();
 
-    // E250: Secondary stress requires primary stress
-    if secondary_stress_count > 0 && primary_stress_count == 0 {
-        errors.report(
-            ParseError::new(
-                ErrorCode::SecondaryStressWithoutPrimary,
-                Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                "Word has secondary stress (ˌ) but no primary stress (ˈ)",
-            )
-            .with_suggestion(
-                "Secondary stress only makes sense when there is also a primary stress marker",
-            ),
-        );
-    }
-
-    for (i, item) in content.iter().enumerate() {
-        // E244: Check for consecutive stress markers
-        if matches!(item, WordContent::StressMarker(_)) {
-            if matches!(content.get(i + 1), Some(WordContent::StressMarker(_))) {
-                errors.report(
-                    ParseError::new(
-                        ErrorCode::ConsecutiveStressMarkers,
-                        Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                        "Multiple consecutive stress markers",
-                    )
-                    .with_suggestion(
-                        "A syllable can only have one stress marker (primary ˈ or secondary ˌ)",
+        // E247: Only one primary stress per word
+        if primary_stress_count > 1 {
+            errors.report(
+                ParseError::new(
+                    ErrorCode::MultiplePrimaryStress,
+                    Severity::Error,
+                    SourceLocation::new(word.span),
+                    ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                    format!(
+                        "Word has {} primary stress markers, but only one is allowed",
+                        primary_stress_count
                     ),
-                );
-            }
-
-            // E245: Stress must be followed by spoken material
-            let has_following_text = content[i + 1..].iter().any(is_spoken_material);
-
-            if !has_following_text {
-                errors.report(
-                    ParseError::new(
-                        ErrorCode::StressNotBeforeSpokenMaterial,
-                        Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                        "Stress marker not followed by spoken material",
-                    )
-                    .with_suggestion("Stress markers (ˈ ˌ) must precede the syllable they mark"),
-                );
-            }
+                )
+                .with_suggestion("A word can have at most one primary stress (ˈ)"),
+            );
         }
 
-        // E246: Lengthening must be after spoken material
-        if let WordContent::Lengthening(_) = item {
-            let has_preceding_text = content[..i].iter().any(is_spoken_material);
+        // E250: Secondary stress requires primary stress
+        if secondary_stress_count > 0 && primary_stress_count == 0 {
+            errors.report(
+                ParseError::new(
+                    ErrorCode::SecondaryStressWithoutPrimary,
+                    Severity::Error,
+                    SourceLocation::new(word.span),
+                    ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                    "Word has secondary stress (ˌ) but no primary stress (ˈ)",
+                )
+                .with_suggestion(
+                    "Secondary stress only makes sense when there is also a primary stress marker",
+                ),
+            );
+        }
 
-            if !has_preceding_text {
-                errors.report(
+        for (i, item) in content.iter().enumerate() {
+            // E244: Check for consecutive stress markers
+            if matches!(item, WordContent::StressMarker(_)) {
+                if matches!(content.get(i + 1), Some(WordContent::StressMarker(_))) {
+                    errors.report(
+                        ParseError::new(
+                            ErrorCode::ConsecutiveStressMarkers,
+                            Severity::Error,
+                            SourceLocation::new(word.span),
+                            ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                            "Multiple consecutive stress markers",
+                        )
+                        .with_suggestion(
+                            "A syllable can only have one stress marker (primary ˈ or secondary ˌ)",
+                        ),
+                    );
+                }
+
+                // E245: Stress must be followed by spoken material
+                let has_following_text = spoken.follows(i);
+
+                if !has_following_text {
+                    errors.report(
+                        ParseError::new(
+                            ErrorCode::StressNotBeforeSpokenMaterial,
+                            Severity::Error,
+                            SourceLocation::new(word.span),
+                            ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                            "Stress marker not followed by spoken material",
+                        )
+                        .with_suggestion(
+                            "Stress markers (ˈ ˌ) must precede the syllable they mark",
+                        ),
+                    );
+                }
+            }
+
+            // E246: Lengthening must be after spoken material
+            if let WordContent::Lengthening(_) = item {
+                let has_preceding_text = spoken.precedes(i);
+
+                if !has_preceding_text {
+                    errors.report(
                     ParseError::new(
                         ErrorCode::LengtheningNotAfterSpokenMaterial,
                         Severity::Error,
@@ -396,27 +455,28 @@ pub(crate) fn check_prosodic_markers(word: &Word, errors: &impl ErrorSink) {
                         "Lengthening marker (:) must follow the syllable it lengthens (e.g., bana:nas)",
                     ),
                 );
+                }
             }
-        }
 
-        // E252: Syllable pause must be between spoken material
-        if let WordContent::SyllablePause(_) = item {
-            let has_preceding_text = content[..i].iter().any(is_spoken_material);
-            let has_following_text = content[i + 1..].iter().any(is_spoken_material);
+            // E252: Syllable pause must be between spoken material
+            if let WordContent::SyllablePause(_) = item {
+                let has_preceding_text = spoken.precedes(i);
+                let has_following_text = spoken.follows(i);
 
-            if !has_preceding_text || !has_following_text {
-                errors.report(
-                    ParseError::new(
-                        ErrorCode::SyllablePauseNotBetweenSpokenMaterial,
-                        Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                        "Syllable pause marker (^) must be between spoken material",
-                    )
-                    .with_suggestion(
-                        "Syllable pause (^) must occur between syllables (e.g., rhi^noceros)",
-                    ),
-                );
+                if !has_preceding_text || !has_following_text {
+                    errors.report(
+                        ParseError::new(
+                            ErrorCode::SyllablePauseNotBetweenSpokenMaterial,
+                            Severity::Error,
+                            SourceLocation::new(word.span),
+                            ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                            "Syllable pause marker (^) must be between spoken material",
+                        )
+                        .with_suggestion(
+                            "Syllable pause (^) must occur between syllables (e.g., rhi^noceros)",
+                        ),
+                    );
+                }
             }
         }
     }

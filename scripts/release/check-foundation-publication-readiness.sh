@@ -3,16 +3,19 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 allow_dirty=()
+metadata_only=false
 
-if [[ "${1:-}" == "--allow-dirty" ]]; then
-    allow_dirty=(--allow-dirty)
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --allow-dirty) allow_dirty=(--allow-dirty) ;;
+        --metadata-only) metadata_only=true ;;
+        *)
+            echo "usage: $0 [--allow-dirty] [--metadata-only]" >&2
+            exit 1
+            ;;
+    esac
     shift
-fi
-
-if [[ $# -ne 0 ]]; then
-    echo "usage: $0 [--allow-dirty]" >&2
-    exit 1
-fi
+done
 
 first_wave=(
     tree-sitter-talkbank
@@ -24,14 +27,8 @@ first_wave=(
     talkbank-transform
 )
 
-held_back=(
-    send2clan
-    chatter
-    talkbank-lsp
-)
-
 echo "==> Checking first-wave crates.io publication metadata"
-python3 - "$repo_root" "$(IFS=,; echo "${first_wave[*]}")" "$(IFS=,; echo "${held_back[*]}")" <<'PY'
+python3 - "$repo_root" "$(IFS=,; echo "${first_wave[*]}")" <<'PY'
 import json
 import pathlib
 import subprocess
@@ -39,7 +36,6 @@ import sys
 
 repo_root = pathlib.Path(sys.argv[1])
 first_wave = sys.argv[2].split(",")
-held_back = sys.argv[3].split(",")
 
 metadata = json.loads(
     subprocess.check_output(
@@ -51,6 +47,7 @@ metadata = json.loads(
 
 packages = {package["name"]: package for package in metadata["packages"]}
 workspace_names = set(packages)
+held_back = sorted(workspace_names - set(first_wave))
 errors: list[str] = []
 
 
@@ -118,18 +115,17 @@ for package_name in first_wave:
             )
 
 for package_name in held_back:
-    package = packages.get(package_name)
-    require(package is not None, f"missing held-back package {package_name}")
-    if package is None:
-        continue
+    package = packages[package_name]
     require(
         package.get("publish") == [],
-        f"{package_name} must stay publish = false until the Wave 1B contract is ready",
+        f"{package_name} is outside the first-wave publication set and must declare publish = false",
     )
 
 first_wave_index = {name: index for index, name in enumerate(first_wave)}
 for package_name in first_wave:
-    package = packages[package_name]
+    package = packages.get(package_name)
+    if package is None:
+        continue
     for dependency in package["dependencies"]:
         dep_name = dependency["name"]
         dep_path = dependency.get("path")
@@ -160,6 +156,10 @@ print(
     "smoke test happens as the wave is published in order."
 )
 PY
+
+if [[ "$metadata_only" == true ]]; then
+    exit 0
+fi
 
 echo
 echo "==> Checking package contents for first-wave crates"

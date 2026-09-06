@@ -1,7 +1,7 @@
 # JSON Schema
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-09-05 12:03 EDT
 
 This repository generates JSON Schema from Rust-owned types with
 [schemars](https://docs.rs/schemars) for the `ChatFile` transcript model used
@@ -14,7 +14,7 @@ integrations consume a stable contract without re-deriving the shapes by hand.
 
 | Schema | Canonical URL | Repository | Generator |
 |----------|------------|------------|------------|
-| `ChatFile` transcript model | `https://talkbank.org/schemas/v0.1/chat-file.json` | `schema/chat-file.schema.json` | `cargo test -p talkbank-transform --tests generate_schema` |
+| `ChatFile` transcript model | `https://talkbank.org/schemas/v0.1/chat-file.json` | `schema/chat-file.schema.json` | `just schema-gen` |
 
 The generated schema declares both `$schema` (JSON Schema 2020-12) and `$id`
 (the canonical URL above). External consumers that want to track the
@@ -34,6 +34,18 @@ By default, `chatter to-json`:
 - checks dependent-tier alignment unless `--skip-alignment` is passed, and
 - validates the emitted JSON against the schema unless
   `--skip-schema-validation` is passed.
+
+These controls are independent. `--skip-schema-validation` skips only the
+JSON Schema check after CHAT parsing and validation. It retains the input
+filename, so filename-dependent rules such as E531 (`@Media` name mismatch)
+still run for both single files and directory conversions. A directory run
+prints individual parse/validation diagnostics and exits unsuccessfully if
+any file fails, while retaining successfully converted siblings.
+
+Library callers that know the transcript name can use
+`chat_to_json_with_schema_policy` with `TranscriptName` and
+`JsonSchemaPolicy::{Validate, Skip}`. The policy selects serialization only;
+it cannot alter the parse options or discard the transcript name.
 
 Useful flags:
 
@@ -104,7 +116,7 @@ After changing transcript-model types in `talkbank-model`:
 
 ```bash
 cd chatter
-cargo test -p talkbank-transform --tests generate_schema
+just schema-gen
 ```
 
 This writes the checked-in schema artifact in `schema/`. CI already checks that
@@ -115,4 +127,18 @@ generated artifacts stay in sync.
 - `schema/chat-file.schema.json`: generated schema
 - `crates/talkbank-transform/src/json.rs`: schema loading and validation
 - `crates/talkbank-model/src/model/`: Rust data model
-- `tests/generate_schema/`: shared schema generation helpers
+- `tests/integration/generate_schema/`: shared schema generation helpers
+
+Schema generation is an explicit operation: `just schema-gen` selects the
+ignored generator, and `just regen` includes it. Ordinary tests only check
+currency, so they do not rewrite the schema while checking the version embedded
+at compile time. Identical output preserves the file's modification time to
+avoid invalidating builds that embed it. A currency mismatch reports the repair
+command without dumping the entire schema into the test log.
+
+The generator preserves schemars' Draft 2020-12 structure. In this dialect,
+[`$ref` permits sibling keywords](https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.3.1),
+including the tag constraints for internally tagged enums. No `allOf` rewrite
+is required. The former recursive workaround also traversed literal `const`
+values and could change their meaning, so it has been removed. The generated
+schema regression verifies both the tag and the referenced payload constraints.

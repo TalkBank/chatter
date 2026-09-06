@@ -1,7 +1,7 @@
 # Spec System
 
 **Status:** Current
-**Last modified:** 2026-08-27 13:44 EDT
+**Last modified:** 2026-09-05 16:52 EDT
 
 `spec/` is the source of truth for what CHAT is and for what chatter rejects.
 Tests, fixtures and error documentation are GENERATED from it. You change the
@@ -307,9 +307,17 @@ that names them: `spec/symbols/symbol_registry.json` (`just symbols-gen`) and
 `spec/form_markers/form_marker_registry.json` (`just form-markers-gen`). Each
 has its own README and its own drift gate.
 
+Shared-directory artifacts (`Ownership::NamedFiles`) retain byte-identical
+outputs and delete only explicitly retired filenames. This preserves generated
+Rust inputs across no-op regeneration while leaving other producers' files
+alone. The generator reports the number of files actually written, not the
+number it expected to produce. Whole-directory artifacts additionally require the ownership capability
+described below before obsolete files may be pruned.
+
 **Generated and hand-written tests live in separate trees.**
-`grammar/test/corpus/generated/` is wiped in full on every run and refuses to
-clear a directory lacking its `.generated-output-dir` marker;
+`grammar/test/corpus/generated/` retains unchanged files and removes obsolete
+ones through `GeneratedDir`, which requires a `.generated-output-dir` marker
+and refuses human ownership or symlinked entries;
 `grammar/test/corpus/manual/` is never written by a generator. Both were once
 one tree, which destroyed 1,468 lines of hand-mined corpus tests twice in three
 days.

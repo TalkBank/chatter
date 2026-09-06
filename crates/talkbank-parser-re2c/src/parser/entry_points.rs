@@ -1,15 +1,10 @@
-//! Public entry point functions, each lexes input and delegates to chumsky parsers.
+//! Public entry points lex caller-owned source into temporary token storage.
 //!
-//! These are the public API that `chat_parser_impl.rs` and tests call.
-//! Each function: lex → leaked token slice → chumsky parser → AST.
+//! Chumsky parsers borrow tokens only during parsing. Returned AST slices borrow
+//! the original input; reconstructed word text is owned by the AST. All token
+//! and recovery buffers are dropped when parsing returns.
 //!
-//! **Memory:** Entry points use `lex_to_tokens` which leaks the NUL-padded
-//! source and token slice via `Box::leak`. This is acceptable for
-//! small-batch use. For large corpus runs (>5k files), callers should
-//! periodically fork a subprocess or accept the memory cost.
-//!
-//! `parse_chat_file_to_model` provides an owned-result entry point that
-//! still leaks internally but is the intended API for batch processing.
+//! `parse_chat_file_to_model` also converts the AST into a fully owned model.
 
 use crate::ast::*;
 use crate::token::Token;
@@ -23,7 +18,7 @@ use super::{dependent_tiers, file, headers, lex_to_tokens, main_tier};
 
 /// Parse a complete CHAT file to an owned model.
 ///
-/// Lex → parse → convert. The intermediate AST borrows from leaked data;
+/// Lex → parse → convert. The intermediate AST borrows from the caller's input;
 /// the returned model is fully owned (all `String`s, no borrows).
 pub fn parse_chat_file_to_model(
     input: &str,
@@ -42,17 +37,14 @@ pub fn parse_main_tier(input: &str) -> Option<MainTier<'_>> {
     parse_main_tier_with_source(input).map(|(tier, _source)| tier)
 }
 
-/// Parse a main tier and return the LEAKED source its slices borrow from.
-///
-/// The lexer NUL-pads and leaks a COPY of `input`, so the caller's own string
-/// is a different allocation and `SourceText::new(input)` would place nothing.
-/// A caller that wants source spans needs this one; `parse_main_tier` remains
-/// for callers that do not.
+/// Parse a main tier and return its original borrowed source alongside it.
+/// The source is identical to `input`; this paired API is retained for callers
+/// that pass both results directly to source-aware model conversion.
 pub fn parse_main_tier_with_source(input: &str) -> Option<(MainTier<'_>, &str)> {
     use chumsky::Parser as _;
     let (tokens, source) = crate::parser::lex_to_tokens_and_source(input, 0);
     main_tier::main_tier_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .ok()
         .map(|tier| (tier, source))
@@ -62,7 +54,10 @@ pub fn parse_main_tier_with_source(input: &str) -> Option<(MainTier<'_>, &str)> 
 pub fn parse_id_header(input: &str) -> Option<IdHeaderParsed<'_>> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_ID_CONTENT);
-    headers::id_header_parser().parse(tokens).into_result().ok()
+    headers::id_header_parser()
+        .parse(tokens.as_slice())
+        .into_result()
+        .ok()
 }
 
 /// Parse a @Languages header content (after `@Languages:\t`).
@@ -70,7 +65,7 @@ pub fn parse_languages_header(input: &str) -> LanguagesHeaderParsed<'_> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_LANGUAGES_CONTENT);
     headers::languages_header_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .unwrap_or_else(|_| LanguagesHeaderParsed { codes: Vec::new() })
 }
@@ -80,7 +75,7 @@ pub fn parse_participants_header(input: &str) -> ParticipantsHeaderParsed<'_> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_PARTICIPANTS_CONTENT);
     headers::participants_header_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .unwrap_or_else(|_| ParticipantsHeaderParsed {
             entries: Vec::new(),
@@ -93,7 +88,7 @@ pub fn parse_word(input: &str) -> Option<WordWithAnnotations<'_>> {
     let tokens = lex_to_tokens(input, crate::lexer::COND_MAIN_CONTENT);
     let word_parser =
         chumsky::primitive::choice((main_tier::rich_word(), main_tier::subtoken_word()));
-    let item = word_parser.parse(tokens).into_result().ok()?;
+    let item = word_parser.parse(tokens.as_slice()).into_result().ok()?;
     match item {
         ContentItem::Word(w) => Some(w),
         _ => None,
@@ -105,7 +100,7 @@ pub fn parse_mor_word(input: &str) -> Option<MorWordParsed<'_>> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_MOR_CONTENT);
     dependent_tiers::mor_word_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .ok()
 }
@@ -134,7 +129,7 @@ pub fn parse_pho_tier(input: &str) -> PhoTier<'_> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_PHO_CONTENT);
     dependent_tiers::pho_tier_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .unwrap_or_else(|_| PhoTier {
             items: Vec::new(),
@@ -147,24 +142,25 @@ pub fn parse_text_tier(input: &str) -> TextTierParsed<'_> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_TIER_CONTENT);
     dependent_tiers::text_tier_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .unwrap_or_else(|_| TextTierParsed {
             segments: Vec::new(),
         })
 }
 
-/// Parse a complete CHAT file (AST, borrows from leaked data).
+/// Parse a complete CHAT file (AST, borrows from the input).
 pub fn parse_chat_file(input: &str) -> ChatFile<'_> {
     let (tokens, source) = super::lex_to_tokens_and_source(input, 0);
-    file::parse_file(tokens, source)
+    file::parse_file(&tokens, source)
 }
 
 /// Parse a complete CHAT file with streaming error reporting (AST, borrows).
 pub fn parse_chat_file_streaming<'a>(input: &'a str, errors: &impl ErrorSink) -> ChatFile<'a> {
+    talkbank_model::validation::report_control_characters(input, errors);
     report_header_colon_without_tab(input, errors);
     let (tokens, source) = super::lex_to_tokens_and_source(input, 0);
-    file::parse_file_with_errors(tokens, source, errors)
+    file::parse_file_with_errors(&tokens, source, errors)
 }
 
 /// Report E303 at the source boundary before lexing malformed headers.
@@ -233,7 +229,7 @@ pub fn parse_mor_tier(input: &str) -> MorTier<'_> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_MOR_CONTENT);
     dependent_tiers::mor_tier_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .unwrap_or_else(|_| MorTier {
             items: Vec::new(),
@@ -246,7 +242,7 @@ pub fn parse_gra_tier(input: &str) -> GraTier<'_> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_GRA_CONTENT);
     dependent_tiers::gra_tier_parser()
-        .parse(tokens)
+        .parse(tokens.as_slice())
         .into_result()
         .unwrap_or_else(|_| GraTier {
             relations: Vec::new(),

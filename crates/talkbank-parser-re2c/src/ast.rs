@@ -344,9 +344,9 @@ pub struct WordWithAnnotations<'a> {
     pub pos_tag: Option<&'a str>,
     /// Trailing scoped annotations: `[*]`, `[= text]`, `[/]`, `[!]`, etc.
     pub annotations: Vec<ParsedAnnotation<'a>>,
-    /// Raw text of the entire word, sliced directly from source.
-    /// Eliminates the need for `source` in conversion, the AST is self-contained.
-    pub raw_text: &'a str,
+    /// Raw word text: borrowed from source for rich tokens, owned when rebuilt
+    /// from subtoken display forms. Only borrowed text can recover a source span.
+    pub raw_text: std::borrow::Cow<'a, str>,
 }
 
 /// A parsed scoped annotation. Tag-extracted content, no delimiters.
@@ -779,7 +779,7 @@ pub enum DependentTierParsed<'a> {
     Gra(GraTier<'a>),
     Pho(PhoTier<'a>),
     Mod(PhoTier<'a>),
-    Sin(SinTierParsed<'a>),
+    Sin(SinTierParsed),
     /// %wor tier: words with optional inline timing bullets.
     Wor(WorTierParsed<'a>),
     /// Generic text tier (content is raw text segments + bullets).
@@ -845,15 +845,15 @@ pub struct PhoWordParsed<'a> {
 
 /// A parsed %sin tier, gesture/sign words with optional 〔groups〕.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct SinTierParsed<'a> {
-    pub items: Vec<SinItemParsed<'a>>,
+pub struct SinTierParsed {
+    pub items: Vec<SinItemParsed>,
 }
 
 /// A single %sin item: either a token or a 〔group〕.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum SinItemParsed<'a> {
-    Token(&'a str),
-    Group(Vec<&'a str>),
+pub enum SinItemParsed {
+    Token(talkbank_model::model::SinToken),
+    Group(Vec<talkbank_model::model::SinToken>),
 }
 
 // ═══════════════════════════════════════════════════════════════

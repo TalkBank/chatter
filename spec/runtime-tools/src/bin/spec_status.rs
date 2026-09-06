@@ -75,16 +75,15 @@ fn spec_statuses(specs: &[ErrorSpec]) -> BTreeMap<String, usize> {
     counts
 }
 
-/// List deferred specs whose code the validator ALREADY emits.
+/// Observe diagnostic codes for every deferred example.
 ///
-/// A spec marked `not_implemented` is skipped by the gate and its generated
-/// tests carry `#[ignore]`. If the rule has since been implemented and nobody
-/// updated the status, that is coverage sitting switched off: the work is done
-/// and nothing checks it. This asks the validator directly.
+/// Emitting the declared code can reveal stale status, but does not establish
+/// the example's complete claim. An absent code can reflect a legal example,
+/// alternate diagnostics, or an unreachable rule rather than missing code.
 fn list_deferred(root: &RepoRoot) -> Result<(), String> {
     let parser = talkbank_parser::TreeSitterParser::new().map_err(|e| e.to_string())?;
     let specs = generators::spec::error::ErrorSpec::load_for_repo(root)?;
-    let (mut ready, mut genuine) = (0usize, 0usize);
+    let (mut matching, mut unmatched) = (0usize, 0usize);
     for spec in &specs {
         if spec.status() == Status::Implemented {
             continue;
@@ -95,9 +94,9 @@ fn list_deferred(root: &RepoRoot) -> Result<(), String> {
             let own = &definition.code;
             let emits_own = codes.iter().any(|c| c == own.as_str());
             if emits_own {
-                ready += 1;
+                matching += 1;
             } else {
-                genuine += 1;
+                unmatched += 1;
             }
             println!(
                 "  {:<44} ex{} {:<16} {} emits: {}",
@@ -105,7 +104,7 @@ fn list_deferred(root: &RepoRoot) -> Result<(), String> {
                 index + 1,
                 spec.status(),
                 if emits_own {
-                    "IMPLEMENTED ->"
+                    "emits own code"
                 } else {
                     "still deferred"
                 },
@@ -118,7 +117,7 @@ fn list_deferred(root: &RepoRoot) -> Result<(), String> {
         }
     }
     println!(
-        "\n  {ready} deferred example(s) ALREADY emit their own code: the rule exists\n           and the spec still says it does not, so the test is skipped for nothing.\n           {genuine} are genuinely unimplemented."
+        "\n  {matching} deferred example(s) ALREADY emit their own code: review their claims and status before enabling them.\n           {unmatched} do not emit their declared code; this does not prove missing implementation.\n           Adjudicate alternate diagnostics, invalid examples, deprecation and unreachable cases."
     );
     Ok(())
 }

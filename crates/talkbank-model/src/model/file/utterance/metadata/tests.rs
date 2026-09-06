@@ -544,8 +544,8 @@ fn alignment_units_count_annotated_action_for_sin_domain() {
         Terminator::Period { span: Span::DUMMY },
     );
     let sin = SinTier::new(vec![
-        SinItem::Token(SinToken::new_unchecked("0")),
-        SinItem::Token(SinToken::new_unchecked("0")),
+        SinItem::Token(SinToken::new("0").expect("nonempty test token")),
+        SinItem::Token(SinToken::new("0").expect("nonempty test token")),
     ]);
 
     let utterance = Utterance::new(main).with_sin(sin);

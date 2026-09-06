@@ -516,16 +516,15 @@ fn chatter_matches_check() -> Result<(), TestError> {
 
 /// Re-grounding gate (CLAN-gated, `#[ignore]`): the REAL CLAN CHECK must still
 /// emit each fixture's `check_code`. Set `CHATTER_CLAN_RUN` to the path of the
-/// file-mode pty wrapper (`clan-run.sh`); when unset the test no-ops so CI and
-/// non-CLAN machines stay green. Run on every new CLAN bundle to catch CLAN-side
-/// drift.
+/// file-mode pty wrapper (`clan-run.sh`). Explicitly selecting this ignored test
+/// requires that configuration; an unexecuted audit cannot pass. Run on every
+/// new CLAN bundle to catch CLAN-side drift.
 #[test]
 #[ignore = "requires real CLAN CHECK via CHATTER_CLAN_RUN (file-mode pty wrapper)"]
 fn clan_check_grounding() -> Result<(), TestError> {
-    let Some(wrapper) = std::env::var_os("CHATTER_CLAN_RUN") else {
-        eprintln!("CHATTER_CLAN_RUN unset; skipping CLAN-side grounding.");
-        return Ok(());
-    };
+    let wrapper = std::env::var_os("CHATTER_CLAN_RUN").ok_or_else(|| {
+        TestError::Failure("CHATTER_CLAN_RUN must name the file-mode CLAN wrapper when explicitly running clan_check_grounding".to_owned())
+    })?;
     let manifest = load_manifest()?;
     let mut failures = Vec::new();
     for entry in &manifest.entries {

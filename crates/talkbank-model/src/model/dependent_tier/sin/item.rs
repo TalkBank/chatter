@@ -99,20 +99,12 @@ pub enum SinItem {
 pub struct SinToken(NonEmptyString);
 
 impl SinToken {
-    /// Create a new token, returning `None` if the text is empty.
+    /// Create a new token, returning `EmptyText` if the text is empty.
     ///
     /// This constructor is useful for user-input paths where empty values are
     /// expected and should be handled without panics.
     pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
         NonEmptyString::new(text).map(Self)
-    }
-
-    /// Create a new token without checking for empty text.
-    ///
-    /// Use this only when callers already enforce non-empty invariants (for
-    /// example, parser code after lexical validation).
-    pub fn new_unchecked(text: impl AsRef<str>) -> Self {
-        Self(NonEmptyString::new_unchecked(text))
     }
 }
 
@@ -197,16 +189,22 @@ impl From<Vec<SinToken>> for SinGroupGestures {
 }
 
 impl Validate for SinGroupGestures {
-    /// Group-level semantic checks are performed when validating `%sin` alignment.
-    ///
-    /// Deliberately empty, and note what that means for the tokens: this does
-    /// NOT descend into them, so [`SinToken`]'s non-empty invariant is
-    /// enforced by nothing once a value arrives through the lenient serde
-    /// boundary. `SinToken::validate` exists and is correct; it simply has no
-    /// caller, since nothing calls this impl either. Filling this body alone
-    /// would not help. Recorded rather than fixed because wiring the `%sin`
-    /// validation chain is a real piece of work, not a cleanup.
-    fn validate(&self, _context: &ValidationContext, _errors: &impl ErrorSink) {}
+    /// Validate tokens admitted through the lenient JSON boundary.
+    fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
+        for token in &self.0 {
+            token.validate(context, errors);
+        }
+    }
+}
+
+impl Validate for SinItem {
+    /// Dispatch validation to either a bare token or every token in a group.
+    fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
+        match self {
+            Self::Token(token) => token.validate(context, errors),
+            Self::SinGroup(group) => group.validate(context, errors),
+        }
+    }
 }
 
 impl WriteChat for SinItem {

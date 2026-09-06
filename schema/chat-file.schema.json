@@ -1,5 +1,5 @@
 {
-  "$comment": "AUTO-GENERATED - Do not edit manually! This schema is automatically generated from Rust types using schemars. To update: modify src/model/*.rs types and run `cargo test -p talkbank-transform --tests generate_schema`",
+  "$comment": "AUTO-GENERATED - Do not edit manually! This schema is automatically generated from Rust types using schemars. To update: modify the Rust model and run `just schema-gen`",
   "$defs": {
     "ActTier": {
       "description": "Action description tier (%act).\n\nDescribes physical actions, gestures, and non-verbal behaviors that occur\nduring or around speech. Actions can be timed to specific words using\ntiming markers, and may contain inline media bullets.\n\n# Timing Conventions\n\n- **`<1w>`**: Action occurs during word 1\n- **`<1w-3w>`**: Action spans from word 1 to word 3\n- **`<aft>`**: Action occurs after the utterance\n- **`<bef>`**: Action occurs before the utterance\n- **Inline bullets**: `\\u0015START_END\\u0015` for precise media timing\n\n# Common Uses\n\n- Documenting manipulative actions (picking up, holding, giving objects)\n- Recording body movements and positioning\n- Noting facial expressions and eye gaze\n- Timing actions relative to speech\n- Multimodal interaction analysis\n\n# CHAT Manual Reference\n\n- [Actions Coding](https://talkbank.org/0info/manuals/CHAT.html#Actions)\n\n# Examples\n\n```\nuse talkbank_model::model::{ActTier, BulletContent};\n\nlet act = ActTier::new(BulletContent::from_text(\"<1w-2w> reaches toward shelf\"));\nassert_eq!(act.to_chat(), \"%act:\\t<1w-2w> reaches toward shelf\");\n```\n\n**CHAT format:**\n```text\n*CHI: I want that .\n%act: <3w> points at cookie jar\n```",
@@ -626,564 +626,396 @@
       "description": "Token variants allowed inside bracketed constructs.\n\nShared across regular groups, phonological/sign groups, and quotations so\nparsing and serialization logic can treat nested payloads consistently.\n\n# CHAT Format Examples\n\n**Regular group with retracing:**\n```text\n*CHI: <I want> [/] I need cookie .\n```\n\n**Phonological group:**\n```text\n*CHI: hello ‹hɛloʊ› !\n```\n\n**Sign group:**\n```text\n*CHI: 〔wave goodbye〕 .\n```\n\n**Quotation:**\n```text\n*CHI: \"I said hello\" .\n```\n\n**Nested structures:**\n```text\n*CHI: <I <really> [/] really want it> [/] I need it .\n```\n\n# Allowed Content\n\nUnlike main tier content, bracketed content has some restrictions:\n- Groups inside brackets MUST have scoped annotations (e.g., `[/]`, `[//]`)\n- Bare actions (without annotations) are rare but allowed\n- All CA markers (overlaps, separators) are allowed\n\n# References\n\n- [Group](https://talkbank.org/0info/manuals/CHAT.html#Group)\n- [Phonological Coding](https://talkbank.org/0info/manuals/CHAT.html#Phonological_Coding)\n- [Sign Language Coding](https://talkbank.org/0info/manuals/CHAT.html#Sign_Language)\n- [Quotation](https://talkbank.org/0info/manuals/CHAT.html#Quotation)",
       "oneOf": [
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Word"
-            },
-            {
-              "description": "Bare word with NO brackets\nBoxed to keep enum size bounded.",
-              "properties": {
-                "type": {
-                  "const": "word",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Word",
+          "description": "Bare word with NO brackets\nBoxed to keep enum size bounded.",
+          "properties": {
+            "type": {
+              "const": "word",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated"
-            },
-            {
-              "description": "Word WITH scoped annotations (e.g., \"hello [* m]\", \"hello [= greeting]\")\nBoxed to reduce enum size (216 bytes → 8 bytes)",
-              "properties": {
-                "type": {
-                  "const": "annotated_word",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated",
+          "description": "Word WITH scoped annotations (e.g., \"hello [* m]\", \"hello [= greeting]\")\nBoxed to reduce enum size (216 bytes → 8 bytes)",
+          "properties": {
+            "type": {
+              "const": "annotated_word",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ReplacedWord"
-            },
-            {
-              "description": "Replaced word - word with [: replacement] (e.g., \"hello [: world]\")\nBoxed to reduce enum size (248 bytes → 8 bytes)",
-              "properties": {
-                "type": {
-                  "const": "replaced_word",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ReplacedWord",
+          "description": "Replaced word - word with [: replacement] (e.g., \"hello [: world]\")\nBoxed to reduce enum size (248 bytes → 8 bytes)",
+          "properties": {
+            "type": {
+              "const": "replaced_word",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Event"
-            },
-            {
-              "description": "Event (e.g., &=laughs)",
-              "properties": {
-                "type": {
-                  "const": "event",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Event",
+          "description": "Event (e.g., &=laughs)",
+          "properties": {
+            "type": {
+              "const": "event",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated2"
-            },
-            {
-              "description": "Event WITH scoped annotations",
-              "properties": {
-                "type": {
-                  "const": "annotated_event",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated2",
+          "description": "Event WITH scoped annotations",
+          "properties": {
+            "type": {
+              "const": "annotated_event",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Pause"
-            },
-            {
-              "description": "Pause (e.g., (.), (1.5))",
-              "properties": {
-                "type": {
-                  "const": "pause",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Pause",
+          "description": "Pause (e.g., (.), (1.5))",
+          "properties": {
+            "type": {
+              "const": "pause",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Action"
-            },
-            {
-              "description": "Action (e.g., 0) - bare action without annotations (rare)",
-              "properties": {
-                "type": {
-                  "const": "action",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Action",
+          "description": "Action (e.g., 0) - bare action without annotations (rare)",
+          "properties": {
+            "type": {
+              "const": "action",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated3"
-            },
-            {
-              "description": "Action WITH scoped annotations (e.g., <0 [= ! whining]>)",
-              "properties": {
-                "type": {
-                  "const": "annotated_action",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated3",
+          "description": "Action WITH scoped annotations (e.g., <0 [= ! whining]>)",
+          "properties": {
+            "type": {
+              "const": "annotated_action",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Group"
-            },
-            {
-              "description": "Group `<...>` with NO annotations, nested inside other bracketed\ncontent.\n\nThe mirror of `UtteranceContent::Action`, missing for the same reason\nand found the same day: without it, an unannotated nested group had to\nbecome an `AnnotatedGroup` carrying an empty list, and the re2c\nconverter said so in a comment rather than being able to fix it. With\n`AnnotatedContentAnnotations` non-empty by construction, that spelling\nno longer exists, so this variant has to.\n\nThe two content enums are now symmetric: every annotatable construct\nhas a bare and an annotated form on both sides.",
-              "properties": {
-                "type": {
-                  "const": "group",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Group",
+          "description": "Group `<...>` with NO annotations, nested inside other bracketed\ncontent.\n\nThe mirror of `UtteranceContent::Action`, missing for the same reason\nand found the same day: without it, an unannotated nested group had to\nbecome an `AnnotatedGroup` carrying an empty list, and the re2c\nconverter said so in a comment rather than being able to fix it. With\n`AnnotatedContentAnnotations` non-empty by construction, that spelling\nno longer exists, so this variant has to.\n\nThe two content enums are now symmetric: every annotatable construct\nhas a bare and an annotated form on both sides.",
+          "properties": {
+            "type": {
+              "const": "group",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated4"
-            },
-            {
-              "description": "Nested regular group `<...>` WITH scoped annotations (non-retrace only).",
-              "properties": {
-                "type": {
-                  "const": "annotated_group",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated4",
+          "description": "Nested regular group `<...>` WITH scoped annotations (non-retrace only).",
+          "properties": {
+            "type": {
+              "const": "annotated_group",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Retrace"
-            },
-            {
-              "description": "Nested retraced content, words the speaker said then corrected.",
-              "properties": {
-                "type": {
-                  "const": "retrace",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Retrace",
+          "description": "Nested retraced content, words the speaker said then corrected.",
+          "properties": {
+            "type": {
+              "const": "retrace",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated5"
-            },
-            {
-              "description": "Retraced content carrying scoped annotations written AFTER its marker.\n\nSee `UtteranceContent::AnnotatedRetrace`; the two enums mirror each\nother and a shape legal on the tier is legal inside brackets.",
-              "properties": {
-                "type": {
-                  "const": "annotated_retrace",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated5",
+          "description": "Retraced content carrying scoped annotations written AFTER its marker.\n\nSee `UtteranceContent::AnnotatedRetrace`; the two enums mirror each\nother and a shape legal on the tier is legal inside brackets.",
+          "properties": {
+            "type": {
+              "const": "annotated_retrace",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/PhoGroup"
-            },
-            {
-              "description": "Nested phonological group ‹...›",
-              "properties": {
-                "type": {
-                  "const": "pho_group",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/PhoGroup",
+          "description": "Nested phonological group ‹...›",
+          "properties": {
+            "type": {
+              "const": "pho_group",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/SinGroup"
-            },
-            {
-              "description": "Nested sign group 〔...〕",
-              "properties": {
-                "type": {
-                  "const": "sin_group",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/SinGroup",
+          "description": "Nested sign group 〔...〕",
+          "properties": {
+            "type": {
+              "const": "sin_group",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Quotation"
-            },
-            {
-              "description": "Nested quotation \"...\"",
-              "properties": {
-                "type": {
-                  "const": "quotation",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Quotation",
+          "description": "Nested quotation \"...\"",
+          "properties": {
+            "type": {
+              "const": "quotation",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated6"
-            },
-            {
-              "description": "A quotation carrying its own scoped annotations.\n\nParallel to `AnnotatedGroup` above, and required for the same reason:\n`content_item` admits a quotation with annotations since 2026-08-26,\nand `contents` is what a group encloses, so a quoted phrase retraced\ninside a group is representable in the CST. Without this variant its\nannotations would have nowhere to land and would be dropped on the way\ninto the model.",
-              "properties": {
-                "type": {
-                  "const": "annotated_quotation",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated6",
+          "description": "A quotation carrying its own scoped annotations.\n\nParallel to `AnnotatedGroup` above, and required for the same reason:\n`content_item` admits a quotation with annotations since 2026-08-26,\nand `contents` is what a group encloses, so a quoted phrase retraced\ninside a group is representable in the CST. Without this variant its\nannotations would have nowhere to land and would be dropped on the way\ninto the model.",
+          "properties": {
+            "type": {
+              "const": "annotated_quotation",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/OverlapPoint"
-            },
-            {
-              "description": "Overlap point marker (CA transcription: ⌊, ⌋, ⌈, ⌉)",
-              "properties": {
-                "type": {
-                  "const": "overlap_point",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/OverlapPoint",
+          "description": "Overlap point marker (CA transcription: ⌊, ⌋, ⌈, ⌉)",
+          "properties": {
+            "type": {
+              "const": "overlap_point",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Separator"
-            },
-            {
-              "description": "Separator (commas, etc. used in CA transcription)\nCanonicalized output always has a space before the separator",
-              "properties": {
-                "type": {
-                  "const": "separator",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Separator",
+          "description": "Separator (commas, etc. used in CA transcription)\nCanonicalized output always has a space before the separator",
+          "properties": {
+            "type": {
+              "const": "separator",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Bullet"
-            },
-            {
-              "description": "Internal bullet/timestamp within group",
-              "properties": {
-                "type": {
-                  "const": "internal_bullet",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Bullet",
+          "description": "Internal bullet/timestamp within group",
+          "properties": {
+            "type": {
+              "const": "internal_bullet",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Freecode"
-            },
-            {
-              "description": "Freecode - free-form inline annotation (e.g., \"[^ comment]\")",
-              "properties": {
-                "type": {
-                  "const": "freecode",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Freecode",
+          "description": "Freecode - free-form inline annotation (e.g., \"[^ comment]\")",
+          "properties": {
+            "type": {
+              "const": "freecode",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/LongFeatureBegin"
-            },
-            {
-              "description": "Long feature begin marker (&{l=LABEL)",
-              "properties": {
-                "type": {
-                  "const": "long_feature_begin",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/LongFeatureBegin",
+          "description": "Long feature begin marker (&{l=LABEL)",
+          "properties": {
+            "type": {
+              "const": "long_feature_begin",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/LongFeatureEnd"
-            },
-            {
-              "description": "Long feature end marker (&}l=LABEL)",
-              "properties": {
-                "type": {
-                  "const": "long_feature_end",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/LongFeatureEnd",
+          "description": "Long feature end marker (&}l=LABEL)",
+          "properties": {
+            "type": {
+              "const": "long_feature_end",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/UnderlineMarker"
-            },
-            {
-              "description": "Underline begin marker (\\u0002\\u0001)",
-              "properties": {
-                "type": {
-                  "const": "underline_begin",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/UnderlineMarker",
+          "description": "Underline begin marker (\\u0002\\u0001)",
+          "properties": {
+            "type": {
+              "const": "underline_begin",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/UnderlineMarker"
-            },
-            {
-              "description": "Underline end marker (\\u0002\\u0002)",
-              "properties": {
-                "type": {
-                  "const": "underline_end",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/UnderlineMarker",
+          "description": "Underline end marker (\\u0002\\u0002)",
+          "properties": {
+            "type": {
+              "const": "underline_end",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/NonvocalBegin"
-            },
-            {
-              "description": "Nonvocal scope begin marker (&{n=LABEL)",
-              "properties": {
-                "type": {
-                  "const": "nonvocal_begin",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/NonvocalBegin",
+          "description": "Nonvocal scope begin marker (&{n=LABEL)",
+          "properties": {
+            "type": {
+              "const": "nonvocal_begin",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/NonvocalEnd"
-            },
-            {
-              "description": "Nonvocal scope end marker (&}n=LABEL)",
-              "properties": {
-                "type": {
-                  "const": "nonvocal_end",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/NonvocalEnd",
+          "description": "Nonvocal scope end marker (&}n=LABEL)",
+          "properties": {
+            "type": {
+              "const": "nonvocal_end",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/NonvocalSimple"
-            },
-            {
-              "description": "Nonvocal simple marker (&{n=LABEL})",
-              "properties": {
-                "type": {
-                  "const": "nonvocal_simple",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/NonvocalSimple",
+          "description": "Nonvocal simple marker (&{n=LABEL})",
+          "properties": {
+            "type": {
+              "const": "nonvocal_simple",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/OtherSpokenEvent"
-            },
-            {
-              "description": "Other spoken event (&*SPEAKER:word) - someone else speaking in background",
-              "properties": {
-                "type": {
-                  "const": "other_spoken_event",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/OtherSpokenEvent",
+          "description": "Other spoken event (&*SPEAKER:word) - someone else speaking in background",
+          "properties": {
+            "type": {
+              "const": "other_spoken_event",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -1246,64 +1078,46 @@
       "description": "A segment of content that can be text, a media bullet, or a picture reference.\n\nRepresents one piece of content within a tier that supports inline bullets.\nContent is broken into segments to preserve the exact position and timing of\nmedia bullets relative to the surrounding text.\n\n# CHAT Format Examples\n\nPlain text segment:\n```text\n\"this is text\"\n```\n\nMedia timing bullet:\n```text\n\\u00152051689_2052652\\u0015\n```\n\nPicture reference:\n```text\n\\u0015%pic:\\\"photo.jpg\\\"\\u0015\n```\n\n# References\n\n- [CHAT Manual: Media Bullets](https://talkbank.org/0info/manuals/CHAT.html#Bullets)",
       "oneOf": [
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/BulletContentText"
-            },
-            {
-              "description": "Plain text content",
-              "properties": {
-                "type": {
-                  "const": "text",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/BulletContentText",
+          "description": "Plain text content",
+          "properties": {
+            "type": {
+              "const": "text",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/MediaTiming"
-            },
-            {
-              "description": "Media timing bullet: \\u0015START_END\\u0015",
-              "properties": {
-                "type": {
-                  "const": "bullet",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/MediaTiming",
+          "description": "Media timing bullet: \\u0015START_END\\u0015",
+          "properties": {
+            "type": {
+              "const": "bullet",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/BulletContentPicture"
-            },
-            {
-              "description": "Picture reference: \\u0015%pic:\\\"filename\\\"\\u0015\nOnly valid in @Comment and %com",
-              "properties": {
-                "type": {
-                  "const": "picture",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/BulletContentPicture",
+          "description": "Picture reference: \\u0015%pic:\\\"filename\\\"\\u0015\nOnly valid in @Comment and %com",
+          "properties": {
+            "type": {
+              "const": "picture",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
           "description": "Continuation marker: newline + tab (preserves wrapping)",
@@ -1612,84 +1426,60 @@
       "description": "Scoped annotation that modifies or provides information about speech content.\n\nScoped annotations in CHAT format are enclosed in square brackets and provide\ncontextual information about errors, clarifications, overlaps, and repetitions.\n\n# Annotation Types\n\n- **Error marking** (`[*]`, `[* code]`): Indicates speech errors, grammatical mistakes,\n  or phonological errors that need correction or special attention.\n\n- **Explanations** (`[= text]`): Clarifies unintelligible speech, unusual pronunciations,\n  or ambiguous utterances. Often used with `xxx` for unintelligible material.\n\n- **Retracing** (`[/]`, `[//]`, `[///]`): Marks self-corrections and repeated words.\n  Single `/` for partial repetition, double for full retracing, triple for multiple.\n\n- **Overlaps** (`[<]`, `[>]`): Marks simultaneous speech by different speakers.\n  `[<]` at overlap start, `[>]` at overlap end.\n\n# CHAT Manual Reference\n\n- [Error Coding](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)\n- [Explanation Scope](https://talkbank.org/0info/manuals/CHAT.html#Explanation_Scope)\n- [Retracing](https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition)\n- [Overlap Precedes Scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapPrecedes_Scope)\n- [Overlap Follows Scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapFollows_Scope)\n\n# Examples\n\n```\nuse talkbank_model::model::{ContentAnnotation, ScopedError, ScopedExplanation};\n\n// Error marking\nlet error = ContentAnnotation::Error(ScopedError { code: Some(\"grammar\".into()) });\n\n// Explanation\nlet explanation = ContentAnnotation::Explanation(ScopedExplanation {\n    text: \"probably said ball\".into()\n});\n```",
       "oneOf": [
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ScopedError"
-            },
-            {
-              "description": "Error marking (`[*]` or `[* code]`).\n\nMarks speech errors, grammatical mistakes, or phonological errors.\nOptional error code specifies the type of error (e.g., \"grammar\", \"phonology\").\n\n**Examples:**\n- `[*]` - Generic error marker\n- `[* grammar]` - Grammatical error\n- `[* phonology]` - Phonological error\n\nSee: [Error Coding](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)",
-              "properties": {
-                "type": {
-                  "const": "error",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ScopedError",
+          "description": "Error marking (`[*]` or `[* code]`).\n\nMarks speech errors, grammatical mistakes, or phonological errors.\nOptional error code specifies the type of error (e.g., \"grammar\", \"phonology\").\n\n**Examples:**\n- `[*]` - Generic error marker\n- `[* grammar]` - Grammatical error\n- `[* phonology]` - Phonological error\n\nSee: [Error Coding](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)",
+          "properties": {
+            "type": {
+              "const": "error",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ScopedExplanation"
-            },
-            {
-              "description": "Explanation (`[= text]`).\n\nClarifies unclear or unintelligible speech. Commonly used with `xxx` to explain\nwhat was likely said when the actual utterance is unintelligible.\n\n**Examples:**\n- `xxx [= probably ball]`\n- `doggie [= referring to cat]`\n\nSee: [Explanation Scope](https://talkbank.org/0info/manuals/CHAT.html#Explanation_Scope)",
-              "properties": {
-                "type": {
-                  "const": "explanation",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ScopedExplanation",
+          "description": "Explanation (`[= text]`).\n\nClarifies unclear or unintelligible speech. Commonly used with `xxx` to explain\nwhat was likely said when the actual utterance is unintelligible.\n\n**Examples:**\n- `xxx [= probably ball]`\n- `doggie [= referring to cat]`\n\nSee: [Explanation Scope](https://talkbank.org/0info/manuals/CHAT.html#Explanation_Scope)",
+          "properties": {
+            "type": {
+              "const": "explanation",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ScopedOverlapBegin"
-            },
-            {
-              "description": "Overlap beginning marker (`[<]`).\n\nMarks the point where simultaneous speech begins. Used when two or more\nspeakers talk at the same time.\n\n**Example:**\n```text\n*CHI: I want [<] that .\n*MOT: you want [>] what ?\n```\n\nSee: [Overlap Precedes Scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapPrecedes_Scope)",
-              "properties": {
-                "type": {
-                  "const": "overlap_begin",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ScopedOverlapBegin",
+          "description": "Overlap beginning marker (`[<]`).\n\nMarks the point where simultaneous speech begins. Used when two or more\nspeakers talk at the same time.\n\n**Example:**\n```text\n*CHI: I want [<] that .\n*MOT: you want [>] what ?\n```\n\nSee: [Overlap Precedes Scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapPrecedes_Scope)",
+          "properties": {
+            "type": {
+              "const": "overlap_begin",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ScopedOverlapEnd"
-            },
-            {
-              "description": "Overlap ending marker (`[>]`).\n\nMarks the point where simultaneous speech ends.\n\nSee: [Overlap Follows Scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapFollows_Scope)",
-              "properties": {
-                "type": {
-                  "const": "overlap_end",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ScopedOverlapEnd",
+          "description": "Overlap ending marker (`[>]`).\n\nMarks the point where simultaneous speech ends.\n\nSee: [Overlap Follows Scope](https://talkbank.org/0info/manuals/CHAT.html#OverlapFollows_Scope)",
+          "properties": {
+            "type": {
+              "const": "overlap_end",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
           "description": "Scoped stressing marker (`[!]`).\n\nMarks emphatic stress or emphasis on preceding word/phrase.\n\n**Example:** `that [!]` - emphatic stress\n\nSee: [Scoped Symbols](https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols)",
@@ -1731,64 +1521,46 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ScopedParalinguistic"
-            },
-            {
-              "description": "Paralinguistic annotation (`[=! text]`).\n\nDescribes paralinguistic features like whispering, laughing, etc.\n\n**Example:** `hello [=! whispers]`\n\nSee: [Paralinguistic Material Scope](https://talkbank.org/0info/manuals/CHAT.html#ParalinguisticMaterial_Scope)",
-              "properties": {
-                "type": {
-                  "const": "paralinguistic",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ScopedParalinguistic",
+          "description": "Paralinguistic annotation (`[=! text]`).\n\nDescribes paralinguistic features like whispering, laughing, etc.\n\n**Example:** `hello [=! whispers]`\n\nSee: [Paralinguistic Material Scope](https://talkbank.org/0info/manuals/CHAT.html#ParalinguisticMaterial_Scope)",
+          "properties": {
+            "type": {
+              "const": "paralinguistic",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ScopedAlternative"
-            },
-            {
-              "description": "Alternative transcription (`[=? text]`).\n\nProvides alternative interpretation or uncertain transcription.\n\n**Example:** `xxx [=? maybe ball]`\n\nSee: [Alternative Transcription Scope](https://talkbank.org/0info/manuals/CHAT.html#AlternativeTranscription_Scope)",
-              "properties": {
-                "type": {
-                  "const": "alternative",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ScopedAlternative",
+          "description": "Alternative transcription (`[=? text]`).\n\nProvides alternative interpretation or uncertain transcription.\n\n**Example:** `xxx [=? maybe ball]`\n\nSee: [Alternative Transcription Scope](https://talkbank.org/0info/manuals/CHAT.html#AlternativeTranscription_Scope)",
+          "properties": {
+            "type": {
+              "const": "alternative",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ScopedPercentComment"
-            },
-            {
-              "description": "Percent annotation (`[% text]`).\n\nGeneral comment or note about the utterance.\n\n**Example:** `hey [% comment about context]`\n\nSee: [Comment Scope](https://talkbank.org/0info/manuals/CHAT.html#Comment_Scope)",
-              "properties": {
-                "type": {
-                  "const": "percentcomment",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ScopedPercentComment",
+          "description": "Percent annotation (`[% text]`).\n\nGeneral comment or note about the utterance.\n\n**Example:** `hey [% comment about context]`\n\nSee: [Comment Scope](https://talkbank.org/0info/manuals/CHAT.html#Comment_Scope)",
+          "properties": {
+            "type": {
+              "const": "percentcomment",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
           "description": "Exclude marker (`[e]`).\n\nMarks content to be excluded from analysis.\n\nSee: [Excluded Material](https://talkbank.org/0info/manuals/CHAT.html#MorExclude_Scope)",
@@ -1804,44 +1576,32 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/CodeSwitchSpan"
-            },
-            {
-              "description": "Code-switch span (`[@s]`, `[@s:lang]`).\n\nEvery word in the annotated `<...>` scope takes the switched language,\nexactly as if each carried the `@s` / `@s:lang` word suffix. The span is\na main-tier construct only; dependent tiers stay word-aligned and gain\nnothing new from it.\n\n**Example:** `ik weet niet <how to do it> [@s] .`",
-              "properties": {
-                "type": {
-                  "const": "codeswitch",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/CodeSwitchSpan",
+          "description": "Code-switch span (`[@s]`, `[@s:lang]`).\n\nEvery word in the annotated `<...>` scope takes the switched language,\nexactly as if each carried the `@s` / `@s:lang` word suffix. The span is\na main-tier construct only; dependent tiers stay word-aligned and gain\nnothing new from it.\n\n**Example:** `ik weet niet <how to do it> [@s] .`",
+          "properties": {
+            "type": {
+              "const": "codeswitch",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ScopedUnknown"
-            },
-            {
-              "description": "Unknown annotation (lenient parsing).\n\nCaptures annotations with unrecognized markers. This allows the parser\nto accept all CHAT files while flagging unusual annotations for review.",
-              "properties": {
-                "type": {
-                  "const": "unknown",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ScopedUnknown",
+          "description": "Unknown annotation (lenient parsing).\n\nCaptures annotations with unrecognized markers. This allows the parser\nto accept all CHAT files while flagging unusual annotations for review.",
+          "properties": {
+            "type": {
+              "const": "unknown",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -4035,24 +3795,18 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/IDHeader"
-            },
-            {
-              "description": "@ID:\\tlang|corpus|speaker|age|sex|group|ses|role|education|custom|",
-              "properties": {
-                "type": {
-                  "const": "id",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/IDHeader",
+          "description": "@ID:\\tlang|corpus|speaker|age|sex|group|ses|role|education|custom|",
+          "properties": {
+            "type": {
+              "const": "id",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
           "description": "@Date:\\tDD-MMM-YYYY",
@@ -4109,24 +3863,18 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/MediaHeader"
-            },
-            {
-              "description": "@Media:\\tfilename, type",
-              "properties": {
-                "type": {
-                  "const": "media",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/MediaHeader",
+          "description": "@Media:\\tfilename, type",
+          "properties": {
+            "type": {
+              "const": "media",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
           "description": "@Situation:\\tdescription",
@@ -4147,24 +3895,18 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/TypesHeader"
-            },
-            {
-              "description": "@Types:\\tdesign, activity, group",
-              "properties": {
-                "type": {
-                  "const": "types",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/TypesHeader",
+          "description": "@Types:\\tdesign, activity, group",
+          "properties": {
+            "type": {
+              "const": "types",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
           "description": "@Bg:\\tlabel - Begin gem",
@@ -4913,24 +4655,18 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Utterance"
-            },
-            {
-              "description": "Utterance line (main tier + dependent tiers).\n\nSpan is derived from `Utterance.main.span`.",
-              "properties": {
-                "line_type": {
-                  "const": "utterance",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "line_type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Utterance",
+          "description": "Utterance line (main tier + dependent tiers).\n\nSpan is derived from `Utterance.main.span`.",
+          "properties": {
+            "line_type": {
+              "const": "utterance",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "line_type"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -5620,24 +5356,18 @@
           "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/PauseTimedDuration"
-            },
-            {
-              "description": "Numeric pause value preserved as source text (for example `1.5`, `2.0`).",
-              "properties": {
-                "type": {
-                  "const": "timed",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/PauseTimedDuration",
+          "description": "Numeric pause value preserved as source text (for example `1.5`, `2.0`).",
+          "properties": {
+            "type": {
+              "const": "timed",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -6365,7 +6095,7 @@
       "type": "array"
     },
     "SinTier": {
-      "description": "Gesture and sign annotation tier (%sin).\n\nRecords gestures, pointing, and sign language that accompany speech.\nEach token corresponds to one word in the main tier, capturing the\nnon-verbal communication that occurs simultaneously with speech.\n\n# Alignment\n\nThe %sin tier aligns 1-to-1 with alignable main tier content:\n- One token per word (excluding retraces, pauses, events)\n- Use `0` for words without gestures\n- Terminator gets its own token (typically `.` or `0`)\n\n# Token Format\n\nGesture codes follow the pattern `g:referent:type`:\n- **g**: Gesture marker\n- **referent**: Object/person the gesture refers to (e.g., \"ball\", \"mom\", \"toy\")\n- **type**: Gesture type (e.g., \"dpoint\" for deictic point, \"hold\", \"give\")\n\nMultiple gestures for one word use special brackets: `〔g:x g:y〕`\n\n# Research Applications\n\n- **Child development**: Track gesture-speech integration\n- **Communication disorders**: Document gestural compensation\n- **Sign language**: Record sign-speech bilingualism\n- **Multimodal analysis**: Study gesture-speech timing and meaning\n\n# CHAT Manual Reference\n\n- [Gesture Coding](https://talkbank.org/0info/manuals/CHAT.html#Gestures)\n\n# Examples\n\n```\nuse talkbank_model::model::{SinItem, SinTier, SinToken};\n\n// Child points to ball while saying \"ball\"\nlet sin = SinTier::new(vec![\n    SinItem::Token(SinToken::new_unchecked(\"g:ball:dpoint\")),\n    SinItem::Token(SinToken::new_unchecked(\"0\"))  // No gesture on terminator\n]);\n```\n\n**CHAT format:**\n```text\n*CHI: ball .\n%sin: g:ball:dpoint 0\n```",
+      "description": "Gesture and sign annotation tier (%sin).\n\nRecords gestures, pointing, and sign language that accompany speech.\nEach token corresponds to one word in the main tier, capturing the\nnon-verbal communication that occurs simultaneously with speech.\n\n# Alignment\n\nThe %sin tier aligns 1-to-1 with alignable main tier content:\n- One token per word (excluding retraces, pauses, events)\n- Use `0` for words without gestures\n- Terminator gets its own token (typically `.` or `0`)\n\n# Token Format\n\nGesture codes follow the pattern `g:referent:type`:\n- **g**: Gesture marker\n- **referent**: Object/person the gesture refers to (e.g., \"ball\", \"mom\", \"toy\")\n- **type**: Gesture type (e.g., \"dpoint\" for deictic point, \"hold\", \"give\")\n\nMultiple gestures for one word use special brackets: `〔g:x g:y〕`\n\n# Research Applications\n\n- **Child development**: Track gesture-speech integration\n- **Communication disorders**: Document gestural compensation\n- **Sign language**: Record sign-speech bilingualism\n- **Multimodal analysis**: Study gesture-speech timing and meaning\n\n# CHAT Manual Reference\n\n- [Gesture Coding](https://talkbank.org/0info/manuals/CHAT.html#Gestures)\n\n# Examples\n\n```\nuse talkbank_model::model::{SinItem, SinTier, SinToken};\n\n// Child points to ball while saying \"ball\"\nlet sin = SinTier::new(vec![\n    SinItem::Token(SinToken::new(\"g:ball:dpoint\").expect(\"nonempty gesture token\")),\n    SinItem::Token(SinToken::new(\"0\").expect(\"nonempty gesture token\"))  // No gesture on terminator\n]);\n```\n\n**CHAT format:**\n```text\n*CHI: ball .\n%sin: g:ball:dpoint 0\n```",
       "properties": {
         "items": {
           "$ref": "#/$defs/SinItems",
@@ -6918,564 +6648,396 @@
       "description": "Content items that can appear on the main tier of a CHAT utterance.\n\nThis enum represents all possible content between the speaker code and terminator\non a main tier. Content items can be simple (words, events, pauses) or complex\n(annotated items, groups with nested content).\n\n# CHAT Format Examples\n\n```text\n*CHI: I want cookie .                    Word variants\n*CHI: I want [* m] cookie .              AnnotatedWord\n*CHI: I want [: need] cookie .           ReplacedWord\n*CHI: <I want> [/] I need it .           Group, AnnotatedGroup\n*CHI: the dog &=barks loudly .           Event\n*CHI: um (.) yeah (1.5) okay .           Pause\n*CHI: ‹hello there› !                    PhoGroup\n*CHI: 〔wave goodbye〕 .                  SinGroup\n*CHI: \"I said hello\" .                   Quotation\n*CHI: [^ note] yeah .                    Freecode\n*CHI: well , you know .                  Separator (CA mode)\n*CHI: ⌊yeah⌋ !                           OverlapPoint (CA mode)\n```\n\n# Annotation Patterns\n\nSeveral content types have both \"bare\" and \"annotated\" variants:\n- `Word` / `AnnotatedWord` - word with scoped annotations like `[* m]`, `[= explanation]`\n- `Event` / `AnnotatedEvent` - event with annotations\n- `Group` / `AnnotatedGroup` - group with scoped annotations like `[/]`, `[//]`\n\nThe `Annotated<T>` wrapper adds scoped annotations to any annotatable type.\n\n# References\n\n- [Main line](https://talkbank.org/0info/manuals/CHAT.html#Main_Line)\n- [Group scopes](https://talkbank.org/0info/manuals/CHAT.html#Group_Scopes)\n- [Annotations](https://talkbank.org/0info/manuals/CHAT.html#Annotations)\n- [Error Coding](https://talkbank.org/0info/manuals/CHAT.html#Error_Coding)",
       "oneOf": [
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Word"
-            },
-            {
-              "description": "Bare word with NO brackets\nBoxed to keep enum size bounded.",
-              "properties": {
-                "type": {
-                  "const": "word",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Word",
+          "description": "Bare word with NO brackets\nBoxed to keep enum size bounded.",
+          "properties": {
+            "type": {
+              "const": "word",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated"
-            },
-            {
-              "description": "Word WITH scoped annotations (e.g., \"hello [* m]\", \"hello [= greeting]\")\n`Annotated<T>` MUST have nonempty scoped_annotations\nBoxed to reduce enum size (216 bytes → 8 bytes)",
-              "properties": {
-                "type": {
-                  "const": "annotated_word",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated",
+          "description": "Word WITH scoped annotations (e.g., \"hello [* m]\", \"hello [= greeting]\")\n`Annotated<T>` MUST have nonempty scoped_annotations\nBoxed to reduce enum size (216 bytes → 8 bytes)",
+          "properties": {
+            "type": {
+              "const": "annotated_word",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/ReplacedWord"
-            },
-            {
-              "description": "Replaced word - word with [: replacement] (e.g., \"hello [: world]\")\nThis is a distinct semantic concept, not just an annotation\nBoxed to reduce enum size (248 bytes → 8 bytes)",
-              "properties": {
-                "type": {
-                  "const": "replaced_word",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/ReplacedWord",
+          "description": "Replaced word - word with [: replacement] (e.g., \"hello [: world]\")\nThis is a distinct semantic concept, not just an annotation\nBoxed to reduce enum size (248 bytes → 8 bytes)",
+          "properties": {
+            "type": {
+              "const": "replaced_word",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Event"
-            },
-            {
-              "description": "Bare event with NO brackets",
-              "properties": {
-                "type": {
-                  "const": "event",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Event",
+          "description": "Bare event with NO brackets",
+          "properties": {
+            "type": {
+              "const": "event",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated2"
-            },
-            {
-              "description": "Event WITH scoped annotations",
-              "properties": {
-                "type": {
-                  "const": "annotated_event",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated2",
+          "description": "Event WITH scoped annotations",
+          "properties": {
+            "type": {
+              "const": "annotated_event",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Pause"
-            },
-            {
-              "description": "Pause (no annotations possible)",
-              "properties": {
-                "type": {
-                  "const": "pause",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Pause",
+          "description": "Pause (no annotations possible)",
+          "properties": {
+            "type": {
+              "const": "pause",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Group"
-            },
-            {
-              "description": "Regular group <...> - bare (no annotations)",
-              "properties": {
-                "type": {
-                  "const": "group",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Group",
+          "description": "Regular group <...> - bare (no annotations)",
+          "properties": {
+            "type": {
+              "const": "group",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated4"
-            },
-            {
-              "description": "Regular group <...> WITH scoped annotations (non-retrace only)",
-              "properties": {
-                "type": {
-                  "const": "annotated_group",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated4",
+          "description": "Regular group <...> WITH scoped annotations (non-retrace only)",
+          "properties": {
+            "type": {
+              "const": "annotated_group",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated6"
-            },
-            {
-              "description": "Quotation “...” WITH scoped annotations.\n\nExactly parallel to `Group` / `AnnotatedGroup`, and added 2026-08-26\nfor the same reason that pair exists: a quotation may be retraced or\ncommented, and the annotations belong to the quotation rather than to\nthe utterance around it. Until then `content_item` offered only a bare\n`quotation`, so `“plant” [//]` did not parse at all while\n`<“plant”> [//]` did. Real CLAN CHECK accepts both, so this is\nCHECK parity; 53 files under the data repos use the unbracketed form.",
-              "properties": {
-                "type": {
-                  "const": "annotated_quotation",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated6",
+          "description": "Quotation “...” WITH scoped annotations.\n\nExactly parallel to `Group` / `AnnotatedGroup`, and added 2026-08-26\nfor the same reason that pair exists: a quotation may be retraced or\ncommented, and the annotations belong to the quotation rather than to\nthe utterance around it. Until then `content_item` offered only a bare\n`quotation`, so `“plant” [//]` did not parse at all while\n`<“plant”> [//]` did. Real CLAN CHECK accepts both, so this is\nCHECK parity; 53 files under the data repos use the unbracketed form.",
+          "properties": {
+            "type": {
+              "const": "annotated_quotation",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Retrace"
-            },
-            {
-              "description": "Retraced content, words the speaker said then corrected.\n\nFirst-class variant ensures every `match` handles retraces explicitly.\nExcluded from %mor alignment; included in %pho/%sin/%wor.\n\nCHAT: `<I want> [/] I need` or `word [/] word`",
-              "properties": {
-                "type": {
-                  "const": "retrace",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Retrace",
+          "description": "Retraced content, words the speaker said then corrected.\n\nFirst-class variant ensures every `match` handles retraces explicitly.\nExcluded from %mor alignment; included in %pho/%sin/%wor.\n\nCHAT: `<I want> [/] I need` or `word [/] word`",
+          "properties": {
+            "type": {
+              "const": "retrace",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated5"
-            },
-            {
-              "description": "Retraced content carrying scoped annotations written AFTER its marker.\n\nCHAT: `<a b> [/] [= gloss]`, `dog [/] [* p:w]`.\n\nExactly parallel to `Group` / `AnnotatedGroup`, and it exists because\nthe marker sequence is a left-associative chain: an annotation written\nBEFORE the marker scopes over the retraced material and therefore lives\ninside the retrace's own `content`, while one written AFTER scopes over\nthe retrace and lives here. Holding both in one flat list on `Retrace`\nmade the two indistinguishable and silently rewrote one into the other.",
-              "properties": {
-                "type": {
-                  "const": "annotated_retrace",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated5",
+          "description": "Retraced content carrying scoped annotations written AFTER its marker.\n\nCHAT: `<a b> [/] [= gloss]`, `dog [/] [* p:w]`.\n\nExactly parallel to `Group` / `AnnotatedGroup`, and it exists because\nthe marker sequence is a left-associative chain: an annotation written\nBEFORE the marker scopes over the retraced material and therefore lives\ninside the retrace's own `content`, while one written AFTER scopes over\nthe retrace and lives here. Holding both in one flat list on `Retrace`\nmade the two indistinguishable and silently rewrote one into the other.",
+          "properties": {
+            "type": {
+              "const": "annotated_retrace",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/PhoGroup"
-            },
-            {
-              "description": "Phonological group ‹...› (cannot have annotations)",
-              "properties": {
-                "type": {
-                  "const": "pho_group",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/PhoGroup",
+          "description": "Phonological group ‹...› (cannot have annotations)",
+          "properties": {
+            "type": {
+              "const": "pho_group",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/SinGroup"
-            },
-            {
-              "description": "Sign/gesture group 〔...〕 (cannot have annotations)",
-              "properties": {
-                "type": {
-                  "const": "sin_group",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/SinGroup",
+          "description": "Sign/gesture group 〔...〕 (cannot have annotations)",
+          "properties": {
+            "type": {
+              "const": "sin_group",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Quotation"
-            },
-            {
-              "description": "Quotation \"...\" (cannot have annotations)",
-              "properties": {
-                "type": {
-                  "const": "quotation",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Quotation",
+          "description": "Quotation \"...\" (cannot have annotations)",
+          "properties": {
+            "type": {
+              "const": "quotation",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Action"
-            },
-            {
-              "description": "Action with NO annotations, `0` on its own.\n\nThe sibling of [`Self::Event`], and it was missing until 2026-08-26.\nIts absence is why the parser wrapped every bare `0` in an\n`Annotated<Action>` carrying an empty list: it had nowhere else to put\none. That was 20,184,072 values across the corpus, counted as recorded\non [`AnnotatedContentAnnotations`](crate::model::AnnotatedContentAnnotations),\nwhich carries the method beside the number. The variant's\nown doc comment used to assert the opposite of the data, saying \"bare\nAction is an error - actions defined by brackets\". It is not an error;\n`*CHI:\\t0 .` is ordinary CHAT and the validator has always accepted it.",
-              "properties": {
-                "type": {
-                  "const": "action",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Action",
+          "description": "Action with NO annotations, `0` on its own.\n\nThe sibling of [`Self::Event`], and it was missing until 2026-08-26.\nIts absence is why the parser wrapped every bare `0` in an\n`Annotated<Action>` carrying an empty list: it had nowhere else to put\none. That was 20,184,072 values across the corpus, counted as recorded\non [`AnnotatedContentAnnotations`](crate::model::AnnotatedContentAnnotations),\nwhich carries the method beside the number. The variant's\nown doc comment used to assert the opposite of the data, saying \"bare\nAction is an error - actions defined by brackets\". It is not an error;\n`*CHI:\\t0 .` is ordinary CHAT and the validator has always accepted it.",
+          "properties": {
+            "type": {
+              "const": "action",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Annotated3"
-            },
-            {
-              "description": "Action WITH scoped annotations, e.g. `0 [= ! whining]`.",
-              "properties": {
-                "type": {
-                  "const": "annotated_action",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Annotated3",
+          "description": "Action WITH scoped annotations, e.g. `0 [= ! whining]`.",
+          "properties": {
+            "type": {
+              "const": "annotated_action",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Freecode"
-            },
-            {
-              "description": "Freecode - free-form inline annotation (e.g., \"[^ comment]\")",
-              "properties": {
-                "type": {
-                  "const": "freecode",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Freecode",
+          "description": "Freecode - free-form inline annotation (e.g., \"[^ comment]\")",
+          "properties": {
+            "type": {
+              "const": "freecode",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Separator"
-            },
-            {
-              "description": "CA separator (e.g., Comma, Semicolon, Colon, intonation markers)\nCan appear between content items or at end of utterance in CA mode\nCanonicalized output always has a space before the separator",
-              "properties": {
-                "type": {
-                  "const": "separator",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Separator",
+          "description": "CA separator (e.g., Comma, Semicolon, Colon, intonation markers)\nCan appear between content items or at end of utterance in CA mode\nCanonicalized output always has a space before the separator",
+          "properties": {
+            "type": {
+              "const": "separator",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/OverlapPoint"
-            },
-            {
-              "description": "Overlap point marker (e.g., \"⌊\", \"⌋\", \"⌈\", \"⌉\" with optional indices)\nUsed in CA transcription to mark overlap boundaries",
-              "properties": {
-                "type": {
-                  "const": "overlap_point",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/OverlapPoint",
+          "description": "Overlap point marker (e.g., \"⌊\", \"⌋\", \"⌈\", \"⌉\" with optional indices)\nUsed in CA transcription to mark overlap boundaries",
+          "properties": {
+            "type": {
+              "const": "overlap_point",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Bullet"
-            },
-            {
-              "description": "Internal bullet/timestamp (media_url within content, not terminal)\nThese mark timing for content segments, distinct from terminal bullets",
-              "properties": {
-                "type": {
-                  "const": "internal_bullet",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Bullet",
+          "description": "Internal bullet/timestamp (media_url within content, not terminal)\nThese mark timing for content segments, distinct from terminal bullets",
+          "properties": {
+            "type": {
+              "const": "internal_bullet",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/LongFeatureBegin"
-            },
-            {
-              "description": "Long feature begin marker (&{l=LABEL)",
-              "properties": {
-                "type": {
-                  "const": "long_feature_begin",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/LongFeatureBegin",
+          "description": "Long feature begin marker (&{l=LABEL)",
+          "properties": {
+            "type": {
+              "const": "long_feature_begin",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/LongFeatureEnd"
-            },
-            {
-              "description": "Long feature end marker (&}l=LABEL)",
-              "properties": {
-                "type": {
-                  "const": "long_feature_end",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/LongFeatureEnd",
+          "description": "Long feature end marker (&}l=LABEL)",
+          "properties": {
+            "type": {
+              "const": "long_feature_end",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/UnderlineMarker"
-            },
-            {
-              "description": "Underline begin marker (\\u0002\\u0001) - can appear at main tier level",
-              "properties": {
-                "type": {
-                  "const": "underline_begin",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/UnderlineMarker",
+          "description": "Underline begin marker (\\u0002\\u0001) - can appear at main tier level",
+          "properties": {
+            "type": {
+              "const": "underline_begin",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/UnderlineMarker"
-            },
-            {
-              "description": "Underline end marker (\\u0002\\u0002) - can appear at main tier level",
-              "properties": {
-                "type": {
-                  "const": "underline_end",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/UnderlineMarker",
+          "description": "Underline end marker (\\u0002\\u0002) - can appear at main tier level",
+          "properties": {
+            "type": {
+              "const": "underline_end",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/NonvocalBegin"
-            },
-            {
-              "description": "Nonvocal scope begin marker (&{n=LABEL)",
-              "properties": {
-                "type": {
-                  "const": "nonvocal_begin",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/NonvocalBegin",
+          "description": "Nonvocal scope begin marker (&{n=LABEL)",
+          "properties": {
+            "type": {
+              "const": "nonvocal_begin",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/NonvocalEnd"
-            },
-            {
-              "description": "Nonvocal scope end marker (&}n=LABEL)",
-              "properties": {
-                "type": {
-                  "const": "nonvocal_end",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/NonvocalEnd",
+          "description": "Nonvocal scope end marker (&}n=LABEL)",
+          "properties": {
+            "type": {
+              "const": "nonvocal_end",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/NonvocalSimple"
-            },
-            {
-              "description": "Nonvocal simple marker (&{n=LABEL})",
-              "properties": {
-                "type": {
-                  "const": "nonvocal_simple",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/NonvocalSimple",
+          "description": "Nonvocal simple marker (&{n=LABEL})",
+          "properties": {
+            "type": {
+              "const": "nonvocal_simple",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         },
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/OtherSpokenEvent"
-            },
-            {
-              "description": "Other spoken event (&*SPEAKER:word) - someone else speaking in background",
-              "properties": {
-                "type": {
-                  "const": "other_spoken_event",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/OtherSpokenEvent",
+          "description": "Other spoken event (&*SPEAKER:word) - someone else speaking in background",
+          "properties": {
+            "type": {
+              "const": "other_spoken_event",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -7598,24 +7160,18 @@
       "description": "A single item in a %wor tier: either a timed word or an untimed\ntag-marker separator.\n\nTag-marker separators (comma `,`, tag `„`, vocative `‡`) appear in %wor\nbetween timed words. They correspond to `cm|cm`, `end|end`, and `beg|beg`\nin %mor. They are never timed and do not count toward alignment with the\nmain tier's word slots.\n\n# Word Text Is Corroboration, Not Lexical Authority\n\nThe word text exists solely for:\n- Human readability when viewing CHAT files\n- Canonical lexical-correspondence diagnostics\n- CHAT format serialization compliance\n\n**The word text is NOT used for:**\n- Forced alignment (uses main tier words)\n- Morphosyntax processing (uses main tier words)\n- Lexical identity (always comes from the typed main tier)\n\n**Current convention**: `generate_wor_tier()` copies `cleaned_text` from\nmain-tier words. Timing consumers may compare a parsed `%wor` sequence with\nthat canonical generated sequence to refuse unsafe positional reuse after a\nsame-count edit. A different display convention therefore requires a new,\nexplicitly named correspondence policy. It cannot change silently.\n\n**What matters**: The `inline_bullet` field on each word, which contains\nthe actual timing data (start_ms, end_ms). This is parsed, stored, and\nused for all timing-related operations.\n\n# Reference\n\n- [Word tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)",
       "oneOf": [
         {
-          "allOf": [
-            {
-              "$ref": "#/$defs/Word"
-            },
-            {
-              "description": "A word with optional timing bullet.\n\nThe `Word.cleaned_text` and `Word.raw_text` fields are display material\nand optional lexical corroboration. They never replace main-tier lexical\nidentity. Timing data remains in `Word.inline_bullet`.",
-              "properties": {
-                "kind": {
-                  "const": "word",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "kind"
-              ],
-              "type": "object"
+          "$ref": "#/$defs/Word",
+          "description": "A word with optional timing bullet.\n\nThe `Word.cleaned_text` and `Word.raw_text` fields are display material\nand optional lexical corroboration. They never replace main-tier lexical\nidentity. Timing data remains in `Word.inline_bullet`.",
+          "properties": {
+            "kind": {
+              "const": "word",
+              "type": "string"
             }
-          ]
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
         },
         {
           "description": "An untimed tag-marker separator (`,`, `„`, or `‡`).",
@@ -8377,7 +7933,7 @@
     },
     "WordText": {
       "$ref": "#/$defs/NonEmptyString",
-      "description": "A plain text segment within a word.\n\nWraps a [`NonEmptyString`] guaranteeing the text is non-empty. Dereferences to `&str`\nfor convenient access to the underlying text content.\n\n# Reference\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)"
+      "description": "A plain text segment within a word.\n\nWraps a [`NonEmptyString`]. Checked construction rejects empty text;\ndeserialized values require validation. Dereferences to `&str` for access.\n\n# Reference\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)"
     },
     "XphointGroup": {
       "description": "One word-group on `%xphoint`: the time-aligned phones of a single `%pho`\nword. Groups are separated by ` / ` in serialization.",

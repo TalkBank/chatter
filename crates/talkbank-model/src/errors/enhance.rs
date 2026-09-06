@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::chat_formatting::process_for_plain_display_mapped;
-use crate::line_map::LineMap;
+use crate::line_map::SourceIndex;
 use crate::{ErrorCode, ParseError};
 use tracing::warn;
 
@@ -28,30 +28,22 @@ fn requires_raw_display(code: &ErrorCode) -> bool {
 
 /// Enhance errors with line/column information and source context from full source.
 ///
-/// Builds a [`LineMap`] internally. If a pre-built `LineMap` is available (e.g.
-/// from `ChatFile::line_map`), prefer [`enhance_errors_with_line_map`] to avoid
-/// the redundant O(n) construction pass.
-///
-/// Performance: O(n log m) where n = number of errors, m = number of lines in source.
-/// Uses binary search for line lookups instead of linear scanning.
+/// Builds a source-bound index once for the batch. For repeated batches on
+/// the same immutable source, retain a [`SourceIndex`] and use
+/// [`enhance_errors_with_index`]. Construction is O(source bytes), followed
+/// by O(log lines) lookups for each diagnostic and label.
 pub fn enhance_errors_with_source(errors: &mut [ParseError], full_source: &str) {
-    let line_map = LineMap::new(full_source);
-    enhance_errors_with_line_map(errors, full_source, &line_map);
+    let index = SourceIndex::new(full_source);
+    enhance_errors_with_index(errors, &index);
 }
 
-/// Enhance errors using a pre-built [`LineMap`].
+/// Enhance diagnostics using an index bound to its original immutable source.
 ///
-/// This function ensures that all errors have:
-/// - `location.line` and `location.column` calculated from byte offsets
-/// - `context.line_offset` set for correct miette display
-/// - `context.source_text` populated with the source line if empty
-///
-/// Performance: O(n log m) where n = number of errors, m = number of lines.
-pub fn enhance_errors_with_line_map(
-    errors: &mut [ParseError],
-    full_source: &str,
-    line_map: &LineMap,
-) {
+/// The source and line boundaries cannot be supplied independently, so an index
+/// from another file cannot produce incorrect coordinates or invalid UTF-8 slices.
+pub fn enhance_errors_with_index(errors: &mut [ParseError], index: &SourceIndex<'_>) {
+    let full_source = index.source();
+    let line_map = index.lines();
     let has_content = !full_source.is_empty();
     let source_len = full_source.len() as u32;
 
@@ -493,5 +485,24 @@ mod tests {
         // Label span should be valid
         let label = &errors[0].labels[0];
         assert_eq!(label.span.start, 0, "label should start at beginning");
+    }
+}
+
+#[cfg(test)]
+mod source_binding_tests {
+    use super::*;
+
+    #[test]
+    fn source_and_line_index_must_not_be_mixed() {
+        let mut errors = [ParseError::new(
+            ErrorCode::UnmatchedUnderlineBegin,
+            crate::Severity::Error,
+            crate::SourceLocation::from_offsets(4, 5),
+            crate::ErrorContext::new("", 0..0, "b"),
+            "diagnostic on the final character",
+        )];
+        enhance_errors_with_index(&mut errors, &SourceIndex::new("aaéb"));
+        assert_eq!(errors[0].location.line, Some(1));
+        assert_eq!(errors[0].location.column, Some(5));
     }
 }

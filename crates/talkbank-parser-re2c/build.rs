@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Copy the vendored (pre-generated) lexer to OUT_DIR.
     //
     // To regenerate (requires re2c 4.x, `brew install re2c` on macOS):
-    //   re2rust -W -Wno-nondeterministic-tags --input-encoding utf8 --utf8 \
+    //   re2rust --no-unsafe -W -Wno-nondeterministic-tags --input-encoding utf8 --utf8 \
     //     --no-generation-date \
     //     --conditions -o src/generated/lexer.rs src/lexer.re
     //

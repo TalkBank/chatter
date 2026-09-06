@@ -48,8 +48,8 @@ quotations. Parser combinators replace the original 1,923-line
 hand-written recursive descent parser.
 
 **Conversion:** `From` impls convert AST types to `talkbank-model` types.
-All conversions are source-free -- the AST is self-contained via
-`raw_text` fields.
+Source-aware conversions take `SourceText` to recover spans from AST slices
+that borrow the original input. Reconstructed word text is owned by the AST.
 
 ## Performance
 
@@ -90,8 +90,9 @@ measurement.
 | full file (mor-gra.cha) | 2,603 ns | 9,374 ns | 28% |
 
 The re2c DFA accounts for 15-31% of total parse time. The remaining
-69-85% is chumsky combinator overhead (backtracking, AST construction,
-`Box::leak` for lifetime management).
+69-85% was attributed to parser and allocation overhead in this historical
+measurement. Current parsing borrows source and drops temporary token storage;
+these timings have not been remeasured after that ownership change.
 
 ### Why re2c is faster
 

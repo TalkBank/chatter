@@ -32,6 +32,57 @@ pub struct LineMap {
     line_starts: Vec<u32>,
 }
 
+/// Line boundaries bound to the immutable source from which they were derived.
+///
+/// Construct once for repeated diagnostic lookups. No source copy is retained;
+/// the borrow prevents editing or dropping the source while this index is used.
+/// Unlike a bare `LineMap`, this value can safely supply both text and line
+/// boundaries to diagnostic enrichment.
+///
+/// ```
+/// use talkbank_model::{SourceIndex, enhance_errors_with_index};
+/// let index = SourceIndex::new("first\nsecond");
+/// assert_eq!(index.line_col_of(6), (1, 0));
+/// enhance_errors_with_index(&mut [], &index);
+/// ```
+///
+/// ```compile_fail
+/// use talkbank_model::{SourceIndex, enhance_errors_with_index};
+/// let mut text = String::from("first\nsecond");
+/// let index = SourceIndex::new(&text);
+/// text.clear();
+/// enhance_errors_with_index(&mut [], &index);
+/// ```
+#[derive(Debug)]
+pub struct SourceIndex<'source> {
+    source: &'source str,
+    lines: LineMap,
+}
+
+impl<'source> SourceIndex<'source> {
+    /// Build line boundaries from the borrowed source, in one O(n) pass.
+    pub fn new(source: &'source str) -> Self {
+        Self {
+            source,
+            lines: LineMap::new(source),
+        }
+    }
+
+    /// The original immutable source, never a separately supplied replacement.
+    pub fn source(&self) -> &'source str {
+        self.source
+    }
+
+    /// Zero-indexed line and byte column, with the same semantics as `LineMap`.
+    pub fn line_col_of(&self, byte_offset: u32) -> (usize, usize) {
+        self.lines.line_col_of(byte_offset)
+    }
+
+    pub(super) fn lines(&self) -> &LineMap {
+        &self.lines
+    }
+}
+
 impl LineMap {
     /// Build a `LineMap` from source text. Single O(n) pass.
     pub fn new(source: &str) -> Self {

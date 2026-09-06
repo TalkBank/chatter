@@ -34,7 +34,7 @@ impl TreeSitterParser {
         // Lexical rules first: a forbidden control character is decided over
         // the whole input, so its diagnostic does not depend on whether the
         // grammar happened to fail around it.
-        crate::parser::lexical::report_control_characters(input, errors);
+        talkbank_model::validation::report_control_characters(input, errors);
 
         let mut lines = parse_lines(self, input, errors);
 

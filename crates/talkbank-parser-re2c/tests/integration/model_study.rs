@@ -292,9 +292,6 @@ fn gra_tier_equivalence() {
 /// Parse a word using our re2c parser and convert to model Word.
 fn re2c_word(input: &str) -> talkbank_model::model::Word {
     let parsed = talkbank_parser_re2c::parser::parse_word(input).expect("re2c parse_word");
-    // `parse_word` leaks its own copy and does not hand it back, so no source
-    // can place these slices; the span stays dummy and these tests compare
-    // content, which `semantic_eq` does anyway.
     talkbank_parser_re2c::convert::word_from_parsed(
         &parsed,
         talkbank_parser_re2c::source_text::SourceText::new(input),
@@ -399,7 +396,7 @@ fn whole_file_spans_are_reported() {
 
 /// A MULTI-TOKEN word must be placed too, not just a single-token one.
 ///
-/// `subtoken_word` rebuilds `raw_text` by `Box::leak`ing a fresh concatenation
+/// `subtoken_word` rebuilds `raw_text` as an owned concatenation
 /// of its tokens' display forms, so that string is a DIFFERENT ALLOCATION from
 /// the source and `SourceText::span_of` correctly refuses it. The word then
 /// keeps `Span::DUMMY`. `whole_file_spans_are_reported` cannot see this: every
@@ -503,4 +500,11 @@ fn re2c_reports_no_diagnostic_twice() {
         "re2c reported these diagnostics more than once:\n  {}",
         offenders.join("\n  ")
     );
+}
+
+#[test]
+fn word_fragment_conversion_retains_caller_source_span() {
+    let input = String::from("hello");
+    let word = re2c_word(&input);
+    assert_eq!(word.span, talkbank_model::Span::from_usize(0, input.len()));
 }

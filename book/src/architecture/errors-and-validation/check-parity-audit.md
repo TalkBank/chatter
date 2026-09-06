@@ -1,95 +1,72 @@
 # CHECK Parity Audit
 
 **Status:** Current
-**Last updated:** 2026-06-25 07:30 EDT
+**Last updated:** 2026-09-05
 
-CLAN's `check` (CHECK) was the long-standing validator for CHAT files. `chatter
-validate` is the forward-looking replacement, and it is the **binding judgment
-on whether a byte sequence is valid CHAT**: when `chatter` rejects a file, the
-file is invalid and the right response is to clean the data, not to weaken the
-parser. CHECK is no longer the authority on validity.
+`chatter validate` is the binding CHAT validator, but a rejection must first be
+adjudicated: parser/validator defect or invalid data? Assume a Chatter defect
+until the specification and source evidence establish otherwise. Do not edit
+corpus data merely to make a diagnostic disappear. CHECK remains a useful
+independent source of counterexamples, not a substitute for that adjudication.
 
-CHECK is still useful for one thing: as a **reference oracle** that helps find
-validation rules `chatter` does not yet have. The CHECK Parity Audit is the
-tool that compares the two systematically, so that every rule CHECK enforces is
-either matched by `chatter`, or is a deliberate, documented divergence.
+## Three different kinds of evidence
 
-## What the audit answers
+1. **Code mapping.** The generated inventory at
+   `docs/audits/check-parity-audit.md` joins the committed CHECK reference with
+   Chatter's compiled error-code registry. A curated mapping identifies related
+   checks; it proves neither semantic completeness nor runtime agreement.
+   Missing mappings likewise do not prove missing validation.
+2. **Adjudicated expectations.**
+   `crates/talkbank-parser-tests/tests/check_parity/manifest.json` records fixture
+   expectations, intentional divergences and cases with no file-mode obligation.
+   `just spec-status` summarizes these declarations and verifies spec examples.
+3. **Executed behavior.** `chatter_matches_check` tests Chatter against the
+   manifest. The ignored `clan_check_grounding` test runs the actual CHECK
+   executable through `CHATTER_CLAN_RUN`, a file-mode PTY wrapper. Running this
+   test explicitly without the wrapper is an error, not a passing skipped audit.
 
-For every error code CLAN's `check` actually emits, the audit answers: does
-`chatter` have an equivalent rule, and if not, *why not*?
+## Regenerating the mapping inventory
 
-- **Semantic parity**: does `chatter` enforce the same intended rule?
-- **Behavioral parity**: does `chatter` match CHECK's literal runtime behavior,
-  including CHECK's documented anomalies (some CHECK rules are buggy or were
-  disabled in place; reproducing those bugs is not a goal)?
-- **Strictness policy**: `chatter` should be *at least as strict* semantically.
-  A file CHECK rejects should not silently pass `chatter` unless the divergence
-  is deliberate.
-
-## How it works
-
-```mermaid
-flowchart LR
-    cpp["CLAN check.cpp\n(OSX-CLAN/src/clan)"]
-    extract["scripts/extract_check_codes.py\n(every code CHECK actually emits)"]
-    ref["clan-check-reference/\ncheck-error-codes.json"]
-    map["map_by_id()\n(audit_check_parity.rs)"]
-    audit["audit_check_parity\nbinary"]
-    out["docs/audits/\ncheck-parity-audit.md"]
-
-    cpp --> extract --> ref
-    ref --> audit
-    map --> audit
-    audit --> out
+```bash
+cargo run -p talkbank-parser-tests --bin audit_check_parity
 ```
 
-1. **The CHECK reference** is generated from CLAN's `check.cpp` by
-   `scripts/extract_check_codes.py` into
-   `crates/talkbank-parser-tests/clan-check-reference/check-error-codes.json`.
-   It records every code CHECK *emits* (the call sites in the C source), not the
-   stale subset documented in CLAN's own `CHECK-rules.md`.
-2. **The mapping** lives in `map_by_id()` in
-   `crates/talkbank-parser-tests/src/bin/audit_check_parity.rs`: an explicit
-   CHECK-number to TalkBank-code table (for example `138 | 139 => &["E256"]`),
-   with a keyword fallback for the unmapped remainder.
-3. **The audit binary** joins the two and writes the report. Regenerate it with:
+The library module `check_mapping_audit` owns the report. Its mapping type has
+only unmapped and nonempty curated states, with no runtime-parity certificate.
+The error-code registry comes from `ErrorCode::iter()`, generated from
+`spec/codes/error-codes.toml`; source-file moves cannot erase its inventory.
+The supplementary ID table and `check_error_map` both use compiled
+`ErrorCode` variants, so retired or renamed codes cannot silently disappear.
+No message-keyword fallback is used. The integration gate checks
+that the committed report matches a fresh render.
 
-   ```bash
-   cargo run -p talkbank-parser-tests --bin audit_check_parity
-   ```
-
-   which rewrites `docs/audits/check-parity-audit.md` (the full per-rule table
-   and the executive summary). That generated file is the authoritative,
-   citation-stable record; this page explains how to read it.
-
-The current headline numbers (regenerate to refresh): of the CHECK codes that
-are actually emitted, roughly two-thirds map directly to a TalkBank code, and
-the audit reports semantic parity, behavioral parity, and an "enhancements
-beyond CHECK" set (TalkBank codes with no CHECK equivalent, the majority).
+For runtime checks, use the commands in
+[Spec Workflow](../../contributing/spec-workflow.md). Record the source and
+executable revision when refreshing CHECK evidence. The committed mapping
+report deliberately carries no verified behavioral-parity count.
 
 ## Triaging a gap
 
 A CHECK rule with no TalkBank mapping is **not** automatically a `chatter` bug.
 Each gap is triaged against the CLAN source (`OSX-CLAN/src/clan/check.cpp`) into
-one of three buckets:
+one of four buckets:
 
 - **(a) Genuine gap.** CHECK enforces a real CHAT rule `chatter` is missing.
-  *Action: implement it in `chatter`* with strict top-down TDD (a failing
-  `chatter validate` test on a real `.cha` fixture first), then add the
-  `map_by_id` entry. Example: curly single quotes (see below).
-- **(b) Intentional divergence.** CHECK's rule is wrong, disabled, or a
+  *Action: implement it in `chatter`* through a spec example and its generated fixture, then run the
+  focused validator and parity gates. Update curated mapping evidence if needed. Example: curly single quotes (see below).
+- **(b) Intentional divergence.** CHECK's active rule is wrong or a
   text-hack `chatter` deliberately does not reproduce. *Action: document the
-  divergence, do not implement.* Examples: CHECK error 49 (uppercase-in-word)
-  has been commented out in `check.cpp` since 2019, so flagging it would
-  diverge from *current* CHECK; CHECK error 109 (postcodes on dependent tiers)
-  is a raw character-match text-hack `chatter` deliberately does not reproduce
-  (worked example below).
-- **(c) Enhancement beyond CHECK.** A TalkBank code with no CHECK counterpart.
-  These are validation rules `chatter` adds; they need no CHECK mapping.
+  divergence, do not implement.* CHECK error 109 (postcodes on dependent tiers)
+  is the worked example below.
+- **(c) No obligation in file mode.** A retired, GUI-only or unreachable CHECK
+  path needs a typed reason in the manifest. CHECK 49 is commented out; it is
+  not an active rule from which Chatter intentionally diverges.
+- **(d) Additional Chatter validation.** Establish the actual enforced rule
+  before describing an unmapped Chatter code as an enhancement. A code can
+  instead be dormant, deprecated or awaiting mapping.
 
-The remaining unmapped CHECK codes are an open, low-priority tail: most resolve
-to bucket (b) on source examination. Closing them is not a release gate.
+An unmapped row alone does not establish priority or release readiness. The
+manifest adjudication and supported-input contract determine its obligation.
 
 ## Worked example: E256 (CHECK 138/139), implemented across both parsers
 

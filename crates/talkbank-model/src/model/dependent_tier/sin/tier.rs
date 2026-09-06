@@ -54,8 +54,8 @@ use super::{SinItem, SinToken};
 ///
 /// // Child points to ball while saying "ball"
 /// let sin = SinTier::new(vec![
-///     SinItem::Token(SinToken::new_unchecked("g:ball:dpoint")),
-///     SinItem::Token(SinToken::new_unchecked("0"))  // No gesture on terminator
+///     SinItem::Token(SinToken::new("g:ball:dpoint").expect("nonempty gesture token")),
+///     SinItem::Token(SinToken::new("0").expect("nonempty gesture token"))  // No gesture on terminator
 /// ]);
 /// ```
 ///
@@ -99,16 +99,14 @@ impl SinTier {
     /// Legacy convenience constructor from plain `%sin` token strings.
     ///
     /// Each token becomes `SinItem::Token`. Prefer [`Self::new`] when callers
-    /// already parsed grouped or structured `%sin` forms.
-    pub fn from_tokens(tokens: Vec<String>) -> Self {
-        let items: Vec<SinItem> = tokens
+    /// already parsed grouped or structured `%sin` forms. Empty text returns
+    /// `EmptyText` instead of panicking or constructing an invalid token.
+    pub fn from_tokens(tokens: Vec<String>) -> Result<Self, crate::model::EmptyText> {
+        let items = tokens
             .into_iter()
-            .map(|text| SinItem::Token(SinToken::new_unchecked(text)))
-            .collect();
-        Self {
-            items: items.into(),
-            span: Span::DUMMY,
-        }
+            .map(|text| SinToken::new(text).map(SinItem::Token))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::new(items))
     }
 
     /// Number of alignment slots represented in this tier.
@@ -177,11 +175,26 @@ impl From<Vec<SinItem>> for SinItems {
 }
 
 impl crate::validation::Validate for SinItems {
-    /// Cross-tier `%sin` checks run where main-tier alignment context is available.
+    /// Validate each item independently of cross-tier alignment.
     fn validate(
         &self,
-        _context: &crate::validation::ValidationContext,
-        _errors: &impl crate::ErrorSink,
+        context: &crate::validation::ValidationContext,
+        errors: &impl crate::ErrorSink,
     ) {
+        for item in &self.0 {
+            item.validate(context, errors);
+        }
+    }
+}
+
+impl crate::validation::Validate for SinTier {
+    /// Validate deserialized token text with this tier's source location.
+    fn validate(
+        &self,
+        context: &crate::validation::ValidationContext,
+        errors: &impl crate::ErrorSink,
+    ) {
+        self.items
+            .validate(&context.clone().with_field_span(self.span), errors);
     }
 }

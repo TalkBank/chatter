@@ -123,9 +123,9 @@ mod tests {
     fn extraction_helpers_return_serialized_values() {
         let gra = GraTier::new_gra(vec![GrammaticalRelation::new(1, 2, "SUBJ")]);
         let pho = PhoTier::new_pho(vec![PhoItem::Word("hɛˈloʊ".into())]);
-        let sin = SinTier::new(vec![SinItem::Token(SinToken::new_unchecked(
-            "g:ball:dpoint",
-        ))]);
+        let sin = SinTier::new(vec![SinItem::Token(
+            SinToken::new("g:ball:dpoint").expect("nonempty test token"),
+        )]);
 
         assert_eq!(get_gra_relation_text(&gra, 0), Some("1|2|SUBJ".to_string()));
         assert_eq!(get_pho_form_text(&pho, 0), Some("hɛˈloʊ".to_string()));

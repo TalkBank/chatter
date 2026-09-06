@@ -128,11 +128,12 @@ pub use self::json::{
     validate_json_string,
 };
 pub use self::pipeline::{
-    DroppedContent, PipelineError, Rewrite, ValidatedParseError, chat_to_json, chat_to_json_named,
-    chat_to_json_unvalidated, normalize_chat, parse_and_validate, parse_and_validate_named,
-    parse_and_validate_streaming, parse_and_validate_streaming_for_path,
-    parse_and_validate_streaming_named, parse_and_validate_streaming_with_parser,
-    parse_and_validate_with_parser, parse_file_and_validate, parse_validated_with_parser,
+    DroppedContent, JsonSchemaPolicy, PipelineError, Rewrite, ValidatedParseError, chat_to_json,
+    chat_to_json_named, chat_to_json_unvalidated, chat_to_json_with_schema_policy, normalize_chat,
+    parse_and_validate, parse_and_validate_named, parse_and_validate_streaming,
+    parse_and_validate_streaming_for_path, parse_and_validate_streaming_named,
+    parse_and_validate_streaming_with_parser, parse_and_validate_with_parser,
+    parse_file_and_validate, parse_validated_with_parser,
 };
 pub use self::presentation::{ConfigurableErrorSink, PresentationPolicy};
 pub use self::rendering::{

@@ -229,14 +229,14 @@ release-tag VERSION:
 actionlint:
     actionlint
 
-# Regenerate the tree-sitter parser and fail if the committed output moved.
+# Generate in staging and report stale grammar artifacts without rewriting them.
 #
 # The ONLY check that catches a stale `parser.c`. The traversal staleness guard
 # hashes `grammar.json` and `node-types.json`, so a regeneration that changes
 # only `parser.c` passes it correctly; a tree-sitter version bump does exactly
 # that. A guard proves what it hashes.
 grammar-generate-check:
-    cd grammar && tree-sitter generate && git diff --exit-code src/parser.c src/grammar.json src/node-types.json
+    python3 scripts/generate_grammar.py --check
 
 # Regenerate the node-type constants and fail if the committed output moved.
 #
@@ -250,19 +250,19 @@ grammar-generate-check:
 node-types-check:
     #!/usr/bin/env bash
     set -euo pipefail
+    python3 -m unittest discover -s scripts -p test_generate_if_changed.py
     # Generate to a TEMPORARY file and compare, never `>` straight over the
     # tracked one. The redirection truncates BEFORE node runs, so a generator
     # that crashes leaves an EMPTY `node_types.rs` in the working tree, and the
     # failure then surfaces from `git diff` as "the file changed" instead of
-    # from node as "the generator broke". `grammar-generate-check` above does
-    # not have this shape only because `tree-sitter generate` writes its own
-    # outputs rather than being redirected into a tracked path.
+    # from node as "the generator broke". `grammar-generate-check` above
+    # uses the same staged-output principle for all tree-sitter outputs.
     generated="$(mktemp)"
     trap 'rm -f "$generated"' EXIT
     node scripts/generate-node-types.js > "$generated"
     if ! diff -u crates/talkbank-parser/src/node_types.rs "$generated"; then
         echo "error: node_types.rs is stale. Regenerate with:" >&2
-        echo "  node scripts/generate-node-types.js > crates/talkbank-parser/src/node_types.rs" >&2
+        echo "  just regen" >&2
         exit 1
     fi
     # The docs file is the HAND-WRITTEN half, and it drifted too: it carried
@@ -409,7 +409,7 @@ doc-dates:
 # tree. Review the diff before committing.
 # REGENERATE EVERY DERIVED ARTIFACT, in dependency order, in ONE command.
 #
-# Seven artifacts are derived from the grammar, the spec and the registries,
+# Artifacts are derived from the model, grammar, spec and registries,
 # each with its own currency test that fails the gate when it is stale. Run one
 # at a time they are discovered SERIALLY: on 2026-08-27 a single grammar edit
 # took six full gate runs, each failing on the next stale artifact
@@ -417,13 +417,19 @@ doc-dates:
 # change under grammar/, spec/ or the registries: `just regen`, then
 # `just test`, once.
 regen:
-    cd grammar && tree-sitter generate
-    node scripts/generate-node-types.js > crates/talkbank-parser/src/node_types.rs
+    just schema-gen
+    python3 scripts/generate_grammar.py
+    python3 scripts/generate_if_changed.py crates/talkbank-parser/src/node_types.rs node scripts/generate-node-types.js
     just traversal-gen
     just symbols-gen
     just form-markers-gen
-    cargo run --quiet -p talkbank-parser-tests --example gen_conformance_inventory
+    python3 scripts/generate_if_changed.py crates/talkbank-parser-tests/tests/integration/generated_traversal_conformance/inventory.rs cargo run --quiet -p talkbank-parser-tests --example gen_conformance_inventory -- --stdout
     just spec-gen
+
+# Refresh the schema before later builds embed it. Select only the generator:
+# the currency test in the same binary sees the old compile-time schema.
+schema-gen:
+    cargo test --quiet -p talkbank-transform --test integration generate_schema::generate::generate_chat_file_schema -- --exact --ignored
 
 # The typed CST traversal, from a CLEAN tree-sitter-grammar-utils checkout.
 # The generator stamps its own `git describe` into the output header and the
@@ -433,7 +439,7 @@ regen:
 traversal-gen:
     #!/usr/bin/env bash
     set -euo pipefail
-    tsgu="${TSGU_DIR:-$HOME/tree-sitter-grammar-utils}"
+    tsgu="${TSGU_DIR:-$HOME/tsgu}"
     if [ ! -d "$tsgu" ]; then
         echo "error: tree-sitter-grammar-utils not found at $tsgu (set TSGU_DIR)" >&2
         exit 1
@@ -445,10 +451,10 @@ traversal-gen:
     edition=$(sed -n 's/^edition = "\(.*\)"/\1/p' Cargo.toml)
     toolchain=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
     (cd "$tsgu" && cargo build --quiet --release --example generate_typed_traversal -p tree-sitter-node-types)
-    "$tsgu/target/release/examples/generate_typed_traversal" \
+    python3 scripts/generate_if_changed.py crates/talkbank-parser/src/generated_traversal.rs \
+        "$tsgu/target/release/examples/generate_typed_traversal" \
         grammar/src/grammar.json grammar/src/node-types.json \
-        --edition "$edition" --toolchain "$toolchain" \
-        > crates/talkbank-parser/src/generated_traversal.rs
+        --edition "$edition" --toolchain "$toolchain"
 
 [doc("Regenerate every artifact derived from spec/.")]
 spec-gen:
@@ -548,7 +554,7 @@ verify-vendored-lexer:
     cd {{ justfile_directory() }}/crates/talkbank-parser-re2c
     regenerated="$(mktemp)"
     trap 'rm -f "$regenerated"' EXIT
-    re2rust -W -Wno-nondeterministic-tags --input-encoding utf8 --utf8 \
+    re2rust --no-unsafe -W -Wno-nondeterministic-tags --input-encoding utf8 --utf8 \
         --no-generation-date --conditions -o "$regenerated" src/lexer.re
     if cmp -s "$regenerated" src/generated/lexer.rs; then
         echo "vendored lexer is current under re2rust $actual"

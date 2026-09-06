@@ -442,3 +442,24 @@ fn equivalence_marker_chain() {
         failed.join("\n  ")
     );
 }
+
+#[test]
+fn sin_fragment_preserves_single_token_groups_and_rejects_unclosed_groups() {
+    use talkbank_model::model::SinItem;
+    let parser = Re2cParser::new();
+    let errors = ErrorCollector::new();
+    let ParseOutcome::Parsed(tier) = parser.parse_sin_tier("〔g:toy:hold〕", 0, &errors) else {
+        panic!("complete gesture group must parse");
+    };
+    assert_eq!(tier.items.len(), 1, "the group must not disappear");
+    assert!(matches!(&tier.items[0], SinItem::SinGroup(group) if group.len() == 1));
+    assert!(
+        parser
+            .parse_sin_tier("〔g:toy:hold", 0, &errors)
+            .is_rejected()
+    );
+    assert!(
+        !errors.into_vec().is_empty(),
+        "rejection must retain a diagnostic"
+    );
+}

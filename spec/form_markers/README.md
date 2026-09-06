@@ -1,7 +1,7 @@
 # Form Marker Registry
 
 **Status:** Current
-**Last updated:** 2026-08-12 22:55 EDT
+**Last updated:** 2026-09-05 13:46 EDT
 
 `form_marker_registry.json` is the single owner of the CHAT special-form marker
 set: the `@` suffix a word can carry (`gumma@c`, `b@l`, `word@z:rtfd`).
@@ -26,7 +26,7 @@ Two follow-ups the generator cannot do, and says so on every run:
    Run `just verify-vendored-lexer` (under a second) in the same commit.
 2. A change to the enum's shape or doc comments changes the JSON Schema, which
    is embedded at compile time. Regenerate it in the same commit:
-   `cargo test -p talkbank-transform --tests generate_schema`.
+   `just schema-gen`.
 
 ## The gate
 

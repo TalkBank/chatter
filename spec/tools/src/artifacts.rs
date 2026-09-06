@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::output::{error_code_enum, markdown, rust_test, tree_sitter, validation_corpus};
-use crate::owned_output::clear_owned;
+use crate::owned_output::GeneratedDir;
 use crate::rust_source::format_generated_rust;
 use crate::spec::by_code::SpecsByCode;
 use crate::spec::{ConstructSpec, ErrorSpec};
@@ -68,10 +68,10 @@ const TEST_ERROR_PATH: &str = "talkbank_parser_tests::test_error::TestError";
 /// it was tried on 2026-07-29.
 #[derive(Debug, Clone, Copy)]
 pub enum Ownership {
-    /// The generator owns the whole directory and clears it wholesale before
-    /// writing, which is how a file disappears when its spec is deleted.
+    /// The generator owns the whole directory and removes obsolete files,
+    /// which is how a file disappears when its spec is deleted.
     ///
-    /// [`clear_owned`] refuses a directory that does not carry the
+    /// [`GeneratedDir`] refuses a directory that does not carry the
     /// `.generated-output-dir` marker, so this cannot be pointed at a
     /// hand-authored tree.
     WholeDirectory,
@@ -199,7 +199,7 @@ pub(crate) fn error_dir(repo_root: &Path) -> PathBuf {
 /// `.../errors/codes`, inside the `DiagnosticKind` registry's `.../errors`.
 /// `no_artifact_root_contains_another` fired on exactly that the moment it was
 /// strengthened from equality to containment, and it was right to: if the
-/// outer row ever became `WholeDirectory`, `clear_owned`'s `remove_dir_all`
+/// outer row ever became `WholeDirectory`, pruning
 /// would delete the inner's committed output, and `committed_files` walks
 /// recursively so it would report it as `Extra` first.
 ///
@@ -470,23 +470,21 @@ impl Artifact {
         Ok(differences)
     }
 
-    /// Rebuild the committed copy from the specs, and report what was written.
+    /// Rebuild the committed copy and return the number of files actually written.
     pub fn write(&self, repo_root: &Path) -> Result<usize> {
         let files = (self.build)(repo_root).with_context(|| format!("building {}", self.what))?;
         let root = self.path(repo_root);
 
         match self.ownership {
-            // Clearing wholesale is how a file disappears when its spec is
-            // deleted. `clear_owned` refuses a directory without the marker.
-            Ownership::WholeDirectory => clear_owned(&root)?,
+            Ownership::WholeDirectory => {
+                GeneratedDir::claim(&root)?.retain(|relative| files.contains_key(relative))?;
+            }
             Ownership::NamedFiles { retired } => {
                 // No `create_dir_all` here: removal does not need the directory
                 // to exist, and the write loop below creates every parent.
-                for name in files
-                    .keys()
-                    .filter_map(|p| p.to_str())
-                    .chain(retired.iter().copied())
-                {
+                // Current outputs remain in place for the byte comparison below.
+                // Only explicitly retired names belong to this deletion phase.
+                for name in retired {
                     let path = root.join(name);
                     if path.exists() {
                         std::fs::remove_file(&path)?;
@@ -495,15 +493,25 @@ impl Artifact {
             }
         }
 
+        let mut written = 0;
         for (relative, content) in &files {
             let full = root.join(relative);
             if let Some(parent) = full.parent() {
                 std::fs::create_dir_all(parent)?;
             }
+            match std::fs::read(&full) {
+                Ok(existing) if existing == content.as_bytes() => continue,
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(error).with_context(|| format!("reading {}", full.display()));
+                }
+            }
             std::fs::write(&full, content)
                 .with_context(|| format!("writing {}", full.display()))?;
+            written += 1;
         }
-        Ok(files.len())
+        Ok(written)
     }
 }
 
@@ -545,6 +553,86 @@ fn committed_files(root: &Path) -> Result<Vec<PathBuf>> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn named_artifact_preserves_current_files_and_removes_only_retired() -> Result<()> {
+        let repo = tempfile::tempdir()?;
+        let artifact = Artifact {
+            what: "test output",
+            root: "shared",
+            ownership: Ownership::NamedFiles {
+                retired: &["retired.rs"],
+            },
+            build: |_| {
+                Ok(BTreeMap::from([(
+                    PathBuf::from("nested/current.rs"),
+                    "generated\n".into(),
+                )]))
+            },
+        };
+        let root = artifact.path(repo.path());
+        std::fs::create_dir_all(&root)?;
+        std::fs::write(root.join("retired.rs"), "old")?;
+        std::fs::write(root.join("other.rs"), "another producer")?;
+        assert_eq!(artifact.write(repo.path())?, 1);
+        assert!(!root.join("retired.rs").exists());
+        let current = root.join("nested/current.rs");
+        let time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        std::fs::File::options()
+            .write(true)
+            .open(&current)?
+            .set_times(std::fs::FileTimes::new().set_modified(time))?;
+        let before = std::fs::metadata(&current)?.modified()?;
+        assert_eq!(artifact.write(repo.path())?, 0);
+        assert_eq!(std::fs::metadata(&current)?.modified()?, before);
+        std::fs::write(&current, "stale")?;
+        assert_eq!(artifact.write(repo.path())?, 1);
+        assert_eq!(std::fs::read_to_string(current)?, "generated\n");
+        assert_eq!(
+            std::fs::read_to_string(root.join("other.rs"))?,
+            "another producer"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn whole_artifact_preserves_current_files_and_prunes_stale_output() -> Result<()> {
+        let repo = tempfile::tempdir()?;
+        let artifact = Artifact {
+            what: "owned output",
+            root: "owned",
+            ownership: Ownership::WholeDirectory,
+            build: |_| {
+                Ok(BTreeMap::from([(
+                    PathBuf::from("current.txt"),
+                    "current".into(),
+                )]))
+            },
+        };
+        assert_eq!(artifact.write(repo.path())?, 1);
+        let root = artifact.path(repo.path());
+        let current = root.join("current.txt");
+        let time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        std::fs::File::options()
+            .write(true)
+            .open(&current)?
+            .set_times(std::fs::FileTimes::new().set_modified(time))?;
+        let before = std::fs::metadata(&current)?.modified()?;
+        std::fs::write(root.join("stale.txt"), "retired")?;
+        assert_eq!(artifact.write(repo.path())?, 0);
+        assert_eq!(std::fs::metadata(&current)?.modified()?, before);
+        assert!(!root.join("stale.txt").exists());
+        assert!(root.join(crate::owned_output::OWNERSHIP_MARKER).is_file());
+        // Ambiguous ownership must fail before anything is removed.
+        crate::owned_output::mark_human_authored(&root)?;
+        std::fs::write(root.join("precious.txt"), "human work")?;
+        assert!(artifact.write(repo.path()).is_err());
+        assert_eq!(
+            std::fs::read_to_string(root.join("precious.txt"))?,
+            "human work"
+        );
+        Ok(())
+    }
+
     /// Two artifacts writing the same directory would each report the other's
     /// files as `Extra`, and each would delete the other's on write.
     ///
@@ -553,7 +641,7 @@ mod tests {
     /// lands in `crates/talkbank-model/src/errors/codes`, INSIDE the
     /// `DiagnosticKind` registry's `crates/talkbank-model/src/errors`. Equality
     /// passes on that. If the outer row ever became `WholeDirectory`,
-    /// `clear_owned`'s `remove_dir_all` would delete the inner artifact's
+    /// pruning would delete the inner artifact's
     /// committed output, and `committed_files` walks recursively so it would
     /// report it as `Extra` first.
     ///

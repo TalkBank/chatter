@@ -194,8 +194,8 @@ impl Validate for WordContent {
 
 /// A plain text segment within a word.
 ///
-/// Wraps a [`NonEmptyString`] guaranteeing the text is non-empty. Dereferences to `&str`
-/// for convenient access to the underlying text content.
+/// Wraps a [`NonEmptyString`]. Checked construction rejects empty text;
+/// deserialized values require validation. Dereferences to `&str` for access.
 ///
 /// # Reference
 ///
@@ -231,9 +231,8 @@ impl WordText {
     ///
     /// # Errors
     ///
-    /// [`crate::model::EmptyText`] if `text` is empty. The inner field is
-    /// private, so this and `new_unchecked` are the only ways in and the
-    /// non-emptiness invariant actually holds.
+    /// [`crate::model::EmptyText`] if `text` is empty. Deserialization remains
+    /// lenient, so values admitted through serde still require validation.
     pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
         NonEmptyString::new(text).map(Self)
     }
@@ -295,9 +294,8 @@ impl WordPhonetic {
     ///
     /// # Errors
     ///
-    /// [`crate::model::EmptyText`] if `text` is empty. The inner field is
-    /// private, so this and `new_unchecked` are the only ways in and the
-    /// non-emptiness invariant actually holds.
+    /// [`crate::model::EmptyText`] if `text` is empty. Deserialization remains
+    /// lenient, so values admitted through serde still require validation.
     pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
         NonEmptyString::new(text).map(Self)
     }
@@ -361,9 +359,8 @@ impl WordShortening {
     ///
     /// # Errors
     ///
-    /// [`crate::model::EmptyText`] if `text` is empty. The inner field is
-    /// private, so this and `new_unchecked` are the only ways in and the
-    /// non-emptiness invariant actually holds.
+    /// [`crate::model::EmptyText`] if `text` is empty. Deserialization remains
+    /// lenient, so values admitted through serde still require validation.
     pub fn new(text: impl AsRef<str>) -> Result<Self, crate::model::EmptyText> {
         NonEmptyString::new(text).map(Self)
     }

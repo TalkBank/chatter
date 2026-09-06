@@ -1,13 +1,11 @@
 //! Regenerate the canonical CHAT JSON Schema from `talkbank_model::ChatFile`.
 //!
-//! `schema_for!(ChatFile)` produces the schemars schema; a post-process fixes a
-//! schemars bug with internally-tagged enums (see `transform.rs`), then the
-//! top-level metadata is added and the result is written to the workspace
+//! `schema_for!(ChatFile)` produces the Draft 2020-12 schema. Only top-level
+//! metadata is added before the result is written to the workspace
 //! `schema/chat-file.schema.json`. Run with `--nocapture` to see the summary.
 
 mod io;
 mod metadata;
-mod transform;
 
 use schemars::schema_for;
 use talkbank_model::ChatFile;
@@ -31,16 +29,12 @@ fn build_canonical_schema_json() -> Result<String, TestError> {
     let mut schema_value =
         metadata::schema_to_value(schema).map_err(|source| TestError::Metadata { source })?;
 
-    // Fix schemars bug: internally-tagged enums with $ref generate invalid JSON Schema.
-    // See transform.rs for details.
-    transform::fix_ref_properties_combination(&mut schema_value);
-
     metadata::add_schema_metadata(
         &mut schema_value,
         "https://talkbank.org/schemas/v0.1/chat-file.json",
         "JSON Schema for TalkBank CHAT format transcript files. \
          This schema defines the structure of CHAT files when serialized to JSON.",
-        "modify src/model/*.rs types and run `cargo test -p talkbank-transform --tests generate_schema`",
+        "modify the Rust model and run `just schema-gen`",
     );
 
     metadata::to_pretty_json(&schema_value).map_err(|source| TestError::Metadata { source })
@@ -48,6 +42,7 @@ fn build_canonical_schema_json() -> Result<String, TestError> {
 
 /// Generates the chat-file JSON schema and writes the canonical file.
 #[test]
+#[ignore = "writes the canonical schema; run just schema-gen explicitly"]
 fn generate_chat_file_schema() -> Result<(), TestError> {
     let schema_json = build_canonical_schema_json()?;
     let canonical_path = io::schema_path_for("chat-file.schema");
@@ -70,12 +65,38 @@ fn generate_chat_file_schema() -> Result<(), TestError> {
 fn committed_schema_matches_model() -> Result<(), TestError> {
     let generated = build_canonical_schema_json()?;
     let committed = talkbank_transform::SCHEMA_JSON;
-    assert_eq!(
-        generated.trim_end(),
-        committed.trim_end(),
+    assert!(
+        generated.trim_end() == committed.trim_end(),
         "schema/chat-file.schema.json is stale relative to the talkbank-model types. \
-         Run `cargo test -p talkbank-transform --tests generate_schema` and rebuild, \
+         Run `just schema-gen` and rebuild, \
          then commit the regenerated schema."
+    );
+    Ok(())
+}
+
+/// Draft 2020-12 evaluates both a referenced payload and its sibling tag.
+#[test]
+fn generated_ref_siblings_enforce_tag_and_payload() -> Result<(), Box<dyn std::error::Error>> {
+    let canonical: serde_json::Value = serde_json::from_str(&build_canonical_schema_json()?)?;
+    let schema = serde_json::json!({
+        "$schema": canonical["$schema"],
+        "$defs": canonical["$defs"],
+        "$ref": "#/$defs/BracketedItem",
+    });
+    let validator = jsonschema::validator_for(&schema)?;
+    let mut word = serde_json::to_value(talkbank_model::Word::new_unchecked("hello", "hello"))?;
+    word["type"] = serde_json::json!("word");
+    assert!(validator.is_valid(&word));
+    word["type"] = serde_json::json!("unknown_tag");
+    assert!(
+        !validator.is_valid(&word),
+        "the sibling tag must be enforced"
+    );
+    word["type"] = serde_json::json!("word");
+    word["raw_text"] = serde_json::json!(42);
+    assert!(
+        !validator.is_valid(&word),
+        "the referenced payload must be enforced"
     );
     Ok(())
 }

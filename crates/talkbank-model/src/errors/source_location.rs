@@ -190,27 +190,20 @@ impl SourceLocation {
 
     /// Calculate line and column (1-indexed) from byte offset in source.
     ///
-    /// Uses [`LineMap`](crate::LineMap) for O(log n) lookup. The LineMap is cached
-    /// in thread-local storage keyed by `(source_ptr, source_len)`, so repeated
-    /// calls for the same source (e.g. multiple errors in one file) reuse the
-    /// same LineMap without rebuilding.
+    /// Performs an allocation-free scan up to the requested byte offset. There
+    /// is no address-keyed cache: a buffer can be edited or reused between calls.
+    /// For repeated lookups, build one [`crate::SourceIndex`] and use its
+    /// `line_col_of` method (zero-indexed), or enrich a batch of diagnostics.
     pub fn calculate_line_column(offset: usize, source: &str) -> (usize, usize) {
-        use std::cell::RefCell;
-
-        thread_local! {
-            static LINE_MAP_CACHE: RefCell<Option<(usize, usize, crate::LineMap)>> = const { RefCell::new(None) };
-        }
-
-        LINE_MAP_CACHE.with_borrow_mut(|cache| {
-            let ptr = source.as_ptr() as usize;
-            let len = source.len();
-            let cached = cache.get_or_insert_with(|| (ptr, len, crate::LineMap::new(source)));
-            if cached.0 != ptr || cached.1 != len {
-                *cached = (ptr, len, crate::LineMap::new(source));
+        let mut line = 1;
+        let mut line_start = 0;
+        for (index, byte) in source.bytes().take(offset).enumerate() {
+            if byte == b'\n' {
+                line += 1;
+                line_start = index + 1;
             }
-            let (line_0, col_0) = cached.2.line_col_of(offset as u32);
-            (line_0 + 1, col_0 + 1)
-        })
+        }
+        (line, offset.saturating_sub(line_start).saturating_add(1))
     }
 
     /// Create a zero-width location at a single byte offset (no line/column).
@@ -271,5 +264,20 @@ impl From<Severity> for miette::Severity {
             Severity::Error => miette::Severity::Error,
             Severity::Warning => miette::Severity::Warning,
         }
+    }
+}
+
+#[cfg(test)]
+mod source_identity_tests {
+    use super::SourceLocation;
+
+    #[test]
+    fn edited_source_at_same_address_does_not_reuse_stale_line_positions() {
+        let mut source = String::from("a\nbc");
+        let address = source.as_ptr();
+        assert_eq!(SourceLocation::calculate_line_column(3, &source), (2, 2));
+        source.replace_range(.., "ab\nc");
+        assert_eq!(source.as_ptr(), address);
+        assert_eq!(SourceLocation::calculate_line_column(3, &source), (2, 1));
     }
 }

@@ -32,7 +32,7 @@ pub type LexerSpan = std::ops::Range<usize>;
 
 /// State for our lexer.
 pub struct Lexer<'a> {
-    /// String with NUL sentinel.
+    /// Borrowed source text; an optional legacy NUL sentinel is accepted.
     pub nul_terminated: &'a str,
 
     /// Used by generated lexer for conditions.
@@ -154,7 +154,7 @@ impl<'a> Iterator for Lexer<'a> {
     'yyl: loop {
         match yystate {
             0 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -233,7 +233,7 @@ impl<'a> Iterator for Lexer<'a> {
             2 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 3;
                 continue 'yyl;
             }
@@ -286,7 +286,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorLine);
         },
             5 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 |
                     0x20 => {
@@ -304,7 +304,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Whitespace);
         },
             7 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -327,7 +327,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Newline);
         },
             9 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x41 ..= 0x5A |
                     0x61 ..= 0x62 |
@@ -399,7 +399,7 @@ impl<'a> Iterator for Lexer<'a> {
             12 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x41 => {
                         self.cursor += 1;
@@ -513,7 +513,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             15 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -529,7 +529,7 @@ impl<'a> Iterator for Lexer<'a> {
             16 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -545,7 +545,7 @@ impl<'a> Iterator for Lexer<'a> {
             17 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -561,7 +561,7 @@ impl<'a> Iterator for Lexer<'a> {
             18 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBA |
                     0xBC ..= 0xBF => {
@@ -583,7 +583,7 @@ impl<'a> Iterator for Lexer<'a> {
             19 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -599,7 +599,7 @@ impl<'a> Iterator for Lexer<'a> {
             20 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -615,7 +615,7 @@ impl<'a> Iterator for Lexer<'a> {
             21 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -629,7 +629,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             22 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -700,7 +700,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             24 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -714,7 +714,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             25 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -728,7 +728,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             26 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -742,7 +742,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             27 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -756,7 +756,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             28 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -770,7 +770,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             29 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -789,7 +789,7 @@ impl<'a> Iterator for Lexer<'a> {
             31 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 32;
                 continue 'yyl;
             }
@@ -822,7 +822,7 @@ impl<'a> Iterator for Lexer<'a> {
             34 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -838,7 +838,7 @@ impl<'a> Iterator for Lexer<'a> {
             35 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -854,7 +854,7 @@ impl<'a> Iterator for Lexer<'a> {
             36 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -870,7 +870,7 @@ impl<'a> Iterator for Lexer<'a> {
             37 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x68 => {
                         self.cursor += 1;
@@ -886,7 +886,7 @@ impl<'a> Iterator for Lexer<'a> {
             38 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -902,7 +902,7 @@ impl<'a> Iterator for Lexer<'a> {
             39 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -918,7 +918,7 @@ impl<'a> Iterator for Lexer<'a> {
             40 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -934,7 +934,7 @@ impl<'a> Iterator for Lexer<'a> {
             41 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
@@ -951,7 +951,7 @@ impl<'a> Iterator for Lexer<'a> {
             42 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 43;
                 continue 'yyl;
             }
@@ -1004,7 +1004,7 @@ impl<'a> Iterator for Lexer<'a> {
             44 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -1020,7 +1020,7 @@ impl<'a> Iterator for Lexer<'a> {
             45 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -1056,7 +1056,7 @@ impl<'a> Iterator for Lexer<'a> {
             46 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -1072,7 +1072,7 @@ impl<'a> Iterator for Lexer<'a> {
             47 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -1088,7 +1088,7 @@ impl<'a> Iterator for Lexer<'a> {
             48 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x67 => {
                         self.cursor += 1;
@@ -1109,7 +1109,7 @@ impl<'a> Iterator for Lexer<'a> {
             49 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -1125,7 +1125,7 @@ impl<'a> Iterator for Lexer<'a> {
             50 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -1150,7 +1150,7 @@ impl<'a> Iterator for Lexer<'a> {
             52 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x44 => {
                         self.cursor += 1;
@@ -1166,7 +1166,7 @@ impl<'a> Iterator for Lexer<'a> {
             53 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x31 => {
                         self.cursor += 1;
@@ -1192,7 +1192,7 @@ impl<'a> Iterator for Lexer<'a> {
             54 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -1208,7 +1208,7 @@ impl<'a> Iterator for Lexer<'a> {
             55 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -1229,7 +1229,7 @@ impl<'a> Iterator for Lexer<'a> {
             56 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -1245,7 +1245,7 @@ impl<'a> Iterator for Lexer<'a> {
             57 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x49 => {
                         self.cursor += 1;
@@ -1266,7 +1266,7 @@ impl<'a> Iterator for Lexer<'a> {
             58 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -1287,7 +1287,7 @@ impl<'a> Iterator for Lexer<'a> {
             59 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -1303,7 +1303,7 @@ impl<'a> Iterator for Lexer<'a> {
             60 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -1344,7 +1344,7 @@ impl<'a> Iterator for Lexer<'a> {
             61 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x54 => {
                         self.cursor += 1;
@@ -1360,7 +1360,7 @@ impl<'a> Iterator for Lexer<'a> {
             62 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -1376,7 +1376,7 @@ impl<'a> Iterator for Lexer<'a> {
             63 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -1395,7 +1395,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             64 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -1409,7 +1409,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             65 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -1423,7 +1423,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             66 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -1437,7 +1437,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             67 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -1451,7 +1451,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             68 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -1465,7 +1465,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             69 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -1479,7 +1479,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             70 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBE => {
                         self.cursor += 1;
@@ -1498,7 +1498,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             71 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -1514,7 +1514,7 @@ impl<'a> Iterator for Lexer<'a> {
             72 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6D => {
                         self.cursor += 1;
@@ -1530,7 +1530,7 @@ impl<'a> Iterator for Lexer<'a> {
             73 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -1546,7 +1546,7 @@ impl<'a> Iterator for Lexer<'a> {
             74 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x64 => {
                         self.cursor += 1;
@@ -1567,7 +1567,7 @@ impl<'a> Iterator for Lexer<'a> {
             75 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -1583,7 +1583,7 @@ impl<'a> Iterator for Lexer<'a> {
             76 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -1599,7 +1599,7 @@ impl<'a> Iterator for Lexer<'a> {
             77 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -1615,7 +1615,7 @@ impl<'a> Iterator for Lexer<'a> {
             78 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -1631,7 +1631,7 @@ impl<'a> Iterator for Lexer<'a> {
             79 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
@@ -1654,7 +1654,7 @@ impl<'a> Iterator for Lexer<'a> {
             80 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -1670,7 +1670,7 @@ impl<'a> Iterator for Lexer<'a> {
             81 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6B => {
                         self.cursor += 1;
@@ -1686,7 +1686,7 @@ impl<'a> Iterator for Lexer<'a> {
             82 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x67 => {
                         self.cursor += 1;
@@ -1702,7 +1702,7 @@ impl<'a> Iterator for Lexer<'a> {
             83 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -1727,7 +1727,7 @@ impl<'a> Iterator for Lexer<'a> {
             85 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -1743,7 +1743,7 @@ impl<'a> Iterator for Lexer<'a> {
             86 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -1759,7 +1759,7 @@ impl<'a> Iterator for Lexer<'a> {
             87 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -1780,7 +1780,7 @@ impl<'a> Iterator for Lexer<'a> {
             88 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -1796,7 +1796,7 @@ impl<'a> Iterator for Lexer<'a> {
             89 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -1821,7 +1821,7 @@ impl<'a> Iterator for Lexer<'a> {
             91 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x64 => {
                         self.cursor += 1;
@@ -1837,7 +1837,7 @@ impl<'a> Iterator for Lexer<'a> {
             92 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -1851,7 +1851,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             93 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -1867,7 +1867,7 @@ impl<'a> Iterator for Lexer<'a> {
             94 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -1883,7 +1883,7 @@ impl<'a> Iterator for Lexer<'a> {
             95 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -1899,7 +1899,7 @@ impl<'a> Iterator for Lexer<'a> {
             96 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -1915,7 +1915,7 @@ impl<'a> Iterator for Lexer<'a> {
             97 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -1931,7 +1931,7 @@ impl<'a> Iterator for Lexer<'a> {
             98 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x64 => {
                         self.cursor += 1;
@@ -1947,7 +1947,7 @@ impl<'a> Iterator for Lexer<'a> {
             99 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x77 => {
                         self.cursor += 1;
@@ -1963,7 +1963,7 @@ impl<'a> Iterator for Lexer<'a> {
             100 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6D => {
                         self.cursor += 1;
@@ -1979,7 +1979,7 @@ impl<'a> Iterator for Lexer<'a> {
             101 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -1995,7 +1995,7 @@ impl<'a> Iterator for Lexer<'a> {
             102 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x44 => {
                         self.cursor += 1;
@@ -2011,7 +2011,7 @@ impl<'a> Iterator for Lexer<'a> {
             103 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x67 => {
                         self.cursor += 1;
@@ -2032,7 +2032,7 @@ impl<'a> Iterator for Lexer<'a> {
             104 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -2048,7 +2048,7 @@ impl<'a> Iterator for Lexer<'a> {
             105 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -2064,7 +2064,7 @@ impl<'a> Iterator for Lexer<'a> {
             106 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -2078,7 +2078,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             107 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -2094,7 +2094,7 @@ impl<'a> Iterator for Lexer<'a> {
             108 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -2110,7 +2110,7 @@ impl<'a> Iterator for Lexer<'a> {
             109 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x75 => {
                         self.cursor += 1;
@@ -2126,7 +2126,7 @@ impl<'a> Iterator for Lexer<'a> {
             110 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6D => {
                         self.cursor += 1;
@@ -2142,7 +2142,7 @@ impl<'a> Iterator for Lexer<'a> {
             111 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -2158,7 +2158,7 @@ impl<'a> Iterator for Lexer<'a> {
             112 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -2174,7 +2174,7 @@ impl<'a> Iterator for Lexer<'a> {
             113 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x46 => {
                         self.cursor += 1;
@@ -2190,7 +2190,7 @@ impl<'a> Iterator for Lexer<'a> {
             114 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x64 => {
                         self.cursor += 1;
@@ -2206,7 +2206,7 @@ impl<'a> Iterator for Lexer<'a> {
             115 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -2222,7 +2222,7 @@ impl<'a> Iterator for Lexer<'a> {
             116 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -2238,7 +2238,7 @@ impl<'a> Iterator for Lexer<'a> {
             117 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -2265,7 +2265,7 @@ impl<'a> Iterator for Lexer<'a> {
             120 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2281,7 +2281,7 @@ impl<'a> Iterator for Lexer<'a> {
             121 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2297,7 +2297,7 @@ impl<'a> Iterator for Lexer<'a> {
             122 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2318,7 +2318,7 @@ impl<'a> Iterator for Lexer<'a> {
             123 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2334,7 +2334,7 @@ impl<'a> Iterator for Lexer<'a> {
             124 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2360,7 +2360,7 @@ impl<'a> Iterator for Lexer<'a> {
             125 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2376,7 +2376,7 @@ impl<'a> Iterator for Lexer<'a> {
             126 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2392,7 +2392,7 @@ impl<'a> Iterator for Lexer<'a> {
             127 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2406,7 +2406,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             128 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -2422,7 +2422,7 @@ impl<'a> Iterator for Lexer<'a> {
             129 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -2438,7 +2438,7 @@ impl<'a> Iterator for Lexer<'a> {
             130 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2454,7 +2454,7 @@ impl<'a> Iterator for Lexer<'a> {
             131 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -2468,7 +2468,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             132 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -2484,7 +2484,7 @@ impl<'a> Iterator for Lexer<'a> {
             133 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -2500,7 +2500,7 @@ impl<'a> Iterator for Lexer<'a> {
             134 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -2516,7 +2516,7 @@ impl<'a> Iterator for Lexer<'a> {
             135 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -2532,7 +2532,7 @@ impl<'a> Iterator for Lexer<'a> {
             136 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6D => {
                         self.cursor += 1;
@@ -2548,7 +2548,7 @@ impl<'a> Iterator for Lexer<'a> {
             137 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -2562,7 +2562,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             138 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -2578,7 +2578,7 @@ impl<'a> Iterator for Lexer<'a> {
             139 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -2598,7 +2598,7 @@ impl<'a> Iterator for Lexer<'a> {
             141 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -2616,7 +2616,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             143 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -2632,7 +2632,7 @@ impl<'a> Iterator for Lexer<'a> {
             144 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -2648,7 +2648,7 @@ impl<'a> Iterator for Lexer<'a> {
             145 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x67 => {
                         self.cursor += 1;
@@ -2664,7 +2664,7 @@ impl<'a> Iterator for Lexer<'a> {
             146 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -2680,7 +2680,7 @@ impl<'a> Iterator for Lexer<'a> {
             147 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -2696,7 +2696,7 @@ impl<'a> Iterator for Lexer<'a> {
             148 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -2712,7 +2712,7 @@ impl<'a> Iterator for Lexer<'a> {
             149 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 => {
                         self.cursor += 1;
@@ -2728,7 +2728,7 @@ impl<'a> Iterator for Lexer<'a> {
             150 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -2744,7 +2744,7 @@ impl<'a> Iterator for Lexer<'a> {
             151 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -2760,7 +2760,7 @@ impl<'a> Iterator for Lexer<'a> {
             152 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -2776,7 +2776,7 @@ impl<'a> Iterator for Lexer<'a> {
             153 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -2792,7 +2792,7 @@ impl<'a> Iterator for Lexer<'a> {
             154 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -2808,7 +2808,7 @@ impl<'a> Iterator for Lexer<'a> {
             155 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6D => {
                         self.cursor += 1;
@@ -2824,7 +2824,7 @@ impl<'a> Iterator for Lexer<'a> {
             156 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x75 => {
                         self.cursor += 1;
@@ -2844,7 +2844,7 @@ impl<'a> Iterator for Lexer<'a> {
             158 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -2860,7 +2860,7 @@ impl<'a> Iterator for Lexer<'a> {
             159 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6D => {
                         self.cursor += 1;
@@ -2876,7 +2876,7 @@ impl<'a> Iterator for Lexer<'a> {
             160 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -2892,7 +2892,7 @@ impl<'a> Iterator for Lexer<'a> {
             161 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -2908,7 +2908,7 @@ impl<'a> Iterator for Lexer<'a> {
             162 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -2924,7 +2924,7 @@ impl<'a> Iterator for Lexer<'a> {
             163 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x38 => {
                         self.cursor += 1;
@@ -2940,7 +2940,7 @@ impl<'a> Iterator for Lexer<'a> {
             164 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -2956,7 +2956,7 @@ impl<'a> Iterator for Lexer<'a> {
             165 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -2972,7 +2972,7 @@ impl<'a> Iterator for Lexer<'a> {
             166 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x64 => {
                         self.cursor += 1;
@@ -2986,7 +2986,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             167 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3000,7 +3000,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             168 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3014,7 +3014,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             169 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3030,7 +3030,7 @@ impl<'a> Iterator for Lexer<'a> {
             170 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x79 => {
                         self.cursor += 1;
@@ -3044,7 +3044,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             171 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3058,7 +3058,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             172 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3074,7 +3074,7 @@ impl<'a> Iterator for Lexer<'a> {
             173 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -3090,7 +3090,7 @@ impl<'a> Iterator for Lexer<'a> {
             174 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x79 => {
                         self.cursor += 1;
@@ -3104,7 +3104,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             175 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3118,7 +3118,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             176 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3132,7 +3132,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             177 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3154,7 +3154,7 @@ impl<'a> Iterator for Lexer<'a> {
             179 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x76 => {
                         self.cursor += 1;
@@ -3168,7 +3168,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             180 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3184,7 +3184,7 @@ impl<'a> Iterator for Lexer<'a> {
             181 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -3204,7 +3204,7 @@ impl<'a> Iterator for Lexer<'a> {
             183 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x68 => {
                         self.cursor += 1;
@@ -3220,7 +3220,7 @@ impl<'a> Iterator for Lexer<'a> {
             184 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6B => {
                         self.cursor += 1;
@@ -3236,7 +3236,7 @@ impl<'a> Iterator for Lexer<'a> {
             185 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -3252,7 +3252,7 @@ impl<'a> Iterator for Lexer<'a> {
             186 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -3268,7 +3268,7 @@ impl<'a> Iterator for Lexer<'a> {
             187 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -3288,7 +3288,7 @@ impl<'a> Iterator for Lexer<'a> {
             189 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -3308,7 +3308,7 @@ impl<'a> Iterator for Lexer<'a> {
             191 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x66 => {
                         self.cursor += 1;
@@ -3324,7 +3324,7 @@ impl<'a> Iterator for Lexer<'a> {
             192 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x75 => {
                         self.cursor += 1;
@@ -3340,7 +3340,7 @@ impl<'a> Iterator for Lexer<'a> {
             193 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -3356,7 +3356,7 @@ impl<'a> Iterator for Lexer<'a> {
             194 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -3372,7 +3372,7 @@ impl<'a> Iterator for Lexer<'a> {
             195 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x45 => {
                         self.cursor += 1;
@@ -3388,7 +3388,7 @@ impl<'a> Iterator for Lexer<'a> {
             196 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -3404,7 +3404,7 @@ impl<'a> Iterator for Lexer<'a> {
             197 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -3418,7 +3418,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             198 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3434,7 +3434,7 @@ impl<'a> Iterator for Lexer<'a> {
             199 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -3450,7 +3450,7 @@ impl<'a> Iterator for Lexer<'a> {
             200 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -3466,7 +3466,7 @@ impl<'a> Iterator for Lexer<'a> {
             201 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -3482,7 +3482,7 @@ impl<'a> Iterator for Lexer<'a> {
             202 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -3498,7 +3498,7 @@ impl<'a> Iterator for Lexer<'a> {
             203 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -3514,7 +3514,7 @@ impl<'a> Iterator for Lexer<'a> {
             204 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -3530,7 +3530,7 @@ impl<'a> Iterator for Lexer<'a> {
             205 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 => {
                         self.cursor += 1;
@@ -3546,7 +3546,7 @@ impl<'a> Iterator for Lexer<'a> {
             206 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -3562,7 +3562,7 @@ impl<'a> Iterator for Lexer<'a> {
             207 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -3578,7 +3578,7 @@ impl<'a> Iterator for Lexer<'a> {
             208 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -3594,7 +3594,7 @@ impl<'a> Iterator for Lexer<'a> {
             209 => {
                 yyaccept = 9;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -3614,7 +3614,7 @@ impl<'a> Iterator for Lexer<'a> {
             211 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -3630,7 +3630,7 @@ impl<'a> Iterator for Lexer<'a> {
             212 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -3646,7 +3646,7 @@ impl<'a> Iterator for Lexer<'a> {
             213 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -3674,7 +3674,7 @@ impl<'a> Iterator for Lexer<'a> {
             217 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -3698,7 +3698,7 @@ impl<'a> Iterator for Lexer<'a> {
             220 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -3714,7 +3714,7 @@ impl<'a> Iterator for Lexer<'a> {
             221 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -3742,7 +3742,7 @@ impl<'a> Iterator for Lexer<'a> {
             225 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -3762,7 +3762,7 @@ impl<'a> Iterator for Lexer<'a> {
             227 => {
                 yyaccept = 10;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -3782,7 +3782,7 @@ impl<'a> Iterator for Lexer<'a> {
             229 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -3803,7 +3803,7 @@ impl<'a> Iterator for Lexer<'a> {
             230 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -3823,7 +3823,7 @@ impl<'a> Iterator for Lexer<'a> {
             232 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -3839,7 +3839,7 @@ impl<'a> Iterator for Lexer<'a> {
             233 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -3853,7 +3853,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             234 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3867,7 +3867,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             235 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -3883,7 +3883,7 @@ impl<'a> Iterator for Lexer<'a> {
             236 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 |
                     0x20 => {
@@ -3900,7 +3900,7 @@ impl<'a> Iterator for Lexer<'a> {
             237 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -3916,7 +3916,7 @@ impl<'a> Iterator for Lexer<'a> {
             238 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -3932,7 +3932,7 @@ impl<'a> Iterator for Lexer<'a> {
             239 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -3948,7 +3948,7 @@ impl<'a> Iterator for Lexer<'a> {
             240 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -3964,7 +3964,7 @@ impl<'a> Iterator for Lexer<'a> {
             241 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -3980,7 +3980,7 @@ impl<'a> Iterator for Lexer<'a> {
             242 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -3998,7 +3998,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             244 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -4014,7 +4014,7 @@ impl<'a> Iterator for Lexer<'a> {
             245 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -4030,7 +4030,7 @@ impl<'a> Iterator for Lexer<'a> {
             246 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x64 => {
                         self.cursor += 1;
@@ -4046,7 +4046,7 @@ impl<'a> Iterator for Lexer<'a> {
             247 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x4C => {
                         self.cursor += 1;
@@ -4062,7 +4062,7 @@ impl<'a> Iterator for Lexer<'a> {
             248 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -4078,7 +4078,7 @@ impl<'a> Iterator for Lexer<'a> {
             249 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x4C => {
                         self.cursor += 1;
@@ -4094,7 +4094,7 @@ impl<'a> Iterator for Lexer<'a> {
             250 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -4110,7 +4110,7 @@ impl<'a> Iterator for Lexer<'a> {
             251 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x44 => {
                         self.cursor += 1;
@@ -4131,7 +4131,7 @@ impl<'a> Iterator for Lexer<'a> {
             252 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -4147,7 +4147,7 @@ impl<'a> Iterator for Lexer<'a> {
             253 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -4163,7 +4163,7 @@ impl<'a> Iterator for Lexer<'a> {
             254 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -4179,7 +4179,7 @@ impl<'a> Iterator for Lexer<'a> {
             255 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -4195,7 +4195,7 @@ impl<'a> Iterator for Lexer<'a> {
             256 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x77 => {
                         self.cursor += 1;
@@ -4211,7 +4211,7 @@ impl<'a> Iterator for Lexer<'a> {
             257 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -4227,7 +4227,7 @@ impl<'a> Iterator for Lexer<'a> {
             258 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -4243,7 +4243,7 @@ impl<'a> Iterator for Lexer<'a> {
             259 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -4259,7 +4259,7 @@ impl<'a> Iterator for Lexer<'a> {
             260 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -4275,7 +4275,7 @@ impl<'a> Iterator for Lexer<'a> {
             261 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -4291,7 +4291,7 @@ impl<'a> Iterator for Lexer<'a> {
             262 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -4307,7 +4307,7 @@ impl<'a> Iterator for Lexer<'a> {
             263 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x77 => {
                         self.cursor += 1;
@@ -4323,7 +4323,7 @@ impl<'a> Iterator for Lexer<'a> {
             264 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -4347,7 +4347,7 @@ impl<'a> Iterator for Lexer<'a> {
             267 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -4421,7 +4421,7 @@ impl<'a> Iterator for Lexer<'a> {
             268 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x67 => {
                         self.cursor += 1;
@@ -4437,7 +4437,7 @@ impl<'a> Iterator for Lexer<'a> {
             269 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -4451,7 +4451,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             270 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -4467,7 +4467,7 @@ impl<'a> Iterator for Lexer<'a> {
             271 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -4483,7 +4483,7 @@ impl<'a> Iterator for Lexer<'a> {
             272 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -4499,7 +4499,7 @@ impl<'a> Iterator for Lexer<'a> {
             273 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -4519,7 +4519,7 @@ impl<'a> Iterator for Lexer<'a> {
             275 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -4535,7 +4535,7 @@ impl<'a> Iterator for Lexer<'a> {
             276 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -4551,7 +4551,7 @@ impl<'a> Iterator for Lexer<'a> {
             277 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -4567,7 +4567,7 @@ impl<'a> Iterator for Lexer<'a> {
             278 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -4583,7 +4583,7 @@ impl<'a> Iterator for Lexer<'a> {
             279 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -4599,7 +4599,7 @@ impl<'a> Iterator for Lexer<'a> {
             280 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -4615,7 +4615,7 @@ impl<'a> Iterator for Lexer<'a> {
             281 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x75 => {
                         self.cursor += 1;
@@ -4631,7 +4631,7 @@ impl<'a> Iterator for Lexer<'a> {
             282 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -4647,7 +4647,7 @@ impl<'a> Iterator for Lexer<'a> {
             283 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -4661,7 +4661,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             284 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -4677,7 +4677,7 @@ impl<'a> Iterator for Lexer<'a> {
             285 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -4693,7 +4693,7 @@ impl<'a> Iterator for Lexer<'a> {
             286 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x67 => {
                         self.cursor += 1;
@@ -4709,7 +4709,7 @@ impl<'a> Iterator for Lexer<'a> {
             287 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -4723,7 +4723,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             288 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -4737,7 +4737,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             289 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -4751,7 +4751,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             290 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -4767,7 +4767,7 @@ impl<'a> Iterator for Lexer<'a> {
             291 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -4783,7 +4783,7 @@ impl<'a> Iterator for Lexer<'a> {
             292 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x66 => {
                         self.cursor += 1;
@@ -4799,7 +4799,7 @@ impl<'a> Iterator for Lexer<'a> {
             293 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -4815,7 +4815,7 @@ impl<'a> Iterator for Lexer<'a> {
             294 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -4831,7 +4831,7 @@ impl<'a> Iterator for Lexer<'a> {
             295 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -4847,7 +4847,7 @@ impl<'a> Iterator for Lexer<'a> {
             296 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -4918,7 +4918,7 @@ impl<'a> Iterator for Lexer<'a> {
             297 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -4934,7 +4934,7 @@ impl<'a> Iterator for Lexer<'a> {
             298 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -4954,7 +4954,7 @@ impl<'a> Iterator for Lexer<'a> {
             300 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -4968,7 +4968,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             301 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -4984,7 +4984,7 @@ impl<'a> Iterator for Lexer<'a> {
             302 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -5000,7 +5000,7 @@ impl<'a> Iterator for Lexer<'a> {
             303 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -5016,7 +5016,7 @@ impl<'a> Iterator for Lexer<'a> {
             304 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -5032,7 +5032,7 @@ impl<'a> Iterator for Lexer<'a> {
             305 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x79 => {
                         self.cursor += 1;
@@ -5048,7 +5048,7 @@ impl<'a> Iterator for Lexer<'a> {
             306 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -5064,7 +5064,7 @@ impl<'a> Iterator for Lexer<'a> {
             307 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -5080,7 +5080,7 @@ impl<'a> Iterator for Lexer<'a> {
             308 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -5096,7 +5096,7 @@ impl<'a> Iterator for Lexer<'a> {
             309 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -5112,7 +5112,7 @@ impl<'a> Iterator for Lexer<'a> {
             310 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -5128,7 +5128,7 @@ impl<'a> Iterator for Lexer<'a> {
             311 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -5146,7 +5146,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             313 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -5162,7 +5162,7 @@ impl<'a> Iterator for Lexer<'a> {
             314 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -5176,7 +5176,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             315 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -5204,7 +5204,7 @@ impl<'a> Iterator for Lexer<'a> {
             319 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -5220,7 +5220,7 @@ impl<'a> Iterator for Lexer<'a> {
             320 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 |
                     0x20 => {
@@ -5237,7 +5237,7 @@ impl<'a> Iterator for Lexer<'a> {
             321 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -5253,7 +5253,7 @@ impl<'a> Iterator for Lexer<'a> {
             322 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -5267,7 +5267,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             323 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -5281,7 +5281,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             324 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -5297,7 +5297,7 @@ impl<'a> Iterator for Lexer<'a> {
             325 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -5313,7 +5313,7 @@ impl<'a> Iterator for Lexer<'a> {
             326 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -5329,7 +5329,7 @@ impl<'a> Iterator for Lexer<'a> {
             327 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -5347,7 +5347,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             329 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -5363,7 +5363,7 @@ impl<'a> Iterator for Lexer<'a> {
             330 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -5379,7 +5379,7 @@ impl<'a> Iterator for Lexer<'a> {
             331 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x67 => {
                         self.cursor += 1;
@@ -5395,7 +5395,7 @@ impl<'a> Iterator for Lexer<'a> {
             332 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -5411,7 +5411,7 @@ impl<'a> Iterator for Lexer<'a> {
             333 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -5427,7 +5427,7 @@ impl<'a> Iterator for Lexer<'a> {
             334 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -5443,7 +5443,7 @@ impl<'a> Iterator for Lexer<'a> {
             335 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -5459,7 +5459,7 @@ impl<'a> Iterator for Lexer<'a> {
             336 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -5475,7 +5475,7 @@ impl<'a> Iterator for Lexer<'a> {
             337 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -5491,7 +5491,7 @@ impl<'a> Iterator for Lexer<'a> {
             338 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 => {
                         self.cursor += 1;
@@ -5514,7 +5514,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             340 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -5534,7 +5534,7 @@ impl<'a> Iterator for Lexer<'a> {
             342 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -5550,7 +5550,7 @@ impl<'a> Iterator for Lexer<'a> {
             343 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -5624,7 +5624,7 @@ impl<'a> Iterator for Lexer<'a> {
             344 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -5640,7 +5640,7 @@ impl<'a> Iterator for Lexer<'a> {
             345 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x64 => {
                         self.cursor += 1;
@@ -5669,7 +5669,7 @@ impl<'a> Iterator for Lexer<'a> {
             348 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -5683,7 +5683,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             349 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -5699,7 +5699,7 @@ impl<'a> Iterator for Lexer<'a> {
             350 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x64 => {
                         self.cursor += 1;
@@ -5719,7 +5719,7 @@ impl<'a> Iterator for Lexer<'a> {
             352 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -5735,7 +5735,7 @@ impl<'a> Iterator for Lexer<'a> {
             353 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -5751,7 +5751,7 @@ impl<'a> Iterator for Lexer<'a> {
             354 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x75 => {
                         self.cursor += 1;
@@ -5767,7 +5767,7 @@ impl<'a> Iterator for Lexer<'a> {
             355 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -5783,7 +5783,7 @@ impl<'a> Iterator for Lexer<'a> {
             356 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -5799,7 +5799,7 @@ impl<'a> Iterator for Lexer<'a> {
             357 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -5815,7 +5815,7 @@ impl<'a> Iterator for Lexer<'a> {
             358 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -5831,7 +5831,7 @@ impl<'a> Iterator for Lexer<'a> {
             359 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -5847,7 +5847,7 @@ impl<'a> Iterator for Lexer<'a> {
             360 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -5863,7 +5863,7 @@ impl<'a> Iterator for Lexer<'a> {
             361 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -5883,7 +5883,7 @@ impl<'a> Iterator for Lexer<'a> {
             363 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -5899,7 +5899,7 @@ impl<'a> Iterator for Lexer<'a> {
             364 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -5970,7 +5970,7 @@ impl<'a> Iterator for Lexer<'a> {
             365 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -5986,7 +5986,7 @@ impl<'a> Iterator for Lexer<'a> {
             366 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -6000,7 +6000,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             367 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6020,7 +6020,7 @@ impl<'a> Iterator for Lexer<'a> {
             369 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x65 => {
                         self.cursor += 1;
@@ -6036,7 +6036,7 @@ impl<'a> Iterator for Lexer<'a> {
             370 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -6052,7 +6052,7 @@ impl<'a> Iterator for Lexer<'a> {
             371 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x51 => {
                         self.cursor += 1;
@@ -6068,7 +6068,7 @@ impl<'a> Iterator for Lexer<'a> {
             372 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -6082,7 +6082,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             373 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6098,7 +6098,7 @@ impl<'a> Iterator for Lexer<'a> {
             374 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -6112,7 +6112,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             375 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6128,7 +6128,7 @@ impl<'a> Iterator for Lexer<'a> {
             376 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -6144,7 +6144,7 @@ impl<'a> Iterator for Lexer<'a> {
             377 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6160,7 +6160,7 @@ impl<'a> Iterator for Lexer<'a> {
             378 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x72 => {
                         self.cursor += 1;
@@ -6176,7 +6176,7 @@ impl<'a> Iterator for Lexer<'a> {
             379 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -6190,7 +6190,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             380 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6204,7 +6204,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             381 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6220,7 +6220,7 @@ impl<'a> Iterator for Lexer<'a> {
             382 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -6236,7 +6236,7 @@ impl<'a> Iterator for Lexer<'a> {
             383 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6256,7 +6256,7 @@ impl<'a> Iterator for Lexer<'a> {
             385 => {
                 yyaccept = 12;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -6276,7 +6276,7 @@ impl<'a> Iterator for Lexer<'a> {
             387 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -6292,7 +6292,7 @@ impl<'a> Iterator for Lexer<'a> {
             388 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x75 => {
                         self.cursor += 1;
@@ -6308,7 +6308,7 @@ impl<'a> Iterator for Lexer<'a> {
             389 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6328,7 +6328,7 @@ impl<'a> Iterator for Lexer<'a> {
             391 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -6348,7 +6348,7 @@ impl<'a> Iterator for Lexer<'a> {
             393 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -6362,7 +6362,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             394 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6378,7 +6378,7 @@ impl<'a> Iterator for Lexer<'a> {
             395 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6394,7 +6394,7 @@ impl<'a> Iterator for Lexer<'a> {
             396 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6F => {
                         self.cursor += 1;
@@ -6423,7 +6423,7 @@ impl<'a> Iterator for Lexer<'a> {
             399 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x66 => {
                         self.cursor += 1;
@@ -6437,7 +6437,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             400 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6453,7 +6453,7 @@ impl<'a> Iterator for Lexer<'a> {
             401 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6469,7 +6469,7 @@ impl<'a> Iterator for Lexer<'a> {
             402 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 => {
                         self.cursor += 1;
@@ -6483,7 +6483,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             403 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6499,7 +6499,7 @@ impl<'a> Iterator for Lexer<'a> {
             404 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -6515,7 +6515,7 @@ impl<'a> Iterator for Lexer<'a> {
             405 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -6533,7 +6533,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             407 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6549,7 +6549,7 @@ impl<'a> Iterator for Lexer<'a> {
             408 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6E => {
                         self.cursor += 1;
@@ -6565,7 +6565,7 @@ impl<'a> Iterator for Lexer<'a> {
             409 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 |
                     0x20 => {
@@ -6584,7 +6584,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             411 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6600,7 +6600,7 @@ impl<'a> Iterator for Lexer<'a> {
             412 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -6620,7 +6620,7 @@ impl<'a> Iterator for Lexer<'a> {
             414 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6636,7 +6636,7 @@ impl<'a> Iterator for Lexer<'a> {
             415 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6656,7 +6656,7 @@ impl<'a> Iterator for Lexer<'a> {
             417 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6672,7 +6672,7 @@ impl<'a> Iterator for Lexer<'a> {
             418 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -6750,7 +6750,7 @@ impl<'a> Iterator for Lexer<'a> {
             420 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -6764,7 +6764,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             421 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6778,7 +6778,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             422 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6792,7 +6792,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             423 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6808,7 +6808,7 @@ impl<'a> Iterator for Lexer<'a> {
             424 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -6879,7 +6879,7 @@ impl<'a> Iterator for Lexer<'a> {
             425 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x74 => {
                         self.cursor += 1;
@@ -6905,7 +6905,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             429 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6921,7 +6921,7 @@ impl<'a> Iterator for Lexer<'a> {
             430 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x79 => {
                         self.cursor += 1;
@@ -6946,7 +6946,7 @@ impl<'a> Iterator for Lexer<'a> {
             432 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -6960,7 +6960,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             433 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -6978,7 +6978,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit!(HeaderPrefix); }
             }
             435 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -7038,7 +7038,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorHeaderAfterName);
         },
             438 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -7064,7 +7064,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             440 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -7085,7 +7085,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             443 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7100,7 +7100,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             444 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -7115,7 +7115,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             445 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7130,7 +7130,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             446 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -7145,7 +7145,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             447 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7160,7 +7160,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             448 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -7174,7 +7174,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             449 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -7197,7 +7197,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             452 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7216,7 +7216,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             454 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7230,7 +7230,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             455 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x00 => {
                         self.cursor += 1;
@@ -7300,7 +7300,7 @@ impl<'a> Iterator for Lexer<'a> {
             457 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -7356,7 +7356,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorInIdContent);
         },
             459 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -7384,7 +7384,7 @@ impl<'a> Iterator for Lexer<'a> {
             461 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -7444,7 +7444,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             464 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7460,7 +7460,7 @@ impl<'a> Iterator for Lexer<'a> {
             465 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -7476,7 +7476,7 @@ impl<'a> Iterator for Lexer<'a> {
             466 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7492,7 +7492,7 @@ impl<'a> Iterator for Lexer<'a> {
             467 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -7508,7 +7508,7 @@ impl<'a> Iterator for Lexer<'a> {
             468 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7524,7 +7524,7 @@ impl<'a> Iterator for Lexer<'a> {
             469 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -7538,7 +7538,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             470 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7569,7 +7569,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             472 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -7583,7 +7583,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             473 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7597,7 +7597,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             474 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -7611,7 +7611,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             475 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7625,7 +7625,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             476 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -7639,7 +7639,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             477 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -7658,7 +7658,7 @@ impl<'a> Iterator for Lexer<'a> {
             479 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -7711,7 +7711,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             480 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7725,7 +7725,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             481 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -7739,7 +7739,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             482 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7753,7 +7753,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             483 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -7767,7 +7767,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             484 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7781,7 +7781,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             485 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -7797,7 +7797,7 @@ impl<'a> Iterator for Lexer<'a> {
             486 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -7850,7 +7850,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             487 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7864,7 +7864,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             488 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -7878,7 +7878,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             489 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7892,7 +7892,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             490 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -7906,7 +7906,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             491 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -7920,7 +7920,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             492 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -7936,7 +7936,7 @@ impl<'a> Iterator for Lexer<'a> {
             493 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -7989,7 +7989,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             494 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8003,7 +8003,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             495 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -8017,7 +8017,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             496 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8031,7 +8031,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             497 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -8045,7 +8045,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             498 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8059,7 +8059,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             499 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -8075,7 +8075,7 @@ impl<'a> Iterator for Lexer<'a> {
             500 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -8128,7 +8128,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             501 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8142,7 +8142,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             502 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -8156,7 +8156,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             503 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8170,7 +8170,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             504 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -8184,7 +8184,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             505 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8198,7 +8198,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             506 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -8214,7 +8214,7 @@ impl<'a> Iterator for Lexer<'a> {
             507 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -8267,7 +8267,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             508 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8281,7 +8281,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             509 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -8295,7 +8295,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             510 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8309,7 +8309,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             511 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -8323,7 +8323,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             512 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8337,7 +8337,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             513 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -8353,7 +8353,7 @@ impl<'a> Iterator for Lexer<'a> {
             514 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -8406,7 +8406,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             515 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8420,7 +8420,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             516 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -8434,7 +8434,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             517 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8448,7 +8448,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             518 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -8462,7 +8462,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             519 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8476,7 +8476,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             520 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -8492,7 +8492,7 @@ impl<'a> Iterator for Lexer<'a> {
             521 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -8545,7 +8545,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             522 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8559,7 +8559,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             523 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -8573,7 +8573,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             524 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8587,7 +8587,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             525 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -8601,7 +8601,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             526 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8615,7 +8615,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             527 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -8631,7 +8631,7 @@ impl<'a> Iterator for Lexer<'a> {
             528 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -8683,7 +8683,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             529 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8697,7 +8697,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             530 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -8711,7 +8711,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             531 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8725,7 +8725,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             532 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -8739,7 +8739,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             533 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8753,7 +8753,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             534 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -8769,7 +8769,7 @@ impl<'a> Iterator for Lexer<'a> {
             535 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -8814,7 +8814,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             537 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8828,7 +8828,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             538 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -8842,7 +8842,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             539 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8856,7 +8856,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             540 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -8870,7 +8870,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             541 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8884,7 +8884,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             542 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -8900,7 +8900,7 @@ impl<'a> Iterator for Lexer<'a> {
             543 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 544;
                 continue 'yyl;
             }
@@ -8950,7 +8950,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             545 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8964,7 +8964,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             546 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -8978,7 +8978,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             547 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -8992,7 +8992,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             548 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -9006,7 +9006,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             549 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9020,7 +9020,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             550 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -9034,7 +9034,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             551 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x00 => {
                         self.cursor += 1;
@@ -9110,7 +9110,7 @@ impl<'a> Iterator for Lexer<'a> {
             553 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -9166,7 +9166,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorInTypesContent);
         },
             555 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -9194,7 +9194,7 @@ impl<'a> Iterator for Lexer<'a> {
             557 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -9247,7 +9247,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             560 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9263,7 +9263,7 @@ impl<'a> Iterator for Lexer<'a> {
             561 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -9279,7 +9279,7 @@ impl<'a> Iterator for Lexer<'a> {
             562 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9295,7 +9295,7 @@ impl<'a> Iterator for Lexer<'a> {
             563 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -9311,7 +9311,7 @@ impl<'a> Iterator for Lexer<'a> {
             564 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9327,7 +9327,7 @@ impl<'a> Iterator for Lexer<'a> {
             565 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -9343,7 +9343,7 @@ impl<'a> Iterator for Lexer<'a> {
             566 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2C => {
                         self.cursor += 1;
@@ -9357,7 +9357,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             567 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9393,7 +9393,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             569 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -9407,7 +9407,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             570 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9421,7 +9421,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             571 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -9435,7 +9435,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             572 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9449,7 +9449,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             573 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -9463,7 +9463,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             574 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -9480,7 +9480,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             576 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9494,7 +9494,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             577 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -9508,7 +9508,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             578 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9522,7 +9522,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             579 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -9536,7 +9536,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             580 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9550,7 +9550,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             581 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -9566,7 +9566,7 @@ impl<'a> Iterator for Lexer<'a> {
             582 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -9621,7 +9621,7 @@ impl<'a> Iterator for Lexer<'a> {
             583 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 584;
                 continue 'yyl;
             }
@@ -9692,7 +9692,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             585 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9706,7 +9706,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             586 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -9720,7 +9720,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             587 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9734,7 +9734,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             588 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -9748,7 +9748,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             589 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9762,7 +9762,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             590 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -9778,7 +9778,7 @@ impl<'a> Iterator for Lexer<'a> {
             591 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -9831,7 +9831,7 @@ impl<'a> Iterator for Lexer<'a> {
             592 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -9896,7 +9896,7 @@ impl<'a> Iterator for Lexer<'a> {
             594 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 595;
                 continue 'yyl;
             }
@@ -9967,7 +9967,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             596 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -9981,7 +9981,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             597 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -9995,7 +9995,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             598 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10009,7 +10009,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             599 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -10023,7 +10023,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             600 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10037,7 +10037,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             601 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -10051,7 +10051,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             602 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -10105,7 +10105,7 @@ impl<'a> Iterator for Lexer<'a> {
             604 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -10154,7 +10154,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(HeaderContent);
         },
             606 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -10187,7 +10187,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             610 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10203,7 +10203,7 @@ impl<'a> Iterator for Lexer<'a> {
             611 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -10219,7 +10219,7 @@ impl<'a> Iterator for Lexer<'a> {
             612 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10235,7 +10235,7 @@ impl<'a> Iterator for Lexer<'a> {
             613 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -10251,7 +10251,7 @@ impl<'a> Iterator for Lexer<'a> {
             614 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10267,7 +10267,7 @@ impl<'a> Iterator for Lexer<'a> {
             615 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -10281,7 +10281,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             616 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10305,7 +10305,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             618 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -10319,7 +10319,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             619 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10333,7 +10333,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             620 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -10347,7 +10347,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             621 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10361,7 +10361,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             622 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -10375,7 +10375,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             623 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -10392,7 +10392,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             625 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -10464,7 +10464,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             628 => { emit!(ErrorInLanguagesContent); },
             629 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -10490,7 +10490,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             631 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -10506,7 +10506,7 @@ impl<'a> Iterator for Lexer<'a> {
             632 => { emit!(Whitespace); },
             633 => { emit!(Comma); },
             634 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -10527,7 +10527,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             637 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10542,7 +10542,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             638 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -10557,7 +10557,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             639 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10572,7 +10572,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             640 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -10587,7 +10587,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             641 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10602,7 +10602,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             642 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -10616,7 +10616,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             643 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -10633,7 +10633,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             645 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -10650,7 +10650,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(LanguageCode);
         },
             647 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10669,7 +10669,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             649 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10683,7 +10683,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             650 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -10701,7 +10701,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             652 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -10769,7 +10769,7 @@ impl<'a> Iterator for Lexer<'a> {
             654 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -10822,7 +10822,7 @@ impl<'a> Iterator for Lexer<'a> {
         },
             656 => { emit!(ErrorInParticipantsContent); },
             657 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -10848,7 +10848,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             659 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -10871,7 +10871,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             664 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10887,7 +10887,7 @@ impl<'a> Iterator for Lexer<'a> {
             665 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -10903,7 +10903,7 @@ impl<'a> Iterator for Lexer<'a> {
             666 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10919,7 +10919,7 @@ impl<'a> Iterator for Lexer<'a> {
             667 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -10935,7 +10935,7 @@ impl<'a> Iterator for Lexer<'a> {
             668 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10951,7 +10951,7 @@ impl<'a> Iterator for Lexer<'a> {
             669 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -10965,7 +10965,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             670 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -10989,7 +10989,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             672 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -11003,7 +11003,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             673 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11017,7 +11017,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             674 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -11031,7 +11031,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             675 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11045,7 +11045,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             676 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -11059,7 +11059,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             677 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -11076,7 +11076,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             679 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -11149,7 +11149,7 @@ impl<'a> Iterator for Lexer<'a> {
             681 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -11224,7 +11224,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             684 => { emit!(ErrorInMediaContent); },
             685 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -11250,7 +11250,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             687 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -11267,7 +11267,7 @@ impl<'a> Iterator for Lexer<'a> {
             689 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -11292,7 +11292,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             693 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11308,7 +11308,7 @@ impl<'a> Iterator for Lexer<'a> {
             694 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -11324,7 +11324,7 @@ impl<'a> Iterator for Lexer<'a> {
             695 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11340,7 +11340,7 @@ impl<'a> Iterator for Lexer<'a> {
             696 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -11356,7 +11356,7 @@ impl<'a> Iterator for Lexer<'a> {
             697 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11372,7 +11372,7 @@ impl<'a> Iterator for Lexer<'a> {
             698 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -11386,7 +11386,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             699 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -11457,7 +11457,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             701 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11471,7 +11471,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             702 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -11485,7 +11485,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             703 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11499,7 +11499,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             704 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -11513,7 +11513,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             705 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11527,7 +11527,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             706 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -11541,7 +11541,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             707 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -11558,7 +11558,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             709 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 710;
                 continue 'yyl;
             }
@@ -11614,7 +11614,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             711 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11628,7 +11628,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             712 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -11642,7 +11642,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             713 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11656,7 +11656,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             714 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -11670,7 +11670,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             715 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11684,7 +11684,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             716 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -11702,7 +11702,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(MediaFilename);
         },
             718 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -11774,7 +11774,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorSpeaker);
         },
             721 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -11800,7 +11800,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             723 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x27 |
                     0x2B |
@@ -11833,7 +11833,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             727 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11848,7 +11848,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             728 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -11863,7 +11863,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             729 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11878,7 +11878,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             730 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -11893,7 +11893,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             731 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11908,7 +11908,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             732 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -11922,7 +11922,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             733 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -11939,7 +11939,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             735 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11958,7 +11958,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             737 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -11972,7 +11972,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             738 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -12032,7 +12032,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorTierAfterLabel);
         },
             741 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -12058,7 +12058,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             743 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -12079,7 +12079,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             746 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12094,7 +12094,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             747 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -12109,7 +12109,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             748 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12124,7 +12124,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             749 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -12139,7 +12139,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             750 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12154,7 +12154,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             751 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -12168,7 +12168,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             752 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -12199,7 +12199,7 @@ impl<'a> Iterator for Lexer<'a> {
             return Some((Token::TierSep(&yyinput[start..end]), start..end));
         },
             755 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12218,7 +12218,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             757 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12232,7 +12232,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             758 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -12292,7 +12292,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorTierSep);
         },
             761 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -12318,7 +12318,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             763 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -12339,7 +12339,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             766 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12354,7 +12354,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             767 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -12369,7 +12369,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             768 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12384,7 +12384,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             769 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -12399,7 +12399,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             770 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12414,7 +12414,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             771 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -12428,7 +12428,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             772 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -12451,7 +12451,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             775 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12470,7 +12470,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             777 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -12484,7 +12484,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             778 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -12677,7 +12677,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             781 => { emit!(ErrorInMainContent); },
             782 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 => {
                         self.cursor += 1;
@@ -12698,7 +12698,7 @@ impl<'a> Iterator for Lexer<'a> {
             783 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -12856,7 +12856,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             785 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -12884,7 +12884,7 @@ impl<'a> Iterator for Lexer<'a> {
             787 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt1 = self.cursor;
@@ -12899,7 +12899,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             788 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -12917,7 +12917,7 @@ impl<'a> Iterator for Lexer<'a> {
         },
             790 => { emit!(Exclamation); },
             791 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -12936,7 +12936,7 @@ impl<'a> Iterator for Lexer<'a> {
             792 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2A => {
                         self.cursor += 1;
@@ -12983,7 +12983,7 @@ impl<'a> Iterator for Lexer<'a> {
             794 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -13093,7 +13093,7 @@ impl<'a> Iterator for Lexer<'a> {
             796 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
@@ -13152,7 +13152,7 @@ impl<'a> Iterator for Lexer<'a> {
             800 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.yyt1 = self.cursor;
@@ -13267,7 +13267,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             801 => { emit!(Zero); },
             802 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -13288,7 +13288,7 @@ impl<'a> Iterator for Lexer<'a> {
             808 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 ..= 0x64 |
                     0x67 |
@@ -13336,7 +13336,7 @@ impl<'a> Iterator for Lexer<'a> {
             809 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -13485,7 +13485,7 @@ impl<'a> Iterator for Lexer<'a> {
             811 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -13587,7 +13587,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             818 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -13613,7 +13613,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             819 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -13627,7 +13627,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             820 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -13649,7 +13649,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             821 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -13671,7 +13671,7 @@ impl<'a> Iterator for Lexer<'a> {
             822 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -13687,7 +13687,7 @@ impl<'a> Iterator for Lexer<'a> {
             823 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -13709,7 +13709,7 @@ impl<'a> Iterator for Lexer<'a> {
             824 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -13789,7 +13789,7 @@ impl<'a> Iterator for Lexer<'a> {
             825 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -13810,7 +13810,7 @@ impl<'a> Iterator for Lexer<'a> {
             826 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -13826,7 +13826,7 @@ impl<'a> Iterator for Lexer<'a> {
             827 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -13842,7 +13842,7 @@ impl<'a> Iterator for Lexer<'a> {
             828 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -13858,7 +13858,7 @@ impl<'a> Iterator for Lexer<'a> {
             829 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -13874,7 +13874,7 @@ impl<'a> Iterator for Lexer<'a> {
             830 => {
                 yyaccept = 9;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -13930,7 +13930,7 @@ impl<'a> Iterator for Lexer<'a> {
             831 => { emit!(UnderlineBegin); },
             832 => { emit!(UnderlineEnd); },
             833 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x02 => {
                         self.cursor += 1;
@@ -14278,7 +14278,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             835 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -14295,7 +14295,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             836 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -14384,7 +14384,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             837 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -14497,7 +14497,7 @@ impl<'a> Iterator for Lexer<'a> {
             838 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -14633,7 +14633,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             839 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 ..= 0x64 |
                     0x67 |
@@ -14679,7 +14679,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             840 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -14701,7 +14701,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             841 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -14715,7 +14715,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             842 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -14737,7 +14737,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             843 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -14757,7 +14757,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             844 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -14771,7 +14771,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             845 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -14791,7 +14791,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             846 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -14869,7 +14869,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             847 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -14888,7 +14888,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             848 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -14902,7 +14902,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             849 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -14916,7 +14916,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             850 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -14930,7 +14930,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             851 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -14944,7 +14944,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             852 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -14961,7 +14961,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             854 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -14980,7 +14980,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             855 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -15000,7 +15000,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1!(PosTag); }
             }
             857 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x27 |
                     0x2B |
@@ -15023,7 +15023,7 @@ impl<'a> Iterator for Lexer<'a> {
             858 => {
                 yyaccept = 10;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.yyt1 = self.cursor;
@@ -15140,7 +15140,7 @@ impl<'a> Iterator for Lexer<'a> {
             860 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.yyt1 = self.cursor;
@@ -15255,7 +15255,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             861 => { emit!(PrefixFiller); },
             862 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -15355,7 +15355,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             863 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -15374,7 +15374,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             864 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x6C => {
                         self.cursor += 1;
@@ -15395,7 +15395,7 @@ impl<'a> Iterator for Lexer<'a> {
             865 => {
                 yyaccept = 12;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.yyt1 = self.cursor;
@@ -15512,7 +15512,7 @@ impl<'a> Iterator for Lexer<'a> {
             867 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 868;
                 continue 'yyl;
             }
@@ -15566,7 +15566,7 @@ impl<'a> Iterator for Lexer<'a> {
             869 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x04 |
                     0x07 ..= 0x08 |
@@ -15678,7 +15678,7 @@ impl<'a> Iterator for Lexer<'a> {
             870 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x29 => {
                         self.cursor += 1;
@@ -15699,7 +15699,7 @@ impl<'a> Iterator for Lexer<'a> {
             871 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -15766,7 +15766,7 @@ impl<'a> Iterator for Lexer<'a> {
             872 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x04 |
                     0x07 ..= 0x08 |
@@ -15890,7 +15890,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             873 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -15912,7 +15912,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             874 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -15926,7 +15926,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             875 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -15948,7 +15948,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             876 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -15968,7 +15968,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             877 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -15982,7 +15982,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             878 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -16002,7 +16002,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             879 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -16080,7 +16080,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             880 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -16099,7 +16099,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             881 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -16113,7 +16113,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             882 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -16127,7 +16127,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             883 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -16141,7 +16141,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             884 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -16155,7 +16155,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             885 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3F => {
                         self.cursor += 1;
@@ -16171,7 +16171,7 @@ impl<'a> Iterator for Lexer<'a> {
             886 => {
                 yyaccept = 13;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -16195,7 +16195,7 @@ impl<'a> Iterator for Lexer<'a> {
             890 => {
                 yyaccept = 14;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -16210,7 +16210,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             891 => { emit!(BreakForCoding); },
             892 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -16236,7 +16236,7 @@ impl<'a> Iterator for Lexer<'a> {
             893 => { emit!(LinkerLazyOverlap); },
             894 => { emit!(LinkerQuickUptakeOverlap); },
             895 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x89 => {
                         self.cursor += 1;
@@ -16250,7 +16250,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             896 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 => {
                         self.cursor += 1;
@@ -16266,7 +16266,7 @@ impl<'a> Iterator for Lexer<'a> {
             897 => {
                 yyaccept = 15;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -16420,7 +16420,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             899 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -16509,7 +16509,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             900 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -16531,7 +16531,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             901 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -16545,7 +16545,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             902 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -16567,7 +16567,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             903 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -16587,7 +16587,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             904 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -16601,7 +16601,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             905 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -16621,7 +16621,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             906 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -16699,7 +16699,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             907 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -16718,7 +16718,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             908 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -16732,7 +16732,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             909 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -16746,7 +16746,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             910 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -16760,7 +16760,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             911 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -16774,7 +16774,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             912 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -16791,7 +16791,7 @@ impl<'a> Iterator for Lexer<'a> {
             914 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.yyt2 = self.cursor;
                 match yych {
                     0x3A => {
@@ -16815,7 +16815,7 @@ impl<'a> Iterator for Lexer<'a> {
             916 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.yyt2 = self.cursor;
@@ -16838,7 +16838,7 @@ impl<'a> Iterator for Lexer<'a> {
             917 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.yyt2 = self.cursor;
@@ -16861,7 +16861,7 @@ impl<'a> Iterator for Lexer<'a> {
             918 => {
                 yyaccept = 17;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -16896,7 +16896,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             920 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -16910,7 +16910,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             921 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 922;
                 continue 'yyl;
             }
@@ -16967,7 +16967,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             923 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
@@ -16986,7 +16986,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             924 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -17000,7 +17000,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             925 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x1F |
                     0x21 ..= 0x5C |
@@ -17064,7 +17064,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             926 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -17078,7 +17078,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             927 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -17092,7 +17092,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             928 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2D => {
                         self.cursor += 1;
@@ -17116,7 +17116,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             929 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -17176,7 +17176,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             930 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -17203,7 +17203,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             931 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -17227,7 +17227,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             932 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -17254,7 +17254,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             933 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -17268,7 +17268,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             934 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -17282,7 +17282,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             935 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -17301,7 +17301,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             936 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -17315,7 +17315,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             937 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -17329,7 +17329,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             938 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -17343,7 +17343,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             939 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -17357,7 +17357,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             940 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -17371,7 +17371,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             941 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -17385,7 +17385,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             942 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -17399,7 +17399,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             943 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -17415,7 +17415,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             944 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -17429,7 +17429,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             945 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -17445,7 +17445,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             946 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -17460,7 +17460,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             947 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -17474,7 +17474,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             948 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -17494,7 +17494,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             949 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -17572,7 +17572,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             950 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -17591,7 +17591,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             951 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -17605,7 +17605,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             952 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -17619,7 +17619,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             953 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -17633,7 +17633,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             954 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -17649,7 +17649,7 @@ impl<'a> Iterator for Lexer<'a> {
             955 => {
                 yyaccept = 18;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -17706,7 +17706,7 @@ impl<'a> Iterator for Lexer<'a> {
             957 => {
                 yyaccept = 19;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -17763,7 +17763,7 @@ impl<'a> Iterator for Lexer<'a> {
             959 => {
                 yyaccept = 20;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -17818,7 +17818,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             960 => { emit!(CaYawn); },
             961 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -17838,7 +17838,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             962 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -17896,7 +17896,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             963 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -17928,7 +17928,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             964 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -17981,7 +17981,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             965 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -18006,7 +18006,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             966 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -18061,7 +18061,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             967 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -18098,7 +18098,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             968 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -18133,7 +18133,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             969 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -18159,7 +18159,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             970 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -18179,7 +18179,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             971 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -18199,7 +18199,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             972 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -18219,7 +18219,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             973 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -18244,7 +18244,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             974 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -18269,7 +18269,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             975 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 => {
                         self.cursor += 1;
@@ -18285,7 +18285,7 @@ impl<'a> Iterator for Lexer<'a> {
             976 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 977;
                 continue 'yyl;
             }
@@ -18424,7 +18424,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             978 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -18446,7 +18446,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             979 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -18460,7 +18460,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             980 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -18482,7 +18482,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             981 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -18502,7 +18502,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             982 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -18516,7 +18516,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             983 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -18536,7 +18536,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             984 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -18614,7 +18614,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             985 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -18633,7 +18633,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             986 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -18647,7 +18647,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             987 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -18661,7 +18661,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             988 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -18675,7 +18675,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             989 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -18689,7 +18689,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             990 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -18706,7 +18706,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             991 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -18799,7 +18799,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             992 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -18815,7 +18815,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             993 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -18829,7 +18829,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             994 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -18845,7 +18845,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             995 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -18860,7 +18860,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             996 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -18874,7 +18874,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             997 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -18894,7 +18894,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             998 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -18972,7 +18972,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             999 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -18991,7 +18991,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1000 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -19005,7 +19005,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1001 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -19019,7 +19019,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1002 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -19033,7 +19033,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1003 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -19047,7 +19047,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1004 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -19069,7 +19069,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1005 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -19089,7 +19089,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1006 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -19109,7 +19109,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1007 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -19189,7 +19189,7 @@ impl<'a> Iterator for Lexer<'a> {
             1008 => {
                 yyaccept = 21;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt2 = self.yyt4;
@@ -19226,7 +19226,7 @@ impl<'a> Iterator for Lexer<'a> {
             1009 => {
                 yyaccept = 21;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt2 = self.yyt4;
@@ -19268,7 +19268,7 @@ impl<'a> Iterator for Lexer<'a> {
             1010 => {
                 yyaccept = 21;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt2 = self.yyt4;
@@ -19310,7 +19310,7 @@ impl<'a> Iterator for Lexer<'a> {
             1011 => {
                 yyaccept = 22;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.cursor;
@@ -19346,7 +19346,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1012 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -19360,7 +19360,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1013 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -19380,7 +19380,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1014 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -19398,7 +19398,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1015 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -19422,7 +19422,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1016 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -19448,7 +19448,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1017 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -19463,7 +19463,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1018 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -19492,7 +19492,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1019 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -19514,7 +19514,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1020 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -19534,7 +19534,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1021 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -19556,7 +19556,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1022 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -19576,7 +19576,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1023 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -19596,7 +19596,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1024 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -19616,7 +19616,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1025 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -19636,7 +19636,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1026 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -19651,7 +19651,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1027 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
@@ -19666,7 +19666,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1028 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x27 |
                     0x2B |
@@ -19691,7 +19691,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1029 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 => {
                         self.cursor += 1;
@@ -19707,7 +19707,7 @@ impl<'a> Iterator for Lexer<'a> {
             1030 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -19862,7 +19862,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1032 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -19951,7 +19951,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1033 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -19973,7 +19973,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1034 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -19987,7 +19987,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1035 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -20009,7 +20009,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1036 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -20029,7 +20029,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1037 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -20043,7 +20043,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1038 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -20063,7 +20063,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1039 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -20141,7 +20141,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1040 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -20160,7 +20160,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1041 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -20174,7 +20174,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1042 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -20188,7 +20188,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1043 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -20202,7 +20202,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1044 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -20218,7 +20218,7 @@ impl<'a> Iterator for Lexer<'a> {
             1045 => {
                 yyaccept = 24;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -20310,7 +20310,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1t2!(Event); }
             }
             1047 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -20326,7 +20326,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1048 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -20340,7 +20340,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1049 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -20356,7 +20356,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1050 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -20371,7 +20371,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1051 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -20385,7 +20385,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1052 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -20405,7 +20405,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1053 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -20483,7 +20483,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1054 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -20502,7 +20502,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1055 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -20516,7 +20516,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1056 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -20530,7 +20530,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1057 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -20544,7 +20544,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1058 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -20558,7 +20558,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1059 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3D => {
                         self.cursor += 1;
@@ -20572,7 +20572,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1060 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3D => {
                         self.cursor += 1;
@@ -20586,7 +20586,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1061 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3D => {
                         self.cursor += 1;
@@ -20600,7 +20600,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1062 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3D => {
                         self.cursor += 1;
@@ -20614,7 +20614,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1063 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -20628,7 +20628,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1064 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -20642,7 +20642,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1065 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -20656,7 +20656,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1066 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -20670,7 +20670,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1067 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -20684,7 +20684,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1068 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -20701,7 +20701,7 @@ impl<'a> Iterator for Lexer<'a> {
             1070 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x29 => {
                         self.cursor += 1;
@@ -20722,7 +20722,7 @@ impl<'a> Iterator for Lexer<'a> {
             1071 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -20783,7 +20783,7 @@ impl<'a> Iterator for Lexer<'a> {
             1072 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -20797,7 +20797,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1073 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -20817,7 +20817,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1074 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -20843,7 +20843,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1075 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -20867,7 +20867,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1076 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -20893,7 +20893,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1077 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -20913,7 +20913,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1078 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -20943,7 +20943,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1079 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -20967,7 +20967,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1080 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -20987,7 +20987,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1081 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -21009,7 +21009,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1082 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -21029,7 +21029,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1083 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -21049,7 +21049,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1084 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -21069,7 +21069,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1085 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -21089,7 +21089,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1086 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -21111,7 +21111,7 @@ impl<'a> Iterator for Lexer<'a> {
             1087 => { emit!(BrokenQuestion); },
             1088 => { emit!(QuotedPeriodSimple); },
             1089 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -21125,7 +21125,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1090 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -21145,7 +21145,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1091 => { emit!(Interruption); },
             1092 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -21165,7 +21165,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1093 => { emit!(InterruptedQuestion); },
             1094 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x88 => {
                         self.cursor += 1;
@@ -21184,7 +21184,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1095 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -21283,7 +21283,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1096 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x02 => {
                         self.cursor += 1;
@@ -21297,7 +21297,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1097 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -21314,7 +21314,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1098 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -21427,7 +21427,7 @@ impl<'a> Iterator for Lexer<'a> {
             1099 => {
                 yyaccept = 15;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -21563,7 +21563,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1100 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 ..= 0x64 |
                     0x67 |
@@ -21609,7 +21609,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1101 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -21631,7 +21631,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1102 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -21651,7 +21651,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1103 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -21671,7 +21671,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1104 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -21749,7 +21749,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1105 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -21842,7 +21842,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1106 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -21858,7 +21858,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1107 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -21872,7 +21872,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1108 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -21888,7 +21888,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1109 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -21903,7 +21903,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1110 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -21917,7 +21917,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1111 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -21937,7 +21937,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1112 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -22015,7 +22015,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1113 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -22034,7 +22034,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1114 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -22048,7 +22048,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1115 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -22062,7 +22062,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1116 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -22076,7 +22076,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1117 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -22090,7 +22090,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1118 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -22110,7 +22110,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1119 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -22128,7 +22128,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1120 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -22152,7 +22152,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1121 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -22178,7 +22178,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1122 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -22193,7 +22193,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1123 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -22222,7 +22222,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1124 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -22244,7 +22244,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1125 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -22264,7 +22264,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1126 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -22286,7 +22286,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1127 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -22306,7 +22306,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1128 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -22326,7 +22326,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1129 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -22346,7 +22346,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1130 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -22366,7 +22366,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1131 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -22381,7 +22381,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1132 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
@@ -22398,7 +22398,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1133 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.yyt1 = self.cursor;
@@ -22413,7 +22413,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1134 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -22433,7 +22433,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1t2!(UnknownAnnotation); }
             }
             1136 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -22448,7 +22448,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1137 => { emit!(ScopedStressing); },
             1138 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -22507,7 +22507,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1139 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x5C |
                     0x5E ..= 0x7F => {
@@ -22557,7 +22557,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1140 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x5C |
                     0x5E ..= 0x7F => {
@@ -22621,7 +22621,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1t2!(ErrorMarkerAnnotation); }
             }
             1142 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -22635,7 +22635,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1143 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -22649,7 +22649,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1144 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -22663,7 +22663,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1145 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -22677,7 +22677,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1146 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -22691,7 +22691,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1147 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -22705,7 +22705,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1148 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -22764,7 +22764,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1149 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -22823,7 +22823,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1150 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -22837,7 +22837,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1151 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2F => {
                         self.cursor += 1;
@@ -22857,7 +22857,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1152 => { emit!(RetracePartial); },
             1153 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -22910,7 +22910,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1154 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -22924,7 +22924,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1155 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -22938,7 +22938,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1156 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -22952,7 +22952,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1157 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -22966,7 +22966,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1158 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -22980,7 +22980,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1159 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -22994,7 +22994,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1160 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.yyt1 = self.cursor;
@@ -23023,7 +23023,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1161 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.yyt1 = self.cursor;
@@ -23049,7 +23049,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1t2!(OverlapPrecedes); }
             }
             1163 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -23108,7 +23108,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1164 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -23122,7 +23122,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1165 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -23136,7 +23136,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1166 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.yyt1 = self.cursor;
@@ -23165,7 +23165,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1167 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.yyt1 = self.cursor;
@@ -23192,7 +23192,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1169 => { emit!(ScopedUncertain); },
             1170 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -23211,7 +23211,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1171 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -23270,7 +23270,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1172 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -23285,7 +23285,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1173 => { emit!(ExcludeMarker); },
             1174 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -23300,7 +23300,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1175 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -23318,7 +23318,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1176 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -23335,7 +23335,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1177 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -23353,7 +23353,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1178 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -23368,7 +23368,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1179 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -23388,7 +23388,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1180 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -23405,7 +23405,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1181 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -23420,7 +23420,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1182 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -23436,7 +23436,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1183 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -23451,7 +23451,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1184 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -23466,7 +23466,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1185 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -23481,7 +23481,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1186 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -23496,7 +23496,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1187 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -23513,7 +23513,7 @@ impl<'a> Iterator for Lexer<'a> {
             1188 => {
                 yyaccept = 25;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -23578,7 +23578,7 @@ impl<'a> Iterator for Lexer<'a> {
             1198 => {
                 yyaccept = 26;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -23635,7 +23635,7 @@ impl<'a> Iterator for Lexer<'a> {
             1200 => {
                 yyaccept = 27;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -23692,7 +23692,7 @@ impl<'a> Iterator for Lexer<'a> {
             1202 => {
                 yyaccept = 28;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -23749,7 +23749,7 @@ impl<'a> Iterator for Lexer<'a> {
             1204 => {
                 yyaccept = 29;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -23807,7 +23807,7 @@ impl<'a> Iterator for Lexer<'a> {
             1207 => {
                 yyaccept = 30;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -23866,7 +23866,7 @@ impl<'a> Iterator for Lexer<'a> {
             1211 => {
                 yyaccept = 31;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -23923,7 +23923,7 @@ impl<'a> Iterator for Lexer<'a> {
             1213 => {
                 yyaccept = 32;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -23982,7 +23982,7 @@ impl<'a> Iterator for Lexer<'a> {
             1217 => {
                 yyaccept = 33;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24039,7 +24039,7 @@ impl<'a> Iterator for Lexer<'a> {
             1219 => {
                 yyaccept = 34;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24096,7 +24096,7 @@ impl<'a> Iterator for Lexer<'a> {
             1221 => {
                 yyaccept = 35;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24154,7 +24154,7 @@ impl<'a> Iterator for Lexer<'a> {
             1224 => {
                 yyaccept = 36;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24211,7 +24211,7 @@ impl<'a> Iterator for Lexer<'a> {
             1226 => {
                 yyaccept = 37;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24268,7 +24268,7 @@ impl<'a> Iterator for Lexer<'a> {
             1228 => {
                 yyaccept = 38;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24327,7 +24327,7 @@ impl<'a> Iterator for Lexer<'a> {
             1232 => {
                 yyaccept = 39;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24385,7 +24385,7 @@ impl<'a> Iterator for Lexer<'a> {
             1235 => {
                 yyaccept = 40;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24446,7 +24446,7 @@ impl<'a> Iterator for Lexer<'a> {
             1237 => {
                 yyaccept = 41;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24507,7 +24507,7 @@ impl<'a> Iterator for Lexer<'a> {
             1239 => {
                 yyaccept = 42;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24568,7 +24568,7 @@ impl<'a> Iterator for Lexer<'a> {
             1241 => {
                 yyaccept = 43;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24629,7 +24629,7 @@ impl<'a> Iterator for Lexer<'a> {
             1243 => {
                 yyaccept = 44;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24686,7 +24686,7 @@ impl<'a> Iterator for Lexer<'a> {
             1245 => {
                 yyaccept = 45;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24743,7 +24743,7 @@ impl<'a> Iterator for Lexer<'a> {
             1247 => {
                 yyaccept = 46;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24800,7 +24800,7 @@ impl<'a> Iterator for Lexer<'a> {
             1249 => {
                 yyaccept = 47;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24857,7 +24857,7 @@ impl<'a> Iterator for Lexer<'a> {
             1251 => {
                 yyaccept = 48;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24914,7 +24914,7 @@ impl<'a> Iterator for Lexer<'a> {
             1253 => {
                 yyaccept = 49;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -24971,7 +24971,7 @@ impl<'a> Iterator for Lexer<'a> {
             1255 => {
                 yyaccept = 50;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -25028,7 +25028,7 @@ impl<'a> Iterator for Lexer<'a> {
             1257 => { emit!(SinGroupBegin); },
             1258 => { emit!(SinGroupEnd); },
             1259 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -25127,7 +25127,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1260 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -25147,7 +25147,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1261 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -25165,7 +25165,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1262 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -25189,7 +25189,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1263 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -25215,7 +25215,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1264 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -25230,7 +25230,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1265 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -25259,7 +25259,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1266 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -25281,7 +25281,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1267 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -25301,7 +25301,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1268 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -25323,7 +25323,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1269 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -25343,7 +25343,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1270 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -25363,7 +25363,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1271 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -25383,7 +25383,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1272 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -25403,7 +25403,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1273 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -25418,7 +25418,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1274 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -25433,7 +25433,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1275 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -25451,7 +25451,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1276 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -25468,7 +25468,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1277 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -25486,7 +25486,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1278 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -25501,7 +25501,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1279 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -25521,7 +25521,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1280 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -25538,7 +25538,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1281 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -25553,7 +25553,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1282 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -25569,7 +25569,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1283 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -25584,7 +25584,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1284 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -25599,7 +25599,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1285 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -25614,7 +25614,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1286 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -25629,7 +25629,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1287 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -25644,7 +25644,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1288 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -25664,7 +25664,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1289 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -25688,7 +25688,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1290 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -25714,7 +25714,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1291 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -25743,7 +25743,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1292 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -25765,7 +25765,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1293 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -25785,7 +25785,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1294 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -25807,7 +25807,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1295 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -25827,7 +25827,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1296 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -25847,7 +25847,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1297 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -25867,7 +25867,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1298 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -25887,7 +25887,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1299 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
@@ -25904,7 +25904,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1300 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -25918,7 +25918,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1301 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.yyt7 = self.cursor;
@@ -25933,7 +25933,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1302 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -25947,7 +25947,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1303 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
@@ -25973,7 +25973,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1304 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.yyt2 = self.cursor;
@@ -26087,7 +26087,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1305 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -26186,7 +26186,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1306 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x02 => {
                         self.cursor += 1;
@@ -26200,7 +26200,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1307 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -26217,7 +26217,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1308 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -26330,7 +26330,7 @@ impl<'a> Iterator for Lexer<'a> {
             1309 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -26466,7 +26466,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1310 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 ..= 0x64 |
                     0x67 |
@@ -26512,7 +26512,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1311 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -26534,7 +26534,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1312 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -26554,7 +26554,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1313 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -26574,7 +26574,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1314 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -26652,7 +26652,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1315 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -26745,7 +26745,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1316 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -26761,7 +26761,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1317 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -26775,7 +26775,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1318 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -26791,7 +26791,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1319 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -26806,7 +26806,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1320 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -26820,7 +26820,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1321 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -26840,7 +26840,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1322 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -26918,7 +26918,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1323 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -26937,7 +26937,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1324 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -26951,7 +26951,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1325 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -26965,7 +26965,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1326 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -26979,7 +26979,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1327 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -26993,7 +26993,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1328 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -27013,7 +27013,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1329 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -27031,7 +27031,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1330 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -27055,7 +27055,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1331 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -27081,7 +27081,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1332 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -27096,7 +27096,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1333 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -27125,7 +27125,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1334 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -27147,7 +27147,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1335 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -27167,7 +27167,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1336 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -27189,7 +27189,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1337 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -27209,7 +27209,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1338 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -27229,7 +27229,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1339 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -27249,7 +27249,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1340 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -27269,7 +27269,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1341 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -27284,7 +27284,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1342 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -27299,7 +27299,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1343 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x9B |
                     0x9F ..= 0xA0 |
@@ -27316,7 +27316,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1344 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -27333,7 +27333,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1345 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -27351,7 +27351,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1346 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -27366,7 +27366,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1347 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -27386,7 +27386,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1348 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -27403,7 +27403,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1349 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -27418,7 +27418,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1350 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -27434,7 +27434,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1351 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -27449,7 +27449,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1352 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -27464,7 +27464,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1353 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -27479,7 +27479,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1354 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -27494,7 +27494,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1355 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -27509,7 +27509,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1356 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
                     0x2D |
@@ -27529,7 +27529,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1357 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
                     0x2D |
@@ -27549,7 +27549,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1358 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
                     0x2D |
@@ -27569,7 +27569,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1359 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
                     0x2D |
@@ -27592,7 +27592,7 @@ impl<'a> Iterator for Lexer<'a> {
             1361 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x29 => {
                         self.cursor += 1;
@@ -27614,7 +27614,7 @@ impl<'a> Iterator for Lexer<'a> {
             1363 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -27681,7 +27681,7 @@ impl<'a> Iterator for Lexer<'a> {
             1369 => { emit!(CaNoBreakLinker); },
             1370 => { emit!(CaTechnicalBreakLinker); },
             1371 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -27700,7 +27700,7 @@ impl<'a> Iterator for Lexer<'a> {
             1372 => {
                 yyaccept = 51;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -27737,7 +27737,7 @@ impl<'a> Iterator for Lexer<'a> {
             1373 => {
                 yyaccept = 51;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -27779,7 +27779,7 @@ impl<'a> Iterator for Lexer<'a> {
             1374 => {
                 yyaccept = 51;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -27821,7 +27821,7 @@ impl<'a> Iterator for Lexer<'a> {
             1375 => {
                 yyaccept = 52;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt4 = self.cursor;
@@ -27857,7 +27857,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1376 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -27871,7 +27871,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1377 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -27891,7 +27891,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1378 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -27915,7 +27915,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1379 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -27941,7 +27941,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1380 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -27970,7 +27970,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1381 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -27992,7 +27992,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1382 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -28012,7 +28012,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1383 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -28034,7 +28034,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1384 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -28054,7 +28054,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1385 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -28074,7 +28074,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1386 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -28094,7 +28094,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1387 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -28114,7 +28114,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1388 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -28129,7 +28129,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1389 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -28147,7 +28147,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1390 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -28164,7 +28164,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1391 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -28182,7 +28182,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1392 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -28197,7 +28197,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1393 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -28217,7 +28217,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1394 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -28234,7 +28234,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1395 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -28249,7 +28249,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1396 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -28265,7 +28265,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1397 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -28280,7 +28280,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1398 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -28295,7 +28295,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1399 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -28310,7 +28310,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1400 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -28325,7 +28325,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1401 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -28340,7 +28340,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1402 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
@@ -28357,7 +28357,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1403 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -28372,7 +28372,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1404 => { emit!(ScopedContrastiveStressing); },
             1405 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -28424,7 +28424,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1406 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28438,7 +28438,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1407 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -28452,7 +28452,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1408 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28466,7 +28466,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1409 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -28480,7 +28480,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1410 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28494,7 +28494,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1411 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -28508,7 +28508,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1412 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -28560,7 +28560,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1413 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28574,7 +28574,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1414 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -28588,7 +28588,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1415 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28602,7 +28602,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1416 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -28616,7 +28616,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1417 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28630,7 +28630,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1418 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -28644,7 +28644,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1419 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -28696,7 +28696,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1420 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28710,7 +28710,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1421 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -28724,7 +28724,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1422 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28738,7 +28738,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1423 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -28752,7 +28752,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1424 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28766,7 +28766,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1425 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -28781,7 +28781,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1426 => { emit!(RetraceReformulation); },
             1427 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -28802,7 +28802,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1t2!(Replacement); }
             }
             1430 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -28816,7 +28816,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1431 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -28868,7 +28868,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1432 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28882,7 +28882,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1433 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -28896,7 +28896,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1434 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28910,7 +28910,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1435 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -28924,7 +28924,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1436 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -28938,7 +28938,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1437 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -28952,7 +28952,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1438 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -29011,7 +29011,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1439 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -29070,7 +29070,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1440 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -29084,7 +29084,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1441 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.yyt1 = self.cursor;
@@ -29100,7 +29100,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1442 => { emit!(CodeSwitchShortcut); },
             1443 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -29152,7 +29152,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1444 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -29166,7 +29166,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1445 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -29180,7 +29180,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1446 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -29194,7 +29194,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1447 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -29208,7 +29208,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1448 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -29222,7 +29222,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1449 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -29239,7 +29239,7 @@ impl<'a> Iterator for Lexer<'a> {
             1451 => {
                 yyaccept = 40;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 |
                     0x05 ..= 0x06 |
@@ -29269,7 +29269,7 @@ impl<'a> Iterator for Lexer<'a> {
             1452 => {
                 yyaccept = 41;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 |
                     0x05 ..= 0x06 |
@@ -29299,7 +29299,7 @@ impl<'a> Iterator for Lexer<'a> {
             1453 => {
                 yyaccept = 42;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 |
                     0x05 ..= 0x06 |
@@ -29329,7 +29329,7 @@ impl<'a> Iterator for Lexer<'a> {
             1454 => {
                 yyaccept = 43;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 |
                     0x05 ..= 0x06 |
@@ -29359,7 +29359,7 @@ impl<'a> Iterator for Lexer<'a> {
             1455 => {
                 yyaccept = 21;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt2 = self.yyt4;
@@ -29399,7 +29399,7 @@ impl<'a> Iterator for Lexer<'a> {
             1456 => {
                 yyaccept = 53;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt2 = self.yyt4;
@@ -29427,7 +29427,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1457 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -29456,7 +29456,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1459 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
@@ -29470,7 +29470,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1460 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 => {
                         self.cursor += 1;
@@ -29486,7 +29486,7 @@ impl<'a> Iterator for Lexer<'a> {
             1461 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -29619,7 +29619,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1463 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -29708,7 +29708,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1464 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -29730,7 +29730,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1465 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -29744,7 +29744,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1466 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -29766,7 +29766,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1467 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -29786,7 +29786,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1468 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -29800,7 +29800,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1469 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -29820,7 +29820,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1470 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -29898,7 +29898,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1471 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -29917,7 +29917,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1472 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -29931,7 +29931,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1473 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -29945,7 +29945,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1474 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -29959,7 +29959,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1475 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -29973,7 +29973,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1476 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -29992,7 +29992,7 @@ impl<'a> Iterator for Lexer<'a> {
             1477 => {
                 yyaccept = 55;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -30029,7 +30029,7 @@ impl<'a> Iterator for Lexer<'a> {
             1478 => {
                 yyaccept = 55;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -30071,7 +30071,7 @@ impl<'a> Iterator for Lexer<'a> {
             1479 => {
                 yyaccept = 55;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -30113,7 +30113,7 @@ impl<'a> Iterator for Lexer<'a> {
             1480 => {
                 yyaccept = 56;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt4 = self.cursor;
@@ -30149,7 +30149,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1481 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -30163,7 +30163,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1482 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -30183,7 +30183,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1483 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -30207,7 +30207,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1484 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -30233,7 +30233,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1485 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -30262,7 +30262,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1486 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -30284,7 +30284,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1487 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -30304,7 +30304,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1488 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -30326,7 +30326,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1489 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -30346,7 +30346,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1490 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -30366,7 +30366,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1491 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -30386,7 +30386,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1492 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -30406,7 +30406,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1493 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -30421,7 +30421,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1494 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -30439,7 +30439,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1495 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -30456,7 +30456,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1496 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -30474,7 +30474,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1497 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -30489,7 +30489,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1498 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -30509,7 +30509,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1499 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -30526,7 +30526,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1500 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -30541,7 +30541,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1501 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -30557,7 +30557,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1502 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -30572,7 +30572,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1503 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -30587,7 +30587,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1504 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -30602,7 +30602,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1505 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -30617,7 +30617,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1506 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -30632,7 +30632,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1507 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
                     0x2D |
@@ -30655,7 +30655,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1!(LongFeatureBegin); }
             }
             1509 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
                     0x2D |
@@ -30683,7 +30683,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1!(NonvocalBegin); }
             }
             1511 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
                     0x2D |
@@ -30706,7 +30706,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1!(LongFeatureEnd); }
             }
             1513 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
                     0x2D |
@@ -30730,7 +30730,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1515 => { emit!(PauseLong); },
             1516 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
@@ -30747,7 +30747,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1517 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -30761,7 +30761,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1518 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.yyt8 = self.cursor;
@@ -30776,7 +30776,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1519 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -30792,7 +30792,7 @@ impl<'a> Iterator for Lexer<'a> {
             1520 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x26 |
                     0x2B => {
@@ -30837,7 +30837,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1t2!(ExplanationAnnotation); }
             }
             1526 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -30889,7 +30889,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1527 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -30903,7 +30903,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1528 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -30917,7 +30917,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1529 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -30931,7 +30931,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1530 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -30945,7 +30945,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1531 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -30959,7 +30959,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1532 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -30973,7 +30973,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1533 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -31025,7 +31025,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1534 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -31039,7 +31039,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1535 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -31053,7 +31053,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1536 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -31067,7 +31067,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1537 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -31081,7 +31081,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1538 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -31095,7 +31095,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1539 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -31109,7 +31109,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1540 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -31131,7 +31131,7 @@ impl<'a> Iterator for Lexer<'a> {
             1542 => {
                 yyaccept = 58;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.cursor;
@@ -31160,7 +31160,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1543 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -31259,7 +31259,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1544 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x02 => {
                         self.cursor += 1;
@@ -31273,7 +31273,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1545 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -31289,7 +31289,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1546 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -31402,7 +31402,7 @@ impl<'a> Iterator for Lexer<'a> {
             1547 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
@@ -31523,7 +31523,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1548 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 ..= 0x64 |
                     0x67 |
@@ -31564,7 +31564,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1549 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -31586,7 +31586,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1550 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -31606,7 +31606,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1551 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -31626,7 +31626,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1552 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -31704,7 +31704,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1553 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
                     0x0B ..= 0x0C |
@@ -31797,7 +31797,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1554 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
@@ -31813,7 +31813,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1555 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -31827,7 +31827,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1556 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8B |
@@ -31843,7 +31843,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1557 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
@@ -31858,7 +31858,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1558 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -31872,7 +31872,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1559 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
@@ -31892,7 +31892,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1560 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -31970,7 +31970,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1561 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -31989,7 +31989,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1562 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -32003,7 +32003,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1563 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -32017,7 +32017,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1564 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -32031,7 +32031,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1565 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -32045,7 +32045,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1566 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -32065,7 +32065,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1567 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -32083,7 +32083,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1568 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -32107,7 +32107,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1569 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -32133,7 +32133,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1570 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -32148,7 +32148,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1571 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -32177,7 +32177,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1572 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -32199,7 +32199,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1573 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -32219,7 +32219,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1574 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -32241,7 +32241,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1575 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -32261,7 +32261,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1576 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -32281,7 +32281,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1577 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -32301,7 +32301,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1578 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -32321,7 +32321,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1579 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -32336,7 +32336,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1580 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
@@ -32353,7 +32353,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1581 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -32367,7 +32367,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1582 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.yyt8 = self.cursor;
@@ -32382,7 +32382,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1583 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -32404,7 +32404,7 @@ impl<'a> Iterator for Lexer<'a> {
             1585 => {
                 yyaccept = 51;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -32444,7 +32444,7 @@ impl<'a> Iterator for Lexer<'a> {
             1586 => {
                 yyaccept = 59;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -32472,7 +32472,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1587 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -32486,7 +32486,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1588 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -32502,7 +32502,7 @@ impl<'a> Iterator for Lexer<'a> {
             1589 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x26 |
                     0x2B => {
@@ -32529,7 +32529,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1t2!(AltAnnotation); }
             }
             1592 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -32548,7 +32548,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1593 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -32564,7 +32564,7 @@ impl<'a> Iterator for Lexer<'a> {
             1594 => {
                 yyaccept = 58;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.cursor;
@@ -32588,7 +32588,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1595 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
@@ -32606,7 +32606,7 @@ impl<'a> Iterator for Lexer<'a> {
             1596 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
@@ -32632,7 +32632,7 @@ impl<'a> Iterator for Lexer<'a> {
             1597 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
@@ -32663,7 +32663,7 @@ impl<'a> Iterator for Lexer<'a> {
             1598 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
@@ -32694,7 +32694,7 @@ impl<'a> Iterator for Lexer<'a> {
             1599 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
@@ -32724,7 +32724,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1600 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -32738,7 +32738,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1601 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -32758,7 +32758,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1602 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -32782,7 +32782,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1603 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -32808,7 +32808,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1604 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -32837,7 +32837,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1605 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -32859,7 +32859,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1606 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -32879,7 +32879,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1607 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -32901,7 +32901,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1608 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -32921,7 +32921,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1609 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -32941,7 +32941,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1610 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -32961,7 +32961,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1611 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -32981,7 +32981,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1612 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
                     0xAA ..= 0xBF => {
@@ -32996,7 +32996,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1613 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
                     0x9A ..= 0x9B |
@@ -33014,7 +33014,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1614 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
                     0x88 ..= 0x8D |
@@ -33031,7 +33031,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1615 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
                     0x94 ..= 0x96 |
@@ -33049,7 +33049,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1616 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
@@ -33064,7 +33064,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1617 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0x98 |
@@ -33084,7 +33084,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1618 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -33101,7 +33101,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1619 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x8C ..= 0xBF => {
@@ -33116,7 +33116,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1620 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
                     0x82 ..= 0x93 |
@@ -33132,7 +33132,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1621 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -33147,7 +33147,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1622 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
                     0xBB ..= 0xBF => {
@@ -33162,7 +33162,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1623 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
                     0x8C ..= 0xBF => {
@@ -33177,7 +33177,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1624 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
@@ -33192,7 +33192,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1625 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -33209,7 +33209,7 @@ impl<'a> Iterator for Lexer<'a> {
             1626 => {
                 yyaccept = 55;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -33249,7 +33249,7 @@ impl<'a> Iterator for Lexer<'a> {
             1627 => {
                 yyaccept = 60;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt3 = self.yyt5;
@@ -33277,7 +33277,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1628 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -33293,7 +33293,7 @@ impl<'a> Iterator for Lexer<'a> {
             1629 => {
                 yyaccept = 61;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt4 = self.cursor;
@@ -33328,7 +33328,7 @@ impl<'a> Iterator for Lexer<'a> {
                 { emit_t1t2!(CodeSwitchExplicit); }
             }
             1631 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -33347,7 +33347,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1632 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
@@ -33364,7 +33364,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1633 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -33378,7 +33378,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1634 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -33392,7 +33392,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1635 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
@@ -33408,7 +33408,7 @@ impl<'a> Iterator for Lexer<'a> {
             1636 => {
                 yyaccept = 62;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt4 = self.cursor;
@@ -33437,7 +33437,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1637 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -33453,7 +33453,7 @@ impl<'a> Iterator for Lexer<'a> {
             1638 => {
                 yyaccept = 61;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt4 = self.cursor;
@@ -33477,7 +33477,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1639 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
@@ -33493,7 +33493,7 @@ impl<'a> Iterator for Lexer<'a> {
             1640 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
@@ -33522,7 +33522,7 @@ impl<'a> Iterator for Lexer<'a> {
             1641 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
@@ -33541,7 +33541,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1642 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -33555,7 +33555,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1643 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
@@ -33571,7 +33571,7 @@ impl<'a> Iterator for Lexer<'a> {
             1644 => {
                 yyaccept = 62;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt4 = self.cursor;
@@ -33597,7 +33597,7 @@ impl<'a> Iterator for Lexer<'a> {
             1645 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
@@ -33624,7 +33624,7 @@ impl<'a> Iterator for Lexer<'a> {
             1646 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
@@ -33644,7 +33644,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1647 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -33728,7 +33728,7 @@ impl<'a> Iterator for Lexer<'a> {
             1649 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 1650;
                 continue 'yyl;
             }
@@ -33782,7 +33782,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(TextSegment);
         },
             1652 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -33810,7 +33810,7 @@ impl<'a> Iterator for Lexer<'a> {
             1654 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 => {
                         self.cursor += 1;
@@ -33833,7 +33833,7 @@ impl<'a> Iterator for Lexer<'a> {
             1656 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -33853,7 +33853,7 @@ impl<'a> Iterator for Lexer<'a> {
             1658 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
@@ -33884,7 +33884,7 @@ impl<'a> Iterator for Lexer<'a> {
             1659 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -33904,7 +33904,7 @@ impl<'a> Iterator for Lexer<'a> {
             1661 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -33929,7 +33929,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             1665 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -33945,7 +33945,7 @@ impl<'a> Iterator for Lexer<'a> {
             1666 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -33961,7 +33961,7 @@ impl<'a> Iterator for Lexer<'a> {
             1667 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -33977,7 +33977,7 @@ impl<'a> Iterator for Lexer<'a> {
             1668 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -33999,7 +33999,7 @@ impl<'a> Iterator for Lexer<'a> {
             1669 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -34015,7 +34015,7 @@ impl<'a> Iterator for Lexer<'a> {
             1670 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -34031,7 +34031,7 @@ impl<'a> Iterator for Lexer<'a> {
             1671 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -34045,7 +34045,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1672 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -34136,7 +34136,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1674 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -34150,7 +34150,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1675 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -34164,7 +34164,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1676 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -34178,7 +34178,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1677 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -34192,7 +34192,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1678 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -34206,7 +34206,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1679 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -34223,7 +34223,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             1681 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
@@ -34237,7 +34237,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1682 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -34258,7 +34258,7 @@ impl<'a> Iterator for Lexer<'a> {
             1683 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3F => {
                         self.cursor += 1;
@@ -34274,7 +34274,7 @@ impl<'a> Iterator for Lexer<'a> {
             1684 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -34295,7 +34295,7 @@ impl<'a> Iterator for Lexer<'a> {
             1685 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34321,7 +34321,7 @@ impl<'a> Iterator for Lexer<'a> {
             1687 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -34345,7 +34345,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1688 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -34371,7 +34371,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1689 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
@@ -34385,7 +34385,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1690 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
@@ -34402,7 +34402,7 @@ impl<'a> Iterator for Lexer<'a> {
             1691 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34422,7 +34422,7 @@ impl<'a> Iterator for Lexer<'a> {
             1693 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34442,7 +34442,7 @@ impl<'a> Iterator for Lexer<'a> {
             1695 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -34458,7 +34458,7 @@ impl<'a> Iterator for Lexer<'a> {
             1696 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -34479,7 +34479,7 @@ impl<'a> Iterator for Lexer<'a> {
             1697 => {
                 yyaccept = 9;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34499,7 +34499,7 @@ impl<'a> Iterator for Lexer<'a> {
             1699 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -34520,7 +34520,7 @@ impl<'a> Iterator for Lexer<'a> {
             1700 => {
                 yyaccept = 10;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34540,7 +34540,7 @@ impl<'a> Iterator for Lexer<'a> {
             1702 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34560,7 +34560,7 @@ impl<'a> Iterator for Lexer<'a> {
             1704 => {
                 yyaccept = 12;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34578,7 +34578,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1705 => { emit!(CaTechnicalBreak); },
             1706 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
@@ -34592,7 +34592,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1707 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
@@ -34620,7 +34620,7 @@ impl<'a> Iterator for Lexer<'a> {
             1708 => {
                 yyaccept = 13;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34640,7 +34640,7 @@ impl<'a> Iterator for Lexer<'a> {
             1710 => {
                 yyaccept = 14;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34660,7 +34660,7 @@ impl<'a> Iterator for Lexer<'a> {
             1712 => {
                 yyaccept = 15;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34680,7 +34680,7 @@ impl<'a> Iterator for Lexer<'a> {
             1714 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34700,7 +34700,7 @@ impl<'a> Iterator for Lexer<'a> {
             1716 => {
                 yyaccept = 17;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -34718,7 +34718,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1717 => { emit!(SelfInterruptedQuestion); },
             1718 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
@@ -34747,7 +34747,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1720 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
@@ -34761,7 +34761,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1721 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x22 => {
                         self.cursor += 1;
@@ -34775,7 +34775,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1722 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
@@ -34792,7 +34792,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1723 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x22 => {
                         self.cursor += 1;
@@ -34815,7 +34815,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1724 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
@@ -34837,7 +34837,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1726 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -34933,7 +34933,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1729 => { emit!(ErrorInGraContent); },
             1730 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -34961,7 +34961,7 @@ impl<'a> Iterator for Lexer<'a> {
             1732 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt1 = self.cursor;
@@ -34976,7 +34976,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1733 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -34994,7 +34994,7 @@ impl<'a> Iterator for Lexer<'a> {
             1736 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
@@ -35026,7 +35026,7 @@ impl<'a> Iterator for Lexer<'a> {
             1738 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -35053,7 +35053,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             1742 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -35069,7 +35069,7 @@ impl<'a> Iterator for Lexer<'a> {
             1743 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -35085,7 +35085,7 @@ impl<'a> Iterator for Lexer<'a> {
             1744 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -35101,7 +35101,7 @@ impl<'a> Iterator for Lexer<'a> {
             1745 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -35123,7 +35123,7 @@ impl<'a> Iterator for Lexer<'a> {
             1746 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -35139,7 +35139,7 @@ impl<'a> Iterator for Lexer<'a> {
             1747 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -35155,7 +35155,7 @@ impl<'a> Iterator for Lexer<'a> {
             1748 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -35169,7 +35169,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1749 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -35186,7 +35186,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             1751 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -35222,7 +35222,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1753 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3F => {
                         self.cursor += 1;
@@ -35236,7 +35236,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1754 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -35257,7 +35257,7 @@ impl<'a> Iterator for Lexer<'a> {
             1755 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -35272,7 +35272,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1756 => { emit!(BreakForCoding); },
             1757 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -35296,7 +35296,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1758 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -35315,7 +35315,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1759 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt1 = self.cursor;
@@ -35330,7 +35330,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1760 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -35344,7 +35344,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1761 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -35370,7 +35370,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1762 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -35384,7 +35384,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1763 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
@@ -35401,7 +35401,7 @@ impl<'a> Iterator for Lexer<'a> {
             1764 => { emit!(BrokenQuestion); },
             1765 => { emit!(QuotedPeriodSimple); },
             1766 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -35415,7 +35415,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1767 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -35435,7 +35435,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1768 => { emit!(Interruption); },
             1769 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -35455,7 +35455,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1770 => { emit!(InterruptedQuestion); },
             1771 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -35476,7 +35476,7 @@ impl<'a> Iterator for Lexer<'a> {
             1772 => { emit!(CaNoBreak); },
             1773 => { emit!(CaTechnicalBreak); },
             1774 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
@@ -35507,7 +35507,7 @@ impl<'a> Iterator for Lexer<'a> {
             1778 => { emit!(SelfInterruption); },
             1779 => { emit!(SelfInterruptedQuestion); },
             1780 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x41 ..= 0x5A => {
                         self.yyt2 = self.cursor;
@@ -35537,7 +35537,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1782 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
@@ -35551,7 +35551,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1783 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2D |
                     0x30 ..= 0x39 |
@@ -35583,7 +35583,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1785 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -35692,7 +35692,7 @@ impl<'a> Iterator for Lexer<'a> {
             1787 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -35721,7 +35721,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             1790 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -35749,7 +35749,7 @@ impl<'a> Iterator for Lexer<'a> {
             1792 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -35780,7 +35780,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1793 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -35798,7 +35798,7 @@ impl<'a> Iterator for Lexer<'a> {
             1796 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
@@ -35837,7 +35837,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             1802 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -35853,7 +35853,7 @@ impl<'a> Iterator for Lexer<'a> {
             1803 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -35869,7 +35869,7 @@ impl<'a> Iterator for Lexer<'a> {
             1804 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -35885,7 +35885,7 @@ impl<'a> Iterator for Lexer<'a> {
             1805 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -35912,7 +35912,7 @@ impl<'a> Iterator for Lexer<'a> {
             1806 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -35928,7 +35928,7 @@ impl<'a> Iterator for Lexer<'a> {
             1807 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -35944,7 +35944,7 @@ impl<'a> Iterator for Lexer<'a> {
             1808 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -35958,7 +35958,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1809 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 1810;
                 continue 'yyl;
             }
@@ -36061,7 +36061,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1812 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -36127,7 +36127,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1813 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -36141,7 +36141,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1814 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -36155,7 +36155,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1815 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -36169,7 +36169,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1816 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -36188,7 +36188,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1817 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -36202,7 +36202,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1818 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -36216,7 +36216,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1819 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -36230,7 +36230,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1820 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -36247,7 +36247,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             1822 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -36325,7 +36325,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1823 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3F => {
                         self.cursor += 1;
@@ -36339,7 +36339,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1824 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -36360,7 +36360,7 @@ impl<'a> Iterator for Lexer<'a> {
             1825 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -36375,7 +36375,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1826 => { emit!(BreakForCoding); },
             1827 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -36399,7 +36399,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1828 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -36413,7 +36413,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1829 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x9B |
                     0x9E ..= 0xBF => {
@@ -36433,7 +36433,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1830 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -36459,7 +36459,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1831 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -36475,7 +36475,7 @@ impl<'a> Iterator for Lexer<'a> {
             1832 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -36545,7 +36545,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1834 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -36559,7 +36559,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1835 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -36573,7 +36573,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1836 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -36587,7 +36587,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1837 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -36606,7 +36606,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1838 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -36620,7 +36620,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1839 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -36634,7 +36634,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1840 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -36648,7 +36648,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1841 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x9B |
                     0x9E ..= 0xBF => {
@@ -36663,7 +36663,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1842 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
@@ -36680,7 +36680,7 @@ impl<'a> Iterator for Lexer<'a> {
             1843 => { emit!(BrokenQuestion); },
             1844 => { emit!(QuotedPeriodSimple); },
             1845 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -36694,7 +36694,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1846 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -36714,7 +36714,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1847 => { emit!(Interruption); },
             1848 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -36736,7 +36736,7 @@ impl<'a> Iterator for Lexer<'a> {
             1850 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -36763,7 +36763,7 @@ impl<'a> Iterator for Lexer<'a> {
             1852 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -36788,7 +36788,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1853 => { emit!(CaTechnicalBreak); },
             1854 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x9B |
                     0x9E ..= 0xBF => {
@@ -36803,7 +36803,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1855 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -36895,7 +36895,7 @@ impl<'a> Iterator for Lexer<'a> {
             1861 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -36934,7 +36934,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1863 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
@@ -36952,7 +36952,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             1865 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -37036,7 +37036,7 @@ impl<'a> Iterator for Lexer<'a> {
             1867 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 1868;
                 continue 'yyl;
             }
@@ -37090,7 +37090,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(TextSegment);
         },
             1870 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -37118,7 +37118,7 @@ impl<'a> Iterator for Lexer<'a> {
             1872 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt1 = self.cursor;
@@ -37136,7 +37136,7 @@ impl<'a> Iterator for Lexer<'a> {
             1874 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37156,7 +37156,7 @@ impl<'a> Iterator for Lexer<'a> {
             1876 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
@@ -37187,7 +37187,7 @@ impl<'a> Iterator for Lexer<'a> {
             1877 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37207,7 +37207,7 @@ impl<'a> Iterator for Lexer<'a> {
             1879 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37232,7 +37232,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             1883 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -37248,7 +37248,7 @@ impl<'a> Iterator for Lexer<'a> {
             1884 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -37264,7 +37264,7 @@ impl<'a> Iterator for Lexer<'a> {
             1885 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -37280,7 +37280,7 @@ impl<'a> Iterator for Lexer<'a> {
             1886 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -37302,7 +37302,7 @@ impl<'a> Iterator for Lexer<'a> {
             1887 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -37318,7 +37318,7 @@ impl<'a> Iterator for Lexer<'a> {
             1888 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -37334,7 +37334,7 @@ impl<'a> Iterator for Lexer<'a> {
             1889 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -37348,7 +37348,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1890 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -37439,7 +37439,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1892 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -37453,7 +37453,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1893 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -37467,7 +37467,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1894 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -37481,7 +37481,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1895 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -37495,7 +37495,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1896 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -37509,7 +37509,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1897 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -37526,7 +37526,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             1899 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -37547,7 +37547,7 @@ impl<'a> Iterator for Lexer<'a> {
             1900 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3F => {
                         self.cursor += 1;
@@ -37563,7 +37563,7 @@ impl<'a> Iterator for Lexer<'a> {
             1901 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -37584,7 +37584,7 @@ impl<'a> Iterator for Lexer<'a> {
             1902 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37610,7 +37610,7 @@ impl<'a> Iterator for Lexer<'a> {
             1904 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -37634,7 +37634,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1905 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -37660,7 +37660,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1906 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
@@ -37677,7 +37677,7 @@ impl<'a> Iterator for Lexer<'a> {
             1907 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37697,7 +37697,7 @@ impl<'a> Iterator for Lexer<'a> {
             1909 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37717,7 +37717,7 @@ impl<'a> Iterator for Lexer<'a> {
             1911 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -37733,7 +37733,7 @@ impl<'a> Iterator for Lexer<'a> {
             1912 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -37754,7 +37754,7 @@ impl<'a> Iterator for Lexer<'a> {
             1913 => {
                 yyaccept = 9;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37774,7 +37774,7 @@ impl<'a> Iterator for Lexer<'a> {
             1915 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -37795,7 +37795,7 @@ impl<'a> Iterator for Lexer<'a> {
             1916 => {
                 yyaccept = 10;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37815,7 +37815,7 @@ impl<'a> Iterator for Lexer<'a> {
             1918 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37835,7 +37835,7 @@ impl<'a> Iterator for Lexer<'a> {
             1920 => {
                 yyaccept = 12;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37853,7 +37853,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1921 => { emit!(CaTechnicalBreak); },
             1922 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
@@ -37881,7 +37881,7 @@ impl<'a> Iterator for Lexer<'a> {
             1923 => {
                 yyaccept = 13;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37901,7 +37901,7 @@ impl<'a> Iterator for Lexer<'a> {
             1925 => {
                 yyaccept = 14;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37921,7 +37921,7 @@ impl<'a> Iterator for Lexer<'a> {
             1927 => {
                 yyaccept = 15;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37941,7 +37941,7 @@ impl<'a> Iterator for Lexer<'a> {
             1929 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37961,7 +37961,7 @@ impl<'a> Iterator for Lexer<'a> {
             1931 => {
                 yyaccept = 17;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -37994,7 +37994,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             1934 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
@@ -38008,7 +38008,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1935 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -38092,7 +38092,7 @@ impl<'a> Iterator for Lexer<'a> {
             1937 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 yystate = 1938;
                 continue 'yyl;
             }
@@ -38146,7 +38146,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(TextSegment);
         },
             1940 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -38174,7 +38174,7 @@ impl<'a> Iterator for Lexer<'a> {
             1942 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt1 = self.cursor;
@@ -38192,7 +38192,7 @@ impl<'a> Iterator for Lexer<'a> {
             1944 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38212,7 +38212,7 @@ impl<'a> Iterator for Lexer<'a> {
             1946 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
@@ -38243,7 +38243,7 @@ impl<'a> Iterator for Lexer<'a> {
             1947 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38263,7 +38263,7 @@ impl<'a> Iterator for Lexer<'a> {
             1949 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38288,7 +38288,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             1953 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -38304,7 +38304,7 @@ impl<'a> Iterator for Lexer<'a> {
             1954 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -38320,7 +38320,7 @@ impl<'a> Iterator for Lexer<'a> {
             1955 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -38336,7 +38336,7 @@ impl<'a> Iterator for Lexer<'a> {
             1956 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
@@ -38358,7 +38358,7 @@ impl<'a> Iterator for Lexer<'a> {
             1957 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -38374,7 +38374,7 @@ impl<'a> Iterator for Lexer<'a> {
             1958 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -38390,7 +38390,7 @@ impl<'a> Iterator for Lexer<'a> {
             1959 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -38404,7 +38404,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1960 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -38495,7 +38495,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1962 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -38509,7 +38509,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1963 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -38523,7 +38523,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1964 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -38537,7 +38537,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1965 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -38551,7 +38551,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1966 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -38565,7 +38565,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1967 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -38582,7 +38582,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             1969 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
@@ -38603,7 +38603,7 @@ impl<'a> Iterator for Lexer<'a> {
             1970 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3F => {
                         self.cursor += 1;
@@ -38619,7 +38619,7 @@ impl<'a> Iterator for Lexer<'a> {
             1971 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -38640,7 +38640,7 @@ impl<'a> Iterator for Lexer<'a> {
             1972 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38666,7 +38666,7 @@ impl<'a> Iterator for Lexer<'a> {
             1974 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -38690,7 +38690,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1975 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
@@ -38716,7 +38716,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1976 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
@@ -38733,7 +38733,7 @@ impl<'a> Iterator for Lexer<'a> {
             1977 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38753,7 +38753,7 @@ impl<'a> Iterator for Lexer<'a> {
             1979 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38773,7 +38773,7 @@ impl<'a> Iterator for Lexer<'a> {
             1981 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -38789,7 +38789,7 @@ impl<'a> Iterator for Lexer<'a> {
             1982 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -38810,7 +38810,7 @@ impl<'a> Iterator for Lexer<'a> {
             1983 => {
                 yyaccept = 9;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38830,7 +38830,7 @@ impl<'a> Iterator for Lexer<'a> {
             1985 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
@@ -38851,7 +38851,7 @@ impl<'a> Iterator for Lexer<'a> {
             1986 => {
                 yyaccept = 10;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38871,7 +38871,7 @@ impl<'a> Iterator for Lexer<'a> {
             1988 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38891,7 +38891,7 @@ impl<'a> Iterator for Lexer<'a> {
             1990 => {
                 yyaccept = 12;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38909,7 +38909,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1991 => { emit!(CaTechnicalBreak); },
             1992 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
@@ -38937,7 +38937,7 @@ impl<'a> Iterator for Lexer<'a> {
             1993 => {
                 yyaccept = 13;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38957,7 +38957,7 @@ impl<'a> Iterator for Lexer<'a> {
             1995 => {
                 yyaccept = 14;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38977,7 +38977,7 @@ impl<'a> Iterator for Lexer<'a> {
             1997 => {
                 yyaccept = 15;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -38997,7 +38997,7 @@ impl<'a> Iterator for Lexer<'a> {
             1999 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -39017,7 +39017,7 @@ impl<'a> Iterator for Lexer<'a> {
             2001 => {
                 yyaccept = 17;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
                     0x0B ..= 0x0C |
@@ -39050,7 +39050,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             2004 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
@@ -39064,7 +39064,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2005 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -39139,7 +39139,7 @@ impl<'a> Iterator for Lexer<'a> {
             2007 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -39198,7 +39198,7 @@ impl<'a> Iterator for Lexer<'a> {
         },
             2009 => { emit!(ErrorInPhoContent); },
             2010 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -39224,7 +39224,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             2012 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -39247,7 +39247,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             2017 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39263,7 +39263,7 @@ impl<'a> Iterator for Lexer<'a> {
             2018 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -39279,7 +39279,7 @@ impl<'a> Iterator for Lexer<'a> {
             2019 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39295,7 +39295,7 @@ impl<'a> Iterator for Lexer<'a> {
             2020 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -39316,7 +39316,7 @@ impl<'a> Iterator for Lexer<'a> {
             2021 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -39332,7 +39332,7 @@ impl<'a> Iterator for Lexer<'a> {
             2022 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39348,7 +39348,7 @@ impl<'a> Iterator for Lexer<'a> {
             2023 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -39362,7 +39362,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2024 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39386,7 +39386,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2026 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -39400,7 +39400,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2027 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39414,7 +39414,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2028 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -39433,7 +39433,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2029 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -39447,7 +39447,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2030 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39461,7 +39461,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2031 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -39475,7 +39475,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2032 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -39492,7 +39492,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             2034 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB8 |
                     0xBB ..= 0xBF => {
@@ -39517,7 +39517,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2035 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB8 |
                     0xBB ..= 0xBF => {
@@ -39534,7 +39534,7 @@ impl<'a> Iterator for Lexer<'a> {
             2036 => { emit!(PhoGroupBegin); },
             2037 => { emit!(PhoGroupEnd); },
             2038 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
@@ -39610,7 +39610,7 @@ impl<'a> Iterator for Lexer<'a> {
         },
             2040 => { emit!(ErrorInSinContent); },
             2041 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
@@ -39636,7 +39636,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
             }
             2043 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -39651,7 +39651,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             2044 => { emit!(Whitespace); },
             2045 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2D |
                     0x30 ..= 0x3A |
@@ -39679,7 +39679,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(ErrorUnrecognized);
         },
             2049 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39694,7 +39694,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             2050 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
@@ -39709,7 +39709,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             2051 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39724,7 +39724,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             2052 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
@@ -39744,7 +39744,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             2053 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
@@ -39759,7 +39759,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             2054 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39774,7 +39774,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             2055 => {
                 self.marker = self.cursor;
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
@@ -39788,7 +39788,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2056 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
@@ -39805,7 +39805,7 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(Continuation);
         },
             2058 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
@@ -39824,7 +39824,7 @@ impl<'a> Iterator for Lexer<'a> {
                 continue 'yyl;
             }
             2060 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
@@ -39849,7 +39849,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2061 => {
-                yych = unsafe {*buffer.get_unchecked(self.cursor)};
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;

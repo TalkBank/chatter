@@ -155,7 +155,7 @@ code = "E212"
 variant = "InvalidWordFormat"
 summary = "Invalid word format."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E213"
@@ -239,7 +239,7 @@ code = "E246"
 variant = "LengtheningNotAfterSpokenMaterial"
 summary = "Lengthening marker not placed after spoken material."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E247"
@@ -274,7 +274,7 @@ code = "E251"
 variant = "EmptyWordContentText"
 summary = "Word content text is empty."
 kind = "Invalidity"
-status = "not_implemented"
+status = "unreachable_from_chat"
 
 [[code]]
 code = "E252"

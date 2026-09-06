@@ -17,17 +17,13 @@
 //! - **`Validate` trait** - Implemented by all model types for uniform validation
 //! - **`ValidationContext`** - File-level context passed down validation hierarchy
 //!
-//! ## Location Tracking Limitation
+//! ## Source Locations
 //!
-//! Currently, validation errors use placeholder source locations `(1, 1)` because
-//! the domain model (Word, MainTier, etc.) does not carry source location information.
-//! This is a deliberate design choice for the current phase:
-//! - Domain model remains simple and focused on semantics
-//! - Location tracking will be added in Phase 4 (Validation Engine) when we design
-//!   a comprehensive approach that integrates with parsing and editor integration
-//!
-//! For now, validation errors still provide useful context through ErrorContext
-//! (the actual text, column ranges, and expectations).
+//! Parsers attach byte spans to model nodes where source provenance is known.
+//! Lexical checks retain the original source and exact character offsets before
+//! parsing. Programmatic and recovered nodes may lack locations; validation must
+//! not fabricate positions for them. Diagnostic enrichment uses a source-bound
+//! index to turn available spans into line and column coordinates.
 //!
 //! ## Design Principles
 //!
@@ -57,6 +53,7 @@ mod context;
 #[doc(hidden)]
 pub mod cross_utterance;
 pub(crate) mod header;
+mod lexical;
 #[doc(hidden)]
 pub mod main_tier;
 pub(crate) mod retrace;
@@ -71,6 +68,7 @@ pub(crate) mod word;
 // Re-export public API
 pub use config::RuleSelection;
 pub use context::{SharedValidationData, ValidationContext, language_allows_numbers};
+pub use lexical::report_control_characters;
 pub use state::{AlignmentValidation, ValidChatFile, ValidationFailure, ValidationPolicy};
 pub use r#trait::Validate;
 
