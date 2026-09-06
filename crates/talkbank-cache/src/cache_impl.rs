@@ -48,6 +48,8 @@ pub struct CachePool<S = ValidationScope> {
     pool: SqlitePool,
     rt: blocking::ConfinedRuntime,
     scope: S,
+    /// Opening-time storage provenance; in-memory pools have no directory.
+    cache_dir: Option<PathBuf>,
 }
 
 /// Admitted validation namespace and the retention result from opening it.
@@ -134,6 +136,7 @@ impl CachePool {
         Ok(Self {
             pool,
             rt,
+            cache_dir: Some(cache_dir),
             scope: ValidationScope {
                 identity,
                 version_prune,
@@ -166,6 +169,7 @@ impl CachePool {
         Ok(Self {
             pool,
             rt,
+            cache_dir: None,
             scope: ValidationScope {
                 identity,
                 version_prune: VersionPruneOutcome::NothingUnreachable,
@@ -409,13 +413,12 @@ impl<S> CachePool<S> {
     /// Get cache statistics.
     pub fn stats(&self) -> Result<CacheStats, CacheError> {
         let pool = &self.pool;
+        let cache_dir = self.cache_dir.clone();
         self.rt.block_on(async {
             let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM file_cache")
                 .fetch_one(pool)
                 .await
                 .map_err(|source| CacheError::Database { source })?;
-
-            let cache_dir = cache_location::default_cache_dir()?;
 
             Ok(CacheStats {
                 total_entries: row.0 as usize,
@@ -439,6 +442,7 @@ impl MaintenanceCache {
             pool,
             rt,
             scope: MaintenanceScope,
+            cache_dir: Some(cache_dir),
         })
     }
 }

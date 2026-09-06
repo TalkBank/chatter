@@ -11,8 +11,8 @@ use std::path::PathBuf;
 pub struct CacheStats {
     /// Total number of file entries in the cache database.
     pub total_entries: usize,
-    /// Filesystem path to the cache directory.
-    pub cache_dir: PathBuf,
+    /// Directory selected when the pool opened, or `None` for in-memory storage.
+    pub cache_dir: Option<PathBuf>,
 }
 
 /// Validation identity: build/rule generation and parser row namespace.

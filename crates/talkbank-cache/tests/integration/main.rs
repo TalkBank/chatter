@@ -26,3 +26,5 @@ mod concurrent_open;
 mod concurrent_process_open;
 mod rules_version_invalidation;
 mod version_pruning;
+
+mod storage_location;

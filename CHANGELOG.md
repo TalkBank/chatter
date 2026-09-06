@@ -11,6 +11,9 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Breaking:** `CacheStats::cache_dir` is optional: in-memory storage has no
+  filesystem directory. File-backed statistics retain the opening directory.
+
 - **Breaking:** validation-cache constructors require `CacheIdentity` (rules and
   parser), and roundtrip cache methods use that bound identity instead of a
   parser string. `ParserKind` is shared from `talkbank-model` and re-exported.
@@ -39,6 +42,9 @@ version and are listed under "Changed" / "Removed".
   reflect this category; serialized CHAT model output retains its shape.
 
 ### Fixed
+
+- Cache statistics report the directory actually opened instead of resolving
+  the current default again, including for explicitly located maintenance pools.
 
 - Validation cache rows are isolated by parser in both CLI and desktop. Switching
   parser/rule combinations no longer risks serving another parser's verdict or
