@@ -1,7 +1,7 @@
 # Developer Verification Checks
 
 **Status:** Current
-**Last modified:** 2026-08-30 15:20 EDT
+**Last modified:** 2026-09-06 10:18 EDT
 
 What to run locally, and what each thing costs. The commands are `just`
 recipes; `just --list` shows them all.
@@ -162,6 +162,17 @@ are in [Spec Workflow](spec-workflow.md), with every command written out.
 Regeneration is not a substitute for choosing the right regression test.
 
 ## Failure policy
+
+For CLI subprocess failures, retain the full exit status, stdout and stderr.
+Check successful completion before interpreting cache counts or other output:
+an empty stream alone cannot distinguish a product failure from a terminated
+process. Reproduce the exact failing test before broadening the run.
+
+On Unix, tests that vary the program name should use `CommandExt::arg0` on
+the original executable. This avoids giving the shared test executable a
+second filesystem name during concurrent launches. Windows uses a temporary
+same-filesystem hard link because its command API has no `arg0` override.
+
 
 A failing check blocks the change. If a failure is unrelated and pre-existing,
 verify that by running against a clean checkout, say so, and fix it anyway

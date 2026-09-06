@@ -26,6 +26,7 @@
 //! integration test). A red here is a real regression in a command we
 //! ship, not a flaky expectation.
 
+#[cfg(not(unix))]
 use std::fs;
 use std::path::Path;
 
@@ -269,42 +270,44 @@ fn watch_requires_path_argument() -> Result<(), TestError> {
 /// documented throughout the book and breaking the help-contract tests
 /// (`watch_help_documents_command` on windows-latest, cross-platform CI).
 ///
-/// This reproduces the mechanism on ANY OS by running the real binary
-/// under a deliberately different `argv[0]`: copy it to a renamed file
-/// and invoke that. Without a pinned `bin_name` the usage line leaks the
+/// This reproduces the mechanism by running the real binary under a
+/// deliberately different `argv[0]`: set it directly on Unix, and invoke a
+/// renamed hard link on Windows. Without a pinned `bin_name` the usage line leaks the
 /// renamed file; with it pinned the line is always `Usage: chatter ...`.
 /// It would have caught the Windows regression on Ubuntu CI.
 #[test]
 fn program_name_is_pinned_regardless_of_argv0() -> Result<(), TestError> {
-    // HARD LINK, NOT COPY, and the scratch dir sits beside the binary so the
-    // link cannot cross a filesystem.
-    //
-    // A copy has to be WRITTEN, and on Linux exec'ing a file that any process
-    // still holds open for writing fails with ETXTBSY ("Text file busy").
-    // `cargo test` runs the suite multi-threaded, so while this thread is
-    // writing the copy another thread can fork for its own `Command`; the
-    // child inherits this thread's write fd for the window between fork and
-    // exec, and if we exec the copy inside that window the kernel refuses.
-    // That is what failed the scheduled ubuntu run on 2026-08-01 while the
-    // identical commit passed on push: a race, not flakiness.
-    //
-    // A hard link gives the same inode a second name with no write at all, so
-    // the window does not exist. It also keeps the exec bit for free, and
-    // `argv[0]` is still the new name, which is the whole point of the test.
     let bin = Path::new(env!("CARGO_BIN_EXE_chatter"));
+    // Unix exposes argv[0] directly. Keep the executable's filesystem identity
+    // untouched while other tests launch it: macOS security logs have reported
+    // denials for the hard-linked alias during concurrent CLI test runs.
+    #[cfg(unix)]
+    let executable = bin;
+
+    // Windows has no CommandExt::arg0. A same-filesystem hard link changes the
+    // name without introducing an open-for-write executable (ETXTBSY on Unix).
+    #[cfg(not(unix))]
     let scratch = tempfile::Builder::new()
         .prefix("argv0-probe-")
         .tempdir_in(bin.parent().expect("test binary has a parent directory"))?;
-    // The stem is deliberately NOT `chatter`.
-    let renamed = scratch
+    #[cfg(not(unix))]
+    let executable = scratch
         .path()
         .join(format!("renamed-probe{}", std::env::consts::EXE_SUFFIX));
-    fs::hard_link(bin, &renamed)?;
+    #[cfg(not(unix))]
+    fs::hard_link(bin, &executable)?;
 
     // The top-level command and a subcommand both build their usage line
     // from the program name; pin must hold for both.
     for args in [["--help"].as_slice(), ["watch", "--help"].as_slice()] {
-        let output = std::process::Command::new(&renamed).args(args).output()?;
+        let mut command = std::process::Command::new(executable.as_os_str());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.arg0("renamed-probe");
+        }
+        let output = command.args(args).output()?;
+        assert_success(&output, "renamed argv[0] help");
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             stdout.contains("Usage: chatter"),

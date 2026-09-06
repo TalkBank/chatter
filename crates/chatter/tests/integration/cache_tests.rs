@@ -717,6 +717,7 @@ fn a_row_written_by_one_parser_never_serves_the_other() -> Result<(), TestError>
 
     // Populate the cache under the re2c backend.
     let first = run_validate(&harness, &file_path, &["--parser", "re2c"])?;
+    assert_success(&first, "cold re2c validation");
     let first_out = combined_output(&first);
     if !first_out.contains("Cache misses: 1") {
         return Err(TestError::Failure(format!(
@@ -726,6 +727,7 @@ fn a_row_written_by_one_parser_never_serves_the_other() -> Result<(), TestError>
 
     // The default backend must not be served that row.
     let second = run_validate(&harness, &file_path, &[])?;
+    assert_success(&second, "tree-sitter validation");
     let second_out = combined_output(&second);
     if !second_out.contains("Cache hits: 0") {
         return Err(TestError::Failure(format!(
@@ -736,6 +738,7 @@ fn a_row_written_by_one_parser_never_serves_the_other() -> Result<(), TestError>
 
     // And the reverse direction, so a fix that keys only one way still fails.
     let third = run_validate(&harness, &file_path, &["--parser", "re2c"])?;
+    assert_success(&third, "warm re2c validation");
     let third_out = combined_output(&third);
     if !third_out.contains("Cache hits: 1") {
         return Err(TestError::Failure(format!(
