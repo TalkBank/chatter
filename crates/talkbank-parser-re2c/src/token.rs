@@ -4,9 +4,11 @@
 //! Names are taken directly from grammar.js where possible.
 
 mod inspection;
+mod pause;
 mod postcode;
 mod prefix;
 pub use inspection::{LexError, LexResult};
+pub use pause::PauseLexeme;
 pub use postcode::PostcodeToken;
 pub use prefix::{DependentBodyKind, DependentPrefixToken, PrefixToken};
 
@@ -196,13 +198,13 @@ pub enum Token<'a> {
 
     // ── Pauses ──────────────────────────────────────────────
     /// grammar.js: token(prec(10, '(...)'))
-    PauseLong(&'a str),
+    PauseLong(PauseLexeme<'a>),
     /// grammar.js: token(prec(10, '(..)'))
-    PauseMedium(&'a str),
+    PauseMedium(PauseLexeme<'a>),
     /// grammar.js: token(prec(10, '(.)'))
-    PauseShort(&'a str),
+    PauseShort(PauseLexeme<'a>),
     /// grammar.js: token(prec(10, /\(\d+(?::\d+)?\.\d*\)/))
-    PauseTimed(&'a str),
+    PauseTimed(PauseLexeme<'a>),
 
     // ── Word (rich token) ─────────────────────────────────
     /// A complete word matched by the lexer as a single token.

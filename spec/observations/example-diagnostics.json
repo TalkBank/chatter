@@ -3801,6 +3801,22 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E765.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E765"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E765.md",
+      "example": 5,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E766.md",
       "example": 1,
       "parse": [

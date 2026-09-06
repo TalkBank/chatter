@@ -70,9 +70,9 @@ fn trailing_annotations<'tokens, 'a: 'tokens>()
 fn pause<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
-        Token::PauseLong(_) => ContentItem::Pause(crate::ast::PauseKindParsed::Long),
-        Token::PauseMedium(_) => ContentItem::Pause(crate::ast::PauseKindParsed::Medium),
-        Token::PauseShort(_) => ContentItem::Pause(crate::ast::PauseKindParsed::Short),
+        Token::PauseLong(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Long(s)),
+        Token::PauseMedium(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Medium(s)),
+        Token::PauseShort(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Short(s)),
         Token::PauseTimed(s) => ContentItem::Pause(crate::ast::PauseKindParsed::Timed(s)),
     }
 }

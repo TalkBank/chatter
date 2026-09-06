@@ -54,68 +54,6 @@ fn report_space_inside_angle_group<'a>(tokens: &[Token<'a>], errors: &impl Error
     }
 }
 
-/// Report E765 for a PAUSE immediately followed by content (`(.)and`).
-///
-/// The model rule `check_separator_glued_to_following_content` covers this
-/// case in principle: its `free_standing_end` returns `Some(pause.span.end)`.
-/// It cannot fire on this backend's output, because pause spans are still
-/// `Span::DUMMY` and the rule skips `end == Span::DUMMY.end`.
-///
-/// SEPARATORS are deliberately NOT handled here any more. They carry real
-/// spans since 2026-08-27, so the model rule reaches them, and this scan
-/// reported E765 a SECOND time for every one it caught: `dog :and .` gave two.
-/// A mirror is only correct while its model rule is genuinely unreachable, and
-/// `re2c_reports_no_diagnostic_twice` is what notices when that stops being
-/// true. Delete this the moment pauses carry spans.
-fn report_pause_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
-    let is_pause = |t: &Token<'a>| {
-        matches!(
-            t,
-            Token::PauseShort(_)
-                | Token::PauseMedium(_)
-                | Token::PauseLong(_)
-                | Token::PauseTimed(_)
-        )
-    };
-    for pair in tokens.windows(2) {
-        if is_pause(&pair[0]) && (matches!(pair[1], Token::Word { .. }) || is_pause(&pair[1])) {
-            errors.report(ParseError::new(
-                talkbank_model::errors::codes::ErrorCode::SeparatorGluedToFollowingContent,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
-                None,
-                "Separator must be separated from the following content by a space".to_owned(),
-            ));
-        }
-    }
-}
-
-/// Report E751 for every pause token immediately following a word token
-/// with no whitespace between (`hello(.)`; CLAN CHECK 57). Mirrors the
-/// model-validation rule `check_pause_glued_to_word` (talkbank-model
-/// `validation/utterance/spacing.rs`), which cannot fire on this
-/// parser's output because its pauses carry dummy spans.
-fn report_pause_glued_to_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
-    for pair in tokens.windows(2) {
-        let is_pause = matches!(
-            pair[1],
-            Token::PauseShort(_)
-                | Token::PauseMedium(_)
-                | Token::PauseLong(_)
-                | Token::PauseTimed(_)
-        );
-        if matches!(pair[0], Token::Word { .. }) && is_pause {
-            errors.report(ParseError::new(
-                talkbank_model::errors::codes::ErrorCode::PauseGluedToWord,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
-                None,
-                "Pause must be separated from the preceding word by a space".to_owned(),
-            ));
-        }
-    }
-}
-
 /// Report missing separators at source-located annotation boundaries.
 /// Replacements require whitespace before their opening bracket (E375/E316);
 /// rich scoped annotations and retraces require it before a following word
@@ -282,8 +220,6 @@ pub(crate) fn parse_file_with_errors<'a>(
     let source = lexed.source();
     report_leading_zero_bullet_times(tokens, errors);
     report_space_inside_angle_group(tokens, errors);
-    report_pause_glued_to_word(tokens, errors);
-    report_pause_glued_to_following_content(tokens, errors);
     report_annotation_spacing(lexed, errors);
     let mut pos = 0;
     let mut lines = Vec::new();

@@ -776,11 +776,19 @@ impl<'a> Iterator for Lexer<'a> {
 
         // ── Pauses (grammar.js: pause_token with prec(10)) ──
         // grammar.js: token(prec(10, choice('(.)', '(..)', '(...)', /\(\d+(?::\d+)?\.\d*\)/)))
-        <MAIN_CONTENT> "(...)" { emit!(PauseLong); }
-        <MAIN_CONTENT> "(..)" { emit!(PauseMedium); }
-        <MAIN_CONTENT> "(.)" { emit!(PauseShort); }
+        <MAIN_CONTENT> "(...)" { let end = self.cursor;
+            let pause = crate::token::PauseLexeme::from_lexed(&yyinput[start..end], start, end);
+            return Some((Token::PauseLong(pause), start..end)); }
+        <MAIN_CONTENT> "(..)" { let end = self.cursor;
+            let pause = crate::token::PauseLexeme::from_lexed(&yyinput[start..end], start, end);
+            return Some((Token::PauseMedium(pause), start..end)); }
+        <MAIN_CONTENT> "(.)" { let end = self.cursor;
+            let pause = crate::token::PauseLexeme::from_lexed(&yyinput[start..end], start, end);
+            return Some((Token::PauseShort(pause), start..end)); }
         // PauseTimed: tags mark the numeric content
-        <MAIN_CONTENT> "(" @t1 [0-9]+ (":" [0-9]+)? "." [0-9]* @t2 ")" { emit_t1t2!(PauseTimed); }
+        <MAIN_CONTENT> "(" @t1 [0-9]+ (":" [0-9]+)? "." [0-9]* @t2 ")" { let end = self.cursor;
+            let pause = crate::token::PauseLexeme::from_lexed(&yyinput[self.t1..self.t2], start, end);
+            return Some((Token::PauseTimed(pause), start..end)); }
 
         // NOTE: Shortening and ErrorUnclosedParen rules moved AFTER the Word
         // rules (below) so that standalone `(parens)` matches as a rich Word

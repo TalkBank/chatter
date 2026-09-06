@@ -3141,6 +3141,20 @@
       "source_spec": "spec/errors/E765.md"
     },
     {
+      "fixture": "E765_4.cha",
+      "code": "E765",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E765.md"
+    },
+    {
+      "fixture": "E765_5.cha",
+      "code": "E765",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E765.md"
+    },
+    {
       "fixture": "E766_1.cha",
       "code": "E766",
       "claim": "violates",

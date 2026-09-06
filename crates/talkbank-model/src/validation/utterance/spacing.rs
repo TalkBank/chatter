@@ -5,8 +5,8 @@
 //! CHAT items are space-delimited in the source, and these rules detect
 //! glued items by SPAN ADJACENCY over the in-order content walk, which
 //! works because the parser preserves byte spans on words and pauses.
-//! Dummy (0,0) spans are skipped: the re2c oracle fills dummy spans and
-//! mirrors each rule as a token-stream scan in its own front end.
+//! Both parser backends preserve pause spans. Dummy (0,0) spans from
+//! programmatically constructed items are skipped.
 //!
 //! E758 (leading/trailing space between a tab delimiter and tier
 //! content) used to live here as a main-tier-only span reconstruction
@@ -251,97 +251,65 @@ fn separator_forbids_trailing_glue(separator: &crate::model::Separator) -> bool 
     )
 }
 
-/// The source end byte of a FREE-STANDING item that nothing may be glued
-/// after: an in-scope separator (see [`separator_forbids_trailing_glue`])
-/// or a pause. Each is its own main-tier item, so the next item takes a
-/// space.
-fn free_standing_end(item: &UtteranceContent) -> Option<u32> {
-    match item {
-        UtteranceContent::Separator(separator) => separator_forbids_trailing_glue(separator)
-            .then(|| separator.span())
-            .filter(|span| *span != crate::Span::DUMMY)
-            .map(|span| span.end),
-        UtteranceContent::Pause(pause) => Some(pause.span.end),
-        UtteranceContent::OverlapPoint(_) => None,
-        // Everything else either takes trailing material legitimately or is
-        // covered by its own rule (E757 for code-terminated items).
-        UtteranceContent::Word(_)
-        | UtteranceContent::AnnotatedWord(_)
-        | UtteranceContent::ReplacedWord(_)
-        | UtteranceContent::Event(_)
-        | UtteranceContent::AnnotatedEvent(_)
-        | UtteranceContent::Group(_)
-        | UtteranceContent::AnnotatedGroup(_)
-        | UtteranceContent::Retrace(_)
-        | UtteranceContent::AnnotatedRetrace(_)
-        | UtteranceContent::PhoGroup(_)
-        | UtteranceContent::SinGroup(_)
-        | UtteranceContent::Quotation(_)
-        | UtteranceContent::AnnotatedQuotation(_)
-        | UtteranceContent::Action(_)
-        | UtteranceContent::AnnotatedAction(_)
-        | UtteranceContent::Freecode(_)
-        | UtteranceContent::InternalBullet(_)
-        | UtteranceContent::LongFeatureBegin(_)
-        | UtteranceContent::LongFeatureEnd(_)
-        | UtteranceContent::UnderlineBegin(_)
-        | UtteranceContent::UnderlineEnd(_)
-        | UtteranceContent::NonvocalBegin(_)
-        | UtteranceContent::NonvocalEnd(_)
-        | UtteranceContent::NonvocalSimple(_)
-        | UtteranceContent::OtherSpokenEvent(_) => None,
-    }
+/// Source-located roles for the separator rule. One classification owns both
+/// sides of adjacency; excluded items break the chain rather than disappearing.
+enum SpacingBoundary {
+    FreeStanding(crate::Span),
+    Word(crate::Span),
+    Excluded,
 }
 
-/// The source start byte of an item that must not be glued onto a
-/// preceding free-standing item: the word family (via
-/// [`word_family_start`]), plus the in-scope separators and pauses, so
-/// `::`, `;;`, `:(.)` and `(.):` chains are covered.
-///
-/// Overlap markers are excluded on this side for the same reason as on
-/// the other: `⌈` glued after a mark is attested CA notation.
-fn glued_target_start(item: &UtteranceContent) -> Option<u32> {
-    if let Some(start) = word_family_start(item) {
-        return Some(start);
+impl SpacingBoundary {
+    fn from_item(item: &ContentItem<'_>) -> Self {
+        let boundary = match item {
+            ContentItem::Word(word) => Self::Word(word.span),
+            ContentItem::ReplacedWord(replaced) => Self::Word(replaced.word.span),
+            ContentItem::Pause(pause) => Self::FreeStanding(pause.span),
+            ContentItem::Separator(separator) => {
+                if separator_forbids_trailing_glue(separator) {
+                    Self::FreeStanding(separator.span())
+                } else {
+                    Self::Excluded
+                }
+            }
+            ContentItem::Event(_)
+            | ContentItem::Action(_)
+            | ContentItem::OverlapPoint(_)
+            | ContentItem::OtherSpokenEvent(_)
+            | ContentItem::Freecode(_)
+            | ContentItem::InternalBullet(_)
+            | ContentItem::LongFeatureBegin(_)
+            | ContentItem::LongFeatureEnd(_)
+            | ContentItem::UnderlineBegin(_)
+            | ContentItem::UnderlineEnd(_)
+            | ContentItem::NonvocalBegin(_)
+            | ContentItem::NonvocalEnd(_)
+            | ContentItem::NonvocalSimple(_) => Self::Excluded,
+        };
+        match boundary {
+            Self::FreeStanding(span) | Self::Word(span) => {
+                if span.is_dummy() {
+                    Self::Excluded
+                } else {
+                    boundary
+                }
+            }
+            Self::Excluded => Self::Excluded,
+        }
     }
-    match item {
-        UtteranceContent::Separator(separator) => separator_forbids_trailing_glue(separator)
-            .then(|| separator.span())
-            .filter(|span| *span != crate::Span::DUMMY)
-            .map(|span| span.start),
-        UtteranceContent::Pause(pause) => Some(pause.span.start),
-        // Everything else is either handled by `word_family_start` above or
-        // legitimately takes preceding material. Listed rather than `_ =>` so a
-        // new content variant is a compile error here: this function decides
-        // what may not be glued onto a preceding item, and a variant that falls
-        // silently into `None` is a rule that stops applying without anyone
-        // noticing. Mirrors `free_standing_end` directly above.
-        UtteranceContent::Word(_)
-        | UtteranceContent::AnnotatedWord(_)
-        | UtteranceContent::ReplacedWord(_)
-        | UtteranceContent::Event(_)
-        | UtteranceContent::AnnotatedEvent(_)
-        | UtteranceContent::Group(_)
-        | UtteranceContent::AnnotatedGroup(_)
-        | UtteranceContent::Retrace(_)
-        | UtteranceContent::AnnotatedRetrace(_)
-        | UtteranceContent::PhoGroup(_)
-        | UtteranceContent::SinGroup(_)
-        | UtteranceContent::Quotation(_)
-        | UtteranceContent::AnnotatedQuotation(_)
-        | UtteranceContent::Action(_)
-        | UtteranceContent::AnnotatedAction(_)
-        | UtteranceContent::OverlapPoint(_)
-        | UtteranceContent::Freecode(_)
-        | UtteranceContent::InternalBullet(_)
-        | UtteranceContent::LongFeatureBegin(_)
-        | UtteranceContent::LongFeatureEnd(_)
-        | UtteranceContent::UnderlineBegin(_)
-        | UtteranceContent::UnderlineEnd(_)
-        | UtteranceContent::NonvocalBegin(_)
-        | UtteranceContent::NonvocalEnd(_)
-        | UtteranceContent::NonvocalSimple(_)
-        | UtteranceContent::OtherSpokenEvent(_) => None,
+
+    fn start(&self) -> Option<u32> {
+        match self {
+            Self::FreeStanding(span) | Self::Word(span) => Some(span.start),
+            Self::Excluded => None,
+        }
+    }
+
+    fn free_standing_end(&self) -> Option<u32> {
+        match self {
+            Self::FreeStanding(span) => Some(span.end),
+            Self::Word(_) | Self::Excluded => None,
+        }
     }
 }
 
@@ -358,30 +326,30 @@ pub(crate) fn check_separator_glued_to_following_content(
     utterance: &Utterance,
     errors: &impl ErrorSink,
 ) {
-    for pair in utterance.main.content.content.as_slice().windows(2) {
-        let Some(end) = free_standing_end(&pair[0]) else {
-            continue;
-        };
-        if end == crate::Span::DUMMY.end {
-            continue;
-        }
-        let Some(start) = glued_target_start(&pair[1]) else {
-            continue;
-        };
-        if start == end {
-            let span = crate::Span::new(start, start);
-            errors.report(
-                ParseError::new(
-                    ErrorCode::SeparatorGluedToFollowingContent,
-                    Severity::Error,
-                    SourceLocation::new(span),
-                    ErrorContext::new(" ", span, " "),
-                    "Separator must be separated from the following content by a space",
-                )
-                .with_suggestion("Add a space after the separator"),
-            );
-        }
-    }
+    let mut previous_end = None;
+    walk_content(
+        utterance.main.content.content.as_slice(),
+        None,
+        &mut |item| {
+            let boundary = SpacingBoundary::from_item(&item);
+            if let (Some(end), Some(start)) = (previous_end, boundary.start())
+                && start == end
+            {
+                let span = crate::Span::new(start, start);
+                errors.report(
+                    ParseError::new(
+                        ErrorCode::SeparatorGluedToFollowingContent,
+                        Severity::Error,
+                        SourceLocation::new(span),
+                        ErrorContext::new(" ", span, " "),
+                        "Separator must be separated from the following content by a space",
+                    )
+                    .with_suggestion("Add a space after the separator"),
+                );
+            }
+            previous_end = boundary.free_standing_end();
+        },
+    );
 }
 
 /// E751: a pause must not open directly at the end of a word

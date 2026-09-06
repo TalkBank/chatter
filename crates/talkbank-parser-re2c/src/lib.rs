@@ -169,3 +169,6 @@ pub mod lexer {
 /// Includes parser recovery and conversion code; re2c also includes its
 /// authored and vendored lexer. No sibling checkout is read at build time.
 pub const SOURCE_FINGERPRINT: &str = env!("TALKBANK_PARSER_SOURCE_FINGERPRINT");
+
+#[cfg(test)]
+mod pause_provenance_tests;

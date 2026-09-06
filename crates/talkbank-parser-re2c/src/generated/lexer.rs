@@ -22120,7 +22120,9 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1156 => { emit!(PauseShort); },
+            1156 => { let end = self.cursor;
+            let pause = crate::token::PauseLexeme::from_lexed(&yyinput[start..end], start, end);
+            return Some((Token::PauseShort(pause), start..end)); },
             1157 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
@@ -29011,7 +29013,9 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1447 => { emit!(PauseMedium); },
+            1447 => { let end = self.cursor;
+            let pause = crate::token::PauseLexeme::from_lexed(&yyinput[start..end], start, end);
+            return Some((Token::PauseMedium(pause), start..end)); },
             1448 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
@@ -29032,7 +29036,9 @@ impl<'a> Iterator for Lexer<'a> {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
-                { emit_t1t2!(PauseTimed); }
+                { let end = self.cursor;
+            let pause = crate::token::PauseLexeme::from_lexed(&yyinput[self.t1..self.t2], start, end);
+            return Some((Token::PauseTimed(pause), start..end)); }
             }
             1450 => {
                 yyaccept = 4;
@@ -32151,7 +32157,9 @@ impl<'a> Iterator for Lexer<'a> {
                 self.t1 = self.yyt1;
                 { emit_t1!(NonvocalEnd); }
             }
-            1602 => { emit!(PauseLong); },
+            1602 => { let end = self.cursor;
+            let pause = crate::token::PauseLexeme::from_lexed(&yyinput[start..end], start, end);
+            return Some((Token::PauseLong(pause), start..end)); },
             1603 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {

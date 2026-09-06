@@ -107,14 +107,14 @@ impl TerminatorKindParsed {
 /// nothing and makes both conversions exhaustive.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum PauseKindParsed<'a> {
-    /// `(.)`
-    Short,
-    /// `(..)`
-    Medium,
-    /// `(...)`
-    Long,
-    /// `(1.5)` and friends; carries the duration text verbatim.
-    Timed(&'a str),
+    /// `(.)`, retaining its complete lexical extent.
+    Short(crate::token::PauseLexeme<'a>),
+    /// `(..)`, retaining its complete lexical extent.
+    Medium(crate::token::PauseLexeme<'a>),
+    /// `(...)`, retaining its complete lexical extent.
+    Long(crate::token::PauseLexeme<'a>),
+    /// Numeric payload and full parenthesized extent from one lexer match.
+    Timed(crate::token::PauseLexeme<'a>),
 }
 
 /// Which separator a `ContentItem::Separator` is.

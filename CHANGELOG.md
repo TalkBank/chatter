@@ -9,6 +9,20 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Changed
+
+- re2c pause tokens and parsed pause variants retain a `PauseLexeme` instead
+  of discarding the full lexical extent. This changes their Rust payload types.
+
+### Fixed
+
+- re2c preserves pause spans, including timed-pause parentheses, through nested
+  content and fragment rebasing. Shared validation now owns pause spacing;
+  duplicate token scans are removed.
+- Separator spacing validation visits nested groups, reporting E765 at the
+  missing space just as it does for top-level content. Spaced group controls
+  remain valid.
+
 ## [0.20.2] - 2026-09-06
 
 ### Fixed

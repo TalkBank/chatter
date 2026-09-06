@@ -67,6 +67,10 @@ impl<'a> Token<'a> {
     pub fn text(&self) -> &'a str {
         match self {
             Token::Postcode(postcode) => postcode.text(),
+            Token::PauseLong(pause)
+            | Token::PauseMedium(pause)
+            | Token::PauseShort(pause)
+            | Token::PauseTimed(pause) => pause.text(),
             // Use a macro-like approach: every variant carries &str
             Token::BOM(s)
             | Token::Newline(s)
@@ -129,10 +133,6 @@ impl<'a> Token<'a> {
             | Token::PercentAnnotation(s)
             | Token::Langcode(s)
             | Token::Replacement(s)
-            | Token::PauseLong(s)
-            | Token::PauseMedium(s)
-            | Token::PauseShort(s)
-            | Token::PauseTimed(s)
             | Token::WordSegment(s)
             | Token::Shortening(s)
             | Token::Lengthening(s)

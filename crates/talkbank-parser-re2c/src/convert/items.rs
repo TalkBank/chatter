@@ -39,7 +39,7 @@ pub fn content_item_to_model(
 ) -> UtteranceContent {
     match item {
         ast::ContentItem::Word(w) => word_with_annotations_to_model(w, source),
-        ast::ContentItem::Pause(kind) => UtteranceContent::Pause(Pause::new(pause_duration(kind))),
+        ast::ContentItem::Pause(kind) => UtteranceContent::Pause(pause_from_parsed(kind)),
         ast::ContentItem::Event(event_text) => {
             let event_text = *event_text;
             UtteranceContent::Event(Event::new(event_text))
@@ -330,18 +330,18 @@ pub(crate) fn separator_from_kind(kind: ast::SeparatorKindParsed, span: Option<S
     }
 }
 
-/// The one place a parsed pause kind becomes a model duration.
-///
-/// Exhaustive, because the AST now carries the kind rather than a raw token.
-/// It replaces two copies of a match that ended in `_ => PauseDuration::Short`,
-/// which silently turned anything unexpected into `(.)`.
-fn pause_duration(kind: &ast::PauseKindParsed<'_>) -> PauseDuration {
-    match kind {
-        ast::PauseKindParsed::Short => PauseDuration::Short,
-        ast::PauseKindParsed::Medium => PauseDuration::Medium,
-        ast::PauseKindParsed::Long => PauseDuration::Long,
-        ast::PauseKindParsed::Timed(s) => PauseDuration::Timed(PauseTimedDuration::new(*s)),
-    }
+/// Lower the admitted kind and its lexer-owned extent together at both content levels.
+fn pause_from_parsed(kind: &ast::PauseKindParsed<'_>) -> Pause {
+    let (duration, lexeme) = match kind {
+        ast::PauseKindParsed::Short(lexeme) => (PauseDuration::Short, lexeme),
+        ast::PauseKindParsed::Medium(lexeme) => (PauseDuration::Medium, lexeme),
+        ast::PauseKindParsed::Long(lexeme) => (PauseDuration::Long, lexeme),
+        ast::PauseKindParsed::Timed(lexeme) => (
+            PauseDuration::Timed(PauseTimedDuration::new(lexeme.text())),
+            lexeme,
+        ),
+    };
+    Pause::new(duration).with_span(lexeme.span())
 }
 
 // ── Leaf mappings shared by BOTH content levels ─────────────────
@@ -438,7 +438,7 @@ pub(crate) fn content_item_to_bracketed(
                 }
             }
         }
-        ast::ContentItem::Pause(kind) => BracketedItem::Pause(Pause::new(pause_duration(kind))),
+        ast::ContentItem::Pause(kind) => BracketedItem::Pause(pause_from_parsed(kind)),
         ast::ContentItem::Event(event_text) => {
             let event_text = *event_text;
             BracketedItem::Event(Event::new(event_text))
