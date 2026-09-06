@@ -9,12 +9,11 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use crate::api::fragment::WrappedFragment;
 use talkbank_model::ParseOutcome;
 use talkbank_model::dependent_tier::DependentTier;
 use talkbank_model::model::{ChatFile, Line};
-use talkbank_model::{
-    ErrorCollector, ErrorSink, OffsetAdjustingErrorSink, SpanShift, TeeErrorSink,
-};
+use talkbank_model::{ErrorCollector, ErrorSink, SpanShift, TeeErrorSink};
 
 use crate::parser::TreeSitterParser;
 use crate::parser::chat_file_parser::{MINIMAL_CHAT_PREFIX, MINIMAL_CHAT_SUFFIX};
@@ -30,8 +29,8 @@ const MAIN_TIER_LINE: &str = "*CHI:\thello .\n";
 ///
 /// # The Minimal Wrapper Pattern
 ///
-/// Tree-sitter requires a complete, valid CHAT file to parse dependent tiers.
-/// We wrap the tier content in a minimal valid CHAT structure:
+/// These adapters reuse whole-file lowering to parse dependent-tier content.
+/// They wrap that content in a minimal valid CHAT structure:
 ///
 /// ```text
 /// @UTF8
@@ -45,8 +44,8 @@ const MAIN_TIER_LINE: &str = "*CHI:\thello .\n";
 /// # Dual Error Handling
 ///
 /// We use TWO error sinks:
-/// 1. `OffsetAdjustingErrorSink`: Adjusts error spans from wrapper coordinates
-///    to document coordinates, streaming to the user's ErrorSink.
+/// 1. `WrappedFragment::error_sink`: Translates wrapper coordinates through the
+///    owned input boundary to document coordinates for the user's ErrorSink.
 /// 2. `ErrorCollector`: Collects errors to determine success/failure.
 ///
 /// `TeeErrorSink` streams each error to both sinks simultaneously.
@@ -95,27 +94,25 @@ where
     let body = strip_one_trailing_newline(input);
 
     // Build the minimal CHAT wrapper
-    let chat = format!(
-        "{}{}{}{}\n{}",
-        MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, tier_header, body, MINIMAL_CHAT_SUFFIX
+    let fragment = WrappedFragment::new(
+        &[MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, tier_header],
+        body,
+        &format!("\n{MINIMAL_CHAT_SUFFIX}"),
+        offset,
     );
 
     // Set up dual error handling
     let tier_sink = ErrorCollector::new();
-    let adjusting_sink = OffsetAdjustingErrorSink::new(errors, offset, input);
+    let adjusting_sink = fragment.error_sink(errors);
     let tee = TeeErrorSink::new(&adjusting_sink, &tier_sink);
 
     // Parse the wrapper
-    let chat_file = parser.parse_chat_file_streaming(&chat, &tee);
+    let chat_file = parser.parse_chat_file_streaming(fragment.source(), &tee);
 
     // Check for errors
     if !tier_sink.is_empty() {
         return ParseOutcome::rejected();
     }
-
-    // Calculate prefix length for span adjustment
-    // Formula: -(prefix_len) + offset converts wrapper-relative to document-absolute
-    let prefix_len = MINIMAL_CHAT_PREFIX.len() + MAIN_TIER_LINE.len() + tier_header.len();
 
     // Extract the dependent tier from the parsed file
     let Some(tier) = extract_first_dependent_tier(chat_file) else {
@@ -123,13 +120,12 @@ where
     };
 
     // Apply the extractor to get the specific tier type
-    let Some(mut extracted) = extractor(tier) else {
+    let Some(extracted) = extractor(tier) else {
         return ParseOutcome::rejected();
     };
 
     // Adjust spans from wrapper-relative to document-absolute
-    extracted.shift_spans_after(0, -(prefix_len as i32) + offset as i32);
-    ParseOutcome::parsed(extracted)
+    ParseOutcome::parsed(fragment.rebase(extracted))
 }
 
 /// Parse a generic dependent tier (where input includes the header).
@@ -150,38 +146,36 @@ pub(crate) fn wrapper_parse_generic_tier(
     let body = strip_one_trailing_newline(input);
 
     // Build wrapper (input already has tier header)
-    let chat = format!(
-        "{}{}{}\n{}",
-        MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, body, MINIMAL_CHAT_SUFFIX
+    let fragment = WrappedFragment::new(
+        &[MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE],
+        body,
+        &format!("\n{MINIMAL_CHAT_SUFFIX}"),
+        offset,
     );
 
     // Set up dual error handling
     let tier_sink = ErrorCollector::new();
-    let adjusting_sink = OffsetAdjustingErrorSink::new(errors, offset, input);
+    let adjusting_sink = fragment.error_sink(errors);
     let tee = TeeErrorSink::new(&adjusting_sink, &tier_sink);
 
     // Parse the wrapper
-    let chat_file = parser.parse_chat_file_streaming(&chat, &tee);
+    let chat_file = parser.parse_chat_file_streaming(fragment.source(), &tee);
 
     // Check for errors
     if !tier_sink.is_empty() {
         return ParseOutcome::rejected();
     }
 
-    // Calculate prefix length (no tier_header since it's in input)
-    let prefix_len = MINIMAL_CHAT_PREFIX.len() + MAIN_TIER_LINE.len();
-
     // Extract and return the first dependent tier
     for line in chat_file.lines {
         if let Line::Utterance(utterance) = line
-            && let Some(mut tier) = utterance
+            && let Some(tier) = utterance
                 .dependent_tiers
                 .into_iter()
                 .next()
                 .map(|entry| entry.tier)
         {
-            tier.shift_spans_after(0, -(prefix_len as i32) + offset as i32);
-            return ParseOutcome::parsed(tier);
+            return ParseOutcome::parsed(fragment.rebase(tier));
         }
     }
 

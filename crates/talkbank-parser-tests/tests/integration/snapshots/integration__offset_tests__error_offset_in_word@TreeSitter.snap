@@ -1,38 +1,41 @@
 ---
-source: crates/talkbank-parser-tests/tests/offset_tests.rs
+source: crates/talkbank-parser-tests/tests/integration/offset_tests.rs
 expression: "(word, error_vec)"
 ---
 (
-    Some(
-        Word {
-            span: Span {
-                start: 0,
-                end: 0,
+    None,
+    [
+        ParseError {
+            code: InvalidFormType,
+            severity: Error,
+            location: SourceLocation {
+                span: Span {
+                    start: 105,
+                    end: 107,
+                },
+                line: None,
+                column: None,
             },
-            word_id: None,
-            raw_text: "xx",
-            content: WordContents(
-                [
-                    Text(
-                        WordText(
-                            NonEmptyString(
-                                "xx",
-                            ),
-                        ),
-                    ),
-                ],
+            context: Some(
+                ErrorContext {
+                    source_text: "hello@@",
+                    span: Span {
+                        start: 5,
+                        end: 7,
+                    },
+                    expected: [],
+                    found: "",
+                    line_offset: None,
+                },
             ),
-            category: None,
-            form_type: None,
-            lang: None,
-            part_of_speech: None,
-            inline_bullet: None,
-            cached_cleaned_text: CachedStr(
-                OnceLock(
-                    <uninit>,
-                ),
+            labels: [],
+            message: "A word may carry only one '@' suffix, found '@@'",
+            suggestion: Some(
+                "Keep one marker on the word and remove the rest",
+            ),
+            help_url: Some(
+                "https://talkbank.org/errors/E203",
             ),
         },
-    ),
-    [],
+    ],
 )

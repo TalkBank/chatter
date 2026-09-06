@@ -1,6 +1,5 @@
 ---
-source: crates/talkbank-parser-tests/tests/offset_tests.rs
-assertion_line: 267
+source: crates/talkbank-parser-tests/tests/integration/offset_tests.rs
 expression: "(is_semantically_equal, main1, main2)"
 ---
 (
@@ -19,8 +18,8 @@ expression: "(is_semantically_equal, main1, main2)"
                     Word(
                         Word {
                             span: Span {
-                                start: 5,
-                                end: 10,
+                                start: 106,
+                                end: 111,
                             },
                             word_id: None,
                             raw_text: "hello",
@@ -50,8 +49,8 @@ expression: "(is_semantically_equal, main1, main2)"
                     Word(
                         Word {
                             span: Span {
-                                start: 11,
-                                end: 16,
+                                start: 112,
+                                end: 117,
                             },
                             word_id: None,
                             raw_text: "world",
@@ -83,8 +82,8 @@ expression: "(is_semantically_equal, main1, main2)"
             terminator: Some(
                 Period {
                     span: Span {
-                        start: 17,
-                        end: 18,
+                        start: 118,
+                        end: 119,
                     },
                 },
             ),
@@ -94,19 +93,19 @@ expression: "(is_semantically_equal, main1, main2)"
             bullet: None,
             content_span: Some(
                 Span {
-                    start: 4,
-                    end: 19,
+                    start: 105,
+                    end: 120,
                 },
             ),
             language_code_span: None,
         },
         span: Span {
-            start: 0,
-            end: 19,
+            start: 100,
+            end: 120,
         },
         speaker_span: Span {
-            start: 0,
-            end: 3,
+            start: 101,
+            end: 104,
         },
         separator: TierSeparator {
             trailing_space: None,
@@ -126,8 +125,8 @@ expression: "(is_semantically_equal, main1, main2)"
                     Word(
                         Word {
                             span: Span {
-                                start: 5,
-                                end: 10,
+                                start: 106,
+                                end: 111,
                             },
                             word_id: None,
                             raw_text: "hello",
@@ -157,8 +156,8 @@ expression: "(is_semantically_equal, main1, main2)"
                     Word(
                         Word {
                             span: Span {
-                                start: 11,
-                                end: 16,
+                                start: 112,
+                                end: 117,
                             },
                             word_id: None,
                             raw_text: "world",
@@ -190,8 +189,8 @@ expression: "(is_semantically_equal, main1, main2)"
             terminator: Some(
                 Period {
                     span: Span {
-                        start: 17,
-                        end: 18,
+                        start: 118,
+                        end: 119,
                     },
                 },
             ),
@@ -201,19 +200,19 @@ expression: "(is_semantically_equal, main1, main2)"
             bullet: None,
             content_span: Some(
                 Span {
-                    start: 4,
-                    end: 19,
+                    start: 105,
+                    end: 120,
                 },
             ),
             language_code_span: None,
         },
         span: Span {
-            start: 0,
-            end: 19,
+            start: 100,
+            end: 120,
         },
         speaker_span: Span {
-            start: 0,
-            end: 3,
+            start: 101,
+            end: 104,
         },
         separator: TierSeparator {
             trailing_space: None,

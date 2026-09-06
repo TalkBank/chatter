@@ -6,9 +6,13 @@
 
 use super::TreeSitterParser;
 use super::helpers::{MINIMAL_CHAT_PREFIX, MINIMAL_CHAT_SUFFIX};
+use crate::api::fragment::WrappedFragment;
 use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ParseError, ParseErrors, ParseResult, Severity,
-    SourceLocation, SpanShift,
+    SourceLocation,
+};
+use crate::generated_traversal::{
+    FromNodeKind, NodeSlot, SourceFileChoice, SourceFileNode, extract_source_file,
 };
 use crate::model::Line;
 use crate::model::Utterance;
@@ -30,30 +34,29 @@ pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseRe
         .borrow_mut()
         .parse(&input_with_newline, None)
         .is_some_and(|tree| {
-            let mut cursor = tree.root_node().walk();
-            tree.root_node()
-                .children(&mut cursor)
-                .any(|child| child.kind() == crate::node_types::UTF8_HEADER)
+            SourceFileNode::from_node(tree.root_node()).is_some_and(|root| {
+                matches!(
+                    extract_source_file(root).content.slot(),
+                    NodeSlot::Present(SourceFileChoice::FullDocument(_))
+                )
+            })
         });
 
-    let (to_parse, offset) = if is_full_chat {
-        (input_with_newline, 0)
+    let newline = if input.ends_with('\n') { "" } else { "\n" };
+    let suffix = if is_full_chat {
+        newline.to_owned()
     } else {
-        (
-            // Use `input_with_newline` (exactly one trailing newline) here and do
-            // NOT append another `\n`: appending `\n` to an input that already
-            // ends in `\n` produced a spurious blank line in the synthetic
-            // document, which the grammar now correctly rejects as E747.
-            format!(
-                "{}{}{}",
-                MINIMAL_CHAT_PREFIX, input_with_newline, MINIMAL_CHAT_SUFFIX
-            ),
-            MINIMAL_CHAT_PREFIX.len(),
-        )
+        format!("{newline}{MINIMAL_CHAT_SUFFIX}")
     };
-
+    let prefixes: &[&str] = if is_full_chat {
+        &[]
+    } else {
+        &[MINIMAL_CHAT_PREFIX]
+    };
+    let fragment = WrappedFragment::new(prefixes, input, &suffix, 0);
     let errors_sink = ErrorCollector::new();
-    let file = parser.parse_chat_file_streaming(&to_parse, &errors_sink);
+    let file =
+        parser.parse_chat_file_streaming(fragment.source(), &fragment.error_sink(&errors_sink));
     let parse_errors = errors_sink.into_vec();
     if !parse_errors.is_empty() {
         return Err(ParseErrors::from(parse_errors));
@@ -78,10 +81,5 @@ pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseRe
             errors
         })?;
 
-    let mut utterance = utterance;
-    if offset > 0 {
-        utterance.shift_spans_after(0, -(offset as i32));
-    }
-
-    Ok(utterance)
+    Ok(fragment.rebase(utterance))
 }

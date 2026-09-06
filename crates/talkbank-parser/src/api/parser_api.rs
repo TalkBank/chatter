@@ -26,14 +26,13 @@ use talkbank_model::model::{
     SinTier, SitTier, SpaTier, Utterance, WorTier, Word,
 };
 use talkbank_model::{
-    ErrorCode, ErrorContext, ErrorSink, OffsetAdjustingErrorSink, ParseError, ParseErrors,
-    Severity, SourceLocation, Span, SpanShift,
+    ErrorCode, ErrorContext, ErrorSink, ParseError, ParseErrors, Severity, SourceLocation, Span,
+    SpanShift,
 };
 use talkbank_model::{FragmentSemanticContext, ParseOutcome};
 
 use super::parser_impl::{wrapper_parse_generic_tier, wrapper_parse_tier};
 use crate::parser::TreeSitterParser;
-use crate::parser::chat_file_parser::MINIMAL_CHAT_PREFIX;
 
 /// Report parse errors through an ErrorSink.
 fn report_parse_errors(errors: ParseErrors, sink: &impl ErrorSink) {
@@ -127,11 +126,10 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Word> {
-        let adjusting_sink = OffsetAdjustingErrorSink::new(errors, offset, input);
+        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
         match self.parse_word(input) {
             Ok(mut word) => {
-                let wrapper_prefix_len = MINIMAL_CHAT_PREFIX.len() + "*CHI:\t".len();
-                word.shift_spans_after(0, -(wrapper_prefix_len as i32) + offset as i32);
+                word.shift_spans_after(0, offset as i32);
                 ParseOutcome::parsed(word)
             }
             Err(errs) => {
@@ -168,11 +166,10 @@ impl TreeSitterParser {
         context: &FragmentSemanticContext,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<MainTier> {
-        let adjusting_sink = OffsetAdjustingErrorSink::new(errors, offset, input);
+        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
         match self.parse_main_tier(input) {
             Ok(mut main) => {
-                let wrapper_prefix_len = MINIMAL_CHAT_PREFIX.len();
-                main.shift_spans_after(0, -(wrapper_prefix_len as i32) + offset as i32);
+                main.shift_spans_after(0, offset as i32);
                 if context.ca_mode() {
                     crate::parser::chat_file_parser::chat_file::normalize::normalize_ca_omissions_main_tier(&mut main);
                     ParseOutcome::parsed(main)
@@ -213,7 +210,7 @@ impl TreeSitterParser {
         context: &FragmentSemanticContext,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Utterance> {
-        let adjusting_sink = OffsetAdjustingErrorSink::new(errors, offset, input);
+        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
         match self.parse_utterance(input) {
             Ok(mut utterance) => {
                 utterance.shift_spans_after(0, offset as i32);
@@ -261,7 +258,7 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Header> {
-        let adjusting_sink = OffsetAdjustingErrorSink::new(errors, offset, input);
+        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
         match self.parse_header(input) {
             Ok(mut header) => {
                 header.shift_spans_after(0, offset as i32);
@@ -296,23 +293,25 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ParticipantEntry> {
-        let wrapper = format!("{PARTICIPANTS_HEADER_PREFIX}{}\n", input);
+        let wrapper = super::fragment::WrappedFragment::new(
+            &[PARTICIPANTS_HEADER_PREFIX],
+            input,
+            "\n",
+            offset,
+        );
+        let adjusting_sink = wrapper.error_sink(errors);
         let Some(header) = self
-            .parse_header_fragment(&wrapper, 0, errors)
+            .parse_header_fragment(wrapper.source(), 0, &adjusting_sink)
             .into_option()
         else {
             return ParseOutcome::rejected();
         };
         match header {
             Header::Participants { entries } => {
-                let Some(mut entry) = entries.into_iter().next() else {
+                let Some(entry) = entries.into_iter().next() else {
                     return ParseOutcome::rejected();
                 };
-                entry.shift_spans_after(
-                    0,
-                    -(PARTICIPANTS_HEADER_PREFIX.len() as i32) + offset as i32,
-                );
-                ParseOutcome::parsed(entry)
+                ParseOutcome::parsed(wrapper.rebase(entry))
             }
             _ => ParseOutcome::rejected(),
         }

@@ -179,10 +179,13 @@ fn test_parse_mor_tier_with_offset() -> Result<(), TestError> {
 fn test_error_offset_in_word() -> Result<(), TestError> {
     let parser = make_parser()?;
     let errors = ErrorCollector::new();
-    let word = parser.parse_word_fragment("xx", 100, &errors).into_option();
+    let word = parser
+        .parse_word_fragment("hello@@", 100, &errors)
+        .into_option();
 
-    // Verify error spans are offset-adjusted
+    // Require a real diagnostic before checking its document coordinates.
     let error_vec = errors.into_vec();
+    assert!(!error_vec.is_empty());
     if let Some(first) = error_vec.first()
         && first.location.span.start < 100
     {
@@ -206,11 +209,12 @@ fn test_error_offset_in_main_tier() -> Result<(), TestError> {
     let parser = make_parser()?;
     let errors = ErrorCollector::new();
     let main = parser
-        .parse_main_tier_fragment("*CHI:\txx .", 500, &errors)
+        .parse_main_tier_fragment("*CHI:\thello } .", 500, &errors)
         .into_option();
 
-    // Verify error spans are offset-adjusted
+    // Require a real diagnostic before checking its document coordinates.
     let error_vec = errors.into_vec();
+    assert!(!error_vec.is_empty());
     if let Some(first) = error_vec.first()
         && first.location.span.start < 500
     {

@@ -20,6 +20,128 @@ fn parser() -> TreeSitterParser {
 }
 
 #[test]
+fn direct_fragment_spans_do_not_subtract_a_nonexistent_wrapper() {
+    let p = parser();
+    for offset in [0, 200, 1000] {
+        let errors = ErrorCollector::new();
+        let word = p
+            .parse_word_fragment("café", offset, &errors)
+            .into_option()
+            .unwrap();
+        assert_eq!(
+            word.span,
+            talkbank_model::Span::from_usize(offset, offset + "café".len())
+        );
+        let main = p
+            .parse_main_tier_fragment("*CHI:\thello .", offset, &errors)
+            .into_option()
+            .unwrap();
+        assert_eq!(
+            main.speaker_span,
+            talkbank_model::Span::from_usize(offset + 1, offset + 4)
+        );
+        assert!(errors.is_empty());
+    }
+}
+
+#[test]
+fn direct_fragment_diagnostics_add_the_document_origin() {
+    let p = parser();
+    check_fragment_diagnostics("hello@@", |offset, errors| {
+        assert!(
+            p.parse_word_fragment("hello@@", offset, errors)
+                .is_rejected()
+        );
+    });
+    check_fragment_diagnostics("*CHI:\thello } .", |offset, errors| {
+        assert!(
+            p.parse_main_tier_fragment("*CHI:\thello } .", offset, errors)
+                .is_rejected()
+        );
+    });
+}
+
+fn check_fragment_diagnostics(input: &str, parse: impl Fn(usize, &ErrorCollector)) {
+    let local = ErrorCollector::new();
+    parse(0, &local);
+    let local = local.into_vec();
+    assert!(!local.is_empty());
+    let document = ErrorCollector::new();
+    parse(200, &document);
+    let document = document.into_vec();
+    assert_eq!(local.len(), document.len());
+    for (local, document) in local.iter().zip(&document) {
+        assert!(local.location.span.end as usize <= input.len(), "{local:?}");
+        assert_eq!(local.code, document.code);
+        assert_eq!(
+            document.location.span.start,
+            local.location.span.start + 200
+        );
+        assert_eq!(document.location.span.end, local.location.span.end + 200);
+        assert_eq!(document.context, local.context);
+        if let Some(context) = &local.context {
+            assert!(context.span.end as usize <= context.source_text.len());
+        }
+    }
+}
+
+#[test]
+fn utterance_fragment_diagnostics_remove_only_the_real_wrapper() {
+    let p = parser();
+    let input = "*CHI:\thello } .";
+    check_fragment_diagnostics(input, |offset, errors| {
+        assert!(
+            p.parse_utterance_fragment(input, offset, errors)
+                .is_rejected()
+        );
+    });
+}
+
+#[test]
+fn header_fragment_diagnostics_add_the_document_origin() {
+    let p = parser();
+    let input = "@Participants:\tCHI";
+    check_fragment_diagnostics(input, |offset, errors| {
+        assert!(p.parse_header_fragment(input, offset, errors).is_rejected());
+    });
+}
+
+#[test]
+fn participant_fragment_diagnostics_remove_only_the_real_wrapper() {
+    let p = parser();
+    let input = "CHI";
+    check_fragment_diagnostics(input, |offset, errors| {
+        assert!(
+            p.parse_participant_entry_fragment(input, offset, errors)
+                .is_rejected()
+        );
+    });
+}
+
+#[test]
+fn dependent_fragment_diagnostics_remove_only_the_real_wrapper() {
+    let p = parser();
+    let input = "|we v|go .";
+    check_fragment_diagnostics(input, |offset, errors| {
+        assert!(
+            p.parse_mor_tier_fragment(input, offset, errors)
+                .is_rejected()
+        );
+    });
+    let errors = ErrorCollector::new();
+    p.parse_mor_tier_fragment(input, 200, &errors);
+    let errors = errors.into_vec();
+    let malformed = errors
+        .iter()
+        .find(|e| e.code == talkbank_model::ErrorCode::MorItemEmptyPos)
+        .unwrap();
+    assert_eq!(
+        malformed.location.span,
+        talkbank_model::Span::from_usize(200, 203)
+    );
+}
+
+#[test]
 fn public_main_tier_wrapper_rejects_ca_fragment_without_context() {
     let p = parser();
     let errors = ErrorCollector::new();
@@ -51,4 +173,30 @@ fn public_utterance_wrapper_accepts_ca_fragment_with_context() {
     let errors = ErrorCollector::new();
     let result = p.parse_utterance_fragment_with_context("*CHI:\t(word) .\n", 0, &context, &errors);
     assert!(result.into_option().is_some());
+}
+
+#[test]
+fn utterance_coordinates_follow_the_actual_source_form() {
+    let p = parser();
+    for input in [
+        "*CHI:\thello .",
+        "*CHI:\thello .\n",
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|test|CHI|||||Child|||\n*CHI:\thello .\n@End\n",
+    ] {
+        for offset in [0, 200] {
+            let errors = ErrorCollector::new();
+            let utterance = p
+                .parse_utterance_fragment(input, offset, &errors)
+                .into_option()
+                .unwrap_or_else(|| panic!("{input:?}: {:?}", errors.into_vec()));
+            let speaker_start = input.find("CHI:\t").unwrap();
+            assert_eq!(
+                utterance.main.speaker_span,
+                talkbank_model::Span::from_usize(
+                    offset + speaker_start,
+                    offset + speaker_start + 3
+                )
+            );
+        }
+    }
 }

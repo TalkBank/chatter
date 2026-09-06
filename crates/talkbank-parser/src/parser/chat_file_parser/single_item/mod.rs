@@ -56,11 +56,9 @@ impl TreeSitterParser {
 
     /// Parse a single main tier line (speaker code, content words, and terminator).
     ///
-    /// The input is wrapped in a minimal synthetic CHAT document so tree-sitter can
-    /// produce a valid CST. Spans in the returned `MainTier` are relative to the
-    /// wrapper, not the original input.
-    ///
-    /// This is a legacy synthetic fragment path, not an honest isolated-fragment parser.
+    /// The multi-root grammar parses this input directly as a main tier.
+    /// Returned spans are relative to the caller's input; no wrapper prefix
+    /// needs to be removed by the caller.
     ///
     /// # Parameters
     ///
@@ -73,21 +71,17 @@ impl TreeSitterParser {
     /// # Errors
     ///
     /// Returns `ParseErrors` when:
-    /// - Tree-sitter fails to parse the wrapped input.
+    /// - Tree-sitter fails to parse the input.
     /// - The CST contains error nodes inside the main tier.
     /// - No main tier node is found in the parse tree.
     pub fn parse_main_tier(&self, input: &str) -> ParseResult<MainTier> {
         parse_main_tier::parse_main_tier(self, input)
     }
 
-    /// Parse a single CHAT word token, extracting it from a synthetic one-word utterance.
+    /// Parse a single CHAT word token through the multi-root grammar.
     ///
-    /// The input word is embedded in a minimal `*CHI:\t<word> .` utterance, parsed by
-    /// tree-sitter, and the first word-like content element is projected back. Inline
-    /// annotations (e.g., `@b`, `@l`) attached to the word are preserved.
-    ///
-    /// This is a synthetic compatibility helper, not the semantic source of truth
-    /// for isolated word parsing.
+    /// The input is parsed directly as `standalone_word`. Spans are relative
+    /// to that input. Inline form markers attached to the word are preserved.
     ///
     /// # Parameters
     ///
@@ -100,8 +94,8 @@ impl TreeSitterParser {
     /// # Errors
     ///
     /// Returns `ParseErrors` when:
-    /// - Tree-sitter fails to parse the synthetic wrapper.
-    /// - The resulting content is empty or the first element is not a word-like item.
+    /// - Tree-sitter fails to parse the input as one standalone word.
+    /// - The word is empty or contains unparsable content.
     pub fn parse_word(&self, input: &str) -> ParseResult<Word> {
         parse_word::parse_word(self, input)
     }

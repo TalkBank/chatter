@@ -12,6 +12,7 @@
 
 mod chat_parser_impl;
 pub mod dependent_tier;
+pub(crate) mod fragment;
 mod parser_api;
 mod parser_impl;
 pub mod tiers;

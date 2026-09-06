@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 04:57 EDT
+**Last updated:** 2026-09-06 05:21 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -180,19 +180,36 @@ let main_tier = parser.parse_main_tier_fragment(tier_text, document_offset, &err
 
 ### Diagnostic coordinates
 
-Whole-file fragment parsing adds the caller's offset to model spans and
+Fragment parsing adds the caller's offset to model spans and
 diagnostic document locations. `RebasedErrorSink` owns the diagnostic
 translation for both backends. A diagnostic's `ErrorContext` owns its own
 source text, so its highlight remains relative to that text. The wrapper
 removal adapter, `OffsetAdjustingErrorSink`, instead subtracts a synthetic
-prefix and clips context; it is not a document rebasing operation.
+prefix and conditionally clips wrapper context; it is not a document rebasing
+operation.
+
+Word and main-tier fragments use the multi-root grammar directly, so there is
+no synthetic prefix to subtract. Header parsing already returns input-relative
+diagnostics. Utterance, participant-entry and dependent-tier adapters use an
+owned `WrappedFragment`: its constructor records the actual input boundary as
+it assembles the source, and both the model projection and diagnostic sink use
+that boundary. Complete documents passed to the utterance adapter are recognized
+through generated typed CST traversal and receive no extra document wrapper.
+
+`cargo test -p talkbank-parser --test integration context_public_api` reproduces
+the fragment regression checks: UTF-8 word spans, caller offsets, rejected
+fragments, and utterances with or without a trailing newline or document headers.
+These caught obsolete prefix subtraction that collapsed valid word spans to
+zero, subtraction of caller origins from errors, and unremoved synthetic
+prefixes on rejected utterances and participant entries.
 
 The E326 boundary test exercises both parsers with LF and CRLF, UTF-8 content,
 and offsets zero and 200. Unsupported-line recovery must identify each skipped
 line, retain following utterances, and preserve the diagnostic's local source
-highlight. The separate wrapper-based fragment entry points and the existing
-`usize` to signed span-displacement conversions still need a complete offset
-representability review; these controls do not prove large-offset safety.
+highlight. The existing `usize` to signed span-displacement conversions still
+need an offset representability review; these controls do not prove large-offset
+safety. Secondary labels and context clipping in the legacy wrapper-removal sink
+also remain separate review items.
 
 ### AST Structure
 

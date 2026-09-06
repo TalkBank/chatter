@@ -1,5 +1,5 @@
 ---
-source: crates/talkbank-parser-tests/tests/offset_tests.rs
+source: crates/talkbank-parser-tests/tests/integration/offset_tests.rs
 expression: results
 ---
 [
@@ -10,7 +10,7 @@ expression: results
             Word {
                 span: Span {
                     start: 0,
-                    end: 0,
+                    end: 5,
                 },
                 word_id: None,
                 raw_text: "hello",
@@ -45,8 +45,8 @@ expression: results
         Some(
             Word {
                 span: Span {
-                    start: 0,
-                    end: 0,
+                    start: 100,
+                    end: 105,
                 },
                 word_id: None,
                 raw_text: "world",
@@ -81,8 +81,8 @@ expression: results
         Some(
             Word {
                 span: Span {
-                    start: 93,
-                    end: 96,
+                    start: 200,
+                    end: 203,
                 },
                 word_id: None,
                 raw_text: "foo",
@@ -117,8 +117,8 @@ expression: results
         Some(
             Word {
                 span: Span {
-                    start: 193,
-                    end: 196,
+                    start: 300,
+                    end: 303,
                 },
                 word_id: None,
                 raw_text: "bar",

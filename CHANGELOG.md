@@ -54,6 +54,15 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Fragment APIs no longer subtract obsolete word/main-tier wrapper lengths or
+  subtract caller offsets from diagnostics. Synthetic utterance, participant
+  and dependent-tier wrappers own their input boundary for model and error
+  projection. Complete CHAT documents are recognized by the utterance adapter.
+
+- re2c reports unsupported lines as E326 with their original source spans and
+  preserves following utterances. Diagnostic rebasing keeps context highlights
+  relative to their own source text.
+
 - Speaker-qualified `@Birth of`, `@Birthplace of`, and `@L1 of` headers retain
   their separator spans, including non-CA whitespace violations and CA exemptions.
 

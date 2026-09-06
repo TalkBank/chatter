@@ -1,13 +1,13 @@
 ---
-source: crates/talkbank-parser-tests/tests/offset_tests.rs
+source: crates/talkbank-parser-tests/tests/integration/offset_tests.rs
 expression: "(word, errors.into_vec())"
 ---
 (
     Some(
         Word {
             span: Span {
-                start: 893,
-                end: 898,
+                start: 1000,
+                end: 1005,
             },
             word_id: None,
             raw_text: "world",
