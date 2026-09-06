@@ -7,13 +7,27 @@ use talkbank_model::model::*;
 
 /// Convert a parsed header to model Header.
 pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
-    let prefix_text = h.prefix.text();
+    let (prefix, content) = match h {
+        ast::HeaderParsed::Participants(participants) => {
+            return Header::Participants {
+                entries: ParticipantEntries::new(
+                    participants
+                        .entries
+                        .iter()
+                        .map(ParticipantEntry::from)
+                        .collect(),
+                ),
+            };
+        }
+        ast::HeaderParsed::Other { prefix, content } => (prefix, content),
+    };
+    let prefix_text = prefix.text();
 
     // Join all content token texts for free-text headers.
     // Preserve continuation newlines.
-    let all_content: String = h.content.iter().map(|t| t.text()).collect::<String>();
+    let all_content: String = content.iter().map(|t| t.text()).collect::<String>();
 
-    match &h.prefix {
+    match prefix {
         Token::HeaderUtf8(_) => Header::Utf8,
         Token::HeaderBegin(_) => Header::Begin,
         Token::HeaderEnd(_) => Header::End,
@@ -26,8 +40,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
             // guaranteed non-empty here; `.expect()` is defensive only
             // (this crate's file-level `expect_used` allow covers exactly
             // this kind of lexer-guaranteed-non-empty case).
-            let codes: Vec<LanguageCode> = h
-                .content
+            let codes: Vec<LanguageCode> = content
                 .iter()
                 .filter(|t| matches!(t, Token::LanguageCode(_)))
                 .map(|t| {
@@ -36,27 +49,6 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 .collect();
             Header::Languages {
                 codes: LanguageCodes::new(codes),
-            }
-        }
-        Token::HeaderPrefix(p) if p.contains("@Participants") => {
-            // Split participant words on Comma tokens
-            let mut entries = Vec::new();
-            let mut current_words: Vec<&str> = Vec::new();
-            for tok in &h.content {
-                match tok {
-                    Token::ParticipantWord(s) => current_words.push(s),
-                    Token::Comma(_) if !current_words.is_empty() => {
-                        entries.push(participant_words_to_entry(&current_words));
-                        current_words.clear();
-                    }
-                    _ => {}
-                }
-            }
-            if !current_words.is_empty() {
-                entries.push(participant_words_to_entry(&current_words));
-            }
-            Header::Participants {
-                entries: ParticipantEntries::new(entries),
             }
         }
         Token::HeaderPrefix(p) if p.contains("@ID") => {
@@ -72,10 +64,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 role,
                 education,
                 custom,
-            }) = h
-                .content
-                .iter()
-                .find(|t| !matches!(t, Token::Whitespace(_)))
+            }) = content.iter().find(|t| !matches!(t, Token::Whitespace(_)))
             {
                 // Language field can be comma-separated: "eng, ara". Filter
                 // empty pieces (e.g. a malformed "eng,,ara") before
@@ -129,10 +118,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 design,
                 activity,
                 group,
-            }) = h
-                .content
-                .iter()
-                .find(|t| !matches!(t, Token::Whitespace(_)))
+            }) = content.iter().find(|t| !matches!(t, Token::Whitespace(_)))
             {
                 return Header::Types(TypesHeader::new(*design, *activity, *group));
             }
@@ -144,8 +130,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
         }
         Token::HeaderPrefix(p) if p.contains("@Media") => {
             // Media content is MediaWord/MediaFilename tokens separated by Comma
-            let words: Vec<&str> = h
-                .content
+            let words: Vec<&str> = content
                 .iter()
                 .filter(|t| matches!(t, Token::MediaWord(_) | Token::MediaFilename(_)))
                 .map(|t| t.text())
@@ -155,8 +140,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
             // too; the tree-sitter parser records the same fact from its
             // `optional($.whitespaces)` child. Reporting it from one parser's
             // lowering is what made the two disagree when E767 was introduced.
-            let whitespace_before_comma = h
-                .content
+            let whitespace_before_comma = content
                 .iter()
                 .take_while(|t| !matches!(t, Token::Comma(_)))
                 .any(|t| matches!(t, Token::Whitespace(_)));
@@ -205,7 +189,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
             }
         }
         Token::HeaderPrefix(p) if p.contains("@Comment") => Header::Comment {
-            content: tokens_to_bullet_content(&h.content),
+            content: tokens_to_bullet_content(content),
         },
         Token::HeaderPrefix(p) if p.contains("@Date") => Header::Date {
             date: ChatDate::new(&all_content),

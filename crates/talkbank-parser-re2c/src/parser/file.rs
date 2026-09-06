@@ -17,15 +17,10 @@ use chumsky::Parser as _;
 
 use crate::ast::*;
 use crate::token::{Token, TokenDiscriminants};
-use talkbank_model::{ErrorSink, NullErrorSink, ParseError, Span};
+use talkbank_model::{ErrorSink, ParseError, Span};
 
 use super::dependent_tiers;
 use super::main_tier;
-
-/// Parse a complete CHAT file with no error reporting.
-pub fn parse_file<'a>(tokens: &[Token<'a>], source: &'a str) -> ChatFile<'a> {
-    parse_file_with_errors(tokens, source, &NullErrorSink)
-}
 
 /// Report E750 for whitespace hugging an angle-group delimiter: a
 /// `LessThan` token immediately followed by whitespace, or whitespace
@@ -294,11 +289,12 @@ fn report_leading_zero_bullet_times<'a>(tokens: &[Token<'a>], errors: &impl Erro
 
 /// Parse a complete CHAT file from a temporary token slice, reporting
 /// parse failures to the given error sink.
-pub fn parse_file_with_errors<'a>(
-    tokens: &[Token<'a>],
-    source: &'a str,
+pub(crate) fn parse_file_with_errors<'a>(
+    lexed: &super::LexedSource<'a>,
     errors: &impl ErrorSink,
 ) -> ChatFile<'a> {
+    let tokens = lexed.tokens();
+    let source = lexed.source();
     report_leading_zero_bullet_times(tokens, errors);
     report_space_inside_angle_group(tokens, errors);
     report_pause_glued_to_word(tokens, errors);
@@ -324,7 +320,7 @@ pub fn parse_file_with_errors<'a>(
                 {
                     pos += 1;
                 }
-                lines.push(Line::Header(HeaderParsed {
+                lines.push(Line::Header(HeaderParsed::Other {
                     prefix: tok,
                     content: vec![],
                 }));
@@ -337,26 +333,32 @@ pub fn parse_file_with_errors<'a>(
             | TokenDiscriminants::HeaderL1Of => {
                 let prefix = tokens[pos].clone();
                 pos += 1;
-                let mut content = Vec::new();
+                let content_start = pos;
                 while pos < tokens.len()
                     && TokenDiscriminants::from(&tokens[pos]) != TokenDiscriminants::Newline
                 {
-                    let tok = tokens[pos].clone();
                     pos += 1;
-                    // ALL tokens, whitespace included, as the field's own doc
-                    // says. Dropping whitespace here used to be invisible and
-                    // lossy: the `@Media` converter could not see a space
-                    // before the comma, so E767 was unreportable from this
-                    // front end and the two parsers silently disagreed.
-                    // Consumers that read positions skip it explicitly.
-                    content.push(tok);
                 }
+                let header = if matches!(&prefix, Token::HeaderPrefix(p) if p.contains("@Participants"))
+                {
+                    HeaderParsed::Participants(super::headers::parse_participants_tokens(
+                        lexed.located(content_start..pos),
+                        errors,
+                    ))
+                } else {
+                    // Keep whitespace for consumers such as @Media, whose
+                    // E767 diagnostic depends on spaces before the comma.
+                    HeaderParsed::Other {
+                        prefix,
+                        content: tokens[content_start..pos].to_vec(),
+                    }
+                };
                 if pos < tokens.len()
                     && TokenDiscriminants::from(&tokens[pos]) == TokenDiscriminants::Newline
                 {
                     pos += 1;
                 }
-                lines.push(Line::Header(HeaderParsed { prefix, content }));
+                lines.push(Line::Header(header));
             }
 
             // Main tier

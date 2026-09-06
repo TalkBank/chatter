@@ -51,26 +51,113 @@ pub fn languages_header_parser<'tokens, 'a: 'tokens>()
 // @Participants header, comma-separated entries (SPK Name Role)
 // ═══════════════════════════════════════════════════════════
 
-/// Parse a `@Participants` header content.
-pub fn participants_header_parser<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, ParticipantsHeaderParsed<'a>> + Clone {
-    let word = select! { Token::ParticipantWord(s) => s };
-    let comma = select! { Token::Comma(_) => () };
+/// A pending entry always has a first word; a separator belongs to the
+/// completed entry before it. EOF can therefore distinguish an empty list
+/// from a dangling separator without rescanning source text.
+enum ParticipantListState<'a> {
+    Start,
+    Entry { first: &'a str, rest: Vec<&'a str> },
+    AfterComma(crate::lexer::LexerSpan),
+}
 
-    // A single participant entry: one or more words
-    let entry = word
-        .separated_by(ws())
-        .at_least(1)
-        .collect::<Vec<_>>()
-        .map(|words| ParticipantEntryParsed { words });
+fn report_participant_syntax(
+    span: crate::lexer::LexerSpan,
+    code: talkbank_model::ErrorCode,
+    message: &str,
+    errors: &impl talkbank_model::ErrorSink,
+) {
+    errors.report(talkbank_model::ParseError::new(
+        code,
+        talkbank_model::Severity::Error,
+        talkbank_model::SourceLocation::from_offsets(span.start, span.end),
+        None,
+        message,
+    ));
+}
 
-    ws().ignore_then(
-        entry
-            .separated_by(ws().then(comma).then(ws()))
-            .allow_trailing()
-            .collect::<Vec<_>>(),
-    )
-    .then_ignore(ws())
-    .then_ignore(opt_newline())
-    .map(|entries| ParticipantsHeaderParsed { entries })
+/// One participant-list parser for file and fragment entry points. Token
+/// locations originate in their owning lexer run and survive token recovery.
+pub(crate) fn parse_participants_tokens<'tokens, 'source: 'tokens>(
+    tokens: impl Iterator<Item = (&'tokens Token<'source>, crate::lexer::LexerSpan)>,
+    errors: &impl talkbank_model::ErrorSink,
+) -> ParticipantsHeaderParsed<'source> {
+    use ParticipantListState::{AfterComma, Entry, Start};
+    use talkbank_model::ErrorCode;
+
+    let mut state = Start;
+    let mut entries = Vec::new();
+    for (token, span) in tokens {
+        match token {
+            Token::ParticipantWord(word) => {
+                state = match state {
+                    Entry { first, mut rest } => {
+                        rest.push(*word);
+                        Entry { first, rest }
+                    }
+                    Start | AfterComma(_) => Entry {
+                        first: word,
+                        rest: Vec::new(),
+                    },
+                };
+            }
+            Token::Comma(_) => {
+                state = match state {
+                    Entry { first, rest } => {
+                        entries.push(ParticipantEntryParsed {
+                            words: std::iter::once(first).chain(rest).collect(),
+                        });
+                        AfterComma(span)
+                    }
+                    Start => {
+                        report_participant_syntax(
+                            span,
+                            ErrorCode::UnparsableContent,
+                            "Expected a participant before the comma",
+                            errors,
+                        );
+                        Start
+                    }
+                    AfterComma(previous) => {
+                        report_participant_syntax(
+                            span.clone(),
+                            ErrorCode::UnparsableContent,
+                            "Expected a participant between commas",
+                            errors,
+                        );
+                        AfterComma(previous.start..span.end)
+                    }
+                };
+            }
+            Token::Whitespace(_) | Token::Newline(_) => {}
+            _ => report_participant_syntax(
+                span,
+                ErrorCode::UnparsableContent,
+                "Unexpected token in @Participants",
+                errors,
+            ),
+        }
+    }
+    match state {
+        Entry { first, rest } => entries.push(ParticipantEntryParsed {
+            words: std::iter::once(first).chain(rest).collect(),
+        }),
+        AfterComma(span) => {
+            // Match the canonical parser's structural-recovery diagnostic and
+            // the specific CHAT/CLAN trailing-separator rule.
+            report_participant_syntax(
+                span.clone(),
+                ErrorCode::UnparsableContent,
+                "Expected a participant after the comma",
+                errors,
+            );
+            report_participant_syntax(
+                span,
+                ErrorCode::TrailingCommaInParticipants,
+                "Commas at the end of the @Participants tier are not allowed",
+                errors,
+            );
+        }
+        Start => {}
+    }
+    ParticipantsHeaderParsed { entries }
 }

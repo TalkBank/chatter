@@ -563,7 +563,7 @@ fn parse_all_participants_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let result = parser::parse_participants_header(&input);
+        let result = parser::parse_participants_header(&input, &talkbank_model::NullErrorSink);
         assert!(
             !result.entries.is_empty(),
             "empty participants for: {}",
@@ -590,7 +590,7 @@ fn snapshot_parsed_participants_samples() {
         } else {
             format!("{body}\n")
         };
-        let result = parser::parse_participants_header(&input);
+        let result = parser::parse_participants_header(&input, &talkbank_model::NullErrorSink);
         assert_yaml_snapshot!(format!("participants_{i}"), result);
     }
 }
@@ -1014,7 +1014,7 @@ fn convert_id_to_model() {
 #[cfg(feature = "trait_tests")]
 fn convert_participants_to_model() {
     let input = "CHI Target_Child, MOT Mother\n";
-    let parsed = parser::parse_participants_header(input);
+    let parsed = parser::parse_participants_header(input, &talkbank_model::NullErrorSink);
     let entries: Vec<talkbank_model::model::ParticipantEntry> =
         parsed.entries.iter().map(|e| e.into()).collect();
     assert_eq!(entries.len(), 2);

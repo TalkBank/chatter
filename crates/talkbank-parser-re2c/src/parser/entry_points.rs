@@ -71,15 +71,12 @@ pub fn parse_languages_header(input: &str) -> LanguagesHeaderParsed<'_> {
 }
 
 /// Parse a @Participants header content (after `@Participants:\t`).
-pub fn parse_participants_header(input: &str) -> ParticipantsHeaderParsed<'_> {
-    use chumsky::Parser as _;
-    let tokens = lex_to_tokens(input, crate::lexer::COND_PARTICIPANTS_CONTENT);
-    headers::participants_header_parser()
-        .parse(tokens.as_slice())
-        .into_result()
-        .unwrap_or_else(|_| ParticipantsHeaderParsed {
-            entries: Vec::new(),
-        })
+pub fn parse_participants_header<'a>(
+    input: &'a str,
+    errors: &impl ErrorSink,
+) -> ParticipantsHeaderParsed<'a> {
+    let lexed = super::LexedSource::new(input, crate::lexer::COND_PARTICIPANTS_CONTENT);
+    headers::parse_participants_tokens(lexed.located(0..lexed.tokens().len()), errors)
 }
 
 /// Parse a single word (content item) from main tier content.
@@ -151,16 +148,15 @@ pub fn parse_text_tier(input: &str) -> TextTierParsed<'_> {
 
 /// Parse a complete CHAT file (AST, borrows from the input).
 pub fn parse_chat_file(input: &str) -> ChatFile<'_> {
-    let (tokens, source) = super::lex_to_tokens_and_source(input, 0);
-    file::parse_file(&tokens, source)
+    parse_chat_file_streaming(input, &talkbank_model::NullErrorSink)
 }
 
 /// Parse a complete CHAT file with streaming error reporting (AST, borrows).
 pub fn parse_chat_file_streaming<'a>(input: &'a str, errors: &impl ErrorSink) -> ChatFile<'a> {
     talkbank_model::validation::report_control_characters(input, errors);
     report_header_colon_without_tab(input, errors);
-    let (tokens, source) = super::lex_to_tokens_and_source(input, 0);
-    file::parse_file_with_errors(&tokens, source, errors)
+    let lexed = super::LexedSource::new(input, 0);
+    file::parse_file_with_errors(&lexed, errors)
 }
 
 /// Report E303 at the source boundary before lexing malformed headers.

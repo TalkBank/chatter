@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-08-27 17:23 EDT
+**Last updated:** 2026-09-05 22:36 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -83,45 +83,62 @@ Used by the LSP, the default CLI, and all production validation.
 - **Technology:** [re2c](https://re2c.org/) DFA lexer + [chumsky](https://docs.rs/chumsky/1.0.0-alpha.8) parser combinators
 - **Grammar:** Translated from `grammar.js` rules → re2c conditions + chumsky combinators
 - **Strengths:** 4-8x faster, `Send + Sync`, zero constructor cost, specification oracle
-- **Weaknesses:** No incremental reparsing, `Box::leak` memory strategy, and
+- **Weaknesses:** No incremental reparsing, incomplete diagnostic parity, and
   **it is not ready to judge CHAT validity** (see below)
 
 Used for parser parity testing and performance benchmarking.
 
-### NOT READY as a validity authority (as of 0.16.0)
+### Source ownership and participant recovery
 
-**A clean `--parser re2c` run is not evidence that a file is valid.** This
-backend ACCEPTS constructs the default backend refuses, so it must not be used
-to decide whether a transcript is good. Measured 2026-08-27:
+As of 0.19.0, parsed values borrow the caller's source; token storage and
+temporary recovery buffers are released after parsing. The former
+`Box::leak` strategy is gone.
 
-| Input | Default backend | `--parser re2c` |
-|---|---|---|
-| `“hello” [qq] .` | E316 | **accepted** |
-| `hello (.) [qq] .` | E316 | **accepted** |
-| `[x 2] hey .` | E375 | **accepted** |
+File parsing now receives a `LexedSource` that privately owns tokens and their
+lexer locations alongside the borrowed source. Its only constructor lexes
+that source, preventing callers from pairing unrelated token and location
+arrays. Participant lists consume those located tokens through one parser
+shared with the fragment entry point:
 
-The cause is information lost before validation can see it, not a missing
-rule. Both parsers build the same `talkbank_model` types and share one
-validator, but each has its own intermediate parse tree, and re2c's does not
-carry annotations for every construct:
-
-```rust
-// crates/talkbank-parser-re2c/src/ast.rs
-pub struct Group     { contents: ..., annotations: Vec<ParsedAnnotation> }
-pub struct Quotation { contents: ... }   // no annotations field
+```mermaid
+flowchart LR
+    source["Source text"] --> lexed["LexedSource: tokens and locations"]
+    lexed --> parser["Participant list state machine"]
+    parser --> entries["HeaderParsed::Participants: recovered entries"]
+    parser --> errors["ErrorSink: located diagnostics"]
+    entries --> model["Header::Participants"]
 ```
 
-Six lines apart. A quotation's annotations are discarded at parse time, so no
-validator can report them. The same shape covers the pause and the
-utterance-initial position.
+The list distinguishes its initial state, a nonempty entry, and a consumed
+comma awaiting another entry. A trailing comma therefore reports E550 while
+preserving the preceding participants. Conversion receives parsed entries
+instead of reparsing raw header tokens, and header fragments forward the
+same diagnostics with the caller's offset. The internal AST snapshot records
+this distinction; it does not define a serialized CHAT format change.
 
-Also outstanding on this backend: many diagnostics are reported at byte 0
-rather than at the construct, and E307 is reported twice where the default
-backend reports it once.
+### Not ready as a validity authority
 
-Closing these is queued work. Until then, use re2c to COMPARE two
-implementations, which is what a specification oracle is for, and use the
-default backend to decide validity.
+**A clean `--parser re2c` run is not evidence that a file is valid.** The
+backend still accepts some inputs that the default backend rejects. The
+spec parity gate records these cases individually in
+`tests/integration/error_parity/baseline.rs`, including:
+
+| Spec case | Missing behavior in re2c |
+|---|---|
+| `E747.md` | Report a blank line between utterances |
+| `E363.md#0` | Report a postcode containing only spaces |
+| `E375.md#1` | Report a replacement annotation glued to its word |
+
+These are implementation gaps, not alternate CHAT rules. Both backends feed
+the shared model validator, but information discarded before model lowering
+cannot be checked there. Many re2c diagnostic locations also remain dummy
+spans; the located participant path above closes one family, not all spans.
+
+The formerly documented silence on unknown quotation and pause annotations
+is covered by the passing CLI regression
+`unknown_annotation_every_host_tests::an_unrecognised_annotation_is_refused_on_every_host_and_backend`.
+Use the named spec baseline for current gaps instead of treating those
+historical examples as continuing defects.
 
 ## CLI Usage
 
@@ -141,28 +158,24 @@ are parser-specific, switching parsers does not invalidate the other's cache.
 
 ## Parity Status
 
-**The figures in this section were measured against an older tree and have not
-been re-measured since; the table below is known to be wrong in at least one
-row.** Treat them as historical until someone re-runs them.
+The reference-corpus equivalence and roundtrip gates compare actual parsed
+models and serialized output. The error-spec gate
+`backends_diverge_only_where_recorded` separately compares diagnostic code
+sets against a named, bidirectional baseline: a newly divergent case fails,
+and a resolved case must be removed from that baseline. This change removes
+E550 after file and fragment participant recovery agree.
 
-Both parsers produce `SemanticEq`-identical output on the 87-file reference
-corpus (100% match). On the ~100k-file wild corpus, parity is ~98.7%.
+A passing baseline means that disagreements are accounted for, not that
+both backends meet every spec. The harness distinguishes backend agreement
+from each backend's conformance to the declared spec. Run its report with:
 
-### Error Detection
+```bash
+cargo test -p talkbank-parser-re2c --test integration backends_diverge_only_where_recorded --locked -- --nocapture
+```
 
-| Metric | Value |
-|--------|-------|
-| Specs tested | 140 |
-| Both detect error | 140/140 (100%) |
-| Same error code | 79/140 (56.4%) |
-| Different code, both detect | 61/140 (43.6%) |
-| Re2c silent (misses error) | **0 is FALSE.** See "NOT READY" above: three constructs measured silent on 2026-08-27 |
-
-The 61 code mismatches come from architectural differences. The claim that
-both parsers report actionable diagnostics for ALL 140 specs no longer holds:
-the spec corpus contains no annotation-on-a-container case, which is why this
-table did not see the silences named above. A spec example for each is part of
-closing them.
+Older wild-corpus percentages and the 140-case diagnostic table are omitted
+because they do not describe the current spec suite. No new wild-corpus or
+performance measurement is claimed here; the timings below are historical.
 
 ### Performance
 

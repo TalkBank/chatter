@@ -449,3 +449,45 @@ fn re2c_never_panics_on_invalid_input() -> Result<(), String> {
     );
     Ok(())
 }
+
+/// Surviving behavior: lexer locations and fragment rebasing must agree with
+/// the source spec; the type system cannot decide which byte is the comma.
+#[test]
+fn participants_recovery_preserves_entries_and_fragment_locations() {
+    use talkbank_model::model::Header;
+    use talkbank_model::{ChatParser, ErrorCode, ParseOutcome};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
+    let spec = specs
+        .iter()
+        .find(|spec| spec.filename == "E550.md")
+        .unwrap();
+    let source = spec.examples()[0].chat.as_str();
+    let header = source
+        .lines()
+        .find(|line| line.starts_with("@Participants:"))
+        .unwrap();
+    let offset = source.find(header).unwrap();
+    let comma = offset + header.rfind(',').unwrap();
+    let parser = talkbank_parser_re2c::Re2cParser::new();
+    let errors = ErrorCollector::new();
+    let ParseOutcome::Parsed(Header::Participants { entries }) =
+        parser.parse_header(header, offset, &errors)
+    else {
+        panic!("trailing-comma recovery must retain a participant header");
+    };
+    assert_eq!(entries.len(), 2);
+    let diagnostic = errors
+        .into_vec()
+        .into_iter()
+        .find(|error| error.code == ErrorCode::TrailingCommaInParticipants)
+        .unwrap();
+    assert_eq!(
+        diagnostic.location.span,
+        talkbank_model::Span::from_usize(comma, comma + 1)
+    );
+}

@@ -738,12 +738,19 @@ pub struct TypesHeaderParsed<'a> {
     pub group: &'a str,
 }
 
-/// A generic header (prefix + content tokens).
+/// A parsed participant header or another header's preserved lexer tokens.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct HeaderParsed<'a> {
-    pub prefix: Token<'a>,
-    /// All content tokens (may be empty for @UTF8, @Begin, @End, etc.)
-    pub content: Vec<Token<'a>>,
+pub enum HeaderParsed<'a> {
+    /// Participant syntax has already been parsed and diagnosed; lowering must
+    /// consume these entries rather than run a second token-splitting parser.
+    Participants(ParticipantsHeaderParsed<'a>),
+    /// Other header families retain their lexer representation for lowering.
+    Other {
+        /// Header discriminator produced by the lexer.
+        prefix: Token<'a>,
+        /// Content tokens, including whitespace and continuation newlines.
+        content: Vec<Token<'a>>,
+    },
 }
 
 // ═══════════════════════════════════════════════════════════════

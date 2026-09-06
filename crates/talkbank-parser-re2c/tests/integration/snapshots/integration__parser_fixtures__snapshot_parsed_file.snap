@@ -1,49 +1,50 @@
 ---
 source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
-assertion_line: 599
+assertion_line: 606
 expression: file
 ---
 lines:
   - Header:
-      prefix:
-        HeaderUtf8: "@UTF8"
-      content: []
+      Other:
+        prefix:
+          HeaderUtf8: "@UTF8"
+        content: []
   - Header:
-      prefix:
-        HeaderBegin: "@Begin"
-      content: []
+      Other:
+        prefix:
+          HeaderBegin: "@Begin"
+        content: []
   - Header:
-      prefix:
-        HeaderPrefix: "@Languages:\t"
-      content:
-        - LanguageCode: eng
+      Other:
+        prefix:
+          HeaderPrefix: "@Languages:\t"
+        content:
+          - LanguageCode: eng
   - Header:
-      prefix:
-        HeaderPrefix: "@Participants:\t"
-      content:
-        - ParticipantWord: CHI
-        - Whitespace: " "
-        - ParticipantWord: Child
-        - Comma: ","
-        - Whitespace: " "
-        - ParticipantWord: MOT
-        - Whitespace: " "
-        - ParticipantWord: Mother
+      Participants:
+        entries:
+          - words:
+              - CHI
+              - Child
+          - words:
+              - MOT
+              - Mother
   - Header:
-      prefix:
-        HeaderPrefix: "@ID:\t"
-      content:
-        - IdFields:
-            language: eng
-            corpus: corpus
-            speaker: CHI
-            age: 3;00.
-            sex: ""
-            group: ""
-            ses: ""
-            role: Child
-            education: ""
-            custom: ""
+      Other:
+        prefix:
+          HeaderPrefix: "@ID:\t"
+        content:
+          - IdFields:
+              language: eng
+              corpus: corpus
+              speaker: CHI
+              age: 3;00.
+              sex: ""
+              group: ""
+              ses: ""
+              role: Child
+              education: ""
+              custom: ""
   - Utterance:
       main_tier:
         speaker:
@@ -76,7 +77,8 @@ lines:
             terminator:
               Period: "."
   - Header:
-      prefix:
-        HeaderEnd: "@End"
-      content: []
+      Other:
+        prefix:
+          HeaderEnd: "@End"
+        content: []
 source: "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n@ID:\teng|corpus|CHI|3;00.||||Child|||\n*CHI:\thello .\n%mor:\tn|hello .\n@End\n"

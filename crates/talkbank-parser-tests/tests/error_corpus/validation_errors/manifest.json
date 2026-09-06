@@ -2165,6 +2165,13 @@
       "source_spec": "spec/errors/E550.md"
     },
     {
+      "fixture": "E550_2.cha",
+      "code": "E550",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E550.md"
+    },
+    {
       "fixture": "E551_1.cha",
       "code": "E551",
       "claim": "violates",

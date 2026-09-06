@@ -8,6 +8,7 @@ pub mod dependent_tiers;
 pub mod entry_points;
 pub mod file;
 pub mod headers;
+mod located;
 pub mod main_tier;
 pub mod word_body;
 
@@ -34,3 +35,7 @@ pub(crate) fn lex_to_tokens_and_source(
 ) -> (Vec<Token<'_>>, &str) {
     (lex_to_tokens(input, start_condition), input)
 }
+
+/// Source, tokens and lexer spans admitted together by one lexer run.
+/// No caller can pair the token stream with a different source or span table.
+pub(crate) use located::LexedSource;

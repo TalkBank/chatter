@@ -77,9 +77,13 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<Header> {
-        let parsed = crate::parser::parse_chat_file(input);
+        let diagnostics = talkbank_model::ErrorCollector::new();
+        let parsed = crate::parser::parse_chat_file_streaming(input, &diagnostics);
+        for error in diagnostics.into_vec() {
+            errors.report(shifted(error, offset));
+        }
         for line in &parsed.lines {
             if let crate::ast::Line::Header(h) = line {
                 return ParseOutcome::parsed(shifted(
@@ -107,9 +111,13 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ParticipantEntry> {
-        let parsed = crate::parser::parse_participants_header(input);
+        let diagnostics = talkbank_model::ErrorCollector::new();
+        let parsed = crate::parser::parse_participants_header(input, &diagnostics);
+        for error in diagnostics.into_vec() {
+            errors.report(shifted(error, offset));
+        }
         match parsed.entries.first() {
             Some(entry) => ParseOutcome::parsed(shifted(ParticipantEntry::from(entry), offset)),
             None => ParseOutcome::rejected(),

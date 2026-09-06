@@ -37,13 +37,10 @@
 # So the rule is: a check that cannot run the gate must not report on it.
 set -euo pipefail
 
-# ORDER MATTERS: commit first, then gate, then push.
-#
-# The stamp records the WORKING TREE state, so committing changes it: a gate
-# run before the commit stamps "these files are modified" and the push stamps
-# "clean". That is correct rather than annoying, because it makes the stamp
-# mean "the gate ran on exactly what you are pushing", which is the only claim
-# worth having. Gate the thing you are about to push.
+# The stamp hashes working-tree CONTENT, not staging or commit state.
+# Committing the same bytes preserves it; changing any included file after
+# the gate requires a fresh gate. See tree-stamp.sh for the ownership of that
+# content calculation.
 #
 # `tree-stamp.sh` exits non-zero rather than printing an empty stamp; under
 # `set -e` that aborts the push here, which is the point. Its first version
