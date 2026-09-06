@@ -12,8 +12,10 @@ mod headers;
 mod items;
 mod text_tiers;
 mod tiers;
+mod words;
 
 pub use headers::*;
 pub use items::*;
 pub use text_tiers::*;
 pub use tiers::*;
+pub use words::*;

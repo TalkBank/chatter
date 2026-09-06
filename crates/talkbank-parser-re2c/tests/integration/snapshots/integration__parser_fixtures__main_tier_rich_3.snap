@@ -1,5 +1,5 @@
 ---
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
+source: crates/talkbank-parser-re2c/tests/integration/parser_fixtures.rs
 expression: result.unwrap()
 ---
 speaker:
@@ -29,7 +29,7 @@ tier_body:
               annotations: []
               raw_text: tuu
         annotations:
-          - Uncertain
+          - Scoped: Uncertain
   terminator:
     Period: "."
   postcodes: []

@@ -2875,6 +2875,13 @@
       "source_spec": "spec/errors/E757.md"
     },
     {
+      "fixture": "E757_4.cha",
+      "code": "E757",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E757.md"
+    },
+    {
       "fixture": "E758_1.cha",
       "code": "E758",
       "claim": "violates",

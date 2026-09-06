@@ -9,6 +9,20 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** re2c AST `ParsedAnnotation` separates `Scoped` annotations
+  from retrace, replacement, language-code and postcode structures. Match
+  `ParsedAnnotation::Scoped(ScopedAnnotationParsed::...)` for scoped kinds;
+  their conversion to model annotations is now total. AST inspection snapshots
+  reflect this category; serialized CHAT model output retains its shape.
+
+### Fixed
+
+- re2c reports E757 when rich bracketed annotations are glued to the following
+  word, including `[!]there` and `[= toy]there`. The check uses the parser's
+  annotation categories and reports the following word's original lexer span.
+
 ## [0.19.0] - 2026-09-05
 
 ### Changed

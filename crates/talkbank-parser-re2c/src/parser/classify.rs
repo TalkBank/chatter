@@ -180,20 +180,48 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation
         Token::RetraceReformulation(_) => {
             ParsedAnnotation::Retrace(RetraceKindParsed::Reformulation)
         }
-        Token::UnknownAnnotation(inner) => ParsedAnnotation::Unknown(inner),
-        Token::ScopedStressing(_) => ParsedAnnotation::Stressing,
-        Token::ScopedContrastiveStressing(_) => ParsedAnnotation::ContrastiveStressing,
-        Token::ScopedUncertain(_) => ParsedAnnotation::Uncertain,
-        Token::ExcludeMarker(_) => ParsedAnnotation::Exclude,
-        Token::CodeSwitchShortcut(_) => ParsedAnnotation::CodeSwitchShortcut,
-        Token::CodeSwitchExplicit(s) => ParsedAnnotation::CodeSwitchExplicit(s),
-        Token::ErrorMarkerAnnotation(s) => ParsedAnnotation::Error(s),
-        Token::OverlapPrecedes(s) => ParsedAnnotation::OverlapPrecedes(s),
-        Token::OverlapFollows(s) => ParsedAnnotation::OverlapFollows(s),
-        Token::ExplanationAnnotation(s) => ParsedAnnotation::Explanation(s),
-        Token::ParaAnnotation(s) => ParsedAnnotation::Paralinguistic(s),
-        Token::AltAnnotation(s) => ParsedAnnotation::Alternative(s),
-        Token::PercentAnnotation(s) => ParsedAnnotation::PercentComment(s),
+        Token::UnknownAnnotation(inner) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Unknown(inner))
+        }
+        Token::ScopedStressing(_) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Stressing)
+        }
+        Token::ScopedContrastiveStressing(_) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::ContrastiveStressing)
+        }
+        Token::ScopedUncertain(_) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Uncertain)
+        }
+        Token::ExcludeMarker(_) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Exclude)
+        }
+        Token::CodeSwitchShortcut(_) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::CodeSwitchShortcut)
+        }
+        Token::CodeSwitchExplicit(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::CodeSwitchExplicit(s))
+        }
+        Token::ErrorMarkerAnnotation(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Error(s))
+        }
+        Token::OverlapPrecedes(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::OverlapPrecedes(s))
+        }
+        Token::OverlapFollows(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::OverlapFollows(s))
+        }
+        Token::ExplanationAnnotation(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Explanation(s))
+        }
+        Token::ParaAnnotation(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Paralinguistic(s))
+        }
+        Token::AltAnnotation(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Alternative(s))
+        }
+        Token::PercentAnnotation(s) => {
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::PercentComment(s))
+        }
         Token::Replacement(s) => ParsedAnnotation::Replacement(s),
         Token::Langcode(s) => ParsedAnnotation::Langcode(s),
         Token::Postcode(s) => ParsedAnnotation::Postcode(s),

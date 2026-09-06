@@ -3466,6 +3466,13 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E757.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E758.md",
       "example": 1,
       "parse": [],

@@ -264,10 +264,14 @@ fn retracing_annotation() {
 fn explanation_annotation() {
     let mt = parser::parse_main_tier("*CHI:\tit [= the cookie] .\n").unwrap();
     let has = mt.tier_body.contents.iter().any(|c| match c {
-        ContentItem::Word(w) => w
-            .annotations
-            .iter()
-            .any(|a| matches!(a, ParsedAnnotation::Explanation(_))),
+        ContentItem::Word(w) => w.annotations.iter().any(|a| {
+            matches!(
+                a,
+                ParsedAnnotation::Scoped(
+                    talkbank_parser_re2c::ast::ScopedAnnotationParsed::Explanation(_)
+                )
+            )
+        }),
         _ => false,
     });
     assert!(has, "got {:?}", mt.tier_body.contents);

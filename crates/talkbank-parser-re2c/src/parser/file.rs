@@ -115,32 +115,27 @@ fn report_pause_glued_to_word<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink)
     }
 }
 
-/// Report E757 for every word token immediately following a closing
-/// bracket with no whitespace between (`hello [/]x`, `hello [!]x`; CLAN
-/// CHECK 19). Two token shapes carry that closing bracket: the retrace
-/// markers, which lex as one token each, and a bare `RightBracket`,
-/// which is how every other bracketed code ends. Mirrors the
-/// model-validation rule
-/// `check_code_glued_to_following_content` (talkbank-model
-/// `validation/utterance/spacing.rs`), which cannot fire on this
-/// parser's output because its retraces carry dummy spans.
-fn report_code_glued_to_following_content<'a>(tokens: &[Token<'a>], errors: &impl ErrorSink) {
-    for pair in tokens.windows(2) {
-        let closes_a_code = matches!(
-            pair[0],
-            Token::RetraceComplete(_)
-                | Token::RetracePartial(_)
-                | Token::RetraceMultiple(_)
-                | Token::RetraceReformulation(_)
-                | Token::RightBracket(_)
-        );
-        if closes_a_code && matches!(pair[1], Token::Word { .. }) {
+/// Report E757 using the annotation category already admitted by the parser.
+/// Rich scoped tokens close a bracket just as retraces do. Lexer locations
+/// remain paired with their tokens, so the diagnostic names the glued word.
+fn report_code_glued_to_following_content(lexed: &super::LexedSource<'_>, errors: &impl ErrorSink) {
+    let range = 0..lexed.tokens().len();
+    for ((left, _), (right, span)) in lexed
+        .located(range.clone())
+        .zip(lexed.located(range).skip(1))
+    {
+        let closes_a_code = matches!(left, Token::RightBracket(_))
+            || matches!(
+                super::classify::token_to_parsed_annotation(left.clone()),
+                Some(ParsedAnnotation::Scoped(_) | ParsedAnnotation::Retrace(_))
+            );
+        if closes_a_code && matches!(right, Token::Word { .. }) {
             errors.report(ParseError::new(
-                talkbank_model::errors::codes::ErrorCode::CodeGluedToFollowingContent,
+                talkbank_model::ErrorCode::CodeGluedToFollowingContent,
                 talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
+                talkbank_model::SourceLocation::from_offsets(span.start, span.end),
                 None,
-                "Bracketed code must be separated from the following word by a space".to_owned(),
+                "Bracketed code must be separated from the following word by a space",
             ));
         }
     }
@@ -299,7 +294,7 @@ pub(crate) fn parse_file_with_errors<'a>(
     report_space_inside_angle_group(tokens, errors);
     report_pause_glued_to_word(tokens, errors);
     report_pause_glued_to_following_content(tokens, errors);
-    report_code_glued_to_following_content(tokens, errors);
+    report_code_glued_to_following_content(lexed, errors);
     report_leading_space_on_main_tier(tokens, errors);
     let mut pos = 0;
     let mut lines = Vec::new();

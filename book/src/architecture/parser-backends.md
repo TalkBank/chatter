@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-05 23:01 EDT
+**Last updated:** 2026-09-06 00:17 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -122,6 +122,24 @@ structure. Source-aware file dispatch reports an unconsumed blank newline at
 its lexer span. Generated error fixtures preserve their exact line-ending
 bytes in Git; published Markdown normalizes display line breaks and labels
 that presentation change.
+
+### Annotation categories survive conversion
+
+Token classification produces `ParsedAnnotation::Scoped(ScopedAnnotationParsed)`
+for annotations that decorate content. Retraces, replacements, language codes
+and postcodes remain distinct outer variants. The model converter accepts only
+`ScopedAnnotationParsed` and returns a `ContentAnnotation` directly: structural
+markers cannot enter that conversion and be silently discarded through `None`.
+Replacement lookup likewise returns its payload rather than an index requiring
+a second match or an unreachable branch.
+
+The file-level E757 spacing check uses the same classified categories for
+closing annotations and retraces. It reads adjacent tokens from `LexedSource`
+and reports the following word's complete lexer span when the code is glued to
+that word. The specification includes both glued examples and a spaced control;
+the cross-backend gate checks those generated cases. The internal AST snapshot
+changes to show the category, while reference-corpus model equivalence guards
+serialized CHAT behavior.
 
 ### Not ready as a validity authority
 
