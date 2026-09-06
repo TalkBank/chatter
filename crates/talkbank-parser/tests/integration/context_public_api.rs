@@ -62,6 +62,39 @@ fn direct_fragment_diagnostics_add_the_document_origin() {
 }
 
 #[test]
+fn header_fragment_must_account_for_the_whole_input() {
+    let p = parser();
+    for input in [
+        "@Languages:\teng\n@Comment:\tsecond header",
+        "@Comment:\tfirst header\n@Date:\t01-JAN-2020",
+    ] {
+        let errors = ErrorCollector::new();
+        assert!(
+            p.parse_header_fragment(input, 200, &errors).is_rejected(),
+            "accepted only part of {input:?}"
+        );
+        assert!(!errors.is_empty());
+    }
+}
+
+#[test]
+fn complete_header_fragment_accepts_folded_content_and_line_endings() {
+    let p = parser();
+    for input in [
+        "@Languages:\teng\n",
+        "@Comment:\tcafé\r\n",
+        "@Comment:\tfirst line\n\tcontinued content",
+    ] {
+        let errors = ErrorCollector::new();
+        assert!(
+            p.parse_header_fragment(input, 200, &errors).is_parsed(),
+            "{input:?}"
+        );
+        assert!(errors.is_empty());
+    }
+}
+
+#[test]
 fn unlocated_header_reports_the_callers_source_and_origin() {
     let p = parser();
     // This malformed line prevents the wrapper's header lookup from finding

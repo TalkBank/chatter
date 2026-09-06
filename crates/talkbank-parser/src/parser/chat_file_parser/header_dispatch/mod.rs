@@ -10,6 +10,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#ID_Header>
 
 mod finder;
+mod fragment;
 mod parse;
 #[cfg(test)]
 mod tests;

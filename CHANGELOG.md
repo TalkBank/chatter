@@ -9,6 +9,18 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-09-06
+
+### Fixed
+
+- Single-header parsing rejects extra headers instead of silently returning
+  only the first. Lowering consumes a complete `HeaderFragment` that owns the
+  selected node and its source; folded content and LF/CRLF remain accepted.
+- Standalone header and dependent-tier parsing derive diagnostic coordinates
+  from their owned synthetic source rather than separately supplied prefix
+  lengths. Header lookup failures carry the caller's text and document origin
+  instead of empty context. Existing malformed-header diagnostics are retained.
+
 ## [0.20.1] - 2026-09-06
 
 ### Fixed
@@ -2619,7 +2631,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.20.1...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.20.2...HEAD
+[0.20.2]: https://github.com/TalkBank/chatter/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/TalkBank/chatter/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/TalkBank/chatter/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/TalkBank/chatter/compare/v0.18.1...v0.19.0

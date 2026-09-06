@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 08:14 EDT
+**Last updated:** 2026-09-06 08:52 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -203,11 +203,14 @@ secondary spans. Context is projected only when its text exactly matches the
 owned synthetic source; an independent context retains its own coordinates
 regardless of length. `cargo test -p talkbank-parser --lib api::fragment::tests`
 checks long inputs, related labels and independent context text. These adapters
-no longer use the legacy sink's length heuristic. Header dispatch also asks
-that owner whether a located node starts inside the caller's input, removing
-the independently supplied wrapper-prefix length. This check does not yet
-prove that the header consumes all the input; complete header admission is a
-separate remaining boundary improvement.
+no longer use the legacy sink's length heuristic. Header lowering consumes a
+`HeaderFragment` that owns the located node together with its wrapped source.
+Admission requires the node to account for all caller text: only surrounding
+whitespace may lie outside it or extend into the synthetic line terminator.
+The former start-only check accepted the first of two headers and discarded the
+second. The public regression reproduces that refusal boundary, while controls
+retain folded header content and caller-supplied LF/CRLF. Raw ordinal lookup
+and document-root navigation remain separate traversal improvements.
 Header lookup failures carry tree facts in `HeaderNotFound`, rather than
 constructing a parse error with invented empty context. The fragment caller
 attaches the real input and its full span; public fragment rebasing then adds

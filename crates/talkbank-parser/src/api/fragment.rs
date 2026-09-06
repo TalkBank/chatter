@@ -12,6 +12,12 @@ pub(crate) struct WrappedFragment<'input> {
     document_offset: usize,
 }
 
+/// Why a selected CST range cannot represent the complete caller input.
+pub(crate) enum FragmentCoverageError {
+    OutsideInput,
+    Incomplete,
+}
+
 impl<'input> WrappedFragment<'input> {
     pub(crate) fn new(
         prefixes: &[&str],
@@ -40,9 +46,34 @@ impl<'input> WrappedFragment<'input> {
         &self.source
     }
 
-    /// Whether a CST node starts in the caller's input rather than scaffolding.
-    pub(crate) fn contains_input_start(&self, byte: usize) -> bool {
-        (self.input_start..self.input_start + self.input.len()).contains(&byte)
+    pub(crate) fn input(&self) -> &str {
+        self.input
+    }
+
+    /// The node accounts for all caller text; only surrounding whitespace may
+    /// remain outside it, or extend from it into a synthetic line terminator.
+    pub(crate) fn require_complete_input(
+        &self,
+        range: std::ops::Range<usize>,
+    ) -> Result<(), FragmentCoverageError> {
+        let input_end = self.input_start + self.input.len();
+        if !(self.input_start..input_end).contains(&range.start) {
+            return Err(FragmentCoverageError::OutsideInput);
+        }
+        if range.end < range.start {
+            return Err(FragmentCoverageError::Incomplete);
+        }
+        let leading = self.source.get(self.input_start..range.start);
+        let trailing = self
+            .source
+            .get(range.end.min(input_end)..range.end.max(input_end));
+        if leading.is_some_and(|text| text.trim().is_empty())
+            && trailing.is_some_and(|text| text.trim().is_empty())
+        {
+            Ok(())
+        } else {
+            Err(FragmentCoverageError::Incomplete)
+        }
     }
 
     pub(crate) fn rebase<T: SpanShift>(&self, mut value: T) -> T {
