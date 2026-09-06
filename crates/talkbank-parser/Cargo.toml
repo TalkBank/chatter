@@ -30,7 +30,6 @@ talkbank-parser-tests = { path = "../talkbank-parser-tests" }
 divan = { workspace = true }
 insta = { workspace = true }
 proptest = { workspace = true }
-rstest = { workspace = true }
 
 [[bench]]
 name = "parse"

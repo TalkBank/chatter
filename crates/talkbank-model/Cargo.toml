@@ -32,7 +32,6 @@ tokio = { workspace = true, optional = true, features = ["rt", "sync"] }
 [dev-dependencies]
 insta = { workspace = true }
 proptest = { workspace = true }
-rstest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
