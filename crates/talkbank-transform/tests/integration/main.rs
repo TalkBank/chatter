@@ -23,7 +23,6 @@
 
 mod adjudication_tests;
 mod book_library_usage_examples;
-mod cache_key_properties;
 // The three suites below exercise the validation runner / result cache and
 // only compile with the default-on `validation-runner` feature.
 #[cfg(feature = "validation-runner")]

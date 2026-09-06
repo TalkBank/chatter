@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-09-05 16:59 EDT
+**Last modified:** 2026-09-06 04:37 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
@@ -80,6 +80,19 @@ The [nextest macOS guide](https://www.nexte.st/docs/installation/macos/)
 separately describes XProtect startup overhead and Developer Tools permission.
 That mechanism matters when launching even trivial tests is slow; it does not
 explain time spent enumerating hundreds of thousands of build artifacts.
+
+## Exercise the owned behavior
+
+Property tests must call the production operation whose contract they claim
+to verify. The retired `cache_key_properties` module instead copied a
+`DefaultHasher` algorithm for a `get_cache_key_with_suffix` function that no
+longer exists. Its two tests could pass with the real cache completely broken;
+one also treated absence of sampled hash collisions as a correctness property.
+Removing those tests deletes redundant work without changing cache coverage.
+The `cache_tests` integration module still exercises the real `CachePool`
+with temporary files, including independent paths, parser identity, alignment
+mode, overwrites, and clearing. This removes two property cases, not a test
+binary: they already shared the transform integration harness.
 
 ## Regeneration must preserve unchanged outputs
 
