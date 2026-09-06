@@ -41,11 +41,7 @@ fn edit_sequence_matches_fresh_analysis() {
             DocumentAnalysis::parse(&parser, &uri, source.clone().into(), Some(&previous));
         let fresh = DocumentAnalysis::parse(&parser, &uri, source.into(), None);
         assert_eq!(incremental.diagnostics(), fresh.diagnostics(), "{name}");
-        assert_eq!(
-            serde_json::to_value(incremental.file()).unwrap(),
-            serde_json::to_value(fresh.file()).unwrap(),
-            "{name}: model and spans"
-        );
+        assert_eq!(incremental.file(), fresh.file(), "{name}: model and spans");
         previous = incremental;
     }
 }
@@ -98,6 +94,94 @@ fn measure_analysis_latency() {
             durations[9],
             durations[18],
             durations[19]
+        );
+    }
+}
+
+// Attribution probe, not an alternative production pipeline. Lowering includes
+// a second, same-source CST parse because the public parser owns that boundary.
+// Every measured result is checked against the actual source-bound analysis.
+#[test]
+#[ignore = "manual phase attribution; no machine-specific CI threshold"]
+fn measure_analysis_phases() {
+    use std::time::Instant;
+    let source = match std::env::var("TALKBANK_LSP_BENCH_SOURCE") {
+        Ok(path) => std::fs::read_to_string(path).unwrap(),
+        Err(std::env::VarError::NotPresent) => REFERENCE.to_owned(),
+        Err(error) => panic!("invalid benchmark source path: {error}"),
+    };
+    let other = source.replacen("@Begin\n", "@Begin\n@Comment:\tlatency probe\n", 1);
+    assert_ne!(source, other, "benchmark input needs @Begin");
+    let parser = TreeSitterParser::new().unwrap();
+    let uri = Url::parse("file:///basic-conversation.cha").unwrap();
+    let mut previous = DocumentAnalysis::parse(&parser, &uri, source.clone().into(), None);
+    let mut samples = Vec::new();
+    for index in 0..21 {
+        let text = if index % 2 == 0 { &other } else { &source };
+        let start = Instant::now();
+        let mut tree = previous.tree().unwrap();
+        tree.edit(&compute_input_edit(&previous.source, text).unwrap());
+        let tree = parser.parse_tree_incremental(text, Some(&tree)).unwrap();
+        let syntax = start.elapsed();
+
+        let start = Instant::now();
+        let sink = ErrorCollector::new();
+        let (mut file, _) = parser.parse_chat_file_streaming_incremental(text, Some(&tree), &sink);
+        let parse_errors = sink.into_vec();
+        assert!(
+            !parse_errors
+                .iter()
+                .any(|error| error.severity == Severity::Error),
+            "phase probe requires a syntactically valid transcript"
+        );
+        let lowering = start.elapsed();
+
+        let start = Instant::now();
+        let sink = ErrorCollector::new();
+        file.validate_with_alignment(
+            &sink,
+            TranscriptName::Named(FileStem::from_stem("basic-conversation")),
+        );
+        let errors = sink.into_vec();
+        let validation = start.elapsed();
+
+        let start = Instant::now();
+        let diagnostics = to_diagnostics_batch_with_context(
+            &errors.iter().collect::<Vec<_>>(),
+            text,
+            Some(&uri),
+            Some(&file),
+        );
+        let conversion = start.elapsed();
+        if index != 0 {
+            samples.push([syntax, lowering, validation, conversion]);
+        }
+        let actual = DocumentAnalysis::parse(&parser, &uri, text.as_str().into(), Some(&previous));
+        assert_eq!(diagnostics, actual.diagnostics());
+        assert_eq!(&file, actual.file().as_ref());
+        previous = actual;
+    }
+    for (column, name) in [
+        "syntax_and_edit",
+        "lowering_plus_same_source_parse",
+        "validation",
+        "diagnostic_conversion",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut values: Vec<_> = samples
+            .iter()
+            .map(|sample| sample[column].as_micros())
+            .collect();
+        values.sort_unstable();
+        eprintln!(
+            "analysis_phase phase={name} bytes={} samples={} p50_us={} p95_us={} max_us={}",
+            source.len(),
+            values.len(),
+            values[9],
+            values[18],
+            values[19]
         );
     }
 }
