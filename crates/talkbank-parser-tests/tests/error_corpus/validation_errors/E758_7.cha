@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Birth of CHI:	01-JAN-2020
+@Comment:	header text
+*CHI:	dog .
+%mor:	n|dog .
+%com:	tier text
+@End

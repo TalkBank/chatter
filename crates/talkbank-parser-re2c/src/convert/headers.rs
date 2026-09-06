@@ -33,7 +33,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
         Token::HeaderEnd(_) => Header::End,
         Token::HeaderBlank(_) => Header::Blank,
         Token::HeaderNewEpisode(_) => Header::NewEpisode,
-        Token::HeaderPrefix(p) if p.contains("@Languages") => {
+        Token::HeaderPrefix(p) if p.text().contains("@Languages") => {
             // `Token::LanguageCode`'s lexer rule requires at least one
             // character (mirrors the tree-sitter grammar's
             // `language_code: $ => /[a-z]{2,4}/`), so the text is
@@ -51,7 +51,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 codes: LanguageCodes::new(codes),
             }
         }
-        Token::HeaderPrefix(p) if p.contains("@ID") => {
+        Token::HeaderPrefix(p) if p.text().contains("@ID") => {
             // Token struct carries all 10 fields directly, no splitting needed
             if let Some(Token::IdFields {
                 language,
@@ -113,7 +113,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 suggested_fix: None,
             }
         }
-        Token::HeaderPrefix(p) if p.contains("@Types") => {
+        Token::HeaderPrefix(p) if p.text().contains("@Types") => {
             if let Some(Token::TypesFields {
                 design,
                 activity,
@@ -128,7 +128,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 suggested_fix: None,
             }
         }
-        Token::HeaderPrefix(p) if p.contains("@Media") => {
+        Token::HeaderPrefix(p) if p.text().contains("@Media") => {
             // Media content is MediaWord/MediaFilename tokens separated by Comma
             let words: Vec<&str> = content
                 .iter()
@@ -188,25 +188,25 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 },
             }
         }
-        Token::HeaderPrefix(p) if p.contains("@Comment") => Header::Comment {
+        Token::HeaderPrefix(p) if p.text().contains("@Comment") => Header::Comment {
             content: tokens_to_bullet_content(content),
         },
-        Token::HeaderPrefix(p) if p.contains("@Date") => Header::Date {
+        Token::HeaderPrefix(p) if p.text().contains("@Date") => Header::Date {
             date: ChatDate::new(&all_content),
         },
-        Token::HeaderPrefix(p) if p.contains("@Situation") => Header::Situation {
+        Token::HeaderPrefix(p) if p.text().contains("@Situation") => Header::Situation {
             text: SituationDescription::new(&all_content),
         },
-        Token::HeaderPrefix(p) if p.contains("@Location:") => Header::Location {
+        Token::HeaderPrefix(p) if p.text().contains("@Location:") => Header::Location {
             location: LocationDescription::new(&all_content),
         },
-        Token::HeaderPrefix(p) if p.contains("@Activities") => Header::Activities {
+        Token::HeaderPrefix(p) if p.text().contains("@Activities") => Header::Activities {
             activities: ActivitiesDescription::new(&all_content),
         },
-        Token::HeaderPrefix(p) if p.contains("@PID") => Header::Pid {
+        Token::HeaderPrefix(p) if p.text().contains("@PID") => Header::Pid {
             pid: PidValue::new(&all_content),
         },
-        Token::HeaderPrefix(p) if p.contains("@Options") => {
+        Token::HeaderPrefix(p) if p.text().contains("@Options") => {
             let flags: Vec<ChatOptionFlag> = all_content
                 .split(',')
                 .map(|s| ChatOptionFlag::from_text(s.trim()))
@@ -218,12 +218,12 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
         Token::HeaderBirthOf(speaker) => {
             // Token carries tag-extracted speaker code directly
             Header::Birth {
-                participant: SpeakerCode::new(*speaker),
+                participant: SpeakerCode::new(speaker.text()),
                 date: ChatDate::new(&all_content),
             }
         }
         Token::HeaderBirthplaceOf(speaker) => Header::Birthplace {
-            participant: SpeakerCode::new(*speaker),
+            participant: SpeakerCode::new(speaker.text()),
             place: BirthplaceDescription::new(&all_content),
         },
         // @L1 of values are ISO 639-3 codes (typed model migration,
@@ -231,7 +231,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
         // tree-sitter path's unknown-header fallback.
         Token::HeaderL1Of(speaker) => match LanguageCode::new(&all_content) {
             Ok(language) => Header::L1Of {
-                participant: SpeakerCode::new(*speaker),
+                participant: SpeakerCode::new(speaker.text()),
                 language,
             },
             Err(_empty) => Header::Unknown {
@@ -240,21 +240,23 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 suggested_fix: None,
             },
         },
-        Token::HeaderPrefix(p) if p.contains("@Bg") => Header::BeginGem {
+        Token::HeaderPrefix(p) if p.text().contains("@Bg") => Header::BeginGem {
             label: if all_content.is_empty() {
                 None
             } else {
                 Some(GemLabel::new(&all_content))
             },
         },
-        Token::HeaderPrefix(p) if p.starts_with("@G:") || *p == "@G" => Header::LazyGem {
-            label: if all_content.is_empty() {
-                None
-            } else {
-                Some(GemLabel::new(&all_content))
-            },
-        },
-        Token::HeaderPrefix(p) if p.contains("@Eg") => Header::EndGem {
+        Token::HeaderPrefix(p) if p.text().starts_with("@G:") || p.text() == "@G" => {
+            Header::LazyGem {
+                label: if all_content.is_empty() {
+                    None
+                } else {
+                    Some(GemLabel::new(&all_content))
+                },
+            }
+        }
+        Token::HeaderPrefix(p) if p.text().contains("@Eg") => Header::EndGem {
             label: if all_content.is_empty() {
                 None
             } else {

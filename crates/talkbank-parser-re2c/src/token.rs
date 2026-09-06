@@ -5,8 +5,10 @@
 
 mod inspection;
 mod postcode;
+mod prefix;
 pub use inspection::{LexError, LexResult};
 pub use postcode::PostcodeToken;
+pub use prefix::PrefixToken;
 
 use serde::Serialize;
 use strum::EnumDiscriminants;
@@ -28,18 +30,18 @@ pub enum Token<'a> {
     // ── Headers ─────────────────────────────────────────────
     /// Header prefix: @HeaderName:\t (includes the colon+tab for structured headers)
     /// Or just @HeaderName for no-content headers or catch-all.
-    HeaderPrefix(&'a str),
+    HeaderPrefix(PrefixToken<'a>),
     /// Header separator: ":\t" (only for unknown headers via HEADER_AFTER_NAME)
-    HeaderSep(&'a str),
+    HeaderSep(PrefixToken<'a>),
     /// Header content: free text after colon+tab
     HeaderContent(&'a str),
 
     /// `@Birth of SPK:\t`, carries tag-extracted speaker code.
-    HeaderBirthOf(&'a str),
+    HeaderBirthOf(PrefixToken<'a>),
     /// `@Birthplace of SPK:\t`, carries tag-extracted speaker code.
-    HeaderBirthplaceOf(&'a str),
+    HeaderBirthplaceOf(PrefixToken<'a>),
     /// `@L1 of SPK:\t`, carries tag-extracted speaker code.
-    HeaderL1Of(&'a str),
+    HeaderL1Of(PrefixToken<'a>),
 
     // ── No-content headers (distinct tokens) ────────────────
     /// @UTF8 header (must be first line)
@@ -83,11 +85,11 @@ pub enum Token<'a> {
 
     // ── Dependent tier ──────────────────────────────────────
     /// Complete dependent tier prefix, including the required colon and tab.
-    TierPrefix(&'a str),
+    TierPrefix(PrefixToken<'a>),
     /// A dependent tier label whose required colon-tab separator did not match.
     IncompleteTierPrefix(&'a str),
     /// Tier separator: ":\t" (colon + tab, after tier label)
-    TierSep(&'a str),
+    TierSep(PrefixToken<'a>),
 
     // ── Terminators (grammar.js: terminator supertype) ──────
     /// grammar.js: period = '.'

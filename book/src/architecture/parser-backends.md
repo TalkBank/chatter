@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-06 01:13 EDT
+**Last updated:** 2026-09-06 01:29 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -189,28 +189,37 @@ content for inspection. A complete prefix with no body remains a separate
 content-validation question (E756). The E602 boundary test loads both malformed
 specification examples and the valid colon-tab control and checks source spans.
 
-### Not ready as a validity authority
+### Separator provenance belongs to lexical admission
 
-**A clean `--parser re2c` run is not evidence that a file is valid.** The
-backend still accepts some inputs that the default backend rejects. The
-spec parity gate records these cases individually in
-`tests/integration/error_parity/baseline.rs`, including:
+`PrefixToken` owns the matched payload and separator provenance. Prefix lexer
+rules consume spaces after the required tab, so those spaces never become
+header or tier content. The same carrier covers ordinary headers, embedded
+speaker headers, dependent prefixes, and main-tier separators. AST header lines,
+main tiers and dependent entries retain the admitted `TierSeparator` through
+model lowering. The former main-tier-only whitespace scan and its separate CA
+probe are removed: both backends now use the shared file validator and its CA
+policy. Separator spans are omitted from serialized AST/model metadata, and
+CHAT serialization writes the canonical tab in both CA and non-CA files.
 
-| Spec case | Missing behavior in re2c |
-|---|---|
-| `E363.md#0` | Report a postcode containing only spaces |
-| `E375.md#1` | Report a replacement annotation glued to its word |
+The source-spec boundary test covers all E758 examples, padded CA headers and
+tiers, canonical non-CA controls, exact byte spans and nonzero source offsets.
+It compares canonical serialized CHAT with tree-sitter. The lexer prefix payload
+and header/dependent-entry AST shapes change; the file inspection snapshot
+records that API change.
 
-These are implementation gaps, not alternate CHAT rules. Both backends feed
-the shared model validator, but information discarded before model lowering
-cannot be checked there. Many re2c diagnostic locations also remain dummy
-spans; the located participant path above closes one family, not all spans.
+### Remaining parity limits
 
-The formerly documented silence on unknown quotation and pause annotations
-is covered by the passing CLI regression
-`unknown_annotation_every_host_tests::an_unrecognised_annotation_is_refused_on_every_host_and_backend`.
-Use the named spec baseline for current gaps instead of treating those
-historical examples as continuing defects.
+The current finite spec-parity corpus has no silent re2c case, but a clean
+`--parser re2c` run is not a general validity guarantee. Backend disagreements
+remain in diagnostic specificity, extra or missing diagnostics, and source
+locations. The current per-case authority is
+`tests/integration/error_parity/baseline.rs`; run its gate for derived counts.
+Postcode, glued-replacement and separator silence described in older versions
+of this page are fixed and are no longer examples of open gaps.
+
+Both backends feed the shared model validator, but source information discarded
+before lowering cannot be checked there. Rejected morphology now preserves taint;
+other recovery paths and remaining dummy diagnostic locations still need review.
 
 ## CLI Usage
 

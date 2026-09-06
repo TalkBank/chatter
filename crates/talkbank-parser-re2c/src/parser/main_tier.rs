@@ -581,12 +581,16 @@ pub fn main_tier_parser<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, MainTier<'a>> + Clone {
     let star = select! { Token::Star(_) => () };
     let speaker = select! { tok @ Token::Speaker(_) => tok };
-    let tier_sep = select! { Token::TierSep(_) => () };
+    let tier_sep = select! { Token::TierSep(prefix) => prefix.separator() };
 
     star.ignore_then(speaker)
-        .then_ignore(tier_sep)
+        .then(tier_sep)
         .then(tier_body_parser())
-        .map(|(speaker, tier_body)| MainTier { speaker, tier_body })
+        .map(|((speaker, separator), tier_body)| MainTier {
+            speaker,
+            separator,
+            tier_body,
+        })
 }
 
 /// Build an overlap content item, resolving the index digit once.

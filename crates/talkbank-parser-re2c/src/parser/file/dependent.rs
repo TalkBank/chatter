@@ -16,7 +16,7 @@ pub(super) fn parse_dependent_tiers<'a>(
     lexed: &LexedSource<'a>,
     pos: &mut usize,
     errors: &impl ErrorSink,
-) -> Vec<DependentTierParsed<'a>> {
+) -> Vec<DependentTierEntryParsed<'a>> {
     let tokens = lexed.tokens();
     let mut dep_tiers = Vec::new();
 
@@ -29,6 +29,11 @@ pub(super) fn parse_dependent_tiers<'a>(
         let (prefix, prefix_span) = lexed.token_at(*pos);
         let prefix = prefix.clone();
         let prefix_text = prefix.text();
+        let separator = match &prefix {
+            Token::TierPrefix(prefix) => prefix.separator(),
+            _ => talkbank_model::model::TierSeparator::CLEAN,
+        };
+        let mut push = |tier| dep_tiers.push(DependentTierEntryParsed { tier, separator });
         *pos += 1;
 
         let content_start = *pos;
@@ -51,7 +56,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                 None,
                 "Dependent tier label must be followed by a colon and a tab",
             ));
-            dep_tiers.push(DependentTierParsed::Text {
+            push(DependentTierParsed::Text {
                 prefix,
                 content: tier_tokens.to_vec(),
             });
@@ -65,7 +70,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                 .parse(tier_tokens)
                 .into_result()
             {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Mor(tier)),
+                Ok(tier) => push(DependentTierParsed::Mor(tier)),
                 Err(_) => {
                     // E760: a mor item whose part-of-speech field is empty
                     // (an item beginning with the `|` separator, `|we`).
@@ -114,14 +119,14 @@ pub(super) fn parse_dependent_tiers<'a>(
                     }
                     if prefix_text == "%mor:\t" {
                         let (_, last_span) = lexed.token_at(content_end - 1);
-                        dep_tiers.push(DependentTierParsed::RejectedMor(RejectedMorTier::report(
+                        push(DependentTierParsed::RejectedMor(RejectedMorTier::report(
                             prefix,
                             tier_tokens,
                             Span::from_usize(prefix_span.start, last_span.end),
                             errors,
                         )));
                     } else {
-                        dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
+                        push(fallback_text_tier(prefix, tier_tokens));
                     }
                 }
             }
@@ -130,7 +135,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                 .parse(tier_tokens)
                 .into_result()
             {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Pho(tier)),
+                Ok(tier) => push(DependentTierParsed::Pho(tier)),
                 Err(_) => {
                     report_error(
                         errors,
@@ -139,7 +144,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                         tier_tokens,
                         &format!("failed to parse {prefix_text} tier content"),
                     );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
+                    push(fallback_text_tier(prefix, tier_tokens));
                 }
             }
         } else if prefix_text.starts_with("%mod") {
@@ -147,7 +152,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                 .parse(tier_tokens)
                 .into_result()
             {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Mod(tier)),
+                Ok(tier) => push(DependentTierParsed::Mod(tier)),
                 Err(_) => {
                     report_error(
                         errors,
@@ -156,7 +161,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                         tier_tokens,
                         &format!("failed to parse {prefix_text} tier content"),
                     );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
+                    push(fallback_text_tier(prefix, tier_tokens));
                 }
             }
         } else if prefix_text.starts_with("%gra") {
@@ -164,7 +169,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                 .parse(tier_tokens)
                 .into_result()
             {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Gra(tier)),
+                Ok(tier) => push(DependentTierParsed::Gra(tier)),
                 Err(_) => {
                     report_error(
                         errors,
@@ -173,7 +178,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                         tier_tokens,
                         &format!("failed to parse {prefix_text} tier content"),
                     );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
+                    push(fallback_text_tier(prefix, tier_tokens));
                 }
             }
         } else if prefix_text.starts_with("%sin") {
@@ -181,7 +186,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                 .parse(tier_tokens)
                 .into_result()
             {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Sin(tier)),
+                Ok(tier) => push(DependentTierParsed::Sin(tier)),
                 Err(_) => {
                     report_error(
                         errors,
@@ -190,7 +195,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                         tier_tokens,
                         &format!("failed to parse {prefix_text} tier content"),
                     );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
+                    push(fallback_text_tier(prefix, tier_tokens));
                 }
             }
         } else if prefix_text.starts_with("%wor") {
@@ -198,7 +203,7 @@ pub(super) fn parse_dependent_tiers<'a>(
                 .parse(tier_tokens)
                 .into_result()
             {
-                Ok(wor) => dep_tiers.push(DependentTierParsed::Wor(wor)),
+                Ok(wor) => push(DependentTierParsed::Wor(wor)),
                 Err(_) => {
                     report_error(
                         errors,
@@ -207,13 +212,13 @@ pub(super) fn parse_dependent_tiers<'a>(
                         tier_tokens,
                         &format!("failed to parse {prefix_text} tier content"),
                     );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
+                    push(fallback_text_tier(prefix, tier_tokens));
                 }
             }
         } else {
             // Generic text tier, always succeeds
             let content: Vec<Token<'a>> = tier_tokens.to_vec();
-            dep_tiers.push(DependentTierParsed::Text { prefix, content });
+            push(DependentTierParsed::Text { prefix, content });
         }
     }
 

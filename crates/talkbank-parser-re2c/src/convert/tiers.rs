@@ -76,7 +76,7 @@ pub fn main_tier_to_model(
             .collect(),
     );
 
-    main_tier
+    main_tier.with_separator(mt.separator)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -92,26 +92,24 @@ pub fn utterance_to_model(
     // Skip tiers whose AST→model conversion failed (e.g. a `%mor:`
     // line with a missing or unrecognized terminator). Cross-tier
     // validators surface the absence as a typed diagnostic.
-    let dep_tiers: Vec<talkbank_model::model::DependentTier> = u
+    let dep_tiers = u
         .dependent_tiers
         .iter()
-        .filter_map(|tier| dependent_tier_to_model(tier, source))
+        .filter_map(|entry| {
+            dependent_tier_to_model(&entry.tier, source)
+                .map(|tier| DependentTierEntry::with_separator(tier, entry.separator))
+        })
         .collect();
     let mut parse_health = talkbank_model::model::ParseHealthState::Clean;
     for tier in &u.dependent_tiers {
-        if matches!(tier, ast::DependentTierParsed::RejectedMor(_)) {
+        if matches!(tier.tier, ast::DependentTierParsed::RejectedMor(_)) {
             parse_health.taint(talkbank_model::model::ParseHealthTier::Mor);
         }
     }
     talkbank_model::model::Utterance {
         preceding_headers: Default::default(),
         main,
-        // re2c does not yet parse E758 separator provenance (Task 3 gives
-        // every dependent tier a `DependentTierEntry`; the separator itself
-        // stays a follow-up for the re2c oracle, tracked with the rest of
-        // the E758 CA-gated rewrite). CLEAN is correct today: re2c reports
-        // no illegal trailing space for any dependent tier.
-        dependent_tiers: dep_tiers.into_iter().map(DependentTierEntry::new).collect(),
+        dependent_tiers: dep_tiers,
         alignments: None,
         alignment_diagnostics: Vec::new(),
         // Rejected morphology remains tainted even though there is no model
@@ -436,10 +434,13 @@ pub fn chat_file_to_model(
         .lines
         .iter()
         .map(|line| match line {
-            ast::Line::Header(h) => talkbank_model::model::Line::Header {
+            ast::Line::Header {
+                header: h,
+                separator,
+            } => talkbank_model::model::Line::Header {
                 header: Box::new(crate::convert::header_to_model(h)),
                 span: Span::DUMMY,
-                separator: TierSeparator::CLEAN,
+                separator: *separator,
             },
             ast::Line::Utterance(u) => talkbank_model::model::Line::Utterance(Box::new(
                 utterance_to_model(u.as_ref(), source, errors),

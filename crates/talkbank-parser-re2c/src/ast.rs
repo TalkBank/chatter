@@ -5,6 +5,7 @@
 use crate::token::Token;
 use serde::Serialize;
 
+mod file;
 mod rejected_tier;
 pub use rejected_tier::RejectedMorTier;
 
@@ -18,6 +19,8 @@ pub use word::{
 /// grammar.js: main_tier = seq(star, speaker, colon, tab, tier_body)
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MainTier<'a> {
+    #[serde(skip)]
+    pub separator: talkbank_model::model::TierSeparator,
     pub speaker: Token<'a>,
     pub tier_body: TierBody<'a>,
 }
@@ -514,27 +517,7 @@ pub enum HeaderParsed<'a> {
 // Full file AST
 // ═══════════════════════════════════════════════════════════════
 
-/// A parsed CHAT file.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct ChatFile<'a> {
-    pub lines: Vec<Line<'a>>,
-    /// Original source text, needed for lossless raw_text reconstruction via spans.
-    pub source: &'a str,
-}
-
-/// A line in a CHAT file.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum Line<'a> {
-    Header(HeaderParsed<'a>),
-    Utterance(Box<Utterance<'a>>),
-}
-
-/// An utterance: main tier + dependent tiers.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct Utterance<'a> {
-    pub main_tier: MainTier<'a>,
-    pub dependent_tiers: Vec<DependentTierParsed<'a>>,
-}
+pub use file::{ChatFile, DependentTierEntryParsed, Line, Utterance};
 
 /// A parsed dependent tier.
 #[derive(Debug, Clone, PartialEq, Serialize)]

@@ -17,17 +17,9 @@ use talkbank_model::model::*;
 /// Every content item type has a proper model representation.
 /// Convert a linker token to a model Linker.
 pub(crate) fn linker_token_to_model(tok: &Token<'_>) -> Option<Linker> {
-    // Every model node this converter builds gets Span::DUMMY, because
-    // `parser::tokenize` drops the lexer's spans (`lexer.map(|(tok, _span)|
-    // tok)`) before the parser ever sees them. The lexer DOES produce them:
-    // `Lexer::next` returns `(Token, LexerSpan)`. An earlier version of this
-    // comment said the tokens "carry only the matched text slice", which is
-    // false and which reached the user-facing CLI reference before it was
-    // caught, where it made restoring positions look impossible rather than
-    // merely unfinished.
-    // Source-spacing rules (E758) are span-arithmetic gated on non-dummy
-    // spans in the model path; the re2c oracle mirrors them via its own
-    // token-stream scan, so a dummy span is correct here.
+    // Linker tokens still lack their own source span. Separator provenance
+    // is now retained independently at lexical admission, so E758 no longer
+    // depends on the first content item's location or a second token scan.
     let kind = match tok {
         Token::LinkerLazyOverlap(_) => LinkerKind::LazyOverlapPrecedes,
         Token::LinkerQuickUptake(_) => LinkerKind::OtherCompletion,

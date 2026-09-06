@@ -37,6 +37,7 @@ mod mor_admission;
 mod parser_fixtures;
 mod postcode_admission;
 mod quick_divergence_check;
+mod separator_provenance;
 mod snapshot_tests;
 mod subcategorize_main_tier;
 mod unmatched_bracket_tests;

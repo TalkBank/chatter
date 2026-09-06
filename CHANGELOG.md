@@ -11,6 +11,11 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Breaking:** re2c prefix tokens carry `PrefixToken` payload/separator state.
+  AST header lines, main tiers and `DependentTierEntryParsed` retain separator
+  provenance. Access a prefix payload with `text()`; file AST snapshots reflect
+  the new header and dependent-entry shapes.
+
 - **Breaking:** re2c dependent-tier AST adds `RejectedMor`, retaining raw input
   after failed morphology admission without fabricating a model tier.
 
@@ -29,6 +34,10 @@ version and are listed under "Changed" / "Removed".
   reflect this category; serialized CHAT model output retains its shape.
 
 ### Fixed
+
+- re2c records trailing separator spaces across headers and tiers. The shared
+  validator reports E758 outside CA, and serialization canonicalizes separators
+  in either mode. This removes the separate main-tier scan and CA probe.
 
 - re2c enforces morphological lemma starts and nonempty features at lexing.
   Rejected `%mor` reports E316/E600 and preserves morphology taint instead of

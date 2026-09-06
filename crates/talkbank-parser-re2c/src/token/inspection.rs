@@ -72,8 +72,6 @@ impl<'a> Token<'a> {
             | Token::Newline(s)
             | Token::Continuation(s)
             | Token::Whitespace(s)
-            | Token::HeaderPrefix(s)
-            | Token::HeaderSep(s)
             | Token::HeaderContent(s)
             | Token::HeaderUtf8(s)
             | Token::HeaderBegin(s)
@@ -82,9 +80,7 @@ impl<'a> Token<'a> {
             | Token::HeaderNewEpisode(s)
             | Token::Star(s)
             | Token::Speaker(s)
-            | Token::TierPrefix(s)
             | Token::IncompleteTierPrefix(s)
-            | Token::TierSep(s)
             | Token::Period(s)
             | Token::Question(s)
             | Token::Exclamation(s)
@@ -241,7 +237,13 @@ impl<'a> Token<'a> {
             Token::WordLangSuffix(opt) => opt.unwrap_or("@s"),
             Token::OtherSpokenEvent { speaker, .. } => speaker,
             Token::MediaBullet { raw_text, .. } => raw_text,
-            Token::HeaderBirthOf(s) | Token::HeaderBirthplaceOf(s) | Token::HeaderL1Of(s) => s,
+            Token::HeaderPrefix(s)
+            | Token::HeaderSep(s)
+            | Token::HeaderBirthOf(s)
+            | Token::HeaderBirthplaceOf(s)
+            | Token::HeaderL1Of(s)
+            | Token::TierPrefix(s)
+            | Token::TierSep(s) => s.text(),
             Token::MorWord { pos, .. } => pos,
             Token::GraRelation { index, .. } => index,
             Token::IdFields { language, .. } => language,

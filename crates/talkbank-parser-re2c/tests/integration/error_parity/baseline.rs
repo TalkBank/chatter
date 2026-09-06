@@ -11,7 +11,7 @@ use super::model::Divergence;
 // entry, for no reader benefit in a column whose type the const's own
 // signature states. (No row count here on purpose: a number written beside the
 // list it counts is the drift this file exists to make visible.)
-use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilent};
+use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete};
 
 // ---------------------------------------------------------------------------
 // The baseline
@@ -76,7 +76,8 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilen
 ///
 /// # Added since
 ///
-/// **2026-08-16, one**: `E756.md#0`, `Re2cIncomplete`.
+/// **Closed 2026-09-06 by lexer-owned separator provenance.**
+/// Historical addition, **2026-08-16, one**: `E756.md#0`, `Re2cIncomplete`.
 /// That example's body is a lone space, so the tier is empty AND carries an
 /// illegal trailing space after the separator; tree-sitter now reports both
 /// E756 and E758, re2c reports only E756. It ships because re2c does not track
@@ -229,10 +230,5 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E602.md#0", Re2cExtra),
     ("E709.md", Conflicting),
     ("E710.md", Conflicting),
-    ("E756.md#0", Re2cIncomplete),
-    ("E758.md#1", Re2cSilent),
-    ("E758.md#2", Re2cSilent),
-    ("E758.md#3", Re2cSilent),
-    ("E758.md#4", Re2cExtra),
     ("E760.md#0", Re2cIncomplete),
 ];

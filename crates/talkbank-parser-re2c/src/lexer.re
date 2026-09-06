@@ -69,6 +69,27 @@ impl<'a> Iterator for Lexer<'a> {
             };
         }
 
+        /// Prefix rules own any trailing separator spaces; content starts
+        /// after those spaces and carries no duplicated separator text.
+        macro_rules! emit_prefix {
+            ($variant:ident) => {{
+                let end = self.cursor;
+                let matched = &yyinput[start..end];
+                let prefix = crate::token::PrefixToken::from_lexed(matched, matched, start);
+                return Some((Token::$variant(prefix), start..end));
+            }};
+        }
+
+        macro_rules! emit_prefix_speaker {
+            ($variant:ident) => {{
+                let end = self.cursor;
+                let prefix = crate::token::PrefixToken::from_lexed(
+                    yyinput[self.t1..self.t2].trim(), &yyinput[start..end], start,
+                );
+                return Some((Token::$variant(prefix), start..end));
+            }};
+        }
+
         /// Emit token whose content is the tag-extracted slice t1..cursor.
         /// The LexerSpan still covers the full match (start..end).
         macro_rules! emit_t1 {
@@ -278,71 +299,71 @@ impl<'a> Iterator for Lexer<'a> {
         <INITIAL> "@New Episode" { emit!(HeaderNewEpisode); }
 
         // ── Headers with structured content (specific conditions) ──
-        <INITIAL> "@ID:\t" => ID_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Types:\t" => TYPES_CONTENT { emit!(HeaderPrefix); }
+        <INITIAL> "@ID:\t" " "* => ID_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Types:\t" " "* => TYPES_CONTENT { emit_prefix!(HeaderPrefix); }
 
         // ── Speaker-embedded headers ──
         // @Birth of SPK:\t, @Birthplace of SPK:\t, @L1 of SPK:\t
         // Tag extracts the speaker code directly.
-        <INITIAL> "@Birth of" [ \t]+ @t1 [A-Za-z0-9_'+\-]+ @t2 ":\t" => HEADER_CONTENT {
-            emit_t1t2!(HeaderBirthOf);
+        <INITIAL> "@Birth of" [ \t]+ @t1 [A-Za-z0-9_'+\-]+ @t2 ":\t" " "* => HEADER_CONTENT {
+            emit_prefix_speaker!(HeaderBirthOf);
         }
-        <INITIAL> "@Birthplace of" [ \t]+ @t1 [A-Za-z0-9_'+\-]+ @t2 ":\t" => HEADER_CONTENT {
-            emit_t1t2!(HeaderBirthplaceOf);
+        <INITIAL> "@Birthplace of" [ \t]+ @t1 [A-Za-z0-9_'+\-]+ @t2 ":\t" " "* => HEADER_CONTENT {
+            emit_prefix_speaker!(HeaderBirthplaceOf);
         }
-        <INITIAL> "@L1 of" [ \t]+ @t1 [A-Za-z0-9_'+\-]+ @t2 ":\t" => HEADER_CONTENT {
-            emit_t1t2!(HeaderL1Of);
+        <INITIAL> "@L1 of" [ \t]+ @t1 [A-Za-z0-9_'+\-]+ @t2 ":\t" " "* => HEADER_CONTENT {
+            emit_prefix_speaker!(HeaderL1Of);
         }
 
         // ── Headers with bullet-aware content (text_with_bullets) ──
         // @Comment uses text_with_bullets_and_pics per grammar.js
         // @Comment uses text_with_bullets_and_pics (same as %com)
-        <INITIAL> "@Comment:\t" => COM_CONTENT { emit!(HeaderPrefix); }
+        <INITIAL> "@Comment:\t" " "* => COM_CONTENT { emit_prefix!(HeaderPrefix); }
         // @Bg, @Eg, @G optional content variants also get bullet support
         // (handled in optional-content section below)
 
         // ── Headers with structured content (specific conditions) ──
         // These have internal structure the lexer should extract.
-        <INITIAL> "@Languages:\t" => LANGUAGES_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Participants:\t" => PARTICIPANTS_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Date:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Media:\t" => MEDIA_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Options:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Recording Quality:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Transcription:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Number:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
+        <INITIAL> "@Languages:\t" " "* => LANGUAGES_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Participants:\t" " "* => PARTICIPANTS_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Date:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Media:\t" " "* => MEDIA_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Options:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Recording Quality:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Transcription:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Number:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
 
         // ── Headers with free text content (truly opaque) ──
-        <INITIAL> "@Location:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Situation:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Activities:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Room Layout:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Tape Location:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Time Duration:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Time Start:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Transcriber:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Warning:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Page:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Videos:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Thumbnail:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@T:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Bck:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@PID:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Font:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Window:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Color words:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
+        <INITIAL> "@Location:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Situation:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Activities:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Room Layout:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Tape Location:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Time Duration:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Time Start:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Transcriber:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Warning:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Page:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Videos:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Thumbnail:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@T:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Bck:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@PID:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Font:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Window:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Color words:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
 
         // ── Optional-content headers (can appear with or without :\t) ──
-        <INITIAL> "@Bg:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Bg" { emit!(HeaderPrefix); }
-        <INITIAL> "@Eg:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@Eg" { emit!(HeaderPrefix); }
-        <INITIAL> "@G:\t" => HEADER_CONTENT { emit!(HeaderPrefix); }
-        <INITIAL> "@G" { emit!(HeaderPrefix); }
+        <INITIAL> "@Bg:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Bg" { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Eg:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Eg" { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@G:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@G" { emit_prefix!(HeaderPrefix); }
 
         // ── Catch-all for unknown @headers ──
         <INITIAL> "@" [^\x00:\r\n]* => HEADER_AFTER_NAME {
-            emit!(HeaderPrefix);
+            emit_prefix!(HeaderPrefix);
         }
 
         // grammar.js: star = '*'
@@ -358,33 +379,33 @@ impl<'a> Iterator for Lexer<'a> {
         // ── Tier dispatch: each tier class gets its own lexer condition ──
 
         // Structured tiers (parsed into typed AST)
-        <INITIAL> "%mor:\t" => MOR_CONTENT { emit!(TierPrefix); }
-        <INITIAL> "%trn:\t" => MOR_CONTENT { emit!(TierPrefix); }
-        <INITIAL> "%gra:\t" => GRA_CONTENT { emit!(TierPrefix); }
-        <INITIAL> "%pho:\t" => PHO_CONTENT { emit!(TierPrefix); }
-        <INITIAL> "%mod:\t" => PHO_CONTENT { emit!(TierPrefix); }
-        <INITIAL> "%sin:\t" => SIN_CONTENT { emit!(TierPrefix); }
+        <INITIAL> "%mor:\t" " "* => MOR_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%trn:\t" " "* => MOR_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%gra:\t" " "* => GRA_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%pho:\t" " "* => PHO_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%mod:\t" " "* => PHO_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%sin:\t" " "* => SIN_CONTENT { emit_prefix!(TierPrefix); }
 
         // %wor uses MAIN_CONTENT rules, same word tokenization as main tier
-        <INITIAL> "%wor:\t" => MAIN_CONTENT { emit!(TierPrefix); }
+        <INITIAL> "%wor:\t" " "* => MAIN_CONTENT { emit_prefix!(TierPrefix); }
 
         // %com: text_with_bullets_and_pics (adds inline_pic)
-        <INITIAL> "%com:\t" => COM_CONTENT { emit!(TierPrefix); }
+        <INITIAL> "%com:\t" " "* => COM_CONTENT { emit_prefix!(TierPrefix); }
 
         // User-defined tiers (%x*): text_with_bullets
         // Must come before the catch-all since re2c uses first-match.
-        <INITIAL> "%x" [a-zA-Z] [a-zA-Z0-9]* ":\t" => USER_TIER_CONTENT {
-            emit!(TierPrefix);
+        <INITIAL> "%x" [a-zA-Z] [a-zA-Z0-9]* ":\t" " "* => USER_TIER_CONTENT {
+            emit_prefix!(TierPrefix);
         }
 
         // Phon project tiers: text_with_bullets
-        <INITIAL> "%modsyl:\t" => TIER_CONTENT { emit!(TierPrefix); }
-        <INITIAL> "%phosyl:\t" => TIER_CONTENT { emit!(TierPrefix); }
-        <INITIAL> "%phoaln:\t" => TIER_CONTENT { emit!(TierPrefix); }
+        <INITIAL> "%modsyl:\t" " "* => TIER_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%phosyl:\t" " "* => TIER_CONTENT { emit_prefix!(TierPrefix); }
+        <INITIAL> "%phoaln:\t" " "* => TIER_CONTENT { emit_prefix!(TierPrefix); }
 
         // All other known tiers: text_with_bullets
-        <INITIAL> "%" [a-zA-Z][a-zA-Z0-9]* ":\t" => TIER_CONTENT {
-            emit!(TierPrefix);
+        <INITIAL> "%" [a-zA-Z][a-zA-Z0-9]* ":\t" " "* => TIER_CONTENT {
+            emit_prefix!(TierPrefix);
         }
         // Dependent tier prefix without :\t (malformed)
         <INITIAL> "%" [a-zA-Z][a-zA-Z0-9]* => TIER_AFTER_LABEL {
@@ -407,8 +428,8 @@ impl<'a> Iterator for Lexer<'a> {
         // Some headers have no sep (@UTF8, @Begin, @End, @Blank, @New Episode)
         // ═══════════════════════════════════════════════════════
 
-        <HEADER_AFTER_NAME> ":\t" => HEADER_CONTENT {
-            emit!(HeaderSep);
+        <HEADER_AFTER_NAME> ":\t" " "* => HEADER_CONTENT {
+            emit_prefix!(HeaderSep);
         }
 
         // Header with no colon, newline will reset to INITIAL via <*> rule.
@@ -576,7 +597,7 @@ impl<'a> Iterator for Lexer<'a> {
         // TIER_AFTER_LABEL, After %label, expect : + tab
         // ═══════════════════════════════════════════════════════
 
-        <TIER_AFTER_LABEL> ":\t" {
+        <TIER_AFTER_LABEL> ":\t" " "* {
             // Dispatch to tier-specific condition based on label.
             // The TierPrefix token already contains the label (e.g., "%mor").
             // Parser decides which condition to enter; lexer enters
@@ -588,7 +609,9 @@ impl<'a> Iterator for Lexer<'a> {
             // The parser can re-lex %mor, %gra, etc. with specific conditions.
             self.condition = YYC_TIER_CONTENT;
             let end = self.cursor;
-            return Some((Token::TierSep(&yyinput[start..end]), start..end));
+            return Some((Token::TierSep(crate::token::PrefixToken::from_lexed(
+                &yyinput[start..end], &yyinput[start..end], start,
+            )), start..end));
         }
 
         <TIER_AFTER_LABEL> [^\x00:\r\n] {
@@ -600,8 +623,8 @@ impl<'a> Iterator for Lexer<'a> {
         // grammar.js: seq(colon, tab) between speaker and tier_body
         // ═══════════════════════════════════════════════════════
 
-        <TIER_SEP> ":\t" => MAIN_CONTENT {
-            emit!(TierSep);
+        <TIER_SEP> ":\t" " "* => MAIN_CONTENT {
+            emit_prefix!(TierSep);
         }
 
         <TIER_SEP> [^\x00:\r\n] {

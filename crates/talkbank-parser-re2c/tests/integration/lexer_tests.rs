@@ -492,7 +492,7 @@ fn lex_header_with_content() {
     // @Languages now enters LANGUAGES_CONTENT with structured tokens
     let tokens = lex("@Languages:\teng\n");
     assert!(
-        matches!(tokens[0], Token::HeaderPrefix(s) if s.contains("Languages")),
+        matches!(tokens[0], Token::HeaderPrefix(ref s) if s.text().contains("Languages")),
         "got {:?}",
         tokens[0]
     );
@@ -523,7 +523,7 @@ fn lex_dependent_tier_prefix() {
     // %mor:\t is now a single rich TierPrefix token (includes :\t)
     // and the lexer enters MOR_CONTENT directly
     let tokens = lex("%mor:\tpro|I .\n");
-    assert!(matches!(tokens[0], Token::TierPrefix(s) if s.contains("mor")));
+    assert!(matches!(tokens[0], Token::TierPrefix(ref s) if s.text().contains("mor")));
     // Next token is MorWord (no separate TierSep; it's baked into TierPrefix)
     assert!(
         matches!(tokens[1], Token::MorWord { .. }),
@@ -908,7 +908,7 @@ fn lex_wor_with_bullet() {
 fn lex_full_mor_line() {
     // From INITIAL: %mor:\t dispatches directly to MOR_CONTENT
     let tokens = lex("%mor:\tpro|I v|want .\n");
-    assert!(matches!(tokens[0], Token::TierPrefix(s) if s.contains("mor")));
+    assert!(matches!(tokens[0], Token::TierPrefix(ref s) if s.text().contains("mor")));
     // After the rich TierPrefix("%mor:\t"), we're in MOR_CONTENT
     // so the next tokens should be MorWord, not generic TextSegment
     assert!(
@@ -921,7 +921,7 @@ fn lex_full_mor_line() {
 fn lex_full_gra_line() {
     // From INITIAL: %gra:\t dispatches directly to GRA_CONTENT
     let tokens = lex("%gra:\t1|2|SUBJ 2|0|ROOT\n");
-    assert!(matches!(tokens[0], Token::TierPrefix(s) if s.contains("gra")));
+    assert!(matches!(tokens[0], Token::TierPrefix(ref s) if s.text().contains("gra")));
     assert!(
         tokens
             .iter()
@@ -933,7 +933,7 @@ fn lex_full_gra_line() {
 #[test]
 fn lex_full_pho_line() {
     let tokens = lex("%pho:\ta b c\n");
-    assert!(matches!(tokens[0], Token::TierPrefix(s) if s.contains("pho")));
+    assert!(matches!(tokens[0], Token::TierPrefix(ref s) if s.text().contains("pho")));
     assert!(
         tokens.iter().any(|t| matches!(t, Token::PhoWord(_))),
         "expected PhoWord tokens after %pho prefix, got {tokens:?}"
@@ -943,7 +943,7 @@ fn lex_full_pho_line() {
 #[test]
 fn lex_full_sin_line() {
     let tokens = lex("%sin:\tpoint give\n");
-    assert!(matches!(tokens[0], Token::TierPrefix(s) if s.contains("sin")));
+    assert!(matches!(tokens[0], Token::TierPrefix(ref s) if s.text().contains("sin")));
     assert!(
         tokens.iter().any(|t| matches!(t, Token::SinWord(_))),
         "expected SinWord tokens after %sin prefix, got {tokens:?}"
@@ -954,7 +954,7 @@ fn lex_full_sin_line() {
 fn lex_full_com_line() {
     // %com is a generic text tier
     let tokens = lex("%com:\tCHI is standing\n");
-    assert!(matches!(tokens[0], Token::TierPrefix(s) if s.contains("com")));
+    assert!(matches!(tokens[0], Token::TierPrefix(ref s) if s.text().contains("com")));
     assert!(
         tokens.iter().any(|t| matches!(t, Token::TextSegment(_))),
         "expected TextSegment after %com prefix, got {tokens:?}"
@@ -965,7 +965,7 @@ fn lex_full_com_line() {
 fn lex_full_wor_line() {
     // %wor dispatches to MAIN_CONTENT (same word rules)
     let tokens = lex("%wor:\thello world\n");
-    assert!(matches!(tokens[0], Token::TierPrefix(s) if s.contains("wor")));
+    assert!(matches!(tokens[0], Token::TierPrefix(ref s) if s.text().contains("wor")));
     assert!(
         tokens.iter().any(|t| matches!(t, Token::Word { .. })),
         "expected Word token after %wor prefix, got {tokens:?}"
@@ -1024,7 +1024,7 @@ fn lex_header_new_episode() {
 fn lex_id_header_full() {
     let tokens = lex("@ID:\teng|corpus|CHI|3;00.|female|typical||Child|||\n");
     assert!(
-        matches!(tokens[0], Token::HeaderPrefix(s) if s.contains("ID")),
+        matches!(tokens[0], Token::HeaderPrefix(ref s) if s.text().contains("ID")),
         "got {:?}",
         tokens[0]
     );
@@ -1100,7 +1100,7 @@ fn lex_id_content_isolated() {
 #[test]
 fn lex_types_header() {
     let tokens = lex("@Types:\tlongitudinal, naturalistic, TD\n");
-    assert!(matches!(tokens[0], Token::HeaderPrefix(s) if s.contains("Types")));
+    assert!(matches!(tokens[0], Token::HeaderPrefix(ref s) if s.text().contains("Types")));
     assert!(
         matches!(
             tokens[1],
@@ -1185,12 +1185,12 @@ fn lex_specific_header_prefixes() {
 fn lex_optional_content_headers() {
     // @Bg with content
     let tokens = lex("@Bg:\tsome gem label\n");
-    assert!(matches!(tokens[0], Token::HeaderPrefix(s) if s.contains("Bg")));
+    assert!(matches!(tokens[0], Token::HeaderPrefix(ref s) if s.text().contains("Bg")));
     assert!(matches!(tokens[1], Token::HeaderContent(_)));
 
     // @Bg without content (just newline)
     let tokens = lex("@Bg\n");
-    assert!(matches!(tokens[0], Token::HeaderPrefix(s) if s.contains("Bg")));
+    assert!(matches!(tokens[0], Token::HeaderPrefix(ref s) if s.text().contains("Bg")));
     assert!(matches!(tokens[1], Token::Newline(_)));
 }
 
@@ -1362,7 +1362,7 @@ fn lex_tier_content_no_inline_pic() {
 fn lex_birth_of_header() {
     let tokens = lex("@Birth of CHI:\t28-JUL-2001\n");
     assert!(
-        matches!(tokens[0], Token::HeaderBirthOf("CHI")),
+        matches!(tokens[0], Token::HeaderBirthOf(ref prefix) if prefix.text() == "CHI"),
         "expected HeaderBirthOf(\"CHI\"), got {:?}",
         tokens[0]
     );

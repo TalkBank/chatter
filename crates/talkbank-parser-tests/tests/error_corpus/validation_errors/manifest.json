@@ -2938,6 +2938,20 @@
       "source_spec": "spec/errors/E758.md"
     },
     {
+      "fixture": "E758_6.cha",
+      "code": "E758",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E758.md"
+    },
+    {
+      "fixture": "E758_7.cha",
+      "code": "E758",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E758.md"
+    },
+    {
       "fixture": "E759_1.cha",
       "code": "E759",
       "claim": "violates",

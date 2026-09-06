@@ -3542,6 +3542,23 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E758.md",
+      "example": 6,
+      "parse": [],
+      "validation": [
+        "E547",
+        "E551"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E758.md",
+      "example": 7,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E759.md",
       "example": 1,
       "parse": [

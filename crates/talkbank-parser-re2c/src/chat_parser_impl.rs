@@ -100,7 +100,7 @@ impl ChatParser for Re2cParser {
         };
         let parsed = crate::parser::parse_chat_file_streaming(input, &diagnostics);
         for line in &parsed.lines {
-            if let crate::ast::Line::Header(h) = line {
+            if let crate::ast::Line::Header { header: h, .. } = line {
                 return ParseOutcome::parsed(shifted(
                     crate::convert::header_parsed_to_model(h),
                     offset,
@@ -418,7 +418,8 @@ impl ChatParser for Re2cParser {
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line
                 && let Some(tier) = u.dependent_tiers.first()
-                && let Some(model_tier) = crate::convert::dependent_tier_to_model(tier, source)
+                && let Some(model_tier) =
+                    crate::convert::dependent_tier_to_model(&tier.tier, source)
             {
                 return ParseOutcome::parsed(shifted(model_tier, offset));
             }
