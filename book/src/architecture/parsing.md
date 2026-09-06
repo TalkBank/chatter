@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-08-27 00:33 EDT
+**Last updated:** 2026-09-06 04:57 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -9,7 +9,7 @@ The default and canonical parser is the tree-sitter parser
 exists alongside it as a specification oracle and high-throughput
 batch parser; it produces the same `ChatFile` model and is opt-in via
 `chatter validate --parser re2c`. The LSP and all production paths
-use the tree-sitter parser.
+default to the tree-sitter parser.
 
 ## Tree-Sitter Parser
 
@@ -154,10 +154,10 @@ corpus grew past a hundred. Ask the tree
 
 ## TreeSitterParser API
 
-`TreeSitterParser` is the sole API handle for parsing. Callers create one
-instance and pass `&TreeSitterParser` to all parsing call sites. There is
-no trait abstraction, `TreeSitterParser` is a concrete type in the
-`talkbank-parser` crate.
+`TreeSitterParser` is the concrete canonical parser handle. Reuse an instance
+across calls. The shared `talkbank_model::ChatParser` trait also supports
+generic callers and backend parity tests; both tree-sitter and re2c implement
+it. Its sink methods are generic, so the trait is not a `dyn` trait object.
 
 ```rust,ignore
 use talkbank_parser::TreeSitterParser;
@@ -165,18 +165,34 @@ use talkbank_parser::TreeSitterParser;
 let parser = TreeSitterParser::new()?;
 
 // Full-file parsing (methods on TreeSitterParser).
-// parse_chat_file returns ParseResult<ChatFile> with the diagnostic list
-// embedded in the result envelope.
-let chat_file = parser.parse_chat_file(&source)?;
+// ParseProduct::Built retains the file and diagnostics together, even when
+// recovery was necessary. Unbuildable has diagnostics without a model.
+let product = parser.parse_chat_file(&source);
 // parse_chat_file_streaming pushes diagnostics into an ErrorSink as it
 // goes, useful for very large files or LSP-style incremental flows.
 let chat_file = parser.parse_chat_file_streaming(&source, &errors);
 
 // Fragment parsing (methods on TreeSitterParser), used when synthesizing
 // CHAT from non-CHAT sources (ASR output, UD annotations).
-let word = parser.parse_word_fragment(word_text, &errors);
-let main_tier = parser.parse_main_tier_fragment(tier_text, &errors);
+let word = parser.parse_word_fragment(word_text, document_offset, &errors);
+let main_tier = parser.parse_main_tier_fragment(tier_text, document_offset, &errors);
 ```
+
+### Diagnostic coordinates
+
+Whole-file fragment parsing adds the caller's offset to model spans and
+diagnostic document locations. `RebasedErrorSink` owns the diagnostic
+translation for both backends. A diagnostic's `ErrorContext` owns its own
+source text, so its highlight remains relative to that text. The wrapper
+removal adapter, `OffsetAdjustingErrorSink`, instead subtracts a synthetic
+prefix and clips context; it is not a document rebasing operation.
+
+The E326 boundary test exercises both parsers with LF and CRLF, UTF-8 content,
+and offsets zero and 200. Unsupported-line recovery must identify each skipped
+line, retain following utterances, and preserve the diagnostic's local source
+highlight. The separate wrapper-based fragment entry points and the existing
+`usize` to signed span-displacement conversions still need a complete offset
+representability review; these controls do not prove large-offset safety.
 
 ### AST Structure
 

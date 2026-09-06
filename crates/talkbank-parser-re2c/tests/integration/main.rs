@@ -41,5 +41,6 @@ mod separator_provenance;
 mod snapshot_tests;
 mod subcategorize_main_tier;
 mod unmatched_bracket_tests;
+mod unsupported_lines;
 
 mod dependent_dispatch;

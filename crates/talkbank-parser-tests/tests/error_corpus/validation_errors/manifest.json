@@ -863,6 +863,20 @@
       "source_spec": "spec/errors/E326.md"
     },
     {
+      "fixture": "E326_2.cha",
+      "code": "E326",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E326.md"
+    },
+    {
+      "fixture": "E326_3.cha",
+      "code": "E326",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E326.md"
+    },
+    {
       "fixture": "E330_1.cha",
       "code": "E330",
       "claim": {

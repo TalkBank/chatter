@@ -998,6 +998,22 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E326.md",
+      "example": 2,
+      "parse": [
+        "E326"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E326.md",
+      "example": 3,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E330.md",
       "example": 1,
       "parse": [

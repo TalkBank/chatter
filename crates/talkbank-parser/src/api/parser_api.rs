@@ -242,7 +242,7 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ChatFile> {
-        let adjusting_sink = OffsetAdjustingErrorSink::new(errors, offset, input);
+        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
         let mut chat = self.parse_chat_file_streaming(input, &adjusting_sink);
         if offset > 0 {
             chat.shift_spans_after(0, offset as i32);

@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|test|CHI||female|||Target_Child|||
+*CHI:	hello .
+unprefixed café
+another bare line
+*CHI:	goodbye .
+@End

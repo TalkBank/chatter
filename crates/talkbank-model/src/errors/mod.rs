@@ -61,6 +61,7 @@ pub mod offset_adjusting_sink;
 pub mod parse_error;
 /// Collection type: `ParseErrors` and `ParseResult` type alias.
 pub mod parse_errors;
+mod rebased_sink;
 /// Source location types: `SourceLocation`, `ErrorLabel`, `Severity`, `ErrorVec`.
 pub mod source_location;
 /// Span shifting trait for adjusting byte offsets in errors and AST nodes.
@@ -88,6 +89,7 @@ pub use line_map::{LineMap, SourceIndex};
 pub use offset_adjusting_sink::OffsetAdjustingErrorSink;
 pub use parse_error::ParseError;
 pub use parse_errors::{ParseErrors, ParseResult};
+pub use rebased_sink::RebasedErrorSink;
 pub use source_location::{ErrorLabel, ErrorVec, Severity, SourceLocation, SourceLocationError};
 pub use span_shift::SpanShift;
 pub use tee_sink::TeeErrorSink;

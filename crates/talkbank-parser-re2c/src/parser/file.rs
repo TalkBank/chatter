@@ -536,6 +536,24 @@ pub(crate) fn parse_file_with_errors<'a>(
                 );
             }
 
+            // The lexer already classified a whole unsupported line. Preserve
+            // that fact instead of degrading it to a generic syntax failure.
+            TokenDiscriminants::ErrorLine => {
+                let (_, mut span) = lexed.token_at(pos);
+                pos += 1;
+                if matches!(tokens.get(pos), Some(Token::Newline(_))) {
+                    span.end = lexed.token_at(pos).1.end;
+                    pos += 1;
+                }
+                errors.report(ParseError::new(
+                    talkbank_model::ErrorCode::UnexpectedLineType,
+                    talkbank_model::Severity::Error,
+                    talkbank_model::SourceLocation::from_offsets(span.start, span.end),
+                    talkbank_model::ErrorContext::new(source, span.clone(), "unsupported_line"),
+                    "Unsupported line skipped",
+                ));
+            }
+
             // Unknown tokens, report and skip
             _ => {
                 let tok = &tokens[pos];

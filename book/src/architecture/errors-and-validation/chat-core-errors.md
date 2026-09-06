@@ -1,7 +1,7 @@
 # Errors, CHAT core
 
 **Status:** Current
-**Last modified:** 2026-08-16 12:39 EDT
+**Last modified:** 2026-09-06 04:57 EDT
 
 The error infrastructure used across all CHAT-core crates
 (`talkbank-model`, `talkbank-parser`, `talkbank-transform`,
@@ -24,7 +24,7 @@ pub struct ParseError {
     pub code: ErrorCode,
     pub severity: Severity,
     pub location: SourceLocation,
-    pub context: ErrorContext,
+    pub context: Option<ErrorContext>,
     pub message: String,
 }
 ```
@@ -97,9 +97,11 @@ Carries the source fragment around the error location:
 
 ```rust,ignore
 pub struct ErrorContext {
-    pub source_fragment: String,
-    pub byte_range: Range<usize>,
-    pub node_kind: String,
+    pub source_text: String,
+    pub span: Span, // Relative to source_text, not the document location.
+    pub expected: SmallVec<[String; 2]>,
+    pub found: String,
+    pub line_offset: Option<usize>,
 }
 ```
 
@@ -149,7 +151,11 @@ Module layout in `talkbank-model`:
 - `errors/error_sink.rs`: trait and lightweight forwarding sinks.
 - `errors/collectors.rs`: in-memory collectors and counters.
 - `errors/async_channel_sink.rs`: Tokio-channel streaming.
-- `errors/offset_adjusting_sink.rs`, `errors/tee_sink.rs`, adapters.
+- `errors/offset_adjusting_sink.rs`: remove synthetic wrapper offsets.
+- `errors/rebased_sink.rs`: translate raw document locations and labels while
+  retaining the diagnostic's self-contained source context. Use before display
+  enhancement converts secondary labels into snippet-relative coordinates.
+- `errors/tee_sink.rs`: forward diagnostics to both sinks.
 
 `ConfigurableErrorSink` is the one adapter that does NOT live here: it
 applies a `PresentationPolicy` (what a reader is shown), which belongs to

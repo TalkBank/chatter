@@ -198,7 +198,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E316.md#4", Conflicting),
     ("E316.md#5", Conflicting),
     ("E324.md#0", Conflicting),
-    ("E326.md", Conflicting),
     // These four arrived on 2026-08-11 without any parser change: E342_auto.md
     // was marked `not_implemented` by a stale auto-generated stub while its
     // real spec said `implemented`, so this gate had been skipping it. Fixing
