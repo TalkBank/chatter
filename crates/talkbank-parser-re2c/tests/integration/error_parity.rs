@@ -534,3 +534,42 @@ fn blank_line_recovery_matches_for_each_spec_line_ending() {
         assert_eq!(canonical_spans, re2c_spans, "{:?}", example.chat);
     }
 }
+
+/// Separator admission is independent of whether the malformed tier has content.
+#[test]
+fn malformed_tier_prefixes_report_the_complete_source_line() {
+    use talkbank_model::{ChatParser, ErrorCode, ParseOutcome, Span};
+    use talkbank_spec_vocabulary::frontmatter::Claim;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
+    let spec = specs
+        .iter()
+        .find(|spec| spec.filename == "E602.md")
+        .unwrap();
+    let parser = talkbank_parser_re2c::Re2cParser::new();
+    for example in spec.examples() {
+        let source = example.chat.as_str();
+        let line = source.lines().find(|line| line.starts_with('%')).unwrap();
+        let start = source.find(line).unwrap();
+        let errors = ErrorCollector::new();
+        let ParseOutcome::Parsed(file) = parser.parse_chat_file(source, 0, &errors) else {
+            panic!("tier recovery must retain the preceding utterance");
+        };
+        assert_eq!(file.utterances().count(), 1);
+        let spans: Vec<_> = errors
+            .into_vec()
+            .into_iter()
+            .filter(|error| error.code == ErrorCode::MalformedTierHeader)
+            .map(|error| error.location.span)
+            .collect();
+        match example.claim {
+            Claim::Violates => assert_eq!(spans, vec![Span::from_usize(start, start + line.len())]),
+            Claim::Legal => assert!(spans.is_empty()),
+            _ => panic!("E602 boundary claim needs an explicit test disposition"),
+        }
+    }
+}

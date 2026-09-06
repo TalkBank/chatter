@@ -30,6 +30,11 @@ impl<'source> LexedSource<'source> {
         &self.tokens
     }
 
+    /// A token selected by the file cursor and its original lexer location.
+    pub(crate) fn token_at(&self, index: usize) -> (&Token<'source>, LexerSpan) {
+        (&self.tokens[index], self.spans[index].clone())
+    }
+
     /// Diagnose a standalone newline selected by the file dispatcher. A
     /// newline left behind after recovery on a nonempty line is not blank.
     pub(crate) fn report_blank_line(&self, index: usize, errors: &impl talkbank_model::ErrorSink) {

@@ -869,7 +869,7 @@ impl<'a> Iterator for Lexer<'a> {
             36 => {
                 self.condition = YYC_TIER_AFTER_LABEL;
                 {
-            emit!(TierPrefix);
+            emit!(IncompleteTierPrefix);
         }
             }
             37 => {

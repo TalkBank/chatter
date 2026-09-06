@@ -82,8 +82,10 @@ pub enum Token<'a> {
     Speaker(&'a str),
 
     // ── Dependent tier ──────────────────────────────────────
-    /// Tier prefix: %label (e.g., "%mor", "%gra", "%com")
+    /// Complete dependent tier prefix, including the required colon and tab.
     TierPrefix(&'a str),
+    /// A dependent tier label whose required colon-tab separator did not match.
+    IncompleteTierPrefix(&'a str),
     /// Tier separator: ":\t" (colon + tab, after tier label)
     TierSep(&'a str),
 

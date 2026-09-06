@@ -19,8 +19,9 @@ use crate::ast::*;
 use crate::token::{Token, TokenDiscriminants};
 use talkbank_model::{ErrorSink, ParseError, Span};
 
-use super::dependent_tiers;
+mod dependent;
 use super::main_tier;
+use dependent::parse_dependent_tiers;
 
 /// Report E750 for whitespace hugging an angle-group delimiter: a
 /// `LessThan` token immediately followed by whitespace, or whitespace
@@ -468,7 +469,7 @@ pub(crate) fn parse_file_with_errors<'a>(
                                 "angle-bracket group must be followed by an annotation ([ ])",
                             );
                         }
-                        let dep_tiers = parse_dependent_tiers(tokens, &mut pos, errors);
+                        let dep_tiers = parse_dependent_tiers(lexed, &mut pos, errors);
                         lines.push(Line::Utterance(Box::new(Utterance {
                             main_tier,
                             dependent_tiers: dep_tiers,
@@ -486,8 +487,11 @@ pub(crate) fn parse_file_with_errors<'a>(
                         // Skip any dependent tiers that follow; they're orphaned
                         // without a valid main tier.
                         while pos < tokens.len()
-                            && TokenDiscriminants::from(&tokens[pos])
-                                == TokenDiscriminants::TierPrefix
+                            && matches!(
+                                TokenDiscriminants::from(&tokens[pos]),
+                                TokenDiscriminants::TierPrefix
+                                    | TokenDiscriminants::IncompleteTierPrefix
+                            )
                         {
                             pos = skip_to_newline(tokens, pos);
                             if pos < tokens.len() {
@@ -513,7 +517,7 @@ pub(crate) fn parse_file_with_errors<'a>(
             }
 
             // Orphan tier prefix (no preceding main tier), report E319
-            TokenDiscriminants::TierPrefix => {
+            TokenDiscriminants::TierPrefix | TokenDiscriminants::IncompleteTierPrefix => {
                 let line_start = pos;
                 pos = skip_to_newline(tokens, pos);
                 if pos < tokens.len() {
@@ -544,216 +548,6 @@ pub(crate) fn parse_file_with_errors<'a>(
     }
 
     ChatFile { lines, source }
-}
-
-/// Parse dependent tiers following a main tier.
-///
-/// When a tier-specific chumsky parser fails, the error is reported
-/// and the tier falls back to a generic text tier (preserving the raw
-/// content for downstream inspection).
-fn parse_dependent_tiers<'a>(
-    tokens: &[Token<'a>],
-    pos: &mut usize,
-    errors: &impl ErrorSink,
-) -> Vec<DependentTierParsed<'a>> {
-    let mut dep_tiers = Vec::new();
-
-    while *pos < tokens.len()
-        && TokenDiscriminants::from(&tokens[*pos]) == TokenDiscriminants::TierPrefix
-    {
-        let prefix = tokens[*pos].clone();
-        let prefix_text = prefix.text();
-        *pos += 1;
-
-        let content_start = *pos;
-        *pos = skip_to_newline(tokens, *pos);
-        let content_end = *pos;
-        if *pos < tokens.len() {
-            *pos += 1; // consume newline
-        }
-
-        let tier_tokens = &tokens[content_start..content_end];
-
-        // Malformed tier: no colon-tab at all (e.g. `%mor\n`), which is what
-        // E602 means and what its spec example shows.
-        //
-        // The test used to be `tier_tokens.is_empty()`, which ALSO caught a
-        // well-formed but empty tier (`%xfoo:\t`), reporting "missing
-        // colon-tab?" about a line that plainly has one. Two different
-        // constructs under one code, with a message written for only the first.
-        // Measured 2026-08-04: that made this parser emit E602 where the
-        // tree-sitter parser emitted nothing, on top of the E756 they both
-        // emitted. An empty-but-well-formed tier now falls through to the
-        // normal path, is built with `content: None`, and is reported by E756
-        // during validation, which is the rule that actually describes it.
-        if tier_tokens.is_empty() && !prefix_text.ends_with(":\t") {
-            errors.report(ParseError::new(
-                talkbank_model::errors::codes::ErrorCode::MalformedTierHeader,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
-                None,
-                format!(
-                    "malformed dependent tier: {} has no content (missing colon-tab?)",
-                    prefix_text
-                ),
-            ));
-            dep_tiers.push(DependentTierParsed::Text {
-                prefix,
-                content: vec![],
-            });
-            continue;
-        }
-
-        // Try the tier-specific parser. On failure, report error and
-        // fall back to generic text tier.
-        if prefix_text.starts_with("%mor") || prefix_text.starts_with("%trn") {
-            match dependent_tiers::mor_tier_parser()
-                .parse(tier_tokens)
-                .into_result()
-            {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Mor(tier)),
-                Err(_) => {
-                    // E760: a mor item whose part-of-speech field is empty
-                    // (an item beginning with the `|` separator, `|we`).
-                    // More specific than the generic unparsable fallback;
-                    // mirrors the tree-sitter dependent-tier error analysis
-                    // (modern reading of CLAN CHECK error 11). On a mor
-                    // lex/parse failure the token stream degrades toward
-                    // character-level tokens, so the tier text is
-                    // reconstructed by concatenation (tokens carry their
-                    // exact source slices, including whitespace) and the
-                    // item rule is applied to the whitespace-split items,
-                    // identically to the tree-sitter side.
-                    let tier_text: String = tier_tokens.iter().map(Token::text).collect();
-                    // Tier text reconstruction starts at the tier's content
-                    // boundary, so the first whitespace item is a genuine
-                    // item (no split-tail hazard as in the tree-sitter
-                    // fragment case); items whose leading pipe follows a
-                    // non-space character inside the SAME whitespace token
-                    // (two-pipe/compound malformations) do not match the
-                    // starts_with test at all.
-                    if let Some(item) = tier_text
-                        .split_whitespace()
-                        .find(|text| text.starts_with('|') && text.len() > 1)
-                    {
-                        errors.report(
-                            ParseError::new(
-                                talkbank_model::errors::codes::ErrorCode::MorItemEmptyPos,
-                                talkbank_model::Severity::Error,
-                                talkbank_model::SourceLocation::new(Span::DUMMY),
-                                None,
-                                format!("MOR item '{item}' has an empty part-of-speech field"),
-                            )
-                            .with_suggestion(
-                                "Every %mor item is pos|stem with a non-empty part of speech \
-                                 before the pipe (e.g., pro|we, v|go)",
-                            ),
-                        );
-                    } else {
-                        report_error(
-                            errors,
-                            talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                            talkbank_model::Severity::Error,
-                            tier_tokens,
-                            &format!("failed to parse {prefix_text} tier content"),
-                        );
-                    }
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
-                }
-            }
-        } else if prefix_text.starts_with("%pho") {
-            match dependent_tiers::pho_tier_parser()
-                .parse(tier_tokens)
-                .into_result()
-            {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Pho(tier)),
-                Err(_) => {
-                    report_error(
-                        errors,
-                        talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                        talkbank_model::Severity::Error,
-                        tier_tokens,
-                        &format!("failed to parse {prefix_text} tier content"),
-                    );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
-                }
-            }
-        } else if prefix_text.starts_with("%mod") {
-            match dependent_tiers::pho_tier_parser()
-                .parse(tier_tokens)
-                .into_result()
-            {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Mod(tier)),
-                Err(_) => {
-                    report_error(
-                        errors,
-                        talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                        talkbank_model::Severity::Error,
-                        tier_tokens,
-                        &format!("failed to parse {prefix_text} tier content"),
-                    );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
-                }
-            }
-        } else if prefix_text.starts_with("%gra") {
-            match dependent_tiers::gra_tier_parser()
-                .parse(tier_tokens)
-                .into_result()
-            {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Gra(tier)),
-                Err(_) => {
-                    report_error(
-                        errors,
-                        talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                        talkbank_model::Severity::Error,
-                        tier_tokens,
-                        &format!("failed to parse {prefix_text} tier content"),
-                    );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
-                }
-            }
-        } else if prefix_text.starts_with("%sin") {
-            match dependent_tiers::sin_tier_parser()
-                .parse(tier_tokens)
-                .into_result()
-            {
-                Ok(tier) => dep_tiers.push(DependentTierParsed::Sin(tier)),
-                Err(_) => {
-                    report_error(
-                        errors,
-                        talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                        talkbank_model::Severity::Error,
-                        tier_tokens,
-                        &format!("failed to parse {prefix_text} tier content"),
-                    );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
-                }
-            }
-        } else if prefix_text.starts_with("%wor") {
-            match dependent_tiers::wor_tier_parser()
-                .parse(tier_tokens)
-                .into_result()
-            {
-                Ok(wor) => dep_tiers.push(DependentTierParsed::Wor(wor)),
-                Err(_) => {
-                    report_error(
-                        errors,
-                        talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                        talkbank_model::Severity::Error,
-                        tier_tokens,
-                        &format!("failed to parse {prefix_text} tier content"),
-                    );
-                    dep_tiers.push(fallback_text_tier(prefix, tier_tokens));
-                }
-            }
-        } else {
-            // Generic text tier, always succeeds
-            let content: Vec<Token<'a>> = tier_tokens.to_vec();
-            dep_tiers.push(DependentTierParsed::Text { prefix, content });
-        }
-    }
-
-    dep_tiers
 }
 
 /// Whether any content item is a synthesized recovery from a `<...>` group that
@@ -822,14 +616,6 @@ fn report_error(
         None,
         format!("{context}: {preview}..."),
     ));
-}
-
-/// Create a fallback text tier from raw tokens when a tier-specific
-/// parser fails. This preserves the content for downstream inspection
-/// rather than silently dropping it.
-fn fallback_text_tier<'a>(prefix: Token<'a>, tokens: &[Token<'a>]) -> DependentTierParsed<'a> {
-    let content: Vec<Token<'a>> = tokens.to_vec();
-    DependentTierParsed::Text { prefix, content }
 }
 
 /// Advance position to the Newline token (or end of tokens).

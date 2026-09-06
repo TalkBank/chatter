@@ -11,6 +11,9 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Breaking:** re2c `Token::TierPrefix` denotes a complete colon-tab prefix;
+  the new `IncompleteTierPrefix` variant identifies recovery from a bare label.
+
 - **Breaking:** re2c postcode tokens and main-tier AST postcodes carry checked
   payload state and lexer locations. `main_tier_to_model` and
   `utterance_to_model` now require an error sink; callers can no longer lower
@@ -23,6 +26,11 @@ version and are listed under "Changed" / "Removed".
   reflect this category; serialized CHAT model output retains its shape.
 
 ### Fixed
+
+- re2c reports E602 for malformed dependent-tier separators even when content
+  follows the label, including a space in place of the required tab. Recovery
+  uses the lexer-classified prefix and locates the complete malformed line;
+  empty content no longer participates in deciding whether its prefix is valid.
 
 - re2c rejects whitespace-only postcodes with E363 while preserving the rest
   of the tier. Valid postcodes preserve leading payload whitespace and trim

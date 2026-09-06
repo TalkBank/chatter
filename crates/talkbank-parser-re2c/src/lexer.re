@@ -388,7 +388,7 @@ impl<'a> Iterator for Lexer<'a> {
         }
         // Dependent tier prefix without :\t (malformed)
         <INITIAL> "%" [a-zA-Z][a-zA-Z0-9]* => TIER_AFTER_LABEL {
-            emit!(TierPrefix);
+            emit!(IncompleteTierPrefix);
         }
 
         // Whitespace at line start (before @, *, %)

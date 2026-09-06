@@ -83,6 +83,7 @@ impl<'a> Token<'a> {
             | Token::Star(s)
             | Token::Speaker(s)
             | Token::TierPrefix(s)
+            | Token::IncompleteTierPrefix(s)
             | Token::TierSep(s)
             | Token::Period(s)
             | Token::Question(s)

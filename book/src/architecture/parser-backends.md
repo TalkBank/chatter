@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-06 00:27 EDT
+**Last updated:** 2026-09-06 00:41 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -159,6 +159,17 @@ utterance diagnostics. Remaining fragment entry points that do not yet produce
 diagnostics are still a separate parity gap. The postcode boundary test loads
 the authored E363 examples and checks actual token spans, nonzero offsets,
 recovered tier content and canonical-parser normalization.
+
+### Dependent-tier prefix admission
+
+The lexer distinguishes a complete `TierPrefix`, including its required colon
+and tab, from an `IncompleteTierPrefix` recovered from a label. File dispatch
+recognizes both forms. Dependent-tier recovery consumes this classification
+rather than inferring malformed syntax from an empty body and a suffix check.
+It reports E602 over the original complete line and retains the recovered
+content for inspection. A complete prefix with no body remains a separate
+content-validation question (E756). The E602 boundary test loads both malformed
+specification examples and the valid colon-tab control and checks source spans.
 
 ### Not ready as a validity authority
 
