@@ -153,10 +153,18 @@ pub fn parse_chat_file(input: &str) -> ChatFile<'_> {
 
 /// Parse a complete CHAT file with streaming error reporting (AST, borrows).
 pub fn parse_chat_file_streaming<'a>(input: &'a str, errors: &impl ErrorSink) -> ChatFile<'a> {
+    let lexed = lex_file_source(input, errors);
+    file::parse_file_with_errors(&lexed, errors)
+}
+
+/// File and header-fragment admission share source-level diagnostics and one lexer run.
+pub(super) fn lex_file_source<'a>(
+    input: &'a str,
+    errors: &impl ErrorSink,
+) -> super::LexedSource<'a> {
     talkbank_model::validation::report_control_characters(input, errors);
     report_header_colon_without_tab(input, errors);
-    let lexed = super::LexedSource::new(input, 0);
-    file::parse_file_with_errors(&lexed, errors)
+    super::LexedSource::new(input, 0)
 }
 
 /// Report E303 at the source boundary before lexing malformed headers.

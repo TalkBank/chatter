@@ -16,6 +16,9 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- re2c header fragments reject extra headers, utterances and unsupported
+  trailing lines instead of returning a partial result. Lowering consumes an
+  admitted logical header; folded content and recovery diagnostics survive.
 - re2c preserves pause spans, including timed-pause parentheses, through nested
   content and fragment rebasing. Shared validation now owns pause spacing;
   duplicate token scans are removed.

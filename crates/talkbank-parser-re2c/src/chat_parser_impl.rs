@@ -80,16 +80,10 @@ impl ChatParser for Re2cParser {
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Header> {
         let diagnostics = RebasedErrorSink::new(errors, offset as i32);
-        let parsed = crate::parser::parse_chat_file_streaming(input, &diagnostics);
-        for line in &parsed.lines {
-            if let crate::ast::Line::Header { header: h, .. } = line {
-                return ParseOutcome::parsed(shifted(
-                    crate::convert::header_parsed_to_model(h),
-                    offset,
-                ));
-            }
+        match crate::parser::HeaderFragment::parse(input, &diagnostics) {
+            Some(fragment) => ParseOutcome::parsed(shifted(fragment.lower(), offset)),
+            None => ParseOutcome::rejected(),
         }
-        ParseOutcome::rejected()
     }
 
     fn parse_id_header(

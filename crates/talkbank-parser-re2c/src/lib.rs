@@ -172,3 +172,6 @@ pub const SOURCE_FINGERPRINT: &str = env!("TALKBANK_PARSER_SOURCE_FINGERPRINT");
 
 #[cfg(test)]
 mod pause_provenance_tests;
+
+#[cfg(test)]
+mod header_fragment_tests;
