@@ -343,6 +343,10 @@ ci-gate-sync:
 # gate here IS a green CI. `git rev-parse --git-dir`, never a literal `.git`:
 # in a worktree `.git` is a file.
 gate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/gate-receipt.sh
+    gate_begin
     just fmt-check
     just actionlint
     just ci-gate-sync
@@ -352,6 +356,7 @@ gate:
     just shellcheck
     just breaking-changelog-test
     just evidence-gate-test
+    just gate-receipts-test
     just verify-vendored-lexer
     just grammar-generate-check
     just node-types-check
@@ -360,7 +365,7 @@ gate:
     just deps-check
     just book
     just test-all
-    @bash scripts/tree-stamp.sh > "$(git rev-parse --git-dir)/gate-passed"
+    gate_finish
 
 # RELEASE-TIME LINT. Run before the release squash, never per push: each of
 # these is a separate cargo unit that recompiles the workspace, and a finding
@@ -618,3 +623,7 @@ book: book-tools-check
 # Serve the book locally with the repo-local pinned mdBook toolchain.
 book-serve: book-tools-check
     cd {{ justfile_directory() }}/book && PATH="{{ book_tools_bin }}:$PATH" mdbook serve
+
+# Gate receipts authorize exact pushed trees, including annotated tags.
+gate-receipts-test:
+    bash scripts/test-gate-receipts.sh

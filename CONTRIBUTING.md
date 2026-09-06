@@ -1,6 +1,6 @@
 # Contributing to chatter
 
-**Last modified:** 2026-08-27 14:04 EDT
+**Last modified:** 2026-09-06 02:34 EDT
 
 ## Development setup
 
@@ -75,6 +75,18 @@ GitHub Actions runs `cargo fmt --check`, `cargo build`, `cargo test
 See `.github/workflows/ci.yml`. Clippy and the feature-off build are
 release-time, in `.github/workflows/release-lint.yml`; `just release-lint`
 runs the same set locally.
+
+Before pushing, run `just gate` on the final source, then commit those same
+bytes. Its receipt survives staging and committing, but any content edit
+requires another gate. The gate compares its opening and closing trees and
+records a receipt only after every check succeeds on unchanged content.
+
+The pre-push hook checks both the working tree and every Git object being
+pushed against that receipt, peeling annotated tags to their commit trees.
+Uncommitted fixes cannot authorize an older commit. A mixed push containing
+another tree is refused. The hook does not launch tests while Git holds an
+open network connection. Install it with `just install-hooks`; the isolated
+protocol regression is `just gate-receipts-test` and also runs in CI.
 
 ## Reporting issues
 

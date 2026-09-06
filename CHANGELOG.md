@@ -46,6 +46,10 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Gate receipts verify the actual committed trees in every pushed ref, including
+  annotated tags. Uncommitted fixes cannot authorize an older commit, and a
+  gate whose source changes during verification cannot issue a receipt.
+
 - re2c E760 highlights the original empty-POS morphology item, including across
   continuation lines and non-ASCII text. Recovery inspects source-owned items
   without rebuilding rich-token payloads or using a dummy diagnostic span.
