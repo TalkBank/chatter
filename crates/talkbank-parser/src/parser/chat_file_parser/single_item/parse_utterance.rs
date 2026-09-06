@@ -53,7 +53,7 @@ pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseRe
     } else {
         &[MINIMAL_CHAT_PREFIX]
     };
-    let fragment = WrappedFragment::new(prefixes, input, &suffix, 0);
+    let fragment = WrappedFragment::new(prefixes, input, &suffix, 0)?;
     let errors_sink = ErrorCollector::new();
     let file =
         parser.parse_chat_file_streaming(fragment.source(), &fragment.error_sink(&errors_sink));

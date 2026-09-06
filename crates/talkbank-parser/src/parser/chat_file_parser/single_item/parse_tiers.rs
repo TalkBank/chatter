@@ -65,7 +65,7 @@ pub fn parse_tiers(parser: &TreeSitterParser, input: &str) -> ParseResult<Depend
     // - WrappedFragment owns the source and its coordinate projection
     // - tier_sink: Collects errors to check if parsing succeeded
     let prefix = "@UTF8\n@Begin\n*CHI:\ta b c d e f g h i j k l m n o p q r s t u v w x y z .\n";
-    let fragment = WrappedFragment::new(&[prefix], input, "\n@End", 0);
+    let fragment = WrappedFragment::new(&[prefix], input, "\n@End", 0)?;
 
     // Project diagnostics through the same owner that will rebase the model.
     let tier_sink = ErrorCollector::new();

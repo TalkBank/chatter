@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 08:52 EDT
+**Last updated:** 2026-09-06 14:57 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -181,8 +181,13 @@ let main_tier = parser.parse_main_tier_fragment(tier_text, document_offset, &err
 ### Diagnostic coordinates
 
 Fragment parsing adds the caller's offset to model spans and
-diagnostic document locations. `RebasedErrorSink` owns the diagnostic
-translation for both backends. A diagnostic's `ErrorContext` owns its own
+diagnostic document locations. `FragmentSource` admits the complete input
+range before parsing and owns this translation for both backends. Admission
+checks `origin + input.len()` without overflowing; ranges beyond `u32::MAX`
+are rejected with E310 and an unknown location, since no representable
+location exists. Origins above `i32::MAX` remain supported: the existing
+signed edit-shift interface receives bounded positive steps, never a wrapped
+negative origin. A diagnostic's `ErrorContext` owns its own
 source text, so its highlight remains relative to that text. Wrapper removal
 is a separate operation owned by `WrappedFragment`; it projects the synthetic
 source before applying any document origin.
@@ -231,9 +236,16 @@ prefixes on rejected utterances and participant entries.
 The E326 boundary test exercises both parsers with LF and CRLF, UTF-8 content,
 and offsets zero and 200. Unsupported-line recovery must identify each skipped
 line, retain following utterances, and preserve the diagnostic's local source
-highlight. The existing `usize` to signed span-displacement conversions still
-need an offset representability review; these controls do not prove large-offset
-safety. The legacy `OffsetAdjustingErrorSink` remains exported by the model
+highlight. The `fragment_range_tests` public-API controls exercise both
+backends above 2 GiB, at the final representable byte, and with overflowing
+ranges. They also verify that diagnostic context stays snippet-relative.
+Synthetic terminators for morphology, phonology and grammatical-relation
+fragments are parsed at local origin zero; only the extracted caller result
+is moved into document coordinates. Wrapper allocation separately admits its
+complete synthetic source size, and trimming a caller newline cannot bypass
+admission of the original input range. This does not change the legacy
+`SpanShift` edit API or `Span::from_usize` truncation for unrelated callers;
+the admitted parser paths replace their raw origin casts. The legacy `OffsetAdjustingErrorSink` remains exported by the model
 crate for compatibility, but the tree-sitter parser has no remaining callers.
 Its eventual removal is separate from migrating these owned parser paths.
 

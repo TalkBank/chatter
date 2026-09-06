@@ -11,7 +11,7 @@ use talkbank_model::model::{
     MorTier as ModelMorTier, MorWord, ParticipantEntry, PhoTier as ModelPhoTier, PhoWord, SitTier,
     SpaTier, Utterance as ModelUtterance, WorTier, Word,
 };
-use talkbank_model::{ChatParser, ErrorSink, ParseOutcome, RebasedErrorSink, SpanShift};
+use talkbank_model::{ChatParser, ErrorSink, ParseOutcome};
 
 /// Re2c-based CHAT parser implementing the shared `ChatParser` trait.
 ///
@@ -36,21 +36,6 @@ impl Default for Re2cParser {
     }
 }
 
-/// Apply offset-based span shifting to a parsed result.
-///
-/// When `offset > 0`, all `Span` fields in the model type are shifted
-/// forward by `offset` bytes. This supports embedded CHAT fragments where
-/// spans must map back to positions in a larger document.
-///
-/// Lexer-backed spans shift with the fragment. Remaining unknown spans stay
-/// unknown because `SpanShift::shift_spans_after` skips dummy spans.
-fn shifted<T: SpanShift>(mut value: T, offset: usize) -> T {
-    if offset > 0 {
-        value.shift_spans_after(0, offset as i32);
-    }
-    value
-}
-
 impl ChatParser for Re2cParser {
     fn parser_name(&self) -> &'static str {
         "Re2cParser"
@@ -62,15 +47,14 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelChatFile> {
-        let diagnostics = RebasedErrorSink::new(errors, offset as i32);
-        let mut file = crate::parser::parse_chat_file_to_model(input, &diagnostics);
-        if offset > 0 {
-            // Shift source lines to the caller's input offset.
-            for line in file.lines.as_mut_slice().iter_mut() {
-                line.shift_spans_after(0, offset as i32);
-            }
-        }
-        ParseOutcome::parsed(file)
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let diagnostics = fragment_source.error_sink(errors);
+        let file = crate::parser::parse_chat_file_to_model(input, &diagnostics);
+        ParseOutcome::parsed(fragment_source.rebase(file))
     }
 
     fn parse_header(
@@ -79,9 +63,14 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Header> {
-        let diagnostics = RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let diagnostics = fragment_source.error_sink(errors);
         match crate::parser::HeaderFragment::parse(input, &diagnostics) {
-            Some(fragment) => ParseOutcome::parsed(shifted(fragment.lower(), offset)),
+            Some(fragment) => ParseOutcome::parsed(fragment_source.rebase(fragment.lower())),
             None => ParseOutcome::rejected(),
         }
     }
@@ -90,10 +79,15 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<IDHeader> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         match crate::parser::parse_id_header(input) {
-            Some(parsed) => ParseOutcome::parsed(shifted(IDHeader::from(&parsed), offset)),
+            Some(parsed) => ParseOutcome::parsed(fragment_source.rebase(IDHeader::from(&parsed))),
             None => ParseOutcome::rejected(),
         }
     }
@@ -104,10 +98,17 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ParticipantEntry> {
-        let diagnostics = RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_participants_header(input, &diagnostics);
         match parsed.entries.first() {
-            Some(entry) => ParseOutcome::parsed(shifted(ParticipantEntry::from(entry), offset)),
+            Some(entry) => {
+                ParseOutcome::parsed(fragment_source.rebase(ParticipantEntry::from(entry)))
+            }
             None => ParseOutcome::rejected(),
         }
     }
@@ -118,13 +119,18 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelUtterance> {
-        let diagnostics = RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let diagnostics = fragment_source.error_sink(errors);
         let parsed = crate::parser::parse_chat_file_streaming(input, &diagnostics);
         let source = crate::source_text::SourceText::new(parsed.source);
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line {
                 let model = crate::convert::utterance_to_model(u.as_ref(), source, &diagnostics);
-                return ParseOutcome::parsed(shifted(model, offset));
+                return ParseOutcome::parsed(fragment_source.rebase(model));
             }
         }
         ParseOutcome::rejected()
@@ -136,7 +142,12 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelMainTier> {
-        let diagnostics = RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let diagnostics = fragment_source.error_sink(errors);
         match crate::parser::parse_main_tier_with_source(input) {
             Some((parsed, source)) => {
                 let model = crate::convert::main_tier_to_model(
@@ -144,7 +155,7 @@ impl ChatParser for Re2cParser {
                     crate::source_text::SourceText::new(source),
                     &diagnostics,
                 );
-                ParseOutcome::parsed(shifted(model, offset))
+                ParseOutcome::parsed(fragment_source.rebase(model))
             }
             None => ParseOutcome::rejected(),
         }
@@ -154,15 +165,20 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<Word> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         match crate::parser::parse_word(input) {
             Some(parsed) => {
                 let word = crate::convert::word_from_parsed(
                     &parsed,
                     crate::source_text::SourceText::new(input),
                 );
-                ParseOutcome::parsed(shifted(word, offset))
+                ParseOutcome::parsed(fragment_source.rebase(word))
             }
             None => ParseOutcome::rejected(),
         }
@@ -172,11 +188,16 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelMorTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_mor_tier(input);
         match ModelMorTier::try_from(&parsed) {
-            Ok(tier) => ParseOutcome::parsed(shifted(tier, offset)),
+            Ok(tier) => ParseOutcome::parsed(fragment_source.rebase(tier)),
             // AST-to-model conversion failure (missing or unrecognized
             // terminator). Caller pattern-matches on Rejected.
             Err(_) => ParseOutcome::rejected(),
@@ -187,10 +208,15 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<MorWord> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         match crate::parser::parse_mor_word(input) {
-            Some(parsed) => ParseOutcome::parsed(shifted(MorWord::from(&parsed), offset)),
+            Some(parsed) => ParseOutcome::parsed(fragment_source.rebase(MorWord::from(&parsed))),
             None => ParseOutcome::rejected(),
         }
     }
@@ -199,21 +225,31 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelGraTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_gra_tier(input);
-        ParseOutcome::parsed(shifted(ModelGraTier::from(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(ModelGraTier::from(&parsed)))
     }
 
     fn parse_gra_relation(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<GrammaticalRelation> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         match crate::parser::parse_gra_relation(input) {
             Some(parsed) => {
-                ParseOutcome::parsed(shifted(GrammaticalRelation::from(&parsed), offset))
+                ParseOutcome::parsed(fragment_source.rebase(GrammaticalRelation::from(&parsed)))
             }
             None => ParseOutcome::rejected(),
         }
@@ -223,25 +259,35 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelPhoTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_pho_tier(input);
-        ParseOutcome::parsed(shifted(ModelPhoTier::from(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(ModelPhoTier::from(&parsed)))
     }
 
     fn parse_pho_word(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<PhoWord> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_pho_tier(input);
         let first_word = parsed.items.iter().find_map(|item| match item {
             crate::ast::PhoItemParsed::Word(w) => Some(w),
             _ => None,
         });
         match first_word {
-            Some(w) => ParseOutcome::parsed(shifted(PhoWord::from(w), offset)),
+            Some(w) => ParseOutcome::parsed(fragment_source.rebase(PhoWord::from(w))),
             None => ParseOutcome::rejected(),
         }
     }
@@ -252,8 +298,13 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<talkbank_model::model::SinTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         match crate::convert::sin_tier_from_text(input) {
-            ParseOutcome::Parsed(tier) => ParseOutcome::parsed(shifted(tier, offset)),
+            ParseOutcome::Parsed(tier) => ParseOutcome::parsed(fragment_source.rebase(tier)),
             ParseOutcome::Rejected => {
                 errors.report(talkbank_model::ParseError::new(
                     talkbank_model::ErrorCode::UnparsableContent,
@@ -274,100 +325,150 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ActTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_act_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_act_tier(&parsed)))
     }
 
     fn parse_cod_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<CodTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_cod_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_cod_tier(&parsed)))
     }
 
     fn parse_com_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ComTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_com_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_com_tier(&parsed)))
     }
 
     fn parse_exp_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ExpTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_exp_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_exp_tier(&parsed)))
     }
 
     fn parse_add_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<AddTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_add_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_add_tier(&parsed)))
     }
 
     fn parse_gpx_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<GpxTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_gpx_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_gpx_tier(&parsed)))
     }
 
     fn parse_int_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<IntTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_int_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_int_tier(&parsed)))
     }
 
     fn parse_spa_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<SpaTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_spa_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_spa_tier(&parsed)))
     }
 
     fn parse_sit_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<SitTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_text_tier(input);
-        ParseOutcome::parsed(shifted(crate::convert::to_sit_tier(&parsed), offset))
+        ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_sit_tier(&parsed)))
     }
 
     fn parse_wor_tier(
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<WorTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         match crate::convert::wor_tier_from_input(input) {
-            Some(wor) => ParseOutcome::parsed(shifted(wor, offset)),
+            Some(wor) => ParseOutcome::parsed(fragment_source.rebase(wor)),
             // An unparsable %wor tier used to arrive here as an empty one, so a
             // malformed tier and a tier with no words were indistinguishable.
             None => ParseOutcome::rejected(),
@@ -378,8 +479,13 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelDependentTier> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
         let parsed = crate::parser::parse_chat_file(input);
         let source = crate::source_text::SourceText::new(parsed.source);
         for line in &parsed.lines {
@@ -388,7 +494,7 @@ impl ChatParser for Re2cParser {
                 && let Some(model_tier) =
                     crate::convert::dependent_tier_to_model(&tier.tier, source)
             {
-                return ParseOutcome::parsed(shifted(model_tier, offset));
+                return ParseOutcome::parsed(fragment_source.rebase(model_tier));
             }
         }
         ParseOutcome::rejected()

@@ -16,6 +16,11 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Both parser backends admit complete fragment coordinate ranges before
+  parsing. Origins above 2 GiB retain correct model and diagnostic spans;
+  overflowing 32-bit ranges are rejected instead of truncated. Synthetic
+  wrapper text no longer consumes the caller's document range.
+
 - re2c header fragments reject extra headers, utterances and unsupported
   trailing lines instead of returning a partial result. Lowering consumes an
   admitted logical header; folded content and recovery diagnostics survive.

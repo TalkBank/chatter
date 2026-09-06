@@ -49,6 +49,7 @@ pub mod diagnostic_kind;
 pub mod enhance;
 /// Core error sink trait plus lightweight forwarding implementations.
 pub mod error_sink;
+mod fragment_source;
 /// Generated `DiagnosticKind` match, produced from `spec/errors/*.md` by
 /// `just spec-gen` (`spec/runtime-tools`). DO NOT EDIT BY HAND; see
 /// the file's own header for the regeneration command.
@@ -62,6 +63,7 @@ pub mod parse_error;
 /// Collection type: `ParseErrors` and `ParseResult` type alias.
 pub mod parse_errors;
 mod rebased_sink;
+pub use fragment_source::{FragmentRangeError, FragmentSource};
 /// Source location types: `SourceLocation`, `ErrorLabel`, `Severity`, `ErrorVec`.
 pub mod source_location;
 /// Span shifting trait for adjusting byte offsets in errors and AST nodes.

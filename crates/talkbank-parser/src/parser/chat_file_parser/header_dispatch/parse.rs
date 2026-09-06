@@ -58,9 +58,9 @@ impl TreeSitterParser {
         const POST_BEGIN_SUFFIX: &str = "\n@End\n";
 
         let pre_begin_wrapped =
-            WrappedFragment::new(&[PRE_BEGIN_PREFIX], input, PRE_BEGIN_SUFFIX, 0);
+            WrappedFragment::new(&[PRE_BEGIN_PREFIX], input, PRE_BEGIN_SUFFIX, 0)?;
         let post_begin_wrapped =
-            WrappedFragment::new(&[POST_BEGIN_PREFIX], input, POST_BEGIN_SUFFIX, 0);
+            WrappedFragment::new(&[POST_BEGIN_PREFIX], input, POST_BEGIN_SUFFIX, 0)?;
 
         let try_parse = |fragment: &WrappedFragment<'_>,
                          header_index: usize|

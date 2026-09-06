@@ -27,7 +27,6 @@ use talkbank_model::model::{
 };
 use talkbank_model::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, ParseErrors, Severity, SourceLocation, Span,
-    SpanShift,
 };
 use talkbank_model::{FragmentSemanticContext, ParseOutcome};
 
@@ -126,10 +125,15 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Word> {
-        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let adjusting_sink = fragment_source.error_sink(errors);
         match self.parse_word(input) {
             Ok(mut word) => {
-                word.shift_spans_after(0, offset as i32);
+                word = fragment_source.rebase(word);
                 ParseOutcome::parsed(word)
             }
             Err(errs) => {
@@ -166,10 +170,15 @@ impl TreeSitterParser {
         context: &FragmentSemanticContext,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<MainTier> {
-        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let adjusting_sink = fragment_source.error_sink(errors);
         match self.parse_main_tier(input) {
             Ok(mut main) => {
-                main.shift_spans_after(0, offset as i32);
+                main = fragment_source.rebase(main);
                 if context.ca_mode() {
                     crate::parser::chat_file_parser::chat_file::normalize::normalize_ca_omissions_main_tier(&mut main);
                     ParseOutcome::parsed(main)
@@ -210,10 +219,15 @@ impl TreeSitterParser {
         context: &FragmentSemanticContext,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Utterance> {
-        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let adjusting_sink = fragment_source.error_sink(errors);
         match self.parse_utterance(input) {
             Ok(mut utterance) => {
-                utterance.shift_spans_after(0, offset as i32);
+                utterance = fragment_source.rebase(utterance);
                 if context.ca_mode() {
                     crate::parser::chat_file_parser::chat_file::normalize::normalize_ca_omissions_main_tier(&mut utterance.main);
                     ParseOutcome::parsed(utterance)
@@ -239,10 +253,15 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ChatFile> {
-        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let adjusting_sink = fragment_source.error_sink(errors);
         let mut chat = self.parse_chat_file_streaming(input, &adjusting_sink);
         if offset > 0 {
-            chat.shift_spans_after(0, offset as i32);
+            chat = fragment_source.rebase(chat);
         }
         ParseOutcome::parsed(chat)
     }
@@ -258,10 +277,15 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Header> {
-        let adjusting_sink = talkbank_model::RebasedErrorSink::new(errors, offset as i32);
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let adjusting_sink = fragment_source.error_sink(errors);
         match self.parse_header(input) {
             Ok(mut header) => {
-                header.shift_spans_after(0, offset as i32);
+                header = fragment_source.rebase(header);
                 ParseOutcome::parsed(header)
             }
             Err(parse_errors) => {
@@ -299,6 +323,13 @@ impl TreeSitterParser {
             "\n",
             offset,
         );
+        let wrapper = match wrapper {
+            Ok(fragment) => fragment,
+            Err(errors_found) => {
+                errors.report_vec(errors_found.into_error_vec());
+                return ParseOutcome::rejected();
+            }
+        };
         let adjusting_sink = wrapper.error_sink(errors);
         let Some(header) = self
             .parse_header_fragment(wrapper.source(), 0, &adjusting_sink)
@@ -341,8 +372,14 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<MorWord> {
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let document_sink = fragment_source.error_sink(errors);
         let Some(tier) = self
-            .parse_mor_tier_fragment(&format!("{} .", input), offset, errors)
+            .parse_mor_tier_fragment(&format!("{} .", input), 0, &document_sink)
             .into_option()
         else {
             return ParseOutcome::rejected();
@@ -350,7 +387,7 @@ impl TreeSitterParser {
         let Some(mor) = tier.into_items().into_iter().next() else {
             return ParseOutcome::rejected();
         };
-        ParseOutcome::parsed(mor.main)
+        ParseOutcome::parsed(fragment_source.rebase(mor.main))
     }
 
     // =========================================================================
@@ -380,21 +417,31 @@ impl TreeSitterParser {
         // Diagnostics against the appended scaffold terminator are the
         // wrapper's private business; only input-region diagnostics may
         // reach the caller.
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let document_sink = fragment_source.error_sink(errors);
         let scaffold_sink = ScaffoldRegionFilter {
-            inner: errors,
-            scaffold_start: (offset + input.len()) as u32,
+            inner: &document_sink,
+            scaffold_start: input.len() as u32,
         };
         let Some(tier) = self
             .parse_gra_tier_fragment(
                 &format!("{input} {GRA_RELATION_SCAFFOLD_SUFFIX}"),
-                offset,
+                0,
                 &scaffold_sink,
             )
             .into_option()
         else {
             return ParseOutcome::rejected();
         };
-        tier.into_relations().into_iter().next().into()
+        tier.into_relations()
+            .into_iter()
+            .next()
+            .map(|relation| fragment_source.rebase(relation))
+            .into()
     }
 
     // =========================================================================
@@ -423,8 +470,14 @@ impl TreeSitterParser {
     ) -> ParseOutcome<PhoWord> {
         use talkbank_model::model::PhoItem;
 
+        let ParseOutcome::Parsed(fragment_source) =
+            talkbank_model::FragmentSource::admit(input, offset, errors)
+        else {
+            return ParseOutcome::rejected();
+        };
+        let document_sink = fragment_source.error_sink(errors);
         let Some(tier) = self
-            .parse_pho_tier_fragment(&format!("{} .", input), offset, errors)
+            .parse_pho_tier_fragment(&format!("{} .", input), 0, &document_sink)
             .into_option()
         else {
             return ParseOutcome::rejected();
@@ -433,7 +486,7 @@ impl TreeSitterParser {
             return ParseOutcome::rejected();
         };
         match item {
-            PhoItem::Word(word) => ParseOutcome::parsed(word),
+            PhoItem::Word(word) => ParseOutcome::parsed(fragment_source.rebase(word)),
             PhoItem::Group(_) => ParseOutcome::rejected(),
         }
     }

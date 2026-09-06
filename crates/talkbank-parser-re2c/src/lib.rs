@@ -175,3 +175,6 @@ mod pause_provenance_tests;
 
 #[cfg(test)]
 mod header_fragment_tests;
+
+#[cfg(test)]
+mod fragment_range_tests;

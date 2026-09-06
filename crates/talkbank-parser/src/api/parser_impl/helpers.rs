@@ -91,7 +91,11 @@ where
     // with the re2c oracle (which parses the raw fragment and treats a trailing
     // newline as a benign line end) while still surfacing a GENUINE extra blank
     // line: an `input` ending in "\n\n" strips to "\n" and still doubles.
-    let body = strip_one_trailing_newline(input);
+    let ParseOutcome::Parsed(source) = talkbank_model::FragmentSource::admit(input, offset, errors)
+    else {
+        return ParseOutcome::rejected();
+    };
+    let body = strip_one_trailing_newline(source.input());
 
     // Build the minimal CHAT wrapper
     let fragment = WrappedFragment::new(
@@ -100,6 +104,13 @@ where
         &format!("\n{MINIMAL_CHAT_SUFFIX}"),
         offset,
     );
+    let fragment = match fragment {
+        Ok(fragment) => fragment,
+        Err(errors_found) => {
+            errors.report_vec(errors_found.into_error_vec());
+            return ParseOutcome::rejected();
+        }
+    };
 
     // Set up dual error handling
     let tier_sink = ErrorCollector::new();
@@ -143,7 +154,11 @@ pub(crate) fn wrapper_parse_generic_tier(
     // As in `wrapper_parse_tier`: drop at most one caller-supplied trailing
     // line terminator so the wrapper's own terminator does not double into a
     // blank line (spurious E747). See that function for the full rationale.
-    let body = strip_one_trailing_newline(input);
+    let ParseOutcome::Parsed(source) = talkbank_model::FragmentSource::admit(input, offset, errors)
+    else {
+        return ParseOutcome::rejected();
+    };
+    let body = strip_one_trailing_newline(source.input());
 
     // Build wrapper (input already has tier header)
     let fragment = WrappedFragment::new(
@@ -152,6 +167,13 @@ pub(crate) fn wrapper_parse_generic_tier(
         &format!("\n{MINIMAL_CHAT_SUFFIX}"),
         offset,
     );
+    let fragment = match fragment {
+        Ok(fragment) => fragment,
+        Err(errors_found) => {
+            errors.report_vec(errors_found.into_error_vec());
+            return ParseOutcome::rejected();
+        }
+    };
 
     // Set up dual error handling
     let tier_sink = ErrorCollector::new();
