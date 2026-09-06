@@ -180,30 +180,3 @@ impl PublishedSnapshot<'_> {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-    use super::*;
-    use crate::ResponseCache;
-
-    /// Fail after the temporary file is flushed but before its rename.
-    #[test]
-    fn failed_publication_preserves_the_prior_snapshot() {
-        let dir = tempfile::tempdir().unwrap();
-        let active = dir.path().join("active");
-        let retained = dir.path().join("retained");
-        std::fs::create_dir(&active).unwrap();
-        let cache = ResponseCache::open(CachePath(active.join("cache.json"))).unwrap();
-        cache.put("old", "old response".into()).unwrap();
-        let before = std::fs::read(active.join("cache.json")).unwrap();
-        let staged = PreparedSnapshot::new(&cache, "new", "new response".into())
-            .stage()
-            .unwrap();
-        std::fs::rename(&active, &retained).unwrap();
-        assert!(staged.publish().is_err());
-        assert_eq!(cache.get("new"), None);
-        assert_eq!(cache.get("old").as_deref(), Some("old response"));
-        assert_eq!(std::fs::read(retained.join("cache.json")).unwrap(), before);
-    }
-}

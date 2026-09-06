@@ -111,15 +111,18 @@ fn second_judge_call_is_served_from_cache() {
 #[test]
 fn failed_put_preserves_memory_and_existing_disk_entries() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let active = dir.path().join("active");
-    let retained = dir.path().join("retained");
-    std::fs::create_dir(&active).expect("create cache directory");
-    let cache = ResponseCache::open(CachePath(active.join("cache.json"))).expect("open");
+    let path = dir.path().join("cache.json");
+    let retained = dir.path().join("retained.json");
+    let cache = ResponseCache::open(CachePath(path.clone())).expect("open");
     cache
         .put("old", "retained response".into())
         .expect("initial put");
-    let before = std::fs::read(active.join("cache.json")).expect("read old cache");
-    std::fs::rename(&active, &retained).expect("make destination unavailable");
+    let before = std::fs::read(&path).expect("read old cache");
+    // The JSON file is closed between puts. Move only that file, leaving the
+    // open lease and staged-file directory in place on every platform. A
+    // directory at the destination forces the real publication rename to fail.
+    std::fs::rename(&path, &retained).expect("retain old cache");
+    std::fs::create_dir(&path).expect("obstruct replacement destination");
 
     assert!(cache.put("new", "uncommitted response".into()).is_err());
     assert_eq!(
@@ -128,7 +131,17 @@ fn failed_put_preserves_memory_and_existing_disk_entries() {
         "failed writes cannot publish memory hits"
     );
     assert_eq!(cache.get("old").as_deref(), Some("retained response"));
-    assert_eq!(std::fs::read(retained.join("cache.json")).unwrap(), before);
+    assert_eq!(std::fs::read(&retained).unwrap(), before);
+    assert!(path.is_dir(), "publication must preserve the obstruction");
+    std::fs::remove_dir(&path).expect("remove obstruction");
+    std::fs::rename(&retained, &path).expect("restore retained cache");
+    cache
+        .put("new", "committed response".into())
+        .expect("retry");
+    drop(cache);
+    let reopened = ResponseCache::open(CachePath(path)).expect("reopen");
+    assert_eq!(reopened.get("old").as_deref(), Some("retained response"));
+    assert_eq!(reopened.get("new").as_deref(), Some("committed response"));
 }
 
 /// A second handle must not load a stale snapshot and later overwrite the owner.
