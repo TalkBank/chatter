@@ -717,7 +717,12 @@ impl<'a> Iterator for Lexer<'a> {
         <MAIN_CONTENT> "[=? " @t1 [^\x00\]\r\n]+ @t2 "]" { emit_t1t2!(AltAnnotation); }
         <MAIN_CONTENT> "[% " @t1 [^\x00\]\r\n]+ @t2 "]" { emit_t1t2!(PercentAnnotation); }
 
-        <MAIN_CONTENT> "[+ " @t1 [^\x00\]\r\n]+ @t2 "]" { emit_t1t2!(Postcode); }
+        <MAIN_CONTENT> "[+ " @t1 [^\x00\]\r\n]+ @t2 "]" {
+            let end = self.cursor;
+            let postcode = crate::token::PostcodeToken::from_lexed(
+                &yyinput[self.t1..self.t2], talkbank_model::Span::from_usize(start, end));
+            return Some((Token::Postcode(postcode), start..end));
+        }
 
         <MAIN_CONTENT> "[- " @t1 [^\x00\]\r\n]+ @t2 "]" { emit_t1t2!(Langcode); }
 

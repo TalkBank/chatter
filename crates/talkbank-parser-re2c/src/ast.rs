@@ -31,7 +31,7 @@ pub struct TierBody<'a> {
     pub langcode: Option<Token<'a>>,
     pub contents: Vec<ContentItem<'a>>,
     pub terminator: Option<Token<'a>>,
-    pub postcodes: Vec<Token<'a>>,
+    pub postcodes: Vec<crate::token::PostcodeToken<'a>>,
     pub media_bullet: Option<Token<'a>>,
 }
 

@@ -31495,7 +31495,12 @@ impl<'a> Iterator for Lexer<'a> {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
-                { emit_t1t2!(Postcode); }
+                {
+            let end = self.cursor;
+            let postcode = crate::token::PostcodeToken::from_lexed(
+                &yyinput[self.t1..self.t2], talkbank_model::Span::from_usize(start, end));
+            return Some((Token::Postcode(postcode), start..end));
+        }
             }
             1559 => {
                 self.t1 = self.yyt1;

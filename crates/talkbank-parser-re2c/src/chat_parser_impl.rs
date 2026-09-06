@@ -42,14 +42,25 @@ impl Default for Re2cParser {
 /// forward by `offset` bytes. This supports embedded CHAT fragments where
 /// spans must map back to positions in a larger document.
 ///
-/// Note: Currently all re2c parser spans are `Span::DUMMY` (0,0).
-/// `SpanShift::shift_spans_after` skips dummy spans by design, so this
-/// is a no-op until the re2c parser produces real byte-offset spans.
+/// Lexer-backed spans shift with the fragment. Remaining unknown spans stay
+/// unknown because `SpanShift::shift_spans_after` skips dummy spans.
 fn shifted<T: SpanShift>(mut value: T, offset: usize) -> T {
     if offset > 0 {
         value.shift_spans_after(0, offset as i32);
     }
     value
+}
+
+/// Rebase streamed diagnostics through the same offset operation as models.
+struct ShiftedErrorSink<'a, S> {
+    inner: &'a S,
+    offset: usize,
+}
+
+impl<S: ErrorSink> ErrorSink for ShiftedErrorSink<'_, S> {
+    fn report(&self, error: talkbank_model::ParseError) {
+        self.inner.report(shifted(error, self.offset));
+    }
 }
 
 impl ChatParser for Re2cParser {
@@ -63,7 +74,11 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelChatFile> {
-        let mut file = crate::parser::parse_chat_file_to_model(input, errors);
+        let diagnostics = ShiftedErrorSink {
+            inner: errors,
+            offset,
+        };
+        let mut file = crate::parser::parse_chat_file_to_model(input, &diagnostics);
         if offset > 0 {
             // Shift source lines to the caller's input offset.
             for line in file.lines.as_mut_slice().iter_mut() {
@@ -79,11 +94,11 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<Header> {
-        let diagnostics = talkbank_model::ErrorCollector::new();
+        let diagnostics = ShiftedErrorSink {
+            inner: errors,
+            offset,
+        };
         let parsed = crate::parser::parse_chat_file_streaming(input, &diagnostics);
-        for error in diagnostics.into_vec() {
-            errors.report(shifted(error, offset));
-        }
         for line in &parsed.lines {
             if let crate::ast::Line::Header(h) = line {
                 return ParseOutcome::parsed(shifted(
@@ -113,11 +128,11 @@ impl ChatParser for Re2cParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<ParticipantEntry> {
-        let diagnostics = talkbank_model::ErrorCollector::new();
+        let diagnostics = ShiftedErrorSink {
+            inner: errors,
+            offset,
+        };
         let parsed = crate::parser::parse_participants_header(input, &diagnostics);
-        for error in diagnostics.into_vec() {
-            errors.report(shifted(error, offset));
-        }
         match parsed.entries.first() {
             Some(entry) => ParseOutcome::parsed(shifted(ParticipantEntry::from(entry), offset)),
             None => ParseOutcome::rejected(),
@@ -128,13 +143,17 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelUtterance> {
-        let parsed = crate::parser::parse_chat_file(input);
+        let diagnostics = ShiftedErrorSink {
+            inner: errors,
+            offset,
+        };
+        let parsed = crate::parser::parse_chat_file_streaming(input, &diagnostics);
         let source = crate::source_text::SourceText::new(parsed.source);
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line {
-                let model = crate::convert::utterance_to_model(u.as_ref(), source);
+                let model = crate::convert::utterance_to_model(u.as_ref(), source, &diagnostics);
                 return ParseOutcome::parsed(shifted(model, offset));
             }
         }
@@ -145,13 +164,18 @@ impl ChatParser for Re2cParser {
         &self,
         input: &str,
         offset: usize,
-        _errors: &impl ErrorSink,
+        errors: &impl ErrorSink,
     ) -> ParseOutcome<ModelMainTier> {
+        let diagnostics = ShiftedErrorSink {
+            inner: errors,
+            offset,
+        };
         match crate::parser::parse_main_tier_with_source(input) {
             Some((parsed, source)) => {
                 let model = crate::convert::main_tier_to_model(
                     &parsed,
                     crate::source_text::SourceText::new(source),
+                    &diagnostics,
                 );
                 ParseOutcome::parsed(shifted(model, offset))
             }

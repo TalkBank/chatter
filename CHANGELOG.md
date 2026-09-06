@@ -11,6 +11,11 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- **Breaking:** re2c postcode tokens and main-tier AST postcodes carry checked
+  payload state and lexer locations. `main_tier_to_model` and
+  `utterance_to_model` now require an error sink; callers can no longer lower
+  these structures without deciding where recovery diagnostics go.
+
 - **Breaking:** re2c AST `ParsedAnnotation` separates `Scoped` annotations
   from retrace, replacement, language-code and postcode structures. Match
   `ParsedAnnotation::Scoped(ScopedAnnotationParsed::...)` for scoped kinds;
@@ -18,6 +23,14 @@ version and are listed under "Changed" / "Removed".
   reflect this category; serialized CHAT model output retains its shape.
 
 ### Fixed
+
+- re2c rejects whitespace-only postcodes with E363 while preserving the rest
+  of the tier. Valid postcodes preserve leading payload whitespace and trim
+  only trailing whitespace, matching the canonical parser. Postcode diagnostics
+  retain the complete token span through file, utterance and main-tier APIs.
+- re2c utterance fragments forward parse diagnostics, and file diagnostics honor
+  the caller's offset. A shared streaming adapter replaces temporary diagnostic
+  collectors in header and participant fragments.
 
 - re2c reports E757 when rich bracketed annotations are glued to the following
   word, including `[!]there` and `[= toy]there`. The check uses the parser's

@@ -34,6 +34,7 @@ mod lexer_tests;
 mod media_whitespace_provenance;
 mod model_study;
 mod parser_fixtures;
+mod postcode_admission;
 mod quick_divergence_check;
 mod snapshot_tests;
 mod subcategorize_main_tier;

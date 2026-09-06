@@ -1121,6 +1121,13 @@
       "source_spec": "spec/errors/E363.md"
     },
     {
+      "fixture": "E363_4.cha",
+      "code": "E363",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E363.md"
+    },
+    {
       "fixture": "E364_1.cha",
       "code": "E364",
       "claim": {

@@ -1284,6 +1284,13 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E363.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E364.md",
       "example": 1,
       "parse": [

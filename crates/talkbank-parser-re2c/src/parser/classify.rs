@@ -224,7 +224,7 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation
         }
         Token::Replacement(s) => ParsedAnnotation::Replacement(s),
         Token::Langcode(s) => ParsedAnnotation::Langcode(s),
-        Token::Postcode(s) => ParsedAnnotation::Postcode(s),
+        Token::Postcode(s) => ParsedAnnotation::Postcode(s.text()),
         _ => return None,
     })
 }

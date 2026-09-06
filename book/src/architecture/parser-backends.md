@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-06 00:17 EDT
+**Last updated:** 2026-09-06 00:27 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -140,6 +140,25 @@ that word. The specification includes both glued examples and a spaced control;
 the cross-backend gate checks those generated cases. The internal AST snapshot
 changes to show the category, while reference-corpus model equivalence guards
 serialized CHAT behavior.
+
+### Postcode admission and diagnostic offsets
+
+A `PostcodeToken` owns its lexer's full span and a private payload state:
+nonempty content after trimming trailing whitespace, or recoverable missing
+content. The lexer preserves leading payload whitespace. `TierBody::postcodes`
+contains only these tokens, so lowering cannot accidentally treat another token
+kind as a postcode. Missing content emits E363 and contributes no model postcode;
+valid content retains its source span. Main-tier and utterance lowering require
+an error sink explicitly.
+
+The re2c trait implementation streams diagnostics through one offset adapter.
+File diagnostics, utterance fragments, main-tier lowering and header/participant
+fragments therefore use the same rebasing operation as their models. This
+removes temporary diagnostic collection in header fragments and the discarded
+utterance diagnostics. Remaining fragment entry points that do not yet produce
+diagnostics are still a separate parity gap. The postcode boundary test loads
+the authored E363 examples and checks actual token spans, nonzero offsets,
+recovered tier content and canonical-parser normalization.
 
 ### Not ready as a validity authority
 

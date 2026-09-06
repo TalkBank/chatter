@@ -515,8 +515,8 @@ fn terminator<'tokens, 'a: 'tokens>() -> impl Parser<'tokens, Tokens<'tokens, 'a
 
 /// Parse postcodes: [+ code] tokens.
 fn postcodes<'tokens, 'a: 'tokens>()
--> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<Token<'a>>> + Clone {
-    select! { tok @ Token::Postcode(_) => tok }
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<crate::token::PostcodeToken<'a>>> + Clone {
+    select! { Token::Postcode(postcode) => postcode }
         .padded_by(ws())
         .repeated()
         .collect::<Vec<_>>()

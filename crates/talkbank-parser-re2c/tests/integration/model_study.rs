@@ -144,10 +144,13 @@ fn main_tier_equivalence_simple() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let (re2c_parsed, re2c_src) =
         talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
         &re2c_parsed,
         talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &conversion_errors,
     );
+    assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "simple main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -162,10 +165,13 @@ fn main_tier_equivalence_retrace() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let (re2c_parsed, re2c_src) =
         talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
         &re2c_parsed,
         talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &conversion_errors,
     );
+    assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "retrace main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -180,10 +186,13 @@ fn main_tier_equivalence_compound() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let (re2c_parsed, re2c_src) =
         talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
         &re2c_parsed,
         talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &conversion_errors,
     );
+    assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "compound main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -198,10 +207,13 @@ fn main_tier_equivalence_event() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let (re2c_parsed, re2c_src) =
         talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
         &re2c_parsed,
         talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &conversion_errors,
     );
+    assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "event main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -216,10 +228,13 @@ fn main_tier_equivalence_pause() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let (re2c_parsed, re2c_src) =
         talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
         &re2c_parsed,
         talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &conversion_errors,
     );
+    assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "pause main tier mismatch:\n  ts:   {}\n  re2c: {}",
@@ -234,10 +249,13 @@ fn main_tier_equivalence_trailing_off() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let (re2c_parsed, re2c_src) =
         talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
         &re2c_parsed,
         talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &conversion_errors,
     );
+    assert!(conversion_errors.into_vec().is_empty());
     assert!(
         ts_mt.semantic_eq(&re2c_mt),
         "trailing off mismatch:\n  ts:   {}\n  re2c: {}",
@@ -409,10 +427,13 @@ fn multi_token_words_are_placed_too() {
     let ts_mt = ts().parse_main_tier(input).unwrap();
     let (re2c_parsed, re2c_src) =
         talkbank_parser_re2c::parser::parse_main_tier_with_source(input).unwrap();
+    let conversion_errors = talkbank_model::ErrorCollector::new();
     let re2c_mt = talkbank_parser_re2c::convert::main_tier_to_model(
         &re2c_parsed,
         talkbank_parser_re2c::source_text::SourceText::new(re2c_src),
+        &conversion_errors,
     );
+    assert!(conversion_errors.into_vec().is_empty());
     let spans = |mt: &talkbank_model::model::MainTier| -> Vec<talkbank_model::Span> {
         mt.content
             .content

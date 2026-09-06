@@ -151,8 +151,8 @@ pub fn combined_output(output: &Output) -> String {
 pub fn assert_success(output: &Output, context: &str) {
     assert!(
         output.status.success(),
-        "{context} failed\nstatus: {:?}\nstdout:\n{}\nstderr:\n{}",
-        output.status.code(),
+        "{context} failed\nstatus: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
         stdout_string(output),
         stderr_string(output)
     );

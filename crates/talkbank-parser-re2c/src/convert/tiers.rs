@@ -12,7 +12,11 @@ use talkbank_model::model::*;
 
 use super::*;
 
-pub fn main_tier_to_model(mt: &ast::MainTier<'_>, source: SourceText<'_>) -> MainTier {
+pub fn main_tier_to_model(
+    mt: &ast::MainTier<'_>,
+    source: SourceText<'_>,
+    errors: &(impl ErrorSink + ?Sized),
+) -> MainTier {
     let speaker = SpeakerCode::new(mt.speaker.text());
     let content_items: Vec<UtteranceContent> = mt
         .tier_body
@@ -64,19 +68,13 @@ pub fn main_tier_to_model(mt: &ast::MainTier<'_>, source: SourceText<'_>) -> Mai
         main_tier = main_tier.with_language_code(code);
     }
 
-    // Postcodes
-    if !mt.tier_body.postcodes.is_empty() {
-        let postcodes: Vec<Postcode> = mt
-            .tier_body
+    main_tier = main_tier.with_postcodes(
+        mt.tier_body
             .postcodes
             .iter()
-            .map(|tok| {
-                // Token carries tag-extracted postcode content directly
-                Postcode::new(tok.text())
-            })
-            .collect();
-        main_tier = main_tier.with_postcodes(postcodes);
-    }
+            .filter_map(|postcode| postcode.to_model(errors))
+            .collect(),
+    );
 
     main_tier
 }
@@ -88,8 +86,9 @@ pub fn main_tier_to_model(mt: &ast::MainTier<'_>, source: SourceText<'_>) -> Mai
 pub fn utterance_to_model(
     u: &ast::Utterance<'_>,
     source: SourceText<'_>,
+    errors: &(impl ErrorSink + ?Sized),
 ) -> talkbank_model::model::Utterance {
-    let main = main_tier_to_model(&u.main_tier, source);
+    let main = main_tier_to_model(&u.main_tier, source, errors);
     // Skip tiers whose AST→model conversion failed (e.g. a `%mor:`
     // line with a missing or unrecognized terminator). Cross-tier
     // validators surface the absence as a typed diagnostic.
@@ -440,7 +439,7 @@ pub fn chat_file_to_model(
                 separator: TierSeparator::CLEAN,
             },
             ast::Line::Utterance(u) => talkbank_model::model::Line::Utterance(Box::new(
-                utterance_to_model(u.as_ref(), source),
+                utterance_to_model(u.as_ref(), source, errors),
             )),
         })
         .collect();

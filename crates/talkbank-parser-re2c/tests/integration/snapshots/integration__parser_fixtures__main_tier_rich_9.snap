@@ -22,7 +22,8 @@ tier_body:
   terminator:
     Period: "."
   postcodes:
-    - Postcode: SR
+    - content:
+        Present: SR
   media_bullet:
     MediaBullet:
       raw_text: "\u0015171921_173802\u0015"
