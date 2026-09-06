@@ -7,7 +7,9 @@
 
 use crate::error::{ErrorSink, Span};
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, HeaderSepNode, NodeSlot, extract_header_sep,
+    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, FromNodeKind, HeaderSepNode,
+    L1OfHeaderNode, NodeSlot, extract_birth_of_header, extract_birthplace_of_header,
+    extract_header_sep, extract_l1_of_header,
 };
 use crate::model;
 use crate::model::TierSeparator;
@@ -58,48 +60,50 @@ pub(crate) fn parse_optional_gem_label(
 /// Decode a header line's `header_sep` node (E758 provenance) into a
 /// [`TierSeparator`].
 ///
-/// Every header grammar rule has the uniform shape
-/// `seq(<kind>_prefix, header_sep, <body>, newline)`, so `header_sep` sits at
-/// raw named-child index 1 for every header kind, EXCEPT `@Bg`/`@Eg`, whose
-/// grammar wraps it as `optional(seq(header_sep, free_text))`: when that
-/// whole group is absent, named-child index 1 is `newline`, not
-/// `header_sep`, and the kind check below correctly reports a clean
-/// separator for that case.
+/// Most headers place `header_sep` after their label. Speaker-qualified
+/// headers also carry an optional gap and speaker; their generated carriers
+/// identify the separator without assuming a raw child index. A missing or
+/// recovered separator carries no proof of trailing whitespace.
 ///
-/// This is called from the single point (`document_lowering`'s line
-/// dispatch, and the pre-`@Begin` header dispatch) that builds a
-/// `Line::Header` for a concrete header CST node BEFORE any per-kind typed
-/// dispatch runs, so no per-kind typed carrier (e.g. `CommentHeaderChildren`)
-/// is available there; reaching a typed `header_sep` therefore requires
-/// first locating it by its raw kind. This is PROVENANCE extraction over a
-/// grammar position that is uniform across every header rule, never
-/// structural dispatch that classifies or drops content (the repo's
-/// `node.kind()` ban targets hand-walked parsing, not this kind of
-/// positional provenance read). Once located, the actual trailing-space read
-/// reuses the same typed accessor `dependent_tier_separator`
-/// (`dependent_tier_dispatch/helpers.rs`) uses for tier separators:
-/// `extract_header_sep`'s `child_2` slot, never a second `node.kind()` scan.
+/// The trailing space must remain adjacent to the same separator's actual
+/// tab. Recovery can otherwise put a content space in this optional slot.
 pub(crate) fn header_separator(header_node: Node) -> TierSeparator {
-    let Some(sep_node) = header_node.named_child(1) else {
-        return TierSeparator::CLEAN;
+    let qualified = if let Some(header) = BirthOfHeaderNode::from_node(header_node) {
+        Some(extract_birth_of_header(header).child_3.slot().clone())
+    } else if let Some(header) = BirthplaceOfHeaderNode::from_node(header_node) {
+        Some(extract_birthplace_of_header(header).child_3.slot().clone())
+    } else {
+        L1OfHeaderNode::from_node(header_node)
+            .map(|header| extract_l1_of_header(header).child_3.slot().clone())
     };
-    // The hand-written `sep_node.kind() != HEADER_SEP` guard that stood here was
-    // `from_node` spelled out against a separate constant; one call is the same
-    // test with nothing to drift.
-    let Some(sep) = HeaderSepNode::from_node(sep_node) else {
-        return TierSeparator::CLEAN;
+    let sep = match qualified {
+        Some(NodeSlot::Present(sep)) => sep,
+        Some(_) => return TierSeparator::CLEAN,
+        None => {
+            let Some(sep) = header_node
+                .named_child(1)
+                .and_then(HeaderSepNode::from_node)
+            else {
+                return TierSeparator::CLEAN;
+            };
+            sep
+        }
     };
     let sep_children = extract_header_sep(sep);
     let trailing = sep_children.child_2.slot();
     match trailing {
-        Some(NodeSlot::Present(sep)) => {
+        Some(NodeSlot::Present(sep))
+            if matches!(sep_children.child_1.slot(), NodeSlot::Present(tab)
+                if tab.raw_node().end_byte() == sep.raw_node().start_byte()) =>
+        {
             let raw = sep.raw_node();
             TierSeparator::with_trailing_space(Span::new(
                 raw.start_byte() as u32,
                 raw.end_byte() as u32,
             ))
         }
-        Some(
+        Some(NodeSlot::Present(_))
+        | Some(
             NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
         )
         | None => TierSeparator::CLEAN,

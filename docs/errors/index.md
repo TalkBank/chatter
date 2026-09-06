@@ -217,7 +217,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E755](E755.md) | Utterance language not declared in @Languages | Invalidity | utterance | ✅ |
 | [E756](E756.md) | Empty dependent tier | Invalidity | utterance | ✅ |
 | [E757](E757.md) | Bracketed code glued to the following content | Style | utterance | ✅ |
-| [E758](E758.md) | Trailing space in a line's tier separator (non-CA file) | Invalidity | utterance | ✅ |
+| [E758](E758.md) | Trailing space in a line's tier separator (non-CA file) | Invalidity | utterance, header | ✅ |
 | [E759](E759.md) | Annotation at utterance start has nothing to attach to | Invalidity | utterance | ✅ |
 | [E760](E760.md) | %mor item has an empty part-of-speech field | Invalidity | tier | ✅ |
 | [E761](E761.md) | %gra relation head is not a Universal Dependencies relation | Invalidity | tier | ✅ |

@@ -213,7 +213,9 @@ fn decode_body_text(
 /// (Missing/Error/Unexpected/Absent, or an absent `tier_sep` itself) means no
 /// illegal trailing space was captured, and maps to a clean separator (the
 /// E758 check itself is a later validation pass over this provenance, not
-/// parse-time).
+/// parse-time). A recovered child can occur between the tab and that space;
+/// both positions must come from this carrier and remain adjacent. Otherwise
+/// the space belongs to content, not the line separator.
 pub(crate) fn dependent_tier_separator(slot: &NodeSlot<'_, TierSepNode<'_>>) -> TierSeparator {
     let NodeSlot::Present(tier_sep) = slot else {
         return TierSeparator::CLEAN;
@@ -221,14 +223,18 @@ pub(crate) fn dependent_tier_separator(slot: &NodeSlot<'_, TierSepNode<'_>>) -> 
     let tier_sep_children = extract_tier_sep(*tier_sep);
     let trailing = tier_sep_children.child_2.slot();
     match trailing {
-        Some(NodeSlot::Present(sep_node)) => {
+        Some(NodeSlot::Present(sep_node))
+            if matches!(tier_sep_children.child_1.slot(), NodeSlot::Present(tab)
+                if tab.raw_node().end_byte() == sep_node.raw_node().start_byte()) =>
+        {
             let node = sep_node.raw_node();
             TierSeparator::with_trailing_space(Span::new(
                 node.start_byte() as u32,
                 node.end_byte() as u32,
             ))
         }
-        Some(
+        Some(NodeSlot::Present(_))
+        | Some(
             NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
         )
         | None => TierSeparator::CLEAN,

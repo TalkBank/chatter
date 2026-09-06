@@ -2910,6 +2910,13 @@
       "source_spec": "spec/errors/E758.md"
     },
     {
+      "fixture": "E758_10.cha",
+      "code": "E758",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E758.md"
+    },
+    {
       "fixture": "E758_2.cha",
       "code": "E758",
       "claim": "violates",
@@ -2946,6 +2953,20 @@
     },
     {
       "fixture": "E758_7.cha",
+      "code": "E758",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E758.md"
+    },
+    {
+      "fixture": "E758_8.cha",
+      "code": "E758",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E758.md"
+    },
+    {
+      "fixture": "E758_9.cha",
       "code": "E758",
       "claim": "legal",
       "status": "implemented",

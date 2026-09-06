@@ -54,6 +54,16 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Speaker-qualified `@Birth of`, `@Birthplace of`, and `@L1 of` headers retain
+  their separator spans, including non-CA whitespace violations and CA exemptions.
+
+- Tree-sitter's whole-file fragment API now rebases model spans along with
+  streamed diagnostics when parsing embedded CHAT at a nonzero offset.
+
+- Tree-sitter recovery no longer reports E758 for spaces after rejected
+  dependent-tier or header content. Separator provenance requires adjacency to
+  the actual tab, preserving the original content diagnostics.
+
 - Gate receipts verify the actual committed trees in every pushed ref, including
   annotated tags. Uncommitted fixes cannot authorize an older commit, and a
   gate whose source changes during verification cannot issue a receipt.
