@@ -71,3 +71,59 @@ fn rejected_morphology_retains_taint_and_reports_its_source_boundary() {
     assert!(!canonical.has_error_diagnostics());
     assert!(canonical.expect_built().semantic_eq(&actual));
 }
+
+#[test]
+fn empty_pos_diagnostics_name_the_original_item_at_any_offset() {
+    let specs = talkbank_parser_tests::error_specs::load(
+        talkbank_parser_tests::repo_paths::workspace_root(),
+    )
+    .unwrap();
+    let spec = specs
+        .iter()
+        .find(|spec| spec.filename == "E760.md")
+        .unwrap();
+    let parser = talkbank_parser_re2c::Re2cParser::new();
+    let mut cases: Vec<_> = spec
+        .examples()
+        .iter()
+        .map(|example| {
+            let source = example.chat.as_str();
+            (
+                source.to_owned(),
+                if source.contains("|home") {
+                    "|home"
+                } else {
+                    "|we"
+                },
+            )
+        })
+        .collect();
+    // A rich token contains the same substring first. Non-ASCII bytes,
+    // Unicode whitespace and a continuation must not change the selected span.
+    cases.push((
+        spec.examples()[0]
+            .chat
+            .as_str()
+            .replace("%mor:\t|we v|go .", "%mor:\tn|été n|we\u{2003}\n\t|we ."),
+        "|we",
+    ));
+    for (source, item) in cases {
+        let source = source.as_str();
+        let start = source.rfind(item).unwrap();
+        for offset in [0, 200] {
+            let errors = ErrorCollector::new();
+            let _ = parser.parse_chat_file(source, offset, &errors);
+            let diagnoses: Vec<_> = errors
+                .into_vec()
+                .into_iter()
+                .filter(|error| error.code == ErrorCode::MorItemEmptyPos)
+                .collect();
+            assert_eq!(diagnoses.len(), 1);
+            assert_eq!(
+                diagnoses[0].location.span,
+                Span::from_usize(start + offset, start + item.len() + offset)
+            );
+            assert!(diagnoses[0].message.contains(item));
+        }
+    }
+}

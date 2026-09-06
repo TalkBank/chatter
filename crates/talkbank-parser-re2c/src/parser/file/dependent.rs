@@ -70,36 +70,20 @@ pub(super) fn parse_dependent_tiers<'a>(
                 {
                     Ok(tier) => push(DependentTierParsed::Mor(tier)),
                     Err(_) => {
-                        // E760: a mor item whose part-of-speech field is empty
-                        // (an item beginning with the `|` separator, `|we`).
-                        // More specific than the generic unparsable fallback;
-                        // mirrors the tree-sitter dependent-tier error analysis
-                        // (modern reading of CLAN CHECK error 11). On a mor
-                        // lex/parse failure the token stream degrades toward
-                        // character-level tokens, so the tier text is
-                        // reconstructed by concatenation (tokens carry their
-                        // exact source slices, including whitespace) and the
-                        // item rule is applied to the whitespace-split items,
-                        // identically to the tree-sitter side.
-                        let tier_text: String = tier_tokens.iter().map(Token::text).collect();
-                        // Tier text reconstruction starts at the tier's content
-                        // boundary, so the first whitespace item is a genuine
-                        // item (no split-tail hazard as in the tree-sitter
-                        // fragment case); items whose leading pipe follows a
-                        // non-space character inside the SAME whitespace token
-                        // (two-pipe/compound malformations) do not match the
-                        // starts_with test at all.
-                        if let Some(item) = tier_text
-                            .split_whitespace()
-                            .find(|text| text.starts_with('|') && text.len() > 1)
+                        // Inspect original whitespace items, retaining each item's
+                        // source span even when rich tokens expose only payloads.
+                        if let Some(item) = lexed
+                            .whitespace_items(content_start..content_end)
+                            .find(|item| item.text().starts_with('|') && item.text().len() > 1)
                         {
+                            let text = item.text();
                             errors.report(
                                 ParseError::new(
                                     talkbank_model::errors::codes::ErrorCode::MorItemEmptyPos,
                                     talkbank_model::Severity::Error,
-                                    talkbank_model::SourceLocation::new(Span::DUMMY),
+                                    talkbank_model::SourceLocation::new(item.span()),
                                     None,
-                                    format!("MOR item '{item}' has an empty part-of-speech field"),
+                                    format!("MOR item '{text}' has an empty part-of-speech field"),
                                 )
                                 .with_suggestion(
                                     "Every %mor item is pos|stem with a non-empty part of speech \

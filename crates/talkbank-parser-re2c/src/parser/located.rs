@@ -5,6 +5,21 @@ use std::ops::Range;
 use crate::lexer::{Lexer, LexerSpan};
 use crate::token::Token;
 
+/// A whitespace-delimited item borrowed and located by its source owner.
+pub(crate) struct LocatedItem<'source> {
+    text: &'source str,
+    span: talkbank_model::Span,
+}
+
+impl<'source> LocatedItem<'source> {
+    pub(crate) fn text(&self) -> &'source str {
+        self.text
+    }
+    pub(crate) fn span(&self) -> talkbank_model::Span {
+        self.span
+    }
+}
+
 /// Only lexing constructs this immutable owner of parallel token/span storage.
 pub(crate) struct LexedSource<'source> {
     source: &'source str,
@@ -33,6 +48,33 @@ impl<'source> LexedSource<'source> {
     /// A token selected by the file cursor and its original lexer location.
     pub(crate) fn token_at(&self, index: usize) -> (&Token<'source>, LexerSpan) {
         (&self.tokens[index], self.spans[index].clone())
+    }
+
+    /// Preserve exact source bytes and locations while inspecting a token range.
+    /// Rich tokens can expose only a payload through `text()`; concatenating
+    /// those payloads would lose spelling and positions in malformed content.
+    pub(crate) fn whitespace_items(
+        &self,
+        range: Range<usize>,
+    ) -> impl Iterator<Item = LocatedItem<'source>> {
+        let (text, start) = if range.is_empty() {
+            ("", 0)
+        } else {
+            let start = self.spans[range.start].start;
+            let end = self.spans[range.end - 1].end;
+            (&self.source[start..end], start)
+        };
+        text.split_inclusive(char::is_whitespace)
+            .scan(start, |cursor, chunk| {
+                let start = *cursor;
+                *cursor += chunk.len();
+                let text = chunk.trim_end_matches(char::is_whitespace);
+                Some(LocatedItem {
+                    text,
+                    span: talkbank_model::Span::from_usize(start, start + text.len()),
+                })
+            })
+            .filter(|item| !item.text.is_empty())
     }
 
     /// Diagnose a standalone newline selected by the file dispatcher. A

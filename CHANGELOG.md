@@ -46,6 +46,10 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- re2c E760 highlights the original empty-POS morphology item, including across
+  continuation lines and non-ASCII text. Recovery inspects source-owned items
+  without rebuilding rich-token payloads or using a dummy diagnostic span.
+
 - re2c no longer dispatches longer Phon labels through `%mod` or `%pho` body
   parsers. Bare and x-prefixed syllabification, alignment and interval tiers
   retain their own grammar without false E316 diagnostics.
