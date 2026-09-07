@@ -317,6 +317,7 @@ pub(super) fn parse_lines_with_old_tree(
     // hand-walk. `DocumentLowering` borrows the Tee'd sink so its emissions are
     // recorded for the backstop's span-dedup below.
     let mut lowering = DocumentLowering::new(
+        parser,
         input,
         errors,
         crate::parser::ChildCapacity::for_node(root_node),

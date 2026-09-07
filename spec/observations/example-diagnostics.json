@@ -1737,7 +1737,7 @@
       "validation": [
         "E502"
       ],
-      "roundtrip": "diverged"
+      "roundtrip": "byte_exact"
     },
     {
       "spec": "E503.md",

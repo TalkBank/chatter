@@ -51,6 +51,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use crate::TreeSitterParser;
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
@@ -59,7 +60,7 @@ use crate::generated_traversal::{
     FullDocumentChildren, LineChoice, LineNode, MainTierNode, NodeSlot, Utf8HeaderNode,
     extract_line,
 };
-use crate::model::{Header, Line};
+use crate::model::{Header, Line, Utterance};
 use crate::node_types::{BLANK_LINE, PRE_BEGIN_HEADER, UNSUPPORTED_LINE};
 use crate::parser::ChildCapacity;
 use crate::parser::chat_file_parser::header_parser::{
@@ -68,6 +69,7 @@ use crate::parser::chat_file_parser::header_parser::{
 use crate::parser::chat_file_parser::utterance_parser::{
     parse_recovered_main_tier, parse_utterance_node,
 };
+use crate::parser::terminal_main_tier::TerminalMainTier;
 use crate::parser::tree_parsing::parser_helpers::{
     analyze_error_node, analyze_line_error, collect_recovery_nodes, is_pre_begin_header,
 };
@@ -87,6 +89,8 @@ use super::helpers::{recover_top_level_error_node, report_top_level_dependent_ti
 /// `TeeErrorSink` (which records diagnostics for the backstop's span-dedup)
 /// without boxing.
 pub(super) struct DocumentLowering<'a, S: ErrorSink> {
+    /// Reused only when a proven terminal fragment lost its enclosing CST node.
+    parser: &'a TreeSitterParser,
     /// Full source text of the CHAT file being parsed.
     source: &'a str,
     /// Diagnostic sink that recovery diagnostics are reported to.
@@ -99,8 +103,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// Construct a `DocumentLowering` over `source`, reporting to `errors`, with
     /// `capacity` reserved for the line accumulator (the `full_document` child
     /// count is a good upper bound).
-    pub(super) fn new(source: &'a str, errors: &'a S, capacity: ChildCapacity) -> Self {
+    pub(super) fn new(
+        parser: &'a TreeSitterParser,
+        source: &'a str,
+        errors: &'a S,
+        capacity: ChildCapacity,
+    ) -> Self {
         Self {
+            parser,
             source,
             errors,
             lines: capacity.into_vec(),
@@ -164,9 +174,17 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         // Missing @End can strand the complete final main tier outside a line
         // wrapper. Admit that typed EOF construct and reuse normal utterance
         // construction; arbitrary unexpected content still receives diagnostics.
-        for node in &children.unexpected {
+        let mut unexpected = children.unexpected.iter().copied();
+        while let Some(node) = unexpected.next() {
+            if let Some(terminal) = TerminalMainTier::admit(node, unexpected.clone(), self.source) {
+                if let ParseOutcome::Parsed(main) = terminal.lower(self.parser, self.errors) {
+                    self.lines.push(Line::utterance(Utterance::new(main)));
+                }
+                // Admission consumed the complete remaining EOF sequence.
+                break;
+            }
             if node.end_byte() == self.source.len()
-                && let Some(main) = MainTierNode::from_node(*node)
+                && let Some(main) = MainTierNode::from_node(node)
             {
                 if let ParseOutcome::Parsed(utterance) =
                     parse_recovered_main_tier(main, self.source, self.errors)
@@ -174,7 +192,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                     self.lines.push(Line::utterance(utterance));
                 }
             } else {
-                self.surface_unexpected(std::slice::from_ref(node));
+                self.surface_unexpected(std::slice::from_ref(&node));
             }
         }
     }

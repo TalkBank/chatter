@@ -1,4 +1,4 @@
-//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 569feb170cef
+//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 1b5aad8be2b4
 //! Source grammar digest (sha256): grammar.json=91caecee485fa0c3465c757598b7c7d57a6ccb0df93aa600a242b026d58cf622 node-types.json=ea8a2d154add41001ab2828c71c132b91b0b914d4afad41c0f204d5c05b94c80
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!

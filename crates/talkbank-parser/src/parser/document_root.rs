@@ -170,4 +170,51 @@ mod tests {
             assert!(errors.to_vec().is_empty(), "{:?}", errors.to_vec());
         }
     }
+
+    // Spec boundary: a missing document terminator must not discard speech.
+    #[test]
+    fn truncated_spec_retains_speech_without_final_newline() {
+        let source = include_str!(
+            "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E502_1.cha"
+        );
+        let parser = TreeSitterParser::new().expect("grammar loads");
+        for input in [source, source.trim_end_matches('\n')] {
+            let errors = ErrorCollector::new();
+            let mut file = parser.parse_chat_file_streaming(input, &errors);
+            assert_eq!(file.utterances().count(), 1, "speech retained: {input:?}");
+            assert!(errors.to_vec().is_empty(), "{:?}", errors.to_vec());
+            file.validate_with_alignment(&errors, talkbank_model::model::TranscriptName::Anonymous);
+            let errors = errors.into_vec();
+            assert_eq!(errors.len(), 1, "{errors:?}");
+            assert_eq!(errors[0].code, ErrorCode::MissingEndHeader);
+            assert_eq!(errors[0].location.span.start as usize, input.len());
+        }
+    }
+
+    #[test]
+    fn recovered_terminal_speech_keeps_caller_coordinates() {
+        use talkbank_model::ChatParser;
+        let source = include_str!(
+            "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E502_1.cha"
+        )
+        .trim_end_matches('\n');
+        let parser = TreeSitterParser::new().expect("grammar loads");
+        for origin in [0, 37, u32::MAX as usize - source.len()] {
+            let errors = ErrorCollector::new();
+            let file = ChatParser::parse_chat_file(&parser, source, origin, &errors)
+                .into_option()
+                .expect("recovered document");
+            let utterance = file.utterances().next().expect("retained speech");
+            assert_eq!(
+                utterance.main.span.start as usize,
+                origin + source.find("*CHI").expect("spec speaker")
+            );
+            assert_eq!(utterance.main.span.end as usize, origin + source.len());
+            assert_eq!(
+                utterance.main.speaker_span.start,
+                utterance.main.span.start + 1
+            );
+            assert!(errors.into_vec().is_empty());
+        }
+    }
 }

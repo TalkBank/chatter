@@ -29,6 +29,10 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- A truncated document without a final newline retains its complete simple
+  final main tier. Shared terminal recovery reuses the normal fragment parser
+  and preserves caller coordinates while validation reports missing `@End`.
+
 - LSP diagnostics after edits now agree with fresh-open text, including deleted
   headers, recovery suffixes, Unicode edits and skipped debounce revisions.
   Tree-sitter edits use the cached tree's own source and UTF-8 byte coordinates.

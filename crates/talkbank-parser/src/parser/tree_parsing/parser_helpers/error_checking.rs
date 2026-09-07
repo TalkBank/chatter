@@ -100,7 +100,7 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
         // into it to surface only LOCALIZED recovery nodes; do not report the
         // wrapper itself. A leaf/content ERROR (a stray token, a malformed code)
         // wraps no document structure and is reported normally below.
-        if let Some(wrapper) = DocumentRecoveryWrapper::admit(node, source.len()) {
+        if let Some(wrapper) = DocumentRecoveryWrapper::admit(node, source) {
             wrapper.collect_nested(source, out);
             return;
         }
@@ -286,7 +286,7 @@ pub(crate) fn surface_unexpected(
 struct DocumentRecoveryWrapper<'tree>(Node<'tree>);
 
 impl<'tree> DocumentRecoveryWrapper<'tree> {
-    fn admit(node: Node<'tree>, source_len: usize) -> Option<Self> {
+    fn admit(node: Node<'tree>, source: &str) -> Option<Self> {
         use crate::generated_traversal::{
             BeginHeaderNode, EndHeaderNode, FromNodeKind, FullDocumentNode, HeaderChoice, LineNode,
             MainTierNode, PreBeginHeaderChoice, Utf8HeaderNode, UtteranceNode,
@@ -328,8 +328,11 @@ impl<'tree> DocumentRecoveryWrapper<'tree> {
                 // final main tier. Admit only a complete terminal sequence,
                 // never arbitrary body tokens beside a recognizable header.
                 return (has_structure
-                    && node.end_byte() == source_len
-                    && TerminalMainTier::admit(child, children).is_some())
+                    && node.end_byte() == source.len()
+                    && crate::parser::terminal_main_tier::TerminalMainTier::admit(
+                        child, children, source,
+                    )
+                    .is_some())
                 .then_some(Self(node));
             }
             has_structure = true;
@@ -342,28 +345,5 @@ impl<'tree> DocumentRecoveryWrapper<'tree> {
         for child in self.0.children(&mut cursor) {
             collect_recovery_nodes(child, source, out);
         }
-    }
-}
-
-/// The simple main-tier sequence left at EOF when its newline is absent.
-/// Complex endings remain unclassified here; only the generated grammar's
-/// token types, in order and with no leftover children, establish this proof.
-struct TerminalMainTier;
-
-impl TerminalMainTier {
-    fn admit<'tree>(
-        first: Node<'tree>,
-        mut remaining: impl Iterator<Item = Node<'tree>>,
-    ) -> Option<Self> {
-        use crate::generated_traversal::{
-            ColonNode, ContentsNode, FromNodeKind, SpeakerNode, StarNode, TabNode, TerminatorChoice,
-        };
-        StarNode::from_node(first)?;
-        SpeakerNode::from_node(remaining.next()?)?;
-        ColonNode::from_node(remaining.next()?)?;
-        TabNode::from_node(remaining.next()?)?;
-        ContentsNode::from_node(remaining.next()?)?;
-        TerminatorChoice::from_node(remaining.next()?)?;
-        remaining.next().is_none().then_some(Self)
     }
 }

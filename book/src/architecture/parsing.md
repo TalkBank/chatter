@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 20:01 EDT
+**Last updated:** 2026-09-06 20:19 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -284,12 +284,13 @@ analysis snapshots rather than a second parser-level cache-admission API.
 
 At EOF, lowering retains a generated `MainTierNode` stranded outside its line
 wrapper by reusing the normal utterance builder and parse-health transition.
-Flattened token sequences without a final newline remain a separate retention
-case: the recovery backstop can recognize the exact simple terminal sequence
-and defer E502 to validation without proving that its speech reached the model.
-The existing E502 example covers diagnostics in both newline forms; the
-`document_root` parser tests additionally check retained speech, leading and
-trailing recovery regions, and clean-document admission.
+For the flattened simple terminal sequence without a final newline,
+`TerminalMainTier` pairs the generated grammar tokens with the original source
+range. Lowering reuses the normal main-tier fragment parser, which clips its
+synthetic newline and rebases into caller coordinates. The diagnostic backstop
+uses the same structural admission. The E502 example checks retained speech
+and diagnostics in both newline forms, including maximum representable source
+origins; leading and trailing recovery-region regressions remain separate.
 
 ### AST Structure
 
