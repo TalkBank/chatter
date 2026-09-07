@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-09-06 02:12 EDT
+**Last modified:** 2026-09-07 06:57 EDT
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -17,7 +17,7 @@ structure, never by scanning raw CHAT text) DOES apply here.
 
 A CHAT transcript parser using **re2rust** (re2c's Rust backend) for lexing and **chumsky** parser combinators for parsing. Lives in the chatter workspace as `talkbank-parser-re2c`.
 
-**Status:** Implements the `ChatParser` trait from `talkbank-model`. The public type is `Re2cParser`. Lexer validated against the wild CHAT corpus with zero errors. Integrated into the CLI via `chatter validate --parser re2c`. Substantially faster than TreeSitterParser on the reference corpus.
+**Status:** Implements `ChatParser` from `talkbank-model` through `Re2cParser`, selected by `chatter validate --parser re2c`. Diagnostic and recovery parity remain incomplete. Current measurements, their limits, and reproducible commands belong in `docs/parity-report.md`; do not infer correctness or current speed from historical corpus results.
 
 ## Architecture
 
@@ -159,40 +159,30 @@ The build script (`build.rs`) copies the vendored `src/generated/lexer.rs` into 
 
 ## Testing
 
-- **Lexer tests:** `tests/lexer_tests.rs`, unit tests per token type using start conditions.
-- **Corpus lexer tests:** `tests/corpus_lex_tests.rs`, lex real lines from the wild data corpus.
-- **Parser tests:** `tests/golden_parse.rs`, `tests/parser_fixtures.rs`, parsed AST structures.
-- **Equivalence tests:** `tests/equivalence_tests.rs`, Re2cParser vs TreeSitterParser comparison via `ChatParser` trait.
-- **Single-construct probes:** `tests/integration/model_study.rs`, one hand-picked construct each, checked for `semantic_eq` between the two parsers. Corpus-wide equivalence is NOT here: it belongs to `equivalence_tests.rs` and to `equivalence_reference_corpus`, which walks every reference file.
-- **Full corpus tests:** `tests/full_corpus_parse_test.rs`, wild-corpus SemanticEq comparison.
-- **Benchmarks:** `benches/parse_comparison.rs`, divan benchmarks comparing both parsers.
-- **When a test fails, STOP and ask.** CHAT semantics are domain-specific.
-- **Slow tests:** Mark with `#[ignore]` and run via `--ignored` flag.
+Tests are modules of one integration binary, `tests/integration/main.rs`.
+Use a name filter for the boundary being changed:
 
-### Running Corpus Tests
-
-Corpus tests can take many minutes (release mode). They write reports to `/tmp/re2c_*.json`.
-
-```bash
-# Full parse comparison (SemanticEq on the wild corpus)
-cargo test -p talkbank-parser-re2c --test full_corpus_parse_test --release -- --ignored --nocapture
-
-# Categorize divergences (span-stripped JSON diff)
-cargo test -p talkbank-parser-re2c --test categorize_divergences --release -- --ignored --nocapture
-
-# Sub-categorize main tier divergences
-cargo test -p talkbank-parser-re2c --test subcategorize_main_tier --release -- --ignored --nocapture
+```sh
+cargo test -p talkbank-parser-re2c --test integration word_equivalence_lengthening
+cargo test -p talkbank-parser-re2c --test integration error_parity::backends_diverge_only_where_recorded -- --nocapture
 ```
 
-**Pitfalls:**
-- Do NOT pipe corpus test output through grep; it loses data. Run directly and use `tail` on the output file.
-- Always check `/tmp/re2c_divergence_categories.json` timestamp after runs to verify freshness.
-- If results look stale, `cargo build --release -p talkbank-parser-re2c --tests` forces recompilation.
-- Reports are overwritten on each run. Compare timestamps, not just content.
+`lexer_tests`, `golden_parse`, `parser_fixtures`, `model_study`, and the
+source-provenance modules cover focused behavior. `equivalence_tests` covers
+the repository reference fixtures. The spec-parity ratchet compares diagnostic
+sets and declared expectations separately; see `docs/parity-report.md`.
 
-### Lexer Validation Status
+**When a test fails, STOP and ask.** CHAT semantics are domain-specific.
 
-The lexer has been validated against the wild `.cha` corpus with ZERO errors on valid CHAT data.
+A failure needs diagnosis and CHAT-rule adjudication, not a new baseline entry
+or an invented recovery rule. Model equality, source spans, emitted diagnostics
+and source-preserving serialization answer separate questions.
+
+External corpus helpers remain ignored investigations. They are not release or
+validity gates. Do not revive the obsolete standalone `--test` commands: their
+sources now live inside the integration binary. Use the current test names and
+explicit source inputs when an investigation is authorized, and retain dated
+results without presenting old corpus counts as current guarantees.
 
 ## Error Token Design
 
@@ -257,5 +247,4 @@ Key integration points:
 
 ## Equivalence Status
 
-All reference corpus files pass SemanticEq equivalence with TreeSitterParser.
-All reference corpus files validate and roundtrip successfully with `--parser re2c`.
+The checked-in reference-fixture gate and the invalid-spec ratchet provide different evidence. See `docs/parity-report.md` for the measured scope and unresolved gaps; passing one does not establish complete backend equivalence.

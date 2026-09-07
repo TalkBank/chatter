@@ -499,7 +499,6 @@ impl Validate for WordStressMarker {
 #[derive(
     Clone,
     Copy,
-    Default,
     Debug,
     PartialEq,
     Eq,
@@ -511,12 +510,12 @@ impl Validate for WordStressMarker {
     SpanShift,
 )]
 pub struct WordLengthening {
-    /// Number of colons (`:` = 1, `::` = 2, `:::` = 3).
+    /// Nonzero number of colons, bounded by source length rather than a byte.
     #[serde(
         default = "WordLengthening::default_count",
         skip_serializing_if = "WordLengthening::is_one"
     )]
-    pub count: u8,
+    pub count: std::num::NonZeroUsize,
     /// Source span for error reporting.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[semantic_eq(skip)]
@@ -527,24 +526,21 @@ impl WordLengthening {
     /// Builds a lengthening marker with count 1 and no span metadata.
     pub fn new() -> Self {
         Self {
-            count: 1,
+            count: std::num::NonZeroUsize::MIN,
             span: None,
         }
     }
 
     /// Builds a lengthening marker with a specific colon count.
-    pub fn with_count(count: u8) -> Self {
-        Self {
-            count: count.max(1),
-            span: None,
-        }
+    pub fn with_count(count: std::num::NonZeroUsize) -> Self {
+        Self { count, span: None }
     }
 
-    fn default_count() -> u8 {
-        1
+    fn default_count() -> std::num::NonZeroUsize {
+        std::num::NonZeroUsize::MIN
     }
-    fn is_one(count: &u8) -> bool {
-        *count <= 1
+    fn is_one(count: &std::num::NonZeroUsize) -> bool {
+        count.get() == 1
     }
 
     /// Sets source span metadata.
@@ -554,10 +550,16 @@ impl WordLengthening {
     }
 }
 
+impl Default for WordLengthening {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WriteChat for WordLengthening {
     /// Writes the syllable lengthening marker(s).
     fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        for _ in 0..self.count.max(1) {
+        for _ in 0..self.count.get() {
             w.write_char(':')?;
         }
         Ok(())

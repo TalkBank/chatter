@@ -376,6 +376,7 @@ gate:
 # in any of them is a defect to fix in the same session, not a gate on daily
 # work. `release-lint.yml` runs the same recipe on a tag.
 release-lint:
+    just app-sync-check
     just fmt-check
     just clippy
     just clippy-spec

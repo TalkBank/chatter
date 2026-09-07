@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-06 01:29 EDT
+**Last updated:** 2026-09-07 06:57 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce identical `ChatFile` model types.
@@ -206,6 +206,22 @@ tiers, canonical non-CA controls, exact byte spans and nonzero source offsets.
 It compares canonical serialized CHAT with tree-sitter. The lexer prefix payload
 and header/dependent-entry AST shapes change; the file inspection snapshot
 records that API change.
+
+### Lengthening counts preserve their source
+
+The grammar admits a nonempty run of colons with no 255-character limit.
+`WordLengthening::count` and the re2c AST carry `NonZeroUsize`, measured at the
+parser boundary. Neither backend narrows source length to `u8`; the old paths
+could overflow or silently wrap. A zero count cannot be constructed or decoded
+from JSON, and both the default constructor and omitted JSON count mean one
+colon. Serialization no longer repairs zero counts with `max(1)`.
+
+This changes the Rust count field and `with_count` argument from `u8` to
+`NonZeroUsize`. JSON retains the integer `count` field, omitted for one colon,
+but accepts longer runs and rejects zero. The schema describes that boundary.
+The public-parser regression checks both source roundtrip and semantic equality
+at the old integer boundary; equality alone previously allowed both backends
+to lose the same information.
 
 ### Remaining parity limits
 

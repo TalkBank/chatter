@@ -1,7 +1,7 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-07
 
 ## Pre-Merge Verification
 
@@ -14,7 +14,9 @@ just gate
 This runs the checks used by per-push CI, including doctests, both Rust
 workspaces, generated-artifact currency, and the book. Wait for GitHub Actions
 on the exact pushed commit before announcing it as ready. Release-only checks
-run separately through `just release-lint`.
+run separately through `just release-lint`. That recipe first checks app versions
+and the changelog section/link, before formatting and compiler checks, so a
+missing release entry fails before compilation.
 
 ## Generated artifact drift
 

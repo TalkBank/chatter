@@ -11,10 +11,9 @@ pub(crate) fn body_item_to_word_content(item: &WordBodyItem<'_>) -> WordContent 
     match item {
         WordBodyItem::Text(s) => WordContent::Text(WordText::new_unchecked(s)),
         WordBodyItem::Shortening(s) => WordContent::Shortening(WordShortening::new_unchecked(s)),
-        WordBodyItem::Lengthening(count) => WordContent::Lengthening(WordLengthening {
-            count: *count,
-            span: None,
-        }),
+        WordBodyItem::Lengthening(count) => {
+            WordContent::Lengthening(WordLengthening::with_count(*count))
+        }
         WordBodyItem::CompoundMarker => WordContent::CompoundMarker(WordCompoundMarker::new()),
         WordBodyItem::Stress(StressKind::Primary) => {
             WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary))

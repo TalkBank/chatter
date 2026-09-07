@@ -49,7 +49,6 @@ crates/send2clan/README.md
 crates/talkbank-lsp/ARCHITECTURE.md
 crates/talkbank-lsp/DEBUGGING.md
 crates/talkbank-parser-re2c/README.md
-crates/talkbank-parser-re2c/docs/parity-report.md
 crates/talkbank-parser-tests/clan-check-reference/check-error-codes.md
 crates/talkbank-parser-tests/clan-check-reference/gui-vs-unix-check.md
 crates/talkbank-parser/PARSING_PATTERNS.md

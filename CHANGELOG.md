@@ -9,6 +9,22 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Changed
+
+- `WordLengthening::count`, its `with_count` argument, and re2c's AST
+  lengthening count now use `NonZeroUsize` instead of `u8`. JSON keeps the
+  integer field and its omitted-one default, accepts longer runs, and rejects
+  zero. This is a breaking Rust API and JSON-admission change.
+
+### Fixed
+
+- Both parsers preserve lengthening runs beyond 255 colons without integer
+  overflow or truncation. The default model marker now consistently contains
+  one colon, with no zero-count repair during serialization.
+- Re2c retains malformed form suffixes for specific E202/E203 diagnostics;
+  repeated dangling markers no longer produce both errors for one defect.
+- Release lint checks application-version synchronization before compilation.
+
 ## [0.22.0] - 2026-09-06
 
 ### Changed

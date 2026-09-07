@@ -214,7 +214,7 @@ fn word_with_lengthening() {
         words[0]
             .body
             .iter()
-            .any(|b| matches!(b, WordBodyItem::Lengthening(2)))
+            .any(|b| matches!(b, WordBodyItem::Lengthening(count) if count.get() == 2))
     );
 }
 

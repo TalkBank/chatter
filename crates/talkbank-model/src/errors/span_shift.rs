@@ -80,6 +80,10 @@ impl SpanShift for u64 {
     fn shift_spans_after(&mut self, _offset: u32, _delta: i32) {}
 }
 
+impl SpanShift for std::num::NonZeroUsize {
+    fn shift_spans_after(&mut self, _offset: u32, _delta: i32) {}
+}
+
 impl SpanShift for usize {
     fn shift_spans_after(&mut self, _offset: u32, _delta: i32) {}
 }

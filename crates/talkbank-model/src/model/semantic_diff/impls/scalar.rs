@@ -174,4 +174,17 @@ macro_rules! impl_semantic_diff_scalar {
     };
 }
 
-impl_semantic_diff_scalar!(bool, char, u8, u16, u32, u64, usize, i8, i16, i32, i64);
+impl_semantic_diff_scalar!(
+    bool,
+    char,
+    u8,
+    u16,
+    u32,
+    u64,
+    usize,
+    std::num::NonZeroUsize,
+    i8,
+    i16,
+    i32,
+    i64
+);

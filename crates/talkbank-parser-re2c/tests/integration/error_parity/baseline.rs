@@ -120,20 +120,9 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete};
 /// belongs beside it as a comment. That is the case the docstring above asks
 /// for, and a comment carries it without requiring the other 98 to lie.
 pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
-    ("E202_missing_form_type.md#0", Conflicting),
-    ("E202_missing_form_type.md#1", Conflicting),
-    // `word@@`: tree-sitter names the repeated `@` run as E203, re2c's lexer
-    // cannot form the word at all and reports E321. Both REFUSE the file; they
-    // disagree on whether the answer is about the file or about the parser,
-    // which is the standing re2c gap recorded in the 0.16.0 known limitations.
-    ("E202_missing_form_type.md#2", Conflicting),
-    // `#0` since E203 gained a second example: a bare name addresses a
-    // single-example spec. `dog@b@c` still diverges (tree-sitter E203, re2c
-    // E209 plus E253). The new `#1`, `gumma@c@s:spa`, is deliberately absent:
-    // both backends answer E203 there, so the case the at-most-one-suffix
-    // ruling actually decided AGREES.
-    ("E202_missing_form_type.md#3", Conflicting),
-    ("E203.md#0", Conflicting),
+    // E202's missing/invalid/repeated suffix cases and E203#0 were retired
+    // together when rich-word recovery retained the complete suffix for
+    // semantic validation (2026-09-07).
     ("E208.md", Conflicting),
     ("E231.md", Conflicting),
     ("E232.md", Conflicting),

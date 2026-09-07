@@ -48,12 +48,17 @@ pub fn parse_word_body(body: &str) -> Vec<WordBodyItem<'_>> {
             }
             // Lengthening: one or more colons
             ':' => {
-                let mut count: u8 = 0;
+                let mut count = 0usize;
                 while let Some(&(_, ':')) = chars.peek() {
                     chars.next();
                     count += 1;
                 }
-                items.push(WordBodyItem::Lengthening(count));
+                // Count source bytes without narrowing. The grammar branch
+                // consumes at least one colon; only a nonempty run can enter
+                // the AST and the shared model.
+                if let Some(count) = std::num::NonZeroUsize::new(count) {
+                    items.push(WordBodyItem::Lengthening(count));
+                }
             }
             // Compound marker
             '+' => {

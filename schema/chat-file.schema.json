@@ -7847,10 +7847,9 @@
       "description": "Syllable lengthening marker (`:`) within a word.\n\nIndicates that the preceding syllable is lengthened in speech (e.g., `bana:nas`).\nNot included in cleaned text.\n\n# Reference\n\n- [Words](https://talkbank.org/0info/manuals/CHAT.html#Words)",
       "properties": {
         "count": {
-          "description": "Number of colons (`:` = 1, `::` = 2, `:::` = 3).",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
+          "description": "Nonzero number of colons, bounded by source length rather than a byte.",
+          "format": "uint",
+          "minimum": 1,
           "type": "integer"
         },
         "span": {

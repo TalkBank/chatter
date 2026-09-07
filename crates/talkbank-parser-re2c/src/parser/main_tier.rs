@@ -258,7 +258,11 @@ pub fn subtoken_word<'tokens, 'a: 'tokens>()
                     Token::PosTag(s) => pos_tag = Some(s),
                     Token::WordSegment(s) => body.push(WordBodyItem::Text(s)),
                     Token::Shortening(s) => body.push(WordBodyItem::Shortening(s)),
-                    Token::Lengthening(s) => body.push(WordBodyItem::Lengthening(s.len() as u8)),
+                    Token::Lengthening(s) => {
+                        if let Some(count) = std::num::NonZeroUsize::new(s.len()) {
+                            body.push(WordBodyItem::Lengthening(count));
+                        }
+                    }
                     Token::CompoundMarker(_) => body.push(WordBodyItem::CompoundMarker),
                     Token::StressPrimary(_) => body.push(WordBodyItem::Stress(StressKind::Primary)),
                     Token::StressSecondary(_) => {

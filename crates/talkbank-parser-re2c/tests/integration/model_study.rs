@@ -60,14 +60,35 @@ fn word_equivalence_compound() {
 
 #[test]
 fn word_equivalence_lengthening() {
-    let ts_word = ts().parse_word("no::").unwrap();
-    let re2c_word = re2c_word("no::");
-    assert!(
-        ts_word.semantic_eq(&re2c_word),
-        "lengthening mismatch:\n  ts:   {}\n  re2c: {}",
-        serde_json::to_string(&ts_word).unwrap(),
-        serde_json::to_string(&re2c_word).unwrap(),
-    );
+    use talkbank_model::{ChatParser, ErrorCollector, ParseOutcome};
+    let tree_sitter = ts();
+    let re2c = talkbank_parser_re2c::Re2cParser::new();
+    // The grammar permits any nonempty colon run. Check the old u8 boundary,
+    // and require source preservation as well as agreement: both backends
+    // previously narrowed the count, so agreement alone could hide data loss.
+    for count in [1, 2, 255, 256, 257, 1024] {
+        let input = format!("no{}", ":".repeat(count));
+        let errors = ErrorCollector::new();
+        let ParseOutcome::Parsed(re2c_word) = re2c.parse_word(&input, 0, &errors) else {
+            panic!("re2c rejected a lengthening run of {count}");
+        };
+        let ts_word = tree_sitter.parse_word(&input).unwrap();
+        assert_eq!(re2c_word.to_chat(), input, "re2c lost lengthening");
+        assert_eq!(ts_word.to_chat(), input, "tree-sitter lost lengthening");
+        assert!(ts_word.semantic_eq(&re2c_word), "count={count}");
+    }
+}
+
+#[test]
+fn lengthening_json_requires_a_nonzero_count() {
+    use talkbank_model::{WordLengthening, WriteChat};
+    assert!(serde_json::from_str::<WordLengthening>(r#"{"count":0}"#).is_err());
+    let default: WordLengthening = serde_json::from_str("{}").unwrap();
+    assert_eq!(default, WordLengthening::default());
+    assert_eq!(default.to_chat_string(), ":");
+    let long: WordLengthening = serde_json::from_str(r#"{"count":256}"#).unwrap();
+    assert_eq!(long.to_chat_string(), ":".repeat(256));
+    assert_eq!(serde_json::to_value(long).unwrap()["count"], 256);
 }
 
 #[test]

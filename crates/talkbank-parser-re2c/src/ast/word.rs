@@ -223,7 +223,7 @@ pub enum WordBodyItem<'a> {
     /// Shortened syllable, tag-extracted content (e.g., "be" from "(be)")
     Shortening(&'a str),
     /// Syllable lengthening (:, ::, :::), count of colons
-    Lengthening(u8),
+    Lengthening(std::num::NonZeroUsize),
     /// Compound marker (+)
     CompoundMarker,
     /// Stress marker (primary ˈ or secondary ˌ)

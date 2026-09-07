@@ -258,6 +258,13 @@ impl<'a> Iterator for Lexer<'a> {
         // the code set rather than the whole marker pattern.
         !include "generated_form_markers.re";
 
+        // grammar.js form_marker and repeated_form_marker admit undeclared
+        // suffixes so semantic validation can name E203. A dangling marker
+        // is recoverable as E202 (spec/errors/E202_missing_form_type.md).
+        // This is syntax admission, not a second registry of valid codes.
+        form_candidate = ("s" [a-zA-Z] [-a-zA-Z]* | [a-rt-zA-RT-Z] [-a-zA-Z]*) (":" [a-zA-Z0-9_]+)?;
+        repeated_form_candidate = [a-zA-Z0-9:_-]* ("@" [a-zA-Z0-9:_-]*)+;
+
         // Language suffix: @s or @s:codes
         w_lang = "@s" (":" [a-z][a-z][a-z]? ([+&] [a-z][a-z][a-z]?)*)?;
 
@@ -892,6 +899,20 @@ impl<'a> Iterator for Lexer<'a> {
             let lang_suffix = if self.t6 != NONE { if self.t5 != NONE { Some(&yyinput[self.t5..self.t6]) } else { Some("") } } else { None };
             let pos_tag = if self.t7 != NONE && self.t8 != NONE { Some(&yyinput[self.t7..self.t8]) } else { None };
             return Some((Token::Word { raw_text, prefix: None, body, form_marker, lang_suffix, pos_tag }, start..end));
+        }
+
+        // Keep a complete word for malformed suffixes instead of splitting
+        // off an error token and losing the entire utterance to E321. The
+        // declared-marker rules above win equal-length matches; this path
+        // preserves the source and suffix boundaries for shared validation.
+        <MAIN_CONTENT> (w_prefix | "0")? @t1 w_body @t2 "@" @t3 (form_candidate | repeated_form_candidate | "") @t4 ("$" @t7 [a-zA-Z:]+ @t8)? {
+            let end = self.cursor;
+            let raw_text = &yyinput[start..end];
+            let prefix = if self.t1 == start { None } else { Some(&yyinput[start..self.t1]) };
+            let body = &yyinput[self.t1..self.t2];
+            let form_marker = Some(&yyinput[self.t3..self.t4]);
+            let pos_tag = if self.t7 != NONE && self.t8 != NONE { Some(&yyinput[self.t7..self.t8]) } else { None };
+            return Some((Token::Word { raw_text, prefix, body, form_marker, lang_suffix: None, pos_tag }, start..end));
         }
 
         // NOTE: Shortening sub-token rule removed, shadowed by Word rules above.

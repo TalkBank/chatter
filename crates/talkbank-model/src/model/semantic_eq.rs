@@ -107,6 +107,12 @@ impl SemanticEq for u64 {
     }
 }
 
+impl SemanticEq for std::num::NonZeroUsize {
+    fn semantic_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
 impl SemanticEq for usize {
     fn semantic_eq(&self, other: &Self) -> bool {
         self == other

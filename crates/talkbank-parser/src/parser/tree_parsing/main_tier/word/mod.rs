@@ -348,14 +348,16 @@ fn build_word_contents(
             }
             "lengthening" => {
                 let len_text = extract_utf8_text(child, source, errors, "lengthening", "");
-                let colon_count = len_text.chars().filter(|&c| c == ':').count() as u8;
-                items.push(WordContent::Lengthening(WordLengthening {
-                    count: colon_count.max(1),
-                    span: Some(talkbank_model::Span::from_usize(
-                        child.start_byte(),
-                        child.end_byte(),
-                    )),
-                }));
+                // The grammar's lengthening token consists only of colons.
+                // A failed extraction already reports its error; do not turn
+                // its empty fallback into an invented one-colon marker.
+                if let Some(count) = std::num::NonZeroUsize::new(len_text.len()) {
+                    items.push(WordContent::Lengthening(
+                        WordLengthening::with_count(count).with_span(
+                            talkbank_model::Span::from_usize(child.start_byte(), child.end_byte()),
+                        ),
+                    ));
+                }
             }
             "+" => {
                 // Anonymous compound marker
