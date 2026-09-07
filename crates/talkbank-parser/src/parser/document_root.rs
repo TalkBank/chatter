@@ -22,18 +22,6 @@ pub struct DocumentRoot<'tree> {
     document: DocumentShape<'tree>,
 }
 
-/// A complete document with no recovery anywhere in its source tree.
-/// Only whole-source classification can admit this incremental-reuse proof.
-#[derive(Debug)]
-pub struct CleanDocument<'tree>(FullDocumentNode<'tree>);
-
-impl<'tree> CleanDocument<'tree> {
-    /// The complete document's typed CST node.
-    pub fn node(self) -> FullDocumentNode<'tree> {
-        self.0
-    }
-}
-
 // This short-lived classification is built once and consumed immediately.
 // Boxing the recovered carrier would add a per-document allocation to avoid
 // moving it once; it is not stored in a collection.
@@ -54,19 +42,6 @@ enum DocumentShape<'tree> {
 }
 
 impl<'tree> DocumentRoot<'tree> {
-    /// Admit incremental reuse only for a complete, recovery-free source.
-    /// A clean fragment is not a document and cannot reuse cached headers.
-    #[must_use]
-    pub fn into_clean(self) -> Option<CleanDocument<'tree>> {
-        if self.syntax_root.has_error() {
-            return None;
-        }
-        match self.document {
-            DocumentShape::Complete { document, .. } => Some(CleanDocument(document)),
-            DocumentShape::Recovered { .. } | DocumentShape::NotADocument { .. } => None,
-        }
-    }
-
     /// Locate a complete document even when recovery precedes it.
     ///
     /// The source grammar selects one document or fragment. A complete
@@ -169,10 +144,6 @@ mod tests {
             let root = DocumentRoot::classify(&tree);
             assert_eq!(root.node().kind(), "full_document");
             assert_eq!(root.syntax_root().byte_range(), 0..input.len());
-            assert!(
-                root.into_clean().is_none(),
-                "recovery cannot reuse cached validation"
-            );
             let errors = ErrorCollector::new();
             let file = parser.parse_chat_file_streaming(&input, &errors);
             assert_eq!(file.utterances().count(), 1, "{input:?}");
@@ -193,20 +164,10 @@ mod tests {
     fn genuine_document_recovery_still_defers_missing_end_to_validation() {
         let parser = TreeSitterParser::new().expect("grammar loads");
         for input in [DOCUMENT, DOCUMENT.trim_end_matches("@End\n")] {
-            let tree = parser.parse_tree_incremental(input, None).expect("tree");
-            assert_eq!(
-                DocumentRoot::classify(&tree).into_clean().is_some(),
-                input == DOCUMENT
-            );
             let errors = ErrorCollector::new();
             let file = parser.parse_chat_file_streaming(input, &errors);
             assert_eq!(file.utterances().count(), 1);
             assert!(errors.to_vec().is_empty(), "{:?}", errors.to_vec());
         }
-        let fragment = parser
-            .parse_tree_incremental("hello", None)
-            .expect("fragment tree");
-        assert!(!fragment.root_node().has_error());
-        assert!(DocumentRoot::classify(&fragment).into_clean().is_none());
     }
 }

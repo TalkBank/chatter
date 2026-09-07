@@ -123,7 +123,7 @@ pub(crate) mod parser;
 
 /// Main parser type, initialization error, and the strict whole-file parse
 /// product type.
-pub use parser::document_root::{CleanDocument, DocumentRoot};
+pub use parser::document_root::DocumentRoot;
 pub use parser::{ParseProduct, ParserInitError, TreeSitterParser};
 /// The error type (and its `Result` alias) that every public
 /// `TreeSitterParser::parse_*` method returns. Re-exported from

@@ -17,8 +17,8 @@ version and are listed under "Changed" / "Removed".
   together using the shared model validator.
 
 - `DocumentRoot` is a private-field classification with method accessors rather
-  than a publicly constructible enum. `into_clean` produces `CleanDocument`
-  only when the complete source has no syntax recovery.
+  than a publicly constructible enum. It owns both document lowering and
+  whole-source diagnostic scope.
 
 - re2c parsed header lines carry `HeaderProvenance` in place of a standalone
   separator field, and box their header payload. The owned lexer extent now

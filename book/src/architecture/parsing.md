@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 15:15 EDT
+**Last updated:** 2026-09-06 20:01 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -278,9 +278,9 @@ diagnostic backstop covers the entire source. This prevents trailing text after
 error precedes an otherwise complete document. Private fields prevent callers
 from combining a document with an unrelated diagnostic scope.
 
-Only `DocumentRoot::into_clean` can produce `CleanDocument`, a structural proof
-that rejects recovered sources and clean fragments alike. The proof establishes syntax completeness, not semantic
-validity; shared validation still owns required headers and other CHAT rules.
+Syntax completeness does not establish semantic validity; shared validation
+still owns required headers and other CHAT rules. The LSP owns source-bound
+analysis snapshots rather than a second parser-level cache-admission API.
 
 At EOF, lowering retains a generated `MainTierNode` stranded outside its line
 wrapper by reusing the normal utterance builder and parse-health transition.
