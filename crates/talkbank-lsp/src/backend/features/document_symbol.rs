@@ -22,6 +22,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use std::collections::HashMap;
+use talkbank_model::{GemLabel, Header, Line, Span};
 use tower_lsp::lsp_types::*;
 
 use crate::backend::utils::LineIndex;
@@ -106,38 +108,41 @@ pub fn document_symbol(
     // -----------------------------------------------------------------------
     // Build gem block symbols from @Bg/@Eg pairs.
     // -----------------------------------------------------------------------
-    let mut gem_stack: Vec<(u32, String)> = Vec::new(); // (start_offset, label)
+    let mut open_gems: HashMap<Option<&GemLabel>, Vec<Span>> = HashMap::new();
     let mut gem_symbols: Vec<DocumentSymbol> = Vec::new();
-    let mut byte_pos: u32 = 0;
-    for line in document.lines() {
-        let line_len = line.len() as u32 + 1; // +1 for newline
-        if let Some(label) = line.strip_prefix("@Bg:\t") {
-            gem_stack.push((byte_pos, label.trim().to_string()));
-        } else if line.starts_with("@Eg:")
-            && let Some((start_off, label)) = gem_stack.pop()
-        {
-            let end_off = byte_pos + line_len - 1;
-            let start_pos = index.offset_to_position(start_off);
-            let end_pos = index.offset_to_position(end_off);
-            #[allow(deprecated)]
-            gem_symbols.push(DocumentSymbol {
-                name: format!("Gem: {label}"),
-                detail: None,
-                kind: SymbolKind::EVENT,
-                tags: None,
-                deprecated: None,
-                range: Range {
-                    start: start_pos,
-                    end: end_pos,
-                },
-                selection_range: Range {
-                    start: start_pos,
-                    end: start_pos,
-                },
-                children: None,
-            });
+    for line in &chat_file.lines {
+        let Line::Header { header, span, .. } = line else {
+            continue;
+        };
+        if span.is_dummy() {
+            continue;
         }
-        byte_pos += line_len;
+        match header.as_ref() {
+            Header::BeginGem { label } => {
+                open_gems.entry(label.as_ref()).or_default().push(*span);
+            }
+            Header::EndGem { label } => {
+                let Some(begin) = open_gems.get_mut(&label.as_ref()).and_then(Vec::pop) else {
+                    continue;
+                };
+                let start = index.offset_to_position(begin.start);
+                let end = index.offset_to_position(span.end);
+                #[allow(deprecated)]
+                gem_symbols.push(DocumentSymbol {
+                    name: label
+                        .as_ref()
+                        .map_or_else(|| "Gem".to_string(), |label| format!("Gem: {label}")),
+                    detail: None,
+                    kind: SymbolKind::EVENT,
+                    tags: None,
+                    deprecated: None,
+                    range: Range { start, end },
+                    selection_range: Range { start, end: start },
+                    children: None,
+                });
+            }
+            _ => {}
+        }
     }
 
     // Merge gem symbols into utterance children so they appear in the outline.
@@ -173,14 +178,20 @@ pub fn document_symbol(
     // -----------------------------------------------------------------------
     // Build the "Utterances" namespace symbol wrapping all utterance children.
     // -----------------------------------------------------------------------
-    let utterances_start = first_utterance_offset
-        .map(|off| index.offset_to_position(off))
+    let utterances_start = utterance_children
+        .iter()
+        .map(|symbol| symbol.range.start)
+        .min()
         .unwrap_or(file_end);
 
+    let utterance_count = chat_file.utterances().count();
     #[allow(deprecated)]
     let utterances_sym = DocumentSymbol {
         name: "Utterances".to_string(),
-        detail: Some(format!("{} utterances", utterance_children.len())),
+        detail: Some(format!(
+            "{utterance_count} utterance{}",
+            if utterance_count == 1 { "" } else { "s" }
+        )),
         kind: SymbolKind::NAMESPACE,
         tags: None,
         deprecated: None,
@@ -286,18 +297,35 @@ mod tests {
 
     #[test]
     fn gem_blocks_appear_as_event_symbols() {
-        let input = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Bg:\tPlay\n*CHI:\thello .\n@Eg:\tPlay\n@End\n";
-        let chat_file = parse_chat(input);
-        let response = document_symbol(&chat_file, input);
-
-        if let Some(DocumentSymbolResponse::Nested(symbols)) = response {
-            let utterances = &symbols[0].children.as_ref().unwrap()[1];
-            let children = utterances.children.as_ref().unwrap();
-            // Should contain the utterance AND the gem
-            assert!(children.iter().any(|s| s.name.contains("Gem: Play")));
-            assert!(children.iter().any(|s| s.kind == SymbolKind::EVENT));
-        } else {
-            panic!("Expected nested response");
+        for (begin, end, expected) in [
+            ("@Bg:\tPlay", "@Eg:\tPlay", Some("Gem: Play")),
+            ("@Bg", "@Eg", Some("Gem")),
+            ("@Bg:\tPlay", "@Eg:\tOther", None),
+        ] {
+            for ending in ["\n", "\r\n"] {
+                let input = format!("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n{begin}\n*CHI:\thello .\n{end}\n@End\n").replace('\n', ending);
+                let chat_file = parse_chat(&input);
+                let Some(DocumentSymbolResponse::Nested(symbols)) =
+                    document_symbol(&chat_file, &input)
+                else {
+                    panic!("expected nested response");
+                };
+                let utterances = &symbols[0].children.as_ref().unwrap()[1];
+                assert_eq!(utterances.detail.as_deref(), Some("1 utterance"));
+                let children = utterances.children.as_ref().unwrap();
+                let gems: Vec<_> = children
+                    .iter()
+                    .filter(|symbol| symbol.kind == SymbolKind::EVENT)
+                    .collect();
+                assert_eq!(gems.len(), usize::from(expected.is_some()), "{input}");
+                if let Some(name) = expected {
+                    let gem = gems[0];
+                    assert_eq!(gem.name, name);
+                    assert_eq!(gem.range.start, Position::new(5, 0));
+                    assert!(utterances.range.start <= gem.range.start);
+                    assert!(utterances.range.end >= gem.range.end);
+                }
+            }
         }
     }
 

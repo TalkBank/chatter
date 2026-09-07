@@ -12,7 +12,7 @@
 use serde_json::Value;
 use tower_lsp::jsonrpc::Result as LspResult;
 
-use super::execute_commands::ExecuteCommandRequest;
+use super::execute_commands::ChatOpsCommandRequest;
 use super::state::Backend;
 
 mod filter_document;
@@ -39,31 +39,24 @@ impl ChatOpsCommandService {
     pub(crate) fn dispatch(
         &self,
         backend: &Backend,
-        request: ExecuteCommandRequest,
+        request: ChatOpsCommandRequest,
     ) -> LspResult<Option<Value>> {
-        // Routing invariant: `ExecuteCommandRoutingService::dispatch`
-        // partitions variants by `request.family()` and only forwards
-        // `ExecuteCommandFamily::ChatOps` variants here. Follow-up:
-        // typed sub-enum per family, see
-        // `docs/panic-audit/talkbank-lsp.md`.
-        #[allow(clippy::unreachable)]
         match request {
-            ExecuteCommandRequest::GetSpeakers(request) => {
+            ChatOpsCommandRequest::GetSpeakers(request) => {
                 command_response(handle_get_speakers(backend, &request), "Speaker error")
             }
-            ExecuteCommandRequest::FilterDocument(request) => {
+            ChatOpsCommandRequest::FilterDocument(request) => {
                 command_response(handle_filter_document(backend, &request), "Filter error")
             }
-            ExecuteCommandRequest::GetUtterances(request) => {
+            ChatOpsCommandRequest::GetUtterances(request) => {
                 command_response(handle_get_utterances(backend, &request), "Utterance error")
             }
-            ExecuteCommandRequest::FormatBulletLine(request) => {
+            ChatOpsCommandRequest::FormatBulletLine(request) => {
                 command_response(handle_format_bullet_line(&request), "Format error")
             }
-            ExecuteCommandRequest::ScopedFind(request) => {
+            ChatOpsCommandRequest::ScopedFind(request) => {
                 command_response(handle_scoped_find(backend, &request), "Search error")
             }
-            _ => unreachable!("chat-ops service received unsupported execute-command request"),
         }
     }
 }

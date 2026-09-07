@@ -255,38 +255,36 @@ impl FormatBulletLineRequest {
     }
 }
 
-/// Fully decoded execute-command request ready for feature dispatch.
+/// Fully decoded request, already partitioned for its owning feature service.
 #[derive(Clone, Debug)]
 pub(crate) enum ExecuteCommandRequest {
-    /// Request a dependency graph.
-    ShowDependencyGraph(DocumentPositionRequest),
-    /// Request an alignment sidecar.
-    GetAlignmentSidecar(DocumentUriRequest),
-    /// Fetch participant entries.
-    GetParticipants(DocumentUriRequest),
-    /// Format one `@ID` line.
-    FormatIdLine(IdLineFieldsRequest),
-    /// Fetch speaker metadata.
-    GetSpeakers(DocumentUriRequest),
-    /// Filter a document by speaker.
-    FilterDocument(FilterDocumentRequest),
-    /// Fetch utterance metadata.
-    GetUtterances(DocumentUriRequest),
-    /// Format one timing bullet.
-    FormatBulletLine(FormatBulletLineRequest),
-    /// Execute scoped search.
-    ScopedFind(ScopedFindRequest),
+    Documents(DocumentCommandRequest),
+    Participants(ParticipantCommandRequest),
+    ChatOps(ChatOpsCommandRequest),
 }
 
-/// One feature family that owns a subset of execute-command requests.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ExecuteCommandFamily {
-    /// Document-local graph and alignment commands.
-    Documents,
-    /// Participant extraction and `@ID` formatting commands.
-    Participants,
-    /// Speaker, filtering, utterance, bullet, and scoped-find commands.
-    ChatOps,
+/// Document-local graph and alignment requests.
+#[derive(Clone, Debug)]
+pub(crate) enum DocumentCommandRequest {
+    ShowDependencyGraph(DocumentPositionRequest),
+    GetAlignmentSidecar(DocumentUriRequest),
+}
+
+/// Participant extraction and ID-line formatting requests.
+#[derive(Clone, Debug)]
+pub(crate) enum ParticipantCommandRequest {
+    GetParticipants(DocumentUriRequest),
+    FormatIdLine(IdLineFieldsRequest),
+}
+
+/// CHAT document operation requests.
+#[derive(Clone, Debug)]
+pub(crate) enum ChatOpsCommandRequest {
+    GetSpeakers(DocumentUriRequest),
+    FilterDocument(FilterDocumentRequest),
+    GetUtterances(DocumentUriRequest),
+    FormatBulletLine(FormatBulletLineRequest),
+    ScopedFind(ScopedFindRequest),
 }
 
 impl ExecuteCommandRequest {
@@ -295,48 +293,49 @@ impl ExecuteCommandRequest {
         let command = ExecuteCommandName::parse(params.command.as_str())?;
 
         match command {
-            ExecuteCommandName::ShowDependencyGraph => Ok(Self::ShowDependencyGraph(
-                DocumentPositionRequest::from_arguments(&params.arguments)?,
+            ExecuteCommandName::ShowDependencyGraph => Ok(Self::Documents(
+                DocumentCommandRequest::ShowDependencyGraph(
+                    DocumentPositionRequest::from_arguments(&params.arguments)?,
+                ),
             )),
-            ExecuteCommandName::GetAlignmentSidecar => Ok(Self::GetAlignmentSidecar(
-                DocumentUriRequest::from_arguments(&params.arguments)?,
+            ExecuteCommandName::GetAlignmentSidecar => Ok(Self::Documents(
+                DocumentCommandRequest::GetAlignmentSidecar(DocumentUriRequest::from_arguments(
+                    &params.arguments,
+                )?),
             )),
-            ExecuteCommandName::GetParticipants => Ok(Self::GetParticipants(
-                DocumentUriRequest::from_arguments(&params.arguments)?,
+            ExecuteCommandName::GetParticipants => Ok(Self::Participants(
+                ParticipantCommandRequest::GetParticipants(DocumentUriRequest::from_arguments(
+                    &params.arguments,
+                )?),
             )),
-            ExecuteCommandName::FormatIdLine => Ok(Self::FormatIdLine(
-                IdLineFieldsRequest::from_arguments(&params.arguments)?,
-            )),
-            ExecuteCommandName::GetSpeakers => Ok(Self::GetSpeakers(
-                DocumentUriRequest::from_arguments(&params.arguments)?,
-            )),
-            ExecuteCommandName::FilterDocument => Ok(Self::FilterDocument(
-                FilterDocumentRequest::from_arguments(&params.arguments)?,
-            )),
-            ExecuteCommandName::GetUtterances => Ok(Self::GetUtterances(
-                DocumentUriRequest::from_arguments(&params.arguments)?,
-            )),
-            ExecuteCommandName::FormatBulletLine => Ok(Self::FormatBulletLine(
-                FormatBulletLineRequest::from_arguments(&params.arguments)?,
-            )),
-            ExecuteCommandName::ScopedFind => Ok(Self::ScopedFind(
-                ScopedFindRequest::from_arguments(&params.arguments)?,
-            )),
-        }
-    }
-
-    /// Return the feature family that owns this execute-command request.
-    pub(crate) const fn family(&self) -> ExecuteCommandFamily {
-        match self {
-            Self::ShowDependencyGraph(_) | Self::GetAlignmentSidecar(_) => {
-                ExecuteCommandFamily::Documents
+            ExecuteCommandName::FormatIdLine => {
+                Ok(Self::Participants(ParticipantCommandRequest::FormatIdLine(
+                    IdLineFieldsRequest::from_arguments(&params.arguments)?,
+                )))
             }
-            Self::GetParticipants(_) | Self::FormatIdLine(_) => ExecuteCommandFamily::Participants,
-            Self::GetSpeakers(_)
-            | Self::FilterDocument(_)
-            | Self::GetUtterances(_)
-            | Self::FormatBulletLine(_)
-            | Self::ScopedFind(_) => ExecuteCommandFamily::ChatOps,
+            ExecuteCommandName::GetSpeakers => {
+                Ok(Self::ChatOps(ChatOpsCommandRequest::GetSpeakers(
+                    DocumentUriRequest::from_arguments(&params.arguments)?,
+                )))
+            }
+            ExecuteCommandName::FilterDocument => {
+                Ok(Self::ChatOps(ChatOpsCommandRequest::FilterDocument(
+                    FilterDocumentRequest::from_arguments(&params.arguments)?,
+                )))
+            }
+            ExecuteCommandName::GetUtterances => {
+                Ok(Self::ChatOps(ChatOpsCommandRequest::GetUtterances(
+                    DocumentUriRequest::from_arguments(&params.arguments)?,
+                )))
+            }
+            ExecuteCommandName::FormatBulletLine => {
+                Ok(Self::ChatOps(ChatOpsCommandRequest::FormatBulletLine(
+                    FormatBulletLineRequest::from_arguments(&params.arguments)?,
+                )))
+            }
+            ExecuteCommandName::ScopedFind => Ok(Self::ChatOps(ChatOpsCommandRequest::ScopedFind(
+                ScopedFindRequest::from_arguments(&params.arguments)?,
+            ))),
         }
     }
 }
@@ -348,7 +347,10 @@ mod tests {
     use serde_json::json;
     use tower_lsp::lsp_types::ExecuteCommandParams;
 
-    use super::{ExecuteCommandName, ExecuteCommandRequest, LspBackendError};
+    use super::{
+        ChatOpsCommandRequest, DocumentCommandRequest, ExecuteCommandName, ExecuteCommandRequest,
+        LspBackendError,
+    };
 
     /// The advertised command list should stay in sync with the enum.
     #[test]
@@ -369,7 +371,9 @@ mod tests {
         })
         .expect("dependency graph request should decode");
 
-        let ExecuteCommandRequest::ShowDependencyGraph(request) = request else {
+        let ExecuteCommandRequest::Documents(DocumentCommandRequest::ShowDependencyGraph(request)) =
+            request
+        else {
             panic!("expected dependency-graph request");
         };
 
@@ -416,7 +420,8 @@ mod tests {
         })
         .expect("scoped-find request should decode");
 
-        let ExecuteCommandRequest::ScopedFind(request) = request else {
+        let ExecuteCommandRequest::ChatOps(ChatOpsCommandRequest::ScopedFind(request)) = request
+        else {
             panic!("expected scoped-find request");
         };
 

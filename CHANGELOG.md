@@ -9,6 +9,24 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Changed
+
+- `talkbank_lsp::backend::utils::LineIndex` borrows its source. Its
+  `offset_to_position` method accepts only the offset, preventing callers from
+  pairing indexed line starts with another text. This is a breaking Rust API
+  change and requires a minor version bump before the next pre-1.0 release.
+
+### Fixed
+
+- LSP edits, formatting, semantic tokens, selection ranges, symbols and quick
+  fixes consistently use UTF-16 coordinates. Multiline semantic captures split
+  into individual lines, and whole-document formatting includes the final newline.
+- Gem outlines use parsed header spans and matching labels, preserving CRLF
+  positions and counting only actual utterances in the parent outline.
+- Language-service initialization retains its result in `OnceCell`; nested
+  highlighter access returns an error instead of panicking. Execute-command
+  services accept only their own request enums, removing routing panic branches.
+
 ## [0.21.0] - 2026-09-06
 
 ### Changed

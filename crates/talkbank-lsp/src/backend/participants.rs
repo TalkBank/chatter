@@ -17,7 +17,7 @@ use tower_lsp::lsp_types::Url;
 
 use super::LspBackendError;
 use super::documents;
-use super::execute_commands::{DocumentUriRequest, ExecuteCommandRequest, IdLineFieldsRequest};
+use super::execute_commands::{DocumentUriRequest, IdLineFieldsRequest, ParticipantCommandRequest};
 use super::state::Backend;
 
 /// Feature-oriented execute-command service for participant commands.
@@ -28,22 +28,16 @@ impl ParticipantCommandService {
     pub(crate) fn dispatch(
         &self,
         backend: &Backend,
-        request: ExecuteCommandRequest,
+        request: ParticipantCommandRequest,
     ) -> LspResult<Option<Value>> {
-        // Routing invariant: only `ExecuteCommandFamily::Participants`
-        // variants reach here via `request.family()` partitioning.
-        // Follow-up: typed sub-enum per family, see
-        // `docs/panic-audit/talkbank-lsp.md`.
-        #[allow(clippy::unreachable)]
         match request {
-            ExecuteCommandRequest::GetParticipants(request) => command_response(
+            ParticipantCommandRequest::GetParticipants(request) => command_response(
                 handle_get_participants(backend, &request),
                 "Participant error",
             ),
-            ExecuteCommandRequest::FormatIdLine(request) => {
+            ParticipantCommandRequest::FormatIdLine(request) => {
                 command_response(handle_format_id_line(&request), "Format error")
             }
-            _ => unreachable!("participant service received unsupported execute-command request"),
         }
     }
 }

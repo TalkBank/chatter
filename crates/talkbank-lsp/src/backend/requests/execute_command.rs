@@ -5,7 +5,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::ExecuteCommandParams;
 
 use crate::backend::execute_commands::{
-    DocumentPositionRequest, DocumentUriRequest, ExecuteCommandFamily, ExecuteCommandRequest,
+    DocumentCommandRequest, DocumentPositionRequest, DocumentUriRequest, ExecuteCommandRequest,
 };
 use crate::backend::state::Backend;
 use crate::backend::utils;
@@ -33,10 +33,12 @@ impl ExecuteCommandServices {
 
     /// Route one typed execute-command request to its feature service.
     fn dispatch(&self, backend: &Backend, request: ExecuteCommandRequest) -> Result<Option<Value>> {
-        match request.family() {
-            ExecuteCommandFamily::Documents => self.documents.dispatch(backend, request),
-            ExecuteCommandFamily::Participants => self.participants.dispatch(backend, request),
-            ExecuteCommandFamily::ChatOps => self.chat_ops.dispatch(backend, request),
+        match request {
+            ExecuteCommandRequest::Documents(request) => self.documents.dispatch(backend, request),
+            ExecuteCommandRequest::Participants(request) => {
+                self.participants.dispatch(backend, request)
+            }
+            ExecuteCommandRequest::ChatOps(request) => self.chat_ops.dispatch(backend, request),
         }
     }
 }
@@ -46,20 +48,18 @@ struct DocumentCommandService;
 
 impl DocumentCommandService {
     /// Dispatch one document-command request.
-    fn dispatch(&self, backend: &Backend, request: ExecuteCommandRequest) -> Result<Option<Value>> {
-        // Routing invariant: only `ExecuteCommandFamily::Documents`
-        // variants reach here via the family() partitioning above.
-        // Follow-up: typed sub-enum per family, see
-        // `docs/panic-audit/talkbank-lsp.md`.
-        #[allow(clippy::unreachable)]
+    fn dispatch(
+        &self,
+        backend: &Backend,
+        request: DocumentCommandRequest,
+    ) -> Result<Option<Value>> {
         match request {
-            ExecuteCommandRequest::ShowDependencyGraph(request) => {
+            DocumentCommandRequest::ShowDependencyGraph(request) => {
                 self.handle_dependency_graph_command(backend, &request)
             }
-            ExecuteCommandRequest::GetAlignmentSidecar(request) => {
+            DocumentCommandRequest::GetAlignmentSidecar(request) => {
                 self.handle_alignment_sidecar_command(backend, &request)
             }
-            _ => unreachable!("document service received unsupported execute-command request"),
         }
     }
 

@@ -6,7 +6,7 @@
 //! internal state), so this module replaces those mutexes with lazily
 //! initialized thread-local instances and a small explicit service API.
 
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 
 use talkbank_parser::TreeSitterParser;
 
@@ -17,12 +17,12 @@ use super::state::BackendInitError;
 
 thread_local! {
     /// Thread-local tree-sitter parser used by synchronous parser entry points.
-    static CHAT_PARSER: RefCell<Option<Result<TreeSitterParser, BackendInitError>>> = const {
-        RefCell::new(None)
+    static CHAT_PARSER: OnceCell<Result<TreeSitterParser, BackendInitError>> = const {
+        OnceCell::new()
     };
     /// Thread-local semantic-tokens provider used by token requests.
-    static SEMANTIC_TOKENS: RefCell<Option<Result<SemanticTokensProvider, BackendInitError>>> = const {
-        RefCell::new(None)
+    static SEMANTIC_TOKENS: OnceCell<Result<RefCell<SemanticTokensProvider>, BackendInitError>> = const {
+        OnceCell::new()
     };
 }
 
@@ -42,17 +42,10 @@ impl LanguageServices {
         callback: impl FnOnce(&TreeSitterParser) -> T,
     ) -> Result<T, BackendInitError> {
         CHAT_PARSER.with(|slot| {
-            initialize_parser(slot);
-            let parser = slot.borrow();
-
-            // `initialize_parser` writes `Some(...)` on first call;
-            // subsequent calls observe `Some(...)` from the same slot.
-            // The expect here is therefore infallible by construction,
-            // dropping it would require a `OnceCell` or `LazyLock`
-            // refactor of the thread-local slot, tracked as a
-            // follow-up in `docs/panic-audit/talkbank-lsp.md`.
-            #[allow(clippy::expect_used)]
-            match parser.as_ref().expect("parser slot initialized") {
+            match slot.get_or_init(|| {
+                TreeSitterParser::new()
+                    .map_err(|error| BackendInitError::Parser(format!("{error:?}")))
+            }) {
                 Ok(parser) => Ok(callback(parser)),
                 Err(error) => Err(error.clone()),
             }
@@ -71,44 +64,25 @@ impl LanguageServices {
         callback: impl FnOnce(&mut SemanticTokensProvider) -> Result<T, LspBackendError>,
     ) -> Result<T, LspBackendError> {
         SEMANTIC_TOKENS.with(|slot| {
-            initialize_semantic_tokens(slot);
-            let mut provider = slot.borrow_mut();
-
-            // Same invariant as `with_parser` above: the slot is
-            // populated unconditionally by `initialize_semantic_tokens`
-            // before this read. Tracked under `OnceCell` migration.
-            #[allow(clippy::expect_used)]
-            match provider.as_mut().expect("semantic-tokens slot initialized") {
-                Ok(provider) => callback(provider),
+            match slot.get_or_init(|| {
+                SemanticTokensProvider::new()
+                    .map(RefCell::new)
+                    .map_err(|error| BackendInitError::SemanticTokens(error.to_string()))
+            }) {
+                Ok(provider) => {
+                    let mut provider = provider.try_borrow_mut().map_err(|_| {
+                        LspBackendError::HighlightFailed {
+                            reason: "semantic-token service is already in use on this thread"
+                                .into(),
+                        }
+                    })?;
+                    callback(&mut provider)
+                }
                 Err(init_error) => Err(LspBackendError::HighlightFailed {
                     reason: init_error.to_string(),
                 }),
             }
         })
-    }
-}
-
-/// Initialize the current thread's parser slot on first use.
-fn initialize_parser(slot: &RefCell<Option<Result<TreeSitterParser, BackendInitError>>>) {
-    if slot.borrow().is_none() {
-        let parser =
-            TreeSitterParser::new().map_err(|error| BackendInitError::Parser(format!("{error:?}")));
-        *slot.borrow_mut() = Some(parser);
-    }
-}
-
-/// Initialize the current thread's semantic-tokens slot on first use.
-fn initialize_semantic_tokens(
-    slot: &RefCell<Option<Result<SemanticTokensProvider, BackendInitError>>>,
-) {
-    if slot.borrow().is_none() {
-        // `SemanticTokensProvider::new` now returns the typed
-        // `LspBackendError`; stringify once at this boundary so the
-        // existing `BackendInitError::SemanticTokens(String)` variant
-        // keeps its wire shape.
-        let provider = SemanticTokensProvider::new()
-            .map_err(|err| BackendInitError::SemanticTokens(err.to_string()));
-        *slot.borrow_mut() = Some(provider);
     }
 }
 
@@ -146,6 +120,9 @@ mod tests {
             .expect("semantic-tokens provider should initialize");
         let second = services
             .with_semantic_tokens_provider(|provider| {
+                let nested = services
+                    .with_semantic_tokens_provider(|nested| nested.semantic_tokens_full(text));
+                assert!(nested.is_err(), "nested access must fail without panicking");
                 provider.semantic_tokens_range(text, 0, text.len())
             })
             .expect("semantic-tokens provider should remain available");

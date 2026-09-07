@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-09-06 20:56 EDT
+**Last modified:** 2026-09-06 22:44 EDT
 
 Guidance for Claude Code in `TalkBank/chatter`. This file carries the rules
 and an index; procedures live in the book (`book/src/`) and in per-module
@@ -19,7 +19,9 @@ one data provider or one workflow. Where a general capability needs
 per-corpus input it takes a documented corpus-agnostic form (the
 `--session-context` JSON seam); producing that input is a downstream concern.
 
-**Git hygiene.** Never `git push --force`, never `--no-verify`, never push to
+**Git hygiene.** Before each push, squash unpublished commits since the last
+push into one reviewed commit. Push rarely and preserve published history.
+Never `git push --force`, never `--no-verify`, never push to
 the `archive` remote, never change visibility or push a shared branch without
 the maintainer's sign-off. `CONTRIBUTING.md` covers content hygiene.
 
@@ -58,11 +60,11 @@ it; a rule with no enforcement is a wish.
    build are `just release-lint`, run before a release, never per push.
 6. **No push without the maintainer's word, ever.** No hook can know this; it
    is the standing rule and has no exception.
-7. **Release: `just fmt`, `just release-lint`, `just gate`, then squash every
-   commit since the last push into one release commit whose message is the
-   CHANGELOG section**, gate once more on the squashed tree (the content stamp
-   survives a squash), push on the maintainer's word, CI, `just release-tag
-   X.Y.Z`. Push rarely; never rewrite already-pushed commits to squash a release.
+7. **Release: `just fmt`, `just release-lint`, `just gate`, then apply the
+   squash rule above with the CHANGELOG section as the release commit message.**
+   The content-bound gate receipt survives a squash; reuse it when the tree is
+   unchanged. Push on the maintainer's word, verify CI, then `just release-tag
+   X.Y.Z`.
 
 **The spec system is the test corpus.** A construct with no spec example is
 the gap to fix. Nothing on this path needs data outside the repository, so

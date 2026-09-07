@@ -1,52 +1,40 @@
 # Panic audit: talkbank-lsp
 
 **Status:** Reference
-**Last updated:** 2026-06-13 21:07 EDT
+**Last updated:** 2026-09-06 23:24 EDT
 
-See [README](README.md) for the shared policy. This page records the
-crate-specific panic surface. The non-test surface was audited 2026-04-29.
+See [README](README.md) for the shared policy. This review covers the
+explicit initialization and execute-command routing panic surfaces. It does
+not establish that every implicit indexing or allocation panic is impossible.
 
-## Surface
+## Language-service initialization
 
-Six inline `#[allow(clippy::unreachable)]` sites, all the same shape:
-request/command routing catch-alls.
+Thread-local parser and highlighter initialization uses `OnceCell<Result<...>>`.
+The initialized result is returned by the cell; there is no independent
+`Option` followed by an initialization `expect`. Initialization failures stay
+cached and propagate through the existing diagnostic/request error boundary.
 
-- `backend/language_services.rs`, `backend/chat_ops/mod.rs`,
-  `backend/participants.rs`, `backend/requests/execute_command.rs`,
-  `backend/analysis.rs`: an `ExecuteCommandRoutingService`-style dispatcher
-  partitions incoming LSP commands by family and forwards each to a handler
-  whose `match` covers only its family. The `_ => unreachable!(...)` arm is
-  reached only if the partition and a handler disagree, an internal bug, so
-  crashing loudly is correct rather than silently misrouting a request.
+The highlighter needs mutable access. Its `RefCell` uses `try_borrow_mut()`;
+nested access returns `HighlightFailed` and the outer request can continue.
+The existing repeated-highlighting test reproduced a `RefCell` panic before
+this change and now covers nested refusal followed by successful outer use.
 
-Backend initialization failures surface as diagnostics, not panics, and
-request handlers degrade gracefully when parser services are unavailable
-(per the LSP reliability rules in the crate `CLAUDE.md`).
+## Execute-command routing
 
-Test code is exempt via `#![cfg_attr(test, allow(...))]` in `src/lib.rs`.
+Decoded `ExecuteCommandRequest` contains a document, participant or CHAT-op
+request enum. Each service accepts only its own enum and matches it
+exhaustively. The separate family tag, flat request dispatch and three
+`unreachable!` fallbacks are removed. Adding a request to one family now
+requires handling it in that service; another family's requests do not type
+check at the service boundary.
 
-## Follow-up: typed sub-enums to remove the catch-alls
-
-The `unreachable!` arms exist only because each handler matches against the
-**flat** command enum, which contains variants from other families. The
-principled removal is a typed partition:
-
-1. Define a sub-enum per family (e.g. `ValidationCommand`, `ChatOpCommand`)
-   containing only that family's variants.
-2. Have the router convert the flat command into exactly one sub-enum once,
-   via a fallible `TryFrom` (the single place that can reject an unknown
-   command, returning a typed error, not a panic).
-3. Each handler then matches its sub-enum **exhaustively**, with no `_`
-   arm and no `unreachable!`.
-
-This turns "this command never reaches this handler" from a runtime
-assertion into a compile-time guarantee, and is the same refactor the CLI's
-`commands/dispatch.rs` routing would take (it points here). It is recorded
-as a follow-up, not yet implemented; the current catch-alls are correct and
-covered by the routing invariant above.
+The JSON-RPC command names, payload decoding and response shapes are unchanged.
+Tests remain exempt from the production panic lints through the crate's
+existing test-only allowances.
 
 ## Verification
 
-`just clippy`, which covers this crate along with every other. See
-[README](README.md#verification) for what it checks and why the per-crate
-command that used to sit here could not fail.
+The library tests exercise request decoding and language services. Strict
+Clippy checks the production panic policy; the full release/push gate also
+runs the existing stdio protocol suite. See [README](README.md#verification)
+for the shared verification policy.
