@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-08-27 14:09 EDT
+**Last modified:** 2026-09-06 20:56 EDT
 
 Guidance for Claude Code in `TalkBank/chatter`. This file carries the rules
 and an index; procedures live in the book (`book/src/`) and in per-module
@@ -59,10 +59,10 @@ it; a rule with no enforcement is a wish.
 6. **No push without the maintainer's word, ever.** No hook can know this; it
    is the standing rule and has no exception.
 7. **Release: `just fmt`, `just release-lint`, `just gate`, then squash every
-   commit since the last tag into one release commit whose message is the
+   commit since the last push into one release commit whose message is the
    CHANGELOG section**, gate once more on the squashed tree (the content stamp
    survives a squash), push on the maintainer's word, CI, `just release-tag
-   X.Y.Z`. Public history is one commit per release.
+   X.Y.Z`. Push rarely; never rewrite already-pushed commits to squash a release.
 
 **The spec system is the test corpus.** A construct with no spec example is
 the gap to fix. Nothing on this path needs data outside the repository, so

@@ -1,7 +1,7 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-09-06 05:47 EDT
+**Last updated:** 2026-09-06
 
 ## Pre-Merge Verification
 
@@ -52,10 +52,11 @@ drift CI would have caught). The procedure:
 2. Write the `## [X.Y.Z]` CHANGELOG section (the one deliberately manual
    step; every gate enforces its presence).
 3. Format, run `just release-lint` and `just gate`, then squash the commits
-   since the previous release tag into one release commit whose message is the
+   since the last push into one release commit whose message is the
    CHANGELOG section. Verify the gate on the squashed tree and, with maintainer
    authorization, push and wait for CI on that commit. The content stamp survives
-   a squash that leaves the checked bytes unchanged.
+   a squash that leaves the checked bytes unchanged. Push rarely; preserve
+   already-published commits instead of rewriting history at release time.
 4. `just release-tag X.Y.Z` tags and pushes `vX.Y.Z`, refusing on a dirty
    tree, an unpushed HEAD, any version-copy drift, a missing CHANGELOG
    section, or CI/Cross-platform not yet green on the exact tagged commit.
@@ -138,9 +139,9 @@ around it rather than to the fix.
    push without the stamp; the stamp hashes tree content, so a gate run on
    uncommitted changes stays valid once the same bytes are committed. Clippy
    and the feature-off build are `just release-lint`, run before a release.
-5. **Releasing:** format, `just release-lint`, gate, squash every commit since the last tag into
+5. **Releasing:** format, `just release-lint`, gate, squash every commit since the last push into
    one release commit carrying the changelog section, gate once more, push,
-   wait for CI, then `just release-tag`. Public history carries one commit
-   per release.
+   wait for CI, then `just release-tag`. Push rarely and preserve already-pushed
+   history.
 
 Nothing on this path needs data that is not in the repository.
