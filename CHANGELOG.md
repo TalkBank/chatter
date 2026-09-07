@@ -9,12 +9,14 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-06
+
 ### Changed
 
 - `talkbank_lsp::backend::utils::LineIndex` borrows its source. Its
   `offset_to_position` method accepts only the offset, preventing callers from
   pairing indexed line starts with another text. This is a breaking Rust API
-  change and requires a minor version bump before the next pre-1.0 release.
+  change.
 
 ### Fixed
 
@@ -2708,7 +2710,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/TalkBank/chatter/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/TalkBank/chatter/compare/v0.20.2...v0.21.0
 [0.20.2]: https://github.com/TalkBank/chatter/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/TalkBank/chatter/compare/v0.20.0...v0.20.1
