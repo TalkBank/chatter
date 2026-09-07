@@ -19,8 +19,8 @@ fn to_diagnostic_indexed(
     uri: Option<&Url>,
     chat_file: Option<&ChatFile>,
 ) -> Diagnostic {
-    let start_pos = index.offset_to_position(text, error.location.span.start);
-    let end_pos = index.offset_to_position(text, error.location.span.end);
+    let start_pos = index.offset_to_position(error.location.span.start);
+    let end_pos = index.offset_to_position(error.location.span.end);
     build_diagnostic(error, text, start_pos, end_pos, uri, chat_file)
 }
 

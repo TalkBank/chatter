@@ -24,9 +24,9 @@ pub fn on_type_formatting(document: &str, position: Position, ch: &str) -> Optio
     }
 
     // Don't insert if there's already a tab after the colon.
-    if line.len() > position.character as usize
-        && line.as_bytes()[position.character as usize] == b'\t'
-    {
+    let byte =
+        crate::backend::utils::position_to_offset(line, Position::new(0, position.character));
+    if line.as_bytes().get(byte) == Some(&b'\t') {
         return None;
     }
 

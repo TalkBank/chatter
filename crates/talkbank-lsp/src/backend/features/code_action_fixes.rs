@@ -1,9 +1,7 @@
 use talkbank_model::ErrorCode;
 use tower_lsp::lsp_types::*;
 
-use super::builders::{
-    delete_diagnostic_line, document_end_position, insert_at, replace_diagnostic_range,
-};
+use super::builders::{delete_diagnostic_line, insert_at, replace_diagnostic_range};
 
 /// Build the quick-fix actions offered for one diagnostic, if its code has
 /// a verified fix.
@@ -123,7 +121,8 @@ fn undeclared_speaker_action(uri: &Url, diagnostic: &Diagnostic, doc: &str) -> O
         uri,
         Position {
             line: line_idx as u32,
-            character: line_text.len() as u32,
+            character: crate::backend::utils::offset_to_position(line_text, line_text.len() as u32)
+                .character,
         },
         format!(", {speaker} Participant"),
         format!("Add '{speaker}' to @Participants"),
@@ -144,7 +143,13 @@ fn insert_at_end(uri: &Url, doc: &str, text: &str, title: &str) -> CodeAction {
         format!("\n{text}")
     };
 
-    insert_at(uri, document_end_position(doc), insert_text, title, None)
+    insert_at(
+        uri,
+        crate::backend::utils::offset_to_position(doc, doc.len() as u32),
+        insert_text,
+        title,
+        None,
+    )
 }
 
 fn insert_at_start(uri: &Url, text: &str, title: &str) -> CodeAction {

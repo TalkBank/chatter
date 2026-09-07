@@ -11,9 +11,7 @@ use serde_json::Value;
 use tower_lsp::lsp_types::{ExecuteCommandParams, Position, Url};
 
 use super::LspBackendError;
-use super::execute_command_args::{
-    parse_json_argument, parse_position_argument, parse_uri_argument, parse_uri_string,
-};
+use super::execute_command_args::{parse_json_argument, parse_uri_argument, parse_uri_string};
 
 /// One execute-command identifier supported by the TalkBank language server.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -124,7 +122,10 @@ impl DocumentPositionRequest {
     fn from_arguments(arguments: &[Value]) -> Result<Self, LspBackendError> {
         Ok(Self {
             uri: parse_uri_argument(arguments, 0, "document URI")?,
-            position: parse_position_argument(arguments.get(1)),
+            position: match arguments.get(1) {
+                None => Position::default(),
+                Some(_) => parse_json_argument(arguments, 1, "cursor position")?,
+            },
         })
     }
 }
@@ -340,11 +341,6 @@ impl ExecuteCommandRequest {
     }
 }
 
-// Argument-parsing helpers (`expect_string_argument`,
-// `parse_uri_argument`, `parse_uri_string`, `parse_json_argument`,
-// `parse_position_argument`) moved to `execute_command_args`,
-// imported at the top of this file.
-
 #[cfg(test)]
 mod tests {
     //! Unit tests for execute-command decoding.
@@ -380,6 +376,28 @@ mod tests {
         assert_eq!(request.uri.as_str(), "file:///tmp/test.cha");
         assert_eq!(request.position.line, 0);
         assert_eq!(request.position.character, 0);
+    }
+
+    /// Invalid supplied coordinates must not be coerced into a different cursor.
+    #[test]
+    fn parse_dependency_graph_rejects_invalid_position() {
+        for position in [
+            json!({"line": -1, "character": 0}),
+            json!({"line": 0, "character": 4294967296_u64}),
+            json!({"line": 0.5, "character": 0}),
+            json!({"line": 0}),
+            json!(null),
+        ] {
+            let result = ExecuteCommandRequest::parse(ExecuteCommandParams {
+                command: "talkbank/showDependencyGraph".to_string(),
+                arguments: vec![json!("file:///tmp/test.cha"), position.clone()],
+                work_done_progress_params: Default::default(),
+            });
+            assert!(
+                matches!(result, Err(LspBackendError::ArgumentInvalid { .. })),
+                "invalid position was accepted: {position}"
+            );
+        }
     }
 
     /// Decoding scoped-find should normalize the JSON payload into a typed request.

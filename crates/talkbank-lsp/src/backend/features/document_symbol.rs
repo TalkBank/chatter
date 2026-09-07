@@ -48,7 +48,7 @@ pub fn document_symbol(
         line: 0,
         character: 0,
     };
-    let file_end = index.offset_to_position(document, doc_len as u32);
+    let file_end = index.offset_to_position(doc_len as u32);
     let file_range = Range {
         start: file_start,
         end: file_end,
@@ -70,8 +70,8 @@ pub fn document_symbol(
         let block_start = main_span.start;
         let block_end = utterance_block_end(utterance);
 
-        let start_pos = index.offset_to_position(document, block_start);
-        let end_pos = index.offset_to_position(document, block_end);
+        let start_pos = index.offset_to_position(block_start);
+        let end_pos = index.offset_to_position(block_end);
 
         // Label: "*SPEAKER: …" truncated at 60 chars for readability.
         let speaker = utterance.main.speaker.as_str();
@@ -117,8 +117,8 @@ pub fn document_symbol(
             && let Some((start_off, label)) = gem_stack.pop()
         {
             let end_off = byte_pos + line_len - 1;
-            let start_pos = index.offset_to_position(document, start_off);
-            let end_pos = index.offset_to_position(document, end_off);
+            let start_pos = index.offset_to_position(start_off);
+            let end_pos = index.offset_to_position(end_off);
             #[allow(deprecated)]
             gem_symbols.push(DocumentSymbol {
                 name: format!("Gem: {label}"),
@@ -149,7 +149,7 @@ pub fn document_symbol(
     // Build the "Headers" namespace symbol.
     // -----------------------------------------------------------------------
     let headers_end_pos = first_utterance_offset
-        .map(|off| index.offset_to_position(document, off.saturating_sub(1)))
+        .map(|off| index.offset_to_position(off.saturating_sub(1)))
         .unwrap_or(file_end);
 
     #[allow(deprecated)]
@@ -174,7 +174,7 @@ pub fn document_symbol(
     // Build the "Utterances" namespace symbol wrapping all utterance children.
     // -----------------------------------------------------------------------
     let utterances_start = first_utterance_offset
-        .map(|off| index.offset_to_position(document, off))
+        .map(|off| index.offset_to_position(off))
         .unwrap_or(file_end);
 
     #[allow(deprecated)]

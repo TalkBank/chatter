@@ -46,7 +46,11 @@ pub fn workspace_symbols_for_document(uri: &Url, doc: &str, query: &str) -> Vec<
                     },
                     end: Position {
                         line: line_idx as u32,
-                        character: line.len() as u32,
+                        character: crate::backend::utils::offset_to_position(
+                            line,
+                            line.len() as u32,
+                        )
+                        .character,
                     },
                 },
             },

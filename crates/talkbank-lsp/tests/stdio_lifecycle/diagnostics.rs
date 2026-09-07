@@ -102,3 +102,106 @@ fn edited_diagnostics_match_fresh_open() {
     editor.send(json!({"jsonrpc":"2.0","method":"exit"}));
     editor.expect_exit(0);
 }
+
+#[test]
+fn utf16_incremental_edit_preserves_neighboring_text() {
+    let mut editor = Editor::start();
+    editor.initialize();
+    // CRLF input ensures formatting returns the current document's text.
+    let source = SOURCE
+        .replace("@Begin\n", "@Begin\n@Comment:\ta😀b\n")
+        .replace('\n', "\r\n");
+    editor.open(&source);
+    assert_eq!(editor.diagnostics(), json!([]));
+    // @Comment:\t occupies ten units; a + emoji occupy three UTF-16 units.
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+        "textDocument":{"uri":URI,"version":2},"contentChanges":[{
+            "range":{"start":{"line":2,"character":13},"end":{"line":2,"character":14}},
+            "text":"X"}]}}),
+    );
+    editor.send(
+        json!({"jsonrpc":"2.0","id":8,"method":"textDocument/formatting","params":{
+        "textDocument":{"uri":URI},"options":{"tabSize":4,"insertSpaces":false}}}),
+    );
+    let response = editor.response(8);
+    assert!(response["error"].is_null(), "{response}");
+    assert_eq!(
+        response["result"][0]["range"]["start"],
+        json!({"line":0,"character":0})
+    );
+    assert_eq!(
+        response["result"][0]["range"]["end"],
+        json!({"line":source.lines().count(),"character":0})
+    );
+    let text = response["result"][0]["newText"].as_str().unwrap();
+    assert!(text.contains("@Comment:\ta😀X\n"), "{text}");
+    assert!(!text.contains("a😀bX"), "{text}");
+    let formatted = text.to_owned();
+    // The actual formatter, not a copied implementation, owns idempotence.
+    editor.send(
+        json!({"jsonrpc":"2.0","method":"textDocument/didChange","params":{
+        "textDocument":{"uri":URI,"version":3},"contentChanges":[{"text":formatted}]}}),
+    );
+    editor.send(
+        json!({"jsonrpc":"2.0","id":9,"method":"textDocument/formatting","params":{
+        "textDocument":{"uri":URI},"options":{"tabSize":4,"insertSpaces":false}}}),
+    );
+    let unchanged = editor.response(9);
+    assert!(unchanged["error"].is_null(), "{unchanged}");
+    assert!(unchanged["result"].is_null(), "{unchanged}");
+    editor.send(
+        json!({"jsonrpc":"2.0","id":12,"method":"textDocument/selectionRange","params":{
+        "textDocument":{"uri":URI},"positions":[{"line":2,"character":13}]}}),
+    );
+    let selection = editor.response(12);
+    assert!(selection["error"].is_null(), "{selection}");
+    assert_eq!(
+        selection["result"][0]["range"],
+        json!({
+        "start":{"line":2,"character":10},"end":{"line":2,"character":14}})
+    );
+    for (id, method, params) in [
+        (
+            10,
+            "textDocument/semanticTokens/full",
+            json!({"textDocument":{"uri":URI}}),
+        ),
+        (
+            11,
+            "textDocument/semanticTokens/range",
+            json!({"textDocument":{"uri":URI},
+            "range":{"start":{"line":0,"character":0},"end":{"line":source.lines().count(),"character":0}}}),
+        ),
+    ] {
+        editor.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}));
+        let response = editor.response(id);
+        assert!(response["error"].is_null(), "{response}");
+        let data = response["result"]["data"].as_array().unwrap();
+        assert!(!data.is_empty());
+        let mut line = 0;
+        let mut column = 0;
+        let (tokens, remainder) = data.as_chunks::<5>();
+        assert!(remainder.is_empty());
+        for token in tokens {
+            let delta = token[0].as_u64().unwrap();
+            line += delta;
+            column = if delta == 0 { column } else { 0 } + token[1].as_u64().unwrap();
+            let length = token[2].as_u64().unwrap();
+            let width = formatted
+                .lines()
+                .nth(line as usize)
+                .unwrap()
+                .encode_utf16()
+                .count() as u64;
+            assert!(
+                column + length <= width,
+                "{method}: token {token:?} exceeds UTF-16 line {line} width {width}"
+            );
+        }
+    }
+    editor.send(json!({"jsonrpc":"2.0","id":2,"method":"shutdown"}));
+    assert!(editor.response(2)["error"].is_null());
+    editor.send(json!({"jsonrpc":"2.0","method":"exit"}));
+    editor.expect_exit(0);
+}

@@ -28,3 +28,16 @@ fn test_empty_document() {
     assert_offset_to_position(text, 0, 0, 0);
     assert_position_to_offset(text, 0, 0, 0);
 }
+
+
+/// UTF-16 columns exclude line endings and never split UTF-8 characters.
+#[test]
+fn test_utf16_and_crlf_boundaries() {
+    let text = "😀\r\n";
+    for (offset, line, character) in [(1, 0, 0), (3, 0, 0), (4, 0, 2), (5, 0, 2), (6, 1, 0), (99, 1, 0)] {
+        assert_offset_to_position(text, offset, line, character);
+    }
+    for (line, character, offset) in [(0, 1, 0), (0, 2, 4), (0, 99, 4), (1, 0, 6)] {
+        assert_position_to_offset(text, line, character, offset);
+    }
+}

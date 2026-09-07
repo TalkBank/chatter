@@ -7,7 +7,7 @@ use crate::position_conversion::{assert_offset_to_position, assert_position_to_o
 fn test_emoji_offset_to_position() {
     let text = "hello 😀 world";
 
-    for (offset, line, character) in [(0, 0, 0), (6, 0, 6), (10, 0, 7), (11, 0, 8)] {
+    for (offset, line, character) in [(0, 0, 0), (6, 0, 6), (10, 0, 8), (11, 0, 9)] {
         assert_offset_to_position(text, offset, line, character);
     }
 }
@@ -17,7 +17,7 @@ fn test_emoji_offset_to_position() {
 fn test_emoji_position_to_offset() {
     let text = "hello 😀 world";
 
-    for (line, character, expected_offset) in [(0, 0, 0), (0, 6, 6), (0, 7, 10), (0, 8, 11)] {
+    for (line, character, expected_offset) in [(0, 0, 0), (0, 6, 6), (0, 8, 10), (0, 9, 11)] {
         assert_position_to_offset(text, line, character, expected_offset);
     }
 }
@@ -67,7 +67,7 @@ fn test_accented_position_to_offset() {
 fn test_mixed_multibyte_offset_to_position() {
     let text = "a é 中 😀 b";
 
-    for (offset, line, character) in [(0, 0, 0), (2, 0, 2), (5, 0, 4), (9, 0, 6), (14, 0, 8)] {
+    for (offset, line, character) in [(0, 0, 0), (2, 0, 2), (5, 0, 4), (9, 0, 6), (14, 0, 9)] {
         assert_offset_to_position(text, offset, line, character);
     }
 }

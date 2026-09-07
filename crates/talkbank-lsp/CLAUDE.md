@@ -121,6 +121,14 @@ wrong tool when one already does.
 
 ## Other LSP-specific rules
 
+- **Position coordinates are UTF-16 code units.** The server advertises the
+  [LSP default encoding](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#position).
+  Use `backend::utils::LineIndex` for repeated outgoing conversions; it borrows
+  its source and accepts only offsets. Use `position_to_offset` for incoming
+  cursor/edit coordinates. Line endings are excluded from columns, and a final
+  newline creates an empty final line. Semantic captures are split into
+  single-line tokens. The real stdio regression exercises edits, formatting,
+  selection and both semantic-token endpoints with non-BMP characters.
 - **No panics in request handlers.** Per the workspace rule, plus the
   LSP-specific reason: a panic tears down the server and the client
   usually respawns with stale state. Always return typed errors or empty

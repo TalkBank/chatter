@@ -2,7 +2,7 @@
 //!
 //! These helpers take raw `serde_json::Value` lists, as the LSP
 //! client supplies them, and lift each position into a typed value
-//! (`String`, [`Url`], deserialized struct, or [`Position`]). Factored
+//! (`String`, [`Url`], or a deserialized struct). Factored
 //! out of `execute_commands.rs` so the top-level request-dispatch
 //! file stays focused on command identifiers and request-shape
 //! definitions; these parsers have no state beyond their arguments
@@ -10,7 +10,7 @@
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use tower_lsp::lsp_types::{Position, Url};
+use tower_lsp::lsp_types::Url;
 
 use crate::backend::error::LspBackendError;
 
@@ -60,22 +60,4 @@ pub(super) fn parse_json_argument<T: DeserializeOwned>(
         label,
         reason: error.to_string(),
     })
-}
-
-/// Parse an optional position argument, defaulting to the start of the document.
-pub(super) fn parse_position_argument(argument: Option<&Value>) -> Position {
-    if let Some(Value::Object(object)) = argument
-        && let (Some(Value::Number(line)), Some(Value::Number(character))) =
-            (object.get("line"), object.get("character"))
-    {
-        return Position {
-            line: line.as_u64().unwrap_or(0) as u32,
-            character: character.as_u64().unwrap_or(0) as u32,
-        };
-    }
-
-    Position {
-        line: 0,
-        character: 0,
-    }
 }

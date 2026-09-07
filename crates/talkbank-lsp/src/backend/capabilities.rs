@@ -20,6 +20,7 @@ use crate::semantic_tokens::SemanticTokensProvider;
 pub(super) fn build_initialize_result() -> InitializeResult {
     InitializeResult {
         capabilities: ServerCapabilities {
+            position_encoding: Some(PositionEncodingKind::UTF16),
             text_document_sync: Some(TextDocumentSyncCapability::Kind(
                 TextDocumentSyncKind::INCREMENTAL,
             )),

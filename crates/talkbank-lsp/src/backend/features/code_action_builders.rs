@@ -87,12 +87,3 @@ pub(super) fn delete_diagnostic_line(
         Some(diagnostic),
     )
 }
-
-pub(super) fn document_end_position(doc: &str) -> Position {
-    let line_count = doc.lines().count() as u32;
-    let last_line_len = doc.lines().last().map_or(0, |line| line.len() as u32);
-    Position {
-        line: line_count.saturating_sub(1),
-        character: last_line_len,
-    }
-}

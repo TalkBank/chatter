@@ -36,7 +36,7 @@ fn extract_edit(actions: &[CodeActionOrCommand], uri: &Url) -> TextEdit {
 #[test]
 fn test_fix_undeclared_speaker_adds_to_participants() {
     let uri = Url::parse("file:///test.cha").unwrap();
-    let doc = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n*CHI:\thello .\n*FOO:\thi .\n@End\n";
+    let doc = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI José Child\n*CHI:\thello .\n*FOO:\thi .\n@End\n";
     let diag = make_diagnostic(
         "E308",
         "Speaker 'FOO' is not in the participant list",
@@ -49,6 +49,7 @@ fn test_fix_undeclared_speaker_adds_to_participants() {
     let edit = extract_edit(&actions, &uri);
     assert_eq!(edit.new_text, ", FOO Participant");
     assert_eq!(edit.range.start.line, 3);
+    assert_eq!(edit.range.start.character, 29);
 }
 
 #[test]
@@ -58,10 +59,10 @@ fn test_fix_missing_end_inserts_at_eof() {
     let diag = make_diagnostic("E502", "Missing @End", 0, 0, 0);
 
     let actions = code_action(uri.clone(), vec![diag], Some(doc)).unwrap();
-    match &actions[0] {
-        CodeActionOrCommand::CodeAction(action) => assert!(action.title.contains("@End")),
-        _ => panic!("Expected CodeAction"),
-    }
+    let edit = extract_edit(&actions, &uri);
+    assert_eq!(edit.range.start, Position::new(3, 0));
+    assert_eq!(edit.range.end, edit.range.start);
+    assert_eq!(edit.new_text, "@End\n");
 }
 
 #[test]

@@ -56,9 +56,9 @@ pub fn folding_range(
             continue;
         }
 
-        let main_line = index.offset_to_position(document, main_start).line;
+        let main_line = index.offset_to_position(main_start).line;
         let block_end = utterance_block_end(utterance);
-        let end_line = index.offset_to_position(document, block_end).line;
+        let end_line = index.offset_to_position(block_end).line;
 
         if end_line > main_line {
             ranges.push(FoldingRange {
@@ -74,7 +74,7 @@ pub fn folding_range(
 
     // Header block fold: line 0 → line before first utterance.
     if let Some(first_start) = first_utterance_start {
-        let first_utt_line = index.offset_to_position(document, first_start).line;
+        let first_utt_line = index.offset_to_position(first_start).line;
         if first_utt_line > 1 {
             ranges.push(FoldingRange {
                 start_line: 0,

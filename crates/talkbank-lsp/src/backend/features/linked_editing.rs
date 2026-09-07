@@ -73,8 +73,8 @@ fn collect_speaker_ranges(
         && let Ok(text) = node.utf8_text(doc.as_bytes())
         && text.trim() == speaker_name
     {
-        let start = index.offset_to_position(doc, node.start_byte() as u32);
-        let end = index.offset_to_position(doc, node.end_byte() as u32);
+        let start = index.offset_to_position(node.start_byte() as u32);
+        let end = index.offset_to_position(node.end_byte() as u32);
         ranges.push(Range { start, end });
     }
     let mut cursor = node.walk();

@@ -5,6 +5,8 @@
 
 use tower_lsp::lsp_types::*;
 
+use crate::backend::utils::{offset_to_position, position_to_offset};
+
 /// Build nested selection ranges for CHAT structure at cursor positions.
 pub fn selection_range(document: &str, positions: &[Position]) -> Vec<SelectionRange> {
     positions
@@ -24,7 +26,7 @@ fn build_selection_range(document: &str, position: Position) -> SelectionRange {
     let line = lines[line_idx];
 
     // Level 1: Current word (find word boundaries around cursor).
-    let col = position.character as usize;
+    let col = position_to_offset(line, Position::new(0, position.character));
     let word_range = find_word_range(line, col, position.line);
 
     // Level 2: Line content (after the tab delimiter, if any).
@@ -38,7 +40,7 @@ fn build_selection_range(document: &str, position: Position) -> SelectionRange {
         },
         end: Position {
             line: position.line,
-            character: line.len() as u32,
+            character: offset_to_position(line, line.len() as u32).character,
         },
     };
 
@@ -46,17 +48,12 @@ fn build_selection_range(document: &str, position: Position) -> SelectionRange {
     let block_range = find_utterance_block(lines.as_slice(), line_idx);
 
     // Level 5: Entire file.
-    let file_end_line = lines.len().saturating_sub(1);
-    let file_end_char = lines.last().map_or(0, |l| l.len()) as u32;
     let file_range = Range {
         start: Position {
             line: 0,
             character: 0,
         },
-        end: Position {
-            line: file_end_line as u32,
-            character: file_end_char,
-        },
+        end: offset_to_position(document, document.len() as u32),
     };
 
     // Build nested chain from innermost to outermost.
@@ -99,11 +96,11 @@ fn find_word_range(line: &str, col: usize, line_num: u32) -> Range {
     Range {
         start: Position {
             line: line_num,
-            character: start as u32,
+            character: offset_to_position(line, start as u32).character,
         },
         end: Position {
             line: line_num,
-            character: end as u32,
+            character: offset_to_position(line, end as u32).character,
         },
     }
 }
@@ -114,11 +111,11 @@ fn find_content_range(line: &str, line_num: u32) -> Range {
     Range {
         start: Position {
             line: line_num,
-            character: content_start as u32,
+            character: offset_to_position(line, content_start as u32).character,
         },
         end: Position {
             line: line_num,
-            character: line.len() as u32,
+            character: offset_to_position(line, line.len() as u32).character,
         },
     }
 }
@@ -158,7 +155,9 @@ fn find_utterance_block(lines: &[&str], line_idx: usize) -> Range {
         },
         end: Position {
             line: block_end as u32,
-            character: lines.get(block_end).map_or(0, |l| l.len()) as u32,
+            character: lines.get(block_end).map_or(0, |line| {
+                offset_to_position(line, line.len() as u32).character
+            }),
         },
     }
 }

@@ -128,7 +128,7 @@ fn header_hover(document: &str, position: Position) -> Option<String> {
 /// CHAT bullets use U+0015 (NAK) as the delimiter: `\x15NNN_NNN\x15`.
 fn bullet_hover(document: &str, position: Position) -> Option<String> {
     let line = document.lines().nth(position.line as usize)?;
-    let col = position.character as usize;
+    let col = crate::backend::utils::position_to_offset(line, Position::new(0, position.character));
 
     const BULLET: char = '\u{0015}';
 

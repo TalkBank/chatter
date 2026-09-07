@@ -11,6 +11,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::backend::LspBackendError;
+use crate::backend::utils::LineIndex;
 use crate::highlight::{HighlightConfig, TokenType};
 use tower_lsp::lsp_types::*;
 
@@ -46,41 +47,13 @@ impl SemanticTokensProvider {
         &mut self,
         text: &str,
     ) -> Result<Vec<SemanticToken>, LspBackendError> {
-        let tokens = self.config.highlight(text).map_err(lift_highlight_error)?;
-
-        // Convert to LSP SemanticToken format (delta-encoded)
-        let mut lsp_tokens = Vec::new();
-        let mut prev_line = 0;
-        let mut prev_char = 0;
-
-        for token in tokens {
-            let (line, char) = byte_offset_to_position(text, token.start);
-            let length = (token.end - token.start) as u32;
-
-            lsp_tokens.push(SemanticToken {
-                delta_line: line - prev_line,
-                delta_start: if line == prev_line {
-                    char - prev_char
-                } else {
-                    char
-                },
-                length,
-                token_type: Self::token_type_to_index(token.token_type),
-                token_modifiers_bitset: 0,
-            });
-
-            prev_line = line;
-            prev_char = char;
-        }
-
-        Ok(lsp_tokens)
+        self.semantic_tokens_range(text, 0, text.len())
     }
 
-    /// Generate semantic tokens for a range of the document.
+    /// Highlight tokens overlapping a byte range, encoded in UTF-16 units.
     ///
-    /// Highlights the full document then filters to tokens overlapping the given
-    /// byte range `[start_offset, end_offset)`. Delta encoding restarts from (0,0)
-    /// for the first token in the range.
+    /// Captures may include line endings or span lines. Split them into legal
+    /// single-line tokens; clients need not advertise multiline-token support.
     pub fn semantic_tokens_range(
         &mut self,
         text: &str,
@@ -88,49 +61,35 @@ impl SemanticTokensProvider {
         end_offset: usize,
     ) -> Result<Vec<SemanticToken>, LspBackendError> {
         let tokens = self.config.highlight(text).map_err(lift_highlight_error)?;
-
+        let index = LineIndex::new(text);
         let mut lsp_tokens = Vec::new();
-        let mut prev_line = 0;
-        let mut prev_char = 0;
-        let mut first = true;
-
+        let mut previous = Position::default();
         for token in tokens {
-            // Skip tokens entirely before or after the range.
             if token.end <= start_offset || token.start >= end_offset {
                 continue;
             }
-
-            let (line, char) = byte_offset_to_position(text, token.start);
-            let length = (token.end - token.start) as u32;
-
-            if first {
-                // First token in range: absolute position.
-                lsp_tokens.push(SemanticToken {
-                    delta_line: line,
-                    delta_start: char,
-                    length,
-                    token_type: Self::token_type_to_index(token.token_type),
-                    token_modifiers_bitset: 0,
-                });
-                first = false;
-            } else {
-                lsp_tokens.push(SemanticToken {
-                    delta_line: line - prev_line,
-                    delta_start: if line == prev_line {
-                        char - prev_char
-                    } else {
-                        char
-                    },
-                    length,
-                    token_type: Self::token_type_to_index(token.token_type),
-                    token_modifiers_bitset: 0,
-                });
+            let mut offset = token.start;
+            for part in text[token.start..token.end].split_inclusive('\n') {
+                let content = part.strip_suffix('\n').unwrap_or(part);
+                let content = content.strip_suffix('\r').unwrap_or(content);
+                if !content.is_empty() {
+                    let position = index.offset_to_position(offset as u32);
+                    lsp_tokens.push(SemanticToken {
+                        delta_line: position.line - previous.line,
+                        delta_start: if position.line == previous.line {
+                            position.character - previous.character
+                        } else {
+                            position.character
+                        },
+                        length: content.encode_utf16().count() as u32,
+                        token_type: Self::token_type_to_index(token.token_type),
+                        token_modifiers_bitset: 0,
+                    });
+                    previous = position;
+                }
+                offset += part.len();
             }
-
-            prev_line = line;
-            prev_char = char;
         }
-
         Ok(lsp_tokens)
     }
 
@@ -179,27 +138,6 @@ impl SemanticTokensProvider {
             token_modifiers: vec![],
         }
     }
-}
-
-/// Convert a byte offset to an (line, character) position for LSP API consumption.
-///
-/// Allows the semantic tokens provider to translate capture ranges (byte-based) into the line/column
-/// coordinates mandated by the LSP protocol and described in the CHAT file layout.
-fn byte_offset_to_position(text: &str, offset: usize) -> (u32, u32) {
-    let mut line = 0;
-    let mut line_start = 0;
-
-    for (idx, ch) in text.char_indices() {
-        if idx >= offset {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            line_start = idx + 1;
-        }
-    }
-
-    (line, (offset - line_start) as u32)
 }
 
 #[cfg(test)]
@@ -258,16 +196,6 @@ mod tests {
             "Range should have at least one token for @End"
         );
         Ok(())
-    }
-
-    /// Tests byte offset to position.
-    #[test]
-    fn test_byte_offset_to_position() {
-        let text = "hello\nworld";
-        assert_eq!(byte_offset_to_position(text, 0), (0, 0));
-        assert_eq!(byte_offset_to_position(text, 5), (0, 5)); // at newline
-        assert_eq!(byte_offset_to_position(text, 6), (1, 0)); // start of line 2
-        assert_eq!(byte_offset_to_position(text, 10), (1, 4)); // 'l' in world
     }
 
     /// Tests that the legend contains the expected token types.
@@ -430,28 +358,5 @@ mod tests {
             }
             assert!(token.length > 0, "Token {} has zero length", i);
         }
-    }
-
-    /// Tests byte_offset_to_position for multi-line text with trailing newline.
-    #[test]
-    fn test_byte_offset_to_position_trailing_newline() {
-        let text = "abc\ndef\n";
-        assert_eq!(byte_offset_to_position(text, 3), (0, 3)); // at first \n
-        assert_eq!(byte_offset_to_position(text, 4), (1, 0)); // start of "def"
-        assert_eq!(byte_offset_to_position(text, 7), (1, 3)); // at second \n
-    }
-
-    /// Tests byte_offset_to_position at offset 0 (beginning of text).
-    #[test]
-    fn test_byte_offset_to_position_at_start() {
-        let text = "@UTF8\n@Begin\n";
-        assert_eq!(byte_offset_to_position(text, 0), (0, 0));
-    }
-
-    /// Tests byte_offset_to_position at end of text.
-    #[test]
-    fn test_byte_offset_to_position_at_end() {
-        let text = "abc";
-        assert_eq!(byte_offset_to_position(text, 3), (0, 3));
     }
 }

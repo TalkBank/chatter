@@ -96,7 +96,7 @@ pub(crate) fn build_alignment_sidecar(
                         alignment_index: idx,
                         text: format_content_item(content),
                         range: editor_target_span(content)
-                            .and_then(|span| span_to_range(span, text, &index)),
+                            .and_then(|span| span_to_range(span, &index)),
                         word_id,
                         inline_timing,
                     });
@@ -151,7 +151,7 @@ pub(crate) fn build_alignment_sidecar(
             AlignmentSidecarUtterance {
                 utterance_index,
                 speaker: utterance.main.speaker.to_string(),
-                range: span_to_range(utterance.main.span, text, &index),
+                range: span_to_range(utterance.main.span, &index),
                 timing: utterance.main.content.bullet.as_ref().map(bullet_to_timing),
                 main_units,
                 alignments: links,
@@ -198,13 +198,13 @@ where
         .collect()
 }
 
-fn span_to_range(span: Span, text: &str, index: &utils::LineIndex) -> Option<Range> {
+fn span_to_range(span: Span, index: &utils::LineIndex) -> Option<Range> {
     if span.is_dummy() {
         return None;
     }
     Some(Range {
-        start: index.offset_to_position(text, span.start),
-        end: index.offset_to_position(text, span.end),
+        start: index.offset_to_position(span.start),
+        end: index.offset_to_position(span.end),
     })
 }
 

@@ -7,7 +7,7 @@ use crate::position_conversion::assert_offset_to_position;
 fn test_chat_file_with_emoji() {
     let text = "@UTF8\n@Begin\n*CHI:\thello 😀 world .\n@End\n";
 
-    for (offset, line, character) in [(13, 2, 0), (19, 2, 6), (25, 2, 12), (29, 2, 13)] {
+    for (offset, line, character) in [(13, 2, 0), (19, 2, 6), (25, 2, 12), (29, 2, 14)] {
         assert_offset_to_position(text, offset, line, character);
     }
 }

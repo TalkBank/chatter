@@ -56,9 +56,7 @@ pub fn generate_alignment_hints(
     let index = LineIndex::new(text);
 
     for utterance in chat_file.utterances() {
-        let main_line = index
-            .offset_to_position(text, utterance.main.span.start)
-            .line;
+        let main_line = index.offset_to_position(utterance.main.span.start).line;
         if main_line < range.start.line || main_line > range.end.line {
             continue;
         }
@@ -72,7 +70,7 @@ pub fn generate_alignment_hints(
         {
             let counts = MismatchCounts::from_pairs(mor_result.pairs());
             hints.push(alignment_hint(
-                index.offset_to_position(text, utterance.main.span.end),
+                index.offset_to_position(utterance.main.span.end),
                 format!(
                     " [alignment: {} main ↔ {} mor]",
                     counts.source, counts.target
@@ -85,13 +83,13 @@ pub fn generate_alignment_hints(
             && !gra_result.is_error_free()
             && let Some(gra_tier) = utterance.gra_tier()
         {
-            let gra_line = index.offset_to_position(text, gra_tier.span.start).line;
+            let gra_line = index.offset_to_position(gra_tier.span.start).line;
             if gra_line < range.start.line || gra_line > range.end.line {
                 continue;
             }
             let counts = MismatchCounts::from_pairs(gra_result.pairs());
             hints.push(alignment_hint(
-                index.offset_to_position(text, gra_tier.span.end),
+                index.offset_to_position(gra_tier.span.end),
                 format!(
                     " [alignment: {} gra ↔ {} mor]",
                     counts.target, counts.source
