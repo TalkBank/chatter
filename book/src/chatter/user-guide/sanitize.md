@@ -1,7 +1,7 @@
 # Sanitize (`chatter debug sanitize`)
 
 **Status:** Current
-**Last updated:** 2026-09-08 18:50 EDT
+**Last updated:** 2026-09-09 08:49 EDT
 
 `chatter debug sanitize` strips contributor lexical content from a CHAT
 file while preserving structure (timing bullets, `%wor` per-word bullets,

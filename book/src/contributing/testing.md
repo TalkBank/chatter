@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-09-08 02:33 EDT
+**Last modified:** 2026-09-09 08:49 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in

@@ -1,7 +1,7 @@
 # Alignment
 
 **Status:** Current
-**Last modified:** 2026-09-08 19:57 EDT
+**Last modified:** 2026-09-09 08:49 EDT
 
 Alignment in the toolchain operates at two structural layers, plus a
 separate overlap-marker pass. Tier alignment is structural (counting and

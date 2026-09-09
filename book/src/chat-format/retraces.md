@@ -1,7 +1,7 @@
 # Retraces and Repetitions
 
 **Status:** Current
-**Last updated:** 2026-09-08 22:31 EDT
+**Last updated:** 2026-09-09 08:49 EDT
 
 Retraces mark content that the speaker said but then corrected, repeated,
 or abandoned. They are one of the most consequential constructs in CHAT

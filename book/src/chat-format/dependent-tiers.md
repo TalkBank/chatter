@@ -1,7 +1,7 @@
 # Dependent Tiers
 
 **Status:** Reference
-**Last updated:** 2026-09-08 03:12 EDT
+**Last updated:** 2026-09-09 08:49 EDT
 
 Dependent tiers appear on lines beginning with `%` immediately after an utterance. They provide annotations linked to the main tier content.
 

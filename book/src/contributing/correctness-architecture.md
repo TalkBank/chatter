@@ -1,7 +1,7 @@
 # Correctness Architecture
 
 **Status:** Current
-**Last modified:** 2026-09-08 18:07 EDT
+**Last modified:** 2026-09-09 08:49 EDT
 
 This is the target design of chatter's correctness machinery, written for the
 maintainer who inherits it. It is not a patch list and not a description of the

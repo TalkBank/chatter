@@ -1,7 +1,7 @@
 # Wide Struct Audit
 
 **Status:** Current
-**Last modified:** 2026-09-08 18:27 EDT
+**Last modified:** 2026-09-09 08:49 EDT
 
 A repository-wide audit rule for struct shape. Applies to the crates in
 `TalkBank/chatter` (model, parser, transform, CLI, CLAN, LSP, cache, and

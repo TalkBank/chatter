@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-09-08 19:58 EDT
+**Last modified:** 2026-09-09 08:49 EDT
 
 Guidance for Claude Code in `TalkBank/chatter`. This file carries the rules
 and an index; procedures live in the book (`book/src/`) and in per-module
