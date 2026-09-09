@@ -9,6 +9,40 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-10
+
+### Changed
+
+- Structural merge now consumes ordered AST streams rather than collecting
+  headers and sorting utterances. Interleaved body headers and dependent-tier
+  order survive; selected utterances without timing or with reversed source
+  starts are refused. Section markers use neighboring source timing bounds,
+  and ambiguous cross-source placement is refused instead of guessed.
+- `MergeError` has new variants for timing, section-placement, metadata-order,
+  participant-join and output-validation failures. Exhaustive library matches
+  must handle them. `Merged` and `Reported` retain a validated document;
+  `Reported::into_file` relinquishes that proof for subsequent edits.
+
+### Fixed
+
+- Merge builds the derived participant map through the canonical header join
+  and validates the assembled AST, including tier alignment, before returning
+  success. Callers no longer need serialization and reparsing to obtain a
+  consistent participant map.
+- Donor IDs extend the contiguous opening ID block; donor body comments remain
+  at their source position. An opening ID after a comment is refused rather
+  than silently reordered.
+
+### Added
+
+- `WorSlotMembershipPolicy::admits(&Word) -> bool`, the public per-word
+  `%wor` admission predicate. `WorMainTierProjection::from_main` admits its
+  slots through it, so it is the projection's own rule rather than a second
+  statement of it. A downstream consumer that counts `%wor`-eligible words
+  per content item (both Batchalign trees carried a hand copy of
+  `counts_for_tier(word, TierDomain::Wor)` beside a `walk_words` for this)
+  asks the policy and deletes the copy.
+
 ## [0.23.0] - 2026-09-09
 
 ### Removed
@@ -2984,7 +3018,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/TalkBank/chatter/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/TalkBank/chatter/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/TalkBank/chatter/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/TalkBank/chatter/compare/v0.20.2...v0.21.0

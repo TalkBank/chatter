@@ -8,12 +8,14 @@
 //! else from File 2, interleaved by start time, with File 1's headers
 //! extended by File 2's participants, `@ID` rows and `@Comment` rows.
 //!
-//! Four preconditions REFUSE rather than merging: File 1 declaring no
+//! Preconditions REFUSE rather than merging: File 1 declaring no
 //! retained utterances, File 1 carrying no timeline to position File 2
 //! against, a non-retained speaker appearing in both files, and a
 //! donor participant colliding with a File 1 declaration that has real
 //! content or disagreeing metadata. Each is a case where the merge has
-//! no rule to choose, and choosing silently would damage a corpus.
+//! no rule to choose, and choosing silently would damage a corpus. Selected
+//! utterances also require time bullets and nondecreasing source start times;
+//! the merge never sorts away a source-order conflict.
 //!
 //! One typed entry point, and its phase split matters. [`merge_chat_files`]
 //! returns [`Merged`], which must transition through [`Merged::report`] before
@@ -24,6 +26,8 @@
 //! The earlier note here described a cycle-1 skeleton with no
 //! preconditions, no tier stripping and no domain newtypes. All three
 //! arrived; the note did not.
+
+mod ordered;
 
 use talkbank_model::ParticipantRole;
 use talkbank_model::SpeakerCode;
@@ -45,6 +49,61 @@ use talkbank_model::model::{ChatFile, Line, Utterance};
 /// out-of-transform consumer needs it.
 #[derive(Debug, thiserror::Error)]
 pub enum MergeError {
+    /// Reordering an invalid donor's opening metadata would silently repair it.
+    #[error("donor @ID occurs after an opening @Comment; repair header order before merging")]
+    DonorMetadataOrder,
+    /// Source timing bounds do not determine which side of a section marker
+    /// owns a competing utterance. No arbitrary boundary is chosen.
+    #[error(
+        "cannot place {competing:?} around {header}: preceding end {previous_end:?}, following start {next_start:?}"
+    )]
+    AmbiguousSectionPlacement {
+        /// The source marker retained for adjudication.
+        header: String,
+        /// End of the preceding selected source utterance, if one exists.
+        previous_end: Option<u64>,
+        /// Start of the following selected source utterance, if one exists.
+        next_start: Option<u64>,
+        /// The competing utterance's exact source identity.
+        competing: MergeOrigin,
+    },
+    /// Two sources' section timing brackets do not establish their ordering.
+    #[error("section order is ambiguous between reference {reference} and donor {donor}")]
+    AmbiguousSectionOrder {
+        /// Reference marker.
+        reference: String,
+        /// Donor marker.
+        donor: String,
+    },
+    /// The assembled transcript must pass full model validation before it can
+    /// become a reportable merge result.
+    #[error("merged output is invalid: {0}")]
+    InvalidOutput(Box<talkbank_model::validation::ValidationFailure>),
+    /// Reconciled participant headers cannot produce a consistent model map.
+    #[error("merged participant declarations are inconsistent: {diagnostics:?}")]
+    InvalidParticipantJoin {
+        /// Diagnostics retained from the canonical model join.
+        diagnostics: Vec<talkbank_model::ParseError>,
+    },
+    /// An utterance selected for insertion has no admitted timeline position.
+    #[error(
+        "selected utterance {origin:?} has no time bullet; supply an explicit placement before merging"
+    )]
+    UnpositionedUtterance {
+        /// Source identity of the unpositioned utterance.
+        origin: MergeOrigin,
+    },
+    /// Source order and ascending start-time order disagree. Sorting would
+    /// alter the source transcript, so placement must be resolved by the caller.
+    #[error(
+        "source timeline reverses between {previous:?} and {current:?}; source order cannot be changed by merge"
+    )]
+    SourceTimelineReversal {
+        /// Earlier source utterance with the later start time.
+        previous: MergeOrigin,
+        /// Later source utterance with the earlier start time.
+        current: MergeOrigin,
+    },
     /// File 1 declares no utterances for any speaker in the retain
     /// set. The merge would produce a file with no retained content
     /// (a degenerate output that researchers would mistake for a
@@ -296,86 +355,40 @@ pub enum ReferenceFate {
 ///
 /// # Why the merge returns this rather than a bare `ChatFile`
 ///
-/// [`merge_chat_files`] always knew this: it walks each input in order building
-/// two lists, then stable-sorts the combination by `start_ms`. Returning only
-/// the file was a total function discarding information it had, and the cost
-/// was paid by every caller that needed to join the output back to its inputs.
-/// Reconstructing the mapping afterwards means matching on `(speaker, raw
-/// bullet)`, which is correct only while two facts hold that a caller cannot
-/// check: that the sort is stable on `start_ms`, and that inserted utterances
-/// are cloned unedited.
+/// [`merge_chat_files`] assigns each selected utterance its source ordinal
+/// before admitting it to a forward-only stream. Assembly consumes the whole
+/// utterance with that origin. Returning only the file would discard this
+/// evidence and force callers to reconstruct identity from speaker and timing,
+/// which need not uniquely identify an utterance.
 ///
 /// # The invariant, and where it is enforced
 ///
 /// There is exactly one origin per output utterance, in the same order. That
-/// is checked by `Merged::assemble`, the single private constructor, so a
-/// future edit to any of the header collections that fed `out_lines` fails at
-/// that seam instead of shipping origins silently shifted against the file.
+/// is constructed by ordered assembly: each utterance and its origin are
+/// consumed together. The assembled model must also pass validation before
+/// this state is constructed.
 ///
 /// Prefer [`Merged::utterances_with_origin`] to pairing the two accessors by
 /// hand: zipping [`Merged::origins`] against `file().lines` type-checks and is
 /// wrong by the number of header lines.
 #[derive(Debug, Clone)]
 pub struct Merged {
-    file: ChatFile,
+    file: talkbank_model::validation::ValidChatFile,
     origins: Vec<MergeOrigin>,
     reference_fates: Vec<ReferenceFate>,
     donor_fates: Vec<DonorFate>,
 }
 
 impl Merged {
-    /// Build the result from the pieces, in output order.
-    ///
-    /// The birth site of the proof, and it takes the utterances still PAIRED
-    /// with their origins. That is the whole reason there is no count check
-    /// here: splitting the pairs is this function's own job, so "one origin
-    /// per output utterance" holds by construction rather than by an
-    /// arithmetic comparison that a caller could fail. An earlier version
-    /// split them at the call site and compared the two lengths afterwards,
-    /// which needed an error variant for a state the code then had to be
-    /// trusted not to reach.
-    ///
-    /// The one assumption left is that `pre_end_headers` holds no utterance.
-    /// It is true by construction today (only the header arm of the File 1
-    /// walk pushes into it) but it is not carried by the type, because `Line`
-    /// has no header-only form. A `HeaderLine` newtype in `talkbank-model`
-    /// would close it; that is a model change and deliberately not made here.
-    fn assemble(
-        pre_end_headers: Vec<Line>,
-        utterances: Vec<(Line, MergeOrigin)>,
-        end_marker: Option<Line>,
-        reference_fates: Vec<ReferenceFate>,
-        donor_fates: Vec<DonorFate>,
-    ) -> Self {
-        let mut origins = Vec::with_capacity(utterances.len());
-        let mut out_lines = pre_end_headers;
-        // One reservation for the utterances and the `@End` marker. Pushing in
-        // a loop otherwise loses what `extend` gave free: `Vec::extend` from a
-        // `vec::IntoIter` reserves once and bulk-copies, where repeated `push`
-        // regrows (16 -> 32 -> ...) and re-moves everything each time.
-        out_lines.reserve(utterances.len() + usize::from(end_marker.is_some()));
-        for (line, origin) in utterances {
-            out_lines.push(line);
-            origins.push(origin);
-        }
-        if let Some(end) = end_marker {
-            out_lines.push(end);
-        }
-
-        Self {
-            file: ChatFile::new(out_lines),
-            origins,
-            reference_fates,
-            donor_fates,
-        }
-    }
-
     /// Each output utterance with where it came from, in output order.
     ///
     /// The accessor to reach for: it cannot be mis-paired, because the pairing
     /// is done here rather than by the caller.
     pub fn utterances_with_origin(&self) -> impl Iterator<Item = (&Utterance, MergeOrigin)> {
-        self.file.utterances().zip(self.origins.iter().copied())
+        self.file
+            .document()
+            .utterances()
+            .zip(self.origins.iter().copied())
     }
 
     /// Where each output utterance came from, in output order.
@@ -509,19 +522,20 @@ impl Merged {
 /// has no other constructor, so "serialize a merge without ever asking what it
 /// dropped" is not a thing that can be written.
 #[derive(Debug, Clone)]
-pub struct Reported(ChatFile);
+pub struct Reported(talkbank_model::validation::ValidChatFile);
 
 impl Reported {
-    /// The merged transcript.
+    /// Consume the validated result into an editable model. Any subsequent
+    /// edit requires fresh validation before publication.
     #[must_use]
     pub fn into_file(self) -> ChatFile {
-        self.0
+        self.0.into_unchecked()
     }
 
     /// The merged transcript, borrowed.
     #[must_use]
     pub fn file(&self) -> &ChatFile {
-        &self.0
+        self.0.document()
     }
 }
 
@@ -674,238 +688,13 @@ pub fn merge_chat_files(
         })
         .collect();
 
-    // Collect File 2's @ID rows for speakers NOT in `retain`,
-    // these are injected after File 1's last @ID row.
-    let inserted_id_lines: Vec<Line> = f2
-        .lines
-        .as_slice()
-        .iter()
-        .filter(|line| match line {
-            Line::Header { header, .. } => match header.as_ref() {
-                Header::ID(id) => !in_retain(&id.speaker) && !dedupe_codes.contains(&id.speaker),
-                _ => false,
-            },
-            _ => false,
-        })
-        .cloned()
-        .collect();
-
-    // Collect File 2's @Comment rows verbatim. Donor @Comment
-    // content carries provenance (ASR engine identification, run
-    // timestamps, processing notes) that the merged file's audit
-    // trail must preserve.
-    let inserted_comment_lines: Vec<Line> = f2
-        .lines
-        .as_slice()
-        .iter()
-        .filter(|line| match line {
-            Line::Header { header, .. } => matches!(header.as_ref(), Header::Comment { .. }),
-            _ => false,
-        })
-        .cloned()
-        .collect();
-
-    // Indices of File 1's last @ID and last @Comment lines, if any.
-    // We use these as the "insert after" points for the
-    // corresponding File 2 rows. The helper centralizes the
-    // shared shape (reverse-scan for last matching header).
-    let f1_last_id_idx = last_header_index(f1, |h| matches!(h, Header::ID(_)));
-    let f1_last_comment_idx = last_header_index(f1, |h| matches!(h, Header::Comment { .. }));
-
-    // Split File 1's lines into pre-@End headers and the @End marker.
-    // The @Participants header (if any) is rewritten to concatenate
-    // File 1's entries with `inserted_participants`. Utterances from
-    // File 1 are kept only if their speaker is in `retain`.
-    let mut pre_end_headers: Vec<Line> = Vec::new();
-    let mut end_marker: Option<Line> = None;
-    // Paired with its origin from the moment it is collected, so the sort
-    // below moves the two together and no later step can re-derive the
-    // pairing wrongly.
-
-    for (i, line) in f1.lines.as_slice().iter().enumerate() {
-        match line {
-            Line::Header {
-                header,
-                span,
-                separator,
-            } => {
-                if matches!(header.as_ref(), Header::End) {
-                    end_marker = Some(line.clone());
-                } else if let Header::Participants { entries } = header.as_ref() {
-                    let mut combined: Vec<ParticipantEntry> = entries.iter().cloned().collect();
-                    combined.extend(inserted_participants.iter().cloned());
-                    let merged_header = Header::Participants {
-                        entries: ParticipantEntries::new(combined),
-                    };
-                    pre_end_headers.push(Line::Header {
-                        header: Box::new(merged_header),
-                        span: *span,
-                        separator: *separator,
-                    });
-                } else {
-                    pre_end_headers.push(line.clone());
-                }
-            }
-            // Utterances are collected in their own pass below. This walk
-            // owns the headers and the `@End` marker, and its `i` is a LINE
-            // index; mixing an utterance ordinal into it was a counter kept
-            // correct by a comment.
-            Line::Utterance(_) => {}
-        }
-        // After emitting File 1's last @ID row, inject File 2's
-        // non-retained @ID rows so they appear contiguously with
-        // File 1's @ID block. After File 1's last @Comment row,
-        // inject File 2's @Comment rows so donor provenance is
-        // preserved in the audit trail. Both follow the
-        // user-guide contract: "File 1's rows first, then File 2's
-        // rows in original order."
-        if Some(i) == f1_last_id_idx {
-            pre_end_headers.extend(inserted_id_lines.iter().cloned());
-        }
-        if Some(i) == f1_last_comment_idx {
-            pre_end_headers.extend(inserted_comment_lines.iter().cloned());
-        }
-    }
-
-    // File 1 may have no row of the kind at all, and then the "insert after
-    // File 1's last one" rule above never fires and File 2's rows are DROPPED.
-    // That is silent data loss, and for `@Comment` it is loss of exactly the
-    // provenance the contract says to preserve: an ASR donor records its engine
-    // and run time there, and a hand-coded reference typically carries no
-    // `@Comment` at all, so the case is the common one rather than a corner.
-    //
-    // Found by porting a Python merge that had this fall-through and diffing
-    // the two outputs: 1,014 donor `@Comment` rows across 345 sessions appeared
-    // on the Python side and nowhere on ours.
-    // IDs before comments, so a file needing both fall-throughs still gets its
-    // `@ID` block above its `@Comment` block, which is where a reader looks.
-    //
-    // The `@ID` arm is DEFENSIVE and currently unreachable: a valid File 1 has
-    // an `@ID` row for every declared participant (E522), so the insertion
-    // point always exists. Kept for symmetry with the comment arm, and said
-    // here rather than left for a reader to work out, because a test for it
-    // passes whether or not the arm is present.
-    if f1_last_id_idx.is_none() {
-        pre_end_headers.extend(inserted_id_lines);
-    }
-    if f1_last_comment_idx.is_none() {
-        pre_end_headers.extend(inserted_comment_lines);
-    }
-
-    // From File 2, take only utterances whose speaker is NOT in
-    // `retain`. (Header reconciliation beyond "File 1 wins" is a
-    // later cycle.) Strip dependent tiers in DEFAULT_STRIP_TIERS so
-    // the merged file enters downstream align / morphotag stages in
-    // the expected "no derived tiers" state.
-    // `utterances().enumerate()` rather than a hand-rolled counter over
-    // `lines`: this walk reads nothing but utterances, so the ordinal being
-    // an index into `f2.utterances()` is true by construction instead of by
-    // a comment saying so.
-    // BOTH files' utterances are collected the same way: over
-    // `utterances().enumerate()`, so the ordinal in a `MergeOrigin` indexes
-    // that file's own `utterances()` by construction. The File 1 half used to
-    // be a `mut` counter inside the header walk, which no test could catch
-    // getting out of step: with every File 1 speaker retained, the retained
-    // subset and the full sequence are the same list.
-    let mut retained_utts: Vec<(Line, MergeOrigin)> = Vec::with_capacity(f1.lines.len());
-    let mut reference_fates: Vec<ReferenceFate> = Vec::with_capacity(f1.lines.len());
-    for (ordinal, u) in f1.utterances().enumerate() {
-        // The fate is the VALUE of the branch and is pushed once, at the end of
-        // every iteration. With a push inside each arm, a third arm added later
-        // can forget its own and shift every later ordinal silently; here the
-        // loop body cannot end without one.
-        let fate = if in_retain(&u.main.speaker) {
-            retained_utts.push((
-                Line::Utterance(Box::new(u.clone())),
-                MergeOrigin::Retained(ReferenceIdx(UtteranceIdx::new(ordinal))),
-            ));
-            ReferenceFate::Retained
-        } else {
-            ReferenceFate::DroppedNotRetained {
-                speaker: u.main.speaker.clone(),
-            }
-        };
-        reference_fates.push(fate);
-    }
-
-    // One fate per donor utterance, in donor order, so the record is a
-    // partition rather than a list that has to be proved complete.
-    // `with_capacity(lines.len())` is an O(1) upper bound that avoids the
-    // 4-8-16-... regrow ladder; `donor_fates` is small and cheap either way.
-    let mut inserted_utts: Vec<(Line, MergeOrigin)> = Vec::with_capacity(f2.lines.len());
-    let mut donor_fates: Vec<DonorFate> = Vec::with_capacity(f2.lines.len());
-    for (ordinal, u) in f2.utterances().enumerate() {
-        // Same shape as the File 1 walk above, deliberately: one push site per
-        // vector, at the end. This loop used to `continue` out of the excluded
-        // arm, which put the two `donor_fates` pushes eight lines and one
-        // nesting level apart.
-        let fate = if in_retain(&u.main.speaker) {
-            DonorFate::ExcludedByRetain
-        } else {
-            let mut cloned = u.clone();
-            let before = cloned.dependent_tiers.len();
-            cloned
-                .dependent_tiers
-                .retain(|tier| !strip_tiers.iter().any(|s| s == tier.tier.kind()));
-            // Counted from the work rather than predicted from `strip_tiers`:
-            // the difference is what was actually removed from THIS utterance,
-            // not what the caller asked to remove from any utterance.
-            // `usize`, not `u32`. Narrowing halves `DonorFate` from 16 bytes to
-            // 8, which is real but is tidiness rather than throughput beside a
-            // multi-megabyte `ChatFile`; and the only total narrowing available
-            // is `try_from(..).unwrap_or(u32::MAX)`, a fabricated value this
-            // workspace bans. Eight bytes is not worth an invented number.
-            let tiers_stripped = before - cloned.dependent_tiers.len();
-            inserted_utts.push((
-                Line::Utterance(Box::new(cloned)),
-                MergeOrigin::Inserted(DonorIdx(UtteranceIdx::new(ordinal))),
-            ));
-            DonorFate::Inserted { tiers_stripped }
-        };
-        donor_fates.push(fate);
-    }
-
-    // Combine and sort by timeline position. Utterances without a main-tier
-    // bullet, and headers, are `Untimed` and sort after every timed line.
-    let mut all_utts: Vec<(Line, MergeOrigin)> = retained_utts;
-    all_utts.extend(inserted_utts);
-    // `sort_by_key` is STABLE, which is what makes two utterances sharing a
-    // start_ms keep File 1 ahead of File 2. The origins ride along in the same
-    // tuple, so that guarantee no longer has to be re-derived by a caller.
-    all_utts.sort_by_key(|(line, _)| timeline_position(line));
-
-    // Assemble: `assemble` splits the pairs itself, which is what makes
-    // one-origin-per-utterance structural instead of checked.
-    Ok(Merged::assemble(
-        pre_end_headers,
-        all_utts,
-        end_marker,
-        reference_fates,
-        donor_fates,
-    ))
-}
-
-/// Where a line sits on the merged timeline: at its main-tier bullet's
-/// start, or after every timed line. Until 2026-09-09 the untimed case was
-/// the sentinel `u64::MAX`, a value a bullet could carry; the variant order
-/// is the sort order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum TimelinePosition {
-    /// The main tier's bullet start, in milliseconds.
-    At(u64),
-    /// A header, or an utterance without a main-tier bullet.
-    Untimed,
-}
-
-/// An utterance's position on the timeline.
-fn timeline_position(line: &Line) -> TimelinePosition {
-    match line {
-        Line::Utterance(u) => match &u.main.content.bullet {
-            Some(bullet) => TimelinePosition::At(bullet.timing.start_ms),
-            None => TimelinePosition::Untimed,
-        },
-        Line::Header { .. } => TimelinePosition::Untimed,
-    }
+    ordered::merge(
+        f1,
+        f2,
+        retain,
+        strip_tiers,
+        ordered::OpeningAdditions::from_donor(f2, retain, &dedupe_codes, inserted_participants)?,
+    )
 }
 
 /// Extract the declared `@Languages` codes from `chat_file`. Returns
@@ -921,30 +710,6 @@ fn extract_languages(chat_file: &ChatFile) -> LanguageCodes {
             _ => None,
         })
         .unwrap_or_default()
-}
-
-/// Find the index of the last header line in `chat_file` whose
-/// `Header` payload matches `predicate`. Returns `None` if no
-/// matching header is present.
-///
-/// Used by the header-reconciliation logic to identify the slot at
-/// which File 2's contributions of a given header kind (e.g. @ID,
-/// @Comment) should be inserted to keep the kind contiguous in the
-/// merged output.
-fn last_header_index<F>(chat_file: &ChatFile, predicate: F) -> Option<usize>
-where
-    F: Fn(&Header) -> bool,
-{
-    chat_file
-        .lines
-        .as_slice()
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(i, line)| match line {
-            Line::Header { header, .. } if predicate(header.as_ref()) => Some(i),
-            _ => None,
-        })
 }
 
 /// Speaker codes declared in `chat_file`'s `@Participants` header,

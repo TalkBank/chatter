@@ -1,7 +1,7 @@
 # Merge (`chatter merge`)
 
 **Status:** Draft
-**Last modified:** 2026-09-05 20:31 EDT
+**Last modified:** 2026-09-10 00:28 EDT
 
 `chatter merge` combines two CHAT transcripts that cover the same media
 recording into one. The caller designates which speakers' utterances are
@@ -88,18 +88,11 @@ OPTIONS:
   -o, --output <PATH>
            Write merged output to PATH. Default: stdout.
 
-  --strip-tiers <TIER>[,<TIER>...]
-           Dependent tier names to strip from inserted-speaker
-           utterances before merging. Default: wor,mor,gra,pho.
-           Use empty list (--strip-tiers '') to preserve all
-           dependent tiers as-is.
-
-  --allow-bullet-drift
-           Permit small backward-time bullets in either input (where
-           one utterance's end_ms is slightly greater than the next
-           utterance's start_ms). Default behavior: warn but proceed.
-           Set this flag to silence the warning.
 ```
+
+The CLI uses the default stripping set. The Rust `merge_chat_files` API accepts
+an explicit stripping list, including an empty list to preserve all dependent
+tiers. The CLI does not expose `--strip-tiers` or `--allow-bullet-drift`.
 
 Exit codes:
 
@@ -132,7 +125,7 @@ merge without any structural change.
 For every speaker code in `<FILE2>` that is NOT in `--retain`, the
 utterance is included in the merged output with its main tier
 preserved verbatim BUT with `%wor`, `%mor`, `%gra`, and `%pho`
-removed (configurable via `--strip-tiers`). Other dependent tiers
+removed (configurable through the Rust API). Other dependent tiers
 (`%com`, `%spa`, `%act`, `%sit`, `%add`, contributor-specific tiers)
 are preserved.
 
@@ -145,12 +138,38 @@ is undefined. The contract is: enter the post-merge stages in a
 clean state, exit with the tier present and consistent across every
 utterance.
 
-### Utterance order is timeline order
+### Source order is preserved
 
 Utterances in the merged output appear in ascending order by their
 start time bullet (`\\x15START_END\\x15`, milliseconds). Where two
 utterances have identical start times, the first-file utterance
-comes first.
+comes first. This is a forward merge of admitted source sequences, never a
+global sort. Each selected utterance must have a time bullet, and selected
+utterance starts must be nondecreasing within each source. Missing positions
+or a source time reversal are precondition failures; resolve placement before
+merging rather than changing source order inside merge. Overlapping spans are
+allowed when their start times remain ordered.
+
+Headers remain events in the source sequence. Dependent tiers remain ordered
+inside their owning utterance. Ordinary headers are emitted when their source
+reaches them; reference ordinary headers win simultaneous frontiers. Section
+markers (`@Bg`, `@Eg`, `@G`) instead carry a timing bracket from the preceding
+selected utterance's end and following selected utterance's start. A competing
+turn starting before the bracket precedes the marker; one starting at or after
+its upper bound follows it. A start inside an uncertain gap, overlapping
+neighbor bounds, or indeterminate cross-source section order causes refusal.
+Missing one-sided bounds are not invented. Whole utterances are placed by
+onset; the transform does not split speech spanning a boundary.
+
+The reference `@End` follows all donor events. These rules preserve
+source-relative order without inventing section timestamps. An assembled
+transcript must pass full model validation, including tier alignment, before
+it can become a `Merged` result. Conflicting section markers are refused with
+diagnostics; independently valid sources are not proof of a valid merge.
+
+`Merged` and `Reported` retain an immutable `ValidChatFile` proof internally.
+`Reported::into_file` deliberately consumes that proof to allow further edits;
+the caller must validate again after editing.
 
 ### Time bullets are pass-through
 
@@ -160,12 +179,8 @@ the source files. If `<FILE2>` had `%wor` rows whose first/last word
 times implied a slightly different utterance span than the main-tier
 bullet, the main-tier bullet wins (it was the contract before merge).
 
-If the merge stage detects an inserted-speaker utterance with no
-main-tier bullet at all (Batchalign occasionally omits these),
-it lifts a bullet from the corresponding `%wor` row's first-word
-start and last-word end, appending it to the main tier so the
-merged file has uniform bullet placement. The original `%wor` is
-then stripped (per the per-tier rule above).
+Missing main-tier bullets are refused. This transform does not infer a
+replacement from `%wor`; any timing repair belongs before placement admission.
 
 ### Header reconciliation
 
@@ -181,7 +196,16 @@ two inputs:
 | `@Media` | File 1 | File 2's `@Media` is discarded; warning if mismatched media filename (NOT the modality field, see below) |
 | `@Participants` | concatenation | File 1's entries first, then File 2's entries for non-retained speakers in their original order |
 | `@ID` | concatenation | File 1's `@ID` rows first; File 2's `@ID` rows for non-retained speakers appended in their original order |
-| `@Comment` | concatenation | File 1's `@Comment` rows first; File 2's `@Comment` rows appended in original order (preserves any provenance comments like ASR engine/run timestamp) |
+| Opening `@Comment` | concatenation | File 1's opening comments first, then File 2's opening comments in source order |
+
+Opening metadata ends at the first utterance or gem marker. Donor body headers
+are streamed in their original order, including comments after utterances;
+they are not collected into opening metadata. Reference headers retain their
+position relative to reference speech. The participant and ID reconciliation
+above is an explicit metadata operation, not permission to reorder body content.
+Donor IDs extend the reference's contiguous ID block; donor opening comments
+follow the reference opening metadata. A donor ID following an opening comment
+is refused rather than silently reordered to satisfy the ID-block rule.
 
 The `@Media` modality field (`audio` vs `video`) is a known
 divergence point: when ASR runs against an `mp4`, it may write

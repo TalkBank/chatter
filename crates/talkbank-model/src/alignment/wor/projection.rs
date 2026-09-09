@@ -25,6 +25,25 @@ pub enum WorSlotMembershipPolicy {
     FilteredLexicalV1,
 }
 
+impl WorSlotMembershipPolicy {
+    /// Whether one main-tier word is a `%wor` slot under this policy.
+    ///
+    /// The ONE owner of `%wor` membership, and public on purpose.
+    /// [`WorMainTierProjection::from_main`] admits its slots through it, and
+    /// a consumer that needs the answer for a single word (a per-content-item
+    /// count in an utterance splitter, a per-token check in a diarizer) asks
+    /// here instead of restating `counts_for_tier(word, TierDomain::Wor)`
+    /// beside its own walk. Two downstream trees carried exactly that
+    /// restatement on 2026-09-09, named so they could not drift silently;
+    /// this method is what lets them delete it. A replaced word is admitted by
+    /// its ORIGINAL, as the projection admits it.
+    pub fn admits(self, word: &Word) -> bool {
+        match self {
+            WorSlotMembershipPolicy::FilteredLexicalV1 => counts_for_tier(word, TierDomain::Wor),
+        }
+    }
+}
+
 /// Main-tier content projected through one named `%wor` membership policy.
 ///
 /// This capability is the single owner of current `%wor` selection. Both
@@ -54,12 +73,12 @@ impl<'main> WorMainTierProjection<'main> {
             Some(TierDomain::Wor),
             &mut |item| match item {
                 WordItem::Word(word) => {
-                    if counts_for_tier(word, TierDomain::Wor) {
+                    if policy.admits(word) {
                         items.push(WorMainTierProjectionItem::Slot(word));
                     }
                 }
                 WordItem::ReplacedWord(replaced) => {
-                    if counts_for_tier(&replaced.word, TierDomain::Wor) {
+                    if policy.admits(&replaced.word) {
                         items.push(WorMainTierProjectionItem::Slot(&replaced.word));
                     }
                 }

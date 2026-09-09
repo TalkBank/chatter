@@ -20,9 +20,11 @@
 //! Phase A cycle 2: byte-stability of retained-speaker utterances.
 
 use talkbank_model::ParseValidateOptions;
+use talkbank_model::SemanticEq;
 use talkbank_model::SpeakerCode;
 use talkbank_model::UtteranceIdx;
 use talkbank_model::model::ChatFile;
+use talkbank_model::model::{Header, Line};
 use talkbank_transform::transcript_merge::{
     DonorFate, DonorIdx, MergeError, MergeOrigin, Merged, ReferenceFate, ReferenceIdx,
     default_strip_tiers, merge_chat_files,
@@ -58,6 +60,313 @@ const FIX_ASR_LABELED_RICH: &str = "@UTF8
 *INV:\tthat sounds wonderful . \u{15}3500_4800\u{15}
 @End
 ";
+
+/// Public merge API regression: the ordered reference projection must
+/// survive insertion, including headers between utterances. The section and
+/// utterance content comes from the reference corpus; timing and dependent
+/// tier content come from the existing timed merge fixture.
+#[test]
+fn merge_preserves_the_complete_reference_line_sequence() {
+    let options = ParseValidateOptions::default();
+    let mut reference = talkbank_transform::parse_and_validate(
+        include_str!("../../../../corpus/reference/edge-cases/postcodes-and-gems.cha"),
+        options.clone(),
+    )
+    .expect("reference corpus fixture");
+    let timed = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone())
+        .expect("timed fixture");
+    let exemplar = timed.utterances().next().expect("timed utterance");
+    let media = timed.lines.iter().find(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::Media(_)))
+    }).unwrap().clone();
+    let body = reference.lines.iter().position(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::BeginGem { .. }))
+    }).unwrap();
+    reference.lines.insert(body, media);
+    for (index, utterance) in reference
+        .lines
+        .as_mut_slice()
+        .iter_mut()
+        .filter_map(|line| match line {
+            Line::Utterance(utterance) => Some(utterance),
+            Line::Header { .. } => None,
+        })
+        .enumerate()
+    {
+        let mut bullet = exemplar.main.content.bullet.clone().unwrap();
+        // Translate the fixture's span onto successive disjoint intervals;
+        // duplicating its time span would create invalid speaker self-overlap.
+        let shift = u64::try_from(index).unwrap() * (bullet.timing.end_ms - bullet.timing.start_ms);
+        bullet.timing.start_ms += shift;
+        bullet.timing.end_ms += shift;
+        utterance.main.content.bullet = Some(bullet);
+        utterance.dependent_tiers = exemplar.dependent_tiers.clone();
+    }
+    let donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options.clone())
+        .expect("donor fixture");
+    let output = merge_chat_files(
+        &reference,
+        &donor,
+        &[SpeakerCode::new("CHI"), SpeakerCode::new("MOT")],
+        &[],
+    )
+    .expect("merge")
+    .report(|_, _| {})
+    .into_file();
+
+    // Participants is explicitly reconciled; only the donor ID and donor
+    // utterance are additions. Everything else, including End and all gem
+    // boundaries, must have the same ordered reference projection.
+    let project = |file: &ChatFile| -> Vec<Line> {
+        file.lines
+            .iter()
+            .filter(|line| match line {
+                Line::Header { header, .. } => match header.as_ref() {
+                    Header::Participants { .. } => false,
+                    Header::ID(id) => id.speaker.as_str() != "INV",
+                    _ => true,
+                },
+                Line::Utterance(utterance) => utterance.main.speaker.as_str() != "INV",
+            })
+            .cloned()
+            .collect()
+    };
+    let expected = project(&reference);
+    let actual = project(&output);
+    assert_eq!(expected.len(), actual.len(), "reference line cardinality");
+    for (index, (before, after)) in expected.iter().zip(&actual).enumerate() {
+        assert!(
+            before.semantic_eq(after),
+            "reference line {index} moved or changed"
+        );
+    }
+}
+
+#[test]
+fn merge_keeps_a_donor_body_comment_after_its_utterance() {
+    let options = ParseValidateOptions::default();
+    let reference =
+        talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let mut donor =
+        talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options.clone()).unwrap();
+    let annotated = talkbank_transform::parse_and_validate(
+        include_str!("../../../../corpus/reference/edge-cases/postcodes-and-gems.cha"),
+        options,
+    )
+    .unwrap();
+    let comment = annotated.lines.iter().find(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::Comment { .. }))
+    }).unwrap().clone();
+    let end = donor.lines.len() - 1;
+    donor.lines.insert(end, comment.clone());
+    let output = merge_chat_files(&reference, &donor, &[SpeakerCode::new("CHI")], &[])
+        .unwrap()
+        .report(|_, _| {})
+        .into_file();
+    let speech_position = output
+        .lines
+        .iter()
+        .position(|line| matches!(line, Line::Utterance(u) if u.main.speaker.as_str() == "INV"))
+        .unwrap();
+    let comment_position = output
+        .lines
+        .iter()
+        .position(|line| line.semantic_eq(&comment))
+        .unwrap();
+    assert!(
+        speech_position < comment_position,
+        "donor body comment was hoisted before its speech"
+    );
+}
+
+#[test]
+fn merge_refuses_unpositioned_content_and_source_time_reversal() {
+    let options = ParseValidateOptions::default();
+    let original =
+        talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options).unwrap();
+    let retain = [SpeakerCode::new("CHI")];
+    let positions: Vec<_> = original
+        .lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| matches!(line, Line::Utterance(_)).then_some(index))
+        .collect();
+    let mut untimed = original.clone();
+    if let Line::Utterance(first) = &mut untimed.lines.as_mut_slice()[positions[0]] {
+        first.main.content.bullet = None;
+    }
+    assert!(matches!(
+        merge_chat_files(&untimed, &donor, &retain, &[]),
+        Err(MergeError::UnpositionedUtterance {
+            origin: MergeOrigin::Retained(_)
+        })
+    ));
+
+    let mut reversed = original;
+    reversed
+        .lines
+        .as_mut_slice()
+        .swap(positions[0], positions[1]);
+    assert!(matches!(
+        merge_chat_files(&reversed, &donor, &retain, &[]),
+        Err(MergeError::SourceTimelineReversal { .. })
+    ));
+}
+
+#[test]
+fn merged_model_is_directly_validatable_without_a_serialization_roundtrip() {
+    let (_, _, merged) = merge_fixtures(FIX_REF_RICH_CHI, FIX_ASR_LABELED_RICH);
+    let file = merged.report(|_, _| {}).into_file();
+    assert_eq!(file.participant_count(), 2);
+    file.validate_into(
+        &talkbank_model::NullErrorSink,
+        talkbank_model::model::TranscriptName::Anonymous,
+    )
+    .expect("merged participant headers and derived participant map agree");
+}
+
+#[test]
+fn independently_valid_sections_require_determined_cross_source_order() {
+    let options = ParseValidateOptions::default();
+    let sections = talkbank_transform::parse_and_validate(
+        include_str!("../../../../corpus/reference/edge-cases/postcodes-and-gems.cha"),
+        options.clone(),
+    )
+    .unwrap();
+    let begin = sections.lines.iter().find(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::BeginGem { .. }))
+    }).unwrap().clone();
+    let end = sections.lines.iter().find(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::EndGem { .. }))
+    }).unwrap().clone();
+    let sectioned = |source| {
+        let mut file = talkbank_transform::parse_and_validate(source, options.clone()).unwrap();
+        let first = file
+            .lines
+            .iter()
+            .position(|line| matches!(line, Line::Utterance(_)))
+            .unwrap();
+        file.lines.insert(first, begin.clone());
+        file.lines.insert(file.lines.len() - 1, end.clone());
+        file.validate_into(
+            &talkbank_model::NullErrorSink,
+            talkbank_model::model::TranscriptName::Anonymous,
+        )
+        .expect("each source section is independently valid")
+        .into_unchecked()
+    };
+    let reference = sectioned(FIX_REF_RICH_CHI);
+    let donor = sectioned(FIX_ASR_LABELED_RICH);
+    let error = merge_chat_files(&reference, &donor, &[SpeakerCode::new("CHI")], &[]).unwrap_err();
+    // Refuse before choosing an arbitrary ordering that would subsequently
+    // create invalid nesting. Independently valid inputs do not resolve this.
+    assert!(matches!(error, MergeError::AmbiguousSectionOrder { .. }));
+}
+
+#[test]
+fn section_placement_uses_source_bounds_and_refuses_a_gap() {
+    let options = ParseValidateOptions::default();
+    let sections = talkbank_transform::parse_and_validate(
+        include_str!("../../../../corpus/reference/edge-cases/postcodes-and-gems.cha"),
+        options.clone(),
+    )
+    .unwrap();
+    let begin = sections.lines.iter().find(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::BeginGem { .. }))
+    }).unwrap().clone();
+    let end = sections.lines.iter().find(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::EndGem { .. }))
+    }).unwrap().clone();
+    let mut reference =
+        talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options).unwrap();
+    let positions: Vec<_> = reference
+        .lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| matches!(line, Line::Utterance(_)).then_some(index))
+        .collect();
+    reference.lines.insert(positions[1], end);
+    reference.lines.insert(positions[0], begin);
+    // The original fixture brackets the boundary between 3500 and 5000 ms.
+    // Its donor begins at 3500: neither side is established by that bracket.
+    assert!(matches!(
+        merge_chat_files(&reference, &donor, &[SpeakerCode::new("CHI")], &[]),
+        Err(MergeError::AmbiguousSectionPlacement {
+            previous_end: Some(3500),
+            next_start: Some(5000),
+            ..
+        })
+    ));
+
+    // Extend the first source utterance to the next one's existing start,
+    // making the boundary exactly 5000 ms. The donor at 3500 belongs before it.
+    for line in reference.lines.as_mut_slice() {
+        if let Line::Utterance(utterance) = line {
+            utterance
+                .main
+                .content
+                .bullet
+                .as_mut()
+                .unwrap()
+                .timing
+                .end_ms = 5000;
+            break;
+        }
+    }
+    let merged = merge_chat_files(&reference, &donor, &[SpeakerCode::new("CHI")], &[])
+        .unwrap()
+        .report(|_, _| {})
+        .into_file();
+    let donor_position = merged.lines.iter().position(|line| matches!(line, Line::Utterance(utterance) if utterance.main.speaker.as_str() == "INV")).unwrap();
+    let end_position = merged.lines.iter().position(|line| matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::EndGem { .. }))).unwrap();
+    assert!(
+        donor_position < end_position,
+        "donor speech before the boundary must remain in the section"
+    );
+
+    let mut at_boundary = donor;
+    for line in at_boundary.lines.as_mut_slice() {
+        if let Line::Utterance(utterance) = line {
+            let bullet = utterance.main.content.bullet.as_mut().unwrap();
+            bullet.timing.end_ms += 1500;
+            bullet.timing.start_ms += 1500;
+        }
+    }
+    let merged = merge_chat_files(&reference, &at_boundary, &[SpeakerCode::new("CHI")], &[])
+        .unwrap()
+        .report(|_, _| {})
+        .into_file();
+    let donor_position = merged.lines.iter().position(|line| matches!(line, Line::Utterance(utterance) if utterance.main.speaker.as_str() == "INV")).unwrap();
+    let end_position = merged.lines.iter().position(|line| matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::EndGem { .. }))).unwrap();
+    assert!(
+        end_position < donor_position,
+        "the boundary precedes an utterance starting exactly there"
+    );
+}
+
+#[test]
+fn donor_metadata_admission_refuses_an_id_after_a_comment() {
+    let options = ParseValidateOptions::default();
+    let reference =
+        talkbank_transform::parse_and_validate(FIX_REF_CHI_WITH_COM, options.clone()).unwrap();
+    let mut donor =
+        talkbank_transform::parse_and_validate(FIX_ASR_INV_WITH_DERIVED, options).unwrap();
+    let comment_index = donor.lines.iter().position(|line| matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::Comment { .. }))).unwrap();
+    let comment = donor.lines.remove(comment_index);
+    let id_index = donor.lines.iter().position(|line| matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::ID(id) if id.speaker.as_str() == "INV"))).unwrap();
+    donor.lines.insert(id_index, comment);
+    // E548 requires a contiguous ID block. Admission must not silently repair
+    // invalid donor ordering by collecting IDs ahead of contributor comments.
+    let result = merge_chat_files(
+        &reference,
+        &donor,
+        &[SpeakerCode::new("CHI")],
+        &default_strip_tiers(),
+    );
+    assert!(matches!(result, Err(MergeError::DonorMetadataOrder)));
+}
 
 /// Byte-stability invariant: every retained-speaker main tier line
 /// from File 1, and every dependent tier attached to those

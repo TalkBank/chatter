@@ -281,7 +281,7 @@ pub fn run_pipeline(args: PipelineArgs<'_>) {
 
     // The SAME reporter `chatter merge` calls.
     let merged = to_chat_string(
-        &crate::commands::transcript_merge::report_merge_notices(merged, reference).into_file(),
+        crate::commands::transcript_merge::report_merge_notices(merged, reference).file(),
     );
 
     if let Err(e) = fs::write(output, merged) {

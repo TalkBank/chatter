@@ -232,3 +232,49 @@ fn every_domain_count_holds_over_a_parsed_tier() -> Result<(), TestError> {
         Err(TestError::Failure(wrong.join("\n")))
     }
 }
+
+/// The public per-word predicate IS the projection's rule: over every row,
+/// counting the walker's words through `WorSlotMembershipPolicy::admits`
+/// gives exactly the projection's slot count. A downstream consumer that
+/// needs a per-item `%wor` count can therefore ask the policy and delete its
+/// own copy of the rule (both Batchalign trees carried one on 2026-09-09).
+#[test]
+fn admits_is_the_projection_rule() -> Result<(), TestError> {
+    use talkbank_model::alignment::helpers::{WordItem, walk_words};
+    let mut wrong = Vec::new();
+    for row in ROWS {
+        let lines = format!("*CHI:\t{}", row.utterance);
+        let main = match SingleSpeaker::english(&lines).main_tier(row.codes) {
+            Ok(main) => main,
+            Err(err) => {
+                wrong.push(format!("{}: {err}", row.what));
+                continue;
+            }
+        };
+        let projection = main.wor_projection();
+        let policy = projection.membership_policy();
+        let mut admitted = 0usize;
+        walk_words(&main.content.content, Some(TierDomain::Wor), &mut |item| {
+            let word = match item {
+                WordItem::Word(word) => word,
+                WordItem::ReplacedWord(replaced) => &replaced.word,
+                WordItem::Separator(_) => return,
+            };
+            if policy.admits(word) {
+                admitted += 1;
+            }
+        });
+        let slots = projection.slot_count().get();
+        if admitted != slots {
+            wrong.push(format!(
+                "{}: admits counted {admitted}, the projection holds {slots} slot(s)",
+                row.what
+            ));
+        }
+    }
+    if wrong.is_empty() {
+        Ok(())
+    } else {
+        Err(TestError::Failure(wrong.join("\n")))
+    }
+}

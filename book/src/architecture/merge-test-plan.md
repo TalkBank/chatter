@@ -1,7 +1,7 @@
 # Merge Pipeline, Test Plan
 
 **Status:** Draft
-**Last modified:** 2026-08-30 16:02 EDT
+**Last modified:** 2026-09-10 00:30 EDT
 
 This page is the test-coverage roadmap for the new merge pipeline
 (`chatter speaker-id` + `chatter merge` + `chatter adjudicate` +
@@ -13,9 +13,14 @@ at the highest level the feature lives at, and we want to
 enumerate those tests *before* writing the implementation, so
 coverage is designed, not discovered.
 
-This is a **plan**, not yet code. When the implementation work
-begins, every test case below becomes a real test; the doc then
-flips to a coverage matrix that gets kept honest by CI.
+The original cycle plan below is historical design context, not proof of
+current coverage. In particular, its early global-sort implementation has been
+replaced by an ordered AST merge. Current regression coverage in
+`transcript_merge_tests.rs` checks complete reference line order, donor body
+comments, direct model validity, refusal of missing or reversed timing,
+determined versus ambiguous section placement, and malformed donor metadata
+admission. See the [current merge contract](../chatter/user-guide/merge.md) and
+[domain transitions](merge-domain-types.md) for the implemented rules.
 
 ## TDD discipline, what "strict red/green" means here
 

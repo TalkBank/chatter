@@ -1,7 +1,7 @@
 # Merge Pipeline, Domain Types
 
 **Status:** Draft
-**Last updated:** 2026-09-04 06:45 EDT
+**Last modified:** 2026-09-10 00:30 EDT
 
 This page specifies the typed Rust vocabulary shared by `chatter merge`,
 `chatter speaker-id`, the override-file reader/writer, and the
@@ -634,49 +634,35 @@ wrapping also did not ship; override-file I/O failures surface as
 
 ### `MergeError`
 
-As shipped (`transcript_merge.rs`; the designed `RetainSet` payload
-is a `Vec<SpeakerCode>`, and a fifth precondition variant,
-`ParticipantAlreadyDeclared`, was added for the dedupe-on-insert
-rule on `@Participants`):
+`transcript_merge.rs` owns the exhaustive error enum and its payloads.
+Parsing errors belong to the caller: the merge accepts already parsed models.
+The CLI explicitly maps every merge refusal to exit 2.
 
-```rust,ignore
-#[derive(Debug, thiserror::Error)]
-pub enum MergeError {
-    /// File 1 declares no utterances for any speaker in the retain
-    /// set; the merge would produce a degenerate output.
-    RetainSpeakersMissing { retain: Vec<SpeakerCode> },
+The merge refuses missing retained content or timelines, conflicting speakers
+or languages, malformed donor metadata order, unpositioned selected utterances,
+and reversed source starts. It also refuses ambiguous section placement,
+inconsistent participant joins, and invalid assembled output. The
+[merge contract](../chatter/user-guide/merge.md) specifies the ordering policy.
 
-    /// File 1 has retained-speaker utterances but none carry a time
-    /// bullet; no shared timeline to merge against.
-    NoTimelineInFile1,
+Internal admission and public reporting form distinct transitions:
 
-    /// File 2 (the donor) declares an `@Languages` code not present
-    /// in File 1's set. Donor under-claiming is fine; donor
-    /// over-claiming is refused (see below).
-    LanguageMismatch {
-        file1: LanguageCodes,
-        file2: LanguageCodes,
-    },
-
-    /// A speaker code outside the retain set appears in both files'
-    /// utterances; no rule to choose between the two versions.
-    AmbiguousSpeaker { speaker: SpeakerCode },
-
-    /// A donor participant code (outside --retain) is already
-    /// declared in File 1 with real utterances or conflicting
-    /// metadata; silent dedupe would discard content or paper over
-    /// an identity mismatch.
-    ParticipantAlreadyDeclared {
-        speaker: SpeakerCode,
-        file1_role: ParticipantRole,
-        donor_role: ParticipantRole,
-    },
-
-    /// Underlying parse error from either input file.
-    #[error("parse error: {0}")]
-    Parse(#[from] PipelineError),
-}
+```mermaid
+flowchart LR
+    A[Parsed source ASTs] --> B[SourceAdmission]
+    B -->|finish: attach section bounds| C[OrderedSource]
+    C --> D[AdmittedMerge]
+    D -->|assemble, join participants, validate| E[Merged: ValidChatFile]
+    E -->|report| F[Reported: ValidChatFile]
+    F -->|immutable borrow| G[Serialization]
+    F -->|into_file: relinquish validity| H[Editable ChatFile]
 ```
+
+Only admission constructs source cursors. Assembly can consume their frontiers;
+it cannot sort them or detach dependent tiers from their owning utterances.
+Section comparisons may still refuse: admission supplies the source bounds,
+not a claim that every cross-source order is determined. Only successful
+assembly and full validation construct `Merged`. Edits after `into_file` need
+fresh validation.
 
 Two shipped rules worth calling out because they refine the designed
 "exact `@Languages` match" and "concatenate `@Participants`"

@@ -82,7 +82,8 @@ pub fn run_merge(file1: &Path, file2: &Path, retain: &[String], output: Option<&
         }
     };
 
-    let merged = to_chat_string(&report_merge_notices(merged, file1).into_file());
+    let reported = report_merge_notices(merged, file1);
+    let merged = to_chat_string(reported.file());
 
     match output {
         Some(path) => {
@@ -113,6 +114,13 @@ pub fn run_merge(file1: &Path, file2: &Path, retain: &[String], output: Option<&
 pub(crate) fn merge_exit_code(error: &MergeError) -> i32 {
     match error {
         MergeError::RetainSpeakersMissing { .. }
+        | MergeError::DonorMetadataOrder
+        | MergeError::AmbiguousSectionPlacement { .. }
+        | MergeError::AmbiguousSectionOrder { .. }
+        | MergeError::InvalidOutput(_)
+        | MergeError::InvalidParticipantJoin { .. }
+        | MergeError::UnpositionedUtterance { .. }
+        | MergeError::SourceTimelineReversal { .. }
         | MergeError::NoTimelineInFile1
         | MergeError::LanguageMismatch { .. }
         | MergeError::AmbiguousSpeaker { .. }
