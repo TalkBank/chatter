@@ -9,6 +9,7 @@
 //! JSON consumers (the Serialize impl emits raw_text directly).
 
 use smol_str::SmolStr;
+use talkbank_model::non_empty_literal;
 use talkbank_model::{Word, WordContent, WordShortening, WordText, WriteChat};
 
 use super::placeholder::{PlaceholderState, PlaceholderToken};
@@ -26,18 +27,18 @@ enum ContentRedaction {
 
 fn redact_content(content: &WordContent, placeholder: &PlaceholderToken) -> ContentRedaction {
     match content {
-        WordContent::Text(_) => ContentRedaction::Replace(WordContent::Text(
-            WordText::new_unchecked(placeholder.as_str()),
-        )),
+        WordContent::Text(_) => ContentRedaction::Replace(WordContent::Text(WordText::from(
+            placeholder.text().clone(),
+        ))),
         // A @u phonetic form is SPOKEN content: it can encode a name
         // phonetically, so it must be redacted like text, never preserved as a
         // structural marker.
         WordContent::Phonetic(_) => ContentRedaction::Replace(WordContent::Phonetic(
-            talkbank_model::WordPhonetic::new_unchecked(placeholder.as_str()),
+            talkbank_model::WordPhonetic::from(placeholder.text().clone()),
         )),
-        WordContent::Shortening(_) => {
-            ContentRedaction::Replace(WordContent::Shortening(WordShortening::new_unchecked("x")))
-        }
+        WordContent::Shortening(_) => ContentRedaction::Replace(WordContent::Shortening(
+            WordShortening::from(non_empty_literal!("x")),
+        )),
         // Structural / prosodic markers, preserved verbatim. Listed
         // explicitly (not `_ => {}`) so a new WordContent variant fails to
         // compile here, forcing an explicit redact-vs-preserve decision for
@@ -90,6 +91,7 @@ fn rebuild_raw_text(word: &mut Word) {
 #[cfg(test)]
 mod tests {
     use talkbank_model::{WordCategory, WordCompoundMarker, WordContents};
+    use talkbank_parser::TreeSitterParser;
 
     use super::*;
 
@@ -98,9 +100,9 @@ mod tests {
     /// structure even when no lexical leaf happened to be replaced.
     #[test]
     fn structural_only_recovery_cannot_retain_untrusted_raw_text() {
-        let mut word = Word::new_unchecked("private-name", "private-name").with_content(
-            WordContents::from(vec![WordContent::CompoundMarker(WordCompoundMarker::new())]),
-        );
+        let mut word = Word::simple("private-name").with_content(WordContents::from(vec![
+            WordContent::CompoundMarker(WordCompoundMarker::new()),
+        ]));
         let mut state = PlaceholderState::new();
 
         sanitize_word(&mut word, &mut state);
@@ -112,11 +114,20 @@ mod tests {
     /// on the source spelling cached in `raw_text`. Even this early-return path
     /// must therefore discard an inconsistent recovery spelling before JSON
     /// serialization can expose it.
+    ///
+    /// FABRICATED ON PURPOSE, and one of the few that should stay so. Its
+    /// subject IS the inconsistent state, a `raw_text` of "private-name" over
+    /// content that says `xxx`, which the parser will not produce for any
+    /// input: no CHAT word both reads as untranscribed and carries that
+    /// spelling. Converting it to a parse would delete the case rather than
+    /// strengthen it. This is the "behaviour of a function that a signature
+    /// cannot describe" category the standards name, and the value being
+    /// fabricated is exactly the hazard the redaction must survive.
     #[test]
     fn untranscribed_pass_through_cannot_retain_untrusted_raw_text() {
         let mut word =
             Word::new_unchecked("private-name", "xxx").with_content(WordContents::from(vec![
-                WordContent::Text(WordText::new_unchecked("xxx")),
+                WordContent::Text(WordText::from(non_empty_literal!("xxx"))),
             ]));
         let mut state = PlaceholderState::new();
 
@@ -144,8 +155,22 @@ mod tests {
     /// discard category and suffix markers from that representation.
     #[test]
     fn raw_text_rebuild_preserves_nonlexical_word_markers() {
-        let mut word = Word::new_unchecked("&-private-name", "private-name")
-            .with_category(WordCategory::Filler);
+        // PARSED, not fabricated. The pair `("&-private-name", "private-name")`
+        // stated the input twice with nothing forcing the second to be what
+        // cleaning the first produces, and `.with_category(Filler)` restated
+        // in Rust what the `&-` prefix already says in CHAT. The parse carries
+        // all three, so this test now asserts against a word the toolchain can
+        // actually make.
+        let parser = TreeSitterParser::new().expect("the grammar is linked in");
+        let mut word = parser
+            .parse_word("&-private-name")
+            .expect("`&-private-name` is a word this grammar admits");
+        assert_eq!(
+            word.category,
+            Some(WordCategory::Filler),
+            "the `&-` prefix is what makes this a filler; the fabrication used \
+             to assert it by hand"
+        );
         let mut state = PlaceholderState::new();
 
         sanitize_word(&mut word, &mut state);

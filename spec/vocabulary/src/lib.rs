@@ -33,7 +33,9 @@ use serde::{Deserialize, Serialize};
 
 pub mod frontmatter;
 pub mod observations;
+pub mod paths;
 pub mod registry;
+pub mod validation_manifest;
 
 /// Raised when a metadata value fails the rule its type states.
 #[derive(Debug, thiserror::Error)]
@@ -389,6 +391,39 @@ impl fmt::Display for SpecLevel {
     }
 }
 
+/// Whether a FILE NAME is an error spec: a code-shaped stem and a `.md`
+/// extension.
+///
+/// The predicate half of [`spec_file_paths`], extracted on 2026-09-08 because
+/// the enumeration this crate owns is not the only one. `talkbank-parser-tests`
+/// enumerates `spec/errors` through its own tree overlay so a probe can plant a
+/// spec corpus without touching the checkout, and it had re-grown the rule in
+/// its own spelling. The two already disagreed, which is what
+/// [`spec_file_paths`]'s own "one owner" section predicted and could not
+/// prevent while only the `looks_like_a_code` half was shared: `E999.MD` was a
+/// spec to the tree reader, whose extension test folds ASCII case, and not to
+/// this one.
+///
+/// This function is the single answer and takes the stricter reading: the
+/// extension is `md` exactly. A spec file whose name a maintainer typed
+/// unusually should be renamed, not accommodated by two readers agreeing to
+/// differ.
+///
+/// It does NOT reject `E999.md.md`, and the reason is worth stating because a
+/// first draft of this comment claimed it did, and the test written to assert
+/// that claim failed. Exactly one extension is stripped either way, and
+/// [`looks_like_a_code`] reads only the first two characters of what is left,
+/// so `E999.md` is code-shaped to it. That is pre-existing and deliberate
+/// looseness (it is what lets `E502_wor_cascade_regression.md` be a spec), not
+/// a divergence between the two readers.
+#[must_use]
+pub fn is_spec_file_name(file_name: &str) -> bool {
+    match file_name.rsplit_once('.') {
+        Some((stem, "md")) => looks_like_a_code(stem),
+        Some(_) | None => false,
+    }
+}
+
 /// Every error-spec file under `root`, sorted, and NOTHING else in the
 /// directory.
 ///
@@ -422,6 +457,12 @@ impl fmt::Display for SpecLevel {
 /// well was dead work that also hid which ordering is meant: the two agree
 /// only because `spec/errors` is flat, and on a nested tree per-directory
 /// traversal order and full-path lexicographic order are different answers.
+///
+/// # Errors
+///
+/// When the walk itself fails. A directory that cannot be read is REPORTED,
+/// never skipped: a spec that silently leaves the set takes every gate that
+/// would have judged it with it.
 pub fn spec_file_paths(root: &std::path::Path) -> Result<Vec<std::path::PathBuf>, String> {
     if !root.exists() {
         return Ok(Vec::new());
@@ -432,11 +473,10 @@ pub fn spec_file_paths(root: &std::path::Path) -> Result<Vec<std::path::PathBuf>
         // silently leaves the set takes every gate that would have judged it.
         let entry = entry.map_err(|err| format!("could not walk {}: {err}", root.display()))?;
         let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "md")
-            && path
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .is_some_and(looks_like_a_code)
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(is_spec_file_name)
         {
             paths.push(path.to_path_buf());
         }
@@ -499,5 +539,53 @@ impl FromStr for SpecDescription {
 impl fmt::Display for SpecDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+#[cfg(test)]
+mod spec_file_name_tests {
+    use super::is_spec_file_name;
+
+    /// SURVIVES: policy. Which file names count as specs is a choice with real
+    /// alternatives, and the alternatives are what the two enumerations of
+    /// `spec/errors` had each picked for themselves.
+    #[test]
+    fn a_code_shaped_stem_with_a_markdown_extension_is_a_spec() {
+        assert!(is_spec_file_name("E208.md"));
+        assert!(is_spec_file_name("W123.md"));
+        assert!(is_spec_file_name("E502_wor_cascade_regression.md"));
+    }
+
+    /// The files that turn up beside specs, which is what this predicate is
+    /// for: `README.md` arrived as a spec once and every caller had to
+    /// recognise and skip it.
+    #[test]
+    fn prose_beside_the_specs_is_not_a_spec() {
+        assert!(!is_spec_file_name("README.md"));
+        assert!(!is_spec_file_name("SPEC_ENHANCEMENT_GUIDE.md"));
+        assert!(!is_spec_file_name("notes.md"));
+        assert!(!is_spec_file_name("E208.txt"));
+        assert!(!is_spec_file_name("E208"));
+    }
+
+    /// The edge the tree-side enumeration disagreed with this one about before
+    /// they were merged on 2026-09-08. The stricter answer is chosen on
+    /// purpose: a spec file whose name was typed unusually should be renamed,
+    /// not accommodated by two readers agreeing to differ.
+    #[test]
+    fn the_edge_that_had_diverged_is_decided_here_and_only_here() {
+        assert!(
+            !is_spec_file_name("E999.MD"),
+            "the extension is `md` exactly; the tree reader used to fold case"
+        );
+    }
+
+    /// The near miss, kept because asserting it is how the doc above got
+    /// corrected: a first draft claimed a second divergence here and this test
+    /// refused it. `looks_like_a_code` reads two characters, so the stem
+    /// `E999.md` is code-shaped, and both readers always agreed about that.
+    #[test]
+    fn a_doubled_extension_is_accepted_by_both_readers_and_always_was() {
+        assert!(is_spec_file_name("E999.md.md"));
     }
 }

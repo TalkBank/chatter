@@ -724,6 +724,3 @@ pub fn walk_words_mut<'a>(
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -1,6 +1,36 @@
 use crate::{ErrorCode, ErrorContext, ErrorLabel, ParseError, Severity, SourceLocation, Span};
 
+/// Where a warning about two tier sides points: the first side with a known
+/// location, and `Span::DUMMY` when neither has one.
+///
+/// `left` is the span of a tier the caller holds; `right` is `None` when the
+/// partner side is a group of tiers none of which is present (`%xphoaln`
+/// with neither `%mod` nor `%pho`). A HELD tier's span can still be `0..0`:
+/// the re2c backend sets no tier spans yet, so every tier it builds carries
+/// the sentinel, and a `SourceLocation` has no way to say "unknown". That
+/// producer is the remaining hole, recorded in the fabrication handoff, not
+/// this module's to close; until it is, the sentinel is what such a warning
+/// carries, and the labels below are gated the same way so that no label
+/// points at byte 0 for a tier whose location is unknown.
+fn location_of(left: Span, right: Option<Span>) -> Span {
+    match [Some(left), right]
+        .into_iter()
+        .flatten()
+        .find(|span| !span.is_dummy())
+    {
+        Some(span) => span,
+        None => Span::DUMMY,
+    }
+}
+
+/// A tier's span as a location: `None` when the tier carries the sentinel
+/// (see [`location_of`]).
+pub(super) fn known_span(span: Span) -> Option<Span> {
+    (!span.is_dummy()).then_some(span)
+}
+
 /// Build a warning emitted when parse-health taint blocks one alignment pass.
+/// The spans are as for [`location_of`].
 pub(super) fn skipped_alignment_warning(
     alignment_name: &str,
     left_label: &str,
@@ -8,7 +38,7 @@ pub(super) fn skipped_alignment_warning(
     left_span: Span,
     right_label: &str,
     right_clean: bool,
-    right_span: Span,
+    right_span: Option<Span>,
 ) -> ParseError {
     let tainted = match (!left_clean, !right_clean) {
         (true, true) => format!("{left_label} and {right_label}"),
@@ -17,7 +47,7 @@ pub(super) fn skipped_alignment_warning(
         (false, false) => "an internal parse-health gate".to_string(),
     };
 
-    let location = first_non_dummy_span([left_span, right_span]);
+    let location = location_of(left_span, right_span);
     let mut error = ParseError::new(
         ErrorCode::TierValidationError,
         Severity::Warning,
@@ -30,25 +60,26 @@ pub(super) fn skipped_alignment_warning(
     )
     .with_suggestion("Fix parse errors in the affected tier(s) first, then rerun validation");
 
-    if !left_clean && !left_span.is_dummy() {
+    if !left_clean && let Some(left_span) = known_span(left_span) {
         error.labels.push(ErrorLabel::new(left_span, left_label));
     }
-    if !right_clean && !right_span.is_dummy() {
+    if !right_clean && let Some(right_span) = right_span.and_then(known_span) {
         error.labels.push(ErrorLabel::new(right_span, right_label));
     }
 
     error
 }
 
-/// Build a warning emitted when alignment is blocked by missing parse provenance.
+/// Build a warning emitted when alignment is blocked by missing parse
+/// provenance. The spans are as for [`location_of`].
 pub(super) fn unknown_alignment_warning(
     alignment_name: &str,
     left_label: &str,
     left_span: Span,
     right_label: &str,
-    right_span: Span,
+    right_span: Option<Span>,
 ) -> ParseError {
-    let location = first_non_dummy_span([left_span, right_span]);
+    let location = location_of(left_span, right_span);
     let mut error = ParseError::new(
         ErrorCode::TierValidationError,
         Severity::Warning,
@@ -63,23 +94,14 @@ pub(super) fn unknown_alignment_warning(
         "Run parser-backed validation or explicitly mark parse provenance before alignment checks",
     );
 
-    if !left_span.is_dummy() {
+    if let Some(left_span) = known_span(left_span) {
         error.labels.push(ErrorLabel::new(left_span, left_label));
     }
-    if !right_span.is_dummy() {
+    if let Some(right_span) = right_span.and_then(known_span) {
         error.labels.push(ErrorLabel::new(right_span, right_label));
     }
 
     error
-}
-
-pub(super) fn first_non_dummy_span(spans: [Span; 2]) -> Span {
-    for span in spans {
-        if !span.is_dummy() {
-            return span;
-        }
-    }
-    Span::DUMMY
 }
 
 pub(super) fn build_count_mismatch_error(

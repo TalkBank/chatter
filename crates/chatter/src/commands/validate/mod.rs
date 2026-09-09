@@ -42,7 +42,12 @@ pub struct ValidateCommandRules {
     pub roundtrip: RoundtripValidationMode,
     /// Parser backend selection.
     pub parser_kind: ParserKind,
-    /// Enable strict cross-utterance linker validation (E351-E355).
+    /// Enable strict cross-utterance linker validation.
+    ///
+    /// Checks that the quotation linkers (`+"`, `+"/. `, `+".`) and the completion
+    /// linkers (`+,`, `++`) pair with the terminators they continue. The codes it
+    /// turns on are listed per code in the generated error index; a range written
+    /// here said "E351-E355" in nine places and omitted three codes in all nine.
     pub strict_linkers: bool,
 }
 

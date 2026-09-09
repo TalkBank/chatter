@@ -69,8 +69,7 @@ pub(super) fn check_self_completion_all(utterances: &FileUtterances<'_>, errors:
         if has_self_completion_linker_internal(utterance) {
             let stack_has_match = interruption_stacks
                 .get(speaker)
-                .map(|s| !s.is_empty())
-                .unwrap_or(false);
+                .is_some_and(|s| !s.is_empty());
 
             if stack_has_match {
                 // Happy path: pop the matching `+/.` interruption. The

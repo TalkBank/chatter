@@ -18,8 +18,25 @@ publish = false
 # share the spec format's vocabulary, and the main workspace pulls it into its
 # test graph. Anything added here is compiled by the main test suite, so a
 # markdown parser, a template engine or a CLI framework does not belong.
+#
+# The rule is about what the MAIN TEST SUITE has to compile, which is why
+# `talkbank-model` below is admitted and a template engine still is not.
+# Checked rather than assumed, 2026-09-08: both root-workspace consumers of
+# this crate (`talkbank-parser-tests`, `talkbank-parser-re2c`) already depend
+# on `talkbank-model`, the `spec/` workspace already declares it at workspace
+# level for `runtime-tools`, and `talkbank-model` does not name this crate, so
+# there is no cycle and no new crate in either graph.
+#
+# Admitting it is what let a spec example declare its rules as the model's OWN
+# type. The version before it could not, so the two sides exchanged STRINGS: a
+# name table on each side, a fallible lookup, and four tests whose whole job
+# was to hold the two tables equal. A test asserting two things stay equal is
+# a standing confession that one of them should not exist.
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+# The validator's own rule-selection type, so a spec example declares the
+# rules it runs under rather than naming them in a string both sides parse.
+talkbank-model = { path = "../../crates/talkbank-model" }
 thiserror = "2"
 # Enumerating the spec directory is shared too, not just the predicate that
 # decides which files count. Already in both workspaces' graphs, so it adds
@@ -32,3 +49,10 @@ walkdir = "2.5"
 # and both resolve to the same 1.x, so no new crate enters either graph.
 # LITERAL for the reason stated at the top of this file.
 toml = "1"
+
+# TEST-ONLY. The manifest is JSON on the wire and its round-trip is the one
+# thing no type can assert, so the test that pins it needs a JSON codec. A
+# dev-dependency is not compiled by the main workspace's test graph, so the
+# dependency-light rule above is untouched.
+[dev-dependencies]
+serde_json = "1.0"

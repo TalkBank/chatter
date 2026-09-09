@@ -82,9 +82,6 @@ fn build_validation_context(
     let default_language = declared_languages.first();
 
     let ca_mode = file_uses_ca_mode(headers);
-    // The `bullets` @Options was removed from CHAT, so no file is ever in
-    // bullets mode.
-    let bullets_mode = false;
     let enable_quotation_validation = rules.strict_linkers_enabled();
 
     crate::validation::ValidationContext::from_shared(std::sync::Arc::new(
@@ -94,7 +91,6 @@ fn build_validation_context(
             declared_languages: declared_languages.to_vec(),
             ca_mode,
             enable_quotation_validation,
-            bullets_mode,
         },
     ))
 }
@@ -116,18 +112,12 @@ fn run_validation_checks(
     errors: &impl crate::ErrorSink,
     name: TranscriptName<'_>,
 ) {
-    use crate::validation::{cross_utterance, header};
+    use crate::validation::cross_utterance;
 
     let headers_with_spans: Vec<(&Header, crate::Span)> = file.headers_with_spans().collect();
 
-    // Validate header collection (duplicates, required headers).
-    let source_len = file.lines.last().map(|l| l.span().end as usize);
-    header::structure::check_headers(&headers_with_spans, errors, source_len);
-
-    // Validate individual headers.
-    for (header, span) in &headers_with_spans {
-        header::check_header(header, *span, context, errors);
-    }
+    // The header half, shared with `validate_headers_only`.
+    run_header_checks(file, &headers_with_spans, context, errors, name);
 
     // Cross-header validation: @ID language vs @Languages, role mismatch.
     check_cross_header_consistency(file, &headers_with_spans, errors);
@@ -142,25 +132,35 @@ fn run_validation_checks(
     // no caller can hand them one assembled some other way.
     cross_utterance::check_cross_utterance_patterns_with_sink(file, context, errors);
 
-    // E362: Validate bullet timestamp monotonicity across utterances.
-    // Skip monotonicity check if bullets mode is enabled.
+    // E362: Validate bullet timestamp monotonicity across utterances. The
+    // `bullets` @Options that once switched this off was removed from CHAT;
+    // the flag that remembered it was always false and went on 2026-09-08.
     let bullets: Vec<&crate::model::Bullet> = file
         .utterances()
         .filter_map(|utt| utt.main.content.bullet.as_ref())
         .collect();
-    if !bullets.is_empty() && !context.shared.bullets_mode {
+    if !bullets.is_empty() {
         crate::validation::check_bullet_monotonicity(&bullets, errors);
     }
 
+    // The media-consistency family reads ONE union of main-tier timing
+    // evidence: utterance-final bullets and bullets INSIDE an utterance
+    // (`InternalBullet` items, at any depth). Until 2026-09-08 only the final
+    // bullets counted, so `hello \u{15}100_200\u{15} world .` passed with no
+    // @Media and became E544 once one was declared; CLAN CHECK 112 fires on
+    // it, and a timestamp is a timestamp wherever it sits (maintainer
+    // ruling, 2026-09-08). E362's monotonicity check above stays on the
+    // final bullets alone.
+    let timing_bullets = main_tier_timing_bullets(file);
     // E544: @Media declares linkage but transcript has no timing evidence.
-    check_media_linkage_has_timing(&headers_with_spans, file, &bullets, errors);
+    check_media_linkage_has_timing(&headers_with_spans, file, &timing_bullets, errors);
 
     // E552: the inverse, @Media declares `unlinked` but the transcript has
     // timing bullets, so the media is in fact linked (CLAN CHECK 124).
-    check_media_unlinked_has_no_timing(&headers_with_spans, file, &bullets, errors);
+    check_media_unlinked_has_no_timing(&headers_with_spans, file, &timing_bullets, errors);
 
     // E752: timing evidence with NO @Media header at all (CLAN CHECK 112).
-    check_timing_has_media(&headers_with_spans, file, &bullets, errors);
+    check_timing_has_media(&headers_with_spans, file, &timing_bullets, errors);
 
     // E755: a [- CODE] utterance language must be declared in @Languages
     // (CLAN CHECK 152); word-level @s:CODE deliberately exempt.
@@ -178,12 +178,44 @@ fn run_validation_checks(
 
     // E701, E704: Validate temporal constraints on media bullets.
     crate::validation::temporal::validate_temporal_constraints(file, errors);
+}
+
+/// The header half of validation: the header set (duplicates, required
+/// headers), every header's payload through the per-header dispatcher, and
+/// the transcript-name rule. [`ChatFile::validate_headers_only`] is this and
+/// nothing else; [`run_validation_checks`] is this, then the cross-header,
+/// utterance, cross-utterance, bullet, media and temporal checks. Until
+/// 2026-09-08 the two entry points each wrote this sequence out, and a test
+/// held them equal; one body makes a header rule reachable from the
+/// header-only entry point exactly when it is reachable from full
+/// validation.
+fn run_header_checks(
+    file: &ChatFile,
+    headers_with_spans: &[(&Header, crate::Span)],
+    context: &crate::validation::ValidationContext,
+    errors: &impl crate::ErrorSink,
+    name: TranscriptName<'_>,
+) {
+    use crate::validation::header;
+
+    // Validate header collection (duplicates, required headers). The end of
+    // the file is the end of its last line; a file with no lines ends at 0.
+    let source_len = match file.lines.last() {
+        Some(last) => last.span().end as usize,
+        None => 0,
+    };
+    header::structure::check_headers(headers_with_spans, errors, source_len);
+
+    // Validate individual headers.
+    for (header, span) in headers_with_spans {
+        header::check_header(header, *span, context, errors);
+    }
 
     // E531: the `@Media` filename must match the transcript's own name. Runs
     // only when the caller says the transcript HAS a name; `Anonymous` is a
     // deliberate answer, not a missing one (see `transcript_name`).
     if let Some(stem) = name.stem() {
-        check_media_filename_match(&headers_with_spans, stem.as_str(), errors);
+        check_media_filename_match(headers_with_spans, stem.as_str(), errors);
     }
 }
 
@@ -191,24 +223,22 @@ impl ChatFile {
     /// Run header-only validation and return the derived context.
     ///
     /// Useful for callers that need validated header-derived configuration
-    /// before running utterance-level checks.
+    /// before running utterance-level checks. This is the header half of
+    /// [`Self::validate`], `run_header_checks`, and nothing else, so a
+    /// header rule full validation reports is one this reports. (The LSP
+    /// validates through `validate_with_alignment` today; this entry point
+    /// is public API with no in-tree caller but its tests.)
     pub fn validate_headers_only(
         &self,
         errors: &impl ErrorSink,
         name: TranscriptName<'_>,
     ) -> crate::validation::ValidationContext {
-        use crate::validation::header;
-
         let headers_with_spans: Vec<(&Header, crate::Span)> = self.headers_with_spans().collect();
         let headers: Vec<&Header> = headers_with_spans.iter().map(|(h, _)| *h).collect();
 
         // Extract participant IDs from parsed participant map.
         let participant_ids: HashSet<crate::model::SpeakerCode> =
             self.participants.keys().cloned().collect();
-
-        // Validate header-set invariants (duplicates, required headers).
-        let source_len = self.lines.last().map(|l| l.span().end as usize);
-        header::structure::check_headers(&headers_with_spans, errors, source_len);
 
         let context = build_validation_context(
             participant_ids,
@@ -217,15 +247,7 @@ impl ChatFile {
             RuleSelection::new(),
         );
 
-        // Validate each header payload.
-        for (header, span) in &headers_with_spans {
-            header::check_header(header, *span, &context, errors);
-        }
-
-        // E531: see the sibling call in `run_validation_checks`.
-        if let Some(stem) = name.stem() {
-            check_media_filename_match(&headers_with_spans, stem.as_str(), errors);
-        }
+        run_header_checks(self, &headers_with_spans, &context, errors, name);
 
         context
     }
@@ -540,170 +562,21 @@ impl Validate for ChatFile {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::Span;
-    use crate::model::{
-        GraTier, GrammaticalRelation, Header, LanguageCode, MainTier, Mor, MorTier, MorWord,
-        PosCategory, Terminator, Utterance, UtteranceContent, Word,
-    };
-
-    /// Build a minimal ChatFile wrapping one utterance.
-    fn chat_with_utterance(utt: Utterance) -> ChatFile {
-        ChatFile::new(vec![
-            Line::header(Header::Utf8),
-            Line::header(Header::Begin),
-            Line::header(Header::Languages {
-                codes: vec![LanguageCode::new("eng").expect("test literal is non-empty")].into(),
-            }),
-            Line::utterance(utt),
-            Line::header(Header::End),
-        ])
-    }
-
-    /// Builds a minimal main tier from word strings.
-    fn simple_main_tier(words: &[&str]) -> MainTier {
-        let content: Vec<UtteranceContent> = words
-            .iter()
-            .map(|w| UtteranceContent::Word(Box::new(Word::new_unchecked(*w, *w))))
-            .collect();
-        MainTier::new("CHI", content, Terminator::Period { span: Span::DUMMY })
-    }
-
-    /// Builds a minimal `%mor` tier from `(pos, lemma)` tuples.
-    fn simple_mor_tier(items: &[(&str, &str)]) -> MorTier {
-        let mors: Vec<Mor> = items
-            .iter()
-            .map(|(pos, lemma)| Mor::new(MorWord::new(PosCategory::new(*pos), *lemma)))
-            .collect();
-        MorTier::new_mor(
-            mors,
-            crate::Terminator::Period {
-                span: crate::Span::DUMMY,
-            },
-        )
-    }
-
-    /// Builds a synthetic `%gra` tier with `count` relations.
-    fn simple_gra_tier(count: usize) -> GraTier {
-        let mut rels = Vec::new();
-        for i in 0..count {
-            if i == 0 {
-                rels.push(GrammaticalRelation::new(1, 0, "ROOT"));
-            } else {
-                rels.push(GrammaticalRelation::new(i + 1, 1, "MOD"));
+/// Every main-tier bullet in document order: the utterance-final bullet and
+/// every bullet inside the utterance, at any depth, which is the timing
+/// evidence the media-consistency family (E544, E552, E752) reads.
+fn main_tier_timing_bullets(file: &ChatFile) -> Vec<&crate::model::Bullet> {
+    use crate::alignment::helpers::{ContentItem, walk_content};
+    let mut bullets = Vec::new();
+    for utt in file.utterances() {
+        walk_content(&utt.main.content.content, None, &mut |item| {
+            if let ContentItem::InternalBullet(bullet) = item {
+                bullets.push(bullet);
             }
+        });
+        if let Some(bullet) = utt.main.content.bullet.as_ref() {
+            bullets.push(bullet);
         }
-        GraTier::new_gra(rels)
     }
-
-    /// Alignment check passes when `%mor`/`%gra` cardinalities are consistent.
-    #[test]
-    fn validate_alignments_no_errors_for_matching_tiers() {
-        let main = simple_main_tier(&["I", "go"]);
-        let mor = simple_mor_tier(&[("pro", "I"), ("v", "go")]);
-        // 2 words + terminator = 3 mor chunks → need 3 gra relations
-        let gra = simple_gra_tier(3);
-        let utt = Utterance::new(main).with_mor(mor).with_gra(gra);
-        let chat = chat_with_utterance(utt);
-
-        let errors = chat.validate_alignments();
-        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
-    }
-
-    /// Alignment check reports mismatch when `%gra` has too few relations.
-    #[test]
-    fn validate_alignments_catches_mor_gra_mismatch() {
-        let main = simple_main_tier(&["I", "go"]);
-        let mor = simple_mor_tier(&[("pro", "I"), ("v", "go")]);
-        // Intentionally wrong: 2 gra relations for 3 mor chunks (2 words + terminator)
-        let gra = simple_gra_tier(2);
-        let utt = Utterance::new(main).with_mor(mor).with_gra(gra);
-        let chat = chat_with_utterance(utt);
-
-        let errors = chat.validate_alignments();
-        assert!(
-            !errors.is_empty(),
-            "Expected alignment errors for mor/gra mismatch"
-        );
-    }
-
-    /// Tainted tier domains are skipped during alignment validation.
-    #[test]
-    fn validate_alignments_skips_tainted_tiers() {
-        use crate::model::ParseHealthTier;
-
-        let main = simple_main_tier(&["I", "go"]);
-        let mor = simple_mor_tier(&[("pro", "I"), ("v", "go")]);
-        // Intentionally wrong: 2 gra relations for 3 mor chunks (2 words + terminator)
-        let gra = simple_gra_tier(2);
-
-        let mut utt = Utterance::new(main).with_mor(mor).with_gra(gra);
-        // Taint the gra tier, validation should skip mor→gra check
-        utt.mark_parse_taint(ParseHealthTier::Gra);
-        let chat = chat_with_utterance(utt);
-
-        let errors = chat.validate_alignments();
-        // Mor→gra check is skipped because gra is tainted, so no errors from that check.
-        // Main→mor is still checked but should pass (2 words, 2 mor items).
-        assert!(
-            errors.is_empty(),
-            "Expected no errors when gra is tainted, got: {:?}",
-            errors
-        );
-    }
-
-    /// Alignment check reports mismatch when main-word and `%mor` counts diverge.
-    #[test]
-    fn validate_alignments_catches_main_mor_mismatch() {
-        // 3 words but only 2 mor items
-        let main = simple_main_tier(&["I", "go", "home"]);
-        let mor = simple_mor_tier(&[("pro", "I"), ("v", "go")]);
-        let utt = Utterance::new(main).with_mor(mor);
-        let chat = chat_with_utterance(utt);
-
-        let errors = chat.validate_alignments();
-        assert!(
-            !errors.is_empty(),
-            "Expected alignment errors for main/mor mismatch"
-        );
-    }
-
-    /// An out-of-bounds `%gra` head should surface as E713 without cascading into
-    /// additional root/cycle diagnostics from structural validation.
-    #[test]
-    fn validate_with_alignment_out_of_bounds_head_does_not_cascade_structure_errors() {
-        let main = simple_main_tier(&["I", "go"]);
-        let mor = simple_mor_tier(&[("pro", "I"), ("v", "go")]);
-        let gra = GraTier::new_gra(vec![
-            GrammaticalRelation::new(1, 5, "DEP"),
-            GrammaticalRelation::new(2, 1, "OBJ"),
-            GrammaticalRelation::new(3, 2, "PUNCT"),
-        ]);
-        let utt = Utterance::new(main).with_mor(mor).with_gra(gra);
-        let mut chat = chat_with_utterance(utt);
-
-        let errs = crate::validate_chat_file_with_options(
-            &mut chat,
-            &crate::ParseValidateOptions::default().with_alignment(),
-        )
-        .expect_err("out-of-bounds gra head must fail validation");
-
-        assert!(
-            errs.iter()
-                .any(|e| e.code == crate::ErrorCode::GraInvalidHeadIndex),
-            "out-of-bounds head must report E713"
-        );
-        assert!(
-            !errs.iter().any(|e| e.code == crate::ErrorCode::GraNoRoot),
-            "E713 must not cascade into E722"
-        );
-        assert!(
-            !errs
-                .iter()
-                .any(|e| e.code == crate::ErrorCode::GraCircularDependency),
-            "E713 must not cascade into E724"
-        );
-    }
+    bullets
 }

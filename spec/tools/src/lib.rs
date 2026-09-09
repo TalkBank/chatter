@@ -139,6 +139,7 @@ pub use spec::{
 #[cfg(test)]
 pub(crate) mod test_registry {
     use talkbank_spec_vocabulary::Status;
+    use talkbank_spec_vocabulary::frontmatter::RuleProfile;
     use talkbank_spec_vocabulary::registry::CodeRegistry;
 
     /// A registry declaring exactly the given codes.
@@ -147,14 +148,27 @@ pub(crate) mod test_registry {
     /// `UpperCamelCase` ASCII identifier, so a fixture needs no second
     /// vocabulary of its own.
     pub(crate) fn declaring(codes: &[(&str, Status)]) -> CodeRegistry {
+        declaring_with_rules(codes, RuleProfile::Default)
+    }
+
+    /// A registry declaring the given codes, all under one rules profile.
+    ///
+    /// Separate from [`declaring`] rather than a fourth tuple slot on it,
+    /// because 30-odd call sites would then each state a fact only two of them
+    /// care about, and a value nobody chose reads as a decision.
+    pub(crate) fn declaring_with_rules(
+        codes: &[(&str, Status)],
+        rules: RuleProfile,
+    ) -> CodeRegistry {
         let toml: String = codes
             .iter()
             .map(|(code, status)| {
                 format!(
                     "[[code]]\ncode = '{code}'\nvariant = '{code}'\n\
                      summary = 'A test code.'\nkind = 'Invalidity'\n\
-                     status = '{}'\n",
-                    status.as_str()
+                     status = '{}'\nrules = '{}'\n",
+                    status.as_str(),
+                    rules.as_str()
                 )
             })
             .collect();

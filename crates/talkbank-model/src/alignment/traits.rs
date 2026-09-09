@@ -15,7 +15,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use super::format::format_positional_mismatch;
-use super::helpers::{TierDomain, TierPosition, collect_tier_items, count_tier_positions};
+use super::helpers::{PositionalDomain, TierPosition, collect_tier_items, count_tier_positions};
 use super::types::AlignmentPair;
 use crate::model::{MainTier, UtteranceContent};
 use crate::{ErrorCode, ErrorLabel, ParseError, Severity, Span};
@@ -103,7 +103,7 @@ pub trait TierAlignmentResult: Default {
 ///
 /// ```ignore
 /// impl AlignableTier for PhoTier {
-///     const DOMAIN: TierDomain = TierDomain::Pho;
+///     const DOMAIN: PositionalDomain = PositionalDomain::Pho;
 ///     fn tier_name(&self) -> &str { "%pho tier" }
 ///     fn target_count(&self) -> usize { self.len() }
 ///     // ...
@@ -131,7 +131,7 @@ pub trait AlignableTier {
     type Target: Copy + From<usize> + Into<usize>;
 
     /// The alignment domain used for counting main-tier items.
-    const DOMAIN: TierDomain;
+    const DOMAIN: PositionalDomain;
 
     /// Display name for diagnostic messages (e.g., `"%pho tier"`).
     fn tier_name(&self) -> &str;
@@ -243,23 +243,23 @@ pub fn positional_align<T: AlignableTier>(main: &MainTier, tier: &T) -> Position
 /// Provides method syntax for the operations in [`helpers::count`](super::helpers):
 ///
 /// ```ignore
-/// let count = content.count_alignable(TierDomain::Mor);
-/// let items = content.extract_alignable(TierDomain::Pho);
+/// let count = content.count_alignable(PositionalDomain::Mor);
+/// let items = content.extract_alignable(PositionalDomain::Pho);
 /// ```
 pub trait TierCountable {
     /// Count alignable items for the given domain.
-    fn count_alignable(&self, domain: TierDomain) -> usize;
+    fn count_alignable(&self, domain: PositionalDomain) -> usize;
 
     /// Extract alignable items with display text for diagnostics.
-    fn extract_alignable(&self, domain: TierDomain) -> Vec<TierPosition>;
+    fn extract_alignable(&self, domain: PositionalDomain) -> Vec<TierPosition>;
 }
 
 impl TierCountable for [UtteranceContent] {
-    fn count_alignable(&self, domain: TierDomain) -> usize {
+    fn count_alignable(&self, domain: PositionalDomain) -> usize {
         count_tier_positions(self, domain)
     }
 
-    fn extract_alignable(&self, domain: TierDomain) -> Vec<TierPosition> {
+    fn extract_alignable(&self, domain: PositionalDomain) -> Vec<TierPosition> {
         collect_tier_items(self, domain)
     }
 }

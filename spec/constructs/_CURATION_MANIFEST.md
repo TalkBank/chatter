@@ -11,6 +11,7 @@ there is a minimal, representative spec in `spec/constructs/`.
 - [x] `@Participants`
 - [x] `@ID` variants
 - [x] `@Media` variants
+- [x] `@PID`
 - [x] additional required/optional headers in current grammar
 
 ## Main Tier

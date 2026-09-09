@@ -21,18 +21,14 @@
 use std::path::PathBuf;
 
 use talkbank_parser_tests::error_corpus_gen::{
-    generate_e0_e1xx_internal_errors, generate_e3xx_parser_errors, generate_wxxx_warnings,
+    error_corpus_root, generate_e0_e1xx_internal_errors, generate_e3xx_parser_errors,
+    generate_wxxx_warnings,
 };
 
 /// Entry point for this binary target.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let error_corpus_root = PathBuf::from(manifest_dir)
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.parent())
-        .ok_or("manifest dir missing great-grandparent")?
-        .join("tests/error_corpus");
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let error_corpus_root = error_corpus_root(&manifest_dir)?;
 
     println!("Generating error corpus files...\n");
 

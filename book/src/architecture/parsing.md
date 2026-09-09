@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-06 20:19 EDT
+**Last updated:** 2026-09-09 07:46 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 The default and canonical parser is the tree-sitter parser
@@ -54,7 +54,8 @@ rule, each returning a typed view of that rule's children, so consumer
 code dispatches on generated types rather than on `node.kind()` strings.
 
 Every child position a grammar rule models is exposed as a `NodeSlot`
-with five states:
+with five states, of which each position's type admits only the ones that
+position can produce:
 
 | `NodeSlot` state | Meaning |
 |---|---|
@@ -64,10 +65,24 @@ with five states:
 | `Unexpected` | A node of an unmodeled kind landed here |
 | `Absent` | An optional position is simply empty |
 
+The generator names the position's kind in the slot's type. A `ChildSlot`
+(a child taken by kind) is never `Unexpected`; a `SeqSlot` (an inline
+sequence) is never `Missing` or `Unexpected`; a `ChoiceSlot` can be any of
+the five; a `ClassifiedSlot` (a supertype rule's own node) is never
+`Absent`. The impossible states have the uninhabited `Never` as their
+payload, so an arm that reads a node out of one does not compile, and a
+match by value may omit it. Every generated accessor hands out a
+reference, and a match through a reference must still name every variant,
+so a consumer matches `slot.view()`, which copies the recovery states out
+by value and borrows only the present payload. The parser's shared verbs
+(`expect_present`, `expect_structure`, `expect_delimiter`, `present`) are
+generic over all four kinds.
+
 This design makes silent recovery-node loss structurally impossible at
 modeled positions: `Missing` and `Error` are explicit variants every
 call site must handle, not conditions a hand-written walk can forget to
-check. `Missing` maps to E342 (a MISSING placeholder for a required
+check, and a diagnostic for a state the position cannot reach cannot be
+written either. `Missing` maps to E342 (a MISSING placeholder for a required
 element); `Error` reaches E316, which is the generic "content could not be
 parsed" catch-all.
 

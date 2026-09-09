@@ -213,9 +213,11 @@ fn valid_mod_groups_parses_byte_identical_with_zero_diagnostics() {
 }
 
 /// MALFORMED (upstream): an empty-body `%pho:` line makes the tier node
-/// `has_error()` (the required `pho_word` is recovered as a MISSING node), so the
-/// whole-tree recovery backstop surfaces two `MissingRequiredElement` (E342)
-/// diagnostics and NO pho tier is attached; `parse_pho_tier_inner` is never called
+/// `has_error()` (the required `pho_word` is recovered as a MISSING node), so
+/// one `MissingRequiredElement` (E342) diagnostic surfaces, from the typed
+/// tier dispatch in the tier's words (the whole-tree backstop's candidate for
+/// the same node is deduplicated), and NO pho tier is attached;
+/// `parse_pho_tier_inner` is never called
 /// and its internal "return empty tier silently" partial is unreachable from the
 /// boundary. Pins that reality so the migration cannot accidentally start
 /// attaching a pho tier or changing these diagnostics.
@@ -234,21 +236,14 @@ fn empty_body_pho_tier_is_handled_upstream_without_a_pho_tier() {
     );
     assert_eq!(
         parsed.diags,
-        vec![
-            (
-                "E342".to_string(),
-                30,
-                30,
-                "Missing required 'pho_word' at byte 30 (tree-sitter error recovery)".to_string(),
-            ),
-            (
-                "E342".to_string(),
-                30,
-                30,
-                "Missing required 'pho_word': the document is incomplete here and was only parsed via tree-sitter recovery (recovery is not validity)".to_string(),
-            ),
-        ],
-        "an empty-body %pho line must surface exactly the two MISSING pho_word recovery diagnostics and no pho tier, got: {:?}",
+        vec![(
+            "E342".to_string(),
+            30,
+            30,
+            "Missing required 'pho_word' in pho tier at byte 30 (tree-sitter error recovery)"
+                .to_string(),
+        ),],
+        "an empty-body %pho line must surface exactly the one MISSING pho_word recovery diagnostic and no pho tier, got: {:?}",
         parsed.diags
     );
 }

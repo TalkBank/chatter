@@ -182,9 +182,11 @@ fn valid_sin_groups_parses_byte_identical_with_zero_diagnostics() {
 
 /// MALFORMED (upstream): an empty-body `%sin:` line makes the tier node
 /// `has_error()` (the required `sin_word`, via its first alternative `zero`, is
-/// recovered as a MISSING node), so the
-/// whole-tree recovery backstop surfaces two `MissingRequiredElement` (E342)
-/// diagnostics and NO sin tier is attached; `parse_sin_tier` is never called and
+/// recovered as a MISSING node), so one
+/// `MissingRequiredElement` (E342) diagnostic surfaces, from the typed tier
+/// dispatch in the tier's words (the whole-tree backstop's candidate for the
+/// same node is deduplicated), and NO sin tier is attached; `parse_sin_tier`
+/// is never called and
 /// its internal "return empty tier silently" partial is unreachable from the
 /// boundary. Pins that reality so the migration cannot accidentally start
 /// attaching a sin tier or changing these diagnostics.
@@ -203,21 +205,14 @@ fn empty_body_sin_tier_is_handled_upstream_without_a_sin_tier() {
     );
     assert_eq!(
         parsed.diags,
-        vec![
-            (
-                "E342".to_string(),
-                30,
-                30,
-                "Missing required 'zero' at byte 30 (tree-sitter error recovery)".to_string(),
-            ),
-            (
-                "E342".to_string(),
-                30,
-                30,
-                "Missing required 'zero': the document is incomplete here and was only parsed via tree-sitter recovery (recovery is not validity)".to_string(),
-            ),
-        ],
-        "an empty-body %sin line must surface exactly the two MISSING zero recovery diagnostics and no sin tier, got: {:?}",
+        vec![(
+            "E342".to_string(),
+            30,
+            30,
+            "Missing required 'zero' in sin tier at byte 30 (tree-sitter error recovery)"
+                .to_string(),
+        ),],
+        "an empty-body %sin line must surface exactly the one MISSING zero recovery diagnostic and no sin tier, got: {:?}",
         parsed.diags
     );
 }

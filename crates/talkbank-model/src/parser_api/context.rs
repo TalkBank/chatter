@@ -46,13 +46,4 @@ impl FragmentSemanticContext {
             .iter()
             .any(|flag| matches!(flag, ChatOptionFlag::Ca))
     }
-
-    /// Return whether bullets mode is enabled for this fragment.
-    ///
-    /// Note: the `bullets` option was removed from CHAT. This always returns
-    /// `false`. Retained for API compatibility during migration.
-    #[inline]
-    pub fn bullets_mode(&self) -> bool {
-        false
-    }
 }

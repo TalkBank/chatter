@@ -370,11 +370,23 @@ fn overlap_point(kind: ast::OverlapKind, index: Option<u32>) -> OverlapPoint {
 
 /// The two timestamp texts of a media bullet, as a model `Bullet`.
 ///
-/// `unwrap_or(0)` is retained deliberately and is NOT a silent default: the
-/// lexer's bullet rule matches digits only, so the parse can fail only on
-/// overflow of a number wider than `u64`, and 0 is the least surprising answer
-/// for a timestamp that cannot be represented. Unlike the pause default it
-/// replaced, this cannot be reached by any well-formed shape.
+/// `unwrap_or(0)` IS a silent default, and the paragraph that stood here said
+/// it was not. Its reasoning was right up to its last sentence: the lexer's
+/// bullet rule matches digits only, so the parse can fail only on overflow of
+/// a number wider than `u64`. It then concluded that "this cannot be reached
+/// by any well-formed shape", and a bullet of twenty digits is exactly that
+/// shape. Measured 2026-09-08: both timestamps became `0`, and the file was
+/// reported as a BACKWARDS RANGE (E362, "start (0ms) must be less than end
+/// (0ms)") plus a stray E752, neither of which the input supports.
+///
+/// The rule is now reported where the digits still exist, by
+/// `report_unrepresentable_bullet_times` in `parser/file.rs`, so the user is
+/// told E360 rather than a fact about ordering. The fabrication itself
+/// survives here: removing it means making this fallible through five call
+/// sites that hold no error sink, which is a change to the converter's shape
+/// rather than to this expression. Until then the pair is `(0, 0)` on a file
+/// that is already invalid, and the two diagnostics it draws are recorded in
+/// the backend-parity baseline rather than being explained away.
 pub(crate) fn bullet_from_times(start: &str, end: &str) -> Bullet {
     let (start_ms, end_ms) = bullet_times(start, end);
     Bullet::new(start_ms, end_ms)

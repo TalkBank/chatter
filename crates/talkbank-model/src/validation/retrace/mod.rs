@@ -16,7 +16,6 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 mod collection;
 mod marker_on_marker;
-mod rendering;
 mod types;
 mod visit;
 mod without_words;
@@ -25,7 +24,6 @@ use crate::model::MainTier;
 use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
 use collection::collect_retrace_checks;
 use marker_on_marker::report_if_marker_on_marker;
-use rendering::render_with_spans;
 use types::LeafKind;
 use visit::visit_every_retrace;
 use without_words::report_if_no_words_retraced;
@@ -73,7 +71,7 @@ pub(super) fn retrace_error(
 /// Sharing became possible only once both were expressed over the same
 /// `visit_every_retrace`: the single walk reports E377 as it goes AND answers
 /// the question E370's gate was asking, so the expensive half of E370
-/// (collection plus span-rendering) still runs only when a retrace exists.
+/// (collection) still runs only when a retrace exists.
 ///
 /// # A rewrite deliberately declined
 ///
@@ -114,9 +112,12 @@ pub(crate) fn check_retraces(main_tier: &MainTier, errors: &impl ErrorSink) {
 /// is necessarily followed by the repeated or corrected material (this is also
 /// CLAN CHECK error 119).
 ///
-/// The implementation short-circuits when no retrace marker exists, then runs:
-/// retrace collection, suffix-acceptability computation, and span mapping for
-/// precise diagnostics.
+/// The implementation short-circuits when no retrace marker exists, then runs
+/// retrace collection and the suffix-acceptability computation. Each check
+/// carries the marker's own span from the parse; until 2026-09-08 the rule
+/// rendered the tier back to CHAT text and took the marker's offset in the
+/// rendering, which was right only on canonical spacing (`<hello  there>
+/// [/] .` put the label one byte early).
 ///
 /// Example violations:
 /// - `<the> [/] , .` - ERROR: no real content after the retrace
@@ -136,28 +137,10 @@ fn check_retraces_have_content(main_tier: &MainTier, errors: &impl ErrorSink) {
         .filter(|check| !has_ok_after(&suffix_has_ok, check.after_leaf_index))
         .collect();
 
-    if violations.is_empty() {
-        return;
-    }
-
-    let rendered = render_with_spans(main_tier);
-
     for check in violations {
-        let retrace_span = match rendered.retrace_spans.get(check.retrace_index).copied() {
-            Some(span) => span,
-            None => Span::from_usize(0, 0),
-        };
-        let absolute_span = if !main_tier.span.is_dummy() {
-            let start = main_tier.span.start.saturating_add(retrace_span.start);
-            let end = main_tier.span.start.saturating_add(retrace_span.end);
-            Span::new(start, end)
-        } else {
-            retrace_span
-        };
-
         errors.report(retrace_error(
             ErrorCode::StructuralOrderError,
-            absolute_span,
+            check.marker_span,
             "Retrace marker ([/], [//], [///], or [/-]) must be followed by the repeated or corrected material",
             "Add content after the retrace marker, or remove the retrace if it's not needed",
             "Retrace marker",

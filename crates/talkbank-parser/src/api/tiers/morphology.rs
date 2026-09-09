@@ -1,7 +1,7 @@
 //! Public entrypoint for parsing `%mor` tiers from CST nodes.
 //!
 //! This module re-exports the lower-level morphology parser used by
-//! `parse_dependent_tier` and typed dispatch in the chat-file parser.
+//! `ChatParser::parse_dependent_tier` and typed dispatch in the chat-file parser.
 //!
 //! # Related CHAT Manual Sections
 //!

@@ -65,7 +65,10 @@ pub(crate) fn fold_marker_chain(
         .into_iter()
         .fold(core, |current, marker| match marker {
             ParsedAnnotation::Content(annotation) => annotate(current, annotation, span),
-            ParsedAnnotation::Retrace(kind) => retrace(current, kind, span),
+            ParsedAnnotation::Retrace {
+                kind,
+                span: marker_span,
+            } => retrace(current, kind, span, marker_span),
         })
 }
 
@@ -161,7 +164,15 @@ fn annotate(
 }
 
 /// Wrap whatever the chain has built so far in a retrace.
-fn retrace(current: UtteranceContent, kind: RetraceKind, span: Span) -> UtteranceContent {
+///
+/// `span` is the whole chain's, as for every wrapper the fold builds;
+/// `marker_span` is the marker token's own bytes, which E370 reports at.
+fn retrace(
+    current: UtteranceContent,
+    kind: RetraceKind,
+    span: Span,
+    marker_span: Span,
+) -> UtteranceContent {
     // A bare group hands its brackets to the retrace, which is exactly what
     // `Retrace::is_group` records. Nesting it instead would serialize
     // `<<a b>> [/]`, adding a bracket pair the transcriber did not write.
@@ -182,5 +193,7 @@ fn retrace(current: UtteranceContent, kind: RetraceKind, span: Span) -> Utteranc
             kind,
         )
     };
-    UtteranceContent::Retrace(Box::new(built.with_span(span)))
+    UtteranceContent::Retrace(Box::new(
+        built.with_span(span).with_marker_span(marker_span),
+    ))
 }

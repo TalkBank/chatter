@@ -9,17 +9,17 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 use crate::generated_traversal::{
-    AsRawNode, GraContentsNode, GraDependentTierNode, GraRelationNode, NodeSlot, WhitespacesNode,
-    extract_gra_contents, extract_gra_dependent_tier,
+    AsRawNode, ChildSlot, GraContentsNode, GraDependentTierNode, GraRelationNode, NoChild,
+    SlotView, WhitespacesNode, extract_gra_contents, extract_gra_dependent_tier,
 };
 use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::{GraTier, GraTierType, GrammaticalRelation};
+use talkbank_model::model::{GraCompleteness, GraTier, GrammaticalRelation};
 use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
 use super::relation::parse_gra_relation;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_unexpected};
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
 
 /// Converts one `%gra` tier node into `GraTier`.
 ///
@@ -59,7 +59,7 @@ pub fn parse_gra_tier(
     let node = typed.raw_node();
     let span = span_of(node);
     let children = extract_gra_dependent_tier(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "gra_dependent_tier", source, errors);
 
     match children
         .child_2
@@ -68,8 +68,8 @@ pub fn parse_gra_tier(
         .present_or_placeholder()
     {
         Some(contents) => {
-            let relations = parse_gra_relations(contents, source, errors);
-            GraTier::new(GraTierType::Gra, relations).with_span(span)
+            let (relations, completeness) = parse_gra_relations(contents, source, errors);
+            GraTier::lowered_from(relations, completeness).with_span(span)
         }
         None => {
             errors.report(ParseError::new(
@@ -79,7 +79,11 @@ pub fn parse_gra_tier(
                 ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
                 "Missing gra_contents node in %gra tier".to_string(),
             ));
-            GraTier::new(GraTierType::Gra, Vec::new()).with_span(span)
+            // TRUNCATED, not empty: the `%gra:` line is there and its
+            // contents node is not, so whatever the author wrote was lost. An
+            // empty tier reported as whole would be judged as a complete graph
+            // with no relations.
+            GraTier::lowered_from(Vec::new(), GraCompleteness::Truncated).with_span(span)
         }
     }
 }
@@ -97,36 +101,45 @@ pub fn parse_gra_tier(
 /// `gra_relation` itself); that position is purely structural (no content to
 /// decode) and, per [`push_gra_separator`], unreachable in practice for the
 /// same reason the relation slots below are.
+///
+/// Returns the relations WITH whether every declared one is among them. A
+/// rejected relation is dropped, so the tier can come back shorter than the
+/// line, and `talkbank-model`'s E721 and E722 describe the tier as a whole. The
+/// count of `gra_relation` slots that were `Present` is the denominator: it is
+/// what the LINE declared, and it cannot disagree with the numerator because
+/// both are counted here.
 fn parse_gra_relations(
     typed: GraContentsNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
-) -> Vec<GrammaticalRelation> {
+) -> (Vec<GrammaticalRelation>, GraCompleteness) {
     let contents = extract_gra_contents(typed);
     let mut relations: Vec<GrammaticalRelation> =
         Vec::with_capacity(contents.child_1.slot().len() + 1);
+    let mut declared = 0usize;
 
-    push_gra_relation(contents.child_0.slot(), source, errors, &mut relations);
+    declared += push_gra_relation(contents.child_0.slot(), source, errors, &mut relations);
     for element in contents.child_1.slot() {
-        match element.slot() {
-            NodeSlot::Present(pair) => {
+        match element.slot().view() {
+            SlotView::Present(pair) => {
                 push_gra_separator(pair.child_0.slot(), source, errors);
-                push_gra_relation(pair.child_1.slot(), source, errors, &mut relations);
-                surface_unexpected(&pair.unexpected, source, errors);
+                declared += push_gra_relation(pair.child_1.slot(), source, errors, &mut relations);
+                surface_displaced(&pair.unexpected, "gra_contents", source, errors);
             }
-            // The generated repeat classifies a whole item as `Present` /
-            // `Error` / `Absent` only (see the established finding for the
-            // analogous `@Languages` code-list repeat); matched exhaustively
-            // regardless, per the project no-`_`-on-project-enums rule.
-            NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(*raw, source, "gra_contents"));
+            // An inline sequence is never MISSING or displaced; `SeqSlot` says so.
+            SlotView::Error(raw) => {
+                errors.report(unexpected_node_error(raw, source, "gra_contents"));
             }
-            NodeSlot::Absent => {}
+            SlotView::Absent(NoChild) => {}
         }
     }
 
-    surface_unexpected(&contents.unexpected, source, errors);
-    relations
+    surface_displaced(&contents.unexpected, "gra_contents", source, errors);
+    let completeness = match relations.len() == declared {
+        true => GraCompleteness::Whole,
+        false => GraCompleteness::Truncated,
+    };
+    (relations, completeness)
 }
 
 /// Decode the separating `whitespaces` token inside one `gra_contents` repeat
@@ -144,17 +157,17 @@ fn parse_gra_relations(
 /// CHAT lexer never emits two adjacent `index|head|relation` triples without
 /// intervening whitespace on well-formed input.
 fn push_gra_separator<'tree>(
-    slot: &NodeSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &ChildSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
 ) {
-    match slot {
-        NodeSlot::Present(_) | NodeSlot::Absent => {}
-        NodeSlot::Missing(raw) => {
-            check_not_missing(*raw, source, errors, "gra_contents");
+    match slot.view() {
+        SlotView::Present(_) | SlotView::Absent(NoChild) => {}
+        SlotView::Missing(raw) => {
+            check_not_missing(raw, source, errors, "gra_contents");
         }
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, "gra_contents"));
+        SlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw, source, "gra_contents"));
         }
     }
 }
@@ -180,26 +193,34 @@ fn push_gra_separator<'tree>(
 /// The `Missing` / `Error` / `Unexpected` arms are unreachable from the boundary
 /// (`parse_gra_tier` is only entered when the tier node has no tree-sitter
 /// error); they are handled explicitly for exhaustiveness.
+///
+/// Returns how many relations the LINE declared at this slot: one when the slot
+/// held a `gra_relation` node, whether or not it survived lowering, and zero
+/// otherwise. The caller compares that total against `relations.len()`, so
+/// "was anything dropped" is derived from the same walk that does the dropping
+/// rather than recounted afterwards.
 fn push_gra_relation<'tree>(
-    slot: &NodeSlot<'tree, GraRelationNode<'tree>>,
+    slot: &ChildSlot<'tree, GraRelationNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     relations: &mut Vec<GrammaticalRelation>,
-) {
-    match slot {
-        NodeSlot::Present(relation_node) => {
+) -> usize {
+    match slot.view() {
+        SlotView::Present(relation_node) => {
             if let ParseOutcome::Parsed(relation) =
                 parse_gra_relation(*relation_node, source, errors)
             {
                 relations.push(relation);
             }
+            return 1;
         }
-        NodeSlot::Missing(raw) => {
-            check_not_missing(*raw, source, errors, "gra_contents");
+        SlotView::Missing(raw) => {
+            check_not_missing(raw, source, errors, "gra_contents");
         }
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, "gra_contents"));
+        SlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw, source, "gra_contents"));
         }
-        NodeSlot::Absent => {}
+        SlotView::Absent(NoChild) => {}
     }
+    0
 }

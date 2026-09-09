@@ -20,11 +20,7 @@
 //! - Alignment counting excludes separators
 //! - Roundtrip serialization preserves separators
 
-use talkbank_model::alignment::{
-    WorTimingSidecar,
-    helpers::{TierDomain, count_tier_positions},
-    resolve_wor_timing_sidecar,
-};
+use talkbank_model::alignment::{WorTimingSidecar, resolve_wor_timing_sidecar};
 use talkbank_model::model::dependent_tier::WorTier;
 use talkbank_model::model::dependent_tier::wor::WorItem;
 use talkbank_model::model::{Line, Terminator, WriteChat};
@@ -68,7 +64,7 @@ fn test_wor_tier_terminator_not_counted_in_real_parse() -> Result<(), TestError>
     println!("Terminator: {:?}", main.content.terminator);
     println!(
         "Total alignable (for Wor domain): {}",
-        count_tier_positions(&main.content.content, TierDomain::Wor)
+        main.wor_projection().slot_count().get()
     );
 
     // Debug: wor tier (flat items)
@@ -325,7 +321,7 @@ fn test_wor_alignment_excludes_separators() -> Result<(), TestError> {
         .ok_or_else(|| TestError::Failure("No wor tier found".to_string()))?;
 
     // Main tier should have 2 alignable words (comma is a separator, not alignable for Wor)
-    let main_count = count_tier_positions(&main.content.content, TierDomain::Wor);
+    let main_count = main.wor_projection().slot_count().get();
     assert_eq!(
         main_count, 2,
         "Main tier should have 2 alignable words for Wor domain"

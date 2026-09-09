@@ -194,7 +194,9 @@ fn truncate(value: &str) -> String {
 const PARSER_RESET_INTERVAL: usize = 5_000;
 
 #[test]
-#[ignore]
+#[ignore = "needs the wild corpus, which no contributor has. This is the only \
+           test that runs both parsers over production data, so between \
+           deliberate runs nothing here is watching."]
 fn full_corpus_parse_equivalence() {
     let base = CorpusRoot::resolve().require();
 

@@ -22,7 +22,7 @@ use super::form::FormType;
 use super::language::WordLanguageMarker;
 use super::untranscribed::UntranscribedStatus;
 use super::word_contents::WordContents;
-use crate::model::{Bullet, LanguageCode};
+use crate::model::{Bullet, LanguageCode, NonEmptyString};
 
 /// A cached string value that is transparent to equality comparisons.
 ///
@@ -163,26 +163,47 @@ impl Word {
         Self::new_unchecked(text.clone(), text)
     }
 
+    /// Builds a word from its source text and its cleaned lexical text, each
+    /// proven non-empty by its type.
+    ///
+    /// The constructor a parser front end reaches for: the two proofs are
+    /// built where the texts are, so an empty word is refused THERE, with the
+    /// diagnostic that names why, rather than asserted against in here. Until
+    /// 2026-09-09 the tree-sitter parser tested both strings for emptiness by
+    /// hand and then called [`Self::new_unchecked`], whose debug assertion was
+    /// the only thing between a missed guard and a fabricated word.
+    ///
+    /// `cleaned_text` populates the initial `content` as a single `Text`
+    /// element; the word's cleaned text is always derived from `content` (via
+    /// [`compute_cleaned_text`](Self::compute_cleaned_text)), never stored
+    /// separately.
+    pub fn new(raw_text: NonEmptyString, cleaned_text: WordText) -> Self {
+        Self::from_parts(smol_str::SmolStr::new(raw_text.as_str()), cleaned_text)
+    }
+
     /// Builds a word without punctuation-guard checks.
     ///
-    /// The `cleaned_text` parameter is used to populate the initial `content`
-    /// as a single `Text` element. The word's cleaned text is always derived
-    /// from `content` (via [`compute_cleaned_text`](Self::compute_cleaned_text)),
-    /// not stored separately.
+    /// Test support and the transitional front ends: nothing here proves the
+    /// texts non-empty, and [`WordText::new_unchecked`] carries the debug
+    /// assertion. Production code that holds the texts as strings should
+    /// build the proofs and call [`Self::new`].
     pub fn new_unchecked(
         raw_text: impl Into<smol_str::SmolStr>,
         cleaned_text: impl Into<smol_str::SmolStr>,
     ) -> Self {
-        let raw = raw_text.into();
-        let cleaned = cleaned_text.into();
+        Self::from_parts(
+            raw_text.into(),
+            WordText::new_unchecked(cleaned_text.into()),
+        )
+    }
 
+    /// The one place a `Word` is assembled from its two texts.
+    fn from_parts(raw: smol_str::SmolStr, cleaned: WordText) -> Self {
         Self {
             span: crate::Span::DUMMY,
             word_id: None,
             raw_text: raw,
-            content: WordContents::new(smallvec::smallvec![WordContent::Text(
-                WordText::new_unchecked(cleaned),
-            )]),
+            content: WordContents::new(smallvec::smallvec![WordContent::Text(cleaned)]),
             category: None,
             form_type: None,
             lang: None,
@@ -425,7 +446,10 @@ mod tests {
     fn content_replacement_paths_invalidate_cleaned_text() {
         let mut indexed = Word::simple("old");
         assert_eq!(indexed.cleaned_text(), "old");
-        indexed.replace_content_at(0, WordContent::Text(WordText::new_unchecked("indexed")));
+        indexed.replace_content_at(
+            0,
+            WordContent::Text(WordText::new("indexed").expect("a non-empty literal")),
+        );
         assert_eq!(indexed.cleaned_text(), "indexed");
 
         let mut simple = Word::simple("old");
@@ -435,76 +459,9 @@ mod tests {
 
         let warmed = Word::simple("old");
         assert_eq!(warmed.cleaned_text(), "old");
-        let replaced =
-            warmed.with_content(vec![WordContent::Text(WordText::new_unchecked("builder"))]);
+        let replaced = warmed.with_content(vec![WordContent::Text(
+            WordText::new("builder").expect("a non-empty literal"),
+        )]);
         assert_eq!(replaced.cleaned_text(), "builder");
-    }
-}
-
-#[cfg(test)]
-mod cleaned_text_tests {
-    use super::super::ca::{CADelimiter, CADelimiterType};
-    use super::super::content::{WordContent, WordText};
-    use super::Word;
-
-    fn seg_rep() -> WordContent {
-        WordContent::CADelimiter(CADelimiter::new(CADelimiterType::SegmentRepetition))
-    }
-    fn faster() -> WordContent {
-        WordContent::CADelimiter(CADelimiter::new(CADelimiterType::Faster))
-    }
-    fn text(s: &str) -> WordContent {
-        WordContent::Text(WordText::new_unchecked(s))
-    }
-
-    /// `↫sch↫schaap`: the `↫` pair brackets the repeated onset "sch"; the
-    /// lexical word is "schaap". CHAT manual, Disfluency Transcription:
-    /// "the ↫ brackets the repetition".
-    #[test]
-    fn segment_repetition_initial_onset_excluded() {
-        let word = Word::new_unchecked("↫sch↫schaap", "ignored").with_content(vec![
-            seg_rep(),
-            text("sch"),
-            seg_rep(),
-            text("schaap"),
-        ]);
-        assert_eq!(word.compute_cleaned_text(), "schaap");
-    }
-
-    /// `↫b-b-b↫boy` (manual example): the iterated repeated onset is excluded.
-    #[test]
-    fn segment_repetition_iterated_onset_excluded() {
-        let word = Word::new_unchecked("↫b-b-b↫boy", "ignored").with_content(vec![
-            seg_rep(),
-            text("b-b-b"),
-            seg_rep(),
-            text("boy"),
-        ]);
-        assert_eq!(word.compute_cleaned_text(), "boy");
-    }
-
-    /// `like↫ike-ike↫` (manual): the `↫` pair can mark a repeated FINAL
-    /// segment; the lexical word is "like".
-    #[test]
-    fn segment_repetition_final_segment_excluded() {
-        let word = Word::new_unchecked("like↫ike-ike↫", "ignored").with_content(vec![
-            text("like"),
-            seg_rep(),
-            text("ike-ike"),
-            seg_rep(),
-        ]);
-        assert_eq!(word.compute_cleaned_text(), "like");
-    }
-
-    /// Non-repetition CA delimiters (`∆` faster speech) wrap genuinely spoken
-    /// material, so their enclosed text stays in the cleaned text.
-    #[test]
-    fn faster_delimiter_keeps_enclosed_text() {
-        let word = Word::new_unchecked("∆fast∆", "ignored").with_content(vec![
-            faster(),
-            text("fast"),
-            faster(),
-        ]);
-        assert_eq!(word.compute_cleaned_text(), "fast");
     }
 }

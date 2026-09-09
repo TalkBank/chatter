@@ -32,6 +32,28 @@ fn both_parsers() -> (TreeSitterParser, Re2cParser) {
 // Reference corpus equivalence
 // ═══════════════════════════════════════════════════════════════
 
+/// Reference files on which the two backends report DIFFERENT diagnostics.
+///
+/// A RATCHET: entries may only be removed, in the commit that makes the file
+/// agree. Adding one is an admission of a new divergence and wants a sentence
+/// saying why it ships.
+///
+/// The list exists because the test below used to fill two `ErrorCollector`s
+/// and never look at either. It compared recovered ASTs with `semantic_eq`,
+/// which is a real property and not this one: two parsers can agree exactly on
+/// the model and disagree about whether the input was valid, and on the
+/// reference corpus one pair does. `chatter validate --parser re2c
+/// corpus/reference` reports 1 invalid file where the default backend reports
+/// 0, and no gate in this repository could see it.
+const DIAGNOSTIC_DIVERGENCES: &[(&str, &str)] = &[(
+    "multiline-continuation.cha",
+    "re2c reports E316 on the continuation lines of a multi-line \
+     `@Participants` header; tree-sitter accepts it. The ASTs agree, which is \
+     why the model-level half of this test passes. re2c's header lexing does \
+     not carry the continuation rule into `@Participants`, so this is a real \
+     gap in the oracle backend rather than a disagreement about CHAT.",
+)];
+
 #[test]
 fn equivalence_reference_corpus() {
     let base = format!(
@@ -39,16 +61,28 @@ fn equivalence_reference_corpus() {
         crate::fixture_utils::workspace_root().display()
     );
     let base_path = std::path::Path::new(&base);
-    if !base_path.exists() {
-        eprintln!("Skipping: {base} not found");
-        return;
-    }
+    // FAILS rather than skips. This was `eprintln!("Skipping"); return;`, so a
+    // missing corpus read exactly like a passing run, in the one test this
+    // repository calls the parity oracle. The corpus is CHECKED IN: its
+    // absence is a broken checkout, not a condition to tolerate.
+    assert!(
+        base_path.exists(),
+        "the reference corpus is checked in and {base} is not there; this test \
+         is the parity oracle and must fail rather than skip"
+    );
 
     let (ts, re2c) = both_parsers();
 
     let mut total = 0;
     let mut passed = 0;
     let mut failed_files = Vec::new();
+    let mut diagnostic_divergences = Vec::new();
+    // Which recorded entries the walk actually reached. An entry naming a file
+    // that is not in the corpus is invisible to the per-file arms below, so a
+    // rename or a deletion would leave it standing for ever. Found by planting
+    // one: the first version of this ratchet accepted `("basic.cha", ...)`,
+    // a file this corpus does not contain, and reported clean.
+    let mut visited = vec![false; DIAGNOSTIC_DIVERGENCES.len()];
 
     // Walk every top-level subdir of `corpus/reference/` rather than naming
     // them. The hardcoded list this replaces visited only 6 of the 9 actual
@@ -95,9 +129,51 @@ fn equivalence_reference_corpus() {
                         failed_files.push(format!("{filename}: re2c rejected, ts parsed"));
                     }
                 }
+
+                // The second half, and it used to be missing entirely: the two
+                // sinks above were filled and never read.
+                let ts_codes = codes_of(&ts_errors);
+                let re2c_codes = codes_of(&re2c_errors);
+                let recorded = match DIAGNOSTIC_DIVERGENCES
+                    .iter()
+                    .position(|(name, _)| *name == filename)
+                {
+                    Some(at) => {
+                        visited[at] = true;
+                        true
+                    }
+                    None => false,
+                };
+                // All four cells written out. The compiler refused an earlier
+                // draft that grouped them wrongly, which is what an exhaustive
+                // match over the cross-product is for.
+                match (ts_codes == re2c_codes, recorded) {
+                    // Agreeing and not recorded: the ordinary case.
+                    (true, false) => {}
+                    // Diverging and recorded: the ratchet's own entries.
+                    (false, true) => {}
+                    (false, false) => diagnostic_divergences.push(format!(
+                        "{filename}: ts {ts_codes:?} vs re2c {re2c_codes:?}"
+                    )),
+                    // Recorded but now agreeing. Retiring the entry is the
+                    // deliverable of whatever fixed it; leaving it makes the
+                    // list a permanent exemption.
+                    (true, true) => diagnostic_divergences.push(format!(
+                        "{filename}: RECORDED as diverging, but the backends now \
+                         agree. Delete it from DIAGNOSTIC_DIVERGENCES."
+                    )),
+                }
             }
         }
     }
+
+    // A FLOOR. A corpus directory that is present and holds no `.cha` file
+    // would leave every counter at zero and every list empty, and this test
+    // would report a perfect score over nothing.
+    assert!(
+        total > 0,
+        "the reference corpus is present at {base} but holds no .cha file"
+    );
 
     eprintln!("\n=== Reference corpus equivalence ===");
     eprintln!("Total: {total}");
@@ -114,6 +190,40 @@ fn equivalence_reference_corpus() {
          every file must round-trip with semantic equality.",
         failed_files.len()
     );
+    for (at, (name, _)) in DIAGNOSTIC_DIVERGENCES.iter().enumerate() {
+        if !visited[at] {
+            diagnostic_divergences.push(format!(
+                "{name}: RECORDED as diverging, and no such file is in the \
+                 corpus. Renamed, deleted, or misspelled; delete the entry."
+            ));
+        }
+    }
+
+    assert!(
+        diagnostic_divergences.is_empty(),
+        "{} reference-corpus file(s) disagree about DIAGNOSTICS between the \
+         backends, which `semantic_eq` above cannot see:\n  {}\nFix the \
+         backend, or record the file in DIAGNOSTIC_DIVERGENCES with a sentence \
+         saying why it ships.",
+        diagnostic_divergences.len(),
+        diagnostic_divergences.join("\n  ")
+    );
+}
+
+/// The distinct diagnostic codes a sink collected, sorted and deduplicated.
+///
+/// Codes rather than messages: a message carries spans and quoted source, so
+/// comparing them would fail on wording the two backends have no reason to
+/// share, and this gate is about which RULES each one names.
+fn codes_of(errors: &ErrorCollector) -> Vec<String> {
+    let mut codes: Vec<String> = errors
+        .to_vec()
+        .iter()
+        .map(|error| error.code.as_str().to_owned())
+        .collect();
+    codes.sort_unstable();
+    codes.dedup();
+    codes
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -126,9 +236,8 @@ fn equivalence_mor_tier() {
     let re2c_errors = ErrorCollector::new();
 
     let entries = talkbank_parser_re2c::tests_support::load_fixture("tier_mor");
-    if entries.is_empty() {
-        return;
-    }
+    // No empty guard: `load_fixture` refuses a fixture that yields no
+    // entries, so this loop cannot run zero times and report a pass.
 
     let mut passed = 0;
     let mut failed = 0;
@@ -175,9 +284,8 @@ fn equivalence_gra_tier() {
     let re2c_errors = ErrorCollector::new();
 
     let entries = talkbank_parser_re2c::tests_support::load_fixture("tier_gra");
-    if entries.is_empty() {
-        return;
-    }
+    // No empty guard: `load_fixture` refuses a fixture that yields no
+    // entries, so this loop cannot run zero times and report a pass.
 
     let mut passed = 0;
     let mut failed = 0;

@@ -1,8 +1,52 @@
-//! Regression tests for word-level validation rules.
+//! Word-level validation for states NO PARSE PRODUCES.
 //!
-//! These fixtures pin down the intended behavior of `Word` validators at common
-//! boundary conditions: compound boundaries, whitespace/formatting contamination,
-//! prosodic marker placement, and language-aware token checks.
+//! # Why the rest of this file left
+//!
+//! It held thirty-odd tests that built a `Word` by hand and asserted a rule
+//! against it: a raw text `"+word"` beside a content list
+//! `[CompoundMarker, Text("word")]`, with nothing forcing the two to agree.
+//! That is the input stated twice, and the coverage it produced was
+//! fabrication-backed: the validator ran, the regions counted as covered, and
+//! no CHAT text was ever read. Those rules now run over words the PARSER built,
+//! in `talkbank-parser-tests`. Not because a test here cannot parse: an
+//! integration test under `tests/` with a dev-dependency cycle can, as
+//! `talkbank-derive` does. A `#[cfg(test)] mod` in `src/` cannot, because the
+//! lib-test target is a second instantiation of this crate, and that is where
+//! these were.
+//!
+//! Migrating them found two things no hand-built version could:
+//!
+//! - `+word` does not parse as a word under the CANONICAL parser, by either
+//!   route, so there E232 fires only on a `Word` a test made; the re2c backend
+//!   builds it and reports E232. That matches what `UNDEMONSTRATED` records,
+//!   and is now measured rather than remembered. E232's message is pinned in
+//!   `talkbank-parser-tests` through the re2c backend over a whole file, the
+//!   one route from CHAT text to it; the `insta` snapshot over a hand-built
+//!   `Word` that used to pin it here is gone.
+//! - `:test` does not reach E246. A leading `:` is a separator glued to what
+//!   follows, which is E765, as `spec/errors/E246.md` records in its first
+//!   example since 2026-09-05. The deleted test asserted the older reading,
+//!   and could keep doing so because it built a `Word` carrying a leading
+//!   `Lengthening` that no parse produces.
+//! - `Word::simple("un+do")` carries no `CompoundMarker`, so the deleted
+//!   `test_valid_compound` never reached the check it was named for.
+//!
+//! # What is left, and why it belongs here
+//!
+//! Two rules guard `Word` values that no parser can build, so no parse-backed
+//! test can reach them and there is nothing to migrate:
+//!
+//! - E243: word TEXT carrying a space, tab, newline or bullet byte. Whitespace
+//!   is what separates words, so a parsed `Word` never contains it; this rule
+//!   exists for the `%wor` export path and for deserialization.
+//! - E251/E253: a `Word` with an EMPTY content list. A parse always produces
+//!   content; the reachable route is `serde`, which is how the E251 test builds
+//!   its fixture.
+//!
+//! These stay hand-built ON PURPOSE, and that is the difference between the
+//! fabrication that left and the fabrication that remains: the state under test
+//! is genuinely unreachable from CHAT, so building it is the only way to reach
+//! the rule at all.
 //!
 //! CHAT references:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Words>
@@ -13,13 +57,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#WordInternalPause_Marker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Switching>
 
-use crate::content::word::WordCompoundMarker;
-use crate::model::{
-    LanguageCode, Word, WordContent, WordContents, WordLengthening, WordStressMarker,
-    WordStressMarkerType, WordSyllablePause, WordText,
-};
+use crate::model::{LanguageCode, Word, WordContent, WordContents, WordText};
+use crate::non_empty_literal;
 use crate::validation::{Validate, ValidationContext};
-use crate::{ErrorCollector, ParseError, Span};
+use crate::{ErrorCollector, ParseError};
 use serde_json;
 
 /// Validates one word under a caller-controlled language/CA context.
@@ -41,215 +82,6 @@ fn run_word_validation(
     errors.into_vec()
 }
 
-/// Rejects compounds that start with `+` and therefore have no left segment.
-///
-/// This protects the `E232` invariant and also checks that reported spans stay
-/// within the source word bounds.
-#[test]
-fn test_compound_marker_at_start() {
-    let word = Word::new_unchecked("+word", "word")
-        .with_content(vec![
-            WordContent::CompoundMarker(WordCompoundMarker::new()),
-            WordContent::Text(WordText::new_unchecked("word")),
-        ])
-        .with_span(Span::from(10..15));
-
-    let errors = run_word_validation(&word, None, &[], false);
-
-    let e232_errors: Vec<_> = errors
-        .iter()
-        .filter(|e| e.code.as_str() == "E232")
-        .collect();
-    assert!(!e232_errors.is_empty(), "Leading + should produce E232");
-
-    // Verify error spans are within word bounds
-    for error in &e232_errors {
-        let span = &error.location.span;
-        assert!(
-            span.start >= 10 && span.end <= 15,
-            "E232 error span should be within word bounds [10, 15], got [{}, {}]",
-            span.start,
-            span.end
-        );
-    }
-}
-
-/// Rejects compounds that end with `+` and therefore have no right segment.
-///
-/// The validator must emit `E233` for trailing compound markers.
-#[test]
-fn test_compound_marker_at_end() {
-    let word = Word::new_unchecked("word+", "word").with_content(vec![
-        WordContent::Text(WordText::new_unchecked("word")),
-        WordContent::CompoundMarker(WordCompoundMarker::new()),
-    ]);
-
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E233"),
-        "Trailing + should produce E233"
-    );
-}
-
-/// Rejects adjacent `++` markers that create an empty compound part.
-///
-/// This fixture ensures internal empty segments are treated the same as trailing
-/// empties and reported as `E233`.
-#[test]
-fn test_compound_marker_empty_parts() {
-    let word = Word::new_unchecked("un++do", "undo").with_content(vec![
-        WordContent::Text(WordText::new_unchecked("un")),
-        WordContent::CompoundMarker(WordCompoundMarker::new()),
-        WordContent::CompoundMarker(WordCompoundMarker::new()),
-        WordContent::Text(WordText::new_unchecked("do")),
-    ]);
-
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E233"),
-        "Empty compound parts ++ should produce E233"
-    );
-}
-
-/// Accepts well-formed compounds with non-empty parts on both sides of `+`.
-///
-/// A valid `un+do` token should not trigger `E232` or `E233`.
-#[test]
-fn test_valid_compound() {
-    let word = Word::new_unchecked("un+do", "un+do");
-
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors
-            .iter()
-            .any(|e| e.code.as_str() == "E232" || e.code.as_str() == "E233"),
-        "Valid compound should not produce compound errors"
-    );
-}
-
-/// Flags embedded digits in languages where word tokens must be alphabetic.
-///
-/// With `eng` context, `hello123` should emit `E220` and keep the error span
-/// within the token span.
-#[test]
-fn test_e220_digit_validation_eng() {
-    // "hello123" - 8 bytes
-    let word = Word::new_unchecked("hello123", "hello123").with_span(Span::from(20..28));
-    let eng = LanguageCode::new("eng").expect("test literal is non-empty");
-    let errors = run_word_validation(&word, Some(&eng), std::slice::from_ref(&eng), false);
-
-    let e220_errors: Vec<_> = errors
-        .iter()
-        .filter(|e| e.code.as_str() == "E220")
-        .collect();
-    assert!(
-        !e220_errors.is_empty(),
-        "Expected E220 error for digits in English word, got: {:#?}",
-        errors
-    );
-
-    // Verify error spans are within word bounds
-    for error in &e220_errors {
-        let span = &error.location.span;
-        assert!(
-            span.start >= 20 && span.end <= 28,
-            "E220 error span should be within word bounds [20, 28], got [{}, {}]",
-            span.start,
-            span.end
-        );
-    }
-}
-
-/// Allows digits in language contexts that explicitly permit numeral forms.
-///
-/// Chinese (`zho`) is one of the configured exceptions and should not emit
-/// `E220` for mixed alphanumeric tokens.
-#[test]
-fn test_e220_digit_validation_zho() {
-    let word = Word::new_unchecked("hello123", "hello123");
-    let zho = LanguageCode::new("zho").expect("test literal is non-empty");
-    let errors = run_word_validation(&word, Some(&zho), std::slice::from_ref(&zho), false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E220"),
-        "E220 should not trigger for Chinese (zho) - digits are allowed"
-    );
-}
-
-/// Leaves digit policy disabled when no language context is available.
-///
-/// This avoids over-eager `E220` reports when a tier/header has not declared
-/// language constraints.
-#[test]
-fn test_e220_no_language_context() {
-    let word = Word::new_unchecked("hello123", "hello123");
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E220"),
-        "E220 should not trigger when no language in context"
-    );
-}
-
-/// Confirms all configured digit-allowing languages bypass `E220`.
-///
-/// This table test guards against regressions when language lists are edited.
-#[test]
-fn test_e220_all_number_languages() {
-    let number_langs = vec!["zho", "cym", "vie", "tha", "nan", "yue", "min", "hak"];
-    let word = Word::new_unchecked("word123", "word123");
-
-    for lang in number_langs {
-        let lang_code = LanguageCode::new(lang).expect("test fixture codes are non-empty");
-        let errors = run_word_validation(
-            &word,
-            Some(&lang_code),
-            std::slice::from_ref(&lang_code),
-            false,
-        );
-        assert!(
-            !errors.iter().any(|e| e.code.as_str() == "E220"),
-            "E220 should not trigger for {} - digits allowed",
-            lang
-        );
-    }
-}
-
-/// E241's MESSAGE names the canonical spelling of the marker that was
-/// mistyped, not merely some canonical spelling.
-///
-/// SURVIVES a type: this is about the rendered diagnostic text, which no type
-/// pins. What it is deliberately NOT is coverage of the vocabulary. Which
-/// spellings E241 rejects is settled end to end in
-/// `crates/chatter/tests/integration/untranscribed_marker_spelling_tests.rs`,
-/// at the CLI boundary.
-///
-/// This replaced four near-identical tests, one per token, that each asserted
-/// rejection AND message shape. The rejection half duplicated the CLI file; the
-/// per-token list was a fifth hand-written copy of a vocabulary whose scattering
-/// is the reason `ww` went unrejected for years.
-#[test]
-fn test_e241_message_names_the_intended_marker() {
-    // Two pairs, not four: this test is about the MESSAGE naming the intended
-    // marker, and one shortened plus one miscased form, on different letters,
-    // proves that. Listing all four restated the vocabulary the docstring above
-    // explicitly disclaims owning.
-    for (mistyped, canonical) in [("xx", "xxx"), ("WWW", "www")] {
-        let word = Word::new_unchecked(mistyped, mistyped);
-        let errors = run_word_validation(&word, None, &[], false);
-
-        assert!(
-            errors
-                .iter()
-                .any(|e| e.code.as_str() == "E241" && e.message.contains(canonical)),
-            "Expected E241 for {mistyped:?} to name {canonical:?}, got: {errors:#?}"
-        );
-    }
-}
-
 /// Flags trailing whitespace contamination in word tokens.
 ///
 /// This case mirrors historical `%wor` export issues where trailing spaces were
@@ -257,7 +89,7 @@ fn test_e241_message_names_the_intended_marker() {
 #[test]
 fn test_e243_word_with_trailing_space() {
     // This catches the %wor tier bug where words include trailing spaces
-    let word = Word::new_unchecked("hello ", "hello ");
+    let word = Word::simple("hello ");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -272,7 +104,7 @@ fn test_e243_word_with_trailing_space() {
 /// Leading spaces should consistently emit `E243` rather than silently passing.
 #[test]
 fn test_e243_word_with_leading_space() {
-    let word = Word::new_unchecked(" hello", " hello");
+    let word = Word::simple(" hello");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -307,7 +139,7 @@ fn test_e243_word_with_bullet_marker() {
 /// Tabs are treated as formatting contamination and should emit `E243`.
 #[test]
 fn test_e243_word_with_tab() {
-    let word = Word::new_unchecked("hello\tworld", "hello\tworld");
+    let word = Word::simple("hello\tworld");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -322,7 +154,7 @@ fn test_e243_word_with_tab() {
 /// Newlines must not survive tokenization and therefore trigger `E243`.
 #[test]
 fn test_e243_word_with_newline() {
-    let word = Word::new_unchecked("hello\nworld", "hello\nworld");
+    let word = Word::simple("hello\nworld");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -337,7 +169,7 @@ fn test_e243_word_with_newline() {
 /// A plain token should pass with no `E243`.
 #[test]
 fn test_e243_clean_word_no_error() {
-    let word = Word::new_unchecked("hello", "hello");
+    let word = Word::simple("hello");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -373,211 +205,13 @@ fn test_e243_word_with_space_and_bullet() {
 // Prosodic Marker Validation Tests (E244-E247, E250, E251)
 // =============================================================================
 
-/// Rejects adjacent stress markers with no intervening segment text.
-///
-/// Consecutive stress elements should emit `E244` because stress must attach to
-/// an actual syllabic segment.
-#[test]
-fn test_e244_consecutive_stress_markers() {
-    // ˈˌtest - two stress markers in a row
-    let word = Word::new_unchecked("ˈˌtest", "test").with_content(vec![
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary)),
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Secondary)),
-        WordContent::Text(WordText::new_unchecked("test")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E244"),
-        "Expected E244 error for consecutive stress markers, got: {:#?}",
-        errors
-    );
-}
-
-/// Accepts multiple stress markers when separated by lexical text.
-///
-/// This ensures `E244` is limited to truly adjacent markers, not repeated stress
-/// across distinct subparts.
-#[test]
-fn test_e244_valid_non_consecutive_stress() {
-    // ˈsyl·ˌla·ble - stress markers separated by text
-    let word = Word::new_unchecked("ˈsylˌlable", "syllable").with_content(vec![
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary)),
-        WordContent::Text(WordText::new_unchecked("syl")),
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Secondary)),
-        WordContent::Text(WordText::new_unchecked("lable")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E244"),
-        "Non-consecutive stress markers should not trigger E244"
-    );
-}
-
-/// Rejects stress markers that appear at the end of a word token.
-///
-/// A trailing stress mark has no following segment to modify and should emit
-/// `E245`.
-#[test]
-fn test_e245_stress_at_word_end() {
-    // testˈ - stress marker at end with no following text
-    let word = Word::new_unchecked("testˈ", "test").with_content(vec![
-        WordContent::Text(WordText::new_unchecked("test")),
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary)),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E245"),
-        "Expected E245 error for stress at word end, got: {:#?}",
-        errors
-    );
-}
-
-/// Accepts stress markers that precede lexical text.
-///
-/// This positive case keeps `E245` scoped to dangling trailing markers.
-#[test]
-fn test_e245_valid_stress_before_text() {
-    // ˈtest - stress marker followed by text
-    let word = Word::new_unchecked("ˈtest", "test").with_content(vec![
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary)),
-        WordContent::Text(WordText::new_unchecked("test")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E245"),
-        "Stress before text should not trigger E245"
-    );
-}
-
-/// Rejects lengthening markers that appear before any base segment text.
-///
-/// CHAT lengthening marks must follow a segment, so leading `:` should emit
-/// `E246`.
-#[test]
-fn test_e246_lengthening_at_word_start() {
-    // :test - colon at start with no preceding text
-    let word = Word::new_unchecked(":test", "test").with_content(vec![
-        WordContent::Lengthening(WordLengthening::new()),
-        WordContent::Text(WordText::new_unchecked("test")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E246"),
-        "Expected E246 error for lengthening at word start, got: {:#?}",
-        errors
-    );
-}
-
-/// Accepts lengthening markers placed after lexical text.
-///
-/// This confirms valid in-word placement does not trigger `E246`.
-#[test]
-fn test_e246_valid_lengthening_after_text() {
-    // ba:nana - colon after text
-    let word = Word::new_unchecked("ba:nana", "banana").with_content(vec![
-        WordContent::Text(WordText::new_unchecked("ba")),
-        WordContent::Lengthening(WordLengthening::new()),
-        WordContent::Text(WordText::new_unchecked("nana")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E246"),
-        "Lengthening after text should not trigger E246"
-    );
-}
-
-/// Rejects words containing more than one primary stress marker.
-///
-/// Primary stress is constrained to one occurrence per token and violations emit
-/// `E247`.
-#[test]
-fn test_e247_multiple_primary_stress() {
-    // ˈtestˈword - two primary stress markers
-    let word = Word::new_unchecked("ˈtestˈword", "testword").with_content(vec![
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary)),
-        WordContent::Text(WordText::new_unchecked("test")),
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary)),
-        WordContent::Text(WordText::new_unchecked("word")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E247"),
-        "Expected E247 error for multiple primary stress markers, got: {:#?}",
-        errors
-    );
-}
-
-/// Accepts words with exactly one primary stress marker.
-///
-/// This positive fixture prevents regressions that would over-report `E247`.
-#[test]
-fn test_e247_valid_single_primary_stress() {
-    // ˈtest - only one primary stress
-    let word = Word::new_unchecked("ˈtest", "test").with_content(vec![
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary)),
-        WordContent::Text(WordText::new_unchecked("test")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E247"),
-        "Single primary stress should not trigger E247"
-    );
-}
-
-/// Rejects secondary stress when no primary stress exists in the token.
-///
-/// `E250` enforces the dependency between secondary and primary stress markers.
-#[test]
-fn test_e250_secondary_without_primary() {
-    // ˌtest - secondary stress without primary
-    let word = Word::new_unchecked("ˌtest", "test").with_content(vec![
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Secondary)),
-        WordContent::Text(WordText::new_unchecked("test")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E250"),
-        "Expected E250 error for secondary stress without primary, got: {:#?}",
-        errors
-    );
-}
-
-/// Accepts secondary stress when a primary stress marker is also present.
-///
-/// This keeps `E250` focused on missing-primary violations only.
-#[test]
-fn test_e250_valid_secondary_with_primary() {
-    // ˈtestˌword - secondary stress with primary present
-    let word = Word::new_unchecked("ˈtestˌword", "testword").with_content(vec![
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Primary)),
-        WordContent::Text(WordText::new_unchecked("test")),
-        WordContent::StressMarker(WordStressMarker::new(WordStressMarkerType::Secondary)),
-        WordContent::Text(WordText::new_unchecked("word")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E250"),
-        "Secondary stress with primary present should not trigger E250"
-    );
-}
-
 /// Rejects words whose parsed content list is unexpectedly empty.
 ///
 /// `E253` protects downstream logic that assumes each word has at least one
 /// semantic element.
 #[test]
 fn test_e253_empty_word_content_list() {
-    let word = Word::new_unchecked("test", "test").with_content(WordContents::default());
+    let word = Word::simple("test").with_content(WordContents::default());
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -592,7 +226,7 @@ fn test_e253_empty_word_content_list() {
 /// A normal `Word` should preserve at least one element in `content`.
 #[test]
 fn test_e253_non_empty_word_content_list() {
-    let word = Word::new_unchecked("test", "test");
+    let word = Word::simple("test");
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -631,70 +265,13 @@ fn test_e251_deserialized_word_content() -> Result<(), serde_json::Error> {
 #[test]
 fn test_e251_valid_non_empty_text() {
     // Word with non-empty Text content
-    let word = Word::new_unchecked("test", "test")
-        .with_content(vec![WordContent::Text(WordText::new_unchecked("test"))]);
+    let word = Word::simple("test").with_content(vec![WordContent::Text(WordText::from(
+        non_empty_literal!("test"),
+    ))]);
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
         !errors.iter().any(|e| e.code.as_str() == "E251"),
         "Non-empty word content text should not trigger E251"
-    );
-}
-
-/// Rejects syllable-pause markers that appear before any segment text.
-///
-/// Leading `^` has no left syllable boundary to annotate and should emit `E252`.
-#[test]
-fn test_e252_syllable_pause_at_word_start() {
-    // ^test - caret at start with no preceding text
-    let word = Word::new_unchecked("^test", "test").with_content(vec![
-        WordContent::SyllablePause(WordSyllablePause::new()),
-        WordContent::Text(WordText::new_unchecked("test")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E252"),
-        "Expected E252 error for syllable pause at word start, got: {:#?}",
-        errors
-    );
-}
-
-/// Rejects syllable-pause markers that appear after all segment text.
-///
-/// Trailing `^` has no following syllable and should emit `E252`.
-#[test]
-fn test_e252_syllable_pause_at_word_end() {
-    // test^ - caret at end with no following text
-    let word = Word::new_unchecked("test^", "test").with_content(vec![
-        WordContent::Text(WordText::new_unchecked("test")),
-        WordContent::SyllablePause(WordSyllablePause::new()),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        errors.iter().any(|e| e.code.as_str() == "E252"),
-        "Expected E252 error for syllable pause at word end, got: {:#?}",
-        errors
-    );
-}
-
-/// Accepts syllable-pause markers placed between lexical segments.
-///
-/// Interior pause markers are valid CHAT word-internal boundaries and must not
-/// trigger `E252`.
-#[test]
-fn test_e252_valid_syllable_pause_between_text() {
-    // rhi^noceros - caret between syllables
-    let word = Word::new_unchecked("rhi^noceros", "rhinoceros").with_content(vec![
-        WordContent::Text(WordText::new_unchecked("rhi")),
-        WordContent::SyllablePause(WordSyllablePause::new()),
-        WordContent::Text(WordText::new_unchecked("noceros")),
-    ]);
-    let errors = run_word_validation(&word, None, &[], false);
-
-    assert!(
-        !errors.iter().any(|e| e.code.as_str() == "E252"),
-        "Syllable pause between text should not trigger E252"
     );
 }

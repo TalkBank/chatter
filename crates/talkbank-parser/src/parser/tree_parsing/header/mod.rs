@@ -33,6 +33,7 @@ mod participants;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::node_types::{COMMA, PARTICIPANTS_HEADER, WHITESPACES};
+use crate::parser::tree_parsing::parser_helpers::unknown_header_from_node;
 use tree_sitter::Node;
 
 // Re-export all header parsing functions
@@ -78,6 +79,46 @@ fn error_is_only_commas(error_node: Node) -> bool {
 /// tier-specific CLAN CHECK 100 diagnostic; a trailing comma in any other header
 /// is rejected generically; any other stray `ERROR`/`MISSING` is reported so
 /// nothing is dropped.
+/// `Header::Unknown` for a header whose value slot the parser could not use.
+///
+/// ONE function for what was FIVE near-identical copies, `unknown_pid_header`,
+/// `unknown_types_header`, `unknown_situation_header`,
+/// `unknown_languages_header` and `unknown_participants_header`, differing only
+/// in the label used when the node text is empty and in the suggested fix.
+/// Eighteen regions each, ninety in total, and a whole-suite branch run on
+/// 2026-09-08 found every one of them with ZERO covered regions.
+///
+/// # Why they are consolidated rather than deleted
+///
+/// Each is the `else` arm of a `let Some(contents) = present(slot)` on a child
+/// the grammar makes REQUIRED, and a triage measured that whenever the header
+/// node exists at all, that child is Present: tree-sitter inserts a MISSING
+/// terminal and reduces normally, and an input it cannot start at all abandons
+/// the line to a document-level ERROR, in which case the header node does not
+/// exist and this code never runs.
+///
+/// That is an empirical claim about the grammar, not a guarantee the types
+/// carry, and deleting a recovery arm on an empirical claim is how a parser
+/// starts panicking on input nobody tried. The honest fix is a typed accessor
+/// that cannot be absent for a required child, which is a change to the
+/// GENERATED traversal. Until then: one copy rather than five, so the arm is
+/// eighteen uncovered regions instead of ninety, and one place to delete when
+/// the type arrives.
+pub(super) fn unknown_header(
+    node: Node,
+    source: &str,
+    label: &str,
+    suggested_fix: &str,
+    parse_reason: impl Into<String>,
+) -> talkbank_model::model::Header {
+    // The one builder, in `parser_helpers::header_slots`, since 2026-09-08;
+    // this wrapper keeps the structured headers' calling shape. `label` was
+    // the text for a node with no bytes, a case a matched header node never
+    // presents; the shared builder names the node's kind there instead.
+    let _ = label;
+    unknown_header_from_node(node, source, parse_reason, Some(suggested_fix))
+}
+
 pub(crate) fn report_header_structural_errors(
     header: Node,
     header_kind: &str,

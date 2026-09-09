@@ -1,7 +1,7 @@
 //! Tests for this subsystem.
 //!
 
-use super::{is_dependent_tier, is_header, is_terminator};
+use super::is_header;
 
 // `test_is_base_annotation` was DELETED here on 2026-08-25, and nothing replaced
 // it, which is the point.
@@ -14,22 +14,23 @@ use super::{is_dependent_tier, is_header, is_terminator};
 // `code_switch_annotation`, which the grammar had just gained, so the predicate
 // rejected a construct the parser accepted.
 //
-// What guards the list now is behaviour rather than a second copy of it: the
-// spec-generated construct corpus tests parse each member through a real file,
-// and they are what failed loudly when `code_switch_annotation` was missing.
-// `is_base_annotation`'s own docstring is the single owner of the rest of the
-// explanation, including why deriving the list from the generated traversal was
-// tried and backed out.
-
-/// Tests is terminator.
-#[test]
-fn test_is_terminator() {
-    assert!(is_terminator("period"));
-    assert!(is_terminator("question"));
-    assert!(is_terminator("interruption"));
-    assert!(is_terminator("terminator"));
-    assert!(!is_terminator("word"));
-}
+// The predicate itself went on 2026-09-09: its last caller, the annotation
+// list parser, matches the generated `BaseAnnotationChoice`, which is the
+// grammar's `base_annotation` choice as a type, exhaustively, so the list has
+// no hand-written copy left to drift. Deriving the KIND question from the
+// generated traversal had been tried and backed out on 2026-08-25 because a
+// MISSING `retrace_complete` classifies as `NodeSlot::Missing`, not as a
+// present member, and a derived predicate reported it as "expected annotation,
+// found 'retrace_complete'"; the typed list parser reads that state as the
+// placeholder it is and reports nothing of its own (the whole-tree pass names
+// it, E342), which is the answer to that objection.
+//
+// `test_is_terminator` and `test_is_dependent_tier` went the same way on
+// 2026-09-08, for a sharper reason: their SUBJECTS were dead. Nothing in the
+// tree-sitter parser called either predicate, and `is_dependent_tier`'s last
+// caller had already been replaced by a typed check, with a comment in
+// `tier_parsers/dependent_tier.rs` saying so. The tests were what made two dead
+// hand-written lists look maintained.
 
 /// Tests is header.
 #[test]
@@ -39,14 +40,4 @@ fn test_is_header() {
     assert!(is_header("id_header"));
     assert!(is_header("header"));
     assert!(!is_header("utterance"));
-}
-
-/// Tests is dependent tier.
-#[test]
-fn test_is_dependent_tier() {
-    assert!(is_dependent_tier("mor_dependent_tier"));
-    assert!(is_dependent_tier("gra_dependent_tier"));
-    assert!(is_dependent_tier("pho_dependent_tier"));
-    assert!(is_dependent_tier("dependent_tier"));
-    assert!(!is_dependent_tier("main_tier"));
 }

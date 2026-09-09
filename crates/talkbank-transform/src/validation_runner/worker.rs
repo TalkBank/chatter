@@ -8,9 +8,10 @@
 
 use super::cancel::CancelSignal;
 use super::config::{ParserKind, ValidationConfig};
-use super::roundtrip;
+use super::roundtrip::{self, RoundtripResult};
 use super::types::{
-    ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, ValidationEvent, ValidationStats,
+    ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, RoundtripVerdict, ValidationEvent,
+    ValidationStats,
 };
 use crossbeam_channel::{Receiver, Sender};
 use std::fs;
@@ -111,7 +112,10 @@ pub(super) fn worker_loop<C>(
                         if let Some(rt_outcome) = roundtrip_cached {
                             let rt_passed = rt_outcome == CacheOutcome::Valid;
                             let status = if rt_passed {
-                                FileStatus::Valid { cache_hit: true }
+                                FileStatus::Valid {
+                                    cache_hit: true,
+                                    roundtrip: RoundtripVerdict::Passed,
+                                }
                             } else {
                                 FileStatus::RoundtripFailed {
                                     cache_hit: true,
@@ -147,7 +151,10 @@ pub(super) fn worker_loop<C>(
                         // else: roundtrip not cached, fall through to full processing
                     } else {
                         // No roundtrip needed, just use validation cache hit
-                        let status = FileStatus::Valid { cache_hit: true };
+                        let status = FileStatus::Valid {
+                            cache_hit: true,
+                            roundtrip: RoundtripVerdict::NotRequested,
+                        };
                         update_stats(&stats, &status);
                         if event_tx
                             .send(ValidationEvent::FileComplete(FileCompleteEvent {
@@ -244,15 +251,14 @@ pub(super) fn worker_loop<C>(
                 let status = if is_valid {
                     // Validation passed. Run roundtrip if configured.
                     if config.roundtrip {
-                        if let Some(ref cf) = chat_file {
-                            run_roundtrip_and_emit(
-                                cf, &parser, &file_path, &config, &cache, &event_tx, &stats,
-                            )
-                        } else {
-                            FileStatus::Valid { cache_hit: false }
-                        }
+                        run_roundtrip_and_emit(
+                            &chat_file, &parser, &file_path, &config, &cache, &event_tx,
+                        )
                     } else {
-                        FileStatus::Valid { cache_hit: false }
+                        FileStatus::Valid {
+                            cache_hit: false,
+                            roundtrip: RoundtripVerdict::NotRequested,
+                        }
                     }
                 } else {
                     FileStatus::Invalid {
@@ -287,7 +293,6 @@ fn run_roundtrip_and_emit<C>(
     config: &ValidationConfig,
     cache: &Option<Arc<C>>,
     event_tx: &Sender<ValidationEvent>,
-    stats: &Arc<ValidationStats>,
 ) -> FileStatus
 where
     C: ValidationCache + Send + Sync,
@@ -312,10 +317,11 @@ where
         }));
 
         if rt_passed {
-            stats.record_roundtrip_passed();
-            return FileStatus::Valid { cache_hit: true };
+            return FileStatus::Valid {
+                cache_hit: true,
+                roundtrip: RoundtripVerdict::Passed,
+            };
         } else {
-            stats.record_roundtrip_failed();
             return FileStatus::RoundtripFailed {
                 cache_hit: true,
                 reason: "Roundtrip failed (cached)".to_string(),
@@ -326,10 +332,9 @@ where
     let result = roundtrip::run_roundtrip(chat_file, parser);
 
     // Cache the roundtrip result
-    let roundtrip_outcome = if result.passed {
-        CacheOutcome::Valid
-    } else {
-        CacheOutcome::Invalid
+    let roundtrip_outcome = match &result {
+        RoundtripResult::Passed => CacheOutcome::Valid,
+        RoundtripResult::Failed(_) => CacheOutcome::Invalid,
     };
     if config.cache.allows_writes()
         && let Some(cache_ref) = cache.as_ref()
@@ -339,24 +344,32 @@ where
         tracing::warn!(file = ?file_path, error = %e, "Failed to cache roundtrip result");
     }
 
-    // Emit roundtrip event
-    let _ = event_tx.send(ValidationEvent::RoundtripComplete(RoundtripEvent {
-        path: file_path.to_path_buf(),
-        passed: result.passed,
-        failure_reason: result.failure_reason.clone(),
-        diff: result.diff.clone(),
-    }));
-
-    if result.passed {
-        stats.record_roundtrip_passed();
-        FileStatus::Valid { cache_hit: false }
-    } else {
-        stats.record_roundtrip_failed();
-        FileStatus::RoundtripFailed {
-            cache_hit: false,
-            reason: result
-                .failure_reason
-                .unwrap_or_else(|| "Roundtrip failed".to_string()),
+    // Emit roundtrip event, then the status, from one reading of the result.
+    match result {
+        RoundtripResult::Passed => {
+            let _ = event_tx.send(ValidationEvent::RoundtripComplete(RoundtripEvent {
+                path: file_path.to_path_buf(),
+                passed: true,
+                failure_reason: None,
+                diff: None,
+            }));
+            FileStatus::Valid {
+                cache_hit: false,
+                roundtrip: RoundtripVerdict::Passed,
+            }
+        }
+        RoundtripResult::Failed(failure) => {
+            let reason = failure.reason();
+            let _ = event_tx.send(ValidationEvent::RoundtripComplete(RoundtripEvent {
+                path: file_path.to_path_buf(),
+                passed: false,
+                failure_reason: Some(reason.clone()),
+                diff: failure.diff().map(str::to_string),
+            }));
+            FileStatus::RoundtripFailed {
+                cache_hit: false,
+                reason,
+            }
         }
     }
 }
@@ -364,12 +377,22 @@ where
 /// Updates stats.
 pub(super) fn update_stats(stats: &Arc<ValidationStats>, status: &FileStatus) {
     match status {
-        FileStatus::Valid { cache_hit } => {
+        FileStatus::Valid {
+            cache_hit,
+            roundtrip,
+        } => {
             stats.record_valid_file();
             if *cache_hit {
                 stats.record_cache_hit();
             } else {
                 stats.record_cache_miss();
+            }
+            // The roundtrip count is read off the status, which every branch
+            // that builds a Valid status has to fill in; the counter cannot be
+            // forgotten by one of them again.
+            match roundtrip {
+                RoundtripVerdict::Passed => stats.record_roundtrip_passed(),
+                RoundtripVerdict::NotRequested => {}
             }
         }
         FileStatus::Invalid { cache_hit, .. } => {
@@ -381,8 +404,9 @@ pub(super) fn update_stats(stats: &Arc<ValidationStats>, status: &FileStatus) {
             }
         }
         FileStatus::RoundtripFailed { cache_hit, .. } => {
-            // Roundtrip failures count as invalid files
+            // Roundtrip failures count as invalid files, and as roundtrips.
             stats.record_invalid_file();
+            stats.record_roundtrip_failed();
             if *cache_hit {
                 stats.record_cache_hit();
             } else {
@@ -417,7 +441,7 @@ fn validate_single_file_streaming(
     rules: talkbank_model::RuleSelection,
     parser: &ParserDispatch,
     content: &str,
-) -> (Vec<ParseError>, Option<ChatFile>) {
+) -> (Vec<ParseError>, ChatFile) {
     // Collect all diagnostics during validation (no streaming).
     let collector = talkbank_model::ErrorCollector::new();
 
@@ -441,5 +465,5 @@ fn validate_single_file_streaming(
         chat_file.validate_with_rules(rules, &collector, name);
     }
 
-    (collector.into_vec(), Some(chat_file))
+    (collector.into_vec(), chat_file)
 }

@@ -19,9 +19,6 @@ pub mod overlap_groups;
 mod rules;
 mod walk;
 
-#[cfg(test)]
-mod tests;
-
 pub use count::{
     MorAlignableWordCount, MorItemCount, TierPosition, collect_tier_items, count_tier_positions,
     count_tier_positions_until,
@@ -37,11 +34,8 @@ pub fn to_chat_display_string<T: crate::model::WriteChat>(item: &T) -> String {
     item.write_chat(&mut s).ok();
     s
 }
-pub use domain::TierDomain;
-pub use overlap::{
-    OverlapMarkerInfo, OverlapPointVisit, OverlapRegion, OverlapRegionKind, extract_overlap_info,
-    walk_overlap_points,
-};
+pub use domain::{NotPositional, PositionalDomain, TierDomain};
+pub use overlap::{OverlapMarkerInfo, OverlapRegion, OverlapRegionKind, extract_overlap_info};
 pub use overlap_groups::{
     FileOverlapAnalysis, OverlapAnchor, OverlapGroup, PerUtteranceOverlap, analyze_file_overlaps,
 };

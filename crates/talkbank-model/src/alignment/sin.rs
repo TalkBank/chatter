@@ -4,7 +4,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Sign_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use super::helpers::{TierDomain, TierPosition, to_chat_display_string as to_string};
+use super::helpers::{PositionalDomain, TierPosition, to_chat_display_string as to_string};
 use super::indices::{MainWordIndex, SinItemIndex};
 use super::traits::{AlignableTier, TierAlignmentResult, positional_align};
 use super::types::AlignmentPair;
@@ -83,7 +83,7 @@ impl TierAlignmentResult for SinAlignment {
 impl AlignableTier for SinTier {
     type Source = MainWordIndex;
     type Target = SinItemIndex;
-    const DOMAIN: TierDomain = TierDomain::Sin;
+    const DOMAIN: PositionalDomain = PositionalDomain::Sin;
 
     fn tier_name(&self) -> &str {
         "%sin tier"
@@ -139,132 +139,16 @@ pub fn align_main_to_sin(main: &MainTier, sin: &SinTier) -> SinAlignment {
 
 #[cfg(test)]
 mod sin_alignment_tests {
+    //! The one `%sin` alignment state no parse produces.
+    //!
+    //! Five tests that used to sit here built both tiers by hand; they are
+    //! `talkbank-parser-tests/tests/integration/sin_alignment_from_source.rs`
+    //! now, over parsed tiers. This one stays: a `%sin:` line with no token
+    //! is E342 at parse, so empty on empty is reachable only from a tier
+    //! built by hand, and building it is the only way to reach it.
     use super::*;
     use crate::Span;
-    use crate::model::{SinItem, SinToken, Terminator, UtteranceContent, Word};
-
-    /// Accepts perfectly matched `%sin` and main-tier token counts.
-    #[test]
-    fn test_sin_alignment_perfect_match() {
-        let main = MainTier::new(
-            "CHI",
-            vec![
-                UtteranceContent::Word(Box::new(Word::new_unchecked("one", "one"))),
-                UtteranceContent::Word(Box::new(Word::new_unchecked("two", "two"))),
-            ],
-            Terminator::Period { span: Span::DUMMY },
-        );
-
-        let sin = SinTier::new(vec![
-            SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
-            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
-        ]);
-
-        let alignment = align_main_to_sin(&main, &sin);
-
-        assert_eq!(alignment.pairs.len(), 2); // 2 words (terminator not in %sin)
-        assert!(alignment.errors.is_empty());
-        assert!(alignment.pairs.iter().all(|p| p.is_complete()));
-    }
-
-    /// Emits too-few `%sin` diagnostics when main tier has extra alignable items.
-    #[test]
-    fn test_sin_alignment_main_longer() {
-        let main = MainTier::new(
-            "CHI",
-            vec![
-                UtteranceContent::Word(Box::new(Word::new_unchecked("one", "one"))),
-                UtteranceContent::Word(Box::new(Word::new_unchecked("two", "two"))),
-                UtteranceContent::Word(Box::new(Word::new_unchecked("three", "three"))),
-            ],
-            Terminator::Period { span: Span::DUMMY },
-        );
-
-        let sin = SinTier::new(vec![
-            SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
-            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
-        ]);
-
-        let alignment = align_main_to_sin(&main, &sin);
-
-        assert_eq!(alignment.pairs.len(), 3); // 2 matched + 1 placeholder
-        assert!(!alignment.errors.is_empty());
-        assert_eq!(alignment.errors.len(), 1);
-        assert_eq!(alignment.errors[0].code.as_str(), "E718");
-    }
-
-    /// Emits too-many `%sin` diagnostics when `%sin` has extra tokens.
-    #[test]
-    fn test_sin_alignment_sin_longer() {
-        let main = MainTier::new(
-            "CHI",
-            vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
-                "one", "one",
-            )))],
-            Terminator::Period { span: Span::DUMMY },
-        );
-
-        let sin = SinTier::new(vec![
-            SinItem::Token(SinToken::new("g:toy:dpoint").expect("nonempty test token")),
-            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
-        ]);
-
-        let alignment = align_main_to_sin(&main, &sin);
-
-        assert_eq!(alignment.pairs.len(), 2); // 1 matched + 1 placeholder
-        assert!(!alignment.errors.is_empty());
-        assert_eq!(alignment.errors.len(), 1);
-        assert_eq!(alignment.errors[0].code.as_str(), "E719");
-    }
-
-    /// Treats literal `0` `%sin` placeholders as valid alignable tokens.
-    #[test]
-    fn test_sin_alignment_all_zeros() {
-        let main = MainTier::new(
-            "CHI",
-            vec![
-                UtteranceContent::Word(Box::new(Word::new_unchecked("what", "what"))),
-                UtteranceContent::Word(Box::new(Word::new_unchecked("shall", "shall"))),
-                UtteranceContent::Word(Box::new(Word::new_unchecked("we", "we"))),
-                UtteranceContent::Word(Box::new(Word::new_unchecked("get", "get"))),
-            ],
-            Terminator::Question { span: Span::DUMMY },
-        );
-
-        let sin = SinTier::new(vec![
-            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
-            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
-            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
-            SinItem::Token(SinToken::new("0").expect("nonempty test token")),
-        ]);
-
-        let alignment = align_main_to_sin(&main, &sin);
-
-        assert_eq!(alignment.pairs.len(), 4);
-        assert!(alignment.errors.is_empty());
-    }
-
-    /// Accepts a common gesture token example (`g:toy:dpoint`) with one word.
-    #[test]
-    fn test_sin_alignment_gesture_example() {
-        // Child says "junk" while pointing at toy
-        let main = MainTier::new(
-            "CHI",
-            vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
-                "junk", "junk",
-            )))],
-            Terminator::Period { span: Span::DUMMY },
-        );
-
-        let sin = SinTier::new(vec![SinItem::Token(
-            SinToken::new("g:toy:dpoint").expect("nonempty test token"),
-        )]);
-
-        let alignment = align_main_to_sin(&main, &sin);
-
-        assert_eq!(alignment.pairs.len(), 1);
-        assert!(alignment.errors.is_empty());
-    }
+    use crate::model::Terminator;
 
     /// Accepts empty-on-empty alignment without diagnostics.
     #[test]

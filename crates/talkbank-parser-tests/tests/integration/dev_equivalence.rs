@@ -269,7 +269,9 @@ fn equiv_complex_words() {
 /// cargo test -p talkbank-parser-tests --test dev_equivalence equiv_specific_file
 /// ```
 #[test]
-#[ignore]
+#[ignore = "a developer probe, not a test: it names one hardcoded path and \
+           asserts nothing about the repository. Edit the path and run with \
+           --ignored."]
 fn equiv_specific_file() {
     let path = "corpus/reference/sample.cha";
     let content =

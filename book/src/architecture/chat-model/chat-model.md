@@ -1,7 +1,7 @@
 # CHAT Data Model
 
 **Status:** Current
-**Last updated:** 2026-09-05 11:27 EDT
+**Last updated:** 2026-09-08 19:57 EDT
 
 The `talkbank-model` crate defines the typed AST for CHAT files. Every
 other crate, parser, transform, CLAN, CLI, LSP, and the entire batchalign
@@ -228,7 +228,7 @@ use talkbank_model::alignment::helpers::{
     TierDomain,
 };
 
-walk_words(content, Some(TierDomain::Wor), &mut |leaf| {
+walk_words(content, Some(TierDomain::Mor), &mut |leaf| {
     match leaf {
         WordItem::Word(word) => { /* ... */ }
         WordItem::ReplacedWord(replaced) => { /* ... */ }
@@ -262,23 +262,16 @@ flowchart TD
 
 Only words and separators. Not `OverlapPoint` (any level), not
 `CAElement` within words, not events / pauses / actions, not internal
-bullets. For these, write a custom traversal, see
-`talkbank-model/validation/utterance/overlap.rs` for the reference
-pattern.
+bullets. For these, walk with `walk_content`, which yields every item
+kind; `extract_overlap_info` below is the worked example.
 
-### `walk_overlap_points`, overlap marker iterator
+### `extract_overlap_info`, overlap regions
 
-```text
-walk_overlap_points(content, &mut |visit| {
-    // visit.point.kind, visit.point.index, visit.word_position
-});
-```
-
-Visits every `OverlapPoint` at all three content levels with its
-word-position context. Used by the alignment pipeline (onset estimation)
-and the validator (pairing checks). For region-level analysis (pairing
-⌈ with ⌉ by index), use `extract_overlap_info()` which builds
-`OverlapRegion` structs. For whole-file analysis,
+Walks the content with `walk_content` at the `%wor` domain, so its word
+positions are on the `%wor` projection's scale, and pairs every
+`OverlapPoint` at all three content levels (⌈ with ⌉ by index) into
+`OverlapRegion` structs. Used by the alignment pipeline (onset estimation)
+and the validator (pairing checks). For whole-file analysis,
 `analyze_file_overlaps()` matches top regions (⌈) with bottom regions
 (⌊) across utterances with 1:N support (used by E347 and
 `chatter debug overlap-audit`).

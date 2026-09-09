@@ -440,8 +440,11 @@ fn parse_all_gra_fixtures() {
         } else {
             format!("{body}\n")
         };
-        let tier = parser::parse_gra_tier(&input);
-        if !tier.relations.is_empty() {
+        // `parse_gra_tier` DECLINES a body it cannot parse now, where it used
+        // to return a tier of no relations, so this counts what parsed rather
+        // than what came back non-empty. Same number on a corpus that parses;
+        // a different one, and an honest one, the day something does not.
+        if parser::parse_gra_tier(&input).is_some_and(|tier| !tier.relations.is_empty()) {
             parsed += 1;
         }
     }
@@ -463,6 +466,7 @@ fn snapshot_parsed_gra_samples() {
             format!("{body}\n")
         };
         let tier = parser::parse_gra_tier(&input);
+        assert!(tier.is_some(), "fixture %gra body {i} must parse: {input}");
         assert_yaml_snapshot!(format!("gra_{i}"), tier);
     }
 }
@@ -998,7 +1002,7 @@ fn parse_all_err_fixtures() {
 #[cfg(feature = "trait_tests")]
 fn convert_gra_to_model() {
     let input = "1|2|SUBJ 2|0|ROOT 3|2|OBJ\n";
-    let tier = parser::parse_gra_tier(input);
+    let tier = parser::parse_gra_tier(input).expect("a well formed %gra body parses");
     let model_tier: talkbank_model::model::GraTier = (&tier).into();
     assert_eq!(model_tier.relations.len(), 3);
     assert_eq!(model_tier.relations[0].index, 1);

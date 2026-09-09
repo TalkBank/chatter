@@ -18,7 +18,7 @@
 //! This crate exposes many leaf modules, but the crate root keeps a smaller
 //! convenience surface for the most common pipeline entry points. Specialized
 //! behavior continues to live in its owning module namespace (`json`,
-//! `corpus`, `validation_runner`, and so on).
+//! `validation_runner`, and so on).
 //!
 //! # Start here
 //!
@@ -27,8 +27,7 @@
 //!   have a reusable [`talkbank_parser::TreeSitterParser`]
 //! - [`normalize_chat`] is the common root helper for normalized CHAT output
 //! - [`json`] owns the format-conversion APIs
-//! - [`corpus`] and [`validation_runner`] own discovery, caching, and
-//!   directory-scale validation
+//! - [`validation_runner`] owns caching and directory-scale validation
 //!
 //! If you need a specialized transform (redaction, transcript merge, speaker ID,
 //! adjudication, and so on), go directly to that module rather than expecting
@@ -46,8 +45,8 @@
 //! - Root re-exports such as [`parse_and_validate`] and [`normalize_chat`] are
 //!   the common one-shot pipeline helpers.
 //! - [`json`] owns the format-conversion surfaces.
-//! - [`corpus`] and [`validation_runner`] own discovery,
-//!   caching, and directory-scale validation workflows.
+//! - [`validation_runner`] owns caching and directory-scale validation
+//!   workflows.
 //!
 //! # Design Principles
 //!
@@ -101,7 +100,6 @@ pub mod paths;
 // SQLite result cache, which pulls sqlx via talkbank-cache) is behind the
 // default-on `validation-runner` feature so consumers that only want the
 // transform surface can opt out with `default-features = false`.
-pub mod corpus;
 #[cfg(feature = "validation-runner")]
 pub mod validation_runner;
 
@@ -118,10 +116,6 @@ mod rendering;
 
 // Common convenience re-exports. Detailed APIs continue to live in their
 // owning modules above.
-pub use self::corpus::{
-    CorpusEntry, CorpusManifest, FailureReason, FileEntry, FileStatus as CorpusFileStatus,
-    ManifestError, build_manifest, corpus_summary, discover_corpora, format_manifest,
-};
 pub use self::json::{
     JsonError, JsonResult, SCHEMA_JSON, is_schema_validation_available, schema_load_error,
     to_json_pretty_unvalidated, to_json_pretty_validated, to_json_unvalidated, to_json_validated,
@@ -144,8 +138,8 @@ pub use self::rendering::{
 #[cfg(feature = "validation-runner")]
 pub use self::validation_runner::{
     AbortReason, CacheMode, CacheOutcome, DirectoryMode, ErrorEvent, FileCompleteEvent, FileStatus,
-    ParserKind, RoundtripEvent, RunCoverage, ValidationCache, ValidationConfig, ValidationEvent,
-    ValidationStats, ValidationStatsSnapshot, validate_directory_streaming,
+    ParserKind, RoundtripEvent, RoundtripVerdict, RunCoverage, ValidationCache, ValidationConfig,
+    ValidationEvent, ValidationStats, ValidationStatsSnapshot, validate_directory_streaming,
 };
 #[cfg(feature = "validation-runner")]
 pub use talkbank_cache::{

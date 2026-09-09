@@ -636,7 +636,9 @@ fn pipeline_empty_directory() {
 /// Temp dir with 100 minimal .cha files. `validate_directory_streaming`
 /// should complete without hang or crash.
 #[test]
-#[ignore]
+#[ignore = "a stress test: minutes of wall clock for a property the \
+           ordinary concurrent tests above already pin at a smaller size. Run \
+           with --ignored."]
 fn stress_100_files_parallel() {
     let dir = tempfile::tempdir().expect("create temp dir");
     let file_count = 100;
@@ -676,7 +678,9 @@ fn stress_100_files_parallel() {
 
 /// Write 1000 entries to in-memory cache, read them all back.
 #[test]
-#[ignore]
+#[ignore = "a stress test: minutes of wall clock for a property the \
+           ordinary concurrent tests above already pin at a smaller size. Run \
+           with --ignored."]
 fn stress_cache_1000_entries() {
     let dir = tempfile::tempdir().expect("create temp dir");
     let cache = CachePool::in_memory(talkbank_cache::CacheIdentity::new(
@@ -718,7 +722,9 @@ fn stress_cache_1000_entries() {
 
 /// Create and drop 50 parsers rapidly. No resource leaks or crashes.
 #[test]
-#[ignore]
+#[ignore = "a stress test: minutes of wall clock for a property the \
+           ordinary concurrent tests above already pin at a smaller size. Run \
+           with --ignored."]
 fn stress_parser_rapid_creation() {
     for i in 0..50 {
         let parser = TreeSitterParser::new().expect("parser should initialize");

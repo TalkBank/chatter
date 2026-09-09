@@ -327,7 +327,8 @@ fn angle_bracket_group() {
 // ── Corpus smoke test ───────────────────────────────────────────
 
 #[test]
-#[ignore] // Slow: parses every *-line from all corpus dirs individually. Run with --ignored.
+#[ignore = "slow: parses every main tier of every reference file individually. \
+           Run with --ignored."]
 fn reference_corpus_main_tiers() {
     // Reference corpus lives in this repo at <repo>/corpus/reference.
     // CARGO_MANIFEST_DIR = <repo>/crates/talkbank-parser-re2c

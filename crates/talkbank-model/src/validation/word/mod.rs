@@ -18,7 +18,4 @@ pub mod structure;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-mod snapshot_tests;
-
 pub use language::{GoverningMark, GoverningMarkKind, LanguageResolutionOutcome};

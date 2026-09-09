@@ -10,6 +10,7 @@ use super::error::RedactError;
 use super::header::sanitize_header;
 use super::placeholder::PlaceholderState;
 use super::policy::SanitizationPolicy;
+use super::wor::WorPlan;
 use super::word::sanitize_word;
 
 /// The result of sanitizing a parsed `ChatFile`.
@@ -52,16 +53,26 @@ pub fn sanitize(
                     sanitize_header(header);
                 }
 
+                utt.dependent_tiers
+                    .retain(|entry| keep_dependent_tier(&entry.tier));
+                // Whether each `%wor` tier is the main tier's words is
+                // decided while both still carry their text.
+                let wor_plan =
+                    WorPlan::decide(&utt.main, utt.dependent_tiers.iter().map(|e| &e.tier));
+
                 let main_content = utt.main.content.content.as_mut_slice();
                 walk_content_mut(main_content, None, &mut |item| {
                     sanitize_content_item(item, &mut state);
                 });
 
-                utt.dependent_tiers
-                    .retain(|entry| keep_dependent_tier(&entry.tier));
                 for entry in utt.dependent_tiers.iter_mut() {
                     sanitize_dependent_tier(&mut entry.tier, &mut state);
                 }
+                wor_plan.apply(
+                    &utt.main,
+                    utt.dependent_tiers.iter_mut().map(|e| &mut e.tier),
+                    &mut state,
+                );
             }
         }
     }

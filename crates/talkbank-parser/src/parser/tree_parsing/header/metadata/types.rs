@@ -3,28 +3,16 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Types_Header>
 
-use crate::generated_traversal::{AsRawNode, NodeSlot, TypesHeaderNode, extract_types_header};
+use crate::generated_traversal::{
+    AsRawNode, ChildSlot, NoChild, SlotView, TypesHeaderNode, extract_types_header,
+};
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::{Header, TypesHeader, WarningText};
-
-/// Build `Header::Unknown` for malformed `@Types` input.
-fn unknown_types_header(node: Node, source: &str, parse_reason: impl Into<String>) -> Header {
-    let text = match node.utf8_text(source.as_bytes()) {
-        Ok(raw) if !raw.is_empty() => raw.to_string(),
-        _ => "@Types".to_string(),
-    };
-
-    Header::Unknown {
-        text: WarningText::new(text),
-        parse_reason: Some(parse_reason.into()),
-        suggested_fix: Some("Expected @Types:\tdesign, activity, group".to_string()),
-    }
-}
+use talkbank_model::model::{Header, TypesHeader};
 
 /// Parse Types header from tree-sitter node
 ///
@@ -72,8 +60,14 @@ pub fn parse_types_header(
         errors,
         "types_design",
     ) else {
-        surface_unexpected(&children.unexpected, source, errors);
-        return unknown_types_header(node, source, "Missing design field in @Types header");
+        surface_displaced(&children.unexpected, "types_header", source, errors);
+        return super::super::unknown_header(
+            node,
+            source,
+            "@Types",
+            "Expected @Types:\tdesign, activity, group",
+            "Missing design field in @Types header",
+        );
     };
 
     let ParseOutcome::Parsed(activity) = read_types_field(
@@ -83,8 +77,14 @@ pub fn parse_types_header(
         errors,
         "types_activity",
     ) else {
-        surface_unexpected(&children.unexpected, source, errors);
-        return unknown_types_header(node, source, "Missing activity field in @Types header");
+        surface_displaced(&children.unexpected, "types_header", source, errors);
+        return super::super::unknown_header(
+            node,
+            source,
+            "@Types",
+            "Expected @Types:\tdesign, activity, group",
+            "Missing activity field in @Types header",
+        );
     };
 
     let ParseOutcome::Parsed(group) = read_types_field(
@@ -94,11 +94,17 @@ pub fn parse_types_header(
         errors,
         "types_group",
     ) else {
-        surface_unexpected(&children.unexpected, source, errors);
-        return unknown_types_header(node, source, "Missing group field in @Types header");
+        surface_displaced(&children.unexpected, "types_header", source, errors);
+        return super::super::unknown_header(
+            node,
+            source,
+            "@Types",
+            "Expected @Types:\tdesign, activity, group",
+            "Missing group field in @Types header",
+        );
     };
 
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "types_header", source, errors);
     let types_header = TypesHeader::new(design, activity, group);
 
     Header::Types(types_header)
@@ -107,21 +113,21 @@ pub fn parse_types_header(
 /// Read one mandatory `@Types` field from its typed positional slot, reproducing
 /// the pre-migration `find_child_text` text + diagnostic handling EXACTLY.
 ///
-/// `slot` is the field's `child_N` slot (e.g. `NodeSlot<TypesDesignNode>`);
+/// `slot` is the field's `child_N` slot (e.g. `ChildSlot<TypesDesignNode>`);
 /// `node` is the `@Types` header node (used for the missing-field diagnostic
 /// span); `label` is the field name (`types_design` / `types_activity` /
 /// `types_group`) used to build the preserved diagnostic messages and context.
 /// The slot match is EXHAUSTIVE over every `NodeSlot` variant; there is
 /// deliberately no `_` catch-all that could silently drop a recovery slot.
 fn read_types_field<'tree, T: AsRawNode<'tree>>(
-    slot: &NodeSlot<'tree, T>,
+    slot: &ChildSlot<'tree, T>,
     node: Node,
     source: &str,
     errors: &impl ErrorSink,
     label: &str,
 ) -> ParseOutcome<String> {
-    match slot {
-        NodeSlot::Present(field) => {
+    match slot.view() {
+        SlotView::Present(field) => {
             // Decode through the shared `decode_present_child` helper, which reads
             // from the RAW node's `utf8_text` (NOT the wrapper's `.text()`
             // accessor, which swallows UTF-8 errors via `unwrap_or("")`),
@@ -136,7 +142,7 @@ fn read_types_field<'tree, T: AsRawNode<'tree>>(
         // missing / error / unexpected field child, funnelling to the SAME
         // "Missing <label> in @Types header" diagnostic at the HEADER NODE span.
         // Preserve that exactly.
-        NodeSlot::Missing(_) | NodeSlot::Absent | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
+        SlotView::Missing(_) | SlotView::Absent(NoChild) | SlotView::Error(_) => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,

@@ -24,17 +24,21 @@ pub(crate) use validate::check_header;
 
 #[cfg(test)]
 mod tests {
+    //! Two checks over a `SpeakerCode` no parse produces.
+    //!
+    //! Nine tests that used to sit here built a `Header` value by hand
+    //! (`Header::Options { .. }` for the text `@Options:\tCA, NewThing`) and
+    //! called `check_header` on it at `Span::DUMMY`. They are
+    //! `talkbank-parser-tests/tests/integration/header_values_from_source.rs`
+    //! now, over header lines the parser built. These two stay because the
+    //! value they test, a speaker code containing `:`, is one the parser never
+    //! builds: `@Participants:\tCH:I Child` is E320 and E316 at parse, so the
+    //! invalid-character check is reachable only from a value built by hand,
+    //! and building it is the only way to reach the check at all.
     use super::check_header;
-    use crate::model::{Header, ParticipantEntry, ParticipantRole, SpeakerCode, WarningText};
+    use crate::model::{Header, ParticipantEntry, ParticipantRole, SpeakerCode};
     use crate::validation::ValidationContext;
-    use crate::{ErrorCode, ErrorCollector, Severity, Span};
-
-    /// Builds a fixture `@Media` filename, failing loudly on a literal that
-    /// does not satisfy the type's invariant.
-    fn media_filename(value: &str) -> crate::model::MediaFilename {
-        #[allow(clippy::expect_used)]
-        crate::model::MediaFilename::parse(value).expect("fixture @Media filename must be valid")
-    }
+    use crate::{ErrorCollector, Span};
 
     /// Speaker IDs containing `:` are rejected as invalid.
     ///
@@ -94,191 +98,6 @@ mod tests {
             !error_vec
                 .iter()
                 .any(|e| e.message.contains("invalid character"))
-        );
-    }
-
-    /// Unknown headers map to exactly one `E525` diagnostic.
-    ///
-    /// This keeps malformed-header reporting predictable for downstream tooling.
-    #[test]
-    fn test_unknown_header_reports_error() {
-        // Header::Unknown is used for unknown/malformed headers
-        let header = Header::Unknown {
-            text: WarningText::new("@Unknown:\tsomething".to_string()),
-            parse_reason: Some("Unrecognized header type".to_string()),
-            suggested_fix: None,
-        };
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        // Should report exactly one E525 error
-        assert_eq!(
-            error_vec.len(),
-            1,
-            "Should have exactly one error for unknown header"
-        );
-        assert_eq!(error_vec[0].code, ErrorCode::UnknownHeader);
-        assert_eq!(error_vec[0].severity, Severity::Error);
-        assert!(
-            error_vec[0].message.contains("Unknown or malformed header"),
-            "Error message should mention unknown header"
-        );
-    }
-
-    // ── E534-E539: Unsupported value tests ──────────────────────────
-
-    #[test]
-    fn test_e534_unsupported_option() {
-        use crate::model::{ChatOptionFlag, ChatOptionFlags};
-
-        let header = Header::Options {
-            options: ChatOptionFlags::new(vec![
-                ChatOptionFlag::Ca,
-                ChatOptionFlag::Unsupported("NewThing".to_string()),
-            ]),
-        };
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        assert!(
-            error_vec
-                .iter()
-                .any(|e| e.code == ErrorCode::UnsupportedOption),
-            "Should report E534 for unsupported option"
-        );
-    }
-
-    #[test]
-    fn test_e534_known_options_no_unsupported_warning() {
-        use crate::model::{ChatOptionFlag, ChatOptionFlags};
-
-        let header = Header::Options {
-            options: ChatOptionFlags::new(vec![ChatOptionFlag::Ca, ChatOptionFlag::NoAlign]),
-        };
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        assert!(
-            !error_vec
-                .iter()
-                .any(|e| e.code == ErrorCode::UnsupportedOption),
-            "Known options should not trigger E534"
-        );
-    }
-
-    #[test]
-    fn test_e535_unsupported_media_type() {
-        use crate::model::{MediaHeader, MediaType};
-
-        let header = Header::Media(MediaHeader::new(
-            media_filename("test"),
-            MediaType::Unsupported("hologram".to_string()),
-        ));
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::UnsupportedMediaType);
-    }
-
-    #[test]
-    fn test_e536_unsupported_media_status() {
-        use crate::model::{MediaHeader, MediaStatus, MediaType};
-
-        let header = Header::Media(
-            MediaHeader::new(media_filename("test"), MediaType::Audio)
-                .with_status(MediaStatus::Unsupported("archived".to_string())),
-        );
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::UnsupportedMediaStatus);
-    }
-
-    #[test]
-    fn test_e537_unsupported_number() {
-        use crate::model::Number;
-
-        let header = Header::Number {
-            number: Number::Unsupported("99".to_string()),
-        };
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::UnsupportedNumber);
-    }
-
-    #[test]
-    fn test_e538_unsupported_recording_quality() {
-        use crate::model::RecordingQuality;
-
-        let header = Header::RecordingQuality {
-            quality: RecordingQuality::Unsupported("excellent".to_string()),
-        };
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::UnsupportedRecordingQuality);
-    }
-
-    #[test]
-    fn test_e539_unsupported_transcription() {
-        use crate::model::Transcription;
-
-        let header = Header::Transcription {
-            transcription: Transcription::Unsupported("rough".to_string()),
-        };
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        assert_eq!(error_vec.len(), 1);
-        assert_eq!(error_vec[0].code, ErrorCode::UnsupportedTranscription);
-    }
-
-    #[test]
-    fn test_known_media_no_warnings() {
-        use crate::model::{MediaHeader, MediaStatus, MediaType};
-
-        let header = Header::Media(
-            MediaHeader::new(media_filename("test"), MediaType::Audio)
-                .with_status(MediaStatus::Unlinked),
-        );
-
-        let errors = ErrorCollector::new();
-        let ctx = ValidationContext::default();
-        check_header(&header, Span::DUMMY, &ctx, &errors);
-        let error_vec = errors.into_vec();
-
-        assert!(
-            error_vec.is_empty(),
-            "Known media type and status should not trigger warnings"
         );
     }
 }

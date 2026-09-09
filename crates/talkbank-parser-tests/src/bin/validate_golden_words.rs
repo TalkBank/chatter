@@ -1,5 +1,15 @@
 //! Validate and optionally clean the golden-word corpus.
 //!
+//! # A second spelling of "which lines are entries" lives here
+//!
+//! `EMPTY_RE`, `COMMENT_RE` and `WORD_RE` below classify a golden-list line
+//! independently of `golden::entries_in`, which is the owner of that question
+//! for every READER of these files. They agree today, and this is the WRITER,
+//! so a divergence here produces a list the gate then mis-reads rather than a
+//! disagreement anyone would see. It is recorded rather than fixed because
+//! `WORD_RE` also carries the single-token check, which `entries_in` does not
+//! and should not; splitting the two is the change, and it belongs with the
+//! conversion of this binary that `gate.rs` already lists as owed.
 //!
 //! # Related CHAT Manual Sections
 //!

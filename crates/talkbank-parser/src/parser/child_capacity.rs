@@ -20,9 +20,10 @@ impl ChildCapacity {
         Self(node.child_count())
     }
 
-    /// Wrap a caller-derived upper bound in Tree-sitter's count domain.
-    pub(crate) const fn from_upper_bound(upper_bound: u32) -> Self {
-        Self(upper_bound)
+    /// Use half a node's child count as the upper bound, for a node whose
+    /// children come in pairs that each yield at most one value.
+    pub(crate) fn for_pairs_of(node: Node<'_>) -> Self {
+        Self(node.child_count() / 2)
     }
 
     /// Create an empty vector, reserving the estimate when it fits `usize`.

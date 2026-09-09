@@ -167,10 +167,10 @@ fn generate_chatfile_description(input: &str) -> Result<String, DescriptionError
     let mut has_com = false;
 
     for utterance in chat_file.utterances() {
-        if utterance.mor().is_some() {
+        if utterance.mor_tier().is_some() {
             has_mor = true;
         }
-        if utterance.gra().is_some() {
+        if utterance.gra_tier().is_some() {
             has_gra = true;
         }
         if utterance.pho().is_some() {

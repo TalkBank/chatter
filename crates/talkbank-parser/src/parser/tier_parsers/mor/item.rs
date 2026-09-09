@@ -6,8 +6,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    AsRawNode, MorContentNode, MorPostCliticChildren, MorPostCliticNode, MorWordNode, NodeSlot,
-    SlotValue, extract_mor_content, extract_mor_post_clitic,
+    AsRawNode, ChildSlot, MorContentNode, MorPostCliticChildren, MorPostCliticNode, MorWordNode,
+    NoChild, SlotValue, SlotView, extract_mor_content, extract_mor_post_clitic,
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::ParseOutcome;
@@ -15,7 +15,7 @@ use talkbank_model::model::{Mor, MorWord};
 
 use super::word::parse_mor_word;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 
 /// Converts a `mor_content` CST node into one `Mor` item.
 ///
@@ -45,7 +45,7 @@ pub fn parse_mor_content(
 ) -> ParseOutcome<Mor> {
     let node = typed.raw_node();
     let children = extract_mor_content(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "mor_content", source, errors);
 
     let main_word = decode_main_word(children.main.slot(), source, errors);
 
@@ -59,12 +59,10 @@ pub fn parse_mor_content(
                     post_clitics.push(clitic);
                 }
             }
-            SlotValue::UnclassifiedPlaceholder(raw)
-            | SlotValue::Error(raw)
-            | SlotValue::Unexpected(raw) => {
+            SlotValue::UnclassifiedPlaceholder(raw) | SlotValue::Error(raw) => {
                 errors.report(unexpected_node_error(raw, source, "mor_content"));
             }
-            SlotValue::Absent => {}
+            SlotValue::Absent(NoChild) => {}
         }
     }
 
@@ -84,7 +82,7 @@ pub fn parse_mor_content(
 /// [`parse_mor_word`] alike (see the module doc comment for why), and
 /// reporting `Error`/`Unexpected` the way the removed loop's `_ =>` arm did.
 fn decode_main_word<'tree>(
-    slot: &NodeSlot<'tree, MorWordNode<'tree>>,
+    slot: &ChildSlot<'tree, MorWordNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Option<MorWord> {
@@ -95,13 +93,11 @@ fn decode_main_word<'tree>(
                 ParseOutcome::Rejected => None,
             }
         }
-        SlotValue::UnclassifiedPlaceholder(raw)
-        | SlotValue::Error(raw)
-        | SlotValue::Unexpected(raw) => {
+        SlotValue::UnclassifiedPlaceholder(raw) | SlotValue::Error(raw) => {
             errors.report(unexpected_node_error(raw, source, "mor_content"));
             None
         }
-        SlotValue::Absent => None,
+        SlotValue::Absent(NoChild) => None,
     }
 }
 
@@ -125,12 +121,12 @@ fn parse_mor_post_clitic(
 ) -> ParseOutcome<Option<MorWord>> {
     let node = typed.raw_node();
     let children: MorPostCliticChildren<'_> = extract_mor_post_clitic(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "mor_post_clitic", source, errors);
 
-    match children.child_0.slot() {
-        NodeSlot::Present(_) | NodeSlot::Missing(_) | NodeSlot::Absent => {}
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, "mor_post_clitic"));
+    match children.child_0.slot().view() {
+        SlotView::Present(_) | SlotView::Missing(_) | SlotView::Absent(NoChild) => {}
+        SlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw, source, "mor_post_clitic"));
         }
     }
 
@@ -140,12 +136,10 @@ fn parse_mor_post_clitic(
                 return ParseOutcome::parsed(Some(word));
             }
         }
-        SlotValue::UnclassifiedPlaceholder(raw)
-        | SlotValue::Error(raw)
-        | SlotValue::Unexpected(raw) => {
+        SlotValue::UnclassifiedPlaceholder(raw) | SlotValue::Error(raw) => {
             errors.report(unexpected_node_error(raw, source, "mor_post_clitic"));
         }
-        SlotValue::Absent => {}
+        SlotValue::Absent(NoChild) => {}
     }
 
     errors.report(unexpected_node_error(

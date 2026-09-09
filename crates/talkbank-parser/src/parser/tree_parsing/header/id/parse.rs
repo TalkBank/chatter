@@ -61,13 +61,13 @@
 //! separators carry no payload and are ignored.
 
 use crate::generated_traversal::{
-    AsRawNode, IdHeaderNode, NodeSlot, extract_id_contents, extract_id_header,
+    AsRawNode, ChildSlot, IdHeaderNode, extract_id_contents, extract_id_header,
 };
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::parser::tree_parsing::parser_helpers::present;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Header, Sex};
@@ -97,7 +97,7 @@ fn decode_field_text(node: Node, source: &str, errors: &impl ErrorSink) -> Parse
 /// the sanctioned 2g-style improvement: it cannot reach a VALID input (a
 /// well-formed `id_header` always yields `Present` required fields).
 fn required_field<'tree, T: AsRawNode<'tree>>(
-    slot: &NodeSlot<'tree, T>,
+    slot: &ChildSlot<'tree, T>,
     id_contents: Node,
     source: &str,
     errors: &impl ErrorSink,
@@ -137,7 +137,7 @@ fn required_field<'tree, T: AsRawNode<'tree>>(
 /// optional NEVER errors, exactly as before. Matched EXHAUSTIVELY, with no `_`
 /// catch-all that could silently drop a recovery node.
 fn optional_field<'tree, T: AsRawNode<'tree>>(
-    slot: &Option<NodeSlot<'tree, T>>,
+    slot: &Option<ChildSlot<'tree, T>>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Option<String>> {
@@ -171,7 +171,7 @@ pub fn parse_id_header(typed: IdHeaderNode<'_>, source: &str, errors: &impl Erro
             ErrorContext::new(source, node.start_byte()..node.end_byte(), "id_header"),
             "Missing id_contents child in id_header",
         ));
-        surface_unexpected(&header_children.unexpected, source, errors);
+        surface_displaced(&header_children.unexpected, "id_header", source, errors);
         return unknown_id_header("ID header CST node is missing id_contents");
     };
     let id_contents = contents.raw_node();
@@ -237,8 +237,8 @@ pub fn parse_id_header(typed: IdHeaderNode<'_>, source: &str, errors: &impl Erro
 
     let custom_field = optional_field(contents.child_31.slot(), source, errors);
 
-    surface_unexpected(&header_children.unexpected, source, errors);
-    surface_unexpected(&contents.unexpected, source, errors);
+    surface_displaced(&header_children.unexpected, "id_header", source, errors);
+    surface_displaced(&contents.unexpected, "id_contents", source, errors);
 
     let (language, corpus, speaker, age, sex, group, ses, role, education, custom_field) = match (
         language,

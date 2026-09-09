@@ -128,19 +128,3 @@ fn ordering_follows_the_code() {
     let ordered: Vec<&str> = codes.iter().map(OrderedCode::as_str).collect();
     assert_eq!(ordered, ["E100", "E500", "E999", "E1000", "W108"]);
 }
-
-/// `Ord` must agree with the derived `Eq`. Both now come from declaration
-/// order, and the macro's ascending check rejects a duplicate code (equal keys
-/// are not ascending), so this holds by construction rather than by luck.
-#[test]
-fn ordering_is_consistent_with_equality() {
-    for left in OrderedCode::all() {
-        for right in OrderedCode::all() {
-            assert_eq!(
-                left.cmp(right) == std::cmp::Ordering::Equal,
-                left == right,
-                "cmp and eq disagree for {left} and {right}"
-            );
-        }
-    }
-}

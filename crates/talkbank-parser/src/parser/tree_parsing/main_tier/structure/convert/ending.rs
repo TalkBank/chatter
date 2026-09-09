@@ -19,16 +19,15 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Postcodes>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, FinalCodesChild0Children, FinalCodesChild1Children, NodeSlot, PostcodeNode,
-    UtteranceEndNode, extract_final_codes, extract_utterance_end,
+    AsRawNode, ChildSlot, FinalCodesChild0Children, FinalCodesChild1Children, NoChild, NodeSlot,
+    PostcodeNode, SeqSlot, SlotView, UtteranceEndNode, extract_final_codes, extract_utterance_end,
 };
 use crate::model::{Bullet, Postcode, Terminator};
 use crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps;
 use crate::parser::tree_parsing::postcode::parse_postcode_node;
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 use super::super::super::content::{
     MainTierRegion, classify_main_tier_recovery, surface_main_tier_sink,
@@ -82,7 +81,9 @@ pub(super) fn parse_utterance_end(
             ));
             None
         }
-        Some(NodeSlot::Missing(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent) | None => None,
+        Some(NodeSlot::Missing(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent(NoChild)) | None => {
+            None
+        }
     };
 
     // child_1 (`final_codes`, optional). Only a `Present` `final_codes` contributes
@@ -94,10 +95,10 @@ pub(super) fn parse_utterance_end(
     // from the OLD flat `element.child_0` to the group's `child_1`. Every other
     // element/group slot state is skipped (the safe default, matching the removed
     // loop which acted only on `postcode`-kind children); a `Missing` / `Error` /
-    // `Unexpected` / absent `final_codes` slot yields no postcodes.
+    // absent `final_codes` slot yields no postcodes.
     let mut postcodes: Vec<Postcode> = Vec::new();
-    match end.child_1.slot() {
-        Some(NodeSlot::Present(final_codes)) => {
+    match end.child_1.slot().as_ref().map(NodeSlot::view) {
+        Some(SlotView::Present(final_codes)) => {
             let codes = extract_final_codes(*final_codes);
             push_postcode_from_final_codes_group(
                 codes.child_0.slot(),
@@ -113,12 +114,15 @@ pub(super) fn parse_utterance_end(
                     &mut postcodes,
                 );
             }
-            surface_main_tier_sink(&codes.unexpected, MainTierRegion::Body, source, errors);
+            surface_main_tier_sink(
+                &codes.unexpected,
+                MainTierRegion::Body,
+                "final_codes",
+                source,
+                errors,
+            );
         }
-        Some(
-            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
-        )
-        | None => {}
+        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => {}
     }
 
     // child_2 (`bullet`, optional). The NEW backend groups the trailing
@@ -131,43 +135,51 @@ pub(super) fn parse_utterance_end(
     // marker) the E360 diagnostic is emitted byte-identically to the removed
     // flat loop, so the file still fails validation. Every other slot state
     // (at either nesting level) yields no bullet, no diagnostic.
-    let bullet = match end.child_2.slot() {
-        Some(NodeSlot::Present(group)) => {
-            surface_main_tier_sink(&group.unexpected, MainTierRegion::Body, source, errors);
-            match group.child_1.slot() {
-                NodeSlot::Present(bullet_node) => {
+    let bullet = match end.child_2.slot().as_ref().map(NodeSlot::view) {
+        Some(SlotView::Present(group)) => {
+            surface_main_tier_sink(
+                &group.unexpected,
+                MainTierRegion::Body,
+                "utterance_end",
+                source,
+                errors,
+            );
+            match group.child_1.slot().view() {
+                SlotView::Present(bullet_node) => {
                     let raw = bullet_node.raw_node();
                     match parse_bullet_node_timestamps(raw, source, errors) {
-                        Some((start_ms, end_ms)) => {
+                        Ok((start_ms, end_ms)) => {
                             Some(Bullet::new(start_ms, end_ms).with_span(span_of(raw)))
                         }
-                        None => {
-                            report_invalid_media_bullet(raw, source, errors);
+                        // The rejection says WHICH route, so the message is
+                        // not a guess between four of them. The reporter lives
+                        // beside that type; a local copy here wrote a sentence
+                        // that was false for its only reachable input.
+                        Err(why) => {
+                            crate::parser::tree_parsing::media_bullet::report_bullet_rejection(
+                                raw, source, &why, errors,
+                            );
                             None
                         }
                     }
                 }
-                NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => None,
-                NodeSlot::Absent => None,
+                SlotView::Missing(_) | SlotView::Error(_) => None,
+                SlotView::Absent(NoChild) => None,
             }
         }
-        Some(
-            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
-        )
-        | None => None,
+        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => None,
     };
 
     // child_3 (trailing `whitespace`, optional). NEWLY MATERIALIZED position (the
     // OLD backend's `--skip whitespaces` absorbed this silently): structural
     // only, carries no terminator, postcode, or bullet, so every slot state is a
     // no-op. Matched explicitly so no state is silently dropped.
-    match end.child_3.slot() {
+    match end.child_3.slot().as_ref().map(NodeSlot::view) {
         Some(
-            NodeSlot::Present(_)
-            | NodeSlot::Missing(_)
-            | NodeSlot::Error(_)
-            | NodeSlot::Unexpected(_)
-            | NodeSlot::Absent,
+            SlotView::Present(_)
+            | SlotView::Missing(_)
+            | SlotView::Error(_)
+            | SlotView::Absent(NoChild),
         )
         | None => {}
     }
@@ -175,12 +187,11 @@ pub(super) fn parse_utterance_end(
     // child_4 (`newline`, required; was `child_3` under OLD). Structural only: it
     // carries no terminator, postcode, or bullet, so every slot state is a no-op.
     // Matched explicitly so the required newline slot is never silently dropped.
-    match end.child_4.slot() {
-        NodeSlot::Present(_)
-        | NodeSlot::Missing(_)
-        | NodeSlot::Error(_)
-        | NodeSlot::Unexpected(_)
-        | NodeSlot::Absent => {}
+    match end.child_4.slot().view() {
+        SlotView::Present(_)
+        | SlotView::Missing(_)
+        | SlotView::Error(_)
+        | SlotView::Absent(NoChild) => {}
     }
 
     // Surface the carrier's own `unexpected` sink (R2), classified by region.
@@ -191,7 +202,13 @@ pub(super) fn parse_utterance_end(
     // it and degraded six error codes to E316. "Empty on every fixture probed
     // so far" was a statement about our fixtures, not about the grammar, and it
     // was read as the latter for months.
-    surface_main_tier_sink(&end.unexpected, MainTierRegion::Body, source, errors);
+    surface_main_tier_sink(
+        &end.unexpected,
+        MainTierRegion::Body,
+        "utterance_end",
+        source,
+        errors,
+    );
 
     UtteranceEndTail {
         terminator,
@@ -212,13 +229,13 @@ trait FinalCodesGroup<'tree> {
     /// The group's `unexpected` sink (R2).
     fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>];
     /// The group's `postcode` slot (`child_1`, after the leading whitespace).
-    fn postcode_slot(&self) -> &NodeSlot<'tree, PostcodeNode<'tree>>;
+    fn postcode_slot(&self) -> &ChildSlot<'tree, PostcodeNode<'tree>>;
 }
 impl<'tree> FinalCodesGroup<'tree> for FinalCodesChild0Children<'tree> {
     fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>] {
         &self.unexpected
     }
-    fn postcode_slot(&self) -> &NodeSlot<'tree, PostcodeNode<'tree>> {
+    fn postcode_slot(&self) -> &ChildSlot<'tree, PostcodeNode<'tree>> {
         self.child_1.slot()
     }
 }
@@ -226,7 +243,7 @@ impl<'tree> FinalCodesGroup<'tree> for FinalCodesChild1Children<'tree> {
     fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>] {
         &self.unexpected
     }
-    fn postcode_slot(&self) -> &NodeSlot<'tree, PostcodeNode<'tree>> {
+    fn postcode_slot(&self) -> &ChildSlot<'tree, PostcodeNode<'tree>> {
         self.child_1.slot()
     }
 }
@@ -237,53 +254,31 @@ impl<'tree> FinalCodesGroup<'tree> for FinalCodesChild1Children<'tree> {
 /// `postcode` slot is not `Present`) yields no postcode, matching the removed
 /// flat loop which acted only on `postcode`-kind children.
 fn push_postcode_from_final_codes_group<'tree, G: FinalCodesGroup<'tree>>(
-    group_slot: &NodeSlot<'tree, G>,
+    group_slot: &SeqSlot<'tree, G>,
     source: &str,
     errors: &impl ErrorSink,
     postcodes: &mut Vec<Postcode>,
 ) {
-    match group_slot {
-        NodeSlot::Present(group) => {
+    match group_slot.view() {
+        SlotView::Present(group) => {
             surface_main_tier_sink(
                 group.group_unexpected(),
                 MainTierRegion::Body,
+                "final_codes",
                 source,
                 errors,
             );
-            match group.postcode_slot() {
-                NodeSlot::Present(postcode_node) => {
+            match group.postcode_slot().view() {
+                SlotView::Present(postcode_node) => {
                     if let ParseOutcome::Parsed(postcode) =
                         parse_postcode_node(postcode_node.raw_node(), source, errors)
                     {
                         postcodes.push(postcode);
                     }
                 }
-                NodeSlot::Missing(_)
-                | NodeSlot::Error(_)
-                | NodeSlot::Unexpected(_)
-                | NodeSlot::Absent => {}
+                SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {}
             }
         }
-        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {}
+        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {}
     }
-}
-
-/// Report the E360 `InvalidMediaBullet` diagnostic for a malformed trailing bullet.
-///
-/// Reproduces the removed `parse_utterance_end` bullet-`None` arm byte-identically:
-/// the same error code, severity, span, context (carrying the bullet text, or
-/// `<unreadable>` on a UTF-8 error), and message. The `<unreadable>` fallback is
-/// defensive only, since the CHAT source is already valid UTF-8 in practice.
-fn report_invalid_media_bullet(node: Node<'_>, source: &str, errors: &impl ErrorSink) {
-    let bullet_text = node.utf8_text(source.as_bytes()).unwrap_or("<unreadable>");
-    errors.report(ParseError::new(
-        ErrorCode::InvalidMediaBullet,
-        Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.start_byte()..node.end_byte(), bullet_text),
-        format!(
-            "Invalid media bullet: grammar rejected '{}'. Legal form: ·START_END· with numeric timestamps only",
-            bullet_text
-        ),
-    ));
 }

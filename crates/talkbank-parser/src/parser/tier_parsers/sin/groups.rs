@@ -9,8 +9,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Sign_Group>
 
 use crate::generated_traversal::{
-    AsRawNode, NodeSlot, SinGroupChoice, SinGroupNode, SinGroupedContentNode, SinWordNode,
-    WhitespacesNode, extract_sin_group, extract_sin_grouped_content,
+    AsRawNode, ChildSlot, NoChild, NodeSlot, SinGroupChoice, SinGroupNode, SinGroupedContentNode,
+    SinWordNode, SlotView, WhitespacesNode, extract_sin_group, extract_sin_grouped_content,
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::model::{SinGroupGestures, SinItem, SinToken};
@@ -18,7 +18,7 @@ use tree_sitter::Node;
 
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{
-    check_not_missing, extract_utf8_text, surface_unexpected,
+    check_not_missing, extract_utf8_text, surface_displaced,
 };
 
 /// Extracts `SinItem` values from a `sin_group` node.
@@ -61,7 +61,7 @@ pub(super) fn extract_sin_group_items(
 ) -> Vec<SinItem> {
     let node = typed.raw_node();
     let children = extract_sin_group(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "sin_group", source, errors);
     match children.content.slot() {
         NodeSlot::Present(SinGroupChoice::SinWord(sin_word)) => {
             let text = extract_utf8_text(sin_word.raw_node(), source, errors, "sin_word", "");
@@ -76,9 +76,9 @@ pub(super) fn extract_sin_group_items(
             // the un-named `child_0` (`〔`), `child_1` (`sin_grouped_content`),
             // `child_2` (`〕`); only `child_1` carries content. Surface the seq's
             // own `unexpected` sink (R2) before descending.
-            surface_unexpected(&seq.unexpected, source, errors);
-            match seq.child_1.slot() {
-                NodeSlot::Present(grouped_content) => {
+            surface_displaced(&seq.unexpected, "sin_group", source, errors);
+            match seq.child_1.slot().view() {
+                SlotView::Present(grouped_content) => {
                     let gestures =
                         extract_sin_grouped_content_tokens(*grouped_content, source, errors);
                     if !gestures.is_empty() {
@@ -87,10 +87,7 @@ pub(super) fn extract_sin_group_items(
                         vec![]
                     }
                 }
-                NodeSlot::Missing(_)
-                | NodeSlot::Error(_)
-                | NodeSlot::Unexpected(_)
-                | NodeSlot::Absent => {
+                SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
                     // Fallback: preserve the entire group as a single token.
                     fallback_group_as_token(node, source, errors)
                 }
@@ -99,7 +96,7 @@ pub(super) fn extract_sin_group_items(
         NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
             fallback_group_as_token(node, source, errors)
         }
-        NodeSlot::Absent => vec![],
+        NodeSlot::Absent(NoChild) => vec![],
     }
 }
 
@@ -142,24 +139,21 @@ fn extract_sin_grouped_content_tokens(
 
     push_sin_token(contents.child_0.slot(), source, errors, &mut tokens);
     for element in contents.child_1.slot() {
-        match element.slot() {
-            NodeSlot::Present(pair) => {
+        match element.slot().view() {
+            SlotView::Present(pair) => {
                 push_sin_separator(pair.child_0.slot(), source, errors, "sin_grouped_content");
                 push_sin_token(pair.child_1.slot(), source, errors, &mut tokens);
-                surface_unexpected(&pair.unexpected, source, errors);
+                surface_displaced(&pair.unexpected, "sin_grouped_content", source, errors);
             }
-            // The generated repeat classifies a whole item as `Present` /
-            // `Error` / `Absent` only (the established `@Languages`/gra/pho
-            // repeat finding); matched exhaustively regardless, per the
-            // no-`_`-on-project-enums rule.
-            NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(*raw, source, "sin_grouped_content"));
+            // An inline sequence is never MISSING or displaced; `SeqSlot` says so.
+            SlotView::Error(raw) => {
+                errors.report(unexpected_node_error(raw, source, "sin_grouped_content"));
             }
-            NodeSlot::Absent => {}
+            SlotView::Absent(NoChild) => {}
         }
     }
 
-    surface_unexpected(&contents.unexpected, source, errors);
+    surface_displaced(&contents.unexpected, "sin_grouped_content", source, errors);
     tokens
 }
 
@@ -178,18 +172,18 @@ fn extract_sin_grouped_content_tokens(
 /// whitespace on well-formed input. `context` is the enclosing rule name, so the
 /// diagnostic matches the sibling content-slot diagnostics.
 pub(super) fn push_sin_separator<'tree>(
-    slot: &NodeSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &ChildSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,
 ) {
-    match slot {
-        NodeSlot::Present(_) | NodeSlot::Absent => {}
-        NodeSlot::Missing(raw) => {
-            check_not_missing(*raw, source, errors, context);
+    match slot.view() {
+        SlotView::Present(_) | SlotView::Absent(NoChild) => {}
+        SlotView::Missing(raw) => {
+            check_not_missing(raw, source, errors, context);
         }
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, context));
+        SlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw, source, context));
         }
     }
 }
@@ -203,32 +197,31 @@ pub(super) fn push_sin_separator<'tree>(
 ///   old `SIN_WORD` arm.
 /// - `Missing`: report the `MissingRequiredElement` (E342) recovery diagnostic
 ///   (the returned flag is discarded because the missing child pushes nothing).
-/// - `Error` / `Unexpected`: the old `_` arm reported `unexpected_node_error`;
-///   reproduced here.
+/// - `Error`: the old `_` arm reported `unexpected_node_error`; reproduced here.
 /// - `Absent`: no child at this position; nothing is reported or pushed.
 ///
-/// The `Missing` / `Error` / `Unexpected` arms are unreachable from the boundary
+/// The `Missing` / `Error` arms are unreachable from the boundary
 /// (this runs only for a `Present` `sin_grouped_content` inside an error-free
 /// tier); they are handled explicitly for exhaustiveness.
 fn push_sin_token<'tree>(
-    slot: &NodeSlot<'tree, SinWordNode<'tree>>,
+    slot: &ChildSlot<'tree, SinWordNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     tokens: &mut Vec<SinToken>,
 ) {
-    match slot {
-        NodeSlot::Present(sin_word) => {
+    match slot.view() {
+        SlotView::Present(sin_word) => {
             let text = extract_utf8_text(sin_word.raw_node(), source, errors, "sin_word", "");
             if let Ok(token) = SinToken::new(text) {
                 tokens.push(token);
             }
         }
-        NodeSlot::Missing(raw) => {
-            check_not_missing(*raw, source, errors, "sin_grouped_content");
+        SlotView::Missing(raw) => {
+            check_not_missing(raw, source, errors, "sin_grouped_content");
         }
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, "sin_grouped_content"));
+        SlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw, source, "sin_grouped_content"));
         }
-        NodeSlot::Absent => {}
+        SlotView::Absent(NoChild) => {}
     }
 }

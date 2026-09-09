@@ -11,15 +11,17 @@ pub(super) fn parse_inline_bullet(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<(u64, u64)> {
-    let Some((start_ms, end_ms)) = parse_bullet_node_timestamps(node, source, errors) else {
-        errors.report(ParseError::new(
-            ErrorCode::InvalidMediaBullet,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-            "Invalid bullet: could not extract timestamps",
-        ));
-        return ParseOutcome::rejected();
+    let (start_ms, end_ms) = match parse_bullet_node_timestamps(node, source, errors) {
+        Ok(times) => times,
+        // "could not extract timestamps" said nothing a reader could act on,
+        // and its context carried an empty string where the bullet text
+        // belongs. The rejection knows which of the four routes it took.
+        Err(why) => {
+            crate::parser::tree_parsing::media_bullet::report_bullet_rejection(
+                node, source, &why, errors,
+            );
+            return ParseOutcome::rejected();
+        }
     };
 
     if start_ms == 0 && end_ms == 0 {

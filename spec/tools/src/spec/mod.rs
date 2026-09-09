@@ -17,7 +17,6 @@ pub mod construct;
 pub mod error;
 pub mod markdown;
 pub mod metadata;
-pub mod validation_manifest;
 
 pub use by_code::{CodeSpecs, CodeSpecsView, SpecsByCode};
 pub use construct::ConstructSpec;

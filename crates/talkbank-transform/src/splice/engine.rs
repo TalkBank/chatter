@@ -360,16 +360,13 @@ pub fn mapped_edit_sites(
         // Two edits tied on start offset overlap regardless of kind (see
         // the doc comment on `SpliceError::Overlap`); otherwise the usual
         // "does this edit begin before the previous one finished" check.
-        let overlaps = match previous {
-            Some(previous_edit) if previous_edit.target.start_offset() == start => true,
-            _ => start < cursor,
-        };
-        if overlaps {
-            let earlier = previous
-                .map(|p| p.provenance.clone())
-                .unwrap_or_else(|| edit.provenance.clone());
+        // Only a previous edit can be overlapped: the cursor advances only
+        // past one, so with none the first edit begins at or after 0.
+        if let Some(previous_edit) = previous
+            && (previous_edit.target.start_offset() == start || start < cursor)
+        {
             return Err(SpliceError::Overlap {
-                earlier,
+                earlier: previous_edit.provenance.clone(),
                 later: edit.provenance.clone(),
             });
         }

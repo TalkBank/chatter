@@ -9,8 +9,10 @@
 #![allow(clippy::unreachable, clippy::unwrap_used, clippy::expect_used)]
 
 use crate::ast;
+use crate::source_text::SourceText;
 use crate::token::Token;
 use talkbank_model::model::*;
+use talkbank_model::{ErrorCode, ErrorSink, ParseError, ParseOutcome, Severity};
 
 use super::*;
 
@@ -48,24 +50,193 @@ impl<'a> TryFrom<&ast::MorTier<'a>> for MorTier {
 // %gra conversions
 // ═══════════════════════════════════════════════════════════════
 
-impl<'a> From<&ast::GraRelationParsed<'a>> for GrammaticalRelation {
-    fn from(r: &ast::GraRelationParsed<'a>) -> Self {
-        GrammaticalRelation {
-            index: r.index.parse().unwrap_or(0),
-            head: r.head.parse().unwrap_or(0),
-            relation: GrammaticalRelationType::new(r.relation),
+/// Lower one `%gra` relation, reporting what the model cannot hold.
+///
+/// # What this replaced, and why it is not a `From`
+///
+/// It was `From<&GraRelationParsed>`, infallible, writing
+/// `r.index.parse().unwrap_or(0)` and `r.head.parse().unwrap_or(0)`. The lexer
+/// admits any digit run for either field, so the only way `parse` fails is a
+/// value too large for `usize` , and the answer to that was the number ZERO.
+/// For the head, zero is the ROOT attachment: `2|99999999999999999999|PUNCT`
+/// became `2|0|PUNCT`, so the oracle backend did not merely miss a diagnostic
+/// on invalid input, it FABRICATED a well formed dependency tree from it, and
+/// the parity harness could see only the missing diagnostic. Found 2026-09-07
+/// by writing E710's first working example.
+///
+/// The three rejections mirror the canonical parser's, code for code, because
+/// an oracle that rejects the same inputs for different reasons is not one:
+/// E709 for a zero index, E708 for an index the model cannot hold, E710 for a
+/// head it cannot hold. A rejected relation is DROPPED, never defaulted, which
+/// is also what the canonical parser does.
+///
+/// Spans come from the `SourceText` the slices were cut from, so a diagnostic
+/// points at the field rather than at a fabricated position.
+pub fn gra_relation_to_model(
+    r: &ast::GraRelationParsed<'_>,
+    source: SourceText<'_>,
+    errors: &(impl ErrorSink + ?Sized),
+) -> ParseOutcome<GrammaticalRelation> {
+    let index = match r.index.parse::<usize>() {
+        Ok(0) => {
+            report_gra(
+                errors,
+                source,
+                r.index,
+                ErrorCode::InvalidGrammarIndex,
+                "Index cannot be 0 (indices are 1-indexed)",
+            );
+            return ParseOutcome::rejected();
         }
+        Ok(index) => index,
+        Err(_) => {
+            report_gra(
+                errors,
+                source,
+                r.index,
+                ErrorCode::MalformedGrammarRelation,
+                &format!("Invalid index '{}': must be a positive integer", r.index),
+            );
+            return ParseOutcome::rejected();
+        }
+    };
+    let head = match r.head.parse::<usize>() {
+        Ok(head) => head,
+        Err(_) => {
+            report_gra(
+                errors,
+                source,
+                r.head,
+                ErrorCode::UnexpectedGrammarNode,
+                &format!("Invalid head '{}': must be a non-negative integer", r.head),
+            );
+            return ParseOutcome::rejected();
+        }
+    };
+    ParseOutcome::parsed(GrammaticalRelation {
+        index,
+        head,
+        relation: GrammaticalRelationType::new(r.relation),
+    })
+}
+
+/// One diagnostic, located at the field that carries the fault.
+///
+/// A field whose span this source cannot resolve is reported at the tier's own
+/// fallback rather than at `Span::DUMMY`: the sentinel is also the legal
+/// zero-width position at byte 0, so it would place the diagnostic at the top
+/// of the file and look like a fact.
+fn report_gra(
+    errors: &(impl ErrorSink + ?Sized),
+    source: SourceText<'_>,
+    field: &str,
+    code: ErrorCode,
+    message: &str,
+) {
+    // The slice came from this source by construction, so the fallback is
+    // unreachable today. It is written out rather than unwrapped so that a
+    // future caller pairing a relation with the wrong source loses the
+    // POSITION and not the diagnostic, and it widens to the whole file rather
+    // than collapsing to `Span::DUMMY`, which is also the legal zero-width
+    // position at byte 0 and would put the finding at the top of the file as
+    // though that were where it is.
+    let at = match source.span_of(field) {
+        Some(span) => span,
+        None => source.whole(),
+    };
+    errors.report(ParseError::at_span(
+        code,
+        Severity::Error,
+        at,
+        message.to_owned(),
+    ));
+}
+
+/// A lowered `%gra` tier, and what lowering it cost.
+///
+/// Returned rather than a bare [`GraTier`] because a tier that lost a relation
+/// to a rejection is SHORTER than the one the author wrote, and nothing about
+/// the resulting value says so. Every cross-tier check then blames the
+/// transcript for our own recovery: `%mor` has three chunks and `%gra` has two,
+/// so E720; the surviving relations are not 1..N, so E721; the only root may
+/// be the one that was dropped, so E722.
+///
+/// Two things read the fact, and they are not the same question. The
+/// [`GraCompleteness`] this carries onto the tier answers "did THIS tier lose
+/// a relation", which is what `talkbank-model`'s whole-tier rules need. The
+/// taint answers "is cross-tier alignment involving `%gra` trustworthy", which
+/// the canonical backend also sets for faults in other tiers entirely.
+///
+/// Before this, the two backends disagreed about the consequence on
+/// `spec/errors/E710.md` example 2: tree-sitter tainted and reported E600 and
+/// a spurious E722, re2c recorded nothing and reported E720 against a
+/// transcript whose two tiers agree.
+#[must_use]
+pub struct LoweredGra {
+    tier: GraTier,
+    recovered: Recovered,
+}
+
+/// Whether lowering had to drop something the author wrote.
+#[derive(Clone, Copy)]
+enum Recovered {
+    /// Every relation on the line is in the tier.
+    Nothing,
+    /// At least one relation was rejected and is not in the tier.
+    ADroppedRelation,
+}
+
+impl LoweredGra {
+    /// The tier, recording any recovery on the utterance's parse health.
+    ///
+    /// The one route for a caller that HAS an utterance, which is every caller
+    /// that lowers a whole file.
+    pub fn into_tier(self, health: &mut ParseHealthState) -> GraTier {
+        match self.recovered {
+            Recovered::Nothing => {}
+            Recovered::ADroppedRelation => health.taint(ParseHealthTier::Gra),
+        }
+        self.tier
+    }
+
+    /// The tier alone, for a caller with no utterance to record it on.
+    ///
+    /// The fragment entry points parse one tier out of context: there is no
+    /// `ParseHealth` to taint and nothing downstream that could read it. Named
+    /// so that dropping the fact is a decision visible at the call site rather
+    /// than a field nobody looked at.
+    pub fn tier_without_health(self) -> GraTier {
+        self.tier
     }
 }
 
-impl<'a> From<&ast::GraTier<'a>> for GraTier {
-    fn from(tier: &ast::GraTier<'a>) -> Self {
-        let relations: Vec<GrammaticalRelation> = tier
-            .relations
-            .iter()
-            .map(GrammaticalRelation::from)
-            .collect();
-        GraTier::new_gra(relations)
+/// Lower a `%gra` tier, dropping every relation the model cannot hold.
+pub fn gra_tier_to_model(
+    tier: &ast::GraTier<'_>,
+    source: SourceText<'_>,
+    errors: &(impl ErrorSink + ?Sized),
+) -> LoweredGra {
+    let mut relations = Vec::with_capacity(tier.relations.len());
+    for parsed in &tier.relations {
+        if let ParseOutcome::Parsed(relation) = gra_relation_to_model(parsed, source, errors) {
+            relations.push(relation);
+        }
+    }
+    // Compared against what the LINE held, not against a count carried
+    // alongside: the two cannot disagree.
+    let (recovered, completeness) = match relations.len() == tier.relations.len() {
+        true => (Recovered::Nothing, GraCompleteness::Whole),
+        false => (Recovered::ADroppedRelation, GraCompleteness::Truncated),
+    };
+    LoweredGra {
+        // The fact is recorded TWICE, on purpose, because two different
+        // questions read it. `GraCompleteness` travels on the tier and answers
+        // "did this tier lose a relation", which is what the structural rules
+        // need. The taint below travels on the utterance and answers "is
+        // cross-tier alignment involving `%gra` trustworthy", which is coarser
+        // and is set for reasons that have nothing to do with this tier.
+        tier: GraTier::lowered_from(relations, completeness),
+        recovered,
     }
 }
 
@@ -337,3 +508,73 @@ impl<'a> From<&ast::PhoWordParsed<'a>> for talkbank_model::model::PhoWord {
 // ═══════════════════════════════════════════════════════════════
 // CA character → type mapping
 // ═══════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod gra_lowering_tests {
+    use super::*;
+    use talkbank_model::errors::ErrorCollector;
+
+    /// Lower a `%gra` body through the real lexer and parser, as the whole-file
+    /// path does.
+    fn lower(body: &str) -> (GraTier, Vec<ErrorCode>) {
+        let parsed = match crate::parser::parse_gra_tier(body) {
+            Some(parsed) => parsed,
+            None => panic!("the fixture bodies in this module all parse: {body}"),
+        };
+        let errors = ErrorCollector::new();
+        let tier = gra_tier_to_model(&parsed, SourceText::new(body), &errors).tier_without_health();
+        let codes = errors.to_vec().iter().map(|error| error.code).collect();
+        (tier, codes)
+    }
+
+    /// SURVIVES: behaviour a signature cannot state. That an unrepresentable
+    /// field is REPORTED and DROPPED, rather than lowered to a number, is a
+    /// property of running the lowering.
+    ///
+    /// This is the case that made the oracle backend fabricate: the lexer
+    /// admits any digit run for a head, so the only `parse` failure is a value
+    /// too large for `usize`, and the answer used to be ZERO, which is the ROOT
+    /// attachment. `2|<overflow>|PUNCT` became `2|0|PUNCT`: a well formed
+    /// dependency tree invented out of invalid input.
+    #[test]
+    fn a_head_the_model_cannot_hold_is_reported_and_dropped() {
+        let (tier, codes) = lower("1|0|ROOT 2|99999999999999999999|PUNCT\n");
+        assert_eq!(codes, vec![ErrorCode::UnexpectedGrammarNode]);
+        assert_eq!(
+            tier.relations().len(),
+            1,
+            "the rejected relation must be dropped, never defaulted"
+        );
+        assert!(
+            tier.relations().iter().all(|relation| relation.index == 1),
+            "the surviving relation must be the one that was representable"
+        );
+    }
+
+    /// SURVIVES: behaviour. An index of zero is a different rule with a
+    /// different code, and the canonical parser reports E709 for it.
+    #[test]
+    fn a_zero_index_is_reported_as_its_own_rule() {
+        let (tier, codes) = lower("0|0|ROOT\n");
+        assert_eq!(codes, vec![ErrorCode::InvalidGrammarIndex]);
+        assert!(tier.relations().is_empty());
+    }
+
+    /// SURVIVES: behaviour. An index too large to hold is E708, not E710:
+    /// the two fields fail for the same reason and are reported differently
+    /// because the canonical parser reports them differently, and an oracle
+    /// that rejects the same input under another code is not one.
+    #[test]
+    fn an_index_the_model_cannot_hold_is_a_different_code_from_a_head() {
+        let (_, codes) = lower("99999999999999999999|0|ROOT\n");
+        assert_eq!(codes, vec![ErrorCode::MalformedGrammarRelation]);
+    }
+
+    /// SURVIVES: behaviour. The ordinary tier still lowers untouched.
+    #[test]
+    fn a_well_formed_tier_reports_nothing() {
+        let (tier, codes) = lower("1|2|SUBJ 2|0|ROOT 3|2|OBJ\n");
+        assert!(codes.is_empty());
+        assert_eq!(tier.relations().len(), 3);
+    }
+}

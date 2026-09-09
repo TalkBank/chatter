@@ -20,37 +20,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>
 
 use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ErrorVec, ParseError, Severity, SourceLocation, Span,
+    ErrorCode, ErrorContext, ErrorSink, ErrorVec, ParseError, Severity, SourceLocation,
 };
-use crate::model::Bullet;
 use tree_sitter::Node;
-
-/// Bullet delimiter character (U+0015)
-const BULLET_CHAR: char = '\u{15}';
-
-/// Split bullet token text into its raw `(start, end)` digit components.
-///
-/// Input format: `\u{15}START_END\u{15}`. Returns `None` when the
-/// delimiters or the `_` separator are missing; the components are NOT
-/// yet validated as numbers (callers parse and, separately, check the
-/// leading-zero representation rule, E748).
-pub(crate) fn parse_bullet_components(text: &str) -> Option<(&str, &str)> {
-    let inner = text.strip_prefix(BULLET_CHAR)?.strip_suffix(BULLET_CHAR)?;
-    inner.split_once('_')
-}
-
-/// Parse bullet text content from a token node.
-///
-/// Input format: `\u{15}START_END\u{15}`, exactly digits on both
-/// sides of the underscore, nothing else. Returns `None` for any
-/// deviation (including a trailing `-` or any non-digit byte in
-/// either timestamp).
-pub(crate) fn parse_bullet_text(text: &str) -> Option<(u64, u64)> {
-    let (start_str, end_str) = parse_bullet_components(text)?;
-    let start_ms = start_str.parse::<u64>().ok()?;
-    let end_ms = end_str.parse::<u64>().ok()?;
-    Some((start_ms, end_ms))
-}
 
 /// True when a bullet time component is written with a leading zero
 /// before another digit (`012`). A bare `0` is legal; CLAN CHECK calls
@@ -84,16 +56,95 @@ fn leading_zero_errors(start_text: &str, end_text: &str, node: Node, source: &st
     out
 }
 
+/// Why a structured `bullet` CST node could not be read as a pair of times.
+///
+/// # Four routes, and a diagnostic that guessed between them
+///
+/// This was the `None` of an `Option`, and the caller that reports E360 wrote
+/// one sentence for all four: "grammar rejected '...'. Legal form: ·START_END·
+/// with numeric timestamps only". For the overflow route both halves of that
+/// are false, since the grammar ACCEPTED the bullet and its timestamps ARE
+/// numeric; a first attempt to fix it said "numeric but too large", which is
+/// false for the skip-marker route, where a characterization test caught it.
+/// A message cannot be right about a fact the return type threw away.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BulletRejection {
+    /// The bullet or a descendant carries a tree-sitter ERROR node.
+    ///
+    /// Catches ill-formed bullets like the removed `·\d+_\d+-·` skip marker,
+    /// where the grammar reports ERROR on the trailing `-` but the named
+    /// fields still resolve. Without this gate the parser would silently
+    /// accept data that violates the grammar.
+    ContainsRecoveryNode,
+    /// A named time field is absent, or its bytes are not UTF-8.
+    TimeFieldAbsent {
+        /// `"start"` or `"end"`, so the message can say which.
+        which: &'static str,
+    },
+    /// The digits are there and do not fit a `u64`.
+    TimeNotRepresentable {
+        /// `"start"` or `"end"`.
+        which: &'static str,
+        /// The digits as written, for the message.
+        text: String,
+    },
+}
+
+impl BulletRejection {
+    /// The sentence a reader gets, one per route.
+    pub(crate) fn describe(&self) -> String {
+        match self {
+            Self::ContainsRecoveryNode => {
+                "legal form is ·START_END·, two millisecond integers and nothing \
+                 else"
+                    .to_owned()
+            }
+            Self::TimeFieldAbsent { which } => format!("no readable {which} time"),
+            Self::TimeNotRepresentable { which, text } => format!(
+                "the {which} time '{text}' is numeric but too large to read as \
+                 milliseconds"
+            ),
+        }
+    }
+}
+
+/// Report E360 for a bullet that could not be read, saying which route.
+///
+/// # One reporter, because there were three
+///
+/// Every caller of [`parse_bullet_node_timestamps`] that cannot proceed
+/// reports E360, and each wrote its own sentence: "Invalid media bullet:
+/// grammar rejected '...'. Legal form: ·START_END· with numeric timestamps
+/// only" in `ending.rs`, and "Invalid bullet: could not extract timestamps"
+/// in the two others. The first was false for the only input that reaches it;
+/// the second says nothing a reader can act on. A verb three callers each
+/// spell for themselves is a type, and the reason lives here with the
+/// [`BulletRejection`] that supplies it.
+pub(crate) fn report_bullet_rejection(
+    node: Node,
+    source: &str,
+    rejection: &BulletRejection,
+    errors: &impl ErrorSink,
+) {
+    // The context carries the bullet's text where it can be read; bytes that
+    // are not UTF-8 leave the node's kind as the context, a fact about the
+    // node rather than a text the parser invented.
+    let bullet_text = match node.utf8_text(source.as_bytes()) {
+        Ok(text) => text,
+        Err(_) => node.kind(),
+    };
+    errors.report(ParseError::new(
+        ErrorCode::InvalidMediaBullet,
+        Severity::Error,
+        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+        ErrorContext::new(source, node.start_byte()..node.end_byte(), bullet_text),
+        format!("Invalid media bullet: {}", rejection.describe()),
+    ));
+}
+
 /// Extract `(start_ms, end_ms)` from a structured `bullet` CST node.
 ///
 /// The grammar's `bullet` rule has field names `start_time` and `end_time`.
-/// Returns `None` if either field is missing, unparseable, OR if the
-/// bullet node (or any descendant) carries a tree-sitter ERROR node
-///, that latter case catches ill-formed bullets like the removed
-/// `·\d+_\d+-·` skip marker, where the grammar reports ERROR on the
-/// trailing `-` but the named fields still resolve. Without the
-/// has_error gate we'd silently accept data that violates the
-/// grammar.
 ///
 /// Reports E748 (leading-zero time representation, CHECK 90) through
 /// `errors` while still returning the parsed values: the numeric value
@@ -105,104 +156,29 @@ pub(crate) fn parse_bullet_node_timestamps(
     node: Node,
     source: &str,
     errors: &impl ErrorSink,
-) -> Option<(u64, u64)> {
+) -> Result<(u64, u64), BulletRejection> {
     if node.has_error() {
-        return None;
+        return Err(BulletRejection::ContainsRecoveryNode);
     }
-    let start_text = node
-        .child_by_field_name("start_time")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())?;
-    let end_text = node
-        .child_by_field_name("end_time")
-        .and_then(|n| n.utf8_text(source.as_bytes()).ok())?;
-    let start_ms: u64 = start_text.parse().ok()?;
-    let end_ms: u64 = end_text.parse().ok()?;
+    let text = |field: &str| {
+        node.child_by_field_name(field)
+            .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+    };
+    let start_text =
+        text("start_time").ok_or(BulletRejection::TimeFieldAbsent { which: "start" })?;
+    let end_text = text("end_time").ok_or(BulletRejection::TimeFieldAbsent { which: "end" })?;
+    let start_ms: u64 = start_text
+        .parse()
+        .map_err(|_| BulletRejection::TimeNotRepresentable {
+            which: "start",
+            text: start_text.to_owned(),
+        })?;
+    let end_ms: u64 = end_text
+        .parse()
+        .map_err(|_| BulletRejection::TimeNotRepresentable {
+            which: "end",
+            text: end_text.to_owned(),
+        })?;
     errors.report_vec(leading_zero_errors(start_text, end_text, node, source));
-    Some((start_ms, end_ms))
-}
-
-/// Parse media_url node into Bullet
-///
-/// After grammar coarsening, `media_url` is a single token matching
-/// `\u0015\d+_\d+-?\u0015`. We extract the node text and parse it
-/// with `parse_bullet_text()`.
-///
-/// Format: ·start_end· or ·start_end-· (where · represents \u0015)
-///
-/// Returns: (Option<Bullet>, ErrorVec)
-pub fn parse_media_bullet(node: Node, source: &str) -> (Option<Bullet>, ErrorVec) {
-    let mut errors = ErrorVec::new();
-
-    let text = match node.utf8_text(source.as_bytes()) {
-        Ok(t) => t,
-        Err(e) => {
-            errors.push(ParseError::new(
-                ErrorCode::InvalidMediaBullet,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-                format!("UTF-8 decoding error in media bullet: {e}"),
-            ));
-            return (None, errors);
-        }
-    };
-
-    let Some((start_ms, end_ms)) = parse_bullet_text(text) else {
-        errors.push(ParseError::new(
-            ErrorCode::InvalidMediaBullet,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), text),
-            format!("Invalid media bullet: could not parse timestamps from '{text}'"),
-        ));
-        return (None, errors);
-    };
-
-    // parse_bullet_text succeeded, so the components are present; check
-    // the leading-zero representation rule (E748, CHECK 90) on the raw
-    // digit text while keeping the parsed bullet.
-    if let Some((start_text, end_text)) = parse_bullet_components(text) {
-        errors.extend(leading_zero_errors(start_text, end_text, node, source));
-    }
-
-    if start_ms == 0 && end_ms == 0 {
-        errors.push(ParseError::new(
-            ErrorCode::InvalidMediaBullet,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), text),
-            "Invalid media bullet: could not parse timestamps (both start and end are 0)",
-        ));
-        return (None, errors);
-    }
-
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let bullet = Bullet::new(start_ms, end_ms).with_span(span);
-    (Some(bullet), errors)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_bullet_text_normal() {
-        assert_eq!(parse_bullet_text("\u{15}123_456\u{15}"), Some((123, 456)));
-    }
-
-    /// Legacy skip dash (deprecated 2026-03-31) is NOT accepted.
-    /// The grammar rejects it; `parse_bullet_text` must as well.
-    #[test]
-    fn test_parse_bullet_text_legacy_skip_rejected() {
-        assert_eq!(parse_bullet_text("\u{15}123_456-\u{15}"), None);
-    }
-
-    /// Tests parse bullet text invalid.
-    #[test]
-    fn test_parse_bullet_text_invalid() {
-        assert_eq!(parse_bullet_text("not a bullet"), None);
-        assert_eq!(parse_bullet_text("\u{15}abc_def\u{15}"), None);
-        assert_eq!(parse_bullet_text("\u{15}123\u{15}"), None);
-        assert_eq!(parse_bullet_text(""), None);
-    }
+    Ok((start_ms, end_ms))
 }

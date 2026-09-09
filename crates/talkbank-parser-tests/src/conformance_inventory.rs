@@ -1,5 +1,5 @@
 //! Generator for the mechanical conformance inventory
-//! (`tests/integration/generated_traversal_conformance/inventory.rs`).
+//! (`src/conformance/inventory.rs`).
 //!
 //! The inventory is derived, byte-for-byte, from two committed inputs:
 //!
@@ -9,7 +9,7 @@
 //!   kinds (the `"named": true` entries are the real, dispatchable kinds).
 //!
 //! Both the committed `inventory.rs` and the staleness guard
-//! (`tests/conformance_inventory_current.rs`) call [`generate_inventory`], so a
+//! (`tests/integration/conformance_inventory_current.rs`) call [`generate_inventory`], so a
 //! future visitor regeneration that forgets to regenerate the inventory fails
 //! the test suite instead of silently drifting. The runnable entry point is the
 //! `gen_conformance_inventory` example.
@@ -104,15 +104,16 @@ const PRELUDE: &str = r#"//! MECHANICAL conformance inventory -- DO NOT HAND-EDI
 //! The staleness guard `conformance_inventory_is_current` re-derives this file
 //! from the current typed traversal + node-types.json and fails if the
 //! committed copy has drifted, so a forgotten regen breaks the suite instead of
-//! silently losing coverage. The harness + allowlist live in the parent
-//! `generated_traversal_conformance.rs`.
+//! silently losing coverage. The harness lives in the parent module
+//! `conformance`; the conformance test's allowlist in
+//! `tests/integration/generated_traversal_conformance.rs`.
 
 #![allow(clippy::too_many_lines)]
 
-use talkbank_parser_tests::classify;
-use talkbank_parser_tests::generated_traversal::*;
+use crate::classify;
+use crate::generated_traversal::*;
 
-use super::{Inspect, InspectField, RawViolation};
+use super::{Inspect, InspectField, Observation};
 
 /// Generate a no-op `Inspect` for a leaf node wrapper: its own node kind is
 /// separately visited by `walk_all` and dispatched below, so there is nothing
@@ -121,7 +122,7 @@ macro_rules! impl_inspect_leaf {
     ($($name:ident),* $(,)?) => {
         $(
             impl<'tree> Inspect for $name<'tree> {
-                fn inspect(&self, _rule: &'static str, _out: &mut Vec<RawViolation>) {}
+                fn inspect(&self, _rule: &'static str, _out: &mut Vec<Observation>) {}
             }
         )*
     };
@@ -133,7 +134,7 @@ macro_rules! impl_inspect_leaf {
 macro_rules! impl_inspect_choice {
     ($name:ident { $($variant:ident),* $(,)? }) => {
         impl<'tree> Inspect for $name<'tree> {
-            fn inspect(&self, rule: &'static str, out: &mut Vec<RawViolation>) {
+            fn inspect(&self, rule: &'static str, out: &mut Vec<Observation>) {
                 match self {
                     $( Self::$variant(inner) => inner.inspect(rule, out), )*
                 }
@@ -150,7 +151,7 @@ macro_rules! impl_inspect_choice {
 macro_rules! impl_inspect_struct {
     ($name:ident { $($field:ident),* $(,)? }) => {
         impl<'tree> Inspect for $name<'tree> {
-            fn inspect(&self, rule: &'static str, out: &mut Vec<RawViolation>) {
+            fn inspect(&self, rule: &'static str, out: &mut Vec<Observation>) {
                 $( self.$field.inspect_field(rule, stringify!($field), out); )*
             }
         }
@@ -435,7 +436,7 @@ fn render_source(
     out.push('\n');
     out.push_str(DISPATCH_DOC);
     out.push_str(
-        "pub(super) fn dispatch(node: tree_sitter::Node, out: &mut Vec<RawViolation>) {\n    match node.kind() {\n",
+        "pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {\n    match node.kind() {\n",
     );
     for extract in dispatch {
         out.push_str("        \"");
@@ -527,9 +528,8 @@ pub fn node_types_json_path() -> PathBuf {
 #[must_use]
 pub fn inventory_path() -> PathBuf {
     crate_dir()
-        .join("tests")
-        .join("integration")
-        .join("generated_traversal_conformance")
+        .join("src")
+        .join("conformance")
         .join("inventory.rs")
 }
 

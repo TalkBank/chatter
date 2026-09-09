@@ -411,17 +411,13 @@ fn languages_empty_contents_reports_missing_language_code_not_panic() {
         "languages_empty_contents model output changed"
     );
 
-    // TWO E342s at the same zero-width span: the region-level
-    // `check_not_missing` diagnostic (this fix) plus the whole-tree backstop's
-    // own independent diagnostic for the same MISSING node. This is the
-    // documented "zero-width-MISSING dedup asymmetry" TASK-D AWARENESS caveat
-    // from the B1/B2 migration ledger ("region-surfaced raw spans could
-    // double-emit if a MISSING ever lands in a sink -- inert today, cover when
-    // Task D reworks dedup"): dedup suppression keys off spans the backstop
-    // itself widens by 1 byte, which a genuinely zero-width MISSING span does
-    // not trigger. Not a regression introduced here (the panic path never
-    // reached either diagnostic before this fix); pinned as-is, matching the
-    // ledger's own guidance that this is Task D's to resolve, not this fix's.
+    // ONE E342 at the zero-width span: the region-level `check_not_missing`
+    // diagnostic. The whole-tree backstop's own candidate for the same MISSING
+    // node is suppressed, since 2026-09-08, by a dedup that treats a region
+    // diagnostic zero-width at the candidate's point and of the same code as
+    // covering it; until then only span overlap counted, a zero-width span
+    // overlaps nothing, and this test pinned two diagnostics for one node as
+    // the documented "zero-width MISSING dedup asymmetry".
     assert_eq!(
         diags,
         vec![
@@ -430,12 +426,6 @@ fn languages_empty_contents_reports_missing_language_code_not_panic() {
                 25,
                 25,
                 "Tree-sitter error recovery: MISSING 'language_code' node inserted in languages_contents".to_string(),
-            ),
-            (
-                "E342".to_string(),
-                25,
-                25,
-                "Missing required 'language_code': the document is incomplete here and was only parsed via tree-sitter recovery (recovery is not validity)".to_string(),
             ),
         ],
         "languages_empty_contents diagnostics changed, got: {diags:?}"

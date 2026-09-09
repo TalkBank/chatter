@@ -36,6 +36,6 @@ pub use helpers::is_chat_transcript_path;
 pub use runner::{validate_directory_streaming, validate_files_streaming};
 pub use talkbank_cache::{CacheOutcome, ValidationCache};
 pub use types::{
-    AbortReason, ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, RunCoverage,
-    ValidationEvent, ValidationStats, ValidationStatsSnapshot,
+    AbortReason, ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, RoundtripVerdict,
+    RunCoverage, ValidationEvent, ValidationStats, ValidationStatsSnapshot,
 };

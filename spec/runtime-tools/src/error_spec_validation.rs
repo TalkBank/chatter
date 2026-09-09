@@ -563,7 +563,11 @@ pub fn emit_for(parser: &TreeSitterParser, example: &ErrorExample) -> StagedDiag
             TranscriptName::Named(FileStem::from_stem(stem))
         });
     let validation_sink = ErrorCollector::new();
-    chat_file.validate_with_alignment(&validation_sink, name);
+    // The example says which rules it runs under, and this is the only place
+    // that answer is turned into a `RuleSelection`. Before the example could
+    // say it, this call was `validate_with_alignment` with the default rules,
+    // so no opt-in rule could be demonstrated by any spec example at all.
+    chat_file.validate_with_alignment_and_rules(example.rules.selection(), &validation_sink, name);
     let as_file = if example.input.ends_with('\n') {
         example.input.clone()
     } else {
@@ -668,4 +672,95 @@ fn check_example(
 #[must_use]
 pub fn spec_dir(root: impl AsRef<Path>) -> PathBuf {
     root.as_ref().join("spec").join("errors")
+}
+
+#[cfg(test)]
+mod rule_profile_tests {
+    use talkbank_spec_vocabulary::frontmatter::RuleProfile;
+
+    /// Every option the validator can run must be selectable by some profile.
+    ///
+    /// SURVIVES a type change, and says which category: this is a
+    /// RELATIONSHIP BETWEEN TWO CRATES that no signature holds.
+    /// `RuleProfile::selection` is a total match, so a profile cannot name a
+    /// rule that does not exist; this is the converse, and it is the half a
+    /// type cannot carry.
+    ///
+    /// # The chain this is the last link of
+    ///
+    /// Add a field to `RuleSelection` and the compiler stops at
+    /// `option_count`'s no-rest destructure; raise the count beside that
+    /// pattern and this goes red until a `RuleProfile` variant selects the new
+    /// option. Break the chain anywhere and a rule the binary runs becomes
+    /// undemonstrable by any spec example, which is the state eight codes were
+    /// in: marked `not_implemented` because nothing could show them firing.
+    ///
+    /// A version of this compared NAME SETS across the two crates instead, and
+    /// its forcing was an illusion: `option_names` returned a literal array
+    /// beside the destructure, so adding a field and silencing the destructure
+    /// left the array, both sets, and this test unchanged.
+    ///
+    /// Proven to fire: raising `option_count`'s count to 2 fails with "the
+    /// model carries 2 options".
+    #[test]
+    fn every_rule_option_is_askable_by_an_example() {
+        let options = talkbank_model::RuleSelection::new().option_count();
+        assert_eq!(
+            RuleProfile::ALL.len(),
+            options + 1,
+            "the model carries {options} opt-in rule option(s), so there must be \
+             {} profiles (one per option, plus the default), but the vocabulary \
+             declares {}: {:?}. A rule no example can ask for cannot be \
+             demonstrated by the spec system.",
+            options + 1,
+            RuleProfile::ALL.len(),
+            RuleProfile::ALL
+                .iter()
+                .map(|profile| profile.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    /// Two profiles that select the same rules would make one of them a
+    /// synonym, and the count check above would then pass while an option
+    /// stayed unreachable.
+    #[test]
+    fn each_profile_selects_a_distinct_rule_set() {
+        let mut seen = std::collections::BTreeMap::new();
+        for profile in RuleProfile::ALL {
+            let fragment = profile.selection().cache_key_fragment();
+            if let Some(other) = seen.insert(fragment.clone(), profile.as_str()) {
+                panic!(
+                    "profiles {other:?} and {:?} select the same rules \
+                     (cache key fragment {fragment:?}), so one of them names \
+                     no option of its own",
+                    profile.as_str()
+                );
+            }
+        }
+    }
+
+    /// A profile names a flag exactly when it selects something beyond the
+    /// default.
+    ///
+    /// The pair travels to a reader: a generated error page says "requires
+    /// `--strict-linkers`", and a reader who copies that flag must get the
+    /// rules the example ran under. A profile that selects extra rules and
+    /// names no flag publishes a rule nobody can reproduce; a flag on the
+    /// default profile publishes one nobody needs.
+    #[test]
+    fn a_profile_names_a_flag_exactly_when_it_selects_more_than_the_default() {
+        let plain = talkbank_model::RuleSelection::new().cache_key_fragment();
+        for profile in RuleProfile::ALL {
+            let selects_more = profile.selection().cache_key_fragment() != plain;
+            assert_eq!(
+                profile.cli_flag().is_some(),
+                selects_more,
+                "{:?} selects {:?} and names flag {:?}",
+                profile.as_str(),
+                profile.selection().cache_key_fragment(),
+                profile.cli_flag()
+            );
+        }
+    }
 }

@@ -1,10 +1,10 @@
 # Sanitize (`chatter debug sanitize`)
 
 **Status:** Current
-**Last updated:** 2026-09-01 06:05 EDT
+**Last updated:** 2026-09-08 18:50 EDT
 
 `chatter debug sanitize` strips contributor lexical content from a CHAT
-file while preserving structure (timing bullets, `%wor` per-word offsets,
+file while preserving structure (timing bullets, `%wor` per-word bullets,
 speaker codes, dependent-tier scaffolding, structural counts, POS tags,
 language markers). Output is structurally identical to the input but
 contains no participant words, names, or free-text annotations.
@@ -42,7 +42,8 @@ should outlive a single command. macOS clears `/tmp` on reboot.
 ## What is preserved (byte-exact)
 
 - Timing bullets `•start_end•` on the main tier.
-- `%wor` per-word offsets (`word START_END` triples).
+- `%wor` per-word bullets (`•start_end•` after each word); the words
+  beside them become the main tier's placeholders, below.
 - Speaker codes (`*PAR`, `*INV`, `*CHI`, …).
 - Utterance count, word count per utterance, dependent-tier count.
 - Structural markers: compound `+`, clitic `~`, CA elements, overlap
@@ -65,8 +66,9 @@ should outlive a single command. macOS clears `/tmp` on reboot.
 | `WordContent::Phonetic` (`@u`) | `wN` placeholder; phonetic speech can contain names |
 | `Shortening` text | `(x)` |
 | `%mor` lemmas (`MorWord.lemma`) | `lemmaN`; POS + features preserved |
+| `%wor` words | judged as timing recovery judges the tier, before the main tier is rewritten (count match, then word-by-word corroboration): a corroborating tier has each word become its paired main-tier word's display text, now that word's placeholder (`wN`, the same `N`; `w1w1` for a compound), so it still corroborates the main tier; a drifted or uncorroborated tier takes fresh placeholders rather than a manufactured agreement. Bullets preserved |
 | `%pho` / `%mod` / `%modsyl` / `%phosyl` / `%phoaln` / `%sin` | tier dropped |
-| Free-text dependent tiers (`%com` `%add` `%exp` `%sit` `%spa` `%int` `%gpx` `%eng` `%gls` `%ort` `%flo` `%def` `%coh` `%fac` `%par` `%alt` `%err`) | `[redacted]` |
+| Free-text dependent tiers (`%com` `%add` `%exp` `%sit` `%spa` `%int` `%gpx` `%act` `%cod` `%eng` `%gls` `%ort` `%flo` `%def` `%coh` `%fac` `%par` `%alt` `%err`) | `[redacted]` |
 | `@Comment`, `@Transcriber`, `@Birthplace`, `@Activities`, `@Situation`, `@RoomLayout`, `@Location`, `@TapeLocation`, `@Warning`, `@Bck` | `[redacted]` (when content was free text) |
 | `@Participants` participant-name field | dropped (`Participant_<SPEAKER_CODE>` is implied by speaker code + role) |
 | `@ID` `custom_field` and `education` | cleared |

@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-08-30 16:26 EDT
+**Last modified:** 2026-09-09 07:46 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -199,10 +199,11 @@ A pause marker must be space-delimited from the word before it: write
 
 ### E752: Timing bullets without an @Media header
 
-The transcript carries timing evidence (utterance bullets or %wor word
-timing) but no `@Media` header declares the recording those timestamps
-index. Add an `@Media` header naming the media file (or remove the
-timing bullets if the transcript is genuinely unlinked). Completes the
+The transcript carries timing evidence (an utterance-final bullet, a
+bullet inside an utterance, or %wor word timing) but no `@Media` header
+declares the recording those timestamps index. Add an `@Media` header
+naming the media file (or remove the timing bullets if the transcript is
+genuinely unlinked). Completes the
 media-consistency family: E544 covers declared linkage without timing,
 E552 covers a declared `unlinked` contradicted by timing. Mirrors CLAN
 CHECK error 112.
@@ -240,6 +241,9 @@ languages, not every language that appears. Mirrors CLAN CHECK error
 
 A dependent tier with empty or whitespace-only content declares an
 annotation that is not there; add the content or remove the line.
+Whitespace-only counts as nothing on every free-text tier, `%com` and
+`%add` included (they were exempt by accident until 2026-09-08); CLAN
+CHECK 31 rejects the same lines.
 
 This covers every tier whose body is free text, which is every
 dependent tier except the structured ones (`%mor`, `%gra`, `%pho`,

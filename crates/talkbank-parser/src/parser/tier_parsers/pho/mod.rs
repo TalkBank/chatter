@@ -21,10 +21,8 @@
 
 mod cst;
 mod groups;
-mod unparsed;
 
 #[cfg(test)]
 mod tests;
 
 pub use cst::{parse_mod_tier, parse_pho_tier};
-pub use unparsed::parse_mod_tier_from_unparsed;

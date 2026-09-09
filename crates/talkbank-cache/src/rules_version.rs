@@ -117,7 +117,8 @@ impl RulesVersion {
     /// A cache row records what validation FOUND, so the key must cover
     /// everything that can change what validation DOES, and nothing else.
     /// `RuleSelection`'s defining property is exactly that: every field in it
-    /// changes what is computed (today, whether E351-E355 run at all). Anything
+    /// changes what is computed (today, whether the opt-in cross-utterance linker
+    /// rules run at all). Anything
     /// that merely changes what a reader is shown is a
     /// `talkbank_transform::PresentationPolicy`, and folding one of those in
     /// here is the v0.6.0 regression this signature exists to prevent: a
@@ -284,7 +285,7 @@ mod tests {
         );
     }
 
-    /// Strict-linker mode runs checks (E351-E355) a lenient run never reaches,
+    /// Strict-linker mode runs checks a lenient run never reaches,
     /// so it must not share a cache row with one. The parser fingerprint is
     /// held constant to isolate the rule-selection dimension.
     #[test]

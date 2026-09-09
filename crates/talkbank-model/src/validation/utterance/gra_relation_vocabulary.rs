@@ -127,15 +127,20 @@ fn head_is_universal(head: &str) -> bool {
 /// agreeing with `%mor`, so this check is not suppressed when those fail;
 /// suppressing it would hide the label defect behind an unrelated one.
 pub(crate) fn check_gra_relation_vocabulary(utterance: &Utterance, errors: &impl ErrorSink) {
-    // A parse-tainted `%gra` tier may hold recovery output rather than
-    // authored labels, so its contents are not evidence about the source
-    // text. The root parse failure is reported elsewhere.
-    if utterance
-        .parse_health
-        .is_tier_tainted(crate::model::ParseHealthTier::Gra)
-    {
-        return;
-    }
+    // No taint check, and the paragraph above is why. One used to stand here,
+    // reasoning that "a parse-tainted `%gra` tier may hold recovery output
+    // rather than authored labels". It does not: a `%gra` relation the model
+    // cannot hold is REJECTED and dropped, never defaulted, so every relation
+    // that survives carries the label the author typed and is evidence about
+    // the source text.
+    //
+    // It cost real diagnostics in two shapes, both reproduced in review on
+    // 2026-09-08. One rejected relation silenced every label error on the
+    // relations beside it. And on the canonical backend the `%gra` bit is also
+    // set by `taint_all_alignment_dependents`, so a malformed `%xfoo` line
+    // silenced the label errors of a `%gra` tier that parsed perfectly, which
+    // is exactly the "hide the label defect behind an unrelated one" this
+    // function's own doc forbids.
 
     for entry in &utterance.dependent_tiers {
         let DependentTier::Gra(tier) = &entry.tier else {

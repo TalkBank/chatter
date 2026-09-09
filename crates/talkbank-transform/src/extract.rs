@@ -4,8 +4,9 @@
 //! "alignable" for a given domain (Mor, Wor, Pho, Sin).
 
 use talkbank_model::alignment::helpers::{
-    LanguageScope, TierDomain, WordItem, annotations_have_alignment_ignore, counts_for_tier,
-    is_tag_marker_separator, should_align_replaced_word_in_pho_sin, walk_words_scoped,
+    LanguageScope, PositionalDomain, TierDomain, WordItem, annotations_have_alignment_ignore,
+    counts_for_tier, is_tag_marker_separator, should_align_replaced_word_in_pho_sin,
+    walk_words_scoped,
 };
 use talkbank_model::model::{ChatFile, LanguageCode, Line, ReplacedWord, UtteranceContent, Word};
 use talkbank_model::validation::{GoverningMark, GoverningMarkKind, LanguageResolutionOutcome};
@@ -90,7 +91,7 @@ pub struct ExtractedUtterance {
 /// * `chat_file` - The parsed CHAT file to extract words from.
 /// * `domain` - The alignment domain governing which words are
 ///   considered alignable (`Mor`, `Wor`, `Pho`, or `Sin`).
-pub fn extract_words(chat_file: &ChatFile, domain: TierDomain) -> Vec<ExtractedUtterance> {
+pub fn extract_words(chat_file: &ChatFile, domain: PositionalDomain) -> Vec<ExtractedUtterance> {
     let mut results = Vec::new();
     let mut utt_idx = 0;
 
@@ -120,37 +121,43 @@ pub fn extract_words(chat_file: &ChatFile, domain: TierDomain) -> Vec<ExtractedU
 ///
 /// * `content` - The top-level content items of an utterance.
 /// * `domain` - The alignment domain that determines which words are
-///   collected (e.g., `Mor` includes tag-marker separators; `Wor` does not).
+///   collected (e.g., `Mor` includes tag-marker separators; `Pho` does not).
+///   `%wor` is not a value of the type: its words are the projection's
+///   (`MainTier::wor_projection`), the one owner of that selection.
 /// * `out` - Accumulator that extracted words are pushed into.
 pub fn collect_utterance_content(
     content: &[UtteranceContent],
-    domain: TierDomain,
+    domain: PositionalDomain,
     out: &mut Vec<ExtractedWord>,
 ) {
     // The SCOPED walk. `walk_words` discards the enclosing `<...> [@s]` span,
     // and this function's whole output is what downstream NLP sees, so
     // discarding it here is where the information was actually lost.
-    walk_words_scoped(content, Some(domain), &mut |leaf, scope| match leaf {
-        WordItem::Word(word) => {
-            collect_alignable_word(word, &[], domain, scope, out);
-        }
-        WordItem::ReplacedWord(replaced) => {
-            collect_replaced_word(replaced, domain, scope, out);
-        }
-        WordItem::Separator(sep) => {
-            if domain == TierDomain::Mor && is_tag_marker_separator(sep) {
-                push_extracted(
-                    out,
-                    ChatCleanedText::from_separator(sep),
-                    ChatRawText::from_separator(sep),
-                    None,
-                    // A tag separator is not a word, so there is no
-                    // precedence question: only the enclosing scope to record.
-                    GoverningMark::of_separator(sep, scope.span()),
-                );
+    walk_words_scoped(
+        content,
+        Some(domain.into()),
+        &mut |leaf, scope| match leaf {
+            WordItem::Word(word) => {
+                collect_alignable_word(word, &[], domain, scope, out);
             }
-        }
-    });
+            WordItem::ReplacedWord(replaced) => {
+                collect_replaced_word(replaced, domain, scope, out);
+            }
+            WordItem::Separator(sep) => {
+                if domain == PositionalDomain::Mor && is_tag_marker_separator(sep) {
+                    push_extracted(
+                        out,
+                        ChatCleanedText::from_separator(sep),
+                        ChatRawText::from_separator(sep),
+                        None,
+                        // A tag separator is not a word, so there is no
+                        // precedence question: only the enclosing scope to record.
+                        GoverningMark::of_separator(sep, scope.span()),
+                    );
+                }
+            }
+        },
+    );
 }
 
 /// Push one extracted item, deriving its index from the accumulator.
@@ -204,15 +211,15 @@ fn push_word(out: &mut Vec<ExtractedWord>, word: &Word, scope: LanguageScope<'_>
 fn collect_alignable_word(
     word: &Word,
     annotations: &[talkbank_model::model::ContentAnnotation],
-    domain: TierDomain,
+    domain: PositionalDomain,
     scope: LanguageScope<'_>,
     out: &mut Vec<ExtractedWord>,
 ) {
-    if domain == TierDomain::Mor && annotations_have_alignment_ignore(annotations) {
+    if domain == PositionalDomain::Mor && annotations_have_alignment_ignore(annotations) {
         return;
     }
 
-    if !counts_for_tier(word, domain) {
+    if !counts_for_tier(word, domain.into()) {
         return;
     }
 
@@ -221,16 +228,18 @@ fn collect_alignable_word(
 
 fn collect_replaced_word(
     entry: &ReplacedWord,
-    domain: TierDomain,
+    domain: PositionalDomain,
     scope: LanguageScope<'_>,
     out: &mut Vec<ExtractedWord>,
 ) {
-    if domain == TierDomain::Mor && annotations_have_alignment_ignore(&entry.scoped_annotations) {
+    if domain == PositionalDomain::Mor
+        && annotations_have_alignment_ignore(&entry.scoped_annotations)
+    {
         return;
     }
 
     match domain {
-        TierDomain::Mor => {
+        PositionalDomain::Mor => {
             if !entry.replacement.words.is_empty() {
                 for word in &entry.replacement.words {
                     if counts_for_tier(word, TierDomain::Mor) {
@@ -241,22 +250,7 @@ fn collect_replaced_word(
                 push_word(out, &entry.word, scope);
             }
         }
-        // %wor gets its OWN arm, matching `count::count_alignable_replaced_word`.
-        // Grouping it with Pho/Sin applied the pho/sin fragment exclusion to
-        // %wor, and the two predicates deliberately disagree about fillers:
-        // `is_wor_excluded_category` excludes only Nonword and
-        // PhonologicalFragment, because `rules.rs` documents fillers as
-        // INCLUDED in %wor ("stable, alignable phoneme sequences"), while
-        // `is_fragment_like` (used by the pho/sin predicate) counts Filler as a
-        // fragment. So `&-um [: um]` counted 1 and extracted 0, and
-        // `count_tier_positions(..) == collect_tier_items(..).len()` silently
-        // stopped holding for that shape.
-        TierDomain::Wor => {
-            if counts_for_tier(&entry.word, TierDomain::Wor) {
-                push_word(out, &entry.word, scope);
-            }
-        }
-        TierDomain::Pho | TierDomain::Sin => {
+        PositionalDomain::Pho | PositionalDomain::Sin => {
             if should_align_replaced_word_in_pho_sin(entry) {
                 push_word(out, &entry.word, scope);
             }
@@ -267,7 +261,7 @@ fn collect_replaced_word(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use talkbank_model::alignment::helpers::TierDomain;
+    use talkbank_model::alignment::helpers::PositionalDomain;
     use talkbank_model::validation::GoverningMarkKind;
     use talkbank_parser::TreeSitterParser;
 
@@ -297,7 +291,7 @@ mod tests {
     #[test]
     fn simple_words_in_mor_domain() {
         let chat = parse_chat(&one_utterance("hello world ."));
-        let result = extract_words(&chat, TierDomain::Mor);
+        let result = extract_words(&chat, PositionalDomain::Mor);
         assert_eq!(result.len(), 1, "expected 1 utterance");
         assert_eq!(result[0].words.len(), 2, "expected 2 words (hello, world)");
         assert_eq!(result[0].words[0].text.as_str(), "hello");
@@ -318,7 +312,7 @@ mod tests {
              *CHI:\tbye .\n\
              @End\n",
         );
-        let result = extract_words(&chat, TierDomain::Mor);
+        let result = extract_words(&chat, PositionalDomain::Mor);
         assert_eq!(result.len(), 3, "expected 3 utterances");
         assert_eq!(result[0].utterance_index, UtteranceIdx::new(0));
         assert_eq!(result[1].utterance_index, UtteranceIdx::new(1));
@@ -338,7 +332,7 @@ mod tests {
              *MOT:\thi .\n\
              @End\n",
         );
-        let result = extract_words(&chat, TierDomain::Mor);
+        let result = extract_words(&chat, PositionalDomain::Mor);
         assert_eq!(result[0].speaker.as_str(), "CHI");
         assert_eq!(result[1].speaker.as_str(), "MOT");
     }
@@ -356,7 +350,7 @@ mod tests {
              *CHI:\thello .\n\
              @End\n",
         );
-        let result = extract_words(&chat, TierDomain::Mor);
+        let result = extract_words(&chat, PositionalDomain::Mor);
         assert_eq!(result.len(), 1, "only the utterance, not the comment");
     }
 
@@ -368,7 +362,7 @@ mod tests {
     fn comma_separator_included_in_mor_domain() {
         // CHAT: comma (,) between words is a tag-marker separator in Mor domain.
         let chat = parse_chat(&one_utterance("well , hello ."));
-        let mor_result = extract_words(&chat, TierDomain::Mor);
+        let mor_result = extract_words(&chat, PositionalDomain::Mor);
         // Mor domain: "well", ",", "hello" = 3 items
         let mor_texts: Vec<&str> = mor_result[0]
             .words
@@ -382,25 +376,10 @@ mod tests {
     }
 
     #[test]
-    fn comma_separator_excluded_from_wor_domain() {
-        let chat = parse_chat(&one_utterance("well , hello ."));
-        let wor_result = extract_words(&chat, TierDomain::Wor);
-        let wor_texts: Vec<&str> = wor_result[0]
-            .words
-            .iter()
-            .map(|w| w.text.as_str())
-            .collect();
-        assert!(
-            !wor_texts.contains(&","),
-            "Wor domain should NOT include comma separator, got: {wor_texts:?}"
-        );
-    }
-
-    #[test]
     fn tag_separator_included_in_mor_domain() {
         // „ (U+201E) is the tag separator
         let chat = parse_chat(&one_utterance("hello „ world ."));
-        let mor_result = extract_words(&chat, TierDomain::Mor);
+        let mor_result = extract_words(&chat, PositionalDomain::Mor);
         let mor_texts: Vec<&str> = mor_result[0]
             .words
             .iter()
@@ -416,7 +395,7 @@ mod tests {
     fn vocative_separator_included_in_mor_domain() {
         // ‡ (U+2021) is the vocative separator
         let chat = parse_chat(&one_utterance("‡ Mom ."));
-        let mor_result = extract_words(&chat, TierDomain::Mor);
+        let mor_result = extract_words(&chat, PositionalDomain::Mor);
         let mor_texts: Vec<&str> = mor_result[0]
             .words
             .iter()
@@ -431,7 +410,7 @@ mod tests {
     #[test]
     fn tag_separator_excluded_from_pho_domain() {
         let chat = parse_chat(&one_utterance("hello „ world ."));
-        let pho_result = extract_words(&chat, TierDomain::Pho);
+        let pho_result = extract_words(&chat, PositionalDomain::Pho);
         let pho_texts: Vec<&str> = pho_result[0]
             .words
             .iter()
@@ -451,7 +430,7 @@ mod tests {
     fn replaced_word_uses_replacement_in_mor_domain() {
         // CHAT: "doggie [: dog]", in Mor domain, "dog" is used (the replacement).
         let chat = parse_chat(&one_utterance("doggie [: dog] ."));
-        let result = extract_words(&chat, TierDomain::Mor);
+        let result = extract_words(&chat, PositionalDomain::Mor);
         let texts: Vec<&str> = result[0].words.iter().map(|w| w.text.as_str()).collect();
         assert!(
             texts.contains(&"dog"),
@@ -468,7 +447,7 @@ mod tests {
         // We test the code path with a normal replaced word where the replacement
         // is present, the replacement is used, not the original.
         let chat = parse_chat(&one_utterance("goed [: went] ."));
-        let result = extract_words(&chat, TierDomain::Mor);
+        let result = extract_words(&chat, PositionalDomain::Mor);
         let texts: Vec<&str> = result[0].words.iter().map(|w| w.text.as_str()).collect();
         assert!(
             texts.contains(&"went"),
@@ -480,18 +459,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn replaced_word_uses_original_in_wor_domain() {
-        // In Wor domain, the original word is used (not the replacement).
-        let chat = parse_chat(&one_utterance("doggie [: dog] ."));
-        let result = extract_words(&chat, TierDomain::Wor);
-        let texts: Vec<&str> = result[0].words.iter().map(|w| w.text.as_str()).collect();
-        assert!(
-            texts.contains(&"doggie"),
-            "Wor domain should use original word 'doggie', got: {texts:?}"
-        );
-    }
-
     // -----------------------------------------------------------------------
     // Alignment-ignore annotation ([e]) excludes words in Mor domain
     // -----------------------------------------------------------------------
@@ -500,7 +467,7 @@ mod tests {
     fn exclude_annotation_skips_word_in_mor_domain() {
         // [e] marks excluded content, skipped in Mor domain.
         let chat = parse_chat(&one_utterance("hello [e] world ."));
-        let result = extract_words(&chat, TierDomain::Mor);
+        let result = extract_words(&chat, PositionalDomain::Mor);
         let texts: Vec<&str> = result[0].words.iter().map(|w| w.text.as_str()).collect();
         // "hello" should be excluded by [e]; "world" should remain.
         // Note: [e] applies to the preceding word.
@@ -511,20 +478,6 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Extraction from Wor domain (flat alignment)
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn wor_domain_extracts_simple_words() {
-        let chat = parse_chat(&one_utterance("the dog ran ."));
-        let result = extract_words(&chat, TierDomain::Wor);
-        assert_eq!(result[0].words.len(), 3);
-        assert_eq!(result[0].words[0].text.as_str(), "the");
-        assert_eq!(result[0].words[1].text.as_str(), "dog");
-        assert_eq!(result[0].words[2].text.as_str(), "ran");
-    }
-
-    // -----------------------------------------------------------------------
     // Empty utterances
     // -----------------------------------------------------------------------
 
@@ -532,7 +485,7 @@ mod tests {
     fn empty_utterance_produces_empty_word_list() {
         // Utterance with only a terminator, no words.
         let chat = parse_chat(&one_utterance("0 ."));
-        let result = extract_words(&chat, TierDomain::Mor);
+        let result = extract_words(&chat, PositionalDomain::Mor);
         // "0" is a special CHAT symbol; whether it produces a word depends on
         // counts_for_tier(). We just verify no crash and at most 1 word.
         assert_eq!(result.len(), 1, "still produces 1 utterance");
@@ -556,7 +509,7 @@ mod tests {
     #[test]
     fn a_span_governs_the_words_it_encloses_and_an_own_marker_still_wins() {
         let file = parse_chat(&one_utterance("I said <rocket@s:eng kyaa hai> [@s:hin] ."));
-        let utterances = extract_words(&file, TierDomain::Mor);
+        let utterances = extract_words(&file, PositionalDomain::Mor);
         let words = &utterances[0].words;
 
         let eng = talkbank_model::model::LanguageCode::new("eng").expect("valid code");

@@ -10,14 +10,15 @@
     clippy::unimplemented
 )]
 
-//! Regression test for E245 / empty-cleaned-text parser panic.
+//! E245 for a word that is only a stress marker.
 //!
-//! Bug: when a word contains only a stress marker (ˈ), the cleaned text
-//! becomes empty and `Word::new_unchecked(raw, "")` used to panic inside
-//! `NonEmptyString::new_unchecked` via its debug-assert.
-//!
-//! Expected behavior: the parser must not panic. It must emit E245
-//! (`StressNotBeforeSpokenMaterial`) and reject the word.
+//! When a word contains only a stress marker (ˈ), its cleaned text is empty.
+//! The parser once built the word through an unchecked constructor whose
+//! debug assertion was the only thing that noticed; since 2026-09-09 it
+//! builds the cleaned text's proof (`WordText::new`) at its own boundary and
+//! the constructor takes the proof, so the panic has no path. What this test
+//! pins is the BEHAVIOUR that no signature states: the refusal is reported
+//! as E245 (`StressNotBeforeSpokenMaterial`) and the word is rejected.
 
 use talkbank_model::ErrorCollector;
 use talkbank_parser::TreeSitterParser;
@@ -30,7 +31,6 @@ fn lone_stress_marker_emits_e245_without_panic() {
 
     let parser = TreeSitterParser::new().expect("grammar loads");
     let errors = ErrorCollector::new();
-    // This call used to panic inside NonEmptyString::new_unchecked before the fix.
     let _file = parser.parse_chat_file_streaming(input, &errors);
 
     let collected = errors.into_vec();

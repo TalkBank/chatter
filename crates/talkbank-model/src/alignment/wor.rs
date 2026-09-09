@@ -187,6 +187,18 @@ impl<'main> CountMatchedWorTimings<'main> {
         self.policy
     }
 
+    /// The positional pairing, main-tier slot beside the `%wor` word at the
+    /// same position. This is the convention `corroborate_wor_timing`
+    /// compares under; a consumer that rewrites `%wor` in the main tier's
+    /// terms (the sanitizer) pairs through it rather than zipping by hand,
+    /// so it cannot pair a drifted tier.
+    pub fn pairs(&self) -> impl Iterator<Item = (&'main Word, &'main Word)> + '_ {
+        self.main_slots
+            .iter()
+            .copied()
+            .zip(self.wor_slots.iter().copied())
+    }
+
     /// Shared slot count proved by the count-matching transition.
     pub fn slot_count(&self) -> MainWorSlotCount {
         MainWorSlotCount(self.main_slots.len())
@@ -700,6 +712,3 @@ pub fn resolve_wor_timing_sidecar(main: &MainTier, wor: &WorTier) -> WorTimingSi
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

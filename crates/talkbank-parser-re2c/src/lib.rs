@@ -64,12 +64,39 @@ pub use chat_parser_impl::Re2cParser;
 /// Test support utilities (fixture loading, etc.)
 #[doc(hidden)]
 pub mod tests_support {
-    /// Load fixture lines from tests/fixtures/.
+    /// The entries of one checked-in fixture, or a failure.
+    ///
+    /// # Never an empty Vec, and that is the whole point
+    ///
+    /// Both this and its duplicate in `tests/integration/fixture_utils.rs`
+    /// used to answer an unreadable file with `vec![]`, one of them after
+    /// printing "Skipping fixture". Every consumer then ran its loop zero
+    /// times and passed, so a fixture renamed, moved or emptied turned every
+    /// test over it into a green no-op, and the only trace was a line in
+    /// output nobody reads. Three of the 39 checked-in fixtures are EMPTY
+    /// today (`header_recording_quality`, `tier_flo`, `tier_xcod`); they have
+    /// no consumers, so nothing passes vacuously right now, and this is what
+    /// stops the day one gets one.
+    ///
+    /// Fixtures are checked in, so absence is a defect in the checkout rather
+    /// than a condition to tolerate. Panicking IS the report here: this is
+    /// test support, and a test whose input vanished must fail, not skip.
+    ///
+    /// # Panics
+    ///
+    /// When the fixture cannot be read, or yields no entries.
+    #[allow(
+        clippy::panic,
+        reason = "test support: a checked-in fixture that cannot be read must fail the test that asked for it, never let it run its loop zero times and pass"
+    )]
     pub fn load_fixture(name: &str) -> Vec<String> {
         let path = format!("{}/tests/fixtures/{name}.txt", env!("CARGO_MANIFEST_DIR"));
         let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => return vec![],
+            Ok(content) => content,
+            Err(err) => panic!(
+                "fixture `{name}` is checked in and could not be read: {err}\n\
+                 Every test over it would run its loop zero times and pass."
+            ),
         };
         let mut entries = Vec::new();
         let mut current = String::new();
@@ -91,6 +118,12 @@ pub mod tests_support {
         if !current.is_empty() {
             entries.push(current);
         }
+        assert!(
+            !entries.is_empty(),
+            "fixture `{name}` yielded no entries, so every test over it would \
+             pass over nothing. Mine entries for it, or delete it and its \
+             consumers."
+        );
         entries
     }
 }

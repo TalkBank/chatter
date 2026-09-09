@@ -12,8 +12,8 @@ use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation, Span}
 /// This is a smoke test for serde coverage on a nested replaced-word structure.
 #[test]
 fn demo_utterance_json_serialization() -> Result<(), String> {
-    let word = Word::new_unchecked("hello", "hello");
-    let replacement = Replacement::from_word(Word::new_unchecked("world", "world"));
+    let word = Word::simple("hello");
+    let replacement = Replacement::from_word(Word::simple("world"));
     let replaced_word = ReplacedWord::new(word, replacement);
 
     let main = MainTier::new(

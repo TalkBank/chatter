@@ -1,7 +1,7 @@
 # talkbank-transform
 
 **Status:** Current
-**Last modified:** 2026-08-27 01:00 EDT
+**Last modified:** 2026-09-09 07:46 EDT
 
 Transformation pipelines for [CHAT format](https://talkbank.org/0info/manuals/CHAT.html) (CHAT to JSON, normalization, validation).
 
@@ -20,8 +20,6 @@ Key capabilities:
 - **Normalization**: `normalize_chat()` produces canonical CHAT output.
 - **Caching**: `UnifiedCache` provides SQLite-based caching for validation
   and round-trip results for large file collections.
-- **Corpus operations**: `discover_corpora()` and `build_manifest()` for
-  working with large file collections.
 - **Parallel validation**: `validate_directory_streaming()` validates
   entire directories with concurrent file processing.
 

@@ -5,8 +5,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Model_Phonology>
 
 use crate::generated_traversal::{
-    AsRawNode, ModDependentTierNode, NodeSlot, PhoDependentTierNode, PhoGroupNode, PhoGroupsNode,
-    extract_mod_dependent_tier, extract_pho_dependent_tier, extract_pho_groups,
+    AsRawNode, ChildSlot, ModDependentTierNode, NoChild, PhoDependentTierNode, PhoGroupNode,
+    PhoGroupsNode, SlotView, extract_mod_dependent_tier, extract_pho_dependent_tier,
+    extract_pho_groups,
 };
 use crate::parser::node_span::span_of;
 use talkbank_model::model::dependent_tier::PhoGroupWords;
@@ -16,7 +17,7 @@ use tree_sitter::Node;
 
 use super::groups::{extract_pho_group_items, push_pho_separator};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_unexpected};
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
 
 /// Parse a `%pho` tier from a tree-sitter node.
 ///
@@ -113,39 +114,29 @@ enum PhoBodyTier<'tree> {
 fn parse_pho_tier_inner(tier: PhoBodyTier<'_>, source: &str, errors: &impl ErrorSink) -> PhoTier {
     // ONE match. Both carriers expose the body at `child_2` and their own
     // top-level `unexpected` sink, and `child_2.slot`'s type is the same
-    // `NodeSlot<PhoGroupsNode>` for `%pho` and `%mod`, so the only thing that
+    // `ChildSlot<PhoGroupsNode>` for `%pho` and `%mod`, so the only thing that
     // varies is which `extract_*` reads it and which model tag it carries. Those
     // were three separate matches on the same two-variant enum, which is three
     // chances for the arms to disagree about what `Pho` means.
-    let (tier_type, node, body_slot, unexpected): (
+    let (tier_type, node, body_slot): (
         PhoTierType,
         tree_sitter::Node<'_>,
-        NodeSlot<PhoGroupsNode>,
-        Vec<tree_sitter::Node>,
+        ChildSlot<PhoGroupsNode>,
     ) = match tier {
         PhoBodyTier::Pho(n) => {
             let raw = n.raw_node();
             let children = extract_pho_dependent_tier(n);
-            (
-                PhoTierType::Pho,
-                raw,
-                children.child_2.slot().clone(),
-                children.unexpected,
-            )
+            surface_displaced(&children.unexpected, "pho_dependent_tier", source, errors);
+            (PhoTierType::Pho, raw, children.child_2.slot().clone())
         }
         PhoBodyTier::Mod(n) => {
             let raw = n.raw_node();
             let children = extract_mod_dependent_tier(n);
-            (
-                PhoTierType::Mod,
-                raw,
-                children.child_2.slot().clone(),
-                children.unexpected,
-            )
+            surface_displaced(&children.unexpected, "mod_dependent_tier", source, errors);
+            (PhoTierType::Mod, raw, children.child_2.slot().clone())
         }
     };
     let span = span_of(node);
-    surface_unexpected(&unexpected, source, errors);
 
     // The two-state reading: every way of NOT having a `pho_groups` node yields
     // the empty tier, so naming the four separately was four arms saying one
@@ -182,24 +173,21 @@ fn parse_pho_groups(
 
     push_pho_group(groups.child_0.slot(), source, errors, &mut items);
     for element in groups.child_1.slot() {
-        match element.slot() {
-            NodeSlot::Present(pair) => {
+        match element.slot().view() {
+            SlotView::Present(pair) => {
                 push_pho_separator(pair.child_0.slot(), source, errors, "pho_groups");
                 push_pho_group(pair.child_1.slot(), source, errors, &mut items);
-                surface_unexpected(&pair.unexpected, source, errors);
+                surface_displaced(&pair.unexpected, "pho_groups", source, errors);
             }
-            // The generated repeat classifies a whole item as `Present` /
-            // `Error` / `Absent` only (the established `@Languages`/gra repeat
-            // finding); matched exhaustively regardless, per the no-`_`-on-
-            // project-enums rule.
-            NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(*raw, source, "pho_groups"));
+            // An inline sequence is never MISSING or displaced; `SeqSlot` says so.
+            SlotView::Error(raw) => {
+                errors.report(unexpected_node_error(raw, source, "pho_groups"));
             }
-            NodeSlot::Absent => {}
+            SlotView::Absent(NoChild) => {}
         }
     }
 
-    surface_unexpected(&groups.unexpected, source, errors);
+    surface_displaced(&groups.unexpected, "pho_groups", source, errors);
     items
 }
 
@@ -224,22 +212,22 @@ fn parse_pho_groups(
 /// (`parse_pho_tier_inner` is only entered when the tier node has no tree-sitter
 /// error); they are handled explicitly for exhaustiveness.
 fn push_pho_group<'tree>(
-    slot: &NodeSlot<'tree, PhoGroupNode<'tree>>,
+    slot: &ChildSlot<'tree, PhoGroupNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<PhoItem>,
 ) {
-    match slot {
-        NodeSlot::Present(group_node) => {
+    match slot.view() {
+        SlotView::Present(group_node) => {
             items.extend(extract_pho_group_items(*group_node, source, errors));
         }
-        NodeSlot::Missing(raw) => {
-            check_not_missing(*raw, source, errors, "pho_groups");
+        SlotView::Missing(raw) => {
+            check_not_missing(raw, source, errors, "pho_groups");
         }
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, "pho_groups"));
+        SlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw, source, "pho_groups"));
         }
-        NodeSlot::Absent => {}
+        SlotView::Absent(NoChild) => {}
     }
 }
 

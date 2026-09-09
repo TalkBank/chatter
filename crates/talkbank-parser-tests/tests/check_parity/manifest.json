@@ -307,7 +307,7 @@
    "expected_chatter_codes": [
     "E756"
    ],
-   "note": "A declared tier with a colon but no text after it (check.cpp:1748); '@' headers are exempt ('to always allow empty header tiers'), so the fixture uses an empty dependent tier '%fac:'. chatter answers E756 'Empty dependent tier', which states the rule CHECK 31 is about. It used to answer E330 plus E342: an auto-generated stub with no description, plus a generic tree-sitter recovery diagnostic, because the model could not represent an empty tier and the line failed to parse. The 2026-08-15 maintainer ruling widened E756 to every free-text tier rather than writing E330's spec, so the verdict here is unchanged (parity) and only the code chatter names for it moved. An empty '*CHI:' main tier instead yields CLAN (21)+(70), not (31)."
+   "note": "A declared tier with a colon but no text after it (check.cpp:1748); '@' headers are exempt ('to always allow empty header tiers'), so the fixture uses an empty dependent tier '%fac:'. chatter answers E756 'Empty dependent tier', which states the rule CHECK 31 is about. It used to answer E330 plus E342: an auto-generated stub with no description, plus a generic tree-sitter recovery diagnostic, because the model could not represent an empty tier and the line failed to parse. The 2026-08-15 maintainer ruling widened E756 to every free-text tier rather than writing E330's spec, so the verdict here is unchanged (parity) and only the code chatter names for it moved. An empty '*CHI:' main tier instead yields CLAN (21)+(70), not (31). 2026-09-08: whitespace-only content is E756 on every free-text tier now, matching check_FoundText (check.cpp:1639), which skips ASCII space, tab and newline before looking for text; %com and %add had counted whitespace as content. Two deliberate divergences, chatter stricter in both: CHECK exempts user-defined %x tiers from 31 and chatter reports them; chatter's whitespace is Unicode whitespace, so a payload of non-breaking spaces alone is E756 while CHECK (verified 2026-09-08) reports nothing."
   },
   {
    "check_code": 32,
@@ -488,10 +488,9 @@
    "fixture": "CHECK_051_angle_without_square.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E342",
-    "E370"
+    "E342"
    ],
-   "note": "CLAN prints this message WITHOUT a (51) suffix (format string lacks (%d)); grounding matches by message text. A '<...>' angle group not followed by a '[...]' code, detected at end of tier or at the next word (check.cpp:4376/4568, anb flag from check_CheckBrakets). QUIRK: CLAN prints this message WITHOUT the numeric '(51)' suffix; check_mess case 51 (check.cpp) has no (%d) in its format string. Grounding is the verbatim unique message text. chatter frames the same construct as an incomplete retra",
+   "note": "CLAN prints this message WITHOUT a (51) suffix (format string lacks (%d)); grounding matches by message text. A '<...>' angle group not followed by a '[...]' code, detected at end of tier or at the next word (check.cpp:4376/4568, anb flag from check_CheckBrakets). QUIRK: CLAN prints this message WITHOUT the numeric '(51)' suffix; check_mess case 51 (check.cpp) has no (%d) in its format string. Grounding is the verbatim unique message text. chatter names the same construct as a missing required element: the grammar requires a code after the group, tree-sitter inserts a MISSING placeholder for it, and the whole-tree pass reports E342. Until 2026-09-09 the annotation decoder read that placeholder's kind and built a Full retrace nobody wrote, and the validator then added E370 (a retrace with nothing after it) to a construct the file does not contain; the decoder skips MISSING nodes now, so the group stays bare and E342 is the whole verdict.",
    "no_numeric_suffix": true
   },
   {
@@ -783,9 +782,9 @@
    "fixture": "CHECK_079_mor_two_pipes.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316"
+    "E702"
    ],
-   "note": "A %mor word with two | separators (n|dog|cat). CLAN 79 (only one | per word); chatter surfaces the malformed %mor structure as E316."
+   "note": "A %mor word with two | separators (n|dog|cat). CLAN 79 (only one | per word); chatter surfaces the malformed %mor item as E702 (E316 until 2026-09-08, when a recovery node below the tier's direct children was classified without the tier's name)."
   },
   {
    "check_code": 80,
@@ -793,9 +792,9 @@
    "fixture": "CHECK_080_mor_no_pipe.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316"
+    "E702"
    ],
-   "note": "A %mor word with no | separator (bare 'dog'). CLAN 80 (must be at least one |); chatter E316 (also E702)."
+   "note": "A %mor word with no | separator (bare 'dog'). CLAN 80 (must be at least one |); chatter E702 (E316 beside it until 2026-09-08, from a second reporter that has been removed)."
   },
   {
    "check_code": 81,
@@ -862,9 +861,9 @@
    "fixture": "CHECK_087_malformed_compound.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E316"
+    "E702"
    ],
-   "note": "A %mor/%xmor/%trn (or %cnl) word whose compound structure is malformed: a '+' not in canonical 'pfx|+a|b' shape drives numOfCompounds to -2 or 0 (check.cpp 3592/3646). Fixture '%mor: n|cat+n|fish .' (compound missing the '|+' marker after the head POS). chatter rejects (E600 %mor item structure)."
+   "note": "A %mor/%xmor/%trn (or %cnl) word whose compound structure is malformed: a '+' not in canonical 'pfx|+a|b' shape drives numOfCompounds to -2 or 0 (check.cpp 3592/3646). Fixture '%mor: n|cat+n|fish .' (compound missing the '|+' marker after the head POS). chatter rejects: E702 on the item (E316 until 2026-09-08) and E600 at the tier."
   },
   {
    "check_code": 88,
@@ -1106,7 +1105,7 @@
    "expected_chatter_codes": [
     "E752"
    ],
-   "note": "A new-format digits_digits bullet in a file with NO @Media header (check.cpp 3927 via check_getOLDMediaTagInfo res==6). chatter accepts time bullets without an @Media header (exit 0). GAP: bullets should require an @Media header. Note the reference-table message has '%s' filled as '@Media:' in real output. CLOSED 2026-07-15 per the 2026-07-14 MEANINGFUL ruling: chatter rejects timing-without-@Media as E752 (inverse of E544); spec spec/errors/E752.md."
+   "note": "A new-format digits_digits bullet in a file with NO @Media header (check.cpp 3927 via check_getOLDMediaTagInfo res==6). chatter accepts time bullets without an @Media header (exit 0). GAP: bullets should require an @Media header. Note the reference-table message has '%s' filled as '@Media:' in real output. CLOSED 2026-07-15 per the 2026-07-14 MEANINGFUL ruling: chatter rejects timing-without-@Media as E752 (inverse of E544); spec spec/errors/E752.md. 2026-09-08: chatter's timing-evidence union now includes bullets INSIDE an utterance, which CHECK 112 already counted (check_checkBulletsConsist is called from the main-tier walk); the E752 spec carries the example. CHECK never looks at %wor bullets; chatter does, deliberately stricter."
   },
   {
    "check_code": 113,

@@ -6,9 +6,11 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
     Severity, SourceLocation,
 };
-use crate::model::{Header, WarningText};
+use crate::generated_traversal::{FromNodeKind, PidHeaderNode};
+use crate::model::Header;
 use crate::node_types::*;
 use crate::parser::tree_parsing::header::parse_pid_header;
+use crate::parser::tree_parsing::parser_helpers::unknown_header_from_node;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -75,15 +77,7 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
                     header_node.end_byte()
                 ),
             ));
-            let text = match header_node.utf8_text(wrapped.as_bytes()) {
-                Ok(text) => text.to_string(),
-                Err(_) => header_node.kind().to_string(),
-            };
-            Header::Unknown {
-                text: WarningText::new(text),
-                parse_reason: Some("Malformed header content".to_string()),
-                suggested_fix: None,
-            }
+            unknown_header_from_node(header_node, wrapped, "Malformed header content", None)
         } else {
             match header_node.kind() {
                 // The four kinds the `header` supertype does NOT name, so
@@ -93,7 +87,17 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
                 UTF8_HEADER => Header::Utf8,
                 BEGIN_HEADER => Header::Begin,
                 END_HEADER => Header::End,
-                PID_HEADER => parse_pid_header(header_node, wrapped, &error_sink),
+                PID_HEADER => match PidHeaderNode::from_node(header_node) {
+                    Some(typed) => parse_pid_header(typed, wrapped, &error_sink),
+                    // The kind was just matched; the refusal arm says what it
+                    // would mean rather than unwrapping.
+                    None => unknown_header_from_node(
+                        header_node,
+                        wrapped,
+                        "pid_header node refused by its typed constructor",
+                        None,
+                    ),
+                },
                 // EVERYTHING ELSE goes to the one exhaustive dispatcher.
                 //
                 // This used to be nineteen more hand-written arms plus an
@@ -131,7 +135,7 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
                             "Unknown header type '{unknown}' - will be flagged during validation"
                         ),
                     ));
-                        unknown_header_with_reason(
+                        unknown_header_from_node(
                             header_node,
                             wrapped,
                             format!("Unrecognized header type: {unknown}"),
@@ -151,24 +155,5 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
         }
 
         Ok(header)
-    }
-}
-
-/// Build a `Header::Unknown` while preserving source text and parse reason.
-fn unknown_header_with_reason(
-    node: Node,
-    input: &str,
-    reason: impl Into<String>,
-    suggested_fix: Option<&str>,
-) -> Header {
-    let text = match node.utf8_text(input.as_bytes()) {
-        Ok(raw) if !raw.is_empty() => raw.to_string(),
-        _ => node.kind().to_string(),
-    };
-
-    Header::Unknown {
-        text: WarningText::new(text),
-        parse_reason: Some(reason.into()),
-        suggested_fix: suggested_fix.map(str::to_string),
     }
 }

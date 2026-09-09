@@ -130,8 +130,9 @@ pub fn parse_error_marker_token(token_text: &str) -> Option<ContentAnnotation> {
         // [*], no code
         None
     } else {
-        // [* code], strip leading space
-        let trimmed = after_star.strip_prefix(' ').unwrap_or(after_star).trim();
+        // [* code]: the code, its surrounding space trimmed (the space after
+        // the star is whitespace like any other, so no separate strip).
+        let trimmed = after_star.trim();
         if trimmed.is_empty() {
             None
         } else {

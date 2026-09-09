@@ -63,12 +63,17 @@ pub(super) fn file_uses_ca_mode(headers: &[&Header]) -> bool {
 /// Fires when an @Media header is present, its `status` field is `None`
 /// (i.e., not one of `unlinked` / `missing` / `notrans`), AND the file
 /// carries no timing evidence. Timing evidence is the union of:
-/// - main-tier bullets (already collected by the caller and passed as
-///   `main_bullets`, avoids a second walk)
+/// - main-tier bullets, utterance-final AND inside the utterance at any
+///   depth (collected once by the caller and passed as `main_bullets`;
+///   internal bullets joined the union on 2026-09-08, the day it was
+///   measured that a bullet between two words satisfied neither this rule
+///   nor E752 while CLAN CHECK 112 fires on it)
 /// - any actual `%wor` word bullet on any utterance
 ///
-/// The caller passes the already-collected main-tier bullets to avoid a
-/// duplicate walk; all other timing surfaces are discovered here.
+/// The caller collects the main-tier bullets once (`main_tier_timing_bullets`
+/// in `validate.rs`) and shares them with E552 and E752; E362 keeps its own
+/// final-bullet collection because monotonicity is a different question. All
+/// other timing surfaces are discovered here.
 ///
 /// Spec: `spec/errors/E544.md`.
 pub(super) fn check_media_linkage_has_timing(
@@ -111,8 +116,8 @@ pub(super) fn check_media_linkage_has_timing(
 
 /// E752: transcript has timing evidence but NO `@Media` header at all.
 ///
-/// Fires when the file carries timing evidence (main-tier bullets, or a
-/// actual `%wor` word bullet: the same union E544 uses) and the
+/// Fires when the file carries timing evidence (main-tier bullets, final or
+/// internal, or an actual `%wor` word bullet: the same union E544 uses) and the
 /// header block contains no `@Media` header of any form. A timestamp
 /// into an undeclared media timeline fails to make sense: consumers
 /// cannot resolve what the offsets index. Corresponds to CLAN CHECK
@@ -124,8 +129,9 @@ pub(super) fn check_media_linkage_has_timing(
 /// [`check_media_unlinked_has_no_timing`] (E552), and whether declared
 /// linkage lacks timing is [`check_media_linkage_has_timing`] (E544).
 ///
-/// The caller passes the already-collected main-tier bullets to avoid a
-/// duplicate walk.
+/// The caller passes the main-tier bullets it collected for E544, in
+/// document order, so the first element is the transcript's first timing
+/// surface and is where this diagnostic points.
 ///
 /// Spec: `spec/errors/E752.md`.
 pub(super) fn check_timing_has_media(
@@ -267,10 +273,11 @@ pub(super) fn check_separator_trailing_space(file: &ChatFile, errors: &impl crat
 /// removed. This is the inverse of [`check_media_linkage_has_timing`] (E544):
 /// there, declared linkage lacks timing; here, declared `unlinked` has timing.
 ///
-/// The caller passes the already-collected main-tier bullets to avoid a
-/// duplicate walk; any actual `%wor` word bullet is the other timing
-/// surface checked here. Corresponds to CLAN CHECK error 124 ("remove
-/// \"unlinked\" from @Media header").
+/// The caller passes the main-tier bullets it collected for E544, final or
+/// internal at any depth (internal bullets joined the union on 2026-09-08);
+/// any actual `%wor` word bullet is the other timing surface checked here.
+/// Corresponds to CLAN CHECK error 124 ("remove \"unlinked\" from @Media
+/// header").
 pub(super) fn check_media_unlinked_has_no_timing(
     headers: &[(&Header, crate::Span)],
     file: &ChatFile,

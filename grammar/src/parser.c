@@ -5164,6 +5164,11 @@ static const TSCharacterRange sym_mor_lemma_character_set_1[] = {
   {'\\', '\\'}, {'^', '{'}, {'}', '}'}, {0x7f, 0x201b}, {0x201e, 0x10ffff},
 };
 
+static const TSCharacterRange sym_pho_word_character_set_1[] = {
+  {'(', '*'}, {'.', '.'}, {'0', '9'}, {'A', 'Z'}, {'^', '^'}, {'a', 'z'}, {0xb2, 0xb3}, {0xb9, 0xb9},
+  {0xe6, 0x2038}, {0x203b, 0xa71f},
+};
+
 static bool ts_lex(TSLexer *lexer, TSStateId state) {
   START_LEXER();
   eof = lexer->eof(lexer);
@@ -5801,14 +5806,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
     case 33:
       if (lookahead == ' ') ADVANCE(934);
       if (lookahead == 0x2039) ADVANCE(1020);
-      if (('(' <= lookahead && lookahead <= '*') ||
-          lookahead == '.' ||
-          ('0' <= lookahead && lookahead <= '9') ||
-          ('A' <= lookahead && lookahead <= 'Z') ||
-          lookahead == '^' ||
-          ('a' <= lookahead && lookahead <= 'z') ||
-          (0xe6 <= lookahead && lookahead <= 0x2038) ||
-          (0x203b <= lookahead && lookahead <= 0xa71c)) ADVANCE(726);
+      if (set_contains(sym_pho_word_character_set_1, 10, lookahead)) ADVANCE(726);
       END_STATE();
     case 34:
       if (lookahead == ' ') ADVANCE(934);
@@ -9906,14 +9904,7 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       END_STATE();
     case 726:
       ACCEPT_TOKEN(sym_pho_word);
-      if (('(' <= lookahead && lookahead <= '*') ||
-          lookahead == '.' ||
-          ('0' <= lookahead && lookahead <= '9') ||
-          ('A' <= lookahead && lookahead <= 'Z') ||
-          lookahead == '^' ||
-          ('a' <= lookahead && lookahead <= 'z') ||
-          (0xe6 <= lookahead && lookahead <= 0x2038) ||
-          (0x203b <= lookahead && lookahead <= 0xa71c)) ADVANCE(726);
+      if (set_contains(sym_pho_word_character_set_1, 10, lookahead)) ADVANCE(726);
       END_STATE();
     case 727:
       ACCEPT_TOKEN(aux_sym_sin_word_token1);

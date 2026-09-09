@@ -83,15 +83,21 @@ pub enum Commands {
         )]
         audit: Option<PathBuf>,
 
-        /// Enable strict cross-utterance linker validation (E351-E355).
+        /// Enable strict cross-utterance linker validation.
         ///
-        /// Checks that self-completion (+,) and other-completion (++)
-        /// linkers are paired with the correct preceding terminators
-        /// (+/. and +... respectively). Disabled by default because
-        /// many existing corpora do not follow these strict conventions.
+        /// Checks that the quotation linkers (+", +"/. , +".) and the
+        /// completion linkers (+, and ++) are paired with the terminators
+        /// they continue. Off by default because many existing corpora do
+        /// not follow these strict conventions.
+        ///
+        /// The code list that stood here, "(E351-E355)", was wrong in both
+        /// this doc and the help text below: the option also turns on E341,
+        /// E344 and E346. Naming a range here at all was the mistake, since
+        /// the generated error index already states, per code, which option
+        /// it requires, derived from the spec example that demonstrates it.
         #[arg(
             long = "strict-linkers",
-            help = "Enable strict linker pairing validation (E351-E355)"
+            help = "Enable strict cross-utterance linker validation                     (quotation and completion linkers)"
         )]
         strict_linkers: bool,
 

@@ -80,16 +80,85 @@ pub struct GraTier {
     #[serde(skip, default = "crate::Span::dummy")]
     #[schemars(skip)]
     pub span: Span,
+
+    /// Whether every relation the `%gra` LINE declared is in `relations`.
+    ///
+    /// Not serialized, not compared, not shifted: it is a fact about the PARSE
+    /// that produced this value, in the same class as [`Self::span`], and two
+    /// tiers holding the same relations are the same tier whatever it took to
+    /// build them. A JSON round trip therefore comes back
+    /// [`GraCompleteness::Unknown`], which is the honest answer, rather than
+    /// claiming a completeness nothing established.
+    #[serde(skip, default)]
+    #[schemars(skip)]
+    #[semantic_eq(skip)]
+    #[span_shift(skip)]
+    pub(crate) completeness: GraCompleteness,
+}
+
+/// Whether a `%gra` tier holds every relation its line declared.
+///
+/// A relation the model cannot represent is REJECTED and dropped, so the tier
+/// is shorter than the author wrote it, and the rules that describe it as a
+/// dependency graph then describe our recovery instead. Nothing in a
+/// `Vec<GrammaticalRelation>` can say that, so this says it.
+///
+/// # Why `Unknown` is judged rather than withheld
+///
+/// Only a parser that KNOWS it dropped something sets `Truncated`, so the
+/// suppression is exact. Everything else, including a hand-built tier and a
+/// tier read back from JSON, is `Unknown` and IS judged. Withholding on
+/// `Unknown` would be the fail-closed reading, and it is the wrong one here: a
+/// rule that switches itself off wherever the plumbing is incomplete is the
+/// gate-that-skips-itself failure, and it would be invisible, whereas a
+/// cascade is at least visible in the output. The cost of this direction is
+/// stated rather than hidden: a future lowering that drops a relation without
+/// saying so reopens the cascade, and no type here can stop it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GraCompleteness {
+    /// No parser said. The default, and it is JUDGED; see above.
+    #[default]
+    Unknown,
+    /// Every relation on the line is present.
+    Whole,
+    /// At least one relation was rejected and is not here.
+    Truncated,
 }
 
 impl GraTier {
     /// Constructs a grammatical-relations tier from parsed relations.
+    ///
+    /// Says nothing about completeness: a caller holding a bare `Vec` has not
+    /// established whether anything was dropped on the way. A parser that
+    /// knows says so with [`Self::lowered_from`].
     pub fn new(tier_type: GraTierType, relations: Vec<GrammaticalRelation>) -> Self {
         Self {
             tier_type,
             relations: relations.into(),
             span: Span::DUMMY,
+            completeness: GraCompleteness::Unknown,
         }
+    }
+
+    /// Constructs a tier from a lowering that knows what it dropped.
+    ///
+    /// The one route to a [`GraCompleteness`] other than `Unknown`, so a claim
+    /// of completeness can only come from the code that counted.
+    #[must_use]
+    pub fn lowered_from(
+        relations: Vec<GrammaticalRelation>,
+        completeness: GraCompleteness,
+    ) -> Self {
+        Self {
+            completeness,
+            ..Self::new_gra(relations)
+        }
+    }
+
+    /// Whether every relation this tier's line declared is here.
+    #[must_use]
+    pub fn completeness(&self) -> GraCompleteness {
+        self.completeness
     }
 
     /// Sets source span metadata used in diagnostics.
@@ -150,19 +219,20 @@ impl GraTier {
         self.relations.is_empty()
     }
 
-    /// Validate structural integrity of %gra tier.
+    /// Report the `%gra` structural rules that hold whatever was dropped.
     ///
-    /// **NOTE**: As of 2026-02-14, only index validation is enforced.
-    /// ROOT validation is disabled due to malformed %gra tiers
-    /// in the corpus with circular dependencies and invalid tree structures.
+    /// E723 and E724 only. E721 and E722 need [`WholeGra`], which explains the
+    /// split.
     ///
-    /// Checks:
-    /// - E721: Indices are sequential 1, 2, ..., N
-    ///
-    /// Disabled checks:
-    /// - E722/E723: ROOT relation validation (see validate_gra_structure for details)
-    pub fn validate_structure(&self, errors: &impl crate::ErrorSink) {
-        validate_gra_structure(&self.relations, self.span, errors);
+    /// Eight false assertions went with the rewrite, counted with `rg -i
+    /// disabled` and `rg 'as WARNING|W72[23]:'` against this file at the
+    /// previous commit: four saying ROOT validation was "disabled", two of
+    /// them dating it to 2026-02-14, and four calling E722 and E723 warnings.
+    /// The code has passed `Severity::Error` for as long as this repository
+    /// has history, which begins at the squashed initial release, so what that
+    /// date actually changed is not recoverable here and is not claimed.
+    pub(crate) fn validate_monotone_structure(&self, errors: &impl crate::ErrorSink) {
+        validate_monotone_gra_structure(self, errors);
     }
 
     /// Serialize full `%gra` line to an owned string.
@@ -195,32 +265,113 @@ impl GraTier {
     }
 }
 
-/// Validate structural integrity of a slice of %gra relations.
+/// A `%gra` tier established to hold every relation its line declared.
 ///
-/// Shared implementation used by [`GraTier::validate_structure`].
+/// # What this gates, and what it deliberately does not
 ///
-/// **NOTE**: As of 2026-02-14, ROOT validation is DISABLED.
+/// Of the four structural rules, only two describe the WHOLE tier, and only
+/// those two are behind this witness:
 ///
-/// Checks:
-/// - E721: Indices are sequential 1, 2, ..., N
+/// - **E721**, indices run 1, 2, ..., N. Dropping any relation but the last
+///   breaks that by itself.
+/// - **E722**, no relation is a ROOT. Dropping can remove the only one.
 ///
-/// Disabled (due to non-conforming corpus data):
-/// - E722/E723: ROOT relation validation
-pub fn validate_gra_structure(
+/// The other two are MONOTONE under dropping, so they are never withheld:
+/// dropping a relation cannot create a second ROOT (**E723**) and cannot close
+/// a cycle (**E724**), so a violation among the survivors is a violation the
+/// author wrote. Withholding those was a real loss, caught in review before
+/// this shipped: a tier with a genuine cycle and one unrelated rejected
+/// relation reported the rejection and nothing else.
+///
+/// # The bug this type exists to make unwriteable
+///
+/// A relation the model cannot hold is rejected and DROPPED, so the tier is
+/// shorter than the author wrote it, and E721 and E722 then describe our own
+/// recovery. Two mechanisms were meant to prevent that and cancelled each
+/// other: the structural rules suppressed themselves when ALIGNMENT had
+/// reported E720, E712 or E713, while a `%gra` parse-health taint is precisely
+/// what stops alignment running at all. On `spec/errors/E710.md`'s second
+/// example tree-sitter tainted, alignment was skipped, nothing suppressed the
+/// structural pass, and E722 said "no ROOT relation" about a tier whose one
+/// surviving relation is `1|0|ROOT`.
+///
+/// # Why it reads the TIER and not the utterance's parse health
+///
+/// The taint bit was the obvious input and it is the wrong one. Tree-sitter
+/// sets the `%gra` bit through `taint_all_alignment_dependents` whenever ANY
+/// unclassifiable dependent tier on the utterance reports a parse error, so a
+/// malformed `%xfoo` line would have withheld every structural rule from a
+/// `%gra` tier that parsed perfectly. The bit means "cross-tier alignment
+/// involving `%gra` is untrustworthy"; the question here is "did this tier
+/// lose a relation", which is [`GraCompleteness`], recorded by the lowering
+/// that counted.
+pub struct WholeGra<'a> {
+    tier: &'a GraTier,
+}
+
+impl<'a> WholeGra<'a> {
+    /// The only constructor, and the only route to E721 and E722.
+    ///
+    /// `pub(crate)`, and the public route is
+    /// [`Utterance::validate_gra_structure`](crate::model::Utterance). The two
+    /// arguments are related only by convention: a tier from one utterance
+    /// paired with another utterance's diagnostics type-checks and answers
+    /// confidently about neither. The utterance owns both.
+    ///
+    /// Nothing is reported when the answer is `None`. The fault that caused it
+    /// (E710, E713, E720) is itself reported, and on the recovery path E600
+    /// already says an alignment was skipped. Saying "and two structural rules
+    /// were withheld too" is a real improvement and a separate one: E600's
+    /// message would have to name WHICH check it means, and that message is
+    /// compared verbatim by the backend-parity harness.
+    #[must_use]
+    pub(crate) fn of(
+        tier: &'a GraTier,
+        alignment_diagnostics: &[crate::ParseError],
+    ) -> Option<Self> {
+        let truncated = match tier.completeness {
+            // Only a lowering that COUNTED says `Truncated`, so the
+            // suppression is exact. `Unknown` is judged; see
+            // [`GraCompleteness`] for why that direction and what it costs.
+            GraCompleteness::Truncated => true,
+            GraCompleteness::Whole | GraCompleteness::Unknown => false,
+        };
+        let alignment_disputed = alignment_diagnostics.iter().any(|diagnostic| {
+            matches!(
+                diagnostic.code,
+                crate::ErrorCode::MorGraCountMismatch
+                    | crate::ErrorCode::GraInvalidWordIndex
+                    | crate::ErrorCode::GraInvalidHeadIndex
+            )
+        });
+        match truncated || alignment_disputed {
+            true => None,
+            false => Some(Self { tier }),
+        }
+    }
+
+    /// Report the rules that describe the tier as a whole: E721 and E722.
+    pub(crate) fn validate_whole_tier(&self, errors: &impl crate::ErrorSink) {
+        let relations = self.tier.relations();
+        if relations.is_empty() {
+            return;
+        }
+        report_non_sequential_index(relations, self.tier.span, errors);
+        report_missing_root(relations, self.tier.span, errors);
+    }
+}
+
+/// E721: the indices run 1, 2, ..., N.
+fn report_non_sequential_index(
     relations: &[GrammaticalRelation],
     span: crate::Span,
     errors: &impl crate::ErrorSink,
 ) {
     use crate::{ErrorCode, ParseError, Severity};
 
-    if relations.is_empty() {
-        return;
-    }
-
-    // Check 1: Sequential indices (1, 2, 3, ..., N)
-    for (i, rel) in relations.iter().enumerate() {
-        let expected = i + 1;
-        if rel.index != expected {
+    for (position, relation) in relations.iter().enumerate() {
+        let expected = position + 1;
+        if relation.index != expected {
             errors.report(
                 ParseError::at_span(
                     ErrorCode::GraNonSequentialIndex,
@@ -228,86 +379,115 @@ pub fn validate_gra_structure(
                     span,
                     format!(
                         "%gra indices not sequential: expected {expected}, found {}",
-                        rel.index
+                        relation.index
                     ),
                 )
                 .with_suggestion("Indices must be 1, 2, 3, ..., N"),
             );
-            break; // one error is enough
+            // One is enough: after the first break every later index is
+            // reported against an expectation the tier has already left.
+            break;
         }
     }
+}
 
-    // Check 2: ROOT validation (as WARNING - 2026-02-14)
-    //
-    // Corpus contains malformed %gra tiers with circular dependencies,
-    // invalid tree structures, and no valid root. These appear to be generated by
-    // tools that produce non-conforming output.
-    //
-    // We report these as WARNINGS (not errors) to allow processing to continue
-    // while giving users visibility into data quality issues.
+/// E722: some relation is the ROOT.
+///
+/// Suppressed when the graph already has a cycle: the missing root is then a
+/// consequence of the cycle, and reporting both is one fault told twice.
+fn report_missing_root(
+    relations: &[GrammaticalRelation],
+    span: crate::Span,
+    errors: &impl crate::ErrorSink,
+) {
+    use crate::{ErrorCode, ParseError, Severity};
 
-    // Find all valid ROOT relations. A self-headed relation only counts as a
-    // ROOT when it is explicitly labeled ROOT; other self-headed relations are
-    // structural defects, not additional roots.
-    let mut roots = Vec::new();
-    for rel in relations {
-        if is_valid_root_relation(rel) {
-            roots.push(rel.index);
-        }
+    if !roots(relations).is_empty() || has_any_cycle(relations) {
+        return;
+    }
+    errors.report(
+        ParseError::at_span(
+            ErrorCode::GraNoRoot,
+            Severity::Error,
+            span,
+            "%gra tier has no ROOT relation",
+        )
+        .with_suggestion("Re-run morphotag to regenerate valid %gra"),
+    );
+}
+
+/// The rules that hold whatever the lowering dropped: E723 and E724.
+///
+/// Free functions rather than methods on [`WholeGra`] precisely because they
+/// need no witness. See that type for which rule is which and why.
+pub(crate) fn validate_monotone_gra_structure(tier: &GraTier, errors: &impl crate::ErrorSink) {
+    use crate::{ErrorCode, ParseError, Severity};
+
+    let relations = tier.relations();
+    if relations.is_empty() {
+        return;
     }
 
-    // Exclude terminator PUNCT (last item) from root count
-    let max_index = relations.len();
-    let non_terminator_roots: Vec<_> = roots
-        .iter()
-        .filter(|&&idx| idx != max_index)
-        .copied()
-        .collect();
-
-    // W723: Multiple ROOT relations
-    if non_terminator_roots.len() > 1 {
+    // E723: more than one ROOT.
+    let roots = roots(relations);
+    if roots.len() > 1 {
         errors.report(
             ParseError::at_span(
                 ErrorCode::GraMultipleRoots,
                 Severity::Error,
-                span,
-                format!(
-                    "%gra tier has {} ROOT relations, expected 1",
-                    non_terminator_roots.len()
-                ),
+                tier.span,
+                format!("%gra tier has {} ROOT relations, expected 1", roots.len()),
             )
             .with_suggestion("Re-run morphotag to regenerate valid %gra"),
         );
     }
 
-    // Check 3: Circular dependencies (E724) - Fast O(N) check
-    let has_cycle = has_any_cycle(relations);
-    if has_cycle {
+    // E724: a cycle.
+    if has_any_cycle(relations) {
         errors.report(
             ParseError::at_span(
                 ErrorCode::GraCircularDependency,
                 Severity::Error,
-                span,
+                tier.span,
                 "%gra tier has circular dependency",
             )
             .with_suggestion("Re-run morphotag to regenerate valid %gra"),
         );
     }
+}
 
-    // W722: No ROOT relation. Suppress this when the graph already has a cycle:
-    // in that case the missing root is just a consequence of the cycle and
-    // reporting both diagnostics produces a misleading cascade.
-    if non_terminator_roots.is_empty() && !has_cycle {
-        errors.report(
-            ParseError::at_span(
-                ErrorCode::GraNoRoot,
-                Severity::Error,
-                span,
-                "%gra tier has no ROOT relation",
-            )
-            .with_suggestion("Re-run morphotag to regenerate valid %gra"),
-        );
-    }
+/// Every relation that is a ROOT, by POSITION in the tier.
+///
+/// # The terminator exclusion that used to be here, and why it is gone
+///
+/// This filtered out a root at `index == relations.len()`, so that a
+/// terminator emitted as `N|0|ROOT` would not count as a second root. That is
+/// a COUNT standing in for a POSITION, and it cost more than it bought.
+///
+/// It bought nothing measurable: every `%gra` tier in the reference corpus
+/// ends in a `PUNCT` relation, and `is_valid_root_relation` requires the label
+/// `ROOT`, so the case it guards against occurs in neither the corpus nor the
+/// spec suite. It cost a false E722 on any tier whose genuine root is its last
+/// relation, and there is a live instance in this repository's own spec suite:
+/// `spec/errors/E604_gra_without_mor.md` example 1 is `1|2|NSUBJ 2|0|ROOT`,
+/// with sequential indices, nothing dropped and a clean parse, and chatter
+/// reported "%gra tier has no ROOT relation" against it. The observation
+/// snapshot recorded that verdict as expected output.
+///
+/// Rewriting it to exclude the last ELEMENT rather than an index VALUE fixes
+/// the arithmetic and not the rule: E604's example has no terminator relation
+/// at all, so its root IS the last element and the false positive survives.
+/// A terminator's relation is the one aligned with the `%mor` terminator
+/// chunk, which this function cannot see and which E604's example does not
+/// have. So the guard is deleted rather than repaired, and the day a corpus
+/// produces `N|0|ROOT` terminators the cure is a rule that can see `%mor`.
+fn roots(relations: &[GrammaticalRelation]) -> Vec<usize> {
+    relations
+        .iter()
+        .enumerate()
+        .filter(|(_, relation)| is_valid_root_relation(relation))
+        .map(|(position, _)| position)
+        .collect()
 }
 
 /// Fast O(N) cycle detection using iterative DFS with path tracking.
@@ -457,6 +637,134 @@ mod tests {
     use super::*;
     use crate::{ErrorCode, ErrorCollector, Severity};
 
+    /// Both halves, exactly as `Utterance::validate_gra_structure` runs them
+    /// on a tier nothing disputes.
+    ///
+    /// A test of the RULES states its precondition by going through the
+    /// witness rather than around it: `&[]` says no alignment diagnostic
+    /// disputes this tier, and the tier's own `GraCompleteness` says whether
+    /// anything was dropped.
+    fn validate_all(tier: &GraTier, errors: &impl crate::ErrorSink) {
+        tier.validate_monotone_structure(errors);
+        if let Some(whole) = WholeGra::of(tier, &[]) {
+            whole.validate_whole_tier(errors);
+        }
+    }
+
+    /// A tier whose ROOT is its LAST relation has a root.
+    ///
+    /// The terminator exclusion used to drop a root at
+    /// `index == relations.len()`, so this exact tier, which is
+    /// `spec/errors/E604_gra_without_mor.md` example 1, was reported rootless.
+    /// The observation snapshot recorded E722 against it as expected output.
+    #[test]
+    fn a_root_in_the_last_relation_is_still_a_root() {
+        let tier = GraTier::new_gra(vec![
+            GrammaticalRelation::new(1, 2, "NSUBJ"),
+            GrammaticalRelation::new(2, 0, "ROOT"),
+        ]);
+        let errors = ErrorCollector::new();
+        validate_all(&tier, &errors);
+        assert!(
+            !errors
+                .into_vec()
+                .iter()
+                .any(|e| e.code == ErrorCode::GraNoRoot),
+            "a tier ending in `2|0|ROOT` has a ROOT"
+        );
+    }
+
+    /// Dropping a relation cannot create a second ROOT, so E723 still fires.
+    #[test]
+    fn a_truncated_tier_still_reports_two_roots() {
+        let tier = GraTier::lowered_from(
+            vec![
+                GrammaticalRelation::new(1, 0, "ROOT"),
+                GrammaticalRelation::new(2, 0, "ROOT"),
+                GrammaticalRelation::new(3, 2, "PUNCT"),
+            ],
+            GraCompleteness::Truncated,
+        );
+        let errors = ErrorCollector::new();
+        validate_all(&tier, &errors);
+        assert!(
+            errors
+                .into_vec()
+                .iter()
+                .any(|e| e.code == ErrorCode::GraMultipleRoots),
+            "two surviving ROOTs are two ROOTs the author wrote"
+        );
+    }
+
+    /// Dropping a relation cannot close a cycle, so E724 still fires.
+    #[test]
+    fn a_truncated_tier_still_reports_a_cycle() {
+        let tier = GraTier::lowered_from(
+            vec![
+                GrammaticalRelation::new(1, 2, "NSUBJ"),
+                GrammaticalRelation::new(2, 1, "OBJ"),
+                GrammaticalRelation::new(3, 2, "PUNCT"),
+            ],
+            GraCompleteness::Truncated,
+        );
+        let errors = ErrorCollector::new();
+        validate_all(&tier, &errors);
+        assert!(
+            errors
+                .into_vec()
+                .iter()
+                .any(|e| e.code == ErrorCode::GraCircularDependency),
+            "a cycle among the survivors is a cycle the author wrote"
+        );
+    }
+
+    /// Dropping a relation DOES break sequentiality and can remove the only
+    /// root, so E721 and E722 are withheld on a truncated tier.
+    #[test]
+    fn a_truncated_tier_withholds_the_whole_tier_rules() {
+        // What `%gra: 1|0|ROOT 2|<unrepresentable>|PUNCT` leaves behind, and
+        // what `%gra: 0|0|ROOT 1|0|PUNCT` leaves behind: one relation each,
+        // shaped so that the whole-tier rules would fire if they ran.
+        let rootless = GraTier::lowered_from(
+            vec![GrammaticalRelation::new(2, 1, "PUNCT")],
+            GraCompleteness::Truncated,
+        );
+        let errors = ErrorCollector::new();
+        validate_all(&rootless, &errors);
+        let reported = errors.into_vec();
+        assert!(
+            !reported.iter().any(|e| e.code == ErrorCode::GraNoRoot),
+            "the root may be the relation that was dropped"
+        );
+        assert!(
+            !reported
+                .iter()
+                .any(|e| e.code == ErrorCode::GraNonSequentialIndex),
+            "an index gap is what dropping a relation leaves behind"
+        );
+    }
+
+    /// The same tier, NOT marked truncated, does report both.
+    ///
+    /// The pair is the point: without it the test above passes if the rules
+    /// stop firing for any reason at all.
+    #[test]
+    fn the_same_tier_reports_both_when_nothing_was_dropped() {
+        let tier = GraTier::lowered_from(
+            vec![GrammaticalRelation::new(2, 1, "PUNCT")],
+            GraCompleteness::Whole,
+        );
+        let errors = ErrorCollector::new();
+        validate_all(&tier, &errors);
+        let reported = errors.into_vec();
+        assert!(reported.iter().any(|e| e.code == ErrorCode::GraNoRoot));
+        assert!(
+            reported
+                .iter()
+                .any(|e| e.code == ErrorCode::GraNonSequentialIndex)
+        );
+    }
+
     /// New `%gra` construction preserves relation order and count.
     #[test]
     fn test_gra_tier_new() {
@@ -492,7 +800,7 @@ mod tests {
             GrammaticalRelation::new(4, 3, "PUNCT"),
         ]);
         let errors = ErrorCollector::new();
-        tier.validate_structure(&errors);
+        validate_all(&tier, &errors);
         assert_eq!(errors.into_vec().len(), 0);
     }
 
@@ -505,7 +813,7 @@ mod tests {
             GrammaticalRelation::new(2, 3, "OBJ"),
         ]);
         let errors = ErrorCollector::new();
-        tier.validate_structure(&errors);
+        validate_all(&tier, &errors);
         let errs = errors.into_vec();
         assert!(
             errs.iter()
@@ -513,20 +821,18 @@ mod tests {
         );
     }
 
-    /// Cycles are surfaced as warnings, not hard errors.
+    /// A cycle is E724, at error severity.
     #[test]
-    fn test_validate_structure_circular_dependency_warns() {
-        // ROOT validation enabled - circular dependencies produce warnings
+    fn a_cycle_is_reported_as_an_error() {
         let tier = GraTier::new_gra(vec![
             GrammaticalRelation::new(1, 2, "NSUBJ"),
             GrammaticalRelation::new(2, 1, "OBJ"), // Circular: 1→2, 2→1
             GrammaticalRelation::new(3, 2, "PUNCT"),
         ]);
         let errors = ErrorCollector::new();
-        tier.validate_structure(&errors);
+        validate_all(&tier, &errors);
         let errs = errors.into_vec();
 
-        // Should have warnings, not errors
         assert!(
             errs.iter()
                 .any(|e| e.code == ErrorCode::GraCircularDependency)
@@ -534,20 +840,18 @@ mod tests {
         assert!(errs.iter().all(|e| e.severity == Severity::Error));
     }
 
-    /// Multiple roots are surfaced as warnings.
+    /// Two ROOTs are E723, at error severity.
     #[test]
-    fn test_validate_structure_multiple_roots_warns() {
-        // ROOT validation enabled - multiple roots produce warnings
+    fn two_roots_are_reported_as_an_error() {
         let tier = GraTier::new_gra(vec![
             GrammaticalRelation::new(1, 1, "ROOT"),
             GrammaticalRelation::new(2, 2, "ROOT"),
             GrammaticalRelation::new(3, 1, "PUNCT"),
         ]);
         let errors = ErrorCollector::new();
-        tier.validate_structure(&errors);
+        validate_all(&tier, &errors);
         let errs = errors.into_vec();
 
-        // Should have warnings for multiple roots
         assert!(errs.iter().any(|e| e.code == ErrorCode::GraMultipleRoots));
         assert!(errs.iter().all(|e| e.severity == Severity::Error));
     }
@@ -562,7 +866,7 @@ mod tests {
             GrammaticalRelation::new(3, 2, "OBJ"),
         ]);
         let errors = ErrorCollector::new();
-        tier.validate_structure(&errors);
+        validate_all(&tier, &errors);
         let errs = errors.into_vec();
         assert_eq!(errs.len(), 0); // No errors - head=0 is valid
     }
@@ -577,7 +881,7 @@ mod tests {
             GrammaticalRelation::new(4, 1, "PUNCT"),
         ]);
         let errors = ErrorCollector::new();
-        tier.validate_structure(&errors);
+        validate_all(&tier, &errors);
         let errs = errors.into_vec();
 
         assert!(
@@ -601,7 +905,7 @@ mod tests {
             GrammaticalRelation::new(3, 1, "PUNCT"),
         ]);
         let errors = ErrorCollector::new();
-        tier.validate_structure(&errors);
+        validate_all(&tier, &errors);
         let errs = errors.into_vec();
 
         assert!(
@@ -621,7 +925,7 @@ mod tests {
     fn test_validate_structure_empty() {
         let tier = GraTier::new_gra(vec![]);
         let errors = ErrorCollector::new();
-        tier.validate_structure(&errors);
+        validate_all(&tier, &errors);
         assert_eq!(errors.into_vec().len(), 0);
     }
 }

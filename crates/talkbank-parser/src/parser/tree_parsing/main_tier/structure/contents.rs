@@ -6,17 +6,15 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::model::UtteranceContent;
-use crate::node_types::{
-    CA_CONTINUATION_MARKER, CA_NO_BREAK, CA_TECHNICAL_BREAK, COLON, COMMA, CONTENT_ITEM,
-    FALLING_TO_LOW, FALLING_TO_MID, LEVEL_PITCH, NON_COLON_SEPARATOR, OVERLAP_POINT,
-    RISING_TO_HIGH, RISING_TO_MID, SEMICOLON, SEPARATOR, TAG_MARKER, UNMARKED_ENDING,
-    UPTAKE_SYMBOL, VOCATIVE_MARKER, WHITESPACES,
-};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use crate::generated_traversal::{
-    AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsNode, NodeSlot, extract_contents,
+    AsRawNode, BaseContentItemNode, ChoiceSlot, ContentItemCaNoBreakLinkerChoice,
+    ContentItemChoice, ContentItemNode, ContentsChild0Choice, ContentsChild1Choice,
+    ContentsChildren, ContentsNode, FromNodeKind, GroupWithAnnotationsNode, IllegalCurlyQuoteNode,
+    MainPhoGroupNode, MainSinGroupNode, NoChild, NodeSlot, OverlapPointNode,
+    QuotationWithOptionalAnnotationsNode, SeparatorNode, extract_content_item, extract_contents,
 };
 
 use super::super::super::parser_helpers::parse_separator_like;
@@ -35,31 +33,63 @@ use crate::parser::tree_parsing::helpers::unexpected_node_error;
 /// plus a repeated-tail `child_1`. This trait lets the shared per-item
 /// processing below handle both with one body.
 trait ContentsItem<'tree> {
-    /// The item's raw node, or `None` for the `whitespaces` alternative (the
-    /// NEW backend models whitespace as an explicit choice member since it
-    /// does not use `--skip whitespaces`; skipping it here subsumes the OLD
-    /// `WHITESPACES => continue` arm).
-    fn item_node(&self) -> Option<tree_sitter::Node<'tree>>;
+    /// Which of the four alternatives this item is, with its raw node.
+    ///
+    /// The choice enum the generator emits already proves the kind, so the
+    /// per-item processing dispatches on this and never re-reads
+    /// `node.kind()`: a `contents` child is one of exactly these four, and a
+    /// match with no other arm is the grammar's own statement of that.
+    fn leaf(&self) -> ContentsLeaf<'tree>;
 }
+
+/// The four things a `contents` child can be, carrying the raw node the
+/// per-kind parser takes.
+enum ContentsLeaf<'tree> {
+    /// Whitespace between items; contributes nothing.
+    Whitespace,
+    /// A `content_item` wrapper around a word, group, quotation or the like.
+    ContentItem(tree_sitter::Node<'tree>),
+    /// A bare separator token, which the grammar places directly under
+    /// `contents` (a colon after an overlap marker, for one).
+    Separator(tree_sitter::Node<'tree>),
+    /// A bare overlap marker, likewise a direct child.
+    OverlapPoint(tree_sitter::Node<'tree>),
+}
+
 impl<'tree> ContentsItem<'tree> for ContentsChild0Choice<'tree> {
-    fn item_node(&self) -> Option<tree_sitter::Node<'tree>> {
+    fn leaf(&self) -> ContentsLeaf<'tree> {
         match self {
-            Self::Whitespaces(_) => None,
-            Self::ContentItem(n) => Some(n.raw_node()),
-            Self::Separator(n) => Some(n.raw_node()),
-            Self::OverlapPoint(n) => Some(n.raw_node()),
+            Self::Whitespaces(_) => ContentsLeaf::Whitespace,
+            Self::ContentItem(n) => ContentsLeaf::ContentItem(n.raw_node()),
+            Self::Separator(n) => ContentsLeaf::Separator(n.raw_node()),
+            Self::OverlapPoint(n) => ContentsLeaf::OverlapPoint(n.raw_node()),
         }
     }
 }
+
 impl<'tree> ContentsItem<'tree> for ContentsChild1Choice<'tree> {
-    fn item_node(&self) -> Option<tree_sitter::Node<'tree>> {
+    fn leaf(&self) -> ContentsLeaf<'tree> {
         match self {
-            Self::Whitespaces(_) => None,
-            Self::ContentItem(n) => Some(n.raw_node()),
-            Self::Separator(n) => Some(n.raw_node()),
-            Self::OverlapPoint(n) => Some(n.raw_node()),
+            Self::Whitespaces(_) => ContentsLeaf::Whitespace,
+            Self::ContentItem(n) => ContentsLeaf::ContentItem(n.raw_node()),
+            Self::Separator(n) => ContentsLeaf::Separator(n.raw_node()),
+            Self::OverlapPoint(n) => ContentsLeaf::OverlapPoint(n.raw_node()),
         }
     }
+}
+
+/// Where a `contents` node sits, which decides one thing: whether an ERROR
+/// fragment at its start can be "an annotation with nothing to attach to"
+/// (E759, CLAN CHECK 52). That is a fact about the utterance's first item,
+/// so it holds only for the tier body; inside a bracketed construct the
+/// same fragment is ordinary broken content. Everything else the walker
+/// does is the same in both places: the grammar rule is one rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ContentsRegion {
+    /// The `contents` of a `tier_body`: the utterance's own words.
+    UtteranceBody,
+    /// The `contents` inside `< >`, a quotation, a pho or a sin group.
+    InsideBrackets,
 }
 
 /// Parse main-tier `contents` nodes into ordered `UtteranceContent` items.
@@ -84,59 +114,114 @@ pub fn parse_main_tier_contents(
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<UtteranceContent> {
-    // `content` starts empty rather than pre-sized to `node.child_count()`: that
+    parse_contents(
+        &extract_contents(typed),
+        ContentsRegion::UtteranceBody,
+        source,
+        errors,
+    )
+}
+
+/// Parse an already-extracted `contents` node, wherever it sits.
+///
+/// The bracketed constructs (angle group, quotation, pho and sin groups)
+/// extract their `contents` slot themselves, because the angle group reads
+/// its edge whitespace off the same extraction for E750, and hand the
+/// children here. Until 2026-09-08 each of them walked `contents` by hand
+/// through a second, `node.kind()`-driven copy of this dispatch
+/// (`group/nested.rs`), with its own arms for every separator kind the
+/// grammar never places there.
+pub(crate) fn parse_contents(
+    contents: &ContentsChildren<'_>,
+    region: ContentsRegion,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Vec<UtteranceContent> {
+    // `content` starts empty rather than pre-sized to the child count: that
     // count includes the (now explicit) `whitespaces` children, so on a normal
     // whitespace-separated utterance it over-allocates by roughly 2x. Utterances
     // are short, so the one or two reallocations a growing `Vec` costs are cheaper
     // than a guaranteed 2x over-allocation and leave no wasted capacity.
     let mut content = Vec::new();
-
-    let contents = extract_contents(typed);
-    process_contents_slot(contents.child_0.slot(), source, errors, &mut content);
+    process_contents_slot(
+        contents.child_0.slot(),
+        region,
+        source,
+        errors,
+        &mut content,
+    );
     for element in contents.child_1.slot() {
-        process_contents_slot(element.slot(), source, errors, &mut content);
+        process_contents_slot(element.slot(), region, source, errors, &mut content);
     }
-    surface_main_tier_sink(&contents.unexpected, MainTierRegion::Body, source, errors);
-
+    surface_main_tier_sink(
+        &contents.unexpected,
+        MainTierRegion::Body,
+        "contents",
+        source,
+        errors,
+    );
     content
 }
 
 /// Process one `contents` position's slot (either the required `child_0` or one
 /// element of the repeated `child_1` tail) into `content`.
 ///
-/// The per-slot body is byte-identical to the OLD backend's single loop body
-/// (see the removed `extract_contents_iter` version this replaces): the SAME
-/// four arms, just driven by an exhaustive `NodeSlot` match instead of an
-/// iterator yield.
+/// A present item is dispatched on the typed choice it already carries; a
+/// MISSING placeholder is classified like a present one through the same
+/// typed constructors, which is the precedent `separator.rs` set and
+/// explained: a migration that changes diagnostics is a behaviour change
+/// wearing a refactor's clothes, and this one changes none.
 fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
-    slot: &NodeSlot<'tree, C>,
+    slot: &ChoiceSlot<'tree, C>,
+    region: ContentsRegion,
     source: &str,
     errors: &impl ErrorSink,
     content: &mut Vec<UtteranceContent>,
 ) {
     match slot {
-        // A classified `content_item` / `separator` / `overlap_point` (or a
-        // `whitespaces` item, skipped: `item_node()` returns `None`). The
-        // pre-migration code routed ALL THREE non-whitespace alternatives
-        // through `parse_content_item` with byte-identical bodies. The old
-        // kind() dispatch never checked `is_missing`, so a MISSING node (whose
-        // kind is still one of the alternatives) followed the same path; we
-        // keep that by treating a `Missing` raw node the same as a `Present`
-        // non-whitespace item's raw node (the NEW backend's `Missing` variant
-        // carries no choice classification to check for `whitespaces` against,
-        // matching the OLD "treat Missing like Present" precedent as closely as
-        // the closed `NodeSlot` shape allows). `Present` is the valid path;
-        // `Missing` is recovery-only (a childless MISSING node yields a
-        // rejected `parse_content_item` and pushes nothing).
+        // The choice enum names which of the four kinds this is; nothing here
+        // reads `node.kind()`.
         NodeSlot::Present(item) => {
-            if let Some(item_node) = item.item_node()
-                && let ParseOutcome::Parsed(parsed) = parse_content_item(item_node, source, errors)
-            {
+            let parsed = match item.leaf() {
+                ContentsLeaf::Whitespace => return,
+                ContentsLeaf::Separator(node) => {
+                    parse_separator_like(node, source, errors).map(UtteranceContent::Separator)
+                }
+                ContentsLeaf::OverlapPoint(node) => parse_overlap_point(node, source, errors),
+                ContentsLeaf::ContentItem(node) => match ContentItemNode::from_node(node) {
+                    Some(item) => parse_content_item(item, source, errors),
+                    // The choice enum already proved the kind; a refusal here
+                    // would mean the generator disagrees with itself.
+                    None => {
+                        errors.report(unexpected_node_error(node, source, "content item"));
+                        ParseOutcome::rejected()
+                    }
+                },
+            };
+            if let ParseOutcome::Parsed(parsed) = parsed {
                 content.push(parsed);
             }
         }
+        // A zero-width MISSING placeholder at a content position. It carries
+        // no choice classification, so it is classified through the typed
+        // constructors and parsed like a present item, which is what the
+        // old kind() dispatch did (it never checked `is_missing`) and what
+        // `separator.rs` chose for the same case, for the reason its comment
+        // gives. A MISSING `whitespaces` is the one kind the old dispatch had
+        // no arm for, and it fell to the fail-loud arm; it still does.
         NodeSlot::Missing(item_node) => {
-            if let ParseOutcome::Parsed(parsed) = parse_content_item(*item_node, source, errors) {
+            let node = *item_node;
+            let parsed = if SeparatorNode::from_node(node).is_some() {
+                parse_separator_like(node, source, errors).map(UtteranceContent::Separator)
+            } else if OverlapPointNode::from_node(node).is_some() {
+                parse_overlap_point(node, source, errors)
+            } else if let Some(item) = ContentItemNode::from_node(node) {
+                parse_content_item(item, source, errors)
+            } else {
+                errors.report(unexpected_node_error(node, source, "content item"));
+                ParseOutcome::rejected()
+            };
+            if let ParseOutcome::Parsed(parsed) = parsed {
                 content.push(parsed);
             }
         }
@@ -152,8 +237,12 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
             // attach to (CLAN CHECK 52). The emptiness of `content` is the
             // typed leading-position signal; mid-utterance broken codes fall
             // through to the ordinary word-error analysis.
-            let leading_annotation = if content.is_empty() {
-                let fragment = error_node.utf8_text(source.as_bytes()).unwrap_or("");
+            // A fragment whose bytes are not UTF-8 has no readable leading
+            // annotation; the whole-tree backstop reports the node itself.
+            let leading_annotation = if region == ContentsRegion::UtteranceBody
+                && content.is_empty()
+                && let Ok(fragment) = error_node.utf8_text(source.as_bytes())
+            {
                 crate::parser::tree_parsing::parser_helpers::error_analysis::dedicated::leading_postfix_annotation(
                     fragment.trim_start(),
                 )
@@ -163,9 +252,8 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
             };
             if let Some((code_token, fragment)) = leading_annotation {
                 errors.report(
-                    crate::error::ParseError::new(
-                        crate::error::ErrorCode::AnnotationAtUtteranceStart,
-                        crate::error::Severity::Error,
+                    crate::parser::tree_parsing::parser_helpers::error_analysis::dedicated::annotation_at_utterance_start(
+                        &code_token,
                         crate::error::SourceLocation::from_offsets(
                             error_node.start_byte(),
                             error_node.end_byte(),
@@ -175,14 +263,6 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
                             error_node.start_byte()..error_node.end_byte(),
                             &fragment,
                         ),
-                        format!(
-                            "Annotation '{code_token}' at utterance start has no content to attach to"
-                        ),
-                    )
-                    .with_suggestion(
-                        "Retraces, overlap markers, replacements, and quotation codes scope \
-                         over the material BEFORE them; put the annotated content first, or \
-                         remove the code",
                     ),
                 );
             } else if !attach_error_suffix_to_previous_word(*error_node, source, content) {
@@ -232,7 +312,7 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
         // both produce empty `content`. No-op, not a diagnostic (a missing
         // `contents` node's own "Missing"-ness is reported once, by `body.rs`'s
         // caller, not duplicated here).
-        NodeSlot::Absent => {}
+        NodeSlot::Absent(NoChild) => {}
     }
 }
 
@@ -301,20 +381,72 @@ fn should_attach_error_fragment(existing_raw: &str, fragment: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'+' | b'&' | b'-' | b'_'))
 }
 
-/// Parse a `content_item` or compatible leaf node into `UtteranceContent`.
+/// Parse a `content_item` wrapper into `UtteranceContent`.
 ///
-/// This helper mirrors the grammar alternatives listed in the Main Tier section: base content, groups,
-/// quotations, phonology/syntax groups, separators, and overlap points. When the parser emits bare
-/// separators or overlap markers directly (without `content_item` wrappers) we still accept them so the
-/// model stays faithful to the grammar’s concrete tokens.
-/// Parse a `content_item` or compatible leaf node into `UtteranceContent`.
-///
-/// Mirrors the main tier grammar described in the CHAT manual by handling base content, groups,
-/// quotations, phonology/syntax groups, separators, and overlap points. When the tree-sitter parser
-/// emits bare separator/overlap tokens directly (without a `content_item` wrapper) we still consume
-/// them to ensure the resulting `UtteranceContent` list matches the concrete syntax the manual defines.
+/// The wrapper has one grammar position, `content`, holding one of the
+/// alternatives `ContentItemChoice` names: base content, an annotated
+/// group, an annotated quotation, an illegal curly quote, a pho or sin
+/// group, or a misplaced linker. Each alternative goes to its own parser
+/// with its typed node, so no parser re-checks the kind it was handed.
+/// Until 2026-09-08 this function walked the wrapper's children matching
+/// `node.kind()`, and `group/nested.rs` kept a second copy of that walk for
+/// the same wrapper inside groups.
 fn parse_content_item(
-    node: Node,
+    typed: ContentItemNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<UtteranceContent> {
+    let children = extract_content_item(typed);
+    let outcome = match children.content.slot() {
+        NodeSlot::Present(choice) => parse_content_item_choice(choice, source, errors),
+        // A zero-width MISSING placeholder for a whole construct: classified
+        // through the typed constructors and parsed like a present one, the
+        // precedent `separator.rs` set (the old walk never checked
+        // `is_missing` here either).
+        NodeSlot::Missing(placeholder) => match content_item_choice_of(*placeholder) {
+            Some(choice) => parse_content_item_choice(&choice, source, errors),
+            None => {
+                errors.report(unexpected_node_error(
+                    *placeholder,
+                    source,
+                    "content item child",
+                ));
+                ParseOutcome::rejected()
+            }
+        },
+        NodeSlot::Error(error_node) => {
+            errors.report(classify_main_tier_recovery(
+                *error_node,
+                source,
+                MainTierRegion::Body,
+            ));
+            ParseOutcome::rejected()
+        }
+        NodeSlot::Unexpected(unexpected) => {
+            errors.report(unexpected_node_error(
+                *unexpected,
+                source,
+                "content item child",
+            ));
+            ParseOutcome::rejected()
+        }
+        // A `content_item` with no child at all, which only a childless
+        // MISSING wrapper can be; it carries nothing to parse.
+        NodeSlot::Absent(NoChild) => ParseOutcome::rejected(),
+    };
+    surface_main_tier_sink(
+        &children.unexpected,
+        MainTierRegion::Body,
+        "content_item",
+        source,
+        errors,
+    );
+    outcome
+}
+
+/// Dispatch one `content_item` alternative to the parser that owns it.
+fn parse_content_item_choice(
+    choice: &ContentItemChoice<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
@@ -322,148 +454,52 @@ fn parse_content_item(
         parse_base_content, parse_group_content, parse_pho_group_content,
         parse_quotation_with_annotations_content, parse_sin_group_content,
     };
-    use crate::node_types::{
-        BASE_CONTENT_ITEM, GROUP_WITH_ANNOTATIONS, ILLEGAL_CURLY_QUOTE, MAIN_PHO_GROUP,
-        MAIN_SIN_GROUP, QUOTATION_WITH_OPTIONAL_ANNOTATIONS,
-    };
-    use crate::parser::tree_parsing::parser_helpers::is_linker;
-
-    // CRITICAL FIX: Handle the node itself if it's a leaf node (e.g., bare COLON, SEPARATOR)
-    // This is needed because the serializer outputs canonical spacing like "⌈2 :" where
-    // the colon appears as a bare child of contents, not wrapped in a content_item node.
-    match node.kind() {
-        SEPARATOR => {
-            if let ParseOutcome::Parsed(sep) = parse_separator_like(node, source, errors) {
-                return ParseOutcome::parsed(UtteranceContent::Separator(sep));
-            }
-            return ParseOutcome::rejected();
+    match choice {
+        ContentItemChoice::BaseContentItem(base) => parse_base_content(*base, source, errors),
+        ContentItemChoice::GroupWithAnnotations(group) => {
+            parse_group_content(*group, source, errors)
         }
-        NON_COLON_SEPARATOR
-        | COLON
-        | COMMA
-        | SEMICOLON
-        | TAG_MARKER
-        | VOCATIVE_MARKER
-        | CA_CONTINUATION_MARKER
-        | UNMARKED_ENDING
-        | UPTAKE_SYMBOL
-        | CA_NO_BREAK
-        | CA_TECHNICAL_BREAK
-        | RISING_TO_HIGH
-        | RISING_TO_MID
-        | LEVEL_PITCH
-        | FALLING_TO_MID
-        | FALLING_TO_LOW => {
-            if let ParseOutcome::Parsed(sep) = parse_separator_like(node, source, errors) {
-                return ParseOutcome::parsed(UtteranceContent::Separator(sep));
-            }
-            return ParseOutcome::rejected();
+        ContentItemChoice::QuotationWithOptionalAnnotations(quotation) => {
+            parse_quotation_with_annotations_content(*quotation, source, errors)
         }
-        OVERLAP_POINT => {
-            return parse_overlap_point(node, source, errors);
+        ContentItemChoice::MainPhoGroup(pho) => parse_pho_group_content(*pho, source, errors),
+        ContentItemChoice::MainSinGroup(sin) => parse_sin_group_content(*sin, source, errors),
+        // A recognised illegal curly single quote: E256, no model element.
+        ContentItemChoice::IllegalCurlyQuote(quote) => {
+            errors.report(illegal_curly_quote_error(quote.raw_node(), source));
+            ParseOutcome::rejected()
         }
-        BASE_CONTENT_ITEM => return parse_base_content(node, source, errors),
-        GROUP_WITH_ANNOTATIONS => return parse_group_content(node, source, errors),
-        MAIN_PHO_GROUP => return parse_pho_group_content(node, source, errors),
-        MAIN_SIN_GROUP => return parse_sin_group_content(node, source, errors),
-        QUOTATION_WITH_OPTIONAL_ANNOTATIONS => {
-            return parse_quotation_with_annotations_content(node, source, errors);
-        }
-        ILLEGAL_CURLY_QUOTE => {
-            // Recognized illegal curly single quote: report E256 and reject
-            // (no model element). The surrounding words are separate content
-            // items and parse normally.
-            errors.report(illegal_curly_quote_error(node, source));
-            return ParseOutcome::rejected();
-        }
-        // NOTE: no linker arm here on purpose. A misplaced linker always
-        // arrives wrapped in a `content_item` (the grammar's only route into
-        // content position), so the child loop below handles it; a BARE
-        // linker as a direct `contents` child is a shape the grammar cannot
-        // produce and correctly falls to the fail-loud `_` arm.
-        // content_item is a supertype wrapper, fall through to iterate its children below
-        CONTENT_ITEM => {}
-        _ => {
-            errors.report(unexpected_node_error(node, source, "content item"));
-            return ParseOutcome::rejected();
+        // A linker in content position. Linkers are utterance-initial by
+        // definition; one that reduced here instead of into the tier body's
+        // `linkers` field is misplaced: E766, no model element.
+        ContentItemChoice::CaNoBreakLinker(linker) => {
+            errors.report(misplaced_linker_error(linker.raw_node(), source));
+            ParseOutcome::rejected()
         }
     }
+}
 
-    // If not a leaf node, iterate over children
-    let child_count = node.child_count();
-
-    for idx in 0..child_count {
-        let Some(child) = node.child(idx) else {
-            continue;
-        };
-
-        if child.is_error() {
-            errors.report(classify_main_tier_recovery(
-                child,
-                source,
-                MainTierRegion::Body,
-            ));
-            return ParseOutcome::rejected();
-        }
-
-        match child.kind() {
-            BASE_CONTENT_ITEM => return parse_base_content(child, source, errors),
-            GROUP_WITH_ANNOTATIONS => return parse_group_content(child, source, errors),
-            MAIN_PHO_GROUP => return parse_pho_group_content(child, source, errors),
-            MAIN_SIN_GROUP => return parse_sin_group_content(child, source, errors),
-            QUOTATION_WITH_OPTIONAL_ANNOTATIONS => {
-                return parse_quotation_with_annotations_content(child, source, errors);
-            }
-            ILLEGAL_CURLY_QUOTE => {
-                // Recognized illegal curly single quote inside a content_item
-                // wrapper: report E256 and reject (no model element).
-                errors.report(illegal_curly_quote_error(child, source));
-                return ParseOutcome::rejected();
-            }
-            // A misplaced linker inside a content_item wrapper (the `linker`
-            // supertype is hidden, so the concrete token appears directly):
-            // report E766 and reject (no model element). Membership comes
-            // from the shared `is_linker` supertype predicate so a future
-            // linker kind cannot be missed here.
-            kind if is_linker(kind) => {
-                errors.report(misplaced_linker_error(child, source));
-                return ParseOutcome::rejected();
-            }
-            OVERLAP_POINT => {
-                return parse_overlap_point(child, source, errors);
-            }
-            SEPARATOR => {
-                if let ParseOutcome::Parsed(sep) = parse_separator_like(child, source, errors) {
-                    return ParseOutcome::parsed(UtteranceContent::Separator(sep));
-                }
-                return ParseOutcome::rejected();
-            }
-            NON_COLON_SEPARATOR
-            | COLON
-            | COMMA
-            | SEMICOLON
-            | TAG_MARKER
-            | VOCATIVE_MARKER
-            | CA_CONTINUATION_MARKER
-            | UNMARKED_ENDING
-            | UPTAKE_SYMBOL
-            | RISING_TO_HIGH
-            | RISING_TO_MID
-            | LEVEL_PITCH
-            | FALLING_TO_MID
-            | FALLING_TO_LOW => {
-                if let ParseOutcome::Parsed(sep) = parse_separator_like(child, source, errors) {
-                    return ParseOutcome::parsed(UtteranceContent::Separator(sep));
-                }
-                return ParseOutcome::rejected();
-            }
-            WHITESPACES => continue,
-            _ => {
-                errors.report(unexpected_node_error(child, source, "content item child"));
-                return ParseOutcome::rejected();
-            }
-        }
+/// Classify a raw node into the `content_item` alternative of its kind.
+///
+/// The generator gives the choice enum no `FromNodeKind` (one alternative is
+/// itself a supertype choice), so the MISSING arm above asks each wrapper in
+/// turn. A node of none of these kinds is refused.
+fn content_item_choice_of(node: Node<'_>) -> Option<ContentItemChoice<'_>> {
+    if let Some(base) = BaseContentItemNode::from_node(node) {
+        Some(ContentItemChoice::BaseContentItem(base))
+    } else if let Some(group) = GroupWithAnnotationsNode::from_node(node) {
+        Some(ContentItemChoice::GroupWithAnnotations(group))
+    } else if let Some(quotation) = QuotationWithOptionalAnnotationsNode::from_node(node) {
+        Some(ContentItemChoice::QuotationWithOptionalAnnotations(
+            quotation,
+        ))
+    } else if let Some(quote) = IllegalCurlyQuoteNode::from_node(node) {
+        Some(ContentItemChoice::IllegalCurlyQuote(quote))
+    } else if let Some(pho) = MainPhoGroupNode::from_node(node) {
+        Some(ContentItemChoice::MainPhoGroup(pho))
+    } else if let Some(sin) = MainSinGroupNode::from_node(node) {
+        Some(ContentItemChoice::MainSinGroup(sin))
+    } else {
+        ContentItemCaNoBreakLinkerChoice::from_node(node).map(ContentItemChoice::CaNoBreakLinker)
     }
-
-    ParseOutcome::rejected()
 }

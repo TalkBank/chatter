@@ -37,6 +37,46 @@ fn run_validate(
     harness.run_validate(path, extra_args)
 }
 
+/// `--roundtrip` answers on every run, cached or not.
+///
+/// The roundtrip verdict is cached beside the validity verdict, and a second
+/// run serves both from the cache. Until 2026-09-08 the cached branch built
+/// the file's status but never counted the roundtrip, so the summary of a
+/// warm run said `Passed: 0` for a file whose roundtrip had passed (and
+/// `Failed: 0` for one whose roundtrip had failed): the user asked a question
+/// and the answer was silently dropped. Both runs must say the same thing.
+/// The failure polarity has no fixture here, because no valid file in the
+/// repository writes back differently; it is counted by the same single
+/// owner (`update_stats`) as the pass.
+#[test]
+fn test_roundtrip_is_counted_on_a_cache_hit() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let fixture =
+        crate::common::reference_fixture("corpus/reference/languages/eng-conversation.cha");
+    let cold = run_validate(&harness, &fixture, &["--roundtrip"])?;
+    assert_success(&cold, "cold run with --roundtrip");
+    let cold_text = combined_output(&cold);
+    if !cold_text.contains("=== Roundtrip ===\nPassed: 1\nFailed: 0") {
+        return Err(TestError::Failure(format!(
+            "cold run should count one passed roundtrip, got:\n{cold_text}"
+        )));
+    }
+    let warm = run_validate(&harness, &fixture, &["--roundtrip"])?;
+    assert_success(&warm, "warm run with --roundtrip");
+    let warm_text = combined_output(&warm);
+    if !warm_text.contains("Cache hits: 1") {
+        return Err(TestError::Failure(format!(
+            "warm run should be served from the cache, got:\n{warm_text}"
+        )));
+    }
+    if !warm_text.contains("=== Roundtrip ===\nPassed: 1\nFailed: 0") {
+        return Err(TestError::Failure(format!(
+            "warm run should count the cached roundtrip, got:\n{warm_text}"
+        )));
+    }
+    Ok(())
+}
+
 /// Tests validate command exists.
 #[test]
 fn test_validate_command_exists() -> Result<(), TestError> {
@@ -420,7 +460,8 @@ fn suppression_does_not_partition_the_validation_cache() -> Result<(), TestError
 }
 
 /// `--strict-linkers` genuinely changes WHAT IS COMPUTED (it turns on
-/// E351-E355), so unlike `--suppress` it MUST partition the cache: a verdict
+/// the opt-in linker rules), so unlike `--suppress` it MUST partition the
+/// cache: a verdict
 /// reached without those checks is not an answer for a run that wants them.
 ///
 /// The companion to the test above: together they pin both directions, which

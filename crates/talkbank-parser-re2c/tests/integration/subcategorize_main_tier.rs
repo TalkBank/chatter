@@ -182,7 +182,8 @@ fn collect_cha_files(base: &std::path::Path) -> Vec<PathBuf> {
 }
 
 #[test]
-#[ignore]
+#[ignore = "needs the wild corpus, which no contributor has; a report \
+           generator rather than a gate. Run with --ignored --nocapture."]
 fn subcategorize_main_tier_divergences() {
     let base = crate::corpus_root::CorpusRoot::resolve().require();
     if !base.exists() {

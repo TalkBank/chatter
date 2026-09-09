@@ -9,7 +9,6 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::model::{CADelimiter, CADelimiterType, CAElement, CAElementType};
-use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -28,8 +27,28 @@ pub(crate) fn parse_ca_element_node(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<CAElement> {
+    // A MISSING placeholder is the whole-tree pass's to report (E342); it
+    // names no character, so there is nothing to decode.
+    if node.is_missing() {
+        return ParseOutcome::rejected();
+    }
     let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let text = extract_utf8_text(node, source, errors, "ca_element", "");
+    // Read the bytes directly rather than through `extract_utf8_text`, whose
+    // empty fallback after its own report would be reported here a second
+    // time as an empty token.
+    let text = match node.utf8_text(source.as_bytes()) {
+        Ok(text) => text,
+        Err(err) => {
+            errors.report(ParseError::new(
+                ErrorCode::TreeParsingError,
+                Severity::Error,
+                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+                format!("Failed to extract CA element text: {err}"),
+            ));
+            return ParseOutcome::rejected();
+        }
+    };
 
     let Some(ch) = text.chars().next() else {
         errors.report(ParseError::new(
@@ -66,8 +85,28 @@ pub(crate) fn parse_ca_delimiter_node(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<CADelimiter> {
+    // A MISSING placeholder is the whole-tree pass's to report (E342); it
+    // names no character, so there is nothing to decode.
+    if node.is_missing() {
+        return ParseOutcome::rejected();
+    }
     let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let text = extract_utf8_text(node, source, errors, "ca_delimiter", "");
+    // Read the bytes directly rather than through `extract_utf8_text`, whose
+    // empty fallback after its own report would be reported here a second
+    // time as an empty token.
+    let text = match node.utf8_text(source.as_bytes()) {
+        Ok(text) => text,
+        Err(err) => {
+            errors.report(ParseError::new(
+                ErrorCode::TreeParsingError,
+                Severity::Error,
+                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+                format!("Failed to extract CA delimiter text: {err}"),
+            ));
+            return ParseOutcome::rejected();
+        }
+    };
 
     let Some(ch) = text.chars().next() else {
         errors.report(ParseError::new(

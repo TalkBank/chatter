@@ -59,7 +59,8 @@ const VALID_END: &str = "@UTF8\n@Begin\n*CHI:\thello . [+ trn] \u{15}0_1000\u{15
 
 /// Same shape, but the bullet is the deprecated `·N_N-·` skip marker: the grammar
 /// reports an ERROR on the trailing `-`, so `parse_bullet_node_timestamps` returns
-/// `None` and the decode emits E360 `InvalidMediaBullet`.
+/// `Err(BulletRejection::ContainsRecoveryNode)` and the decode emits E360
+/// `InvalidMediaBullet`.
 const MALFORMED_BULLET: &str = "@UTF8\n@Begin\n*CHI:\thello . \u{15}123_456-\u{15}\n@End\n";
 
 #[test]
@@ -114,13 +115,23 @@ fn valid_terminator_postcode_bullet_unchanged() {
 fn malformed_bullet_emits_exact_e360() {
     let (utterances, diags) = parse_utterances_and_diags(MALFORMED_BULLET);
 
-    // EXACTLY one diagnostic, captured from the pre-migration parser: E360 at the
-    // bullet's byte span (27..37) with the exact legal-form message. There is NO
-    // additional whole-tree-backstop diagnostic on this input.
-    let expected_message = format!(
-        "Invalid media bullet: grammar rejected '{}'. Legal form: \u{b7}START_END\u{b7} with numeric timestamps only",
-        "\u{15}123_456-\u{15}"
-    );
+    // EXACTLY one diagnostic: E360 at the bullet's byte span (27..37). There is
+    // NO additional whole-tree-backstop diagnostic on this input. The CODE and
+    // the SPAN are what this test captured from the pre-migration parser and
+    // both are unchanged.
+    //
+    // THE MESSAGE CHANGED DELIBERATELY on 2026-09-08, and this expectation was
+    // updated rather than the behaviour reverted. What it used to say was
+    // "grammar rejected '...'. Legal form: ·START_END· with numeric timestamps
+    // only", one sentence covering four different reasons the bullet could not
+    // be read, and it was FALSE for the reason a second input reaches: a bullet
+    // of twenty-digit timestamps is one the grammar ACCEPTED, whose timestamps
+    // ARE numeric, and which fails only when the digits are read as a `u64`.
+    // `parse_bullet_node_timestamps` now returns a `BulletRejection` saying
+    // which route it took, and the message is composed from it, so no single
+    // sentence has to be true of four cases. This input takes the
+    // `ContainsRecoveryNode` route, whose sentence is the legal form.
+    let expected_message = "Invalid media bullet: legal form is \u{b7}START_END\u{b7}, two millisecond integers and nothing else".to_string();
     assert_eq!(
         diags,
         vec![("E360".to_string(), 27, 37, expected_message)],

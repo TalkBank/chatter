@@ -1,4 +1,5 @@
-//! Parsing for annotated angle-bracket groups (`< ... >[...]`).
+//! Parsing for annotated angle-bracket groups (`< ... >[...]`), over the
+//! generated typed traversal.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Group>
@@ -7,14 +8,19 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
+use crate::generated_traversal::{
+    AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsChildren,
+    GroupWithAnnotationsNode, NoChild, NodeSlot, SlotView, extract_group_with_annotations,
+};
 use crate::model::{BracketedContent, Group, UtteranceContent};
-use crate::node_types::{BASE_ANNOTATIONS, CONTENTS, GREATER_THAN, LESS_THAN, WHITESPACES};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::super::super::annotations::parse_scoped_annotations;
 use super::super::marker_chain::fold_marker_chain;
-use super::contents::parse_group_contents;
+use super::super::report_tree_shape;
+use super::contents::{contents_of, parse_group_contents};
+use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
 
 /// Which group delimiter the offending whitespace touches; drives the
 /// E750 message wording only.
@@ -48,182 +54,110 @@ fn report_space_inside_angle_group(
     ));
 }
 
+/// Whitespace hugging either delimiter lands INSIDE `contents`, as its
+/// first or last item; the grammar tolerates it so the parse recovers, but
+/// it is invalid CHAT (CLAN CHECK 160). The typed choice at each edge says
+/// whether it is whitespace; interior whitespace between words is legal and
+/// never looked at. A `contents` of one whitespace item is reported once,
+/// as after `<`.
+fn report_edge_whitespace(contents: &ContentsChildren<'_>, source: &str, errors: &impl ErrorSink) {
+    if let NodeSlot::Present(ContentsChild0Choice::Whitespaces(first)) = contents.child_0.slot() {
+        report_space_inside_angle_group(first.raw_node(), source, errors, AngleSide::AfterOpen);
+    }
+    if let Some(last) = contents.child_1.slot().last()
+        && let NodeSlot::Present(ContentsChild1Choice::Whitespaces(last)) = last.slot()
+    {
+        report_space_inside_angle_group(last.raw_node(), source, errors, AngleSide::BeforeClose);
+    }
+}
+
 /// Parse one `group_with_annotations` node into group utterance content, preserving the `<...>[...]` semantics.
 ///
-/// CHAT group annotations appear as `< contents > base_annotations` and are described in the Group and Annotation
-/// sections of the manual. This parser consumes the expected `<`, optional whitespace, contents block,
-/// optional trailing whitespace, closing `>`, and the required annotations block, emitting either a
-/// bare `Group` or an `AnnotatedGroup` depending on whether scoped annotations exist. Any deviation from that
-/// structure is reported through `ParseError` so users can correlate the diagnostic with the manual’s grammar.
+/// Grammar: `seq(less_than, field('content', contents), greater_than,
+/// field('annotations', base_annotations))`. `extract_group_with_annotations`
+/// places the four in typed slots; the delimiters are structure, the
+/// contents go through the one shared walker, and the annotations fold onto
+/// the group through `fold_marker_chain`, giving a bare `Group` or an
+/// `AnnotatedGroup`. A group with no items is rejected. Until 2026-09-08
+/// this walked the children by index and `node.kind()`, with a reporter per
+/// position that only an ERROR at that position ever reached.
 pub(crate) fn parse_group_content(
-    node: Node,
+    typed: GroupWithAnnotationsNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let child_count = node.child_count();
-    // Pre-allocate: group typically has 1-5 items, annotations typically 0-2
-    let mut group_items = Vec::with_capacity(4);
-    // One resolved value rather than an annotation list beside a retrace kind:
-    // those two were a partition of one ordered sequence and lost which side of
-    // the marker each annotation was written on.
-    let mut markers = Vec::new();
-    let mut idx = 0;
+    let node = typed.raw_node();
+    let children = extract_group_with_annotations(typed);
 
-    // Grammar: group_with_annotations: $ => seq(
-    //   $.less_than,
-    //   optional($.whitespaces),  // Allow leading whitespace after <
-    //   $.contents,
-    //   optional($.whitespaces),  // Allow trailing whitespace before >
-    //   $.greater_than,
-    //   $.base_annotations  // REQUIRED
-    // )
+    expect_delimiter(children.child_0.slot(), |bad| {
+        report_tree_shape(
+            bad,
+            format!(
+                "Expected '<' at start of group_with_annotations, found '{}'",
+                bad.kind()
+            ),
+            source,
+            errors,
+        );
+    });
 
-    // Position 0: '<' (required)
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-    {
-        if child.kind() == LESS_THAN {
-            idx += 1;
-        } else {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                format!(
-                    "Expected '<' at start of group_with_annotations, found '{}'",
-                    child.kind()
-                ),
-            ));
-            idx += 1;
+    let group_items = match contents_of(children.content_2.slot(), |bad| {
+        report_tree_shape(
+            bad,
+            format!(
+                "Expected 'contents' in group_with_annotations, found '{}'",
+                bad.kind()
+            ),
+            source,
+            errors,
+        );
+    }) {
+        Some(contents) => {
+            report_edge_whitespace(&contents, source, errors);
+            parse_group_contents(&contents, source, errors)
         }
-    }
+        None => Vec::new(),
+    };
 
-    // Position 1: optional whitespaces after <. The grammar tolerates
-    // it so the parse recovers, but it is invalid CHAT (CLAN CHECK
-    // 160): report E750 instead of silently dropping the space.
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-        && child.kind() == WHITESPACES
-    {
-        report_space_inside_angle_group(child, source, errors, AngleSide::AfterOpen);
-        idx += 1;
-    }
+    expect_delimiter(children.child_2.slot(), |bad| {
+        report_tree_shape(
+            bad,
+            format!(
+                "Expected '>' in group_with_annotations, found '{}'",
+                bad.kind()
+            ),
+            source,
+            errors,
+        );
+    });
 
-    // Next: contents (required)
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-    {
-        if child.kind() == CONTENTS {
-            // In the real CST the delimiter-hugging whitespace lands
-            // INSIDE `contents` as its first/last child (empirically
-            // verified on the CHECK-160 fixture), not as a sibling
-            // between `less_than` and `contents` as the grammar sketch
-            // above suggests; check both shapes. Only the edge
-            // positions violate CHECK 160; interior whitespace between
-            // words is legal.
-            let contents_children = child.child_count();
-            if contents_children > 0 {
-                if let Some(first) = child.child(0)
-                    && first.kind() == WHITESPACES
-                {
-                    report_space_inside_angle_group(first, source, errors, AngleSide::AfterOpen);
-                }
-                if contents_children > 1
-                    && let Some(last) = child.child(contents_children - 1)
-                    && last.kind() == WHITESPACES
-                {
-                    report_space_inside_angle_group(last, source, errors, AngleSide::BeforeClose);
-                }
-            }
-            group_items = parse_group_contents(child, source, errors);
-            idx += 1;
-        } else {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                format!(
-                    "Expected 'contents' in group_with_annotations, found '{}'",
-                    child.kind()
-                ),
-            ));
-            idx += 1;
+    // The annotations are required by the grammar. A MISSING placeholder
+    // has no annotations in it and is the backstop's to report; an ERROR or
+    // displaced node there is the group losing its shape.
+    let markers = match children.annotations.slot().view() {
+        SlotView::Present(annotations) => {
+            parse_scoped_annotations(annotations.raw_node(), source, errors)
         }
-    }
-
-    // Next: optional whitespaces before >. Same E750 contract as the
-    // after-`<` position above.
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-        && child.kind() == WHITESPACES
-    {
-        report_space_inside_angle_group(child, source, errors, AngleSide::BeforeClose);
-        idx += 1;
-    }
-
-    // Next: '>' (required)
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-    {
-        if child.kind() == GREATER_THAN {
-            idx += 1;
-        } else {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                format!(
-                    "Expected '>' in group_with_annotations, found '{}'",
-                    child.kind()
-                ),
-            ));
-            idx += 1;
-        }
-    }
-
-    // Next: base_annotations (required for groups)
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-    {
-        if child.kind() == BASE_ANNOTATIONS {
-            markers = parse_scoped_annotations(child, source, errors);
-            idx += 1;
-        } else {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
+        SlotView::Missing(_) | SlotView::Absent(NoChild) => Vec::new(),
+        SlotView::Error(bad) => {
+            report_tree_shape(
+                bad,
                 format!(
                     "Expected 'base_annotations' in group_with_annotations, found '{}'",
-                    child.kind()
+                    bad.kind()
                 ),
-            ));
-            idx += 1;
+                source,
+                errors,
+            );
+            Vec::new()
         }
-    }
-
-    // Check for unexpected extra children
-    if idx < child_count {
-        for extra_idx in idx..child_count {
-            if let Some(extra) = node.child(extra_idx) {
-                errors.report(ParseError::new(
-                    ErrorCode::TreeParsingError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(extra.start_byte(), extra.end_byte()),
-                    ErrorContext::new(source, extra.start_byte()..extra.end_byte(), ""),
-                    format!(
-                        "Unexpected extra child '{}' at position {} of group_with_annotations",
-                        extra.kind(),
-                        extra_idx
-                    ),
-                ));
-            }
-        }
-    }
+    };
+    surface_displaced(
+        &children.unexpected,
+        "group_with_annotations",
+        source,
+        errors,
+    );
 
     if group_items.is_empty() {
         return ParseOutcome::rejected();

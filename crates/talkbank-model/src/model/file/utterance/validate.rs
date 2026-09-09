@@ -16,6 +16,35 @@ use crate::model::dependent_tier::DependentTier;
 use crate::validation::Validate;
 use crate::validation::ValidationContext;
 
+impl Utterance {
+    /// Report the `%gra` structural rules for every `%gra` tier of THIS
+    /// utterance.
+    ///
+    /// The pairing lives here because this is the only value that owns both
+    /// halves. `WholeGra::of` takes a tier and a diagnostic slice, and a tier
+    /// from one utterance beside another utterance's diagnostics type-checks
+    /// and answers confidently about neither; nothing but the utterance can
+    /// pair them correctly, so nothing but the utterance is allowed to.
+    fn validate_gra_structure(&self, errors: &impl ErrorSink) {
+        for entry in &self.dependent_tiers {
+            let DependentTier::Gra(tier) = &entry.tier else {
+                continue;
+            };
+            // Always: dropping a relation cannot create a second root or close
+            // a cycle, so a violation among the survivors is one the author
+            // wrote.
+            tier.validate_monotone_structure(errors);
+            // Only on a tier established whole and undisputed: dropping breaks
+            // sequentiality by itself, and can remove the only root.
+            if let Some(whole) =
+                crate::model::dependent_tier::WholeGra::of(tier, &self.alignment_diagnostics)
+            {
+                whole.validate_whole_tier(errors);
+            }
+        }
+    }
+}
+
 impl Validate for Utterance {
     /// Performs utterance-local validation checks and reports diagnostics.
     ///
@@ -141,28 +170,10 @@ impl Validate for Utterance {
             );
         }
 
-        let gra_alignment_blocks_structure = self.alignment_diagnostics.iter().any(|diagnostic| {
-            matches!(
-                diagnostic.code,
-                crate::ErrorCode::MorGraCountMismatch
-                    | crate::ErrorCode::GraInvalidWordIndex
-                    | crate::ErrorCode::GraInvalidHeadIndex
-            )
-        });
-
-        // E721-E724: structural validation of `%gra` relations.
-        //
-        // If `%mor↔%gra` alignment has already established that the tier is
-        // cardinality-broken or contains out-of-bounds indices, suppress the
-        // downstream graph-structure checks. Otherwise we emit misleading
-        // cascades like E713 + E722 for the same malformed relation set.
-        if !gra_alignment_blocks_structure {
-            for entry in &self.dependent_tiers {
-                if let DependentTier::Gra(marker) = &entry.tier {
-                    marker.validate_structure(errors);
-                }
-            }
-        }
+        // E721-E724: the structural rules for `%gra`, split by what a dropped
+        // relation can do to them. `WholeGra` carries the reasoning and the
+        // cascade this replaced.
+        self.validate_gra_structure(errors);
 
         // E711: `%mor` content validation (stems/suffixes/POS categories).
         for entry in &self.dependent_tiers {

@@ -7,47 +7,15 @@
 use crate::generated_traversal::{
     AsRawNode, MediaHeaderNode, NodeSlot, extract_media_contents, extract_media_header,
 };
-use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::parser::tree_parsing::parser_helpers::present;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
-use crate::parser::typed_cst::decode_present_child;
-use talkbank_model::ParseOutcome;
-use talkbank_model::model::{
-    Header, MediaFilename, MediaHeader, MediaStatus, MediaType, WarningText,
+use crate::parser::tree_parsing::parser_helpers::{
+    ContentSlot, HeaderSite, present, read_simple_content, surface_displaced,
 };
+use talkbank_model::model::{Header, MediaFilename, MediaHeader, MediaStatus, MediaType};
 
-/// Build `Header::Unknown` for malformed `@Media` input.
-fn unknown_media_header(node: Node, source: &str, parse_reason: impl Into<String>) -> Header {
-    let text = match node.utf8_text(source.as_bytes()) {
-        Ok(raw) if !raw.is_empty() => raw.to_string(),
-        _ => "@Media".to_string(),
-    };
-
-    Header::Unknown {
-        text: WarningText::new(text),
-        parse_reason: Some(parse_reason.into()),
-        suggested_fix: Some("Expected @Media:\tfilename, audio|video[, status]".to_string()),
-    }
-}
-
-/// Decode UTF-8 child text for media header fields, delegating to the shared
-/// `decode_present_child` helper.
-///
-/// The per-field diagnostic (context = the `media_*` field label, message
-/// "Failed to extract UTF-8 text from `<context>`: `<err>`") is supplied here, so
-/// it stays byte-identical to the pre-extraction emission.
-fn decode_child_text(
-    child: Node,
-    source: &str,
-    errors: &impl ErrorSink,
-    context: &str,
-) -> ParseOutcome<String> {
-    decode_present_child(child, source, errors, context, |err| {
-        format!("Failed to extract UTF-8 text from {}: {}", context, err)
-    })
-}
+/// The fix every `@Media` recovery suggests.
+const MEDIA_FIX: &str = "Expected @Media:\tfilename, audio|video[, status]";
 
 /// Parse Media header from tree-sitter node.
 ///
@@ -86,7 +54,8 @@ pub fn parse_media_header(
     source: &str,
     errors: &impl ErrorSink,
 ) -> Header {
-    let node = typed.raw_node();
+    let site = HeaderSite::of(&typed, source);
+    let node = site.actual();
 
     // Extract media_contents via typed slot `child_2` of the media_header.
     // `extract_media_header` exposes `media_contents` as a `NodeSlot`;
@@ -94,13 +63,7 @@ pub fn parse_media_header(
     // non-Present recovery state funnels to the same "Missing media_contents"
     // diagnostic + Header::Unknown.
     let header_children = extract_media_header(typed);
-    let Some(contents) = header_children
-        .child_2
-        .slot()
-        .clone()
-        .present_or_recover()
-        .ok()
-    else {
+    let Some(contents) = present(header_children.child_2.slot()) else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
@@ -108,64 +71,33 @@ pub fn parse_media_header(
             ErrorContext::new(source, node.start_byte()..node.end_byte(), "media_header"),
             "Missing media_contents in @Media header",
         ));
-        surface_unexpected(&header_children.unexpected, source, errors);
-        return unknown_media_header(node, source, "Missing media_contents in @Media header");
+        surface_displaced(&header_children.unexpected, "media_header", source, errors);
+        return site.unknown("Missing media_contents in @Media header", Some(MEDIA_FIX));
     };
-    let contents_raw = contents.raw_node();
-    surface_unexpected(&header_children.unexpected, source, errors);
+    surface_displaced(&header_children.unexpected, "media_header", source, errors);
 
     // Decompose the media_contents node into its typed child slots. The index
     // remap from the OLD (whitespace-skipped) module is documented in the
     // function doc-comment above.
-    let contents_children = extract_media_contents(contents);
+    let contents_children = extract_media_contents(*contents);
 
-    // Extract filename from typed child_0 (unchanged index).
-    // All values accepted via decode_child_text(); the validator flags semantic issues.
-    let filename = match contents_children.child_0.slot() {
-        // Happy path: correct node kind, decode its UTF-8 text via raw_node().
-        NodeSlot::Present(filename_node) => {
-            match decode_child_text(filename_node.raw_node(), source, errors, "media_filename") {
-                ParseOutcome::Parsed(text) => text,
-                ParseOutcome::Rejected => {
-                    return unknown_media_header(node, source, "Could not decode @Media filename");
-                }
-            }
-        }
-        // Wrong-kind node at this position: reproduce the "got {kind}" diagnostic
-        // from the pre-migration `child.kind() != MEDIA_FILENAME` branch.
-        NodeSlot::Unexpected(child) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(
-                    source,
-                    child.start_byte()..child.end_byte(),
-                    "media_filename",
-                ),
-                format!(
-                    "Expected media_filename node at @Media content position 0, got {}",
-                    child.kind()
-                ),
-            ));
-            return unknown_media_header(node, source, "Missing media filename in @Media header");
-        }
-        // No usable node at this position: reproduce the "Missing media_filename"
-        // diagnostic from the pre-migration `contents.child(0u32)` None branch.
-        NodeSlot::Missing(_) | NodeSlot::Absent | NodeSlot::Error(_) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(contents_raw.start_byte(), contents_raw.end_byte()),
-                ErrorContext::new(
-                    source,
-                    contents_raw.start_byte()..contents_raw.end_byte(),
-                    "media_contents",
-                ),
-                "Missing media_filename node in @Media header",
-            ));
-            return unknown_media_header(node, source, "Missing media filename in @Media header");
-        }
+    // The three payload slots read through the shared verb; every recovery
+    // state of a slot reports once at the header node and hands back the
+    // `Header::Unknown` for it. None of those states is reachable from CHAT:
+    // a malformed `@Media` line is a file-level ERROR node and never reaches
+    // this parser, which the 2026-09-08 coverage run showed for every header
+    // family. Until that day this file wrote its own three matches.
+    let filename = match read_simple_content(
+        &site,
+        contents_children.child_0.slot(),
+        &ContentSlot {
+            missing: "Missing media filename in @Media header",
+            suggested_fix: Some(MEDIA_FIX),
+        },
+        errors,
+    ) {
+        Ok(text) => text,
+        Err(refused) => return refused.into_header(&site),
     };
 
     // Whitespace between the filename and the comma, recorded as provenance
@@ -183,53 +115,20 @@ pub fn parse_media_header(
         _ => None,
     };
 
-    // Extract media_type from typed child_4.
-    //
-    // The position has moved twice. It was child_2 before the NEW backend
-    // modelled the `whitespaces` between comma and media_type as its own
-    // position (child_3), and moved again on 2026-08-05 when
-    // `optional($.whitespaces)` was added BEFORE the comma so a space there
-    // stops being an error. All values accepted via MediaType::from_text();
-    // unsupported ones are flagged by the validator.
-    let media_type = match contents_children.child_4.slot() {
-        // Happy path: correct node kind, decode its UTF-8 text.
-        NodeSlot::Present(type_node) => {
-            let ParseOutcome::Parsed(type_text) =
-                decode_child_text(type_node.raw_node(), source, errors, "media_type")
-            else {
-                return unknown_media_header(node, source, "Could not decode @Media type");
-            };
-            MediaType::from_text(&type_text)
-        }
-        // Wrong-kind node: reproduce the "got {kind}" diagnostic.
-        NodeSlot::Unexpected(child) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), "media_type"),
-                format!(
-                    "Expected media_type node at @Media content position 4, got {}",
-                    child.kind()
-                ),
-            ));
-            return unknown_media_header(node, source, "Missing media type in @Media header");
-        }
-        // No usable node: reproduce the "Missing media_type" diagnostic.
-        NodeSlot::Missing(_) | NodeSlot::Absent | NodeSlot::Error(_) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(contents_raw.start_byte(), contents_raw.end_byte()),
-                ErrorContext::new(
-                    source,
-                    contents_raw.start_byte()..contents_raw.end_byte(),
-                    "media_contents",
-                ),
-                "Missing media_type node in @Media header",
-            ));
-            return unknown_media_header(node, source, "Missing media type in @Media header");
-        }
+    // The type is `child_4`: the position moved twice as the grammar grew
+    // its whitespace positions, and every value is accepted here
+    // (`MediaType::from_text`); the validator names an unsupported one.
+    let media_type = match read_simple_content(
+        &site,
+        contents_children.child_4.slot(),
+        &ContentSlot {
+            missing: "Missing media type in @Media header",
+            suggested_fix: Some(MEDIA_FIX),
+        },
+        errors,
+    ) {
+        Ok(text) => MediaType::from_text(&text),
+        Err(refused) => return refused.into_header(&site),
     };
 
     // Extract optional status from typed child_5, a GROUP
@@ -245,27 +144,33 @@ pub fn parse_media_header(
     let status_group = contents_children
         .child_5
         .slot()
-        .clone()
-        .and_then(|s| s.present_or_recover().ok());
-    let status = match status_group
         .as_ref()
-        .and_then(|group| present(group.child_2.slot()))
-    {
-        Some(status_node) => {
-            let ParseOutcome::Parsed(status_text) =
-                decode_child_text(status_node.raw_node(), source, errors, "media_status")
-            else {
-                return unknown_media_header(node, source, "Could not decode @Media status");
-            };
-            Some(MediaStatus::from_text(&status_text))
-        }
+        .and_then(|slot| present(slot));
+    let status = match status_group {
+        Some(group) => match read_simple_content(
+            &site,
+            group.child_2.slot(),
+            &ContentSlot {
+                missing: "Missing media status in @Media header",
+                suggested_fix: Some(MEDIA_FIX),
+            },
+            errors,
+        ) {
+            Ok(text) => Some(MediaStatus::from_text(&text)),
+            Err(refused) => return refused.into_header(&site),
+        },
         None => None,
     };
-    if let Some(group) = &status_group {
-        surface_unexpected(&group.unexpected, source, errors);
+    if let Some(group) = status_group {
+        surface_displaced(&group.unexpected, "media_contents", source, errors);
     }
 
-    surface_unexpected(&contents_children.unexpected, source, errors);
+    surface_displaced(
+        &contents_children.unexpected,
+        "media_contents",
+        source,
+        errors,
+    );
 
     // The grammar stops the filename at the comma, so a well-formed parse
     // always satisfies the invariant. Going through the checked constructor
@@ -274,7 +179,7 @@ pub fn parse_media_header(
     let filename = match MediaFilename::parse(&filename) {
         Ok(filename) => filename,
         Err(err) => {
-            return unknown_media_header(node, source, format!("Invalid @Media filename: {err}"));
+            return site.unknown(format!("Invalid @Media filename: {err}"), Some(MEDIA_FIX));
         }
     };
 

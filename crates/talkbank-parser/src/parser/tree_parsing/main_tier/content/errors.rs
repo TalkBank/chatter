@@ -11,7 +11,7 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::node_types::{CONTENT_ITEM, LINKER_QUICK_UPTAKE, TAB, WHITESPACES};
-use crate::parser::tree_parsing::parser_helpers::{find_child_by_kind, surface_unexpected};
+use crate::parser::tree_parsing::parser_helpers::{find_child_by_kind, surface_displaced};
 use talkbank_model::chars::{LEFT_SINGLE_QUOTE, RIGHT_SINGLE_QUOTE};
 use tree_sitter::Node;
 
@@ -85,18 +85,21 @@ pub(crate) fn classify_main_tier_recovery(
 /// `region` rather than generically.
 ///
 /// One owner for all nine main-tier sinks. Before this, exactly one of them
-/// branched on `is_error()` and the other eight handed everything to
-/// [`surface_unexpected`], which maps every ERROR to E316 regardless of where
-/// it was found. That is the affordance inversion this module exists to remove:
-/// the region-blind call was the short one, so it stayed the default, and the
-/// region-aware handling was a hand-written special case at the single site
-/// whose failure someone had happened to notice.
+/// branched on `is_error()` and the other eight handed everything to the
+/// region-blind free function, which mapped every ERROR to E316 regardless of
+/// where it was found. That is the affordance inversion this module exists to
+/// remove: the region-blind call was the short one, so it stayed the default,
+/// and the region-aware handling was a hand-written special case at the single
+/// site whose failure someone had happened to notice.
 ///
-/// Non-ERROR unexpected children still go to [`surface_unexpected`]: they are
-/// not recovery nodes and no region-specific classification applies to them.
+/// Non-ERROR unexpected children still go to [`surface_displaced`], at
+/// `context` (the calling carrier's own grammar rule name): they are not
+/// recovery nodes and no region-specific classification applies to them, only
+/// the ordinary well-formed-displaced-node report.
 pub(crate) fn surface_main_tier_sink(
     unexpected: &[Node],
     region: MainTierRegion,
+    context: &str,
     source: &str,
     errors: &impl ErrorSink,
 ) {
@@ -104,7 +107,7 @@ pub(crate) fn surface_main_tier_sink(
         if node.is_error() {
             errors.report(classify_main_tier_recovery(*node, source, region));
         } else {
-            surface_unexpected(std::slice::from_ref(node), source, errors);
+            surface_displaced(std::slice::from_ref(node), context, source, errors);
         }
     }
 }
@@ -307,6 +310,18 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         );
     }
 
+    // E312 / E313: a bracket or parenthesis opened and never closed, the
+    // shared pattern the generic analyzer also reads. After the shapes a
+    // closed-or-not bracket cannot be confused with (a replacement `[:`,
+    // quadruple nesting, `[@`) and before the fragment arms below, which
+    // would otherwise call a lone `[` or an unclosed `[x 3` a parse failure
+    // of an annotation that was never finished.
+    if let Some(unclosed) =
+        crate::parser::tree_parsing::helpers::UnclosedDelimiter::in_error_text(error_text)
+    {
+        return unclosed.into_diagnostic(error_node, error_text, "main tier content");
+    }
+
     // Repetition count [x N] or broken bracket annotation fragment.
     // Tree-sitter splits ERROR nodes, so we often get just " [" as the fragment
     // when the real issue is an unrecognized [x N] or [/] etc.
@@ -408,16 +423,10 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         if let Some(code_token) = dedicated::leading_postfix_annotation(error_text.trim_start())
             && dedicated::at_main_tier_content_start(source, error_node.start_byte())
         {
-            return ParseError::new(
-                ErrorCode::AnnotationAtUtteranceStart,
-                Severity::Error,
+            return dedicated::annotation_at_utterance_start(
+                code_token,
                 SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
                 ErrorContext::new(error_text, 0..error_text.len(), error_text),
-                format!("Annotation '{code_token}' at utterance start has no content to attach to"),
-            )
-            .with_suggestion(
-                "Retraces, overlap markers, replacements, and quotation codes scope over the \
-                 material BEFORE them; put the annotated content first, or remove the code",
             );
         }
     }
@@ -505,6 +514,21 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
 /// happens to contain a curly single), so every E256 carries the same
 /// message and suggestion. CHAT requires the ASCII apostrophe; mirrors CLAN
 /// CHECK 138 (U+2019) and 139 (U+2018).
+/// E330 at a node that sits where a bracketed construct (angle group,
+/// quotation, pho or sin group) expected a delimiter, its contents or its
+/// annotations: the construct has lost its shape there. One owner for the
+/// message-only reporter the four construct parsers had each written per
+/// position.
+pub(crate) fn report_tree_shape(bad: Node, message: String, source: &str, errors: &impl ErrorSink) {
+    errors.report(ParseError::new(
+        ErrorCode::TreeParsingError,
+        Severity::Error,
+        SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
+        ErrorContext::new(source, bad.start_byte()..bad.end_byte(), ""),
+        message,
+    ));
+}
+
 pub(crate) fn illegal_curly_quote_error(node: Node, source: &str) -> ParseError {
     ParseError::new(
         ErrorCode::IllegalCurlyQuote,

@@ -42,11 +42,21 @@ pub(crate) fn parse_pause_node(
         "(..)" => ParseOutcome::parsed(Pause::new(PauseDuration::Medium).with_span(span)),
         "(...)" => ParseOutcome::parsed(Pause::new(PauseDuration::Long).with_span(span)),
         _ => {
-            // Timed pause: strip surrounding parens and extract duration text
-            let duration_text = text
-                .strip_prefix('(')
-                .and_then(|s| s.strip_suffix(')'))
-                .unwrap_or(text);
+            // Timed pause: the duration between the parentheses the token
+            // guarantees (`/\(\d+(?::\d+)?\.\d*\)/`). A token without them
+            // does not fit its own grammar and is reported as the traversal's
+            // failure, never read whole as a duration.
+            let Some(duration_text) = text.strip_prefix('(').and_then(|s| s.strip_suffix(')'))
+            else {
+                errors.report(ParseError::new(
+                    ErrorCode::TreeParsingError,
+                    Severity::Error,
+                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                    ErrorContext::new(source, node.start_byte()..node.end_byte(), text),
+                    "pause_token is not enclosed in parentheses",
+                ));
+                return ParseOutcome::rejected();
+            };
 
             if duration_text.is_empty() {
                 errors.report(ParseError::new(

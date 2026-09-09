@@ -42,20 +42,42 @@ const MEDIA_BOUNDS_TOLERANCE_MS: u64 = 1;
 ///   syllabification tiers keep attached to a phone unit (e.g. `ˈa:Np:C`);
 /// - syllable-boundary notation: Phon's `^` (U+005E) between syllables
 ///   (e.g. `ˈbɔ^hɔɪ`) and the IPA syllable break `.` (U+002E)
-///   (e.g. `ko.çɔ̃`), both attested at scale in the wild phon corpora.
+///   (e.g. `ko.çɔ̃`), both attested at scale in the wild phon corpora;
+/// - the linking tie `‿` (U+203F), which Phon writes in the SOURCE word
+///   between two symbols that form one segment (`p‿f`, `t‿s`) or across a
+///   boundary that is not a break (`m‿m`, `a‿a`); it is a sibling of the
+///   phones on either side, never a phone, and the alignment has no column
+///   for it. Attested 336 times across two PhonBank corpora (2026-09-02
+///   inventory, TalkBank/chatter#4), every one on `%pho`; until 2026-09-09
+///   each such word was a spurious E741.
 ///
 /// The phone-by-phone alignment reconstruction is therefore compared modulo
 /// these markers; otherwise a source word like `ˈbɔ^hɔɪ` would never match its
-/// marker-free segmental alignment `b↔…,ɔ↔…,h↔…,ɔɪ↔…`. No phone is itself a
-/// stress or boundary character, so stripping cannot mask a real segment
-/// mismatch.
+/// marker-free segmental alignment `b↔…,ɔ↔…,h↔…,ɔɪ↔…`. The stress and
+/// boundary marks are stripped from both sides, as they always were; the tie
+/// is stripped from the source word only, so a pair side that carries one
+/// (`p‿f↔p‿f`, which is not a bare segment) still mismatches rather than
+/// being read as `pf`. Nothing typed proves a pair side is a bare segment
+/// (`AlignmentPair` holds `NonEmptyString`s); that proof, and the code it
+/// would report under, is recorded work, not this change.
 const SEGMENT_COMPARISON_IGNORED: [char; 4] = ['\u{02C8}', '\u{02CC}', '\u{005E}', '\u{002E}'];
+
+/// The linking tie, ignored on the source word only (see above).
+const LINKING_TIE: char = '\u{203F}';
 
 /// Remove stress and syllable-boundary notation for segmental reconstruction
 /// comparison.
 fn strip_nonsegmental(s: &str) -> String {
     s.chars()
         .filter(|c| !SEGMENT_COMPARISON_IGNORED.contains(c))
+        .collect()
+}
+
+/// The source word as the alignment sees it: stress, boundary notation and
+/// the linking tie removed.
+fn strip_source_notation(s: &str) -> String {
+    s.chars()
+        .filter(|c| !SEGMENT_COMPARISON_IGNORED.contains(c) && *c != LINKING_TIE)
         .collect()
 }
 
@@ -284,7 +306,7 @@ fn check_phoaln_reconstruction(
     errors: &impl ErrorSink,
 ) {
     if let Some(expected) = expected
-        && strip_nonsegmental(reconstructed) != strip_nonsegmental(expected)
+        && strip_nonsegmental(reconstructed) != strip_source_notation(expected)
     {
         errors.report(
             ParseError::at_span(

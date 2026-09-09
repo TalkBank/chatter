@@ -7,6 +7,7 @@
 //! - `node_dispatch` - Node kind dispatch helpers (separators, CA elements)
 //! - `supertypes` - Supertype checking for grammar supertypes
 //! - `cst_assertions` - CST structure validation (REQUIRED for robustness)
+//! - `marked_token` - The text of a token past the marker its rule guarantees
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -18,33 +19,39 @@
 pub(crate) mod cst_assertions;
 pub(crate) mod error_analysis;
 pub(crate) mod error_checking;
+mod header_slots;
+mod marked_token;
 pub(crate) mod node_dispatch;
 pub(crate) mod supertypes;
 
 // Re-export commonly used functions
 #[allow(unused_imports)]
 pub(crate) use cst_assertions::{
-    assert_child_count_exact, assert_child_count_min, assert_child_kind, assert_child_kind_one_of,
-    check_not_missing, expect_child, expect_child_at, extract_utf8_text, find_child_by_kind,
+    SlotState, assert_child_count_exact, assert_child_kind, check_not_missing, expect_child,
+    expect_delimiter, expect_present, expect_structure, extract_utf8_text, find_child_by_kind,
     present,
 };
-pub(crate) use error_analysis::{
-    analyze_dependent_tier_error, analyze_error_node, analyze_line_error,
-};
+pub(crate) use error_analysis::{analyze_dependent_tier_error, analyze_error_node};
 pub(crate) use error_checking::{
-    check_for_errors_recursive, collect_recovery_nodes, surface_unexpected,
+    check_for_errors_recursive_with_context, collect_recovery_nodes, surface_displaced,
 };
+pub(crate) use header_slots::{
+    ContentSlot, HeaderSite, Refused, read_simple_content, unknown_header_from_node,
+};
+pub(crate) use marked_token::after_marker;
 // `parse_separator_node` is deliberately NOT re-exported. Removing the
 // unreachable `separator` arm from `base/mod.rs` on 2026-08-20 revealed it has
 // no production caller and had not had one: `base_content_item` has no
 // `separator` alternative, so that arm was dead and was hiding the fact. It
 // still has its own tests in `node_dispatch::separator`; deleting it is a
 // separate decision from this one.
-pub(crate) use node_dispatch::{parse_pause_node, parse_separator_like};
-// parse_ca_element_node, parse_ca_delimiter_node removed, word-internal CA markers
-// are now parsed by the direct parser (Phase 2 word coarsening)
-#[allow(unused_imports)]
-pub(crate) use supertypes::{
-    is_base_annotation, is_ca_delimiter, is_ca_element, is_dependent_tier, is_header, is_linker,
-    is_overlap_point_marker, is_pre_begin_header, is_terminator,
+// The CA helpers dispatch through the GENERATED `from_char` tables. The word
+// converter is their caller: until 2026-09-09 it carried its own copies of
+// both tables while this file said the helpers had been removed, and the
+// module holding them was not even declared, so the generated tables had no
+// caller and the hand-written copies had no check.
+pub(crate) use node_dispatch::{
+    parse_ca_delimiter_node, parse_ca_element_node, parse_pause_node, parse_separator_like,
 };
+#[allow(unused_imports)]
+pub(crate) use supertypes::{is_header, is_linker, is_pre_begin_header};

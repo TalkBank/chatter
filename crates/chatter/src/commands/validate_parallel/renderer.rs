@@ -427,14 +427,15 @@ impl ValidationRenderer for JsonRenderer {
 fn status_is_cache_hit(status: &FileStatus) -> bool {
     matches!(
         status,
-        FileStatus::Valid { cache_hit: true }
-            | FileStatus::Invalid {
-                cache_hit: true,
-                ..
-            }
-            | FileStatus::RoundtripFailed {
-                cache_hit: true,
-                ..
-            }
+        FileStatus::Valid {
+            cache_hit: true,
+            ..
+        } | FileStatus::Invalid {
+            cache_hit: true,
+            ..
+        } | FileStatus::RoundtripFailed {
+            cache_hit: true,
+            ..
+        }
     )
 }

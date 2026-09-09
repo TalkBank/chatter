@@ -19,28 +19,15 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation,
 };
 use crate::generated_traversal::{
-    AsRawNode, MainTierNode, NodeSlot, SlotValue, UtteranceChild1Choice, UtteranceNode,
+    AsRawNode, MainTierNode, NoChild, SlotValue, SlotView, UtteranceChild1Choice, UtteranceNode,
     extract_utterance,
 };
 use crate::model::{ParseHealth, ParseHealthTier, Utterance};
-use crate::parser::TreeSitterParser;
 use crate::parser::tree_parsing::main_tier::structure::convert_main_tier_node;
 use crate::parser::tree_parsing::parser_helpers::{
-    analyze_dependent_tier_error, check_for_errors_recursive, surface_unexpected,
+    analyze_dependent_tier_error, surface_displaced,
 };
 use talkbank_model::ParseOutcome;
-
-impl TreeSitterParser {
-    /// Parse a CST utterance node into a model Utterance, streaming errors.
-    pub fn parse_utterance_cst(
-        &self,
-        utt_node: UtteranceNode<'_>,
-        input: &str,
-        errors: &impl ErrorSink,
-    ) -> ParseOutcome<Utterance> {
-        parse_utterance_node(utt_node, input, errors)
-    }
-}
 
 /// Builds one `Utterance` from a CST utterance subtree and attaches dependent tiers.
 ///
@@ -86,10 +73,10 @@ pub fn parse_utterance_node(
         }
         // A MISSING placeholder of a kind `main_tier` does not name is reported
         // as an unexpected child: there is no main tier to build either way.
-        SlotValue::Unexpected(node) | SlotValue::UnclassifiedPlaceholder(node) => {
+        SlotValue::UnclassifiedPlaceholder(node) => {
             report_unexpected_utterance_child(node, input, errors, &mut parse_health);
         }
-        SlotValue::Absent => {
+        SlotValue::Absent(NoChild) => {
             // No main-tier child at all: nothing to build. The utterance is
             // rejected below, matching the old loop which left
             // `utterance_builder == None` when no `main_tier` child appeared.
@@ -104,8 +91,8 @@ pub fn parse_utterance_node(
     // `unexpected` sink instead of becoming a Vec element) but are handled
     // explicitly so the match stays exhaustive without a silent `_`-drop.
     for element in children.child_1.slot() {
-        match element.slot() {
-            NodeSlot::Present(tier_choice) => {
+        match element.slot().view() {
+            SlotView::Present(tier_choice) => {
                 // By value, in and out: there is no window in which the
                 // utterance exists only inside this call.
                 utterance_builder = attach_dependent_tier_child(
@@ -123,16 +110,13 @@ pub fn parse_utterance_node(
             // (verified via `tree-sitter parse`). The arm is kept for
             // exhaustiveness: taint the alignment domains defensively; the
             // whole-tree recovery backstop emits the E342 for the MISSING node.
-            NodeSlot::Missing(_) => {
+            SlotView::Missing(_) => {
                 parse_health.taint_all_alignment_dependents();
             }
-            NodeSlot::Error(error_node) => {
-                handle_utterance_error_node(*error_node, input, errors, &mut parse_health);
+            SlotView::Error(error_node) => {
+                handle_utterance_error_node(error_node, input, errors, &mut parse_health);
             }
-            NodeSlot::Unexpected(node) => {
-                report_unexpected_utterance_child(*node, input, errors, &mut parse_health);
-            }
-            NodeSlot::Absent => {}
+            SlotView::Absent(NoChild) => {}
         }
     }
 
@@ -144,7 +128,7 @@ pub fn parse_utterance_node(
     // claim over `tier_body`'s sink turned out to be false the moment a
     // generator fix changed where recovery nodes land. Load-bearing
     // once the whole-tree backstop is deleted (Task D).
-    surface_unexpected(&children.unexpected, input, errors);
+    surface_displaced(&children.unexpected, "utterance", input, errors);
 
     // The phase ends here: the construction wrapper is unwrapped exactly once,
     // where the finished utterance leaves this function.
@@ -233,12 +217,10 @@ impl UtteranceUnderConstruction {
 /// into its concrete subtype by `extract_utterance`).
 ///
 /// It maps the tier to its alignment domain for taint via the typed
-/// [`parse_health_tier_for`] (replacing the removed `classify_dependent_tier_node`
-/// `node.kind()` dispatch), walks its children for parse errors, attaches it via
-/// the now-typed [`parse_and_attach_dependent_tier`] (only once a main tier has
-/// been built, via `utterance_builder.take()`), and taints the matching alignment
-/// domain when the tier had parse errors. Behavior is byte-identical to the
-/// pre-migration hand-walk.
+/// [`parse_health_tier_for`], attaches it via the typed
+/// [`parse_and_attach_dependent_tier`] (only once a main tier has been built),
+/// and taints the matching alignment domain when the attach reported an
+/// error.
 fn attach_dependent_tier_child(
     utterance: Option<UtteranceUnderConstruction>,
     choice: UtteranceChild1Choice,
@@ -246,28 +228,16 @@ fn attach_dependent_tier_child(
     errors: &impl ErrorSink,
     parse_health: &mut ParseHealth,
 ) -> Option<UtteranceUnderConstruction> {
-    let tier_node = choice.raw_node();
     let mut tier_had_parse_errors = false;
     let dependent_tier = parse_health_tier_for(&choice, input);
 
-    let mut dep_cursor = tier_node.walk();
-    for dep_child in tier_node.children(&mut dep_cursor) {
-        if dep_child.is_error() {
-            errors.report(analyze_dependent_tier_error(dep_child, input));
-            tier_had_parse_errors = true;
-        } else {
-            // check_for_errors_recursive needs to be converted to use ErrorSink
-            let mut temp_errors = Vec::new();
-            check_for_errors_recursive(dep_child, input, &mut temp_errors);
-            if has_actual_errors(&temp_errors) {
-                tier_had_parse_errors = true;
-            }
-            errors.report_all(temp_errors);
-        }
-    }
-
-    // The tier-child error walk above runs whether or not there is an utterance,
-    // which is why it is not gated on one. The ATTACH is.
+    // The tier's own recovery nodes are reported by the typed dispatch below
+    // (each tier kind's `report_tier_parse_error`, and the tier parser's own
+    // diagnostics), and whatever no region reports, the whole-tree backstop
+    // does. Until 2026-09-08 this function walked the tier's children first
+    // and reported every ERROR and MISSING node itself, so a `%wor` line with
+    // an unparsable word carried the same E316 twice, at the same span. With
+    // no main tier to attach to, the backstop is the reporter.
     let utterance = utterance.map(|UtteranceUnderConstruction(utt)| {
         let tier_errors = ErrorCollector::new();
         let utt = parse_and_attach_dependent_tier(utt, choice, input, &tier_errors);
@@ -289,13 +259,18 @@ fn attach_dependent_tier_child(
     utterance
 }
 
-/// Run the recovery analysis for an `ERROR` utterance child.
+/// Report an `ERROR` that sits directly under the utterance, at the main-tier
+/// position or in the dependent-tier repeat.
 ///
-/// This is the body of the pre-migration `utt_child.is_error()` branch, unchanged
-/// byte-for-byte (the form-type / unclosed-replacement / `%`-tier / unrecognized
-/// classification and the matching taint). Text-hacking removal is a separate
-/// paused workstream; this dispatch only routes the typed `NodeSlot::Error` arms
-/// (at the main-tier position and within the dependent-tier repeat) to it.
+/// Two kinds arrive here. A `%` line the grammar could not shape is reported
+/// by the dependent-tier analyzer and taints the tier it names (or every
+/// alignment tier when the label is unreadable). Anything else is reported
+/// as unrecognized and taints the main tier. This handler used to scan the
+/// ERROR's text for a bare `@` (E202) and an unclosed `[:` (E311) as well;
+/// both are the content analyzer's (`main_tier/content/errors.rs`), which
+/// reports them at the word where they occur before an ERROR could ever
+/// reach this level, so those scans had been dead since the content analyzer
+/// took them, and text-classifying an ERROR is the banned pattern besides.
 fn handle_utterance_error_node(
     error_node: tree_sitter::Node,
     input: &str,
@@ -306,47 +281,7 @@ fn handle_utterance_error_node(
     let error_end = error_node.end_byte();
     let error_text = &input[error_start..error_end];
 
-    if let Some(relative_at) = find_missing_form_type_offset(error_text) {
-        let at_start = error_start + relative_at;
-        let at_end = at_start + 1;
-        errors.report(
-            ParseError::new(
-                ErrorCode::MissingFormType,
-                Severity::Error,
-                SourceLocation::from_offsets(at_start, at_end),
-                ErrorContext::new(input, at_start..at_end, "@"),
-                "Missing form type after @",
-            )
-            .with_suggestion("Add a form type after @ (e.g., @b for babbling)"),
-        );
-    } else if let Some((relative_start, relative_end)) =
-        find_unclosed_replacement_offset(error_text)
-    {
-        let bracket_start = error_start + relative_start;
-        let bracket_end = error_start + relative_end;
-        errors.report(
-            ParseError::new(
-                ErrorCode::UnexpectedNode,
-                Severity::Error,
-                SourceLocation::from_offsets(bracket_start, bracket_end),
-                ErrorContext::new(
-                    input,
-                    bracket_start..bracket_end,
-                    &input[bracket_start..bracket_end],
-                ),
-                "Unclosed replacement bracket",
-            )
-            .with_suggestion("Close replacement brackets and provide replacement text"),
-        );
-    // NOTE (2026-06-25): the former `error_text.contains("[:]")` (empty
-    // replacement) arm was removed here. An empty replacement `word [:]`
-    // PARSES into a structured `replacement` node (zero-width body with a
-    // MISSING word_segment); the typed replacement path emits E376 and the
-    // MISSING slot emits E342. No utterance-level ERROR node ever carries
-    // `[:]` text, so this scan was DEAD. Classifying ERROR-node text is the
-    // banned anti-pattern (root CLAUDE.md "CST Traversal Rules").
-    // Regression: crates/talkbank-parser/tests/e208_empty_replacement_regression.rs.
-    } else if matches!(error_text.chars().next(), Some('%')) {
+    if matches!(error_text.chars().next(), Some('%')) {
         errors.report(analyze_dependent_tier_error(error_node, input));
         match classify_percent_error_text(error_text) {
             Some(tier) => parse_health.taint(tier),
@@ -433,48 +368,6 @@ fn dependent_tier_label_bytes(text: &str) -> Option<&[u8]> {
     Some(&bytes[1..end])
 }
 
-/// Find the byte offset of an `@` marker that is missing its form-type suffix.
-fn find_missing_form_type_offset(error_text: &str) -> Option<usize> {
-    let bytes = error_text.as_bytes();
-
-    for idx in 0..bytes.len() {
-        if bytes[idx] != b'@' {
-            continue;
-        }
-
-        let missing = match bytes.get(idx + 1).copied() {
-            None => true,
-            Some(next) if next.is_ascii_whitespace() => true,
-            Some(b'.' | b',' | b';' | b'!' | b'?' | b')' | b']') => true,
-            _ => false,
-        };
-
-        if missing {
-            return Some(idx);
-        }
-    }
-
-    None
-}
-
-/// Find the span of an unclosed `[:` replacement marker.
-fn find_unclosed_replacement_offset(error_text: &str) -> Option<(usize, usize)> {
-    let bytes = error_text.as_bytes();
-    let mut idx = 0usize;
-
-    while idx + 1 < bytes.len() {
-        if bytes[idx] == b'[' && bytes[idx + 1] == b':' {
-            let has_closing = bytes[idx + 2..].contains(&b']');
-            if !has_closing {
-                return Some((idx, idx + 2));
-            }
-        }
-        idx += 1;
-    }
-
-    None
-}
-
 /// Map a typed dependent-tier choice to its parse-health tier category.
 ///
 /// Replaces the removed `classify_dependent_tier_node` `node.kind()` dispatch: the
@@ -542,34 +435,8 @@ fn classify_x_tier_label(node: tree_sitter::Node, input: &str) -> Option<ParseHe
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        classify_percent_error_text, find_missing_form_type_offset,
-        find_unclosed_replacement_offset,
-    };
+    use super::classify_percent_error_text;
     use crate::model::ParseHealthTier;
-
-    #[test]
-    fn missing_form_type_offset_detects_lone_at() {
-        assert_eq!(find_missing_form_type_offset("hello @ world"), Some(6));
-        assert_eq!(find_missing_form_type_offset("@"), Some(0));
-        assert_eq!(find_missing_form_type_offset("hello@"), Some(5));
-    }
-
-    #[test]
-    fn missing_form_type_offset_skips_valid_marker_prefixes() {
-        assert_eq!(find_missing_form_type_offset("hello@s:eng"), None);
-        assert_eq!(find_missing_form_type_offset("word@b"), None);
-    }
-
-    #[test]
-    fn unclosed_replacement_offset_detects_open_bracket_without_close() {
-        assert_eq!(
-            find_unclosed_replacement_offset("hello [: world"),
-            Some((6, 8))
-        );
-        assert_eq!(find_unclosed_replacement_offset("[:]"), None);
-        assert_eq!(find_unclosed_replacement_offset("hello [: fixed]"), None);
-    }
 
     #[test]
     fn classify_percent_error_text_accepts_malformed_labels_without_colon() {

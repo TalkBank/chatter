@@ -35,8 +35,6 @@ pub(crate) use comma::{
     check_comma_after_non_spoken, check_comma_glued_to_next, check_consecutive_commas,
 };
 pub(crate) use gra_relation_vocabulary::check_gra_relation_vocabulary;
-#[cfg(test)]
-pub(crate) use overlap::check_overlap_index_values;
 pub(crate) use overlap::check_overlap_markers;
 pub(crate) use phon_xtier::check_phon_xtiers;
 pub(crate) use quotation::check_quotation_balance;

@@ -13,7 +13,6 @@ SECURITY.md
 book/src/SUMMARY.md
 book/src/architecture/algorithms.md
 book/src/architecture/bullet-validation.md
-book/src/architecture/chat-model/wide-structs.md
 book/src/architecture/cli-startup-and-stack.md
 book/src/architecture/crate-reference.md
 book/src/architecture/errors-and-validation/error-diagnostics-ux.md

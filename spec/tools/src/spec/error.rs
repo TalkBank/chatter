@@ -23,10 +23,11 @@ use super::metadata::{SpecDescription, SpecErrorCode, SpecLevel, Status};
 struct CodeFacts {
     kind: ErrorKind,
     status: Status,
+    rules: talkbank_spec_vocabulary::frontmatter::RuleProfile,
 }
 
 impl CodeFacts {
-    /// Take the two facts a spec needs from a registry entry.
+    /// Take the facts a spec needs from a registry entry.
     ///
     /// Private, and takes a `&CodeEntry`, so the only way to reach one is to
     /// have resolved a code against the registry.
@@ -34,6 +35,7 @@ impl CodeFacts {
         Self {
             kind: entry.kind(),
             status: entry.status(),
+            rules: entry.rules(),
         }
     }
 }
@@ -314,6 +316,14 @@ pub struct ErrorExample {
     /// free-text code list whose absence meant inheritance) is on
     /// [`Claim`](talkbank_spec_vocabulary::frontmatter::Claim).
     pub claim: talkbank_spec_vocabulary::frontmatter::Claim,
+    /// The validation rules this example runs under.
+    ///
+    /// Resolved at LOAD from the registry entry for the spec's own code, so
+    /// every example of an opt-in rule runs under it and none can forget to
+    /// say so. A claim is only about the rule set that was actually in force,
+    /// and `legal` under a rule set that skips the rule is vacuous, which is
+    /// why this cannot be a per-example declaration that an author omits.
+    pub rules: talkbank_spec_vocabulary::frontmatter::RuleProfile,
     /// The fixture path the example was taken from, as its `**Source**` line
     /// gives it, when it has one.
     ///
@@ -460,6 +470,7 @@ impl ErrorSpec {
                 input: example.chat.into(),
                 level: example.level,
                 claim: example.claim,
+                rules: code_facts.rules,
                 source: example.source,
             })
             .collect();
@@ -475,6 +486,28 @@ impl ErrorSpec {
             },
             source_path: path.to_path_buf(),
         })
+    }
+
+    /// The rules this spec's code runs under.
+    ///
+    /// # Why anything renders from this
+    ///
+    /// A code whose rule is opt-in is `implemented`, because the rule exists
+    /// and fires. Published as a bare "active in the validator" it reads as
+    /// false to anyone who runs `chatter validate` and sees nothing, which is
+    /// the same sentence that made `not_implemented` look like the honest
+    /// status for eight such codes. So the page says which option the check
+    /// needs, DERIVED from the registry rather than written out beside it,
+    /// where it would be one more paragraph to rot.
+    ///
+    /// This was a scan over the examples' own declarations for an afternoon,
+    /// unioning the profiles of every example that positively asserts the own
+    /// code. That reconstructed a per-code fact from per-example data, and it
+    /// could report "requires --strict-linkers" for a code with one default
+    /// demonstration and one strict one, which is false for that code.
+    #[must_use]
+    pub fn rules(&self) -> talkbank_spec_vocabulary::frontmatter::RuleProfile {
+        self.code_facts.rules
     }
 }
 

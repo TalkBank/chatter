@@ -232,8 +232,21 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_gra_tier(input);
-        ParseOutcome::parsed(fragment_source.rebase(ModelGraTier::from(&parsed)))
+        let Some(parsed) = crate::parser::parse_gra_tier(input) else {
+            // Declined, not lowered to an empty tier. This used to hand the
+            // caller a `%gra` tier of no relations and call it a parse.
+            return ParseOutcome::rejected();
+        };
+        let source = crate::source_text::SourceText::new(input);
+        // The REBASING sink, not the caller's raw one. `rebase` moves the
+        // model; a diagnostic already handed to a sink is past moving, so a
+        // span computed against the fragment stays fragment-local and points
+        // at the wrong bytes of the file. Every other entry point in this file
+        // wraps first, and so does the canonical backend.
+        let diagnostics = fragment_source.error_sink(errors);
+        ParseOutcome::parsed(fragment_source.rebase(
+            crate::convert::gra_tier_to_model(&parsed, source, &diagnostics).tier_without_health(),
+        ))
     }
 
     fn parse_gra_relation(
@@ -247,9 +260,22 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
+        let source = crate::source_text::SourceText::new(input);
+        let diagnostics = fragment_source.error_sink(errors);
         match crate::parser::parse_gra_relation(input) {
+            // A relation the model cannot hold is REJECTED here too, with the
+            // diagnostic already reported, rather than lowered with a
+            // fabricated head. The fragment API and the whole-file path answer
+            // alike in code, in drop behaviour AND in POSITION: the sink is the
+            // rebasing one, so the span is the caller's offset rather than the
+            // fragment's own.
             Some(parsed) => {
-                ParseOutcome::parsed(fragment_source.rebase(GrammaticalRelation::from(&parsed)))
+                match crate::convert::gra_relation_to_model(&parsed, source, &diagnostics) {
+                    ParseOutcome::Parsed(relation) => {
+                        ParseOutcome::parsed(fragment_source.rebase(relation))
+                    }
+                    ParseOutcome::Rejected => ParseOutcome::rejected(),
+                }
             }
             None => ParseOutcome::rejected(),
         }
@@ -488,11 +514,26 @@ impl ChatParser for Re2cParser {
         };
         let parsed = crate::parser::parse_chat_file(input);
         let source = crate::source_text::SourceText::new(parsed.source);
+        // The rebasing sink, for the reason the two `%gra` entry points above
+        // give: this path emitted no diagnostics at all before the `%gra`
+        // lowering became fallible, so passing the raw sink introduced the
+        // fragment-local span rather than inheriting it.
+        let diagnostics = fragment_source.error_sink(errors);
+        // Named rather than passed inline as `&mut ParseHealthState::Clean`,
+        // for the reason `LoweredGra::tier_without_health` gives: a fragment
+        // has no utterance, so recovery has nowhere to be recorded and nothing
+        // downstream that could read it. The rejection itself still reaches
+        // `diagnostics`. A binding a reader can see beats a temporary.
+        let mut no_utterance_health = talkbank_model::model::ParseHealthState::Clean;
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line
                 && let Some(tier) = u.dependent_tiers.first()
-                && let Some(model_tier) =
-                    crate::convert::dependent_tier_to_model(&tier.tier, source)
+                && let Some(model_tier) = crate::convert::dependent_tier_to_model(
+                    &tier.tier,
+                    source,
+                    &diagnostics,
+                    &mut no_utterance_health,
+                )
             {
                 return ParseOutcome::parsed(fragment_source.rebase(model_tier));
             }

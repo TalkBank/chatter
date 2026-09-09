@@ -31,6 +31,11 @@ fn wrap_for_chat_file_parse(example: &ConstructExample, level: &str) -> String {
                 format!("@UTF8\n@Begin\n{}\n@End", example.input)
             }
         }
+        // A pre-`@Begin` header belongs between `@UTF8` and `@Begin`; after
+        // `@Begin` it parses as `Header::Unknown` and the construct test passes
+        // without reaching the header's parser, which is what the first
+        // `pid_simple` test did.
+        "pid_header" => format!("@UTF8\n{}\n@Begin\n@End", example.input),
         // Main tier / utterance fragments: input is already a complete tier line.
         "main_tier" | "utterance" => {
             format!("{chat_prelude}\n{}\n@End", example.input)
@@ -213,6 +218,25 @@ mod tests {
         assert!(wrapped.contains("@ID:\teng|corpus|CHI"));
         assert!(wrapped.contains("*CHI:\t⌈0 &=laughter⌉ ."));
         assert!(wrapped.contains("@End"));
+    }
+
+    /// A pre-`@Begin` header is wrapped BEFORE `@Begin`, where its parser
+    /// runs; after it the line is an unknown header and the test is vacuous.
+    #[test]
+    fn a_pre_begin_header_is_wrapped_before_begin() {
+        let example = ConstructExample {
+            name: "pid_simple".to_string(),
+            input: "@PID:\t11312/a-00013825-1".to_string(),
+            description: "pre-begin header".to_string(),
+            expected: ExpectedParseTree {
+                cst: String::new(),
+                wrapped_input: None,
+                full_cst: None,
+            },
+            input_type: "pid_header".to_string(),
+        };
+        let wrapped = wrap_for_chat_file_parse(&example, "header");
+        assert_eq!(wrapped, "@UTF8\n@PID:\t11312/a-00013825-1\n@Begin\n@End");
     }
 
     /// Tests wrap participants header with matching id.

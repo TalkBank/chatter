@@ -3,10 +3,10 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::generated_traversal::{AsRawNode, NamedKind, NodeSlot};
+use crate::generated_traversal::{AsRawNode, ChildSlot, NamedKind, NoChild, SlotView};
 use crate::parser::tree_parsing::bullet_content::parse_bullet_content;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::model::BulletContent;
 use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use tree_sitter::Node;
@@ -90,7 +90,7 @@ fn tier_label(kind: &str) -> &str {
 /// the sibling carriers `act.rs` / `cod.rs` / gra / pho / sin already surface
 /// theirs.
 ///
-/// `unexpected` is surfaced FIRST via [`surface_unexpected`] (a no-op when
+/// `unexpected` is surfaced FIRST via [`surface_displaced`] (a no-op when
 /// empty, which is every case on valid input: the tier's own body slot below
 /// is the only position that carries content for these grammar rules).
 ///
@@ -121,7 +121,7 @@ fn tier_label(kind: &str) -> &str {
 ///   "no content" rejection.
 fn parse_text_tier_content<'tree, Tier, Body>(
     tier_node: Node<'tree>,
-    body: &NodeSlot<'tree, Body>,
+    body: &ChildSlot<'tree, Body>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -130,17 +130,17 @@ where
     Tier: TextTierBody,
     Body: AsRawNode<'tree>,
 {
-    surface_unexpected(unexpected, source, errors);
+    surface_displaced(unexpected, Tier::KIND, source, errors);
 
-    match body {
-        NodeSlot::Present(text) => parse_bullet_content(text.raw_node(), source, errors),
-        NodeSlot::Missing(node) => parse_bullet_content(*node, source, errors),
-        NodeSlot::Error(node) | NodeSlot::Unexpected(node) => {
-            errors.report(unexpected_node_error(*node, source, Tier::KIND));
+    match body.view() {
+        SlotView::Present(text) => parse_bullet_content(text.raw_node(), source, errors),
+        SlotView::Missing(node) => parse_bullet_content(node, source, errors),
+        SlotView::Error(node) => {
+            errors.report(unexpected_node_error(node, source, Tier::KIND));
             report_missing_text_content::<Tier>(tier_node, source, errors);
             BulletContent::empty()
         }
-        NodeSlot::Absent => {
+        SlotView::Absent(NoChild) => {
             report_missing_text_content::<Tier>(tier_node, source, errors);
             BulletContent::empty()
         }
@@ -168,7 +168,7 @@ where
 /// that is present but malformed keeps its existing diagnostics.
 pub(crate) fn parse_optional_text_tier_content<'tree, Tier, Body>(
     tier: Tier,
-    body: &Option<NodeSlot<'tree, Body>>,
+    body: &Option<ChildSlot<'tree, Body>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -186,7 +186,7 @@ where
             parse_text_tier_content::<Tier, Body>(tier_node, slot, unexpected, source, errors)
         }
         None => {
-            surface_unexpected(unexpected, source, errors);
+            surface_displaced(unexpected, Tier::KIND, source, errors);
             BulletContent::empty()
         }
     }

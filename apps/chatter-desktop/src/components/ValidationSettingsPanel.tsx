@@ -54,7 +54,7 @@ export default function ValidationSettingsPanel({ settings, onChange, disabled }
                 onChange({ ...settings, strictLinkers: event.target.checked })
               }
             />
-            Strict cross-utterance linkers (E351-E355)
+            Strict cross-utterance linkers
           </label>
 
           <label>

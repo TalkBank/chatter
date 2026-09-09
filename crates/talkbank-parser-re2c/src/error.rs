@@ -1,62 +1,12 @@
 //! Parse diagnostics and error infrastructure.
 
 use miette::{Diagnostic, SourceSpan};
-use std::collections::BTreeSet;
 use std::fmt;
 use std::ops::Range;
 use thiserror::Error;
 
 /// A span in the source input (byte offsets).
 pub type Span = Range<usize>;
-
-/// Kinds of dependent tiers, for tracking parse health.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TierKind {
-    /// The `%mor` morphology tier.
-    Mor,
-    /// The `%gra` grammatical-relations tier.
-    Gra,
-    /// The `%pho` phonology tier.
-    Pho,
-    /// The `%sin` dependent tier.
-    Sin,
-    /// The `%wor` word-level timing tier.
-    Wor,
-    /// The `%act` actions tier.
-    Act,
-    /// The `%cod` coding tier.
-    Cod,
-    /// The `%com` dependent comment tier.
-    Com,
-    /// Any other or unrecognized dependent tier.
-    Other,
-}
-
-/// Tracks which parts of an utterance failed to parse.
-///
-/// Downstream consumers check this before operating on partial data.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ParseHealth {
-    /// The set of dependent tiers that failed to parse cleanly.
-    pub tainted_tiers: BTreeSet<TierKind>,
-}
-
-impl ParseHealth {
-    /// Mark `tier` as tainted (it failed to parse cleanly).
-    pub fn taint(&mut self, tier: TierKind) {
-        self.tainted_tiers.insert(tier);
-    }
-
-    /// Returns `true` if no tier is tainted.
-    pub fn is_clean(&self) -> bool {
-        self.tainted_tiers.is_empty()
-    }
-
-    /// Returns `true` if the given `tier` is tainted.
-    pub fn is_tainted(&self, tier: TierKind) -> bool {
-        self.tainted_tiers.contains(&tier)
-    }
-}
 
 /// A parse diagnostic with source location.
 #[derive(Debug, Clone, Error, Diagnostic)]

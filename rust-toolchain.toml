@@ -6,7 +6,10 @@
 # clippy-rolling.yml workflow against `@stable`; when that goes red,
 # bump this pin in a focused commit that also fixes the new lints.
 channel = "1.98.0"
-components = ["rustfmt", "clippy"]
+# `llvm-tools` is here for the same reason `targets` is below: coverage is
+# the completeness criterion for the test suite, and a criterion that needs
+# a human to remember a rustup command is one nobody measures.
+components = ["rustfmt", "clippy", "llvm-tools"]
 # Declared so rustup INSTALLS it, rather than a runbook asking a human to
 # remember. `just wasm-check` needs it, and on the 1.98.0 bump a
 # `--profile minimal` install of the new toolchain carried only the host

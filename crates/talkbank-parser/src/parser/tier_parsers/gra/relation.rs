@@ -5,8 +5,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Grammatical_Relations>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
-use crate::generated_traversal::{AsRawNode, GraRelationNode, NodeSlot, extract_gra_relation};
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::generated_traversal::{
+    AsRawNode, GraRelationNode, NoChild, SlotView, extract_gra_relation,
+};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::GrammaticalRelation;
 use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -30,7 +32,7 @@ use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, S
 ///   as `MalformedGrammarRelation` at the field's span), then apply the same
 ///   value checks (index must be a positive 1-indexed integer, head must be a
 ///   non-negative integer, relation name must be non-empty).
-/// - `Missing` / `Error` / `Unexpected` / `Absent`: the field is not a usable
+/// - `Missing` / `Error` / `Absent`: the field is not a usable
 ///   node, which corresponds to the old positional `None` branch (no child at
 ///   that position); report the same `MalformedGrammarRelation` "Missing
 ///   `<field>`" diagnostic at the relation span and reject. These arms are
@@ -45,10 +47,10 @@ pub(super) fn parse_gra_relation(
     let node = typed.raw_node();
     let relation_span = node.start_byte()..node.end_byte();
     let children = extract_gra_relation(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "gra_relation", source, errors);
 
-    let index_text = match children.index.slot() {
-        NodeSlot::Present(index_node) => {
+    let index_text = match children.index.slot().view() {
+        SlotView::Present(index_node) => {
             let field = index_node.raw_node();
             match field.utf8_text(source.as_bytes()) {
                 Ok(text) => text,
@@ -64,7 +66,7 @@ pub(super) fn parse_gra_relation(
                 }
             }
         }
-        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
                 Severity::Error,
@@ -109,8 +111,8 @@ pub(super) fn parse_gra_relation(
         }
     };
 
-    let head_text = match children.head.slot() {
-        NodeSlot::Present(head_node) => {
+    let head_text = match children.head.slot().view() {
+        SlotView::Present(head_node) => {
             let field = head_node.raw_node();
             match field.utf8_text(source.as_bytes()) {
                 Ok(text) => text,
@@ -126,7 +128,7 @@ pub(super) fn parse_gra_relation(
                 }
             }
         }
-        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
                 Severity::Error,
@@ -158,8 +160,8 @@ pub(super) fn parse_gra_relation(
         }
     };
 
-    let relation_text = match children.relation.slot() {
-        NodeSlot::Present(relation_node) => {
+    let relation_text = match children.relation.slot().view() {
+        SlotView::Present(relation_node) => {
             let field = relation_node.raw_node();
             match field.utf8_text(source.as_bytes()) {
                 Ok(text) => text,
@@ -175,7 +177,7 @@ pub(super) fn parse_gra_relation(
                 }
             }
         }
-        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
                 Severity::Error,

@@ -9,4 +9,4 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Phonology_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Model_Phonology>
 
-pub use crate::parser::tier_parsers::pho::{parse_mod_tier_from_unparsed, parse_pho_tier};
+pub use crate::parser::tier_parsers::pho::parse_pho_tier;

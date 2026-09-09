@@ -300,18 +300,19 @@ mod tests {
     #[test]
     fn retraced_words_are_timeable_content() {
         let retraced = Retrace {
-            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(
-                Word::new_unchecked("dog", "dog"),
-            ))]),
+            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
+                "dog",
+            )))]),
             kind: RetraceKind::Full,
             is_group: true,
             span: Span::from_usize(0, 0),
+            marker_span: None,
         };
         let content = vec![
             UtteranceContent::Retrace(Box::new(retraced)),
             // Everything OUTSIDE the retrace is untranscribed, so the retrace
             // is the only thing that can make this utterance timeable.
-            UtteranceContent::Word(Box::new(Word::new_unchecked("xxx", "xxx"))),
+            UtteranceContent::Word(Box::new(Word::simple("xxx"))),
         ];
 
         assert!(has_transcribed_content(&content));
@@ -322,9 +323,9 @@ mod tests {
     #[test]
     fn words_nested_inside_a_bracketed_group_are_timeable_content() {
         let inner = Group {
-            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(
-                Word::new_unchecked("dog", "dog"),
-            ))]),
+            content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
+                "dog",
+            )))]),
             span: Span::from_usize(0, 0),
             trailing_space: None,
         };

@@ -241,16 +241,23 @@ pub fn parse_mor_tier(input: &str) -> MorTier<'_> {
         })
 }
 
-/// Parse a %gra tier body.
-pub fn parse_gra_tier(input: &str) -> GraTier<'_> {
+/// Parse a %gra tier body, or decline it.
+///
+/// `None` when the body will not parse. It used to be
+/// `.unwrap_or_else(|_| GraTier { relations: Vec::new() })`, so a `%gra` line
+/// chumsky rejected outright came back as a tier of NO relations, with no
+/// diagnostic, and the fragment entry point handed that to a caller as a
+/// successful parse. That is the fabricated-value shape this crate's own
+/// `%gra` lowering was cleaned of the day before, one function upstream of it,
+/// and it made the lowering's completeness verdict a lie: zero relations
+/// lowered from zero declared reads as WHOLE.
+pub fn parse_gra_tier(input: &str) -> Option<GraTier<'_>> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_GRA_CONTENT);
     dependent_tiers::gra_tier_parser()
         .parse(tokens.as_slice())
         .into_result()
-        .unwrap_or_else(|_| GraTier {
-            relations: Vec::new(),
-        })
+        .ok()
 }
 
 #[cfg(test)]

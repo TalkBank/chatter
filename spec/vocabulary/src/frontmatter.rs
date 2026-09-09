@@ -29,7 +29,7 @@
 //! not that, and it is the whole metadata half of the format. One schema, two
 //! callers, and `deny_unknown_fields` holds for both.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::registry::{CodeEntry, CodeRegistry, UnregisteredCode};
 use crate::{SpecErrorCode, SpecLevel};
@@ -308,6 +308,180 @@ pub struct ExampleFrontmatter {
     pub notes: Option<BlockText>,
 }
 
+/// Which validation rules an example runs under.
+///
+/// One variant per rule set a spec example may ask for: the default, plus one
+/// for each opt-in option `talkbank_model::RuleSelection` carries. The
+/// mapping to a `RuleSelection` lives in the spec runtime, which is the only
+/// crate that sees both this vocabulary and the model.
+///
+/// # How this stays in step with the model, across a workspace boundary
+///
+/// `RuleSelection::option_count` destructures its own fields with no rest
+/// pattern, so adding an option is a compile error there; raising the count
+/// beside that pattern reddens the model's own `every_option_is_named` until
+/// the option has a name; and the spec runtime asserts that the names every
+/// profile asks for are exactly the names the model offers, which stays red
+/// until a variant here names the new option. So a rule the binary can run
+/// but no example can ask for cannot reach a release, which is the state
+/// eight codes were in before this type existed.
+///
+/// # Written form
+///
+/// ```toml
+/// rules = 'strict_linkers'
+/// ```
+///
+/// Spelled as the option is spelled in `RuleSelection`, not as the CLI flag
+/// is spelled, because the flag is one caller's surface and the option is the
+/// fact.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum RuleProfile {
+    /// Every always-on check and no opt-in check: what `chatter validate`
+    /// runs with no flags.
+    #[default]
+    Default,
+    /// Adds strict cross-utterance linker validation (`--strict-linkers`).
+    ///
+    /// The checks in `validation/cross_utterance` that pair a `+,`, `++` or
+    /// `+"` linker with the terminator it continues. Off by default because
+    /// many existing corpora do not follow the convention.
+    StrictLinkers,
+}
+
+impl RuleProfile {
+    /// Every profile, in declaration order.
+    ///
+    /// NOT a parsing table: [`FromStr`] is a plain match, following `Status`
+    /// in this crate, whose own doc records that a `find` over an array was
+    /// tried and reverted because the array is a second hand-maintained list
+    /// that nothing checks for completeness. This list has a different job,
+    /// and one that arrays can do honestly: it is what the spec runtime
+    /// SWEEPS to prove that every option the model offers is askable, so an
+    /// entry missing from here fails that test rather than silently rejecting
+    /// a spelling.
+    pub const ALL: &'static [Self] = &[Self::Default, Self::StrictLinkers];
+
+    /// The spelling a spec file uses, which is also what `Display` renders.
+    ///
+    /// ONE table, written by `Display` and matched by [`FromStr`], so the
+    /// parser and the reports cannot disagree about what a profile is called.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::StrictLinkers => "strict_linkers",
+        }
+    }
+
+    /// The rules this profile selects.
+    ///
+    /// # One total match, in one place
+    ///
+    /// This is the whole profile-to-rules mapping. It was a pair of string
+    /// tables for an afternoon (a name list here, a name list on
+    /// `RuleSelection`, a fallible lookup joining them) on the belief that
+    /// this crate could not name a model type. It can: both root-workspace
+    /// consumers of this crate already depend on `talkbank-model`, the spec
+    /// workspace already builds it, and nothing in the model names this crate.
+    /// The string version cost `UnknownRuleOption`, two name tables, a
+    /// fallible constructor, a fold repeated at three call sites, and four
+    /// tests that existed only to hold the tables equal. All of it is deleted
+    /// by this signature.
+    ///
+    /// Adding an option to `RuleSelection` is still forced through here: the
+    /// spec runtime asserts `ALL.len()` against the count `RuleSelection`
+    /// derives from destructuring its own fields, so an option no profile
+    /// selects is red.
+    ///
+    /// # Known limit
+    ///
+    /// One variant per option means no example can ask for TWO opt-in options
+    /// at once. There is one option, so the enum is complete today; a second
+    /// makes this field a list rather than a keyword, and the match below is
+    /// where the compiler will say so.
+    #[must_use]
+    pub fn selection(self) -> talkbank_model::RuleSelection {
+        let plain = talkbank_model::RuleSelection::new();
+        match self {
+            Self::Default => plain,
+            Self::StrictLinkers => plain.with_strict_linkers(),
+        }
+    }
+
+    /// The CLI flag that selects this profile's rules, for a reader who has
+    /// to reproduce the example.
+    ///
+    /// # Why the flag is here and not rebuilt from the option name
+    ///
+    /// It was `format!("--{}", name.replace('_', "-"))` in the doc renderer
+    /// for an afternoon: a fourth spelling of one fact, and the only one no
+    /// test compared to anything, so renaming the flag would have left every
+    /// generated error page advertising a flag that does not exist. Naming it
+    /// here puts it in the same table as everything else about a profile, and
+    /// `every_rules_profile_flag_is_a_flag_this_binary_accepts`, in the CLI
+    /// crate's own integration tests, runs the binary with each flag and
+    /// holds the table to clap. That name is checked: the doc claimed a test
+    /// that did not exist for an hour, which is this same defect one level up.
+    ///
+    /// `None` for the default profile, which needs no flag: that is the
+    /// difference between "run it plainly" and "run it with nothing", and a
+    /// renderer must not print an empty flag for the first.
+    #[must_use]
+    pub const fn cli_flag(self) -> Option<&'static str> {
+        match self {
+            Self::Default => None,
+            Self::StrictLinkers => Some("--strict-linkers"),
+        }
+    }
+
+    /// Is this the default rule set?
+    ///
+    /// Asked by the manifest's serializer, which omits the default so that
+    /// four hundred entries do not each carry the same word.
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
+        matches!(self, Self::Default)
+    }
+}
+
+impl std::str::FromStr for RuleProfile {
+    type Err = crate::UnknownMetadataValue;
+
+    /// A plain match, for the reason `Status::from_str` in this crate states
+    /// at length: a `find` over `ALL` reads as drift-proof and is not, since
+    /// `ALL` is itself hand-maintained, and two enums in one crate should not
+    /// parse two different ways.
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        match text.trim() {
+            "default" => Ok(Self::Default),
+            "strict_linkers" => Ok(Self::StrictLinkers),
+            other => Err(crate::UnknownMetadataValue::new("rules", other)),
+        }
+    }
+}
+
+impl TryFrom<String> for RuleProfile {
+    type Error = crate::UnknownMetadataValue;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        text.parse()
+    }
+}
+
+impl From<RuleProfile> for String {
+    fn from(profile: RuleProfile) -> Self {
+        profile.as_str().to_owned()
+    }
+}
+
+impl std::fmt::Display for RuleProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// One example's claim: `violates`, `legal`, or `subsumed_by <codes>`.
 ///
 /// The vocabulary was ruled 2026-08-15; `subsumed_by` is parameterised (four
@@ -369,6 +543,23 @@ impl Claim {
             Self::Legal => !fired(own_code),
             Self::SubsumedBy(targets) => targets.as_slice().iter().all(&fired) && !fired(own_code),
         }
+    }
+
+    /// Does an example carrying this claim DEMONSTRATE the spec's own code?
+    ///
+    /// Only `violates` does. `legal` asserts the code does not fire, and
+    /// `subsumed_by` asserts it does not fire either (something else does), so
+    /// neither is a demonstration of the rule the spec is named for.
+    ///
+    /// Here rather than at the caller for the reason [`Self::satisfied_by`]
+    /// states: this type is the one owner of what a claim MEANS, and the same
+    /// three-arm reading was respelled in both workspaces within hours of the
+    /// type landing. The generator asked this question as
+    /// `positive_codes(own).contains(own)`, which is the right answer computed
+    /// the long way round, through a `Vec` allocated to be searched once.
+    #[must_use]
+    pub const fn demonstrates_own_code(&self) -> bool {
+        matches!(self, Self::Violates)
     }
 
     /// The codes this claim POSITIVELY asserts.

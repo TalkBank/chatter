@@ -98,6 +98,7 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
 
     let mut variants_with_codes = Vec::new();
     let mut planned_variants: Vec<&syn::Ident> = Vec::new();
+    let mut opt_in_variants: Vec<&syn::Ident> = Vec::new();
     let mut unknown_variant = None;
 
     for variant in &data.variants {
@@ -148,6 +149,24 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
         });
         if planned {
             planned_variants.push(variant_name);
+        }
+
+        // `#[status(opt_in)]` marks a code whose rule EXISTS and fires, but
+        // only when the caller asks for its option. Emitted from the code's
+        // `rules` in the registry, like `planned` is emitted from its
+        // `status`, so there is no second copy to disagree with.
+        //
+        // Distinct from `planned` in the way that matters to a reader: a
+        // planned check never fires, an opt-in check fires on request, and
+        // reporting the second as plain "Active" told users running
+        // `chatter validate` that a check was on when their clean result said
+        // otherwise. Eight codes were in that state.
+        let opt_in = variant.attrs.iter().any(|attr| {
+            attr.path().is_ident("status")
+                && matches!(&attr.meta, Meta::List(list) if list.tokens.to_string() == "opt_in")
+        });
+        if opt_in {
+            opt_in_variants.push(variant_name);
         }
 
         if variant_name == UNKNOWN_VARIANT {
@@ -234,6 +253,10 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
     let planned_arms = planned_variants.iter().map(|variant_name| {
         quote! { #enum_name::#variant_name }
     });
+    let opt_in_count = opt_in_variants.len();
+    let opt_in_arms = opt_in_variants.iter().map(|variant_name| {
+        quote! { #enum_name::#variant_name }
+    });
 
     quote! {
         #(#attrs)*
@@ -299,6 +322,20 @@ pub fn impl_error_code_enum(input: TokenStream) -> TokenStream {
                     #(#planned_arms,)*
                 ];
                 &PLANNED
+            }
+
+            /// Every variant marked `#[status(opt_in)]`: enforced, but only
+            /// when the caller enables the rule option its registry entry
+            /// names.
+            ///
+            /// Generated from the attributes for the same reason
+            /// [`Self::planned`] is: a hand-written list of code strings can
+            /// name a code that does not exist, and the one this replaces did.
+            pub fn opt_in() -> &'static [Self; #opt_in_count] {
+                const OPT_IN: [#enum_name; #opt_in_count] = [
+                    #(#opt_in_arms,)*
+                ];
+                &OPT_IN
             }
         }
 

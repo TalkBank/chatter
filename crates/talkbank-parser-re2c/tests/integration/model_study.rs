@@ -312,8 +312,16 @@ fn gra_tier_equivalence() {
     let input = "1|2|SUBJ 2|0|ROOT 3|2|OBJ\n";
     let errors = talkbank_model::errors::ErrorCollector::new();
     let ts_result = ts().parse_gra_tier_fragment(input, 0, &errors);
-    let re2c_parsed = talkbank_parser_re2c::parser::parse_gra_tier(input);
-    let re2c_tier = talkbank_model::model::GraTier::from(&re2c_parsed);
+    let re2c_parsed = talkbank_parser_re2c::parser::parse_gra_tier(input)
+        .expect("a well formed %gra body parses");
+    // The lowering now takes the sink, because a `%gra` field the model cannot
+    // hold is reported and the relation dropped rather than defaulted to 0.
+    let re2c_tier = talkbank_parser_re2c::convert::gra_tier_to_model(
+        &re2c_parsed,
+        talkbank_parser_re2c::source_text::SourceText::new(input),
+        &errors,
+    )
+    .tier_without_health();
     if let talkbank_model::ParseOutcome::Parsed(ts_tier) = ts_result {
         assert!(
             ts_tier.semantic_eq(&re2c_tier),
@@ -346,7 +354,8 @@ fn re2c_word(input: &str) -> talkbank_model::model::Word {
 ///         -p talkbank-parser-re2c --tests --release \
 ///         study_diff_one_file -- --ignored --nocapture
 #[test]
-#[ignore]
+#[ignore = "a developer probe over one file named by TB_DIFF_FILE; asserts \
+           nothing without it. Run with --ignored --nocapture."]
 fn study_diff_one_file() {
     use talkbank_model::ChatParser;
     use talkbank_model::ErrorCollector;

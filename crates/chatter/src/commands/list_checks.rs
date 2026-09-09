@@ -42,13 +42,28 @@ pub fn print_check_list() {
         .iter()
         .filter(|c| c.check_status() == CheckStatus::Active)
         .count();
-    let planned_count = codes.len() - active_count;
+    let opt_in_count = codes
+        .iter()
+        .filter(|c| c.check_status() == CheckStatus::OptIn)
+        .count();
+    // Derived by subtraction no longer: with three states, `len - active`
+    // would silently fold opt-in checks into the planned count, which is the
+    // arithmetic version of the same false claim this variant exists to end.
+    let planned_count = codes
+        .iter()
+        .filter(|c| c.check_status() == CheckStatus::Planned)
+        .count();
 
-    println!("Validation checks (Active / Planned):");
+    println!("Validation checks (Active / Opt-in / Planned):");
     println!();
     for code in &codes {
         let (badge, label) = match code.check_status() {
             CheckStatus::Active => ("[Active] ", "Active"),
+            // NOT "Active". A user who reads that runs `chatter validate`,
+            // sees nothing, and has been told something false; the fix that
+            // used to be reached for instead was marking the code
+            // `not_implemented`, which is false in the other direction.
+            CheckStatus::OptIn => ("[Opt-in] ", "Opt-in: needs its rule option"),
             CheckStatus::Planned => ("[Planned]", "Planned"),
         };
         // Debug print of the variant gives the canonical Rust name
@@ -58,10 +73,9 @@ pub fn print_check_list() {
     }
     println!();
     println!(
-        "Total: {} checks ({} Active, {} Planned)",
-        codes.len(),
-        active_count,
-        planned_count
+        "Total: {} checks ({active_count} Active, {opt_in_count} Opt-in, \
+         {planned_count} Planned)",
+        codes.len()
     );
 }
 
@@ -93,22 +107,39 @@ mod tests {
     /// that deleted it. The wiring can be checked without naming a single
     /// code's status.
     #[test]
-    fn both_check_status_arms_are_reachable() {
+    fn every_check_status_arm_is_reachable() {
         let planned = ErrorCode::planned();
+        let opt_in = ErrorCode::opt_in();
         assert!(
             !planned.is_empty(),
-            "no code is marked planned, so the Planned arm is unreachable and \
-             this command can only ever print Active"
+            "no code is marked planned, so the Planned arm is unreachable"
         );
         assert!(
-            planned.len() < ErrorCode::iter().len(),
-            "every code is marked planned, so the Active arm is unreachable"
+            !opt_in.is_empty(),
+            "no code is marked opt-in, so the Opt-in arm is unreachable and \
+             this command can only ever print Active or Planned"
         );
-        for code in planned {
-            assert_eq!(code.check_status(), CheckStatus::Planned);
-        }
-        for code in ErrorCode::iter().filter(|code| !planned.contains(code)) {
-            assert_eq!(code.check_status(), CheckStatus::Active);
+        assert!(
+            planned.len() + opt_in.len() < ErrorCode::iter().len(),
+            "every code is planned or opt-in, so the Active arm is unreachable"
+        );
+
+        // The three sets partition the codes. Written as a walk over EVERY
+        // code rather than three loops over the three lists, because the fact
+        // worth pinning is that no code lands in two of them: `check_status`
+        // tests `planned` before `opt_in`, so a code in both would report
+        // Planned and its opt-in marking would be invisible.
+        for code in ErrorCode::iter() {
+            let expected = match (planned.contains(code), opt_in.contains(code)) {
+                (true, true) => panic!(
+                    "{code:?} is marked both planned and opt-in; a rule nothing \
+                     enforces cannot be enforced under an option"
+                ),
+                (true, false) => CheckStatus::Planned,
+                (false, true) => CheckStatus::OptIn,
+                (false, false) => CheckStatus::Active,
+            };
+            assert_eq!(code.check_status(), expected, "for {code:?}");
         }
     }
 }

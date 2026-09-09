@@ -34,8 +34,8 @@
 
 use talkbank_parser::generated_traversal::{
     AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsNode, FullDocumentNode,
-    LineChoice, MainTierNode, NodeSlot, TierBodyNode, extract_contents, extract_full_document,
-    extract_line, extract_main_tier, extract_tier_body, extract_utterance,
+    LineChoice, MainTierNode, NoChild, NodeSlot, TierBodyNode, extract_contents,
+    extract_full_document, extract_line, extract_main_tier, extract_tier_body, extract_utterance,
 };
 use talkbank_parser_tests::classify;
 
@@ -73,10 +73,16 @@ fn full_document(tree: &tree_sitter::Tree) -> tree_sitter::Node<'_> {
 
 /// Return the raw node a `Present` slot wraps, or panic with context. (Test-only;
 /// the clean reference file makes every descent slot `Present`.)
-fn present_raw<'tree, T: AsRawNode<'tree> + std::fmt::Debug>(
-    slot: &NodeSlot<'tree, T>,
+fn present_raw<'tree, T, M, U, A>(
+    slot: &NodeSlot<'tree, T, M, U, A>,
     what: &str,
-) -> tree_sitter::Node<'tree> {
+) -> tree_sitter::Node<'tree>
+where
+    T: AsRawNode<'tree> + std::fmt::Debug,
+    M: std::fmt::Debug,
+    U: std::fmt::Debug,
+    A: std::fmt::Debug,
+{
     match slot {
         NodeSlot::Present(node) => node.raw_node(),
         other => panic!("{what} should be Present on this clean file, got {other:?}"),
@@ -147,7 +153,7 @@ fn extract_contents_enumerates_main_tier_items() {
                     content_item_variants += 1;
                 }
             }
-            NodeSlot::Missing(_) | NodeSlot::Absent => {}
+            NodeSlot::Missing(_) | NodeSlot::Absent(NoChild) => {}
             NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
                 problem_items.push(format!(
                     "contents child_0: {:?}",
@@ -163,7 +169,7 @@ fn extract_contents_enumerates_main_tier_items() {
                         content_item_variants += 1;
                     }
                 }
-                NodeSlot::Missing(_) | NodeSlot::Absent => {}
+                NodeSlot::Missing(_) | NodeSlot::Absent(NoChild) => {}
                 NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
                     problem_items.push(format!("contents item {i}: {:?}", item.slot()));
                 }

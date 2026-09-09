@@ -8,8 +8,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Line>
 
-use crate::LanguageMetadata;
-use crate::alignment::helpers::{MorAlignableWordCount, TierDomain, count_tier_positions};
+use crate::alignment::helpers::{MorAlignableWordCount, PositionalDomain, count_tier_positions};
 use crate::model::dependent_tier::{
     ActTier, CodTier, DependentTier, GraTier, MorTier, PhoTier, PhoalnTier, SinTier, SylTier,
     XphointTier,
@@ -25,16 +24,6 @@ impl Utterance {
             DependentTier::Mor(tier) => Some(tier),
             _ => None,
         })
-    }
-
-    /// Return the first mutable `%mor` tier, if present.
-    pub fn mor_tier_mut(&mut self) -> Option<&mut MorTier> {
-        self.dependent_tiers
-            .iter_mut()
-            .find_map(|t| match &mut t.tier {
-                DependentTier::Mor(tier) => Some(tier),
-                _ => None,
-            })
     }
 
     /// Return the first `%gra` tier, if present.
@@ -77,16 +66,6 @@ impl Utterance {
             DependentTier::Sin(tier) => Some(tier),
             _ => None,
         })
-    }
-
-    /// Convenience alias returning an owned clone of the first `%mor` tier.
-    pub fn mor(&self) -> Option<MorTier> {
-        self.mor_tier().cloned()
-    }
-
-    /// Convenience alias returning an owned clone of the first `%gra` tier.
-    pub fn gra(&self) -> Option<GraTier> {
-        self.gra_tier().cloned()
     }
 
     /// Convenience alias returning an owned clone of the first `%pho` tier.
@@ -308,11 +287,6 @@ impl Utterance {
         })
     }
 
-    /// Return computed per-word language metadata, if available.
-    pub fn computed_language_metadata(&self) -> Option<&LanguageMetadata> {
-        self.language_metadata.as_computed()
-    }
-
     // ---------------------------------------------------------------------
     // Alignable-word counts: the canonical N for each dependent-tier domain.
     //
@@ -349,38 +323,7 @@ impl Utterance {
     pub fn mor_alignable_word_count(&self) -> MorAlignableWordCount {
         MorAlignableWordCount::new(count_tier_positions(
             &self.main.content.content,
-            TierDomain::Mor,
+            PositionalDomain::Mor,
         ))
-    }
-
-    /// Return the number of items the `%wor` tier must contain to be
-    /// aligned 1-to-1 with this utterance's main-tier content.
-    ///
-    /// Counts regular words and fillers (`&-`); excludes nonwords (`&~`),
-    /// phonological fragments (`&+`), untranscribed (`xxx`/`yyy`/`www`),
-    /// and timing metadata. Retrace content **is** counted here (the words
-    /// were phonologically produced).
-    pub fn wor_alignable_word_count(&self) -> usize {
-        count_tier_positions(&self.main.content.content, TierDomain::Wor)
-    }
-
-    /// Return the number of items the `%pho` tier must contain to be
-    /// aligned 1-to-1 with this utterance's main-tier content.
-    ///
-    /// Every phonologically-produced item counts: regular words, fillers,
-    /// fragments, nonwords, retrace content, untranscribed markers, pauses.
-    /// This is the most permissive domain because %pho records what was
-    /// spoken, including corrections and fragments.
-    pub fn pho_alignable_word_count(&self) -> usize {
-        count_tier_positions(&self.main.content.content, TierDomain::Pho)
-    }
-
-    /// Return the number of items the `%sin` tier must contain to be
-    /// aligned 1-to-1 with this utterance's main-tier content.
-    ///
-    /// Similar to %pho but for signed language; includes annotated actions
-    /// which carry sign-language gestures.
-    pub fn sin_alignable_word_count(&self) -> usize {
-        count_tier_positions(&self.main.content.content, TierDomain::Sin)
     }
 }

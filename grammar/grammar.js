@@ -2113,7 +2113,16 @@ export default grammar({
     // PHONE = {IPA_PHON_ALLOWED} | {COVER_PHO_CHAR} | [\(\.\)\^\u0335]
     // Simplified for common phonological symbols
     // Split large Unicode range to exclude PHO grouping delimiters \u2039 (‹) and \u203A (›)
-    pho_word: $ => /[a-zA-Z0-9\u0061-\u007a\u00e6-\u2038\u203b-\ua71c\u0250-\u02af\u1d00-\u1dbf\u2016\u203f\u207f\u2197-\u2198\u2c71\u2e28-\u2e29\ua71b-\ua71cCGVSX\(\.\)\^\u0335*]+/,
+    // Superscript one, two and three live in Latin-1 Supplement (\u00b9 \u00b2
+    // \u00b3), below the big range that starts at \u00e6, and are the only
+    // superscript forms those digits have; tone numbers are written with
+    // them, so they are admitted beside the \u2070-\u2079 digits the range
+    // already covers. The range's upper end is the last Modifier Tone
+    // Letter (\ua71f): \ua71e, the raised inverted exclamation mark, is
+    // attested as a diacritic on the preceding vowel (TalkBank/chatter#7),
+    // and its two block-mates \ua71d and \ua71f are admitted with it as the
+    // rest of the block already was.
+    pho_word: $ => /[a-zA-Z0-9\u0061-\u007a\u00b9\u00b2\u00b3\u00e6-\u2038\u203b-\ua71f\u0250-\u02af\u1d00-\u1dbf\u2016\u203f\u207f\u2197-\u2198\u2c71\u2e28-\u2e29CGVSX\(\.\)\^\u0335*]+/,
 
     sin_groups: $ => seq(
       $.sin_group,

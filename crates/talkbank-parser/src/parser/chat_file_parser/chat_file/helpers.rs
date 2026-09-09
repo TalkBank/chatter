@@ -160,7 +160,14 @@ pub(super) fn report_top_level_dependent_tier_error(
         return false;
     }
 
-    let first_line = text.lines().next().unwrap_or(text);
+    // The first line: up to the first `\n`, its trailing carriage returns
+    // trimmed (`str::lines` strips one; nothing below reads past them), and
+    // the whole text when it has no line break.
+    let first_line = match text.split_once('\n') {
+        Some((first, _)) => first,
+        None => text,
+    }
+    .trim_end_matches('\r');
     let mut has_preceding_utterance = false;
     if let Some(utterance) = lines.iter_mut().rev().find_map(|line| match line {
         Line::Utterance(utt) => Some(utt),
@@ -243,6 +250,26 @@ pub(super) fn parse_lines(
 
 /// Parse lines, optionally reusing `old_tree` for incremental updates.
 /// Returns `(lines, new_tree)`.
+///
+/// # The size guard, and the hole it closes
+///
+/// Every FRAGMENT entry point admits its input through
+/// `talkbank_model::FragmentSource`, whose whole purpose is to refuse a range
+/// the model's 32-bit byte coordinates cannot hold. The four WHOLE-FILE entry
+/// points funnel through here and admitted nothing, so the proof type had a
+/// door in the wall it was built to close: a proof type is only as strong as
+/// its weakest constructor, and the weakest one was no constructor at all.
+///
+/// What that cost, measured 2026-09-08: a 4,294,967,418-byte transcript whose
+/// content after `@End` is invalid CHAT reported `Valid: 1` and exited 0,
+/// while a 1,122-byte file of the same shape was correctly rejected with
+/// E316. tree-sitter's coordinate space is 32 bits wide, so it saw a prefix
+/// and answered about the prefix, and every stage above it reported that
+/// answer as the file's.
+///
+/// The guard is here rather than at the four callers for the reason the
+/// fragment API already demonstrates: a rule each caller must remember is a
+/// rule one of them will not.
 pub(super) fn parse_lines_with_old_tree(
     parser: &TreeSitterParser,
     input: &str,
@@ -250,6 +277,14 @@ pub(super) fn parse_lines_with_old_tree(
     errors: &impl ErrorSink,
 ) -> (Vec<Line>, Option<tree_sitter::Tree>) {
     debug!("Parsing CHAT file ({} bytes)", input.len());
+
+    // A whole file starts at offset zero, so only its length can push it past
+    // the coordinate space. Refused BEFORE the parse: afterwards there is no
+    // way to tell a short answer from a complete one.
+    if let Err(too_large) = talkbank_model::FragmentRangeError::check(0, input.len()) {
+        errors.report(too_large.into_diagnostic());
+        return (Vec::new(), None);
+    }
 
     let tree = match parser.parser.borrow_mut().parse(input, old_tree) {
         Some(t) => t,
@@ -368,7 +403,22 @@ pub(super) fn parse_lines_with_old_tree(
             // covered by a (richer) region diagnostic is suppressed.
             let span = candidate.location.span;
             let probe = Span::new(span.start, span.end.max(span.start.saturating_add(1)));
-            if !reported.iter().any(|e| e.location.span.overlaps(probe)) {
+            // A region diagnostic that is itself zero-width at the same point
+            // covers the candidate only when it reports the same code: the
+            // typed tier dispatch's E342 for a MISSING node covers the
+            // backstop's E342 for that node (until 2026-09-08 it did not, and
+            // every MISSING node inside a dependent tier was reported twice),
+            // while E376 for an empty replacement, zero-width at the point
+            // where its MISSING word segment sits, is a different fact about a
+            // different node and leaves the E342 to be reported (E208.md).
+            let same_point_same_code = |e: &ParseError| {
+                let r = e.location.span;
+                r.start == r.end && r.start == span.start && e.code == candidate.code
+            };
+            if !reported
+                .iter()
+                .any(|e| e.location.span.overlaps(probe) || same_point_same_code(e))
+            {
                 errors.report(candidate);
             }
         }

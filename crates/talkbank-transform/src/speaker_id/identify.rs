@@ -533,11 +533,14 @@ pub fn identify_mapping(
     // `donor_speakers`); the resulting order is deterministic across
     // runs given the same input.
     let mut ranked: Vec<&SpeakerCode> = donor_speakers.iter().collect();
+    // `total_cmp` is a total order over the scalar (a NaN sorts, it does not
+    // read as equal to everything); the old `partial_cmp(..).unwrap_or(Equal)`
+    // made an unordered pair a tie the sort could place either way.
     ranked.sort_by(|a, b| {
         evidence[*b]
             .score()
-            .partial_cmp(&evidence[*a].score())
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .value()
+            .total_cmp(&evidence[*a].score().value())
     });
     let winner = (*ranked[0]).clone();
     let winner_score = evidence[&winner].score();

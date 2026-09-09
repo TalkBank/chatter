@@ -12,6 +12,19 @@ use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use tree_sitter::Node;
 
 /// Classifies a top-level `ERROR` node into a specific parse error.
+///
+/// A `%`-prefixed ERROR text never arrives here. Of the two callers, the
+/// document walker's top-level route hands every such node to
+/// `report_top_level_dependent_tier_error` (`chat_file/helpers.rs`) first
+/// and stops when it reports, which it does for every `%` text; the
+/// `line`-level route never sees an ERROR at all, since `line` is a unit
+/// choice and recovery parks the ERROR beside it. So the arms this function
+/// carried for dependent tiers could not fire, and the whole-workspace
+/// coverage run of 2026-09-08 showed them unreached; they were removed that
+/// day. Two of them (E601, E602) repeated the live owner's messages; the
+/// third called any `%gra:` failure "non-numeric index" (E710), a guess the
+/// live owner does not make (it reports E600, that the tier could not be
+/// parsed), and the honest owner stays.
 pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSink) {
     let error_text = extract_utf8_text(node, source, errors, "file_error", "");
     let start = node.start_byte();
@@ -21,66 +34,6 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
         super::dedicated::scan_quotation_delimiters(node)
     {
         errors.report(finding.into_diagnostic(source));
-        return;
-    }
-
-    // Check if this is a dependent tier error (starts with %)
-    if matches!(error_text.chars().next(), Some('%')) {
-        // E710: Invalid %gra - non-numeric index
-        if error_text.contains("%gra:") {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::UnexpectedGrammarNode,
-                    Severity::Error,
-                    SourceLocation::from_offsets(start, end),
-                    ErrorContext::new(source, start..end, error_text),
-                    "Invalid GRA relation - non-numeric index",
-                )
-                .with_suggestion(
-                    "GRA relation indices must be numbers (e.g., 1|2|SUBJ, not one|2|SUBJ)",
-                ),
-            );
-            return;
-        }
-
-        // Recoverable dependent-tier parse failures:
-        // keep file parsing alive and let downstream validation report semantic issues.
-        let (code, message) = if error_text.contains(":\t") {
-            (
-                ErrorCode::InvalidDependentTier,
-                format!(
-                    "Could not fully parse dependent tier: {}",
-                    match error_text.lines().next() {
-                        Some(line) => line,
-                        None => error_text,
-                    }
-                ),
-            )
-        } else {
-            (
-                ErrorCode::MalformedTierHeader,
-                format!(
-                    "Malformed dependent tier header: {}",
-                    match error_text.lines().next() {
-                        Some(line) => line,
-                        None => error_text,
-                    }
-                ),
-            )
-        };
-
-        errors.report(
-            ParseError::new(
-                code,
-                Severity::Error,
-                SourceLocation::from_offsets(start, end),
-                ErrorContext::new(source, start..end, error_text),
-                message,
-            )
-            .with_suggestion(
-                "Check dependent tier syntax (%tier:\\tcontent) and tier-specific format",
-            ),
-        );
         return;
     }
 
@@ -265,8 +218,10 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
     // parsed `WordContent::SyllablePause` position. Classifying the raw text of an
     // ERROR node to guess the diagnostic is the banned anti-pattern (root CLAUDE.md
     // "CST Traversal Rules"); this diagnostic was re-homed onto structure + model.
-    if error_text.starts_with('*') && error_text.contains(":\t") {
-        let content_start = error_text.find(":\t").unwrap_or(0) + 2;
+    if error_text.starts_with('*')
+        && let Some(separator) = error_text.find(":\t")
+    {
+        let content_start = separator + 2;
         let content = error_text[content_start..].trim();
 
         // E759: utterance content begins with a postfix annotation
@@ -279,21 +234,11 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
         // codes (`[- lang]` precodes, `[^ ...]`) parse normally and never
         // reach this analysis.
         if let Some(code_token) = super::dedicated::leading_postfix_annotation(content) {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::AnnotationAtUtteranceStart,
-                    Severity::Error,
-                    SourceLocation::from_offsets(start + content_start, end),
-                    ErrorContext::new(source, start..end, error_text),
-                    format!(
-                        "Annotation '{code_token}' at utterance start has no content to attach to"
-                    ),
-                )
-                .with_suggestion(
-                    "Retraces, overlap markers, replacements, and quotation codes scope over the \
-                     material BEFORE them; put the annotated content first, or remove the code",
-                ),
-            );
+            errors.report(super::dedicated::annotation_at_utterance_start(
+                code_token,
+                SourceLocation::from_offsets(start + content_start, end),
+                ErrorContext::new(source, start..end, error_text),
+            ));
             return;
         }
 

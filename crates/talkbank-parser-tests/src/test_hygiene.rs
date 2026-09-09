@@ -42,13 +42,11 @@
 //! and preserves length so byte offsets stay valid.
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
 
-use walkdir::WalkDir;
+use crate::gate::tree::{RelPath, TreeError};
+use crate::gate::{Gate, Outcome, ProbeSuite, ReadTree, UnprovenRule, listing, report};
 
-use crate::gate::{Gate, GateOutcome, listing, report};
-use crate::repo_paths::workspace_root;
+mod probes;
 
 /// A corpus of blanked sources, before helper names are known.
 ///
@@ -65,19 +63,29 @@ use crate::repo_paths::workspace_root;
 /// only type that can answer, so the wrong order does not compile.
 struct Scanned {
     files: Vec<SourceFile>,
-    unreadable: Vec<String>,
+    unreadable: Vec<TreeError>,
 }
 
 /// The same corpus once every failing helper in it is known.
 struct Resolved {
     files: Vec<SourceFile>,
-    unreadable: Vec<String>,
+    unreadable: Vec<TreeError>,
     helpers: Vec<String>,
 }
 
 /// One source file: its repo-relative path, as written, and blanked.
 struct SourceFile {
-    path: String,
+    /// The tree-relative path, kept as the type the tree handed over.
+    ///
+    /// It was a `String`, built with `as_str().to_owned()` from a `RelPath`
+    /// that was in hand and then dropped. The conversion was lossless, so what
+    /// it gave up is not correctness today but the guarantee for the next
+    /// writer of the field: `RelPath` exists so that one forward-slashed
+    /// spelling reaches the exclusion tests and the baseline keys, and a
+    /// `String` there is a spelling anyone can supply. The type now travels
+    /// all the way to the key; a first pass moved it one struct and left
+    /// `TestFn` converting back, which is the same door one room along.
+    path: RelPath,
     original: String,
     blanked: String,
 }
@@ -106,7 +114,7 @@ impl Resolved {
         let mut found = Vec::new();
         for file in &self.files {
             for test in tests_in(&file.path, &file.original, &file.blanked) {
-                if can_fail(&test.shape_blanked) {
+                if can_fail(test.shape_blanked.as_blanked()) {
                     continue;
                 }
                 if self
@@ -162,6 +170,25 @@ struct WrittenShape(String);
 /// word `assert` inside a string clears a test that asserts nothing.
 struct BlankedShape(String);
 
+impl BlankedShape {
+    /// Borrow it for a question that only reads.
+    fn as_blanked(&self) -> Blanked<'_> {
+        Blanked(&self.0)
+    }
+}
+
+/// A BORROWED span of already-blanked source.
+///
+/// The owned [`BlankedShape`] exists so the two shapes cannot be swapped, and
+/// that guarantee should not cost a copy. `asserting_helpers` asks the same
+/// question of every `fn` body in the tree, and it used to build a
+/// `BlankedShape` from each: about 91,000 body-sized allocations per
+/// `just test`, purely to satisfy a type that never needed ownership. Passing
+/// `&str` instead would have removed the allocation and the protection
+/// together, which is the trade this newtype refuses to make.
+#[derive(Clone, Copy)]
+struct Blanked<'a>(&'a str);
+
 /// The two are separate types because the ONE bug this module kept making was
 /// using the wrong one: they are both a test's text, both `String`, and each
 /// gate wants the other. Now the compiler refuses the swap that produced a
@@ -169,7 +196,7 @@ struct BlankedShape(String);
 ///
 /// One `#[test]` function, located in a file.
 struct TestFn {
-    path: String,
+    path: RelPath,
     line: usize,
     name: String,
     /// Compared by [`DuplicateTestGate`].
@@ -271,7 +298,12 @@ fn normalise(text: &str) -> String {
 }
 
 /// Index just past the `}` closing the block opening at `start`.
-fn block_end(text: &str, start: usize) -> usize {
+///
+/// `pub(crate)` for [`crate::gate_discipline`], which needs the body of every
+/// `fn check` for the same reason this module needs the body of every `#[test]`
+/// and must not grow a second brace matcher to get it. Expects BLANKED text:
+/// a brace inside a string literal would otherwise unbalance the count.
+pub(crate) fn block_end(text: &str, start: usize) -> usize {
     let bytes = text.as_bytes();
     let mut depth = 0usize;
     for (offset, byte) in bytes.iter().enumerate().skip(start) {
@@ -290,10 +322,10 @@ fn block_end(text: &str, start: usize) -> usize {
 }
 
 /// Whether `body` contains anything that could make a test fail.
-fn can_fail(body: &BlankedShape) -> bool {
+fn can_fail(body: Blanked<'_>) -> bool {
     // `assert` is a SUBSTRING match, not a word match: `assert_roundtrip` is an
     // assertion helper, and a word-boundary match misses every one of them.
-    let body = &body.0;
+    let body = body.0;
     body.contains("assert")
         || body.contains("panic")
         || body.contains("unreachable!")
@@ -338,16 +370,14 @@ fn asserting_helpers(blanked: &str, into: &mut Vec<String>) {
             continue;
         };
         let start = search + open;
-        if can_fail(&BlankedShape(
-            blanked[start..block_end(blanked, start)].to_owned(),
-        )) {
+        if can_fail(Blanked(&blanked[start..block_end(blanked, start)])) {
             into.push(name);
         }
     }
 }
 
 /// Every `#[test]` in `blanked`, with its signature and body.
-fn tests_in(path: &str, original: &str, blanked: &str) -> Vec<TestFn> {
+fn tests_in(path: &RelPath, original: &str, blanked: &str) -> Vec<TestFn> {
     let mut found = Vec::new();
     let mut search = 0usize;
     while let Some(offset) = blanked[search..].find("#[test]") {
@@ -375,7 +405,13 @@ fn tests_in(path: &str, original: &str, blanked: &str) -> Vec<TestFn> {
         let end = block_end(blanked, body_start);
         found.push(TestFn {
             path: path.to_owned(),
-            line: blanked[..attr].matches('\n').count() + 1,
+            // Counted in the ORIGINAL, not the blanked copy. `blank_literals`
+            // replaces the CONTENT of a multi-line string literal with spaces,
+            // newlines included, so counting there under-reports every test
+            // below one. Blanking preserves length, so `attr` indexes both
+            // strings identically and this is the same offset in the file the
+            // reader will open.
+            line: original[..attr].matches('\n').count() + 1,
             name,
             shape: WrittenShape(normalise(
                 original.get(shape_start..end).unwrap_or_default(),
@@ -388,42 +424,41 @@ fn tests_in(path: &str, original: &str, blanked: &str) -> Vec<TestFn> {
 }
 
 /// Read every tracked-looking `.rs` file under `crates/`, blanked.
-fn sources(root: &Path) -> Scanned {
+fn sources(tree: &ReadTree) -> Scanned {
     let mut files = Vec::new();
     let mut unreadable = Vec::new();
-    for entry in WalkDir::new(root.join("crates")) {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(err) => {
-                unreadable.push(err.to_string());
-                continue;
-            }
-        };
-        let path = entry.path();
-        if path.extension().is_none_or(|ext| ext != "rs") {
+
+    let paths = match tree.files_under("crates") {
+        Ok(paths) => paths,
+        // A walk failure is not a smaller corpus: it is an unknown number of
+        // files never offered. It belongs in `unreadable`, which is a section
+        // of the FAILURE report, so a scan that could not enumerate cannot
+        // report clean.
+        Err(err) => {
+            unreadable.push(err);
+            return Scanned { files, unreadable };
+        }
+    };
+    for path in paths {
+        if !path.extension_is("rs") {
             continue;
         }
-        // Forward-slashed on every host: the exclusions and the baseline keys
-        // are written that way, and Windows would otherwise match neither.
-        let as_str = path.to_string_lossy().replace('\\', "/");
+        // The exclusions and the baseline keys are forward-slashed, which is
+        // what `RelPath` guarantees on every host.
+        let as_str = path.as_str();
         if as_str.contains("/generated/") || as_str.contains("/target/") {
             continue;
         }
-        match fs::read_to_string(path) {
+        match tree.read_to_string(&path) {
             Ok(text) => {
-                let rel = path
-                    .strip_prefix(root)
-                    .unwrap_or(path)
-                    .to_string_lossy()
-                    .replace('\\', "/");
                 let blanked = blank_literals(&text);
                 files.push(SourceFile {
-                    path: rel,
+                    path,
                     original: text,
                     blanked,
                 });
             }
-            Err(err) => unreadable.push(format!("{}: {err}", path.display())),
+            Err(err) => unreadable.push(err),
         }
     }
     Scanned { files, unreadable }
@@ -438,8 +473,8 @@ impl Gate for VacuousTestGate {
         "vacuous-tests"
     }
 
-    fn check(&self) -> GateOutcome {
-        let resolved = sources(workspace_root()).resolve();
+    fn check(&self, tree: ReadTree) -> Outcome {
+        let resolved = sources(&tree).resolve();
         let found = resolved.vacuous();
         let unreadable = &resolved.unreadable;
 
@@ -471,15 +506,140 @@ impl Gate for VacuousTestGate {
         ]);
 
         if sections.is_empty() {
-            Ok(format!(
+            tree.clean(format!(
                 "{} test(s) cannot fail, all accepted",
                 ACCEPTED_VACUOUS.len()
             ))
         } else {
-            Err(sections)
+            Outcome::failed(sections)
         }
     }
+
+    fn probes(&self) -> ProbeSuite {
+        probes::vacuous()
+    }
+
+    fn unproven_rules(&self) -> &'static [UnprovenRule] {
+        probes::VACUOUS_UNPROVEN
+    }
 }
+
+/// Every `#[ignore]` says why it does not run.
+///
+/// # A skip list hides two different things
+///
+/// An ignored test is either OPT-IN BY DESIGN (it needs the wild corpus, a live
+/// CLAN install, minutes of wall clock) or DEFERRED AND FORGOTTEN (a rule was
+/// switched off and its tests were parked). A bare `#[ignore]` cannot tell them
+/// apart, and the second kind is invisible: nothing in a green run says a test
+/// exists and did not run, so the suite reports success over a population
+/// nobody is counting.
+///
+/// The reason goes in the ATTRIBUTE and not in a comment above it, because that
+/// is the one place `cargo test` prints it and the one place a scan can read
+/// it. All ten sites this gate first found had a reason already, in a doc
+/// comment or a trailing `//`, where neither happens.
+///
+/// # Why it reads the BLANKED source
+///
+/// Sixteen of the twenty-five lines mentioning `#[ignore]` in this repository
+/// are PROSE about ignoring, in doc comments explaining why something is
+/// ignored. A scan over raw text counts those and reports 25 where the answer
+/// is 9. Blanking first is the difference between a population and a guess, and
+/// this is the third gate in this crate to need that lesson.
+pub struct SilentSkipGate;
+
+/// The exact attribute, with nothing between `ignore` and the bracket.
+const BARE_IGNORE: &str = "#[ignore]";
+
+impl Gate for SilentSkipGate {
+    fn name(&self) -> &'static str {
+        "silent skips"
+    }
+
+    fn check(&self, tree: ReadTree) -> Outcome {
+        let scanned = sources(&tree);
+        let mut bare: Vec<String> = Vec::new();
+        let mut reasoned = 0usize;
+        for file in &scanned.files {
+            for (offset, line) in file.blanked.lines().enumerate() {
+                let trimmed = line.trim();
+                if trimmed.starts_with(BARE_IGNORE) {
+                    bare.push(format!("{}:{}", file.path, offset + 1));
+                } else if trimmed.starts_with("#[ignore") {
+                    reasoned += 1;
+                }
+            }
+        }
+
+        let sections = report([
+            listing(
+                "FAIL: `#[ignore]` with no reason. A skip list hides two different\n                 things, opt-in-by-design and deferred-and-forgotten, and a bare\n                 attribute cannot say which. Put the reason IN the attribute,\n                 where `cargo test` prints it, or delete the test:",
+                &bare,
+            ),
+            listing("unreadable:", &scanned.unreadable),
+        ]);
+
+        if sections.is_empty() {
+            tree.clean(format!(
+                "{reasoned} ignored test(s), every one saying why it does not run"
+            ))
+        } else {
+            Outcome::failed(sections)
+        }
+    }
+
+    fn probes(&self) -> ProbeSuite {
+        ProbeSuite::must_fail("an `#[ignore]` with no reason", "with no reason", |edit| {
+            edit.write(
+                "crates/talkbank-model/src/probe_bare_ignore.rs",
+                "#[test]\n#[ignore]\nfn t() { assert!(true); }\n",
+            );
+            Ok(())
+        })
+        .accepting("an `#[ignore]` that states its reason", |edit| {
+            edit.write(
+                "crates/talkbank-model/src/probe_reasoned_ignore.rs",
+                "#[test]\n#[ignore = \"needs the wild corpus\"]\nfn t() { assert!(true); }\n",
+            );
+            Ok(())
+        })
+        .accepting("PROSE about `#[ignore]` is not an `#[ignore]`", |edit| {
+            // The 25-versus-9 case, as a probe. Sixteen lines in this repository
+            // mention the attribute inside a doc comment; a gate that counts
+            // those reports a population that does not exist.
+            edit.write(
+                "crates/talkbank-model/src/probe_ignore_prose.rs",
+                "//! Tests needing the corpus are `#[ignore]`d and run by hand.\n\
+                 /// Remove the `#[ignore]` to run this locally.\n\
+                 fn f() {}\n",
+            );
+            Ok(())
+        })
+        .refusing("a swept file that cannot be read", "unreadable", |edit| {
+            edit.write_bytes(
+                "crates/talkbank-model/src/probe_skip_unreadable.rs",
+                vec![0xFF, 0xFE],
+            );
+            Ok(())
+        })
+    }
+
+    fn unproven_rules(&self) -> &'static [UnprovenRule] {
+        SILENT_SKIP_UNPROVEN
+    }
+}
+
+/// Rules of [`SilentSkipGate`] no plant reaches.
+static SILENT_SKIP_UNPROVEN: &[UnprovenRule] = &[UnprovenRule::new(
+    "WHETHER A STATED REASON IS TRUE",
+    "The gate reads that a reason exists, never what it says. \
+     `#[ignore = \"flaky\"]` satisfies it, and \"flaky\" is the one reason this \
+     project does not accept as a diagnosis. No probe can express the \
+     difference, because the input that would fail is prose a human has to \
+     judge; the reason is written down so a REVIEWER can, which is the whole \
+     value of moving it into the attribute.",
+)];
 
 /// No two tests in the tree have the same signature and body.
 pub struct DuplicateTestGate;
@@ -489,8 +649,8 @@ impl Gate for DuplicateTestGate {
         "duplicate-tests"
     }
 
-    fn check(&self) -> GateOutcome {
-        let scanned = sources(workspace_root());
+    fn check(&self, tree: ReadTree) -> Outcome {
+        let scanned = sources(&tree);
         let (files, unreadable) = (&scanned.files, &scanned.unreadable);
 
         let mut by_shape: BTreeMap<WrittenShape, Vec<String>> = BTreeMap::new();
@@ -521,16 +681,24 @@ impl Gate for DuplicateTestGate {
         ]);
 
         if sections.is_empty() {
-            Ok(format!("{total} tests, no duplicates"))
+            tree.clean(format!("{total} tests, no duplicates"))
         } else {
-            Err(sections)
+            Outcome::failed(sections)
         }
+    }
+
+    fn probes(&self) -> ProbeSuite {
+        probes::duplicate()
+    }
+
+    fn unproven_rules(&self) -> &'static [UnprovenRule] {
+        probes::DUPLICATE_UNPROVEN
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Scanned, SourceFile, blank_literals};
+    use super::{RelPath, Scanned, SourceFile, blank_literals};
 
     #[test]
     fn helper_declaration_is_not_a_call() {
@@ -546,7 +714,7 @@ mod tests {
         "#;
         let scan = Scanned {
             files: vec![SourceFile {
-                path: "example.rs".to_owned(),
+                path: RelPath::new("example.rs"),
                 original: original.to_owned(),
                 blanked: blank_literals(original),
             }],

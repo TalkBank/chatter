@@ -217,7 +217,7 @@ pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<Validat
 
 /// Post-validation for morphotag: %mor word count must match main tier.
 fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
-    use talkbank_model::alignment::helpers::{TierDomain, count_tier_positions};
+    use talkbank_model::alignment::helpers::{PositionalDomain, count_tier_positions};
 
     for line in &file.lines {
         if let Line::Utterance(utt) = line {
@@ -229,7 +229,7 @@ fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>)
             // counter already exists and is the same rule; extraction's own
             // docs name `count_tier_positions(..) == collect_tier_items(..)
             // .len()` as the invariant tying the two together.
-            let word_count = count_tier_positions(&utt.main.content.content, TierDomain::Mor);
+            let word_count = count_tier_positions(&utt.main.content.content, PositionalDomain::Mor);
 
             // Count %mor items
             for entry in &utt.dependent_tiers {

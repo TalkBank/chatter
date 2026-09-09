@@ -310,6 +310,8 @@ pub struct CodeEntry {
     summary: Rustdoc,
     kind: ErrorKind,
     status: Status,
+    #[serde(default)]
+    rules: crate::frontmatter::RuleProfile,
 }
 
 impl CodeEntry {
@@ -341,6 +343,27 @@ impl CodeEntry {
     #[must_use]
     pub fn status(&self) -> Status {
         self.status
+    }
+
+    /// The rules under which this code's rule RUNS.
+    ///
+    /// # Why this is a fact about the CODE
+    ///
+    /// "E351 only runs under strict linkers" is a property of the rule, not
+    /// of any one demonstration of it. It was a field on the EXAMPLE for an
+    /// afternoon, and three things said that was the wrong altitude: all
+    /// eleven affected examples declared the identical value; the generator
+    /// had a `demonstrating_profiles` method whose only job was to
+    /// reconstruct the per-code fact by scanning examples; and a `legal`
+    /// example that forgot the field stayed green, because under a rule set
+    /// that skips the rule everything is legal. Here, every example of the
+    /// code inherits it and the quiet case cannot be written.
+    ///
+    /// The default is the default rule set, so a code says nothing unless it
+    /// is opt-in, which is 430 of the 441 spec examples.
+    #[must_use]
+    pub fn rules(&self) -> crate::frontmatter::RuleProfile {
+        self.rules
     }
 }
 

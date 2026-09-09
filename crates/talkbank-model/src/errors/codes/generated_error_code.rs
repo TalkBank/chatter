@@ -152,7 +152,6 @@ pub enum ErrorCode {
     MissingMainTier,
     /// Expected tree-sitter node is missing.
     #[code("E302")]
-    #[status(planned)]
     MissingNode,
     /// Header colon not followed by a TAB.
     #[code("E303")]
@@ -175,7 +174,6 @@ pub enum ErrorCode {
     UndeclaredSpeaker,
     /// Unexpected syntax encountered during parsing.
     #[code("E309")]
-    #[status(planned)]
     UnexpectedSyntax,
     /// Parser failed to produce a valid parse tree.
     #[code("E310")]
@@ -192,7 +190,6 @@ pub enum ErrorCode {
     UnexpectedNode,
     /// Unclosed bracket in annotation or word content.
     #[code("E312")]
-    #[status(planned)]
     UnclosedBracket,
     /// Unclosed parenthesis in annotation or word content.
     #[code("E313")]
@@ -208,15 +205,12 @@ pub enum ErrorCode {
     UnparsableContent,
     /// Line could not be parsed.
     #[code("E319")]
-    #[status(planned)]
     UnparsableLine,
     /// Header line could not be parsed.
     #[code("E320")]
-    #[status(planned)]
     UnparsableHeader,
     /// Utterance could not be parsed.
     #[code("E321")]
-    #[status(planned)]
     UnparsableUtterance,
     /// Empty colon with no content following it.
     #[code("E322")]
@@ -241,25 +235,24 @@ pub enum ErrorCode {
     TreeParsingError,
     /// Unexpected node encountered in a specific parsing context.
     #[code("E331")]
-    #[status(planned)]
     UnexpectedNodeInContext,
     /// Unknown base content type in word.
     #[code("E340")]
     UnknownBaseContent,
     /// Unbalanced quotation marks spanning across utterances.
     #[code("E341")]
-    #[status(planned)]
+    #[status(opt_in)]
     UnbalancedQuotationCrossUtterance,
     /// Tree-sitter inserted a MISSING placeholder for a required element.
     #[code("E342")]
     MissingRequiredElement,
     /// Quotation-precedes terminator (+".) with no preceding same-speaker +" utterance; runs only under enable_quotation_validation.
     #[code("E344")]
-    #[status(planned)]
+    #[status(opt_in)]
     InvalidContentAnnotationNesting,
     /// Quoted-utterance linker (+") with no +"/. before it and no +". after it by the same speaker; runs only under enable_quotation_validation.
     #[code("E346")]
-    #[status(planned)]
+    #[status(opt_in)]
     UnmatchedContentAnnotationEnd,
     /// Unbalanced overlap markers.
     #[code("E347")]
@@ -270,23 +263,23 @@ pub enum ErrorCode {
     MissingOverlapEnd,
     /// Missing opening quotation mark.
     #[code("E351")]
-    #[status(planned)]
+    #[status(opt_in)]
     MissingQuoteBegin,
     /// Missing closing quotation mark.
     #[code("E352")]
-    #[status(planned)]
+    #[status(opt_in)]
     MissingQuoteEnd,
     /// Missing context for other-completion annotation.
     #[code("E353")]
-    #[status(planned)]
+    #[status(opt_in)]
     MissingOtherCompletionContext,
     /// Missing trailing-off terminator.
     #[code("E354")]
-    #[status(planned)]
+    #[status(opt_in)]
     MissingTrailingOffTerminator,
     /// Interleaved scoped annotations (overlapping scopes).
     #[code("E355")]
-    #[status(planned)]
+    #[status(opt_in)]
     InterleavedContentAnnotations,
     /// Unmatched underline begin marker.
     #[code("E356")]
@@ -302,7 +295,6 @@ pub enum ErrorCode {
     UnmatchedLongFeatureEnd,
     /// Invalid media bullet format.
     #[code("E360")]
-    #[status(planned)]
     InvalidMediaBullet,
     /// Invalid timestamp value in media bullet.
     #[code("E361")]
@@ -418,6 +410,7 @@ pub enum ErrorCode {
     EmptyLanguagesHeader,
     /// Empty `@Date` header.
     #[code("E508")]
+    #[status(planned)]
     EmptyDateHeader,
     /// Empty `@Media` header.
     #[code("E509")]
@@ -602,7 +595,6 @@ pub enum ErrorCode {
     TierBeginTimeNotMonotonic,
     /// Invalid morphology format on `%mor` tier.
     #[code("E702")]
-    #[status(planned)]
     InvalidMorphologyFormat,
     /// Speaker overlaps with themselves (CLAN Error 133).
     #[code("E704")]
@@ -619,7 +611,6 @@ pub enum ErrorCode {
     MorTerminatorPresenceMismatch,
     /// Malformed grammar relation on `%gra` tier.
     #[code("E708")]
-    #[status(planned)]
     MalformedGrammarRelation,
     /// Invalid index in grammar relation.
     #[code("E709")]
@@ -629,7 +620,6 @@ pub enum ErrorCode {
     UnexpectedGrammarNode,
     /// `%mor` word has empty stem, POS category, prefix, or suffix.
     #[code("E711")]
-    #[status(planned)]
     MorEmptyContent,
     /// `%gra` word index is out of range.
     #[code("E712")]

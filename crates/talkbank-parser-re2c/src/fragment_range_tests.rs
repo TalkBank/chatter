@@ -108,3 +108,50 @@ fn fragment_ranges_rebase_diagnostics_without_moving_their_snippet() {
     check(&talkbank_parser::TreeSitterParser::new().unwrap());
     check(&crate::Re2cParser::new());
 }
+
+/// SURVIVES: behaviour at a seam, and one both backends must agree on.
+///
+/// The test above pins this for `parse_header`, whose diagnostic arrives from a
+/// path that already wrapped the sink. `parse_gra_relation` was covered by
+/// `1|2|SUBJ`, which emits nothing, so it could not see a span at all. When the
+/// `%gra` lowering became fallible on 2026-09-08 the re2c side passed the
+/// caller's RAW sink into it and reported E710 at `2..22` where the canonical
+/// backend reported it at the caller's offset. `rebase` moves the MODEL; a
+/// diagnostic already handed to a sink is past moving.
+#[test]
+fn a_gra_relation_diagnostic_is_reported_at_the_caller_s_offset() {
+    fn check(parser: &impl ChatParser) {
+        // A head no `usize` can hold: the grammar accepts the digit run, so
+        // both backends reach the model check and report E710.
+        let input = "2|99999999999999999999|PUNCT";
+        let offset = 1000usize;
+        let errors = ErrorCollector::new();
+        assert!(
+            parser
+                .parse_gra_relation(input, offset, &errors)
+                .is_rejected(),
+            "{}: an unrepresentable head must be rejected",
+            parser.parser_name()
+        );
+        let errors = errors.into_vec();
+        let error = errors
+            .iter()
+            .find(|e| e.code == ErrorCode::UnexpectedGrammarNode)
+            .unwrap_or_else(|| panic!("{}: expected E710, got {errors:?}", parser.parser_name()));
+        assert!(
+            error.location.span.start as usize >= offset,
+            "{}: reported at {:?}, which is inside the FRAGMENT rather than at \
+             the caller's offset {offset}",
+            parser.parser_name(),
+            error.location.span
+        );
+        assert!(
+            (error.location.span.end as usize) <= offset + input.len(),
+            "{}: reported past the end of the fragment: {:?}",
+            parser.parser_name(),
+            error.location.span
+        );
+    }
+    check(&talkbank_parser::TreeSitterParser::new().unwrap());
+    check(&crate::Re2cParser::new());
+}

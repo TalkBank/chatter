@@ -282,7 +282,8 @@ fn collect_cha_files(base: &std::path::Path) -> Vec<PathBuf> {
 }
 
 #[test]
-#[ignore]
+#[ignore = "needs the wild corpus; a report generator that emits a taxonomy \
+           rather than a gate that can fail. Run with --ignored --nocapture."]
 fn categorize_corpus_divergences() {
     let base = crate::corpus_root::CorpusRoot::resolve().require();
     if !base.exists() {

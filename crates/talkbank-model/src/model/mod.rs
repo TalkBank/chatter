@@ -40,9 +40,8 @@ mod semantic_eq;
 pub use semantic_eq::SemanticEq;
 mod semantic_diff;
 pub use semantic_diff::{
-    DEFAULT_MAX_DIFFS, PathSegment, RenderMode, SemanticDiff, SemanticDiffContext,
-    SemanticDiffKind, SemanticDiffReport, SemanticDifference, SemanticPath, normalize_span,
-    normalize_span_option,
+    DEFAULT_MAX_DIFFS, PathSegment, SemanticDiff, SemanticDiffContext, SemanticDiffKind,
+    SemanticDiffReport, SemanticDifference, SemanticPath, normalize_span, normalize_span_option,
 };
 mod validation_tag;
 pub use validation_tag::{ValidationTag, ValidationTagged};
@@ -264,6 +263,7 @@ pub use dependent_tier::{
     DependentTierEntry,
     ExpTier,
     GpxTier,
+    GraCompleteness,
     GraTier,
     GraTierType,
     // GRA
@@ -313,7 +313,14 @@ pub use alignment_set::{AlignmentSet, AlignmentUnit, AlignmentUnits};
 
 // Re-export language metadata
 pub use language_metadata::{
-    LanguageMetadata, LanguageSource, WordLanguageInfo, WordLanguageInfos,
+    LanguageMetadata,
+    LanguageSource,
+    WordLanguageInfo,
+    WordLanguageInfos,
+    // `WordLanguages` is the type of a public field
+    // (`WordLanguageInfo::languages`), so it was public by leak and unnameable;
+    // a parse-backed test comparing that field needs the name.
+    WordLanguages,
 };
 
 // Re-export user-defined tier types
@@ -322,66 +329,7 @@ pub use user_defined_tier::{UserDefinedTier, UserDefinedTierLabel};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Span;
     use talkbank_derive::ValidationTagged;
-
-    /// Minimal utterance fixture wires required main-tier fields correctly.
-    ///
-    /// This test protects the basic `Utterance::new` contract used across parser outputs.
-    #[test]
-    fn test_simple_utterance_model() {
-        let main = MainTier::new(
-            "CHI",
-            vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
-                "hello", "hello",
-            )))],
-            Terminator::Period { span: Span::DUMMY },
-        );
-
-        let utterance = Utterance::new(main);
-
-        assert_eq!(utterance.main.speaker, "CHI".into());
-        assert_eq!(utterance.main.content.content.len(), 1);
-        assert!(utterance.mor_tier().is_none());
-    }
-
-    /// Word builders preserve raw text, cleaned text, form type, and content structure.
-    ///
-    /// The assertions cover a representative multi-component lexical token.
-    #[test]
-    fn test_word_structure() {
-        let word = Word::new_unchecked("hel(lo)@b", "hello")
-            .with_form_type(FormType::B)
-            .with_content(vec![
-                WordContent::Text(WordText::new_unchecked("hel")),
-                WordContent::Shortening(WordShortening::new_unchecked("lo")),
-            ]);
-
-        assert_eq!(word.raw_text(), "hel(lo)@b");
-        assert_eq!(word.cleaned_text(), "hello");
-        assert_eq!(word.form_type, Some(FormType::B));
-        assert_eq!(word.content().len(), 2);
-    }
-
-    /// Main-tier JSON serialization includes core speaker and content fields.
-    ///
-    /// This is a smoke test for serde wiring on a common top-level model type.
-    #[test]
-    fn test_json_serialization() -> Result<(), String> {
-        let main = MainTier::new(
-            "CHI",
-            vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
-                "hello", "hello",
-            )))],
-            Terminator::Period { span: Span::DUMMY },
-        );
-
-        let json = serde_json::to_string_pretty(&main)
-            .map_err(|err| format!("Failed to serialize main tier: {err}"))?;
-        assert!(json.contains("CHI"));
-        assert!(json.contains("hello"));
-        Ok(())
-    }
 
     /// Demo enum used to validate `ValidationTagged` defaults/overrides.
     #[derive(ValidationTagged)]

@@ -31,29 +31,25 @@ pub(crate) fn analyze_dependent_tier_error_with_context(
         }
     };
 
-    // E710: Invalid %gra - non-numeric index (entire tier is ERROR)
-    // Pattern: ERROR node starts with %gra:
-    if error_text.contains("%gra:") {
-        return ParseError::new(
-            ErrorCode::UnexpectedGrammarNode,
-            Severity::Error,
-            SourceLocation::from_offsets(start, end),
-            ErrorContext::new(source, start..end, error_text),
-            "Invalid GRA relation - non-numeric index",
-        )
-        .with_suggestion("GRA relation indices must be numbers (e.g., 1|2|SUBJ, not one|2|SUBJ)");
-    }
+    // There is no `%gra:` branch here. One fired on that substring anywhere
+    // in the ERROR's text until 2026-09-08 and called it E710, "non-numeric
+    // index", on an `%eng` body that mentioned `%gra:` and on junk after a
+    // well-formed relation alike; this parser's one producer of E710 is the
+    // typed relation parser (`tier_parsers/gra/relation.rs`), which knows a
+    // head field when it has one (the re2c backend has its own). A `%gra`
+    // recovery node is the generic E316 below.
 
     // E760: %mor item with an EMPTY part-of-speech field (`|we`). More
     // specific than the missing-pipe case below: the pipe is present but
     // the field before it is empty, which is never meaningful %mor
-    // content (modern reading of CLAN CHECK error 11). Recognized both
-    // when the caller supplies mor tier context and when the whole line
-    // is the ERROR node (then the `%mor:` prefix is in the text, same
-    // convention as the `%gra:` branch above). The span is narrowed to
-    // the offending item.
+    // content (modern reading of CLAN CHECK error 11). Recognized when the
+    // caller supplies mor tier context, when the ERROR sits on a `%mor`
+    // line, and when the whole line is the ERROR node (then the text STARTS
+    // with the `%mor:` prefix; until 2026-09-08 this tested `contains`, and
+    // an `%eng` body that mentioned `%mor:` beside a `|token` was reported
+    // as a `%mor` fault). The span is narrowed to the offending item.
     if (tier_type == Some("mor")
-        || error_text.contains("%mor:")
+        || error_text.starts_with("%mor:")
         || super::dedicated::on_mor_tier_line(source, start))
         && let Some(item) = super::dedicated::mor_item_with_empty_pos(
             error_text,
@@ -79,20 +75,24 @@ pub(crate) fn analyze_dependent_tier_error_with_context(
         );
     }
 
-    // E702: Invalid %mor format - missing pipe (ERROR within mor_word)
-    // Pattern: space + letter(s) when in mor tier context
-    // Example: ERROR(" n") within mor_word means "hello n|world" instead of "hello|x n|world"
-    // Check if error node has actual content (not just whitespace) by checking byte length
+    // E702: a recovery ERROR carrying content inside a `%mor` tier.
+    //
+    // THE MESSAGE USED TO NAME A FAULT THIS CONDITION DOES NOT ESTABLISH. It
+    // said "missing pipe separator", and the condition tests only that the tier
+    // is `%mor` and that the ERROR node is non-empty. Both `%mor:\tco| .` and
+    // `%mor:\tv|go-PAST^v|went .` reach it with their pipes present, and were
+    // told a pipe was missing. A diagnostic whose message does not match the
+    // input is this project's own stated tell for a chatter defect, so it now
+    // reports what it knows and suggests what it cannot know.
     if tier_type == Some("mor") && !error_text.is_empty() && end > start {
-        // ERROR node in mor tier with non-empty content = missing pipe
         return ParseError::new(
             ErrorCode::InvalidMorphologyFormat,
             Severity::Error,
             SourceLocation::from_offsets(start, end),
             ErrorContext::new(source, start..end, error_text),
-            "Invalid MOR chunk format - missing pipe separator",
+            "Unparsable content in a %mor item",
         )
-        .with_suggestion("MOR chunks must have format: pos|stem (e.g., v|hello, n|world)");
+        .with_suggestion("MOR items are pos|stem (e.g., v|hello, n|world), with optional prefix, suffix and translation");
     }
 
     // Double comma in dependent tier

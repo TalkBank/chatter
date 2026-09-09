@@ -38,6 +38,18 @@ impl<'a> SourceText<'a> {
         Self(text)
     }
 
+    /// The span of the whole text.
+    ///
+    /// The honest fallback for a diagnostic whose exact position cannot be
+    /// resolved: "somewhere in this file" is a range a reader can act on, and
+    /// it is NOT `Span::DUMMY`, which is also the legal zero-width position at
+    /// byte 0 and would place the finding at the top of the file as though
+    /// that were where it is.
+    #[must_use]
+    pub fn whole(self) -> Span {
+        Span::from_usize(0, self.0.len())
+    }
+
     /// The span of `slice` within this source.
     ///
     /// `None` when `slice` does not lie inside this text, which means the

@@ -95,6 +95,12 @@ fn push_variant(out: &mut String, entry: &CodeEntry) {
     // deleted gate's `as_check_status`, whose policy is now `Status::is_enforced`.
     if !entry.status().is_enforced() {
         out.push_str("#[status(planned)]\n");
+    } else if !entry.rules().is_default() {
+        // Enforced, but only on request. `else if` because the two are
+        // exclusive by construction: a rule nothing enforces cannot be
+        // enforced under an option, and emitting both would give the derive
+        // macro one variant in two lists.
+        out.push_str("#[status(opt_in)]\n");
     }
     let _ = writeln!(out, "{},", entry.variant());
 }

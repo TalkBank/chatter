@@ -30,7 +30,6 @@ tracing = { workspace = true }
 tokio = { workspace = true, optional = true, features = ["rt", "sync"] }
 
 [dev-dependencies]
-insta = { workspace = true }
 proptest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

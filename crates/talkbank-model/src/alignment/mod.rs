@@ -60,8 +60,8 @@
 //! let main = MainTier::new(
 //!     "CHI",
 //!     vec![
-//!         UtteranceContent::Word(Word::new_unchecked("hello", "hello")),
-//!         UtteranceContent::Word(Word::new_unchecked("world", "world")),
+//!         UtteranceContent::Word(Word::simple("hello")),
+//!         UtteranceContent::Word(Word::simple("world")),
 //!     ],
 //!     Terminator::Period { span: Span::DUMMY },
 //! );
@@ -121,7 +121,8 @@ mod location_tests;
 // Re-export public API
 pub use gra::{GraAlignment, GraAlignmentPair, align_mor_to_gra};
 pub use helpers::{
-    TierDomain, count_tier_positions_until, counts_for_tier, walk_words, walk_words_mut,
+    PositionalDomain, TierDomain, count_tier_positions_until, counts_for_tier, walk_words,
+    walk_words_mut,
 };
 pub use indices::{
     GraHeadRef, GraIndex, MainWordIndex, MorChunkIndex, MorItemIndex, PhoItemIndex,

@@ -23,10 +23,12 @@
 //! See the chatter book chapter `user-guide/sanitize.md` for the full leak-surface inventory. The
 //! short version:
 //!
-//! - **Preserved byte-exact**: timing bullets, `%wor` per-word offsets,
+//! - **Preserved byte-exact**: timing bullets, `%wor` per-word bullets,
 //!   speaker codes, `@Languages`, `@Birth`, `@Date`, `@Media`, `@PID`,
 //!   `@L1Of`, structural markers (`+`, `~`, CA elements, `@n`, POS tags).
-//! - **Replaced**: every `WordContent::Text`, `Shortening` text, `%mor`
+//! - **Replaced**: every `WordContent::Text`, `Shortening` text, `%wor`
+//!   words (the paired main-tier word's placeholder when the tier
+//!   corroborates the main tier, fresh ones otherwise; `wor.rs`), `%mor`
 //!   lemmas, `%pho`/`%sin`/`%mod` tiers (dropped), free-text dependent
 //!   tiers, free-text headers (`@Comment`, `@Transcriber`, ...),
 //!   `@Participants` names, `@ID` `custom_field`/`education`, free-text
@@ -34,10 +36,10 @@
 //!
 //! # Determinism + Idempotence
 //!
-//! Placeholder generation is keyed off `(utterance_index, word_index)`
-//! tree position rather than a global counter. Sanitizing the same input
-//! always produces byte-identical output, and re-sanitizing a sanitized
-//! file is a no-op.
+//! Placeholders come from one monotonic counter advanced in document
+//! order (`placeholder.rs`), so sanitizing the same input always produces
+//! byte-identical output, and re-sanitizing a sanitized file reproduces
+//! it.
 //!
 //! Out of scope for v1: speaker-code anonymization, `@Birth`/`@Date`
 //! fuzzing, `@Media` filename redaction, audio-side sanitization,
@@ -49,6 +51,7 @@ mod error;
 mod header;
 mod placeholder;
 mod policy;
+mod wor;
 mod word;
 
 /// Marker text emitted in place of redacted free-text content.

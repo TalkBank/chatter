@@ -15,15 +15,9 @@ use crate::model::{BracketedContent, ContentStructure, LeafContent, MainTier};
 pub fn collect_retrace_checks(main_tier: &MainTier) -> (Vec<LeafKind>, Vec<RetraceCheck>) {
     let mut leaf_kinds = Vec::new();
     let mut retrace_checks = Vec::new();
-    let mut retrace_index = 0usize;
 
     for item in main_tier.content.content.iter() {
-        collect(
-            item.structure(),
-            &mut leaf_kinds,
-            &mut retrace_checks,
-            &mut retrace_index,
-        );
+        collect(item.structure(), &mut leaf_kinds, &mut retrace_checks);
     }
 
     if main_tier.content.terminator.is_some() {
@@ -47,7 +41,6 @@ fn collect(
     structure: ContentStructure<'_>,
     leaf_kinds: &mut Vec<LeafKind>,
     retrace_checks: &mut Vec<RetraceCheck>,
-    retrace_index: &mut usize,
 ) {
     match structure {
         ContentStructure::Word(_) => leaf_kinds.push(LeafKind::RealContent),
@@ -56,20 +49,21 @@ fn collect(
             LeafContent::Notation => LeafKind::NonRealContent,
         }),
         ContentStructure::Group(group) => {
-            collect_enclosed(group.content(), leaf_kinds, retrace_checks, retrace_index);
+            collect_enclosed(group.content(), leaf_kinds, retrace_checks);
         }
         ContentStructure::Retrace(retrace) => {
-            collect_enclosed(
-                &retrace.inner().content,
-                leaf_kinds,
-                retrace_checks,
-                retrace_index,
-            );
+            collect_enclosed(&retrace.inner().content, leaf_kinds, retrace_checks);
             retrace_checks.push(RetraceCheck {
-                retrace_index: *retrace_index,
+                // The marker's own bytes when recorded; otherwise the whole
+                // retrace as the wrapper locates it (annotations included),
+                // a wider but true location, or a dummy one that suppresses
+                // the label. Never an invented offset.
+                marker_span: match retrace.inner().marker_span {
+                    Some(marker) => marker,
+                    None => retrace.span(),
+                },
                 after_leaf_index: leaf_kinds.len(),
             });
-            *retrace_index += 1;
         }
     }
 }
@@ -80,9 +74,8 @@ fn collect_enclosed(
     content: &BracketedContent,
     leaf_kinds: &mut Vec<LeafKind>,
     retrace_checks: &mut Vec<RetraceCheck>,
-    retrace_index: &mut usize,
 ) {
     for item in content.content.iter() {
-        collect(item.structure(), leaf_kinds, retrace_checks, retrace_index);
+        collect(item.structure(), leaf_kinds, retrace_checks);
     }
 }

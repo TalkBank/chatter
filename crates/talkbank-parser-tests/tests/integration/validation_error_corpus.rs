@@ -30,43 +30,21 @@ use std::fs;
 use std::path::PathBuf;
 use talkbank_model::model::TranscriptName;
 
-use serde::Deserialize;
 use talkbank_model::ErrorCollector;
 use talkbank_model::ParseOutcome;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
 
-/// One fixture's expectations, mirrored from the generator's
-/// `ValidationFixtureEntry` FIELD NAMES only: every typed value (`code`,
-/// `claim`, `status`) is the shared vocabulary type, so the wire's meaning has
-/// one owner and a variant added on the generator side deserializes here
-/// without a second enum to update. (A local three-variant `FixtureStatus`
-/// mirror sat here and was already missing `unreachable_from_chat`.)
-#[derive(Deserialize)]
-struct ManifestEntry {
-    fixture: String,
-    /// The spec's own code, which the claim is about.
-    code: talkbank_spec_vocabulary::SpecErrorCode,
-    claim: talkbank_spec_vocabulary::frontmatter::Claim,
-    status: talkbank_spec_vocabulary::Status,
-    source_spec: String,
-}
-
-/// The corpus manifest written by `just spec-gen`.
-#[derive(Deserialize)]
-struct Manifest {
-    fixtures: Vec<ManifestEntry>,
-    /// Implemented CODES with no triggering example in any spec.
-    ///
-    /// NOT `#[serde(default)]`: the generator always writes both gate lists,
-    /// so a missing or renamed field must be a loud deserialization failure.
-    /// Defaulted, the R4 rename of this very field would have made the
-    /// coverage gate pass vacuously on the un-renamed side.
-    implemented_codes_without_examples: Vec<String>,
-    /// Specs marked `unreachable_from_chat` that carry an example anyway,
-    /// which means CHAT input does reach them and the status is wrong.
-    unreachable_specs_with_examples: Vec<String>,
-}
+// The manifest types are the GENERATOR'S OWN, read from the crate both cargo
+// workspaces share. A hand-written mirror of `ValidationFixtureEntry` and
+// `ValidationManifest` stood here until 2026-09-08, matched to the generator
+// by field name and by nothing else; its own doc recorded that a previous
+// local status enum had already drifted, and adding `rules` to the format
+// would have meant adding it here too. Moving the wire types into
+// `talkbank-spec-vocabulary` deleted both structs and the drift with them.
+use talkbank_spec_vocabulary::SpecErrorCode;
+use talkbank_spec_vocabulary::paths::RepoRelativePath;
+use talkbank_spec_vocabulary::validation_manifest::ValidationManifest as Manifest;
 
 /// The validation corpus dir under this crate (where the generator writes).
 fn corpus_dir() -> PathBuf {
@@ -125,7 +103,13 @@ fn validation_errors_detected() -> Result<(), TestError> {
         if let ParseOutcome::Parsed(mut chat_file) = parse_result {
             let validation_errors = ErrorCollector::new();
             let fixture_path = dir.join(&entry.fixture);
-            chat_file.validate_with_alignment(
+            // The fixture runs under the rules its own code declares. Before
+            // the manifest carried them, every fixture ran under the default
+            // rule set, so a fixture for an opt-in rule could only ever report
+            // nothing; eight such codes were marked `not_implemented` to keep
+            // this runner quiet about them.
+            chat_file.validate_with_alignment_and_rules(
+                entry.rules.selection(),
                 &validation_errors,
                 TranscriptName::for_path(&fixture_path),
             );
@@ -158,6 +142,59 @@ fn validation_errors_detected() -> Result<(), TestError> {
                 entry.code.as_str()
             ),
         };
+        // THE OTHER HALF OF AN OPT-IN CLAIM, and without it the declaration
+        // is decoration. A fixture whose code declares an option is run a
+        // SECOND time with no options at all, and the code must be absent.
+        //
+        // Why it has to exist: everything above runs the fixture only with the
+        // option ON, so deleting the four `enable_quotation_validation` guards
+        // in `validation/cross_utterance/mod.rs` (or flipping the default in
+        // `validation/context.rs`) leaves every fixture emitting its code,
+        // every claim satisfied, the observation snapshot byte-identical and
+        // the gate green, while eight published pages go on telling readers a
+        // default run is silent. This is the assertion those pages rest on.
+        //
+        // Only `violates` is checked: `legal` and `subsumed_by` already assert
+        // the code is absent, so asserting it again under weaker rules says
+        // nothing new.
+        if matches!(entry.claim, Claim::Violates) && !entry.rules.is_default() {
+            let default_errors = ErrorCollector::new();
+            let mut default_codes: Vec<String> = Vec::new();
+            let parse_errors = ErrorCollector::new();
+            if let ParseOutcome::Parsed(mut chat_file) =
+                parser.parse_chat_file_fragment(&content, 0, &parse_errors)
+            {
+                chat_file.validate_with_alignment(
+                    &default_errors,
+                    TranscriptName::for_path(&dir.join(&entry.fixture)),
+                );
+                default_codes.extend(
+                    parse_errors
+                        .to_vec()
+                        .iter()
+                        .chain(default_errors.to_vec().iter())
+                        .map(|e| e.code.to_string()),
+                );
+            }
+            if default_codes.iter().any(|got| got == entry.code.as_str()) {
+                failures.push(format!(
+                    "{}: {} is declared to need {} but a DEFAULT run reports it \
+                     anyway (got {:?}). Either the rule is no longer opt-in, in \
+                     which case drop `rules` from its registry entry, or a guard \
+                     was lost. Every generated page for this code currently \
+                     tells readers a default run does not report it. [{}]",
+                    entry.fixture,
+                    entry.code.as_str(),
+                    entry
+                        .rules
+                        .cli_flag()
+                        .unwrap_or("an option this build does not name"),
+                    default_codes,
+                    entry.source_spec
+                ));
+            }
+        }
+
         if satisfied {
             println!("  ✓ {} → {} ({})", wants, entry.fixture, codes.join(", "));
         } else {
@@ -196,7 +233,13 @@ fn validation_errors_detected() -> Result<(), TestError> {
              no CHAT input can reach the rule at all, Status: \
              unreachable_from_chat naming its out-of-corpus test):\n  {}",
             coverage_gaps.len(),
-            coverage_gaps.join("\n  ")
+            // Typed now that the manifest is the generator's own struct rather
+            // than a `Vec<String>` mirror: rendered here, never re-parsed.
+            coverage_gaps
+                .iter()
+                .map(SpecErrorCode::as_str)
+                .collect::<Vec<_>>()
+                .join("\n  ")
         ));
     }
     // The converse of the escape hatch: an `unreachable_from_chat` spec that
@@ -208,7 +251,11 @@ fn validation_errors_detected() -> Result<(), TestError> {
             "{} specs marked unreachable_from_chat carry an example, so CHAT \
              input does reach them and the status is wrong:\n  {}",
             mislabelled.len(),
-            mislabelled.join("\n  ")
+            mislabelled
+                .iter()
+                .map(RepoRelativePath::as_str)
+                .collect::<Vec<_>>()
+                .join("\n  ")
         ));
     }
     if !sections.is_empty() {

@@ -137,13 +137,25 @@ impl BulletContent {
 
     /// Returns `true` when the payload carries no meaningful content.
     ///
-    /// A single empty text segment is also treated as empty content, because
-    /// [`Self::from_text`] can build one; [`Self::empty`] carries no segment at
-    /// all.
+    /// Text segments that are empty or whitespace-only count as nothing, so a
+    /// tier written as `%com:` followed by a tab and spaces declares nothing,
+    /// exactly as `%eng:` with the same bytes does (the text tiers' predicate
+    /// trims); a bullet segment is always content. Until 2026-09-08 only a
+    /// single EMPTY segment counted, so `%com` and `%add` escaped E756 on
+    /// whitespace that CLAN CHECK 31 rejects (`check_FoundText` skips ASCII
+    /// space, tab and newline before looking for text). Whitespace here is
+    /// Unicode whitespace, as on the free-text tiers, so a payload of
+    /// non-breaking spaces alone also declares nothing; CHECK accepts that
+    /// one, and chatter is deliberately stricter. [`Self::from_text`] can
+    /// build the empty segment; [`Self::empty`] carries no segment at all.
     pub fn is_empty(&self) -> bool {
-        self.segments.is_empty()
-            || (self.segments.len() == 1
-                && matches!(&self.segments[0], BulletContentSegment::Text(text) if text.text.is_empty()))
+        self.segments.iter().all(|segment| match segment {
+            BulletContentSegment::Text(text) => text.text.trim().is_empty(),
+            // A bullet, a picture and a continuation marker are each a payload.
+            BulletContentSegment::Bullet(_)
+            | BulletContentSegment::Picture(_)
+            | BulletContentSegment::Continuation => false,
+        })
     }
 }
 

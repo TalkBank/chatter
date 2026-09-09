@@ -1,7 +1,7 @@
 # Dependent Tiers
 
 **Status:** Reference
-**Last updated:** 2026-08-30 15:51 EDT
+**Last updated:** 2026-09-08 03:12 EDT
 
 Dependent tiers appear on lines beginning with `%` immediately after an utterance. They provide annotations linked to the main tier content.
 
@@ -37,7 +37,7 @@ The `%gra` tier encodes dependency syntax using Universal Dependencies relation 
 %gra:	1|2|NSUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
 ```
 
-The `%gra` tier aligns with `%mor` chunks (clitics expand into multiple chunks). Validation checks sequential indices (E721), ROOT structure (E722 missing root, E723 multiple roots), and circular dependencies (E724).
+The `%gra` tier aligns with `%mor` chunks (clitics expand into multiple chunks). Validation checks sequential indices (E721), ROOT structure (E722 missing root, E723 multiple roots), and circular dependencies (E724). Two of those describe the tier AS A WHOLE and are withheld when the tier in hand is not the one you wrote: E721 and E722, when the parser had to reject a relation it could not represent, or when `%mor`-to-`%gra` alignment has already reported a count or index fault. E723 and E724 are always reported, because dropping a relation cannot create a second root or close a cycle, so a violation among the relations that survive is one the transcript contains.
 
 ### %pho / %mod, Phonological Transcription
 

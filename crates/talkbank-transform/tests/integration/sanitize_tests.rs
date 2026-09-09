@@ -83,21 +83,90 @@ fn t01_bullets_byte_exact() {
     }
 }
 
+/// `%wor` carries each main-tier word again beside its bullet, so the
+/// sanitizer gives each `%wor` word the placeholder of the main-tier word
+/// it aligns to and keeps every bullet byte-exact. The pairing is the
+/// model's own (`WorMainTierProjection::bind_timing`, then
+/// `corroborate_wor_timing`, decided before the main tier is rewritten),
+/// so an `xxx` on the main tier, which `%wor` never lists, shifts nothing;
+/// a tier whose word count drifts from the main tier's slots (here, one
+/// that lists a fragment the policy excludes), or whose words did not all
+/// match the main tier's (`dog` for `the`; an `xxx` written where the main
+/// tier says `cat`), pairs with nothing and takes fresh placeholders, so no
+/// false correspondence is written, the `xxx` passing through as it does
+/// on the main tier; and a compound
+/// takes the main word's whole display text once, the form a generated
+/// `%wor` carries. Sanitizing the output again reproduces it.
+///
+/// Until 2026-09-08 this test's fixture wrote the timings as bare
+/// `1000_1100` tokens, which is not CHAT (`%wor` bullets carry the same
+/// `\u{15}` delimiters as main-tier bullets) and which the model parses as
+/// six WORDS; the test then checked that those "offsets" survived, which
+/// they did only because the sanitizer wrote `%wor` out untouched, words
+/// and all. The whole line is pinned now, so a leaked word shows.
 #[test]
 fn t02_wor_per_word_offsets_byte_exact() {
-    // %wor uses bare `word START_END` triples on the dependent tier.
-    // The main-tier bullet still uses the `\u{0015}` delimiter, but %wor
-    // word-level offsets do not.
-    let cha = solo_par(&format!(
-        "*PAR:\tthe cat sat . {BULLET}1000_2000{BULLET}\n\
-%wor:\tthe 1000_1100 cat 1100_1500 sat 1500_2000 .\n"
-    ));
-    let out = sanitize_to_string(&cha);
-    for offset in ["1000_1100", "1100_1500", "1500_2000"] {
-        assert!(
-            out.contains(offset),
-            "%wor offset {offset:?} not preserved byte-exactly in:\n{out}"
-        );
+    let b = BULLET;
+    let rows: [(&str, String, String); 6] = [
+        (
+            "plain",
+            format!(
+                "*PAR:\tthe cat sat . {b}1000_2000{b}\n%wor:\tthe {b}1000_1100{b} cat {b}1100_1500{b} sat {b}1500_2000{b} .\n"
+            ),
+            format!(
+                "*PAR:\tw1 w2 w3 . {b}1000_2000{b}\n%wor:\tw1 {b}1000_1100{b} w2 {b}1100_1500{b} w3 {b}1500_2000{b} .\n"
+            ),
+        ),
+        (
+            "an xxx on the main tier, which %wor does not list",
+            format!(
+                "*PAR:\tthe xxx cat sat . {b}1000_2000{b}\n%wor:\tthe {b}1000_1100{b} cat {b}1100_1500{b} sat {b}1500_2000{b} .\n"
+            ),
+            format!(
+                "*PAR:\tw1 xxx w2 w3 . {b}1000_2000{b}\n%wor:\tw1 {b}1000_1100{b} w2 {b}1100_1500{b} w3 {b}1500_2000{b} .\n"
+            ),
+        ),
+        (
+            "an xxx on %wor itself: uncorroborated, fresh placeholders, the xxx stays",
+            format!(
+                "*PAR:\tthe cat sat . {b}1000_2000{b}\n%wor:\tthe {b}1000_1100{b} xxx {b}1100_1500{b} sat {b}1500_2000{b} .\n"
+            ),
+            format!(
+                "*PAR:\tw1 w2 w3 . {b}1000_2000{b}\n%wor:\tw4 {b}1000_1100{b} xxx {b}1100_1500{b} w5 {b}1500_2000{b} .\n"
+            ),
+        ),
+        (
+            "a %wor that lists a fragment the policy excludes: drifted, fresh placeholders",
+            format!(
+                "*PAR:\tthe &+fr cat sat . {b}1000_2000{b}\n%wor:\tthe {b}900_1000{b} fr {b}1000_1050{b} cat {b}1100_1500{b} sat {b}1500_2000{b} .\n"
+            ),
+            format!(
+                "*PAR:\tw1 &+w2 w3 w4 . {b}1000_2000{b}\n%wor:\tw5 {b}900_1000{b} w6 {b}1000_1050{b} w7 {b}1100_1500{b} w8 {b}1500_2000{b} .\n"
+            ),
+        ),
+        (
+            "a count-matched %wor whose words never agreed: no agreement is manufactured",
+            format!(
+                "*PAR:\tthe cat . {b}1000_2000{b}\n%wor:\tdog {b}1000_1100{b} cat {b}1100_1500{b} .\n"
+            ),
+            format!(
+                "*PAR:\tw1 w2 . {b}1000_2000{b}\n%wor:\tw3 {b}1000_1100{b} w4 {b}1100_1500{b} .\n"
+            ),
+        ),
+        (
+            "a compound takes the main word's display text once",
+            format!(
+                "*PAR:\tmail+man cat . {b}1000_2000{b}\n%wor:\tmail+man {b}1000_1100{b} cat {b}1100_1500{b} .\n"
+            ),
+            format!(
+                "*PAR:\tw1+w1 w2 . {b}1000_2000{b}\n%wor:\tw1w1 {b}1000_1100{b} w2 {b}1100_1500{b} .\n"
+            ),
+        ),
+    ];
+    for (what, body, expected_body) in &rows {
+        let out = sanitize_to_string(&solo_par(body));
+        assert_eq!(out, solo_par(expected_body), "{what}");
+        assert_eq!(sanitize_to_string(&out), out, "idempotent: {what}");
     }
 }
 
@@ -351,6 +420,89 @@ fn t00_fixture_roundtrips_without_sanitize() {
         assert!(
             out.contains(&needle),
             "round-trip without sanitize lost bullet {needle:?}:\n{out}"
+        );
+    }
+}
+
+/// Every dependent-tier kind the model has, through the strict sanitizer.
+///
+/// The redaction rule is per tier kind (`redact/dependent_tier.rs`): the
+/// bullet-payload tiers and the free-text tiers become the placeholder, the
+/// `%x` tier too, `%mor` lemmas become placeholders, the numeric tiers
+/// (`%gra`, `%tim`) keep their content, `%wor` words take the main tier's
+/// placeholders beside their timings, and the phonological tiers
+/// are dropped whole. Until 2026-09-08 the tests here reached three of the
+/// twenty-odd arms; this row table reaches each one and pins the output line
+/// by line, so an arm that silently kept content would show.
+#[test]
+fn every_dependent_tier_kind_is_redacted_or_dropped_as_its_rule_says() {
+    let tiers = "\
+%mor:\tn|hello .\n\
+%gra:\t1|0|ROOT 2|1|PUNCT\n\
+%wor:\thello \u{15}0_100\u{15} .\n\
+%act:\twaves\n\
+%cod:\tsecret code\n\
+%com:\ta private remark\n\
+%add:\tMOT\n\
+%exp:\tan explanation\n\
+%gpx:\ta gesture\n\
+%int:\tan intonation\n\
+%sit:\ta situation\n\
+%spa:\ta speech act\n\
+%alt:\tan alternative\n\
+%coh:\ta cohesion note\n\
+%def:\ta definition\n\
+%eng:\tan English gloss\n\
+%err:\tan error note\n\
+%fac:\ta facial note\n\
+%flo:\ta flow note\n\
+%gls:\ta gloss\n\
+%ort:\tan orthography\n\
+%par:\ta paralinguistic note\n\
+%tim:\t17:30-18:00\n\
+%xfoo:\ta user-defined note\n\
+%pho:\th\u{259}\u{2C8}lo\u{28A}\n\
+%mod:\th\u{259}\u{2C8}lo\u{28A}\n";
+    let cha = solo_par(&format!("*PAR:\thello .\n{tiers}"));
+    let out = sanitize_to_string(&cha);
+    let lines: Vec<&str> = out.lines().collect();
+    let expect_line = |prefix: &str, expected: &str| {
+        let found = lines
+            .iter()
+            .find(|line| line.starts_with(prefix))
+            .unwrap_or_else(|| panic!("no {prefix} line in:\n{out}"));
+        assert_eq!(*found, expected, "the {prefix} line after sanitizing");
+    };
+    // Bullet-payload tiers and free-text tiers: the placeholder.
+    for prefix in [
+        "%act:", "%cod:", "%com:", "%add:", "%exp:", "%gpx:", "%int:", "%sit:", "%spa:", "%alt:",
+        "%coh:", "%def:", "%eng:", "%err:", "%fac:", "%flo:", "%gls:", "%ort:", "%par:", "%xfoo:",
+    ] {
+        expect_line(prefix, &format!("{prefix}\t[redacted]"));
+    }
+    // Numeric and structural tiers keep their content.
+    expect_line("%gra:", "%gra:\t1|0|ROOT 2|1|PUNCT");
+    expect_line("%tim:", "%tim:\t17:30-18:00");
+    // `%wor` repeats the main tier's words beside their timings, so it
+    // carries the main tier's placeholders (the same token per aligned
+    // word, which `%wor` corroboration compares) and keeps the timings.
+    expect_line("*PAR:", "*PAR:\tw1 .");
+    expect_line("%wor:", "%wor:\tw1 \u{15}0_100\u{15} .");
+    // `%mor` keeps its shape and loses its lemma.
+    let mor = lines
+        .iter()
+        .find(|line| line.starts_with("%mor:"))
+        .unwrap_or_else(|| panic!("no %mor line in:\n{out}"));
+    assert!(!mor.contains("hello"), "the %mor lemma is redacted: {mor}");
+    assert!(
+        mor.starts_with("%mor:\tn|"),
+        "the %mor shape survives: {mor}"
+    );
+    // Phonological tiers are dropped whole.
+    for prefix in ["%pho:", "%mod:"] {
+        assert!(
+            !lines.iter().any(|line| line.starts_with(prefix)),
+            "{prefix} is dropped, but the output has it:\n{out}"
         );
     }
 }

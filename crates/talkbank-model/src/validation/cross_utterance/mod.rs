@@ -5,49 +5,56 @@
 //! - Quotation patterns (Pattern A: +"/. and Pattern B: +". )
 //! - Completion linkers (+, and ++)
 //!
-//! ## Disabled Validations
+//! ## These checks are OPT-IN, not disabled
 //!
-//! **NOTE**: All quotation marker cross-utterance validations are currently **DISABLED** (2025-12-28).
+//! The quotation and completion checks in this module run only when
+//! `RuleSelection::with_strict_linkers` is set, which the CLI spells
+//! `--strict-linkers`. They are implemented, they fire, and they are
+//! demonstrated by spec examples that declare `rules = 'strict_linkers'`.
 //!
-//! ### Rationale
-//! Legacy CHAT tooling never performed validation of these cross-utterance patterns.
-//! These validations were implemented fresh in the Rust version to enforce strict CHAT
-//! conventions for quoted passages and completion sequences. However, analysis of real-world
-//! corpora (particularly CORAAL, OralArguments) shows that these strict sequential patterns
-//! don't match natural conversational flow:
+//! This section said "**DISABLED** (2025-12-28)" until 2026-09-08, and that
+//! sentence had propagated: eight codes were marked `not_implemented` in the
+//! registry, eight tests in this module's own suite were `#[ignore]`d with
+//! "E34x validation disabled" as the reason, and one of those tests had been
+//! narrowed to assert half of what its name promised. None of it was true.
+//! The rules were made opt-in, which is a different fact, and the word
+//! "disabled" was never corrected.
 //!
-//! - **E341**: Quotation follows (`+"/. `) - Requires next same-speaker utterance to have `+"` linker.
-//!   Fails when speakers don't continue with quoted content or other speakers interject.
+//! ### Why they are off by default
 //!
-//! - **E344**: Quotation precedes (`+".`) - Requires preceding same-speaker utterances with `+"` linkers.
-//!   Fails when quoted content appears without preceding marked utterances.
+//! The rationale below is real and is why the default is what it is. Legacy
+//! CHAT tooling never checked these cross-utterance patterns; they were
+//! written fresh here to enforce strict conventions for quoted passages and
+//! completion sequences, and real corpora show the strict sequential patterns
+//! do not match natural conversational flow:
 //!
-//! - **E346**: Quoted utterance linker (`+"`) - Requires upstream/downstream same-speaker
-//!   utterances to end with `+"/` or `+".` respectively. Fails when attorneys interrupt
-//!   or continue quoted passages in non-canonical ways.
+//! - Quotation follows (`+"/. `) requires the next same-speaker utterance to
+//!   carry a `+"` linker, and fails when a speaker does not continue with
+//!   quoted content or another speaker interjects.
+//! - Quotation precedes (`+".`) requires preceding same-speaker utterances
+//!   with `+"` linkers, and fails when quoted content appears without them.
+//! - The quoted-utterance linker (`+"`) requires a surrounding same-speaker
+//!   utterance ending `+"/. ` or `+".`, and fails when a speaker interrupts or
+//!   continues a quoted passage non-canonically.
+//! - The self-completion linker (`+,`) requires a preceding same-speaker
+//!   utterance ending `+/.`, and fails when speakers resume without an
+//!   interruption marker.
 //!
-//! - **E352**: Self-completion linker (`+,`) - Requires preceding same-speaker utterance
-//!   to end with `+/.` (interruption). Fails when speakers resume utterances in
-//!   natural conversation without interruption markers.
+//! The open question is what these should BE: warnings rather than errors,
+//! context-sensitive by corpus type, relaxed in their sequential matching, or
+//! dropped. Until it is answered they are available on request, which is
+//! strictly more than nothing and honest about the default.
 //!
-//! ### Decision
-//! Rather than relax or modify these validations (which could introduce new bugs), we're
-//! temporarily disabling them to allow corpus-wide roundtrip testing. This lets us:
+//! ### Which codes the option turns on
 //!
-//! 1. Make progress on roundtrip testing across all 807 corpora
-//! 2. Collect real data on how these patterns actually appear in various CHAT corpora
-//! 3. Later make an informed decision on validation approach:
-//!    - Should these be warnings, not errors?
-//!    - Should they be context-sensitive (different rules for different corpus types)?
-//!    - Should we relax the sequential pattern matching?
-//!    - Should we restore the old behavior (no validation)?
-//!
-//! ### Files with Disabled Logic
-//! - `quotation_follows.rs`: check_quotation_follows() - DISABLED (E341)
-//! - `quotation_precedes.rs`: check_quotation_precedes() - DISABLED (E344)
-//! - `quoted_linker.rs`: check_quoted_linker() - DISABLED (E346)
-//! - `completion.rs`: check_self_completion_all() - DISABLED (E352)
-//! - `completion.rs`: check_other_completion() - DISABLED (E349/E350)
+//! Deliberately not listed here. Four hand-written lists of them existed and
+//! three were wrong at once: this section named `E349/E350`, which are not
+//! codes at all, and named E352 for a function that emits E351 and E352; the
+//! `RuleSelection` field doc and the CLI's own `--strict-linkers` help both
+//! said "E351-E355", omitting E341, E344 and E346. What cannot drift is
+//! DERIVED from each code's registry entry: `chatter validate --list-checks`
+//! prints such a code as `[Opt-in]` rather than `[Active]`, the generated
+//! error index marks its row, and its own generated page names the flag.
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Utterance_Linkers>
@@ -65,8 +72,6 @@ mod quotation_follows;
 mod quotation_precedes;
 mod quoted_linker;
 mod scoped_markers;
-#[cfg(test)]
-mod tests;
 
 use crate::model::{OverlapPointKind, Terminator, UtteranceContent};
 use crate::{ErrorCollector, ErrorSink, ParseError};
@@ -99,7 +104,7 @@ pub(crate) fn check_cross_utterance_patterns_with_sink(
     let utterances = &FileUtterances::of(file);
     for (idx, utterance) in utterances.iter().enumerate() {
         // Quotation follows pattern (Pattern A - E341)
-        // Gated behind runtime flag - disabled by default
+        // Opt-in: runs under `RuleSelection::with_strict_linkers`.
         // See module-level documentation for rationale
         if context.shared.enable_quotation_validation
             && let Some(ref term) = utterance.main.content.terminator
@@ -109,7 +114,7 @@ pub(crate) fn check_cross_utterance_patterns_with_sink(
         }
 
         // Quotation precedes pattern (Pattern B - E344)
-        // Gated behind runtime flag - disabled by default
+        // Opt-in: runs under `RuleSelection::with_strict_linkers`.
         // See module-level documentation for rationale
         if context.shared.enable_quotation_validation
             && let Some(ref term) = utterance.main.content.terminator
@@ -121,14 +126,14 @@ pub(crate) fn check_cross_utterance_patterns_with_sink(
         }
 
         // Quoted utterance linker (E346)
-        // Gated behind runtime flag - disabled by default
+        // Opt-in: runs under `RuleSelection::with_strict_linkers`.
         // See module-level documentation for rationale
         if context.shared.enable_quotation_validation && has_quoted_linker(utterance) {
             errors.report_all(quoted_linker::check_quoted_linker(utterances, idx));
         }
 
         // Other-completion linker (++), gated behind runtime flag.
-        // See module-level documentation for rationale on default-disabled state.
+        // See the module docs for why this one is off by default.
         if context.shared.enable_quotation_validation
             && helpers::has_other_completion_linker(utterance)
         {
@@ -137,7 +142,7 @@ pub(crate) fn check_cross_utterance_patterns_with_sink(
     }
 
     // Self-completion linker (E352) - O(n) batch validation
-    // Gated behind runtime flag - disabled by default
+    // Opt-in: runs under `RuleSelection::with_strict_linkers`.
     // See module-level documentation for rationale
     if context.shared.enable_quotation_validation {
         completion::check_self_completion_all(utterances, errors);

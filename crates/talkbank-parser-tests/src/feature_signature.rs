@@ -269,31 +269,53 @@ impl WordFeatureSignature {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use talkbank_parser::TreeSitterParser;
 
     /// Tests plain text signature.
     #[test]
     fn test_plain_text_signature() {
         // A word with only text content should be plain text
-        let word = Word::new_unchecked("hello", "hello");
+        let word = Word::simple("hello");
 
         let sig = WordFeatureSignature::from_word(&word);
         assert!(sig.is_plain_text());
         assert_eq!(sig.describe(), "plain_text");
     }
 
-    /// Tests complex signature.
+    /// A word carrying several features at once, PARSED rather than fabricated.
+    ///
+    /// It was `Word::new_unchecked("0hel(lo)@b$n", "hello")` with the category,
+    /// form type and part of speech then written onto the struct by hand. That
+    /// states the input twice, and nothing made the second statement follow
+    /// from the first: the raw text says omission, shortening, form marker and
+    /// POS, and the fabrication's own content was a single flat `Text("hello")`
+    /// carrying none of them. `from_word` reads `content_types` and
+    /// `content_count` straight off `word.content()`, so the assertions below
+    /// were made against a shape the parser does not produce for this text.
     #[test]
     fn test_complex_signature() {
-        // A word with multiple features
-        let mut word = Word::new_unchecked("0hel(lo)@b$n", "hello");
-        word.category = Some(WordCategory::Omission);
-        word.form_type = Some(FormType::B); // @b is babbling
-        word.part_of_speech = Some("n".into());
+        let parser = TreeSitterParser::new().expect("the grammar is linked in");
+        let word = parser
+            .parse_word("0hel(lo)@b$n")
+            .expect("`0hel(lo)@b$n` is a word this grammar admits");
 
         let sig = WordFeatureSignature::from_word(&word);
         assert!(!sig.is_plain_text());
         assert_eq!(sig.category, Some(WordCategoryClass::Omission));
         assert_eq!(sig.form_type_class, Some(FormTypeClass::SingleLetter));
         assert!(sig.has_pos);
+        // The two fields the fabrication was wrong about, and the reason this
+        // test was converted rather than left alone. `from_word` reads both
+        // straight off `word.content()`, and the fabricated word's content was
+        // one flat `Text("hello")`: `content_types` would have been `{Text}`
+        // and `content_count` `Single`, for a word whose text contains a
+        // shortening. Nothing asserted them, so the test passed either way and
+        // said nothing about the parser.
+        assert!(
+            sig.content_types.contains(&ContentKind::Shortening),
+            "`hel(lo)` parses to a shortening, so the signature must see one: {:?}",
+            sig.content_types
+        );
+        assert_ne!(sig.content_count, ContentCountClass::Single);
     }
 }

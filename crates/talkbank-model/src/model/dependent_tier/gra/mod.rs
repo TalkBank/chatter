@@ -64,5 +64,5 @@ mod tier_type;
 // Re-export all public types
 pub use relation::GrammaticalRelation;
 pub use relation_type::GrammaticalRelationType;
-pub use tier::{GraTier, validate_gra_structure};
+pub use tier::{GraCompleteness, GraTier, WholeGra};
 pub use tier_type::GraTierType;

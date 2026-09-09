@@ -6,10 +6,13 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
-use crate::generated_traversal::{AsRawNode, NodeSlot, TierSepNode, extract_tier_sep};
+use crate::generated_traversal::{
+    AsRawNode, ChildSlot, NoChild, NodeSlot, SlotView, TierSepNode, extract_tier_sep,
+};
 use crate::model::TextTier;
 use crate::model::{NonEmptyString, TierSeparator};
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::analyze_dependent_tier_error;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -43,17 +46,24 @@ use tree_sitter::Node;
 ///   raw `tree_sitter::Node`, not the typed wrapper). A non-empty text yields
 ///   `Parsed`; an empty text reports "Tier has empty content" at the tier-node
 ///   span; a UTF-8 error reports at the body-node span, exactly as before.
-/// - `Error` / `Unexpected` / `Absent`: no child matched the body kind (the
-///   removed loop's `None` branch): an ERROR node has kind `ERROR`, an
-///   unexpected node has a different kind, and an absent child is not present at
-///   all, so none satisfied the kind filter. Report "Tier is missing content
-///   node" at the tier-node span, matching the removed code.
+/// - `Error`: the recovery node is reported first, in the dependent-tier
+///   analyzer's words (E316 for text nothing could parse), then "Tier is
+///   missing content node" at the tier-node span: E330.md's pair. Until
+///   2026-09-08 the utterance parser's pre-attach walk reported the recovery
+///   node; with that walk gone, the whole-tree backstop would have dropped it
+///   as overlapping the tier-span report, and E330.md#3 lost its E316.
+/// - `Unexpected`: a node of another kind where the body belongs (the
+///   generator has not produced one here) is reported by its kind, then the
+///   same "missing content node".
+/// - `Absent`: no body child at all; "Tier is missing content node" alone.
 ///
-/// The carrier's `unexpected` sink is surfaced FIRST via [`surface_unexpected`]
-/// (R2; a no-op on valid input, load-bearing for migration Task D).
+/// The carrier's `unexpected` sink is surfaced FIRST via [`surface_displaced`]
+/// (R2; a no-op on valid input, load-bearing for migration Task D), at the
+/// context named by `tier_node.kind()`, the dependent-tier rule name shared by
+/// every caller's own `extract_<kind>_dependent_tier`.
 fn read_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &NodeSlot<'tree, T>,
+    body: &ChildSlot<'tree, T>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -61,24 +71,36 @@ fn read_tier_body_text<'tree, T>(
 where
     T: AsRawNode<'tree>,
 {
-    surface_unexpected(unexpected, source, errors);
+    surface_displaced(unexpected, tier_node.kind(), source, errors);
 
-    match body.node_or_placeholder() {
+    match body.view() {
         // Decodes to empty text for a placeholder, exactly as the removed
         // kind-scan did: a MISSING node satisfied a kind filter and its text
         // was read.
-        Some(text) => decode_body_text(tier_node, text, source, errors),
-        None => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-                ErrorContext::new(source, tier_node.start_byte()..tier_node.end_byte(), "tier"),
-                "Tier is missing content node",
-            ));
+        SlotView::Present(text) => decode_body_text(tier_node, text.raw_node(), source, errors),
+        SlotView::Missing(text) => decode_body_text(tier_node, text, source, errors),
+        SlotView::Error(node) => {
+            errors.report(analyze_dependent_tier_error(node, source));
+            report_missing_content_node(tier_node, source, errors);
+            ParseOutcome::rejected()
+        }
+        SlotView::Absent(NoChild) => {
+            report_missing_content_node(tier_node, source, errors);
             ParseOutcome::rejected()
         }
     }
+}
+
+/// E330 at the tier: the typed walk arrived at the body slot and found no
+/// content node there.
+fn report_missing_content_node(tier_node: Node, source: &str, errors: &impl ErrorSink) {
+    errors.report(ParseError::new(
+        ErrorCode::TreeParsingError,
+        Severity::Error,
+        SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
+        ErrorContext::new(source, tier_node.start_byte()..tier_node.end_byte(), "tier"),
+        "Tier is missing content node",
+    ));
 }
 
 /// Read a text tier's body when the grammar makes that body OPTIONAL.
@@ -100,7 +122,7 @@ where
 /// constructor's doc asks for.
 pub(crate) fn read_optional_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &Option<NodeSlot<'tree, T>>,
+    body: &Option<ChildSlot<'tree, T>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -139,7 +161,7 @@ where
 /// (E756 versus a parse error).
 pub(crate) fn read_optional_tier_body_raw_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &Option<NodeSlot<'tree, T>>,
+    body: &Option<ChildSlot<'tree, T>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -150,7 +172,7 @@ where
     match body {
         Some(slot) => read_tier_body_text(tier_node, slot, unexpected, source, errors).map(Some),
         None => {
-            surface_unexpected(unexpected, source, errors);
+            surface_displaced(unexpected, tier_node.kind(), source, errors);
             ParseOutcome::Parsed(None)
         }
     }
@@ -210,20 +232,20 @@ fn decode_body_text(
 /// `tier_sep` node itself, then read its own optional `sep_trailing_space`
 /// child (`extract_tier_sep(..).child_2.slot`). Only a `Present` trailing-space
 /// node carries a real span; every other outer/inner recovery state
-/// (Missing/Error/Unexpected/Absent, or an absent `tier_sep` itself) means no
+/// (Missing/Error/Absent, or an absent `tier_sep` itself) means no
 /// illegal trailing space was captured, and maps to a clean separator (the
 /// E758 check itself is a later validation pass over this provenance, not
 /// parse-time). A recovered child can occur between the tab and that space;
 /// both positions must come from this carrier and remain adjacent. Otherwise
 /// the space belongs to content, not the line separator.
-pub(crate) fn dependent_tier_separator(slot: &NodeSlot<'_, TierSepNode<'_>>) -> TierSeparator {
+pub(crate) fn dependent_tier_separator(slot: &ChildSlot<'_, TierSepNode<'_>>) -> TierSeparator {
     let NodeSlot::Present(tier_sep) = slot else {
         return TierSeparator::CLEAN;
     };
     let tier_sep_children = extract_tier_sep(*tier_sep);
     let trailing = tier_sep_children.child_2.slot();
-    match trailing {
-        Some(NodeSlot::Present(sep_node))
+    match trailing.as_ref().map(NodeSlot::view) {
+        Some(SlotView::Present(sep_node))
             if matches!(tier_sep_children.child_1.slot(), NodeSlot::Present(tab)
                 if tab.raw_node().end_byte() == sep_node.raw_node().start_byte()) =>
         {
@@ -233,9 +255,11 @@ pub(crate) fn dependent_tier_separator(slot: &NodeSlot<'_, TierSepNode<'_>>) -> 
                 node.end_byte() as u32,
             ))
         }
-        Some(NodeSlot::Present(_))
-        | Some(
-            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
+        Some(
+            SlotView::Present(_)
+            | SlotView::Missing(_)
+            | SlotView::Error(_)
+            | SlotView::Absent(NoChild),
         )
         | None => TierSeparator::CLEAN,
     }

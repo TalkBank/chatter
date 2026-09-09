@@ -56,12 +56,12 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, BeginHeaderNode, EndHeaderNode, FromNodeKind, FullDocumentChild1Choice,
-    FullDocumentChildren, LineChoice, LineNode, MainTierNode, NodeSlot, Utf8HeaderNode,
-    extract_line,
+    AsRawNode, BeginHeaderNode, ChildSlot, EndHeaderNode, FromNodeKind, FullDocumentChild1Choice,
+    FullDocumentChildren, LineChoice, LineNode, MainTierNode, NoChild, NodeSlot, SlotView,
+    Utf8HeaderNode, extract_line,
 };
 use crate::model::{Header, Line, Utterance};
-use crate::node_types::{BLANK_LINE, PRE_BEGIN_HEADER, UNSUPPORTED_LINE};
+use crate::node_types::{BLANK_LINE, UNSUPPORTED_LINE};
 use crate::parser::ChildCapacity;
 use crate::parser::chat_file_parser::header_parser::{
     handle_pre_begin_header, helpers::header_separator, parse_header_node,
@@ -70,11 +70,9 @@ use crate::parser::chat_file_parser::utterance_parser::{
     parse_recovered_main_tier, parse_utterance_node,
 };
 use crate::parser::terminal_main_tier::TerminalMainTier;
-use crate::parser::tree_parsing::parser_helpers::{
-    analyze_error_node, analyze_line_error, collect_recovery_nodes, is_pre_begin_header,
-};
+use crate::parser::tree_parsing::helpers::unexpected_node_error;
+use crate::parser::tree_parsing::parser_helpers::{analyze_error_node, collect_recovery_nodes};
 use talkbank_model::ParseOutcome;
-use tracing::trace;
 
 use super::helpers::{recover_top_level_error_node, report_top_level_dependent_tier_error};
 
@@ -192,7 +190,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                     self.lines.push(Line::utterance(utterance));
                 }
             } else {
-                self.surface_unexpected(std::slice::from_ref(&node));
+                self.surface_displaced(std::slice::from_ref(&node), "full_document");
             }
         }
     }
@@ -206,56 +204,47 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// Lower the `@UTF8` anchor slot (`child_0`).
     ///
     /// `Present` pushes the `Utf8` header line, matching the hand-walk's
-    /// `UTF8_HEADER` arm. `Missing`/`Error`/`Unexpected`/`Absent` are NOT flagged
+    /// `UTF8_HEADER` arm. `Missing`/`Error`/`Absent` are NOT flagged
     /// here: the pre-migration loop emitted no diagnostic for a missing anchor,
     /// and the validation layer plus the whole-tree backstop cover that case;
     /// emitting one here would be a new diagnostic (regression). An `Error` here
     /// is still surfaced because the backstop walks the whole tree.
-    fn lower_utf8_anchor(&mut self, slot: &Option<NodeSlot<'_, Utf8HeaderNode<'_>>>) {
+    fn lower_utf8_anchor(&mut self, slot: &Option<ChildSlot<'_, Utf8HeaderNode<'_>>>) {
         let Some(slot) = slot else {
             // Preserve the complete document without inventing an encoding
             // declaration. The shared header validator owns the E503 refusal.
             return;
         };
-        match slot {
-            NodeSlot::Present(node) => self.push_anchor_header(node.raw_node(), Header::Utf8),
-            NodeSlot::Missing(_) | NodeSlot::Absent => {
+        match slot.view() {
+            SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::Utf8),
+            SlotView::Missing(_) | SlotView::Absent(NoChild) => {
                 // Layout omission; backstop + validation report missing headers.
             }
-            NodeSlot::Error(error_node) => self.handle_top_level_error(*error_node),
-            NodeSlot::Unexpected(node) => {
-                trace!("Unexpected node at @UTF8 anchor: {}", node.kind());
-            }
+            SlotView::Error(error_node) => self.handle_top_level_error(error_node),
         }
     }
 
     /// Lower the `@Begin` anchor slot (`child_2`). See [`Self::lower_utf8_anchor`]
     /// for the recovery rationale; this mirrors the `BEGIN_HEADER` arm.
-    fn lower_begin_anchor(&mut self, slot: &NodeSlot<'_, BeginHeaderNode<'_>>) {
-        match slot {
-            NodeSlot::Present(node) => self.push_anchor_header(node.raw_node(), Header::Begin),
-            NodeSlot::Missing(_) | NodeSlot::Absent => {
+    fn lower_begin_anchor(&mut self, slot: &ChildSlot<'_, BeginHeaderNode<'_>>) {
+        match slot.view() {
+            SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::Begin),
+            SlotView::Missing(_) | SlotView::Absent(NoChild) => {
                 // Backstop + validation (missing @Begin) cover this.
             }
-            NodeSlot::Error(error_node) => self.handle_top_level_error(*error_node),
-            NodeSlot::Unexpected(node) => {
-                trace!("Unexpected node at @Begin anchor: {}", node.kind());
-            }
+            SlotView::Error(error_node) => self.handle_top_level_error(error_node),
         }
     }
 
     /// Lower the `@End` anchor slot (`child_4`). See [`Self::lower_utf8_anchor`]
     /// for the recovery rationale; this mirrors the `END_HEADER` arm.
-    fn lower_end_anchor(&mut self, slot: &NodeSlot<'_, EndHeaderNode<'_>>) {
-        match slot {
-            NodeSlot::Present(node) => self.push_anchor_header(node.raw_node(), Header::End),
-            NodeSlot::Missing(_) | NodeSlot::Absent => {
+    fn lower_end_anchor(&mut self, slot: &ChildSlot<'_, EndHeaderNode<'_>>) {
+        match slot.view() {
+            SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::End),
+            SlotView::Missing(_) | SlotView::Absent(NoChild) => {
                 // Backstop + validation (missing @End) cover this.
             }
-            NodeSlot::Error(error_node) => self.handle_top_level_error(*error_node),
-            NodeSlot::Unexpected(node) => {
-                trace!("Unexpected node at @End anchor: {}", node.kind());
-            }
+            SlotView::Error(error_node) => self.handle_top_level_error(error_node),
         }
     }
 
@@ -264,51 +253,22 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// `Present` dispatches to `handle_pre_begin_header` exactly as the hand-walk
     /// did for a concrete pre-begin header. `Error` routes through the shared
     /// top-level error path. `Missing` is a layout omission (backstop covers it).
-    fn lower_pre_begin_header_slot(&mut self, slot: &NodeSlot<'_, FullDocumentChild1Choice<'_>>) {
-        match slot {
-            // The NEW `child_1` repeat is typed as the 4-way
-            // `FullDocumentChild1Choice` supertype (color-words / font / pid /
-            // window header), NOT a bare `NodeSlot<Node>` as the OLD API had.
-            // Its concrete raw node (the same node the OLD API yielded) is reached
-            // through the generated `AsRawNode::raw_node`, handed to the unchanged
-            // pre-begin handler.
-            NodeSlot::Present(choice) => self.lower_pre_begin_header_node(choice.raw_node()),
-            NodeSlot::Error(error_node) => self.handle_top_level_error(*error_node),
-            NodeSlot::Missing(_) | NodeSlot::Absent => {
+    fn lower_pre_begin_header_slot(&mut self, slot: &ChildSlot<'_, FullDocumentChild1Choice<'_>>) {
+        match slot.view() {
+            // The repeat is typed as the four-way `FullDocumentChild1Choice`
+            // (color-words / font / pid / window header); the handler matches
+            // it exhaustively.
+            SlotView::Present(choice) => {
+                let span = Span::new(
+                    choice.raw_node().start_byte() as u32,
+                    choice.raw_node().end_byte() as u32,
+                );
+                handle_pre_begin_header(choice, span, self.source, self.errors, &mut self.lines);
+            }
+            SlotView::Error(error_node) => self.handle_top_level_error(error_node),
+            SlotView::Missing(_) | SlotView::Absent(NoChild) => {
                 // Layout omission; nothing to build, backstop reports content MISSING.
             }
-            NodeSlot::Unexpected(node) => {
-                trace!(
-                    "Unexpected node in pre-begin-header repeat: {}",
-                    node.kind()
-                );
-            }
-        }
-    }
-
-    /// Build pre-begin header lines for a present pre-begin-header node.
-    ///
-    /// `extract_full_document` only admits the CONCRETE pre-begin kinds into the
-    /// `child_1` repeat (`pid_header`/`color_words_header`/`window_header`/
-    /// `font_header`), never the `pre_begin_header` supertype wrapper, so the
-    /// wrapper branch is dead in practice. It is preserved verbatim from the
-    /// hand-walk for defensive equivalence: should the supertype node ever
-    /// surface, its concrete children are each handled.
-    fn lower_pre_begin_header_node(&mut self, node: tree_sitter::Node<'_>) {
-        if node.kind() == PRE_BEGIN_HEADER {
-            let mut pre_cursor = node.walk();
-            for pre_child in node.children(&mut pre_cursor) {
-                let span = Span::new(pre_child.start_byte() as u32, pre_child.end_byte() as u32);
-                handle_pre_begin_header(pre_child, span, self.source, self.errors, &mut self.lines);
-            }
-        } else if is_pre_begin_header(node.kind()) {
-            let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-            handle_pre_begin_header(node, span, self.source, self.errors, &mut self.lines);
-        } else {
-            trace!(
-                "Non-pre-begin-header node in pre-begin repeat: {}",
-                node.kind()
-            );
         }
     }
 
@@ -317,15 +277,12 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// `Present` dispatches the `line` node to `dispatch_line`, which now drives
     /// the typed `extract_line` visitor (Task 2a). `Error` routes through the
     /// shared top-level error path. `Missing` is a layout omission.
-    fn lower_line_slot(&mut self, slot: &NodeSlot<'_, LineNode<'_>>) {
-        match slot {
-            NodeSlot::Present(line_node) => self.dispatch_line(*line_node),
-            NodeSlot::Error(error_node) => self.handle_top_level_error(*error_node),
-            NodeSlot::Missing(_) | NodeSlot::Absent => {
+    fn lower_line_slot(&mut self, slot: &ChildSlot<'_, LineNode<'_>>) {
+        match slot.view() {
+            SlotView::Present(line_node) => self.dispatch_line(*line_node),
+            SlotView::Error(error_node) => self.handle_top_level_error(error_node),
+            SlotView::Missing(_) | SlotView::Absent(NoChild) => {
                 // Layout omission; backstop reports content MISSING nodes.
-            }
-            NodeSlot::Unexpected(node) => {
-                trace!("Unexpected node in line repeat: {}", node.kind());
             }
         }
     }
@@ -374,20 +331,21 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// - `Present(Utterance(_))`: delegates to `parse_utterance_node` and pushes
     ///   `Line::utterance` on `Parsed`.
     /// - `Present(UnsupportedLine(_))`: reports E326 `UnexpectedLineType`
-    ///   "Unsupported line skipped: ..." at the node span.
+    ///   "Unsupported line skipped: ..." at the node span
+    ///   ([`Self::report_unsupported_line`]), or E330 for a line whose bytes
+    ///   are not UTF-8.
     /// - `Present(BlankLine(_))`: reports E747 `BlankLineNotAllowed` "Blank
     ///   lines are not allowed" at the node span.
-    /// - `Error(error_node)`: calls `analyze_line_error` with the ERROR node and
-    ///   this `line_node` as context, matching the old `is_error()` branch.
+    /// - `Error(error_node)`: calls `analyze_error_node`, the one owner of
+    ///   ERROR analysis, which `handle_top_level_error` also uses.
     /// - `Missing(_)` / `Absent`: no diagnostic; matches the old
     ///   `is_missing() -> continue` and the empty-loop case.
     /// - `Unexpected(node)`: reports E326 `UnexpectedLineType`
     ///   "Unknown node type '...' in line", matching the old `else` arm.
     ///
     /// After the content match, the carrier's `unexpected` sink is surfaced (see
-    /// [`Self::surface_unexpected`]).
+    /// [`Self::surface_displaced`]).
     fn dispatch_line(&mut self, line: LineNode<'_>) {
-        let line_node = line.raw_node();
         let children = extract_line(line);
         match children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(header_choice)) => {
@@ -419,20 +377,13 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
             NodeSlot::Present(LineChoice::UnsupportedLine(unsupported)) => {
                 let node = unsupported.raw_node();
                 // Catch-all junk line: report and skip (CLAN-style unsupported line).
-                let text = node
-                    .utf8_text(self.source.as_bytes())
-                    .unwrap_or("<invalid UTF-8>");
-                // An `unsupported_line` only matches lines that do NOT begin
-                // with `*`, `@`, `%`, or a tab, so a line whose TRIMMED text
-                // begins with one of those is a recognisable CHAT line pushed
-                // off column 1 by leading whitespace. Say so: "Unsupported
-                // line skipped" alone sends the reader hunting for junk when
-                // the fix is deleting one space (IISRP residue finding 6).
-                // This is a diagnostic hint derived from the already-reported
-                // line text, not model construction.
-                let report = |message: String| {
-                    ParseError::new(
-                        ErrorCode::UnexpectedLineType,
+                // A line whose bytes are not UTF-8 is reported as that fact,
+                // not classified over a text the parser invented; either way
+                // the arm falls through to the carrier's sink like every other.
+                match node.utf8_text(self.source.as_bytes()) {
+                    Ok(text) => self.report_unsupported_line(node, text),
+                    Err(error) => self.errors.report(ParseError::new(
+                        ErrorCode::TreeParsingError,
                         Severity::Error,
                         SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
                         ErrorContext::new(
@@ -440,24 +391,9 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                             node.start_byte()..node.end_byte(),
                             UNSUPPORTED_LINE,
                         ),
-                        message,
-                    )
-                };
-                let indented = |kind: &str| {
-                    report(format!(
-                        "Unsupported line skipped: {} (looks like {kind} line pushed off \
-                         column 1; it must begin at column 1)",
-                        text.trim()
-                    ))
-                    .with_suggestion("Remove the leading whitespace so the line starts at column 1")
-                };
-                let error = match text.trim_start().chars().next() {
-                    Some('%') => indented("a dependent tier"),
-                    Some('*') => indented("a main tier"),
-                    Some('@') => indented("a header"),
-                    _ => report(format!("Unsupported line skipped: {}", text.trim())),
-                };
-                self.errors.report(error);
+                        format!("UTF-8 decoding error in unsupported line: {error}"),
+                    )),
+                }
             }
             NodeSlot::Present(LineChoice::BlankLine(blank)) => {
                 let node = blank.raw_node();
@@ -487,17 +423,31 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 }
             }
             NodeSlot::Error(error_node) => {
-                // Tree-sitter recovery ERROR as the direct child of the `line`
-                // node: route through the same error-analysis helper the old
-                // `is_error()` branch used, passing the ORIGINAL `line_node` as
-                // context so the helper can inspect its non-error siblings.
-                analyze_line_error(*error_node, line_node, self.source, self.errors);
+                // ONE owner for ERROR analysis, the same one `handle_top_level_error`
+                // uses. This called `analyze_line_error`, a second analyser that
+                // existed only for this arm and inspected `line_node`'s siblings
+                // looking for a header among them.
+                //
+                // It could never find one. `line` is a UNIT CHOICE in the grammar
+                // (`choice($.header, $.utterance, $.blank_line, $.unsupported_line)`),
+                // so a `line` node has exactly one child, and a recovery ERROR is a
+                // child of `full_document` instead, which routes to
+                // `analyze_error_node`. Measured two ways: 199 regions across the
+                // two functions with ZERO coverage from the whole suite, and a walk
+                // of every `line` node in all 738 `.cha` files in this repository
+                // finding no ERROR at that depth. Their two message strings,
+                // "Syntax error in line" and "Syntax error in header", appeared
+                // nowhere but their own emit sites: no fixture, spec or doc ever
+                // expected either.
+                //
+                // So this arm keeps a diagnostic and loses a duplicate.
+                analyze_error_node(*error_node, self.source, self.errors);
             }
             NodeSlot::Missing(_) => {
                 // Tree-sitter inserted a MISSING placeholder; no diagnostic.
                 // Matches the old `is_missing() -> continue`.
             }
-            NodeSlot::Absent => {
+            NodeSlot::Absent(NoChild) => {
                 // No child at all (empty line node); no diagnostic.
                 // Matches the old loop producing nothing when there is no child.
             }
@@ -518,36 +468,81 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         // Surface the `line` carrier's own `unexpected` sink (any extra child the
         // chosen `LineChoice` content did not consume). Same backstop-equivalent
         // mapping as the document carrier; empty in practice for CHAT lines.
-        self.surface_unexpected(&children.unexpected);
+        self.surface_displaced(&children.unexpected, "line");
+    }
+    /// E326 for an `unsupported_line` whose text could be read: the
+    /// classification the arm in [`Self::dispatch_line`] used to carry inline.
+    fn report_unsupported_line(&self, node: tree_sitter::Node<'_>, text: &str) {
+        // An `unsupported_line` only matches lines that do NOT begin
+        // with `*`, `@`, `%`, or a tab, so a line whose TRIMMED text
+        // begins with one of those is a recognisable CHAT line pushed
+        // off column 1 by leading whitespace. Say so: "Unsupported
+        // line skipped" alone sends the reader hunting for junk when
+        // the fix is deleting one space (IISRP residue finding 6).
+        // This is a diagnostic hint derived from the already-reported
+        // line text, not model construction.
+        let report = |message: String| {
+            ParseError::new(
+                ErrorCode::UnexpectedLineType,
+                Severity::Error,
+                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                ErrorContext::new(
+                    self.source,
+                    node.start_byte()..node.end_byte(),
+                    UNSUPPORTED_LINE,
+                ),
+                message,
+            )
+        };
+        let indented = |kind: &str| {
+            report(format!(
+                "Unsupported line skipped: {} (looks like {kind} line pushed off \
+                 column 1; it must begin at column 1)",
+                text.trim()
+            ))
+            .with_suggestion("Remove the leading whitespace so the line starts at column 1")
+        };
+        let error = match text.trim_start().chars().next() {
+            Some('%') => indented("a dependent tier"),
+            Some('*') => indented("a main tier"),
+            Some('@') => indented("a header"),
+            _ => report(format!("Unsupported line skipped: {}", text.trim())),
+        };
+        self.errors.report(error);
     }
 
-    /// Surface a carrier's `unexpected` sink as the SAME recovery diagnostics the
-    /// whole-tree backstop emits.
+    /// Surface a carrier's `unexpected` sink WITH its displaced nodes, at
+    /// `context`, mirroring the shared free function
+    /// [`surface_displaced`](crate::parser::tree_parsing::parser_helpers::surface_displaced).
     ///
-    /// Each node that filled no grammar position is routed through the shared
-    /// [`collect_recovery_nodes`] mapping (a dedicated structural code or E316
-    /// `UnparsableContent` for ERROR; E342 `MissingRequiredElement` for MISSING,
-    /// with the same
+    /// A node carrying recovery (`ERROR`/`MISSING`, or an `ERROR` beneath it)
+    /// is routed through the shared [`collect_recovery_nodes`] mapping (a
+    /// dedicated structural code or E316 `UnparsableContent` for ERROR; E342
+    /// `MissingRequiredElement` for MISSING, with the same
     /// `wraps_document_structure` / trailing-newline exemptions and localized
-    /// recursion), reported within the offending node's span. Because the
-    /// whole-tree backstop still runs in this task and dedups by span overlap, a
-    /// node surfaced here auto-suppresses the backstop's duplicate, so the
-    /// diagnostic count is unchanged (WATCH-ITEM: one recovery diagnostic per
-    /// error). A
-    /// present-but-unexpected node contributes only the recovery nodes in its
-    /// subtree, which the whole-tree backstop would find anyway, so this never
-    /// introduces a NEW diagnostic while the backstop is present; it is the
+    /// recursion), reported within the offending node's span. A WELL-FORMED
+    /// node that filled no grammar position (one that parsed cleanly but this
+    /// carrier's rule had no place for) is reported as unexpected at
+    /// `context`, where the predecessor of this method silently dropped it.
+    /// Because the whole-tree backstop still runs in this task and dedups by
+    /// span overlap, a recovery node surfaced here auto-suppresses the
+    /// backstop's duplicate diagnostic; a present-but-unexpected node
+    /// contributes only the recovery nodes in its subtree, which the
+    /// whole-tree backstop would find anyway, so this never introduces a NEW
+    /// diagnostic for a recovery node while the backstop is present; it is the
     /// per-carrier mechanism that makes the backstop deletable in migration Task D.
-    fn surface_unexpected(&self, unexpected: &[tree_sitter::Node<'_>]) {
-        if unexpected.is_empty() {
-            return;
-        }
-        let mut candidates = Vec::new();
+    fn surface_displaced(&self, unexpected: &[tree_sitter::Node<'_>], context: &str) {
         for node in unexpected {
-            collect_recovery_nodes(*node, self.source, &mut candidates);
-        }
-        for candidate in candidates {
-            self.errors.report(candidate);
+            if node.is_error() || node.is_missing() || node.has_error() {
+                let mut candidates = Vec::new();
+                collect_recovery_nodes(*node, self.source, &mut candidates);
+                for candidate in candidates {
+                    self.errors.report(candidate);
+                }
+            } else {
+                self.errors
+                    .report(unexpected_node_error(*node, self.source, context));
+            }
         }
     }
 }

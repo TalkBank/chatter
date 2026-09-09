@@ -139,6 +139,32 @@ pub(crate) fn scan_quotation_delimiters(node: Node<'_>) -> QuotationDelimiterSca
     }
 }
 
+/// The E759 diagnostic, built in ONE place.
+///
+/// Four recovery topologies detect a postfix annotation with nothing before
+/// it to scope over (a whole ERROR line, an ERROR at the first content slot,
+/// an ERROR fragment inside content, and the whole-file analysis), and until
+/// 2026-09-08 each carried its own copy of this message and suggestion. The
+/// detections differ; the diagnostic does not, so it has one owner and the
+/// detectors pass in only what differs: the token and where it sits.
+pub(crate) fn annotation_at_utterance_start(
+    code_token: &str,
+    location: SourceLocation,
+    context: ErrorContext,
+) -> ParseError {
+    ParseError::new(
+        ErrorCode::AnnotationAtUtteranceStart,
+        Severity::Error,
+        location,
+        context,
+        format!("Annotation '{code_token}' at utterance start has no content to attach to"),
+    )
+    .with_suggestion(
+        "Retraces, overlap markers, replacements, and quotation codes scope over the \
+         material BEFORE them; put the annotated content first, or remove the code",
+    )
+}
+
 /// CHECK-52 family: a bracket code whose first inner character is one of
 /// `/`, `<`, `>`, `:`, `"` (retraces, overlap markers, replacements, the
 /// quotation marker). Returns the code token for the message (through

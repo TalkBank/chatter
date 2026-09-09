@@ -318,13 +318,13 @@ impl IntoIterator for ReplacedWordAnnotations {
 ///
 /// // Single word replacement
 /// let replacement = Replacement::from_word(
-///     Word::new_unchecked("dog", "dog")
+///     Word::simple("dog")
 /// );
 ///
 /// // Multi-word replacement
 /// let replacement = Replacement::new(vec![
-///     Word::new_unchecked("went", "went"),
-///     Word::new_unchecked("home", "home"),
+///     Word::simple("went"),
+///     Word::simple("home"),
 /// ]);
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
@@ -409,14 +409,14 @@ impl crate::validation::Validate for Replacement {
 ///
 /// // Simple replacement
 /// let replaced = ReplacedWord::new(
-///     Word::new_unchecked("doggie", "doggie"),
-///     Replacement::from_word(Word::new_unchecked("dog", "dog"))
+///     Word::simple("doggie"),
+///     Replacement::from_word(Word::simple("dog"))
 /// );
 ///
 /// // With error annotation
 /// let replaced = ReplacedWord::new(
-///     Word::new_unchecked("goed", "goed"),
-///     Replacement::from_word(Word::new_unchecked("went", "went"))
+///     Word::simple("goed"),
+///     Replacement::from_word(Word::simple("went"))
 /// ).with_scoped_annotations(vec![
 ///     ContentAnnotation::Error(ScopedError { code: Some("grammar".into()) })
 /// ]);

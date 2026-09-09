@@ -1,179 +1,74 @@
-//! Parsing for main-tier sign/gesture groups (`〔 ... 〕`).
+//! Parsing for main-tier sign/gesture groups (`〔 ... 〕`), over the
+//! generated typed traversal.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Sign_Group>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::ErrorSink;
+use crate::generated_traversal::{MainSinGroupNode, extract_main_sin_group};
 use crate::model::UtteranceContent;
-use crate::node_types::{
-    CA_CONTINUATION_MARKER, CA_NO_BREAK, CA_TECHNICAL_BREAK, COLON, COMMA, CONTENT_ITEM, CONTENTS,
-    FALLING_TO_LOW, FALLING_TO_MID, LEVEL_PITCH, NON_COLON_SEPARATOR, OVERLAP_POINT,
-    RISING_TO_HIGH, RISING_TO_MID, SEMICOLON, SEPARATOR, SIN_BEGIN_GROUP, SIN_END_GROUP,
-    TAG_MARKER, UNMARKED_ENDING, UPTAKE_SYMBOL, VOCATIVE_MARKER, WHITESPACES,
-};
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
-use super::group::{convert_to_group_content, parse_nested_content};
-use crate::parser::ChildCapacity;
-use crate::parser::tree_parsing::helpers::unexpected_node_error;
+use super::group::{contents_of, parse_group_contents};
+use super::report_tree_shape;
+use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
 
 /// Parse a `main_sin_group` node into `UtteranceContent::SinGroup`.
+///
+/// Grammar: `seq(sin_begin_group, contents, sin_end_group)`. The delimiters
+/// are structure, the contents go through the one shared walker, and a
+/// group with no items is rejected. Sign groups carry no annotations.
 pub(crate) fn parse_sin_group_content(
-    node: Node,
+    typed: MainSinGroupNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let mut group_items: Vec<crate::model::BracketedItem> = Vec::new();
-    let child_count = node.child_count();
-    let mut idx = 0;
+    let children = extract_main_sin_group(typed);
 
-    // Position 0: '〔'
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-    {
-        if child.kind() == SIN_BEGIN_GROUP {
-            idx += 1;
-        } else {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                format!(
-                    "Expected '〔' at position 0 of main_sin_group, found '{}'",
-                    child.kind()
-                ),
-            ));
-            idx += 1;
-        }
-    }
-
-    // Position 1: contents
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-    {
-        if child.kind() == CONTENTS {
-            group_items = parse_sin_group_contents_items(child, source, errors);
-            idx += 1;
-        } else {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                format!(
-                    "Expected 'contents' at position 1 of main_sin_group, found '{}'",
-                    child.kind()
-                ),
-            ));
-            idx += 1;
-        }
-    }
-
-    // Position 2: '〕'
-    if idx < child_count
-        && let Some(child) = node.child(idx)
-    {
-        if child.kind() == SIN_END_GROUP {
-            idx += 1;
-        } else {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-                format!(
-                    "Expected '〕' at position 2 of main_sin_group, found '{}'",
-                    child.kind()
-                ),
-            ));
-            idx += 1;
-        }
-    }
-
-    // Check for unexpected extra children
-    if idx < child_count {
-        for extra_idx in idx..child_count {
-            if let Some(extra) = node.child(extra_idx) {
-                errors.report(ParseError::new(
-                    ErrorCode::TreeParsingError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(extra.start_byte(), extra.end_byte()),
-                    ErrorContext::new(source, extra.start_byte()..extra.end_byte(), ""),
-                    format!(
-                        "Unexpected extra child '{}' at position {} of main_sin_group",
-                        extra.kind(),
-                        extra_idx
-                    ),
-                ));
-            }
-        }
-    }
+    expect_delimiter(children.child_0.slot(), |bad| {
+        report_tree_shape(
+            bad,
+            format!(
+                "Expected '\u{3014}' at position 0 of main_sin_group, found '{}'",
+                bad.kind()
+            ),
+            source,
+            errors,
+        );
+    });
+    let group_items = match contents_of(children.child_1.slot(), |bad| {
+        report_tree_shape(
+            bad,
+            format!(
+                "Expected 'contents' at position 1 of main_sin_group, found '{}'",
+                bad.kind()
+            ),
+            source,
+            errors,
+        );
+    }) {
+        Some(contents) => parse_group_contents(&contents, source, errors),
+        None => Vec::new(),
+    };
+    expect_delimiter(children.child_2.slot(), |bad| {
+        report_tree_shape(
+            bad,
+            format!(
+                "Expected '\u{3015}' at position 2 of main_sin_group, found '{}'",
+                bad.kind()
+            ),
+            source,
+            errors,
+        );
+    });
+    surface_displaced(&children.unexpected, "main_sin_group", source, errors);
 
     if group_items.is_empty() {
         return ParseOutcome::rejected();
     }
-
     let bracketed = crate::model::BracketedContent::new(group_items);
-    let sin_group = crate::model::SinGroup::new(bracketed);
-    // Sin groups have no annotations
-    ParseOutcome::parsed(UtteranceContent::SinGroup(sin_group))
-}
-
-/// Parse the `contents` payload inside a sin group.
-///
-/// **Grammar Rule:**
-/// ```text
-/// contents: $ => repeat1(content_item)
-/// ```
-fn parse_sin_group_contents_items(
-    node: Node,
-    source: &str,
-    errors: &impl ErrorSink,
-) -> Vec<crate::model::BracketedItem> {
-    let child_count = node.child_count();
-    // Pre-allocate: each child is typically one content item
-    let mut group_items = ChildCapacity::for_node(node).into_vec();
-    for idx in 0..child_count {
-        if let Some(child) = node.child(idx) {
-            match child.kind() {
-                CONTENT_ITEM
-                | OVERLAP_POINT
-                | SEPARATOR
-                | NON_COLON_SEPARATOR
-                | COLON
-                | COMMA
-                | SEMICOLON
-                | TAG_MARKER
-                | VOCATIVE_MARKER
-                | CA_CONTINUATION_MARKER
-                | UNMARKED_ENDING
-                | UPTAKE_SYMBOL
-                | CA_NO_BREAK
-                | CA_TECHNICAL_BREAK
-                | RISING_TO_HIGH
-                | RISING_TO_MID
-                | LEVEL_PITCH
-                | FALLING_TO_MID
-                | FALLING_TO_LOW => {
-                    for content in parse_nested_content(child, source, errors) {
-                        group_items.push(convert_to_group_content(content));
-                    }
-                }
-                // Expected: whitespace between content items (no model representation needed)
-                WHITESPACES => {}
-                _ => {
-                    errors.report(unexpected_node_error(
-                        child,
-                        source,
-                        "sin_group contents (expected content_item)",
-                    ));
-                }
-            }
-        }
-    }
-
-    group_items
+    ParseOutcome::parsed(UtteranceContent::SinGroup(crate::model::SinGroup::new(
+        bracketed,
+    )))
 }

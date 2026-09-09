@@ -37,7 +37,8 @@ const SAMPLES_PER_TYPE: usize = 200;
 
 /// Extract fixtures from corpus. Only runs when explicitly requested via --ignored.
 #[test]
-#[ignore]
+#[ignore = "a fixture GENERATOR, not a test: it writes tests/fixtures/ from \
+           the wild corpus. Run with --ignored when refreshing them."]
 fn extract_all_fixtures() {
     let mut by_prefix: BTreeMap<String, Vec<String>> = BTreeMap::new();
 

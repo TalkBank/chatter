@@ -56,6 +56,10 @@ walkdir = { workspace = true } #unified
 # used a template that lived here, so this test-support crate compiled into the
 # release binary.
 talkbank-parser-tests = { workspace = true }
+# TEST-ONLY. `RuleProfile::cli_flag` names the flag a generated error page tells
+# readers to pass; only a test that sees both that table and clap's `long` can
+# hold them equal, and this is the one crate that does.
+talkbank-spec-vocabulary = { path = "../../spec/vocabulary" }
 assert_cmd = { workspace = true }
 httpmock = "0.8.3"
 predicates = { workspace = true }

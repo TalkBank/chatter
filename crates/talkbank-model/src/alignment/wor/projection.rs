@@ -82,8 +82,12 @@ impl<'main> WorMainTierProjection<'main> {
         self.policy
     }
 
-    /// Main-tier word slots selected by this projection.
-    pub fn slots(&self) -> impl Iterator<Item = &'main Word> + '_ {
+    /// Main-tier word slots selected by this projection. Crate-private on
+    /// purpose: a consumer outside the model that wants the slots wants to
+    /// pair them with a `%wor` tier, and that pairing is `bind_timing`'s
+    /// (a hand zip of these slots was one of three reviewed drafts of the
+    /// sanitizer on 2026-09-08).
+    pub(crate) fn slots(&self) -> impl Iterator<Item = &'main Word> + '_ {
         self.items.iter().filter_map(|item| match item {
             WorMainTierProjectionItem::Slot(word) => Some(*word),
             WorMainTierProjectionItem::Separator(_) => None,

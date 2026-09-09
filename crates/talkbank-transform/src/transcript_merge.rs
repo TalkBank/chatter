@@ -865,15 +865,14 @@ pub fn merge_chat_files(
         donor_fates.push(fate);
     }
 
-    // Combine and sort by start_ms. Utterances without a main-tier
-    // bullet sort to the end with `u64::MAX` so they don't disturb
-    // the ordering of timed utterances.
+    // Combine and sort by timeline position. Utterances without a main-tier
+    // bullet, and headers, are `Untimed` and sort after every timed line.
     let mut all_utts: Vec<(Line, MergeOrigin)> = retained_utts;
     all_utts.extend(inserted_utts);
     // `sort_by_key` is STABLE, which is what makes two utterances sharing a
     // start_ms keep File 1 ahead of File 2. The origins ride along in the same
     // tuple, so that guarantee no longer has to be re-derived by a caller.
-    all_utts.sort_by_key(|(line, _)| line_start_ms(line));
+    all_utts.sort_by_key(|(line, _)| timeline_position(line));
 
     // Assemble: `assemble` splits the pairs itself, which is what makes
     // one-origin-per-utterance structural instead of checked.
@@ -886,19 +885,26 @@ pub fn merge_chat_files(
     ))
 }
 
-/// Extract an utterance's main-tier `start_ms`. Returns `u64::MAX`
-/// for non-utterance lines and for utterances without a main-tier
-/// bullet, so those entries sort to the end of the timeline.
-fn line_start_ms(line: &Line) -> u64 {
+/// Where a line sits on the merged timeline: at its main-tier bullet's
+/// start, or after every timed line. Until 2026-09-09 the untimed case was
+/// the sentinel `u64::MAX`, a value a bullet could carry; the variant order
+/// is the sort order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum TimelinePosition {
+    /// The main tier's bullet start, in milliseconds.
+    At(u64),
+    /// A header, or an utterance without a main-tier bullet.
+    Untimed,
+}
+
+/// An utterance's position on the timeline.
+fn timeline_position(line: &Line) -> TimelinePosition {
     match line {
-        Line::Utterance(u) => u
-            .main
-            .content
-            .bullet
-            .as_ref()
-            .map(|b| b.timing.start_ms)
-            .unwrap_or(u64::MAX),
-        Line::Header { .. } => u64::MAX,
+        Line::Utterance(u) => match &u.main.content.bullet {
+            Some(bullet) => TimelinePosition::At(bullet.timing.start_ms),
+            None => TimelinePosition::Untimed,
+        },
+        Line::Header { .. } => TimelinePosition::Untimed,
     }
 }
 

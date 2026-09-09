@@ -17,11 +17,13 @@
 //! [`crate::artifacts`] both write them and compare them, from one description.
 
 use crate::artifacts::GeneratedFiles;
-use crate::repo_paths::RepoRelativePath;
 use crate::spec::error::{Demonstration, ErrorSpec};
 use crate::spec::metadata::SpecErrorCode;
 use crate::spec::metadata::Status;
-use crate::spec::validation_manifest::{FixtureName, ValidationFixtureEntry, ValidationManifest};
+use talkbank_spec_vocabulary::paths::RepoRelativePath;
+use talkbank_spec_vocabulary::validation_manifest::{
+    FixtureName, ValidationFixtureEntry, ValidationManifest,
+};
 
 /// One fixture to write: the CHAT input plus the manifest entry (which carries
 /// the unique filename and what the runner must assert). Produced from one spec
@@ -99,17 +101,7 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
                 .map(|(code, _)| code.clone())
                 .collect()
         },
-        // The converse, so the new state cannot become a way to opt a
-        // perfectly reachable rule out of its fixture: if an example exists,
-        // the rule is reachable and the status is wrong.
-        unreachable_specs_with_examples: specs
-            .iter()
-            .filter(|spec| {
-                spec.status() == Status::UnreachableFromChat
-                    && !matches!(spec.demonstration(), Demonstration::NoExamples)
-            })
-            .map(|spec| RepoRelativePath::new(repo_root, &spec.source_path_display()))
-            .collect(),
+        unreachable_specs_with_examples: unreachable_but_demonstrated(&specs, repo_root),
     };
     manifest
         .fixtures
@@ -122,6 +114,53 @@ pub fn build(repo_root: &std::path::Path) -> anyhow::Result<GeneratedFiles> {
         serde_json::to_string_pretty(&manifest)? + "\n",
     );
     Ok(files)
+}
+
+/// Specs whose `unreachable_from_chat` status their own examples disprove.
+///
+/// The converse of the escape hatch, so the status cannot become a way to opt a
+/// perfectly reachable rule out of its fixture: if an example produces the
+/// spec's OWN code, the rule is reachable and the status is wrong.
+///
+/// [`Demonstration::ByExample`], not "has any example". It read
+/// `!matches!(.., NoExamples)` until 2026-09-08, which also caught
+/// [`Demonstration::Absent`]: a spec whose examples every one assert OTHER
+/// codes. That is the opposite finding. A `subsumed_by` example is the evidence
+/// FOR unreachability, showing what CHAT actually produces where the rule would
+/// have to fire, and it is the most useful thing such a spec can hold. The old
+/// form forbade writing it down, so E314 and E512, both established unreachable
+/// by reading the code and by probing seven inputs, could not carry the status
+/// their own prose argued for.
+///
+/// What this does NOT do, stated because a first draft of this comment claimed
+/// it did: [`ErrorSpec::demonstration`] reads the example's declared CLAIM, not
+/// the parser. An example that in fact produces the spec's own code while
+/// declaring `subsumed_by` is `Absent` here and passes. The check that catches
+/// a claim the parser disproves is `status_falsified_by_the_snapshot` in
+/// `scripts/lint/error_code_demonstration.py`, which compares every excused
+/// status against the observation snapshot; that is the mechanism to point a
+/// reader at, and this one only compares two declarations.
+///
+/// And an `unreachable_from_chat` status has a second effect worth knowing
+/// here: `spec_runtime_tools::error_spec_validation` omits such a spec, so its
+/// examples stop being run at all. A `subsumed_by` example offered as evidence
+/// FOR unreachability is therefore no longer verified by the corpus runner
+/// once the status it argues for is granted. The snapshot still records it.
+///
+/// A separate function from [`build`] so the decision is reachable from a test
+/// without a whole repository behind it.
+fn unreachable_but_demonstrated(
+    specs: &[ErrorSpec],
+    repo_root: &std::path::Path,
+) -> Vec<RepoRelativePath> {
+    specs
+        .iter()
+        .filter(|spec| {
+            spec.status() == Status::UnreachableFromChat
+                && matches!(spec.demonstration(), Demonstration::ByExample)
+        })
+        .map(|spec| RepoRelativePath::new(repo_root, &spec.source_path_display()))
+        .collect()
 }
 
 /// Plan one fixture per example, named by the example's identity (see
@@ -139,6 +178,7 @@ fn plan_fixtures(specs: &[ErrorSpec], repo_root: &std::path::Path) -> Vec<Planne
                     fixture: FixtureName::new(fixture_name(spec, index)),
                     code: spec.error.code.clone(),
                     claim: example.claim.clone(),
+                    rules: example.rules,
                     status,
                     source_spec: source_spec.clone(),
                 },
@@ -169,6 +209,64 @@ mod tests {
         use std::io::Write;
         let mut file = fs::File::create(dir.join(name)).expect("create spec file");
         file.write_all(body.as_bytes()).expect("write spec body");
+    }
+
+    /// SURVIVES: policy. Which examples contradict an `unreachable_from_chat`
+    /// status is a judgement about what an example ASSERTS, not a fact any
+    /// signature carries.
+    ///
+    /// A spec whose every example claims a DIFFERENT code is evidence FOR
+    /// unreachability: it shows what CHAT actually produces where the rule
+    /// would have to fire. The filter read "has any example" until 2026-09-08
+    /// and so forbade writing that down, which kept E314 and E512 from
+    /// carrying the status their own prose argued for.
+    #[test]
+    fn a_subsumed_by_example_does_not_contradict_an_unreachable_status() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_spec(
+            dir.path(),
+            "E999_subsumed.md",
+            "+++\n\
+             code = 'E999'\n\
+             name = 'Subsumed'\n\n\
+             [[example]]\n\
+             level = 'utterance'\n\
+             claim = { subsumed_by = 'E316' }\n\
+             chat = \"@UTF8\\n@Begin\\none\\n@End\"\n\
+             +++\n\n## Description\n\nDemo.\n",
+        );
+        let registry = crate::test_registry::declaring(&[("E999", Status::UnreachableFromChat)]);
+        let specs = ErrorSpec::load_all(dir.path(), &registry).expect("load specs");
+        assert!(
+            unreachable_but_demonstrated(&specs, dir.path()).is_empty(),
+            "a spec asserting only OTHER codes is evidence for unreachability, \
+             not against it"
+        );
+    }
+
+    /// The other direction, which is what stops the status becoming an opt-out.
+    #[test]
+    fn an_example_producing_the_spec_s_own_code_contradicts_an_unreachable_status() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_spec(
+            dir.path(),
+            "E999_reachable.md",
+            "+++\n\
+             code = 'E999'\n\
+             name = 'Reachable'\n\n\
+             [[example]]\n\
+             level = 'utterance'\n\
+             claim = 'violates'\n\
+             chat = \"@UTF8\\n@Begin\\none\\n@End\"\n\
+             +++\n\n## Description\n\nDemo.\n",
+        );
+        let registry = crate::test_registry::declaring(&[("E999", Status::UnreachableFromChat)]);
+        let specs = ErrorSpec::load_all(dir.path(), &registry).expect("load specs");
+        assert_eq!(
+            unreachable_but_demonstrated(&specs, dir.path()).len(),
+            1,
+            "an example that produces the code proves the rule reachable"
+        );
     }
 
     #[test]

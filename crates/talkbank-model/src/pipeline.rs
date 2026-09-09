@@ -110,7 +110,12 @@ pub struct ParseValidateOptions {
     ///
     /// This implies `validate = true`.
     pub alignment: bool,
-    /// Enable strict cross-utterance linker validation (E351-E355).
+    /// Enable strict cross-utterance linker validation.
+    ///
+    /// Checks that the quotation linkers (`+"`, `+"/. `, `+".`) and the completion
+    /// linkers (`+,`, `++`) pair with the terminators they continue. The codes it
+    /// turns on are listed per code in the generated error index; a range written
+    /// here said "E351-E355" in nine places and omitted three codes in all nine.
     ///
     /// When true, self-completion (`+,`) and other-completion (`++`) linkers
     /// are checked for correct pairing with preceding terminators.
@@ -131,7 +136,12 @@ impl ParseValidateOptions {
         self
     }
 
-    /// Enable strict cross-utterance linker validation (E351-E355).
+    /// Enable strict cross-utterance linker validation.
+    ///
+    /// Checks that the quotation linkers (`+"`, `+"/. `, `+".`) and the completion
+    /// linkers (`+,`, `++`) pair with the terminators they continue. The codes it
+    /// turns on are listed per code in the generated error index; a range written
+    /// here said "E351-E355" in nine places and omitted three codes in all nine.
     ///
     /// Checks that self-completion (`+,`) and other-completion (`++`)
     /// linkers are paired with the correct preceding terminators.

@@ -38,7 +38,7 @@
 //!   has no goto target.
 
 use talkbank_model::Span;
-use talkbank_model::alignment::{TierDomain, count_tier_positions_until};
+use talkbank_model::alignment::{PositionalDomain, count_tier_positions_until};
 use talkbank_model::model::{ContentStructure, GroupKind, UtteranceContent};
 
 /// The span an editor feature should target for `content`, if any.
@@ -110,8 +110,8 @@ pub(crate) fn find_content_index_at_offset(
 /// only reads `count_tier_positions_until`.
 #[must_use]
 pub(crate) fn mor_alignment_index(content: &[UtteranceContent], index: usize) -> Option<usize> {
-    let before = count_tier_positions_until(content, index, TierDomain::Mor);
-    let after = count_tier_positions_until(content, index + 1, TierDomain::Mor);
+    let before = count_tier_positions_until(content, index, PositionalDomain::Mor);
+    let after = count_tier_positions_until(content, index + 1, PositionalDomain::Mor);
     (after > before).then_some(before)
 }
 

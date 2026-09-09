@@ -10,7 +10,9 @@
     clippy::unimplemented
 )]
 
-//! Tests for `ChatFile::validate_headers_only`, the LSP's entry point.
+//! Tests for `ChatFile::validate_headers_only`, the header-only entry point
+//! (public API; the LSP validates through `validate_with_alignment` today,
+//! checked 2026-09-08).
 //!
 //! This path existed with NO test coverage, which is how E767 shipped
 //! invisible in the editor for a day: it was implemented as a file-level sweep
@@ -50,7 +52,10 @@ fn codes_from(run: impl FnOnce(&ErrorCollector)) -> Vec<ErrorCode> {
 }
 
 /// A header-payload rule must fire from the headers-only entry point, which is
-/// what the LSP calls, and not only from full file validation.
+/// what the LSP calls, and not only from full file validation. Since
+/// 2026-09-08 both entry points run one `run_header_checks`, so the test
+/// that held them equal is gone; this one pins that the shared body is the
+/// one the rule lives in.
 #[test]
 fn header_payload_rules_fire_from_validate_headers_only() -> Result<(), TestError> {
     let file = parse(WHITESPACE_BEFORE_COMMA)?;
@@ -61,28 +66,6 @@ fn header_payload_rules_fire_from_validate_headers_only() -> Result<(), TestErro
     assert!(
         headers_only.contains(&ErrorCode::MediaWhitespaceBeforeComma),
         "E767 must reach the editor: validate_headers_only reported {headers_only:?}"
-    );
-    Ok(())
-}
-
-/// The two entry points must agree about a header-payload rule. If they
-/// diverge, one of the two audiences (CLI users, editor users) silently loses
-/// the rule, which is exactly the defect this file exists to prevent.
-#[test]
-fn both_entry_points_report_the_same_header_rule() -> Result<(), TestError> {
-    let file = parse(WHITESPACE_BEFORE_COMMA)?;
-
-    let headers_only = codes_from(|errors| {
-        file.validate_headers_only(errors, TranscriptName::Anonymous);
-    });
-    let full = codes_from(|errors| {
-        file.validate(errors, TranscriptName::Anonymous);
-    });
-
-    assert!(
-        headers_only.contains(&ErrorCode::MediaWhitespaceBeforeComma)
-            && full.contains(&ErrorCode::MediaWhitespaceBeforeComma),
-        "both paths must name the rule: headers_only={headers_only:?} full={full:?}"
     );
     Ok(())
 }

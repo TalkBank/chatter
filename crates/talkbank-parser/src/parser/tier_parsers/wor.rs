@@ -31,9 +31,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 
 use crate::generated_traversal::{
-    AsRawNode, LangcodeNode, NodeSlot, WhitespacesNode, WorDependentTierNode,
-    WorTierBodyChild1Child0Choice, WorTierBodyNode, extract_wor_dependent_tier,
-    extract_wor_tier_body,
+    AsRawNode, ChildSlot, ChoiceSlot, LangcodeNode, NoChild, NodeSlot, SlotView, WhitespacesNode,
+    WorDependentTierNode, WorTierBodyChild1Child0Choice, WorTierBodyNode,
+    extract_wor_dependent_tier, extract_wor_tier_body,
 };
 use crate::parser::node_span::span_of;
 use talkbank_model::ErrorSink;
@@ -44,7 +44,7 @@ use tree_sitter::Node;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::main_tier::structure::terminator::terminator_from_new_choice;
 use crate::parser::tree_parsing::main_tier::word::convert_word_node;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_unexpected};
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
 use talkbank_model::ParseOutcome;
 
 /// Converts `%wor` into a `WorTier`.
@@ -84,7 +84,7 @@ pub fn parse_wor_tier(
     let span = span_of(node);
 
     let children = extract_wor_dependent_tier(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "wor_dependent_tier", source, errors);
 
     match children
         .child_2
@@ -108,10 +108,10 @@ fn parse_wor_tier_body(
     errors: &impl ErrorSink,
 ) -> WorTier {
     let children = extract_wor_tier_body(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "wor_tier_body", source, errors);
 
     // `language_code` (optional): reproduce the old LANGCODE arm. Unlike the OLD
-    // backend's flat `Option<NodeSlot<LangcodeNode>>`, the NEW backend groups the
+    // backend's flat `Option<ChildSlot<LangcodeNode>>`, the NEW backend groups the
     // whole grammar-optional `(langcode, whitespaces)` pair into one NESTED
     // carrier (`WorTierBodyLanguageCodeChildren`), because that pair together is
     // what is optional, not `langcode` alone (the B2 nested-group precedent).
@@ -119,21 +119,15 @@ fn parse_wor_tier_body(
     // langcode contributes a code, every other state (a malformed group, an absent
     // group) yields none, exactly as the old loop only acted on a real
     // `LANGCODE`-kind child. Surface the nested group's own `unexpected` sink (R2).
-    let language_code = match children.language_code.slot() {
-        Some(NodeSlot::Present(group)) => {
-            surface_unexpected(&group.unexpected, source, errors);
-            match group.child_0.slot() {
-                NodeSlot::Present(langcode) => extract_langcode(*langcode, source),
-                NodeSlot::Missing(_)
-                | NodeSlot::Error(_)
-                | NodeSlot::Unexpected(_)
-                | NodeSlot::Absent => None,
+    let language_code = match children.language_code.slot().as_ref().map(NodeSlot::view) {
+        Some(SlotView::Present(group)) => {
+            surface_displaced(&group.unexpected, "wor_tier_body", source, errors);
+            match group.child_0.slot().view() {
+                SlotView::Present(langcode) => extract_langcode(*langcode, source),
+                SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => None,
             }
         }
-        Some(
-            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
-        )
-        | None => None,
+        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => None,
     };
 
     // Item repeat (`child_1`): each element is a `(choice, whitespaces)` pair, so
@@ -144,45 +138,38 @@ fn parse_wor_tier_body(
     // bullet with its preceding word.
     let mut items: Vec<WorItem> = Vec::with_capacity(children.child_1.slot().len());
     for element in children.child_1.slot() {
-        match element.slot() {
-            NodeSlot::Present(pair) => {
+        match element.slot().view() {
+            SlotView::Present(pair) => {
                 push_wor_item(pair.child_0.slot(), source, errors, &mut items);
                 push_wor_separator(pair.child_1.slot(), source, errors, "wor_tier_body");
-                surface_unexpected(&pair.unexpected, source, errors);
+                surface_displaced(&pair.unexpected, "wor_tier_body", source, errors);
             }
-            // The generated repeat classifies a whole item as `Present` / `Error`
-            // / `Absent` only (the established `@Languages`/gra/pho/sin repeat
-            // finding); matched exhaustively regardless, per the no-`_`-on-project-
-            // enums rule. Unreachable from the boundary.
-            NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(*raw, source, "wor_tier_body"));
+            // An inline sequence is never MISSING or displaced; `SeqSlot` says so.
+            SlotView::Error(raw) => {
+                errors.report(unexpected_node_error(raw, source, "wor_tier_body"));
             }
-            NodeSlot::Absent => {}
+            SlotView::Absent(NoChild) => {}
         }
     }
 
     // `child_2` (`terminator` supertype, optional, previously UNCONSUMED): a
     // `Present` choice maps through the SHARED exhaustive `terminator_from_new_choice`
     // (the NEW-backend twin; wor's terminator is `WorTierBodyChild2Choice`). `None`
-    // (absent from the source), `Missing`, `Error`, or `Unexpected` yield no
+    // (absent from the source), `Missing` or `Error` yield no
     // terminator, matching the old behavior when no terminator child was seen.
-    let terminator = match children.child_2.slot() {
-        Some(NodeSlot::Present(choice)) => Some(terminator_from_new_choice(choice)),
-        Some(
-            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
-        )
-        | None => None,
+    let terminator = match children.child_2.slot().as_ref().map(NodeSlot::view) {
+        Some(SlotView::Present(choice)) => Some(terminator_from_new_choice(choice)),
+        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => None,
     };
 
     // `child_3` (`newline`, required): structural only, no model representation.
     // Every slot state is a no-op, matched explicitly so the required newline slot
     // is never silently dropped (as the old `NEWLINE => {}` arm did).
-    match children.child_3.slot() {
-        NodeSlot::Present(_)
-        | NodeSlot::Missing(_)
-        | NodeSlot::Error(_)
-        | NodeSlot::Unexpected(_)
-        | NodeSlot::Absent => {}
+    match children.child_3.slot().view() {
+        SlotView::Present(_)
+        | SlotView::Missing(_)
+        | SlotView::Error(_)
+        | SlotView::Absent(NoChild) => {}
     }
 
     WorTier::new(items)
@@ -207,18 +194,18 @@ fn parse_wor_tier_body(
 /// the enclosing rule name, so the diagnostic matches the sibling item-slot
 /// diagnostics.
 fn push_wor_separator<'tree>(
-    slot: &NodeSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &ChildSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,
 ) {
-    match slot {
-        NodeSlot::Present(_) | NodeSlot::Absent => {}
-        NodeSlot::Missing(raw) => {
-            check_not_missing(*raw, source, errors, context);
+    match slot.view() {
+        SlotView::Present(_) | SlotView::Absent(NoChild) => {}
+        SlotView::Missing(raw) => {
+            check_not_missing(raw, source, errors, context);
         }
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, context));
+        SlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw, source, context));
         }
     }
 }
@@ -253,7 +240,7 @@ fn push_wor_separator<'tree>(
 /// error); they are handled explicitly for exhaustiveness, reproducing the old
 /// behavior without inventing new diagnostics.
 fn push_wor_item(
-    slot: &NodeSlot<'_, WorTierBodyChild1Child0Choice<'_>>,
+    slot: &ChoiceSlot<'_, WorTierBodyChild1Child0Choice<'_>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<WorItem>,
@@ -295,7 +282,7 @@ fn push_wor_item(
         NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
             errors.report(unexpected_node_error(*raw, source, "wor_tier_body"));
         }
-        NodeSlot::Missing(_) | NodeSlot::Absent => {}
+        NodeSlot::Missing(_) | NodeSlot::Absent(NoChild) => {}
     }
 }
 
@@ -334,9 +321,14 @@ fn extract_langcode(
 ///
 /// After grammar coarsening, `bullet` is a single token.
 fn parse_inline_bullet(node: Node, source: &str, errors: &impl ErrorSink) -> Option<Bullet> {
+    // `.ok()?` rather than reporting: this caller's own `None` is already
+    // handled by the `%wor` alignment path, and reporting here would double
+    // the diagnostic. The rejection is discarded DELIBERATELY, which the
+    // `Result` now makes a visible choice rather than the shape of the API.
     let (start_ms, end_ms) =
         crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps(
             node, source, errors,
-        )?;
+        )
+        .ok()?;
     Some(Bullet::new(start_ms, end_ms))
 }

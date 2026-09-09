@@ -83,6 +83,16 @@ pub struct Retrace {
     #[schemars(skip)]
     #[semantic_eq(skip)]
     pub span: Span,
+    /// The marker's own bytes in the source (`[/]`, `[//]`, `[///]`,
+    /// `[/-]`), when the parser that built this retrace recorded them.
+    /// `span` covers the whole construct through the last annotation of the
+    /// chain the marker sat in, so it cannot say where the marker is; a
+    /// diagnostic about the marker (E370) reports here. `None` is a retrace
+    /// built without a source, or by a backend that keeps no offsets.
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[semantic_eq(skip)]
+    pub marker_span: Option<Span>,
 }
 
 impl Retrace {
@@ -97,12 +107,19 @@ impl Retrace {
             // sentinel makes `check_code_glued_to_following_content` skip the
             // retrace entirely.
             span: Span::DUMMY,
+            marker_span: None,
         }
     }
 
     /// Mark as originally having angle brackets (`<content> [/]`).
     pub fn as_group(mut self) -> Self {
         self.is_group = true;
+        self
+    }
+
+    /// Record the marker's own span, from the parse.
+    pub fn with_marker_span(mut self, marker_span: Span) -> Self {
+        self.marker_span = Some(marker_span);
         self
     }
 

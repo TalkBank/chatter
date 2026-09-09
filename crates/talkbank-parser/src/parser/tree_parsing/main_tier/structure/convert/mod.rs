@@ -18,8 +18,8 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, MainTierChildren, MainTierNode, NodeSlot, SlotValue, TierBodyNode,
-    extract_main_tier, extract_tier_body,
+    AsRawNode, FromNodeKind, MainTierChildren, MainTierNode, NoChild, NodeSlot, SlotValue,
+    SlotView, TierBodyNode, extract_main_tier, extract_tier_body,
 };
 use crate::model::{
     Bullet, LanguageCode, Linker, MainTier, Postcode, Terminator, TierSeparator, UtteranceContent,
@@ -28,7 +28,7 @@ use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::super::content::{MainTierRegion, classify_main_tier_recovery};
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 
 mod body;
 mod ending;
@@ -245,8 +245,8 @@ pub fn convert_main_tier_node(
     // The optional trailing separator space after the tab, before tier_body
     // (E758 provenance): `main.child_4.slot` is `Option<NodeSlot<..>>`. Only
     // `Present` carries a real span; every other outer/inner state (grammar
-    // omits the node entirely, or it recovers as Missing/Error/Unexpected/
-    // Absent) means no illegal trailing space was captured, mirroring how
+    // omits the node entirely, or it recovers as Missing/Error/Absent) means
+    // no illegal trailing space was captured, mirroring how
     // `body.linkers.slot` is read for the other optional single-symbol slot.
     let separator = sep_from_slot(&main);
 
@@ -320,10 +320,10 @@ pub fn convert_main_tier_node(
         )),
         // A MISSING placeholder of a kind `tier_body` does not name is treated
         // as an unexpected child: there is no `tier_body` to walk either way.
-        SlotValue::Unexpected(other) | SlotValue::UnclassifiedPlaceholder(other) => {
+        SlotValue::UnclassifiedPlaceholder(other) => {
             report_unexpected_child(other, source, errors, "tier_body", TIER_BODY_POSITION);
         }
-        SlotValue::Absent => {}
+        SlotValue::Absent(NoChild) => {}
     }
 
     let tier = match located.body {
@@ -356,7 +356,7 @@ pub fn convert_main_tier_node(
     // The sink splits by OWNER, not by bookkeeping. Its ERROR nodes are
     // `MainTierRecovery`'s and were classified above with their region; what is
     // left is content that filled no grammar position, which is
-    // `surface_unexpected`'s. Partitioning on `is_error`, a property of the
+    // `surface_displaced`'s. Partitioning on `is_error`, a property of the
     // node, is not the identity arithmetic this refactor removed: nothing here
     // has to know what another walk did.
     let unexpected_content: Vec<tree_sitter::Node<'_>> = located
@@ -365,7 +365,7 @@ pub fn convert_main_tier_node(
         .copied()
         .filter(|candidate| !candidate.is_error())
         .collect();
-    surface_unexpected(&unexpected_content, source, errors);
+    surface_displaced(&unexpected_content, "main_tier", source, errors);
 
     // No fabricated speaker fallback: if speaker could not be parsed, skip
     // main-tier construction. (All diagnostics above are still emitted first,
@@ -475,11 +475,9 @@ impl TierBodyData {
 /// `None` means the tab is missing or recovered, in which case nothing can be
 /// proven adjacent to it and no adjacency-dependent claim is asserted.
 fn tab_end(main: &MainTierChildren<'_>) -> Option<usize> {
-    match main.child_3.slot() {
-        NodeSlot::Present(tab_node) => Some(tab_node.raw_node().end_byte()),
-        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
-            None
-        }
+    match main.child_3.slot().view() {
+        SlotView::Present(tab_node) => Some(tab_node.raw_node().end_byte()),
+        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => None,
     }
 }
 
@@ -487,11 +485,11 @@ fn tab_end(main: &MainTierChildren<'_>) -> Option<usize> {
 /// (E758 provenance). Mirrors the `body.linkers.slot` read pattern for the
 /// other optional single-symbol slot (see `body.rs`): only `Present` carries
 /// a real span; the outer `None` and every inner non-`Present` state
-/// (Missing/Error/Unexpected/Absent) mean no illegal trailing space was
+/// (Missing/Error/Absent) mean no illegal trailing space was
 /// captured, and map to a clean separator with no diagnostic (the E758 check
 /// itself is a later validation pass over this provenance, not parse-time).
 fn sep_from_slot(main: &MainTierChildren<'_>) -> TierSeparator {
-    match main.child_4.slot() {
+    match main.child_4.slot().as_ref().map(NodeSlot::view) {
         // E758 says "extra whitespace BETWEEN THE TAB AND the tier content", so
         // the span only carries that meaning while it is genuinely adjacent to
         // the tab. Filling this slot does not establish that: when a recovery
@@ -510,7 +508,7 @@ fn sep_from_slot(main: &MainTierChildren<'_>) -> TierSeparator {
         // The tab is read INSIDE this arm, so a well-formed utterance (no
         // separator span at all, which is the overwhelming majority of a corpus)
         // never touches it.
-        Some(NodeSlot::Present(sep_node))
+        Some(SlotView::Present(sep_node))
             if tab_end(main) == Some(sep_node.raw_node().start_byte()) =>
         {
             let node = sep_node.raw_node();
@@ -519,11 +517,10 @@ fn sep_from_slot(main: &MainTierChildren<'_>) -> TierSeparator {
                 node.end_byte() as u32,
             ))
         }
-        Some(NodeSlot::Present(_)) => TierSeparator::CLEAN,
-        Some(
-            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
-        )
-        | None => TierSeparator::CLEAN,
+        Some(SlotView::Present(_)) => TierSeparator::CLEAN,
+        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => {
+            TierSeparator::CLEAN
+        }
     }
 }
 

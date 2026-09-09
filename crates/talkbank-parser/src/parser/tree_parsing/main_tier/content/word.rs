@@ -10,8 +10,11 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
 use crate::error::ErrorSink;
+use crate::generated_traversal::{
+    AsRawNode, FromNodeKind, NoChild, SlotView, WordWithOptionalAnnotationsNode,
+    extract_word_with_optional_annotations,
+};
 use crate::model::{ReplacedWord, UtteranceContent};
-use crate::node_types::{BASE_ANNOTATIONS, REPLACEMENT, STANDALONE_WORD, WHITESPACES};
 use talkbank_model::ParseOutcome;
 use talkbank_model::Span;
 use tree_sitter::Node;
@@ -19,96 +22,123 @@ use tree_sitter::Node;
 use super::super::annotations::{parse_replacement, parse_scoped_annotations};
 use super::super::word::convert_word_node;
 use super::marker_chain::fold_marker_chain;
+use super::report_tree_shape;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::expect_child;
+use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, surface_displaced};
 
-/// Converts `word_with_optional_annotations` into `UtteranceContent`.
+/// Parse a `word_with_optional_annotations` node into `UtteranceContent`,
+/// over the generated typed traversal.
 ///
-/// **Grammar Rule:**
-/// ```text
-/// word_with_optional_annotations: $ => seq(
-///   $.standalone_word,
-///   optional(seq(
-///     $.whitespaces,
-///     choice($.replacement, $.phonological_replacement)
-///   )),
-///   optional($.base_annotations)
-/// )
-/// ```
+/// Grammar: `seq(field('word', standalone_word), optional(seq(whitespaces,
+/// replacement)), field('annotations', optional(base_annotations)))`. The
+/// word goes through the word converter, the replacement through its own
+/// parser, and the markers fold onto the word through `fold_marker_chain`,
+/// giving a `Word`, a `ReplacedWord`, or the annotated spelling when a
+/// marker actually arrives. Until 2026-09-09 this walked the children by
+/// index and `kind()` string with a catch-all for anything unnamed.
 ///
-/// **Expected Sequential Order:**
-/// 1. `standalone_word`
-/// 2. (optional) `whitespaces` followed by `replacement` or `phonological_replacement`
-/// 3. (optional) `base_annotations`
+/// A MISSING word is reported at its position (E342, as the positional
+/// check did) and builds nothing, so a placeholder never becomes a word;
+/// the replacement group is a sequence, never MISSING or displaced, and
+/// one that lost its shape to an ERROR is classified in context as the
+/// old catch-all classified it; a MISSING replacement or annotations node
+/// is reported (E342) where the old walk fed it to the sub-parser
+/// unguarded.
 pub(crate) fn parse_word_content(
     node: Node,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let child_count = node.child_count();
-    let mut word = None;
-    let mut replacement = ParseOutcome::rejected();
+    let Some(typed) = WordWithOptionalAnnotationsNode::from_node(node) else {
+        report_tree_shape(
+            node,
+            format!(
+                "Expected a word_with_optional_annotations node, found '{}'",
+                node.kind()
+            ),
+            source,
+            errors,
+        );
+        return ParseOutcome::rejected();
+    };
+    let children = extract_word_with_optional_annotations(typed);
+
+    let word = match expect_present(
+        children.word.slot(),
+        "word_with_optional_annotations",
+        source,
+        errors,
+    ) {
+        SlotState::Present(word) => convert_word_node(word.raw_node(), source, errors),
+        // The word position is required; `Absent` means a well-formed node of
+        // another kind stood where the word should be, which no recovery
+        // node marks and the whole-tree pass cannot see, so the shape fault
+        // is reported here, as the positional check reported it.
+        SlotState::Absent => {
+            report_tree_shape(
+                node,
+                "Expected 'standalone_word' at the start of word_with_optional_annotations"
+                    .to_string(),
+                source,
+                errors,
+            );
+            ParseOutcome::rejected()
+        }
+        SlotState::Recovered => ParseOutcome::rejected(),
+    };
+
+    let replacement = match children.child_1.slot() {
+        Some(group) => match group.view() {
+            SlotView::Present(group) => match expect_present(
+                group.replacement.slot(),
+                "word_with_optional_annotations",
+                source,
+                errors,
+            ) {
+                SlotState::Present(replacement) => {
+                    parse_replacement(replacement.raw_node(), source, errors)
+                }
+                SlotState::Absent | SlotState::Recovered => ParseOutcome::rejected(),
+            },
+            // An ERROR where the group should be is classified in context, as
+            // the old walk's catch-all classified it (a bare `[` is an
+            // incomplete annotation, not generic unparsable content).
+            SlotView::Error(bad) => {
+                errors.report(unexpected_node_error(
+                    bad,
+                    source,
+                    "word_with_optional_annotations",
+                ));
+                ParseOutcome::rejected()
+            }
+            SlotView::Absent(NoChild) => ParseOutcome::rejected(),
+        },
+        None => ParseOutcome::rejected(),
+    };
+
     // The markers written after the word, already resolved around the retrace
     // marker. ONE value rather than an `annotations` list beside a
     // `retrace_kind`, because those two were a partition of one ordered
     // sequence and could not say which side of the marker an annotation sat on.
-    let mut markers = Vec::new();
-    let mut idx: u32 = 0;
-
-    // Position 0: standalone_word (required)
-    // CRITICAL: Use expect_child to check for MISSING nodes - prevents fake Word objects
-    if let ParseOutcome::Parsed(child) = expect_child(
-        node,
-        idx,
-        STANDALONE_WORD,
+    let markers = match children.annotations.slot() {
+        Some(slot) => {
+            match expect_present(slot, "word_with_optional_annotations", source, errors) {
+                SlotState::Present(annotations) => {
+                    parse_scoped_annotations(annotations.raw_node(), source, errors)
+                }
+                SlotState::Absent | SlotState::Recovered => Vec::new(),
+            }
+        }
+        None => Vec::new(),
+    };
+    surface_displaced(
+        &children.unexpected,
+        "word_with_optional_annotations",
         source,
         errors,
-        "word_with_optional_annotations",
-    ) {
-        // Reuse our existing word CST conversion for full parsing
-        if let ParseOutcome::Parsed(w) = convert_word_node(child, source, errors) {
-            word = Some(w);
-        }
-        idx += 1;
-    }
+    );
 
-    // Position 1+: optional whitespaces, replacement, base_annotations
-    while idx < child_count {
-        if let Some(child) = node.child(idx) {
-            match child.kind() {
-                WHITESPACES => {
-                    // Whitespace between word parts - expected
-                    idx += 1;
-                }
-                REPLACEMENT => {
-                    // Parse replacement [: word1 word2 ...]
-                    replacement = parse_replacement(child, source, errors);
-                    idx += 1;
-                }
-                // Note: phonological_replacement was legacy and doesn't exist in current grammar
-                BASE_ANNOTATIONS => {
-                    // Parse the base_annotations container node
-                    // The grammar admits at most one `base_annotations` child,
-                    // so this assigns rather than accumulates.
-                    markers = parse_scoped_annotations(child, source, errors);
-                    idx += 1;
-                }
-                _ => {
-                    // Unexpected child
-                    errors.report(unexpected_node_error(
-                        child,
-                        source,
-                        "word_with_optional_annotations",
-                    ));
-                    idx += 1;
-                }
-            }
-        } else {
-            break;
-        }
-    }
-
-    let Some(w) = word else {
+    let ParseOutcome::Parsed(w) = word else {
         return ParseOutcome::rejected();
     };
     // The whole construct, word through final `]`. E757's glue detection relies
@@ -118,7 +148,7 @@ pub(crate) fn parse_word_content(
         ParseOutcome::Parsed(repl) => {
             UtteranceContent::ReplacedWord(Box::new(ReplacedWord::new(w, repl)))
         }
-        _ => UtteranceContent::Word(Box::new(w)),
+        ParseOutcome::Rejected => UtteranceContent::Word(Box::new(w)),
     };
     ParseOutcome::parsed(fold_marker_chain(core, markers, whole))
 }

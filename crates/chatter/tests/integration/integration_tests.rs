@@ -1025,6 +1025,44 @@ fn help_text_includes_getting_started() -> Result<(), TestError> {
 /// utterance. Without --strict-linkers this should pass; with it, E351 fires.
 const CHAT_WITH_SELF_COMPLETION_ORPHAN: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t+, hello world .\n@End\n";
 
+/// Every flag a spec example tells a reader to pass is a flag this binary has.
+///
+/// SURVIVES a type change, and says which category: this reaches the OUTSIDE
+/// world, namely a subprocess and its argument parser. `RuleProfile::cli_flag`
+/// lives in the spec workspace and clap's `long` lives here; no signature
+/// relates them, and the spec workspace cannot see clap at all.
+///
+/// What it buys: a generated error page for an opt-in code says "requires
+/// `--strict-linkers`", and a reader copies that into a terminal. Rename the
+/// clap `long` and, without this, every gate stays green while eight
+/// published pages advertise a flag the binary rejects. The doc on `cli_flag`
+/// claimed this test existed before it did, which is the same defect one
+/// level up.
+#[test]
+fn every_rules_profile_flag_is_a_flag_this_binary_accepts() -> Result<(), TestError> {
+    use talkbank_spec_vocabulary::frontmatter::RuleProfile;
+
+    let dir = tempdir()?;
+    let file_path = dir.path().join("valid.cha");
+    fs::write(&file_path, VALID_CHAT)?;
+
+    for profile in RuleProfile::ALL {
+        let Some(flag) = profile.cli_flag() else {
+            continue;
+        };
+        // Passing it must be ACCEPTED, not merely present in the help text: a
+        // flag can be documented and removed, and a `--help` grep would still
+        // find it in a sentence describing something else.
+        crate::common::chatter_cmd()
+            .arg("validate")
+            .arg(flag)
+            .arg(&file_path)
+            .assert()
+            .success();
+    }
+    Ok(())
+}
+
 /// Self-completion orphan passes validation without --strict-linkers.
 #[test]
 fn strict_linkers_off_allows_orphan_self_completion() -> Result<(), TestError> {
@@ -1099,6 +1137,68 @@ fn strict_linkers_on_rejects_orphan_self_completion() -> Result<(), TestError> {
         .assert()
         .failure()
         .stderr(predicate::str::contains("E351"));
+    Ok(())
+}
+
+// ============================================================================
+// E302: the code no spec fixture can carry
+// ============================================================================
+
+/// A main tier with a replacement whose text is empty, and NO trailing newline.
+///
+/// The missing final newline is the whole point and is why this constant is
+/// here rather than in `spec/errors/E302.md`: the fixture generator appends
+/// exactly one newline to every fixture it writes, deliberately, so that a
+/// fixture is never testing its rule plus a MISSING-newline recovery node. No
+/// spec example can express this input.
+const REPLACEMENT_AT_EOF_WITHOUT_NEWLINE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello [: ] .";
+
+/// E302 fires, and it is the trailing newline that decides.
+///
+/// SURVIVES a type change, and says which category: this reaches the OUTSIDE
+/// world, a subprocess over real file bytes, and the fact it pins is about
+/// bytes a `&str` in a test would not preserve through the fixture pipeline.
+///
+/// # Why this test exists at all
+///
+/// E302 was registered `not_implemented` until 2026-09-08, and that was false:
+/// with no final newline the main tier is left flattened at EOF, the whole-file
+/// path routes it through the fragment entry point, and `collect_tree_errors`
+/// reports the MISSING `word_segment` that `[: ]` induces. The status could
+/// not be corrected by writing a spec example, because the corpus generator
+/// normalises exactly the byte this input depends on, so
+/// `UNDEMONSTRATED` in `error_code_demonstration.rs` names this test as what
+/// stands in for one.
+///
+/// The negative half is not decoration. It is the only thing that shows the
+/// missing newline is load-bearing rather than incidental: add it and the same
+/// line reports E376 instead, so a future change that made the parser tolerant
+/// of a missing final newline would silently take E302's only route away.
+#[test]
+fn e302_needs_a_file_that_does_not_end_in_a_newline() -> Result<(), TestError> {
+    let dir = tempdir()?;
+
+    let at_eof = dir.path().join("no_final_newline.cha");
+    fs::write(&at_eof, REPLACEMENT_AT_EOF_WITHOUT_NEWLINE)?;
+    crate::common::chatter_cmd()
+        .arg("validate")
+        .arg(&at_eof)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("E302"));
+
+    let with_newline = dir.path().join("with_final_newline.cha");
+    fs::write(
+        &with_newline,
+        format!("{REPLACEMENT_AT_EOF_WITHOUT_NEWLINE}\n"),
+    )?;
+    crate::common::chatter_cmd()
+        .arg("validate")
+        .arg(&with_newline)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("E302").not());
+
     Ok(())
 }
 

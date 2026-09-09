@@ -37,7 +37,11 @@ pub mod commands {
         pub roundtrip: bool,
         /// Which parser backend to use.
         pub parser_kind: ParserKindRequest,
-        /// Enable strict cross-utterance linker validation (E351-E355).
+        /// Enable strict cross-utterance linker validation.
+        ///
+        /// The codes it turns on are listed per code in the generated
+        /// error index. A range written here said "E351-E355" and omitted
+        /// E341, E344 and E346, which the same option enables.
         pub strict_linkers: bool,
         /// Number of parallel validation jobs (`None` = use all CPUs).
         pub jobs: Option<u32>,

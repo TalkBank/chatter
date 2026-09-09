@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-09-06 04:37 EDT
+**Last modified:** 2026-09-08 02:33 EDT
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
@@ -205,7 +205,7 @@ change earns the same scrutiny as one that looks worse.
 | Roundtrip idempotency, and reference coverage | `cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus` | parse, serialize, re-parse yields a semantically identical AST (`SemanticEq`) for EVERY reference file. One test carries both guarantees: it iterates the whole corpus (coverage) and checks semantic equality on each (idempotency). |
 | Generated spec tests | `cargo test -p talkbank-parser-tests --tests generated_tests` | Every construct spec still parses cleanly. (Error specs no longer feed this: R4 deleted the string-based error tests as strictly weaker than the fixture corpus plus the observation snapshot.) |
 | Validation error corpus | `cargo test -p talkbank-parser-tests --tests validation_error_corpus` | Every ERROR-spec example (both stages, since R4) still satisfies its CLAIM against its generated `.cha` fixture, absences included. |
-| The gate registry | `cargo test -p talkbank-parser-tests --tests gates` | Runs every registered repository-wide gate, including error-code spec coverage, construct coverage, catch-all protection, golden-word validity and spec status. |
+| The gate registry | `cargo test -p talkbank-parser-tests --tests gates` | Runs every gate registered in `gate::ALL`. Ask the registry what that is rather than a list here: `cargo run -p talkbank-parser-tests --bin audit_gate_probes` names each gate, runs every probe against it, and prints the rules no probe reaches. This row used to enumerate five gates: it named one that is not registered at all, and omitted five that are. |
 
 File and test counts deliberately appear nowhere on this page. They change
 weekly; ask the tree (`rg --files -g '*.cha' corpus/reference | wc -l`) rather
@@ -236,6 +236,27 @@ only caller is its own `main`. A `[[bin]]` in that crate sets `test = false`,
 which is target selection, so such a binary is excluded from `--tests` as well
 as never being run by CI. If you are citing a check as a gate, run it, then
 break it on purpose and watch it fail, before believing the citation.
+
+### The ratchets among them, and how you lower one
+
+Three gates hold a baseline that may only shrink: `fabricated_ast` (a per-crate
+`CEILING` on `new_unchecked` and `Span::DUMMY`), `error_code_demonstration` (an
+`UNDEMONSTRATED` list of codes with no example), and `content_catch_alls` (an
+`UNPROTECTED` list). Each baseline is a `const` in its own module, so lowering
+one is an edit in the commit that earned it, reviewed like any other line.
+There is no `--write`: the previous Python ratchets had one, and what replaces
+it is that **each gate names exactly what to edit**. The two list ratchets print
+the entries that are now accounted for and must go; `fabricated_ast`, whose
+baseline holds numbers, prints its replacement row verbatim, so banking a drop
+is a paste rather than a retyped number. Retyping is what went wrong three
+separate times on the meta-repo baseline this pattern came from.
+
+They need a Rust build, which is the real cost of the move out of `scripts/`:
+
+```bash
+cargo test -p talkbank-parser-tests --tests gates   # every gate, verdicts only
+cargo run  -p talkbank-parser-tests --bin audit_gate_probes   # + can each fail?
+```
 
 ## The layers
 
@@ -301,12 +322,30 @@ significant changes.
 
 ```bash
 cargo install cargo-mutants
-cargo mutants -p talkbank-parser --timeout 120 --jobs 1
+cargo mutants -p talkbank-model --file 'src/validation/**' --timeout 180
 cat mutants.out/missed.txt    # mutations no test caught
 ```
 
-`--jobs 1` keeps memory bounded. Configuration is `mutants.toml` at the repo
-root, which excludes trivial functions.
+**Scope it, and read the result as a work list rather than a score.** The
+validation tree is the highest-value target: `chatter validate` is the
+authority on CHAT validity, so a mutant that survives there is a rule that can
+be silently disabled. Running `-p talkbank-parser` unscoped, which this page
+used to recommend, spends most of its budget on `src/generated_traversal.rs`,
+over half that crate and generated, where a survivor indicts the generator
+rather than this repository. To see the size of a target before committing an
+evening to it, use `cargo mutants --list --file '<glob>'`.
+
+Each job runs a full workspace build peaking around 8 GB, and the failure mode
+is an out-of-memory kill during overlapping linker phases rather than steady
+state, so measure peak memory at a small `--jobs` before raising it. A fixed
+`--jobs 1` was this page's advice until 2026-09-07; it was written for one
+machine and is not a property of the tool.
+
+Configuration is `mutants.toml` at the repo root. It genuinely is now: until
+2026-09-07 that file lived in the batchalign3 workspace, left behind when the
+CHAT core was extracted from it, so this paragraph named a file this repo did
+not have while the file itself excluded functions its own repo no longer
+defined.
 
 ## Adding tests, and when not to
 

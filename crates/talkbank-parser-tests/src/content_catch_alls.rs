@@ -53,13 +53,9 @@
 //! `src/bin/audit_content_catch_alls.rs`.
 
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::Path;
 
-use walkdir::WalkDir;
-
-use crate::gate::{Gate, GateOutcome, listing, report};
-use crate::repo_paths::workspace_root;
+use crate::gate::tree::{RelPath, TreeError};
+use crate::gate::{Gate, Outcome, ProbeSuite, ReadTree, UnprovenRule, listing, report};
 
 /// The files still carrying a content-enum catch-all.
 ///
@@ -134,82 +130,19 @@ const CONTENT_ENUMS: &[&str] = &[
     "WordContent::",
 ];
 
-/// A workspace-relative path: the one spelling in which a file is listed in
-/// [`UNPROTECTED`], compared against it, and printed.
-///
-/// Both absolute and relative paths were in play, converted at three separate
-/// call sites by a `relative(&root, ..)` helper. A comparison that forgot the
-/// call would compile and silently never match, which in a ratchet reads as
-/// "clean". Converting once, where the hit is recorded, removes the chance.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RepoPath(String);
-
-impl RepoPath {
-    /// Strip the workspace root, the only way a `RepoPath` is made from a
-    /// filesystem path.
-    /// Always forward-slashed, whatever the host separator is.
-    ///
-    /// `UNPROTECTED` is written with forward slashes, and Windows yields
-    /// backslashes, so a raw `to_string_lossy` compares every path against a
-    /// list it can never match: the gate reported all 20 listed files as newly
-    /// "gaining" a catch-all, on Windows only, and had done since it was
-    /// written. A path is not a string, and a path RENDERED for comparison
-    /// needs a stated convention.
-    fn of(root: &Path, file: &Path) -> Self {
-        Self(
-            file.strip_prefix(root)
-                .unwrap_or(file)
-                .to_string_lossy()
-                .replace('\\', "/"),
-        )
-    }
-
-    fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for RepoPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
 /// A `match` block whose own arms name a content enum and which also has a
 /// catch-all.
 pub struct CatchAll {
     /// The file the catch-all sits in, workspace-relative.
-    pub file: RepoPath,
-    /// 1-indexed line of the `_ =>` arm.
+    pub file: RelPath,
+    /// 1-indexed line of the `match` keyword whose arms carry the catch-all.
+    ///
+    /// The MATCH, not the arm. It said "the `_ =>` arm" and computed the other
+    /// thing, and an `UnprovenRule` was added recording the disagreement rather
+    /// than correcting the sentence, which is the stale-claim-corrected-in-place
+    /// rule broken inside the module that enforces it. The match is also the
+    /// more useful anchor: the whole block is what an operator rewrites.
     pub line: usize,
-}
-
-/// Why a candidate file did not contribute to the sweep.
-///
-/// Named cases rather than a preformatted `String`, because the two call for
-/// different operator actions and a walk failure is the worse one: it means an
-/// unknown number of files were never offered at all, where a read failure
-/// names exactly what was lost.
-pub enum Unreadable {
-    /// The directory walk itself failed. How many files it skipped is not
-    /// knowable from here.
-    Walk(String),
-    /// One named file could not be read.
-    File {
-        /// The file that could not be read, workspace-relative.
-        path: RepoPath,
-        /// The underlying IO failure, as reported.
-        error: String,
-    },
-}
-
-impl std::fmt::Display for Unreadable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Walk(error) => write!(f, "walk error: {error}"),
-            Self::File { path, error } => write!(f, "{path}: {error}"),
-        }
-    }
 }
 
 /// What a sweep of the tree established.
@@ -224,40 +157,43 @@ enum Sweep {
     /// Every candidate file was read, so the hits are exact.
     Measured(Vec<CatchAll>),
     /// At least one file could not be read, so any count would be a FLOOR.
-    Incomplete(Vec<Unreadable>),
+    ///
+    /// [`TreeError`] rather than a local sum of the same cases. This module
+    /// grew its own `Unreadable { Walk(String), File(TreeError) }`, which drew
+    /// the identical distinction one level up, wrapped the real error, and
+    /// stringified the walk case: the operator saw the prefix twice ("walk
+    /// error: could not walk crates: ..."), and the typed directory the walk
+    /// failed under was thrown away at the one place it was known.
+    Incomplete(Vec<TreeError>),
 }
 
 impl Sweep {
     /// Walk `crates/` and record every content-enum catch-all.
-    fn run(root: &Path) -> Self {
+    fn run(tree: &ReadTree) -> Self {
         let mut hits = Vec::new();
         let mut unreadable = Vec::new();
 
-        for entry in WalkDir::new(root.join("crates")) {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    unreadable.push(Unreadable::Walk(err.to_string()));
-                    continue;
-                }
-            };
-            let path = entry.path();
-            if path.extension().is_none_or(|ext| ext != "rs") {
+        let files = match tree.files_under("crates") {
+            Ok(files) => files,
+            // A walk failure is not a smaller file set: it is an unknown
+            // number of files never offered. The predecessor pushed it onto
+            // the same list and carried on, which meant a count taken after
+            // one could still be reported as if it were a measurement.
+            Err(err) => return Self::Incomplete(vec![err]),
+        };
+        for file in files {
+            if !file.extension_is("rs") {
                 continue;
             }
-            let as_str = path.to_string_lossy().replace('\\', "/");
             // Test code is exempt: a test matching one variant it cares about
             // is not a traversal that can silently drop content.
+            let as_str = file.as_str();
             if as_str.contains("/tests/") || as_str.contains("/generated/") {
                 continue;
             }
-            let file = RepoPath::of(root, path);
-            match fs::read_to_string(path) {
+            match tree.read_to_string(&file) {
                 Ok(source) => hits.extend(scan(file, &source)),
-                Err(err) => unreadable.push(Unreadable::File {
-                    path: file,
-                    error: err.to_string(),
-                }),
+                Err(err) => unreadable.push(err),
             }
         }
 
@@ -283,9 +219,9 @@ pub enum Agreement {
     /// They disagree; at least one vector is non-empty by construction.
     Drifted {
         /// Carrying a catch-all but not listed: a NEW one, the regression.
-        appeared: Vec<RepoPath>,
+        appeared: Vec<RelPath>,
         /// Listed but carrying none: a stale exemption to delete.
-        cleaned: Vec<RepoPath>,
+        cleaned: Vec<RelPath>,
     },
 }
 
@@ -293,14 +229,14 @@ impl Agreement {
     /// Compare the two sets, in both directions.
     ///
     /// Both sides are `&str`, so this is two `BTreeSet::difference` calls: a
-    /// sorted merge. The predecessor held one side as `BTreeSet<&RepoPath>`,
+    /// sorted merge. The predecessor held one side as `BTreeSet<&RelPath>`,
     /// which left the two directions spelled differently (`contains` one way,
     /// a linear `any` with a manual `as_str` the other) for no reason beyond
     /// the element types not matching.
     fn between(listed: &BTreeSet<&str>, carrying: &BTreeSet<&str>) -> Self {
-        let own = |file: &&str| RepoPath((*file).to_owned());
-        let appeared: Vec<RepoPath> = carrying.difference(listed).map(own).collect();
-        let cleaned: Vec<RepoPath> = listed.difference(carrying).map(own).collect();
+        let own = |file: &&str| RelPath::new(file);
+        let appeared: Vec<RelPath> = carrying.difference(listed).map(own).collect();
+        let cleaned: Vec<RelPath> = listed.difference(carrying).map(own).collect();
         if appeared.is_empty() && cleaned.is_empty() {
             Self::Exact
         } else {
@@ -320,7 +256,7 @@ impl Agreement {
 /// once reported "92 files checked" having checked 91.
 pub enum Audit {
     /// The sweep failed, so no count from it means anything.
-    Unmeasurable(Vec<Unreadable>),
+    Unmeasurable(Vec<TreeError>),
     /// The tree was measured; `agreement` says whether the list matches.
     Measured {
         /// Every catch-all the sweep found, in path order.
@@ -332,8 +268,8 @@ pub enum Audit {
 
 impl Audit {
     /// Sweep the tree and compare against [`UNPROTECTED`].
-    pub fn of(root: &Path) -> Self {
-        let hits = match Sweep::run(root) {
+    pub fn of(tree: &ReadTree) -> Self {
+        let hits = match Sweep::run(tree) {
             Sweep::Incomplete(unreadable) => return Self::Unmeasurable(unreadable),
             Sweep::Measured(hits) => hits,
         };
@@ -359,7 +295,12 @@ impl Audit {
     /// calls let a caller pair the wrong answers, and reducing a sum type to a
     /// bool at the seam throws away which failure it was. The renderer prints
     /// it and the gate IS it, so the two cannot disagree.
-    pub fn outcome(&self) -> GateOutcome {
+    /// The tree is a PARAMETER, and the witness is asked of it here rather
+    /// than snapshotted into `Measured` when the sweep ran. A field would have
+    /// been the hand-carried witness that [`crate::gate::Outcome`] refuses to
+    /// offer: a summary about one tree paired with evidence earned by another,
+    /// reconstructed twenty lines from the type built to forbid it.
+    pub fn outcome(&self, tree: &ReadTree) -> Outcome {
         let (hits, agreement) = match self {
             Self::Unmeasurable(unreadable) => {
                 let mut out = format!(
@@ -371,7 +312,7 @@ impl Audit {
                 for problem in unreadable {
                     out.push_str(&format!("\n  {problem}"));
                 }
-                return Err(out);
+                return Outcome::failed(out);
             }
             Self::Measured { hits, agreement } => (hits, agreement),
         };
@@ -379,7 +320,7 @@ impl Audit {
         let (appeared, cleaned) = match agreement {
             Agreement::Exact => {
                 let files: BTreeSet<&str> = hits.iter().map(|hit| hit.file.as_str()).collect();
-                return Ok(format!(
+                return tree.clean(format!(
                     "content-enum catch-alls: {} across {} file(s); \
                      all listed in UNPROTECTED",
                     hits.len(),
@@ -389,7 +330,7 @@ impl Audit {
             Agreement::Drifted { appeared, cleaned } => (appeared, cleaned),
         };
 
-        Err(report([
+        Outcome::failed(report([
             listing(
                 &format!(
                     "FAIL: {} file(s) gained a content-enum catch-all.\n\
@@ -422,7 +363,7 @@ impl Audit {
 /// forty lines from each `_ =>` and reported 41 hits, sixteen of which were
 /// matches over `Token`, `Separator` or `PauseDuration` that merely happened to
 /// sit near a content-enum reference. Proximity is not scope.
-fn scan(file: RepoPath, source: &str) -> Vec<CatchAll> {
+fn scan(file: RelPath, source: &str) -> Vec<CatchAll> {
     // BYTES, not chars. `str::find` returns a BYTE offset, and an earlier
     // version indexed a `Vec<char>` with it. The two agree only in pure-ASCII
     // files, so every file containing a CHAT example (guillemets, bullets)
@@ -515,45 +456,230 @@ fn has_catch_all(arms: &str) -> bool {
 /// Design rule 3, as a registered gate.
 pub struct CatchAllGate;
 
+/// Rust source for a probe fixture, built by FORMATTING rather than written as
+/// a literal.
+///
+/// The reason is this file's own sweep: a literal containing a content-enum
+/// name inside a `match` block, beside a `_ =>` line at depth 1, would be a
+/// hit in THIS file, which is not listed in [`UNPROTECTED`], so the gate would
+/// fail on the live tree. A probe that breaks its own gate is worse than no
+/// probe. With the enum named by a parameter and substituted after formatting,
+/// no such substring exists here.
+///
+/// None of these fixtures is ever compiled: the harness writes them into an
+/// in-memory overlay, and no `mod` declaration names them.
+fn probe_source(enum_name: &str, arms: &str) -> String {
+    format!(
+        "//! A probe fixture. Nothing declares it as a module.\n\
+         fn probe(item: &Item) -> usize {{\n\
+         {arms}\n\
+         }}\n"
+    )
+    .replace("ENUM", enum_name)
+}
+
+/// One `match` over the named enum whose last arm is a catch-all.
+fn catch_all_over(enum_name: &str, catch_all_arm: &str) -> String {
+    probe_source(
+        enum_name,
+        &format!("    match item {{\n        ENUM::Word(_) => 1,\n        {catch_all_arm}\n    }}"),
+    )
+}
+
+/// Rules of this gate no plant can reach.
+///
+/// See [`crate::gate::UnprovenRule`]. Two of these are genuine holes in the
+/// rule rather than in the probes, and both are named as such: the sweep does
+/// not leave `crates/`, and a bound wildcard is a catch-all the scan cannot
+/// see.
+const UNPROVEN: &[UnprovenRule] = &[
+    UnprovenRule::new(
+        "the `/generated/` and non-`.rs` exclusions",
+        "They can only cause a MISS, never a report, so no must-fail probe \
+         reaches them. The sibling `/tests/` exclusion IS covered, from the \
+         other side, by a must-pass probe.",
+    ),
+    UnprovenRule::new(
+        "`RelPath`'s forward-slash normalisation",
+        "Unreachable on macOS or Linux: it fires only on Windows, where a raw \
+         `to_string_lossy` made the gate report every listed file as newly \
+         gaining a catch-all. Its unit test in `gate::tree` is the coverage.",
+    ),
+    UnprovenRule::new(
+        "`CatchAll.line`, which the verdict never reads",
+        "The gate compares FILE SETS only, so no probe of `check` reaches the \
+         line arithmetic; only the renderer bin prints it. The entry used to \
+         add that the field disagreed with its own doc comment, which was a \
+         defect to fix rather than a coverage gap to record, and the doc now \
+         says what the code computes.",
+    ),
+    UnprovenRule::new(
+        "SCOPE: everything outside `crates/`",
+        "A LIVE HOLE, not a probe gap. `spec/`, `apps/`, `xtask/` and the root \
+         `tests/` are never swept, and `spec/runtime-tools/src/bin/ca_census.rs` \
+         carries real catch-alls today while the gate reports Exact. The \
+         ratchet's finish line, `UNPROTECTED` empty, is reachable with those \
+         still live. The fix is a code change, not a probe.",
+    ),
+    UnprovenRule::new(
+        "VACUITY: nothing asserts the sweep read any FILE",
+        "Half of this closed when a clean verdict began requiring an \
+         `Examined`: a sweep that read nothing at all can no longer report \
+         clean, and every clean summary now prints what was examined, so \
+         `0 across 0 file(s)` no longer reads like a working sweep. What is \
+         still missing is a FLOOR. Enumerating `crates/` counts as one \
+         examination whether it offers 812 files or none, so a sweep that \
+         reaches no file still passes, and the gate is saved today only by \
+         `UNPROTECTED` being non-empty, which makes an empty sweep fail as \
+         thirteen stale entries. The floor is a code change, not a probe.",
+    ),
+    UnprovenRule::new(
+        "a BOUND wildcard (`_other =>`) is a catch-all the scan cannot see",
+        "A real weakness in the detection rule, not merely an unprobed one. It \
+         is what makes the stale-exemption probe expressible at all, and it is \
+         why that probe can clear a file without deleting its arm.",
+    ),
+];
+
+/// The file two probes plant a catch-all into, and whose PATH those same two
+/// probes require the failure report to name.
+///
+/// A const rather than four string literals, because two of the four are the
+/// plant and two are the assertion: a rename that missed one would leave a
+/// probe asserting on a path nothing writes, which passes only if the gate
+/// fails for some other reason. The sibling suite in `test_hygiene::probes`
+/// already had this convention.
+const PROBE_CATCH_ALL: &str = "crates/talkbank-model/src/probe_gate_catch_all.rs";
+
 impl Gate for CatchAllGate {
     fn name(&self) -> &'static str {
         "content-enum catch-alls (design rule 3)"
     }
 
-    fn check(&self) -> GateOutcome {
-        Audit::of(workspace_root()).outcome()
+    fn check(&self, tree: ReadTree) -> Outcome {
+        Audit::of(&tree).outcome(&tree)
+    }
+
+    /// Both directions of the ratchet, three of the six vocabulary entries, and
+    /// three must-pass probes for sub-rules whose job is NOT to fire.
+    ///
+    /// The must-fail plants REPLACE arms rather than adding a `_ =>` beside an
+    /// exhaustive list. That matters if these fixtures are ever materialised on
+    /// disk instead of in the overlay: `unreachable_patterns` is denied
+    /// workspace-wide, so an ADDED redundant arm is a compile error, and a
+    /// harness would record a build failure as though it were a gate failure.
+    fn probes(&self) -> ProbeSuite {
+        ProbeSuite::must_fail(
+            "a WordItem catch-all in a file that is not listed",
+            "design rule 3",
+            |edit| {
+                edit.replace_once(
+                    "crates/talkbank-transform/src/fix_s.rs",
+                    "        WordItem::Separator(_) => {}",
+                    "        _ => {}",
+                )
+            },
+        )
+        .refusing(
+            "a catch-all in a file the sweep must DISCOVER, not merely re-read",
+            PROBE_CATCH_ALL,
+            |edit| {
+                edit.write(
+                    PROBE_CATCH_ALL,
+                    catch_all_over("UtteranceContent", "_ => 0,"),
+                );
+                Ok(())
+            },
+        )
+        .refusing(
+            "the second catch-all spelling, `_=>` with no space",
+            PROBE_CATCH_ALL,
+            |edit| {
+                edit.write(PROBE_CATCH_ALL, catch_all_over("WordContent", "_=> 0,"));
+                Ok(())
+            },
+        )
+        .refusing(
+            "a listed file that no longer carries a catch-all",
+            "permanent exemption",
+            |edit| {
+                edit.replace_once(
+                    "crates/talkbank-parser-tests/src/bin/generate_golden_words.rs",
+                    "                    _ => {}",
+                    "                    _other => {}",
+                )
+            },
+        )
+        .refusing(
+            "the swept directory cannot be ENUMERATED",
+            "could not be read, so any count is a FLOOR",
+            |edit| {
+                edit.fail_walk_under("crates");
+                Ok(())
+            },
+        )
+        .refusing(
+            "a swept file that cannot be read",
+            "could not be read, so any count is a FLOOR",
+            |edit| {
+                edit.write_bytes(
+                    "crates/talkbank-model/src/probe_gate_unreadable.rs",
+                    vec![0xFF, 0xFE],
+                );
+                Ok(())
+            },
+        )
+        .accepting(
+            "an inner match's catch-all does not implicate the outer content match",
+            |edit| {
+                edit.write(
+                    "crates/talkbank-model/src/probe_gate_nested.rs",
+                    probe_source(
+                        "BracketedItem",
+                        "    match item {\n        \
+                             ENUM::Word(w) => match w.kind {\n            \
+                             Kind::Plain => 1,\n            _ => 0,\n        },\n        \
+                             ENUM::Pause(_) => 0,\n    }",
+                    ),
+                );
+                Ok(())
+            },
+        )
+        .accepting(
+            "an arm that CONSTRUCTS a content item is a match over something else",
+            |edit| {
+                edit.write(
+                    "crates/talkbank-model/src/probe_gate_constructing.rs",
+                    probe_source(
+                        "ContentItem",
+                        "    match token {\n        \
+                             Token::Word(w) => ENUM::Word(w),\n        _ => 0,\n    }",
+                    ),
+                );
+                Ok(())
+            },
+        )
+        .accepting(
+            "a catch-all under a `tests/` directory is out of scope",
+            |edit| {
+                edit.write(
+                    "crates/talkbank-model/tests/probe_gate_catch_all.rs",
+                    catch_all_over("UtteranceContent", "_ => 0,"),
+                );
+                Ok(())
+            },
+        )
+    }
+
+    fn unproven_rules(&self) -> &'static [UnprovenRule] {
+        UNPROVEN
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{RepoPath, has_catch_all, scan};
-    use std::path::Path;
-
-    /// SURVIVES: behaviour a signature cannot state. `RepoPath` renders a path
-    /// for COMPARISON against `UNPROTECTED`, which is written with forward
-    /// slashes, so the rendering must be separator-independent.
-    ///
-    /// This is testable on any host because the input is a path whose text
-    /// contains backslashes, which is what Windows hands `to_string_lossy`.
-    /// Without it, the gate reported all 20 listed files as newly gaining a
-    /// catch-all on Windows and nowhere else, and the only place that showed up
-    /// was a cross-platform CI matrix nobody reads on a green day.
-    #[test]
-    fn repo_paths_are_forward_slashed_whatever_the_host_separator() {
-        let root = Path::new("/repo");
-        let windows_style = Path::new("/repo/crates\\talkbank-lsp\\src\\alignment.rs");
-        assert_eq!(
-            RepoPath::of(root, windows_style).as_str(),
-            "crates/talkbank-lsp/src/alignment.rs",
-            "a path rendered for comparison must not carry the host separator"
-        );
-        let unix_style = Path::new("/repo/crates/talkbank-lsp/src/alignment.rs");
-        assert_eq!(
-            RepoPath::of(root, unix_style).as_str(),
-            "crates/talkbank-lsp/src/alignment.rs"
-        );
-    }
+    use super::{has_catch_all, scan};
+    use crate::gate::tree::RelPath;
 
     /// SURVIVES: behaviour. `scan` is brace-balanced and depth-aware, which no
     /// signature describes; this pins that a catch-all in an INNER match over
@@ -573,7 +699,7 @@ fn outer(item: &UtteranceContent) -> usize {
     }
 }
 "#;
-        let hits = scan(RepoPath("probe.rs".to_owned()), source);
+        let hits = scan(RelPath::new("probe.rs"), source);
         assert!(
             hits.is_empty(),
             "the outer match is exhaustive; the `_ =>` belongs to `Kind`, at depth 2"

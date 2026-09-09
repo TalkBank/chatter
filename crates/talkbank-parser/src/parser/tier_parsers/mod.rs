@@ -14,7 +14,6 @@
 
 pub mod act;
 pub mod cod;
-pub mod dependent_tier;
 pub mod gra;
 pub mod mor;
 pub mod pho;
@@ -23,4 +22,3 @@ pub mod text;
 pub mod wor;
 
 // Re-export public parsing functions for convenience within parser module
-pub use dependent_tier::parse_dependent_tier;

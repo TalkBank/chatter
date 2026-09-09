@@ -1,4 +1,4 @@
-//! Converts `contents` lists inside bracketed groups.
+//! The `contents` inside a bracketed construct, as `BracketedItem`s.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -7,83 +7,60 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#OverlapMarkers>
 
 use crate::error::ErrorSink;
-use crate::model::{BracketedItem, UtteranceContent};
-use crate::node_types::{
-    CA_CONTINUATION_MARKER, CA_NO_BREAK, CA_TECHNICAL_BREAK, COLON, COMMA, CONTENT_ITEM,
-    FALLING_TO_LOW, FALLING_TO_MID, LEVEL_PITCH, NON_COLON_SEPARATOR, OVERLAP_POINT,
-    RISING_TO_HIGH, RISING_TO_MID, SEMICOLON, SEPARATOR, TAG_MARKER, UNMARKED_ENDING,
-    UPTAKE_SYMBOL, VOCATIVE_MARKER, WHITESPACES,
+use crate::generated_traversal::{
+    ChildSlot, ContentsChildren, ContentsNode, FromNodeKind, NoChild, SlotView, extract_contents,
 };
+use crate::model::{BracketedItem, UtteranceContent};
 use tree_sitter::Node;
 
-use super::nested::parse_nested_content;
-use crate::parser::ChildCapacity;
-use crate::parser::tree_parsing::helpers::unexpected_node_error;
+use crate::parser::tree_parsing::main_tier::structure::contents::{ContentsRegion, parse_contents};
 
-/// Converts a `contents` CST node into `BracketedItem`s.
+/// The extracted children of a construct's `contents` slot, or nothing.
 ///
-/// The `contents` rule enumerates the tokens that can live inside bracketed tiers (e.g., `%mor`, `%gra`),
-/// including explicit overlap/continuation markers. This parser walks the CST children, decoys whitespace,
-/// and delegates to `parse_nested_content` so each nested utterance item ends up in the `BracketedItem`
-/// vector reported back to the caller. That way the bracketed tiers keep the same ordering and annotated types
-/// described in the manual’s Scoped Symbols chapter.
+/// Present is extracted. A MISSING `contents` is a zero-width placeholder
+/// with no children, and extracting it yields no items, which is what the
+/// old `kind()` walk did with it (a MISSING node carries the expected kind,
+/// so it passed the check and walked zero children); its absence is the
+/// whole-tree backstop's to report. An ERROR or displaced node at the
+/// position is the construct losing its shape there, which `on_bad` reports
+/// in the construct's own words, and Absent means the construct has no
+/// contents at all; both yield nothing, and the caller rejects an empty
+/// construct.
+pub(crate) fn contents_of<'tree>(
+    slot: &ChildSlot<'tree, ContentsNode<'tree>>,
+    on_bad: impl FnOnce(Node<'tree>),
+) -> Option<ContentsChildren<'tree>> {
+    match slot.view() {
+        SlotView::Present(contents) => Some(extract_contents(*contents)),
+        SlotView::Missing(placeholder) => {
+            ContentsNode::from_node(placeholder).map(extract_contents)
+        }
+        SlotView::Error(bad) => {
+            on_bad(bad);
+            None
+        }
+        SlotView::Absent(NoChild) => None,
+    }
+}
+
+/// Parse an extracted `contents` node inside brackets into `BracketedItem`s.
 ///
-/// **Grammar Rule:**
-/// ```text
-/// contents: $ => repeat1($.content_item)
-/// ```
+/// The one `contents` grammar rule serves the tier body and every bracketed
+/// construct, so this is the one walker
+/// ([`parse_contents`]) in its bracketed region, followed by the total
+/// conversion below. Until 2026-09-08 the angle group, the quotation, the
+/// pho group and the sin group each walked `contents` with their own copy
+/// of a `node.kind()` match and a shared second dispatcher
+/// (`group/nested.rs`) beneath it.
 pub(crate) fn parse_group_contents(
-    node: Node,
+    contents: &ContentsChildren<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<BracketedItem> {
-    let child_count = node.child_count();
-    // Pre-allocate: each child is typically one content item
-    let mut group_items = ChildCapacity::for_node(node).into_vec();
-
-    for idx in 0..child_count {
-        if let Some(child) = node.child(idx) {
-            match child.kind() {
-                // One arm: `CONTENT_ITEM` and the CA/separator kinds had
-                // byte-identical bodies once the converter became total, and
-                // the sibling group parsers already merged them.
-                CONTENT_ITEM
-                | OVERLAP_POINT
-                | SEPARATOR
-                | NON_COLON_SEPARATOR
-                | COLON
-                | COMMA
-                | SEMICOLON
-                | TAG_MARKER
-                | VOCATIVE_MARKER
-                | CA_CONTINUATION_MARKER
-                | UNMARKED_ENDING
-                | UPTAKE_SYMBOL
-                | CA_NO_BREAK
-                | CA_TECHNICAL_BREAK
-                | RISING_TO_HIGH
-                | RISING_TO_MID
-                | LEVEL_PITCH
-                | FALLING_TO_MID
-                | FALLING_TO_LOW => {
-                    for content in parse_nested_content(child, source, errors) {
-                        group_items.push(convert_to_group_content(content));
-                    }
-                }
-                // Expected: whitespace between content items (no model representation needed)
-                WHITESPACES => {}
-                _ => {
-                    errors.report(unexpected_node_error(
-                        child,
-                        source,
-                        "contents (expected content_item)",
-                    ));
-                }
-            }
-        }
-    }
-
-    group_items
+    parse_contents(contents, ContentsRegion::InsideBrackets, source, errors)
+        .into_iter()
+        .map(convert_to_group_content)
+        .collect()
 }
 
 /// Convert `UtteranceContent` into `BracketedItem` when the content is valid inside a bracketed tier.

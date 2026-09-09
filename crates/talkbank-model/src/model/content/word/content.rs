@@ -218,6 +218,13 @@ impl From<WordShortening> for WordText {
     }
 }
 
+impl From<NonEmptyString> for WordText {
+    /// Proven text is word text: the invariant transfers, nothing is re-checked.
+    fn from(text: NonEmptyString) -> Self {
+        Self(text)
+    }
+}
+
 impl TryFrom<&str> for WordText {
     type Error = crate::model::EmptyText;
 
@@ -280,6 +287,13 @@ impl Validate for WordText {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 pub struct WordPhonetic(NonEmptyString);
+
+impl From<NonEmptyString> for WordPhonetic {
+    /// Proven text is a phonetic form: the invariant transfers, nothing is re-checked.
+    fn from(text: NonEmptyString) -> Self {
+        Self(text)
+    }
+}
 
 impl TryFrom<&str> for WordPhonetic {
     type Error = crate::model::EmptyText;
@@ -345,6 +359,13 @@ impl Validate for WordPhonetic {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 pub struct WordShortening(NonEmptyString);
+
+impl From<NonEmptyString> for WordShortening {
+    /// Proven text is shortening text: the invariant transfers, nothing is re-checked.
+    fn from(text: NonEmptyString) -> Self {
+        Self(text)
+    }
+}
 
 impl TryFrom<&str> for WordShortening {
     type Error = crate::model::EmptyText;

@@ -10,12 +10,12 @@
     clippy::unimplemented
 )]
 
-//! Integration tests for the streaming validation runner, config, stats, and corpus discovery.
+//! Integration tests for the streaming validation runner, config and stats.
 
 use std::io::Write as _;
 use talkbank_transform::{
     CacheMode, DirectoryMode, ParserKind, ValidationConfig, ValidationEvent, ValidationStats,
-    build_manifest, corpus_summary, validate_directory_streaming,
+    validate_directory_streaming,
 };
 
 /// Minimal valid CHAT file content for temp directory tests.
@@ -263,76 +263,4 @@ fn validate_directory_empty() {
     }
     assert!(saw_started, "Empty dir should still emit Started{{0}}");
     assert!(saw_finished, "Empty dir should still emit Finished");
-}
-
-// ===== Corpus (3 tests) =====
-
-#[test]
-fn build_manifest_from_directory() {
-    let dir = tempfile::tempdir().ok();
-    let dir = match dir {
-        Some(ref d) => d.path(),
-        None => return,
-    };
-
-    // build_manifest looks for directories with 0metadata.cdc
-    let corpus_dir = dir.join("TestCorpus");
-    std::fs::create_dir_all(&corpus_dir).ok();
-    std::fs::write(corpus_dir.join("0metadata.cdc"), "test metadata").ok();
-    write_cha_file(&corpus_dir, "file1.cha", VALID_CHAT);
-    write_cha_file(&corpus_dir, "file2.cha", VALID_CHAT);
-
-    let manifest = build_manifest(dir);
-    assert!(manifest.is_ok(), "build_manifest should succeed");
-    let manifest = manifest.ok();
-    if let Some(m) = manifest {
-        assert_eq!(m.total_corpora, 1, "Should find one corpus");
-        assert_eq!(m.total_files, 2, "Should find two .cha files");
-    }
-}
-
-#[test]
-fn build_manifest_empty_dir() {
-    let dir = tempfile::tempdir().ok();
-    let dir = match dir {
-        Some(ref d) => d.path(),
-        None => return,
-    };
-
-    let manifest = build_manifest(dir);
-    assert!(manifest.is_ok());
-    let manifest = manifest.ok();
-    if let Some(m) = manifest {
-        assert_eq!(m.total_corpora, 0);
-        assert_eq!(m.total_files, 0);
-    }
-}
-
-#[test]
-fn corpus_summary_includes_count() {
-    let dir = tempfile::tempdir().ok();
-    let dir = match dir {
-        Some(ref d) => d.path(),
-        None => return,
-    };
-
-    let corpus_dir = dir.join("SummaryCorpus");
-    std::fs::create_dir_all(&corpus_dir).ok();
-    std::fs::write(corpus_dir.join("0metadata.cdc"), "metadata").ok();
-    write_cha_file(&corpus_dir, "a.cha", VALID_CHAT);
-
-    let manifest = build_manifest(dir);
-    if let Ok(m) = manifest {
-        let summary = corpus_summary(&m);
-        assert!(
-            summary.contains("Total files: 1"),
-            "Summary should include file count, got: {}",
-            summary
-        );
-        assert!(
-            summary.contains("Total corpora: 1"),
-            "Summary should include corpus count, got: {}",
-            summary
-        );
-    }
 }

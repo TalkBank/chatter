@@ -1,12 +1,12 @@
-//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 1b5aad8be2b4
-//! Source grammar digest (sha256): grammar.json=91caecee485fa0c3465c757598b7c7d57a6ccb0df93aa600a242b026d58cf622 node-types.json=ea8a2d154add41001ab2828c71c132b91b0b914d4afad41c0f204d5c05b94c80
+//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 957fc1258301
+//! Source grammar digest (sha256): grammar.json=9baa7eeed28b071b9b431956e0478b0c9696e96830049e94bae83754dddab5fd node-types.json=ea8a2d154add41001ab2828c71c132b91b0b914d4afad41c0f204d5c05b94c80
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
 //! Generated typed CST traversal API. DO NOT EDIT.
 //!
 //! Produced by the tree-sitter-grammar-utils Rust backend from a grammar's
 //! `grammar.json` + `node-types.json`. EVERY named rule lowers to a uniform,
-//! recovery-aware `<Rule>Children` carrier struct, with a five-state `NodeSlot`
+//! recovery-aware `<Rule>Children` carrier struct, with a recovery `NodeSlot`
 //! at every position. A `Seq`-shaped rule's carrier has one field per member; a
 //! rule of any other shape (choice, supertype, single symbol/leaf, raw) has a
 //! single `content` member referencing that rule's `<Rule>Choice` /
@@ -120,50 +120,208 @@
     clippy::type_complexity
 )]
 
+/// The payload of a slot state a position cannot produce.
+///
+/// Uninhabited, so a `NodeSlot` whose `Missing`, `Unexpected` or `Absent`
+/// payload is `Never` has no value in that state at all: an arm reading it
+/// as a node is a type error, and a match by value may omit it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Never {}
+/// The payload of `Absent` where absence is possible: there is no child here.
+///
+/// A unit, because absence carries no node to report; it is a named type
+/// rather than `()` so a pattern reads `NodeSlot::Absent(NoChild)`, and so a
+/// wildcard is not the only way to write the arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NoChild;
 /// What exists at a child position in a typed CST traversal.
 ///
-/// Only `Present` carries the typed wrapper `T`; every recovery state
-/// carries the raw node (or nothing, for `Absent`), so which recovery
-/// state occurred is never collapsed away.
+/// `T` is a typed node wrapper (a generated `<Kind>Node<'tree>`, or a
+/// generated choice or supertype enum) that guarantees the node kind matches
+/// the grammar expectation. Only `Present` carries `T`: `Missing`, `Error`,
+/// and `Unexpected` carry the raw [`tree_sitter::Node`] where the position
+/// can produce them, since in each of those cases the grammar's kind
+/// expectation was *not* met by definition (a MISSING node standing in for
+/// `T`'s kind still failed to produce real content; an ERROR or wrong-kind
+/// node was never `T` to begin with). This is decision A1: recovery
+/// information is carried in full, never collapsed to `Option`.
+///
+/// `M`, `U` and `A` are the payloads of `Missing`, `Unexpected` and `Absent`:
+/// the node (or [`NoChild`]) where the position can produce the state, and
+/// [`Never`] where it cannot. Generated code names positions through the
+/// four aliases ([`ChildSlot`], [`SeqSlot`], [`ChoiceSlot`],
+/// [`ClassifiedSlot`]); see the module documentation for which position kind
+/// admits which states, and why.
+///
+/// The `'tree` lifetime ties the slot to the tree-sitter parse tree that
+/// owns the underlying nodes.
 #[derive(Debug, Clone)]
-pub enum NodeSlot<'tree, T> {
+pub enum NodeSlot<'tree, T, M, U, A> {
     /// A valid node with the expected kind and content.
     Present(T),
     /// A tree-sitter MISSING placeholder at this position.
-    Missing(tree_sitter::Node<'tree>),
+    ///
+    /// MISSING nodes are inserted by error recovery when a required child
+    /// is absent. They report the expected `kind()` but have zero-length
+    /// span and no real content, so the raw node is carried rather than a
+    /// (necessarily fabricated) `T`.
+    Missing(M),
     /// A tree-sitter ERROR node at this position.
+    ///
+    /// ERROR nodes wrap unparseable regions. The node's `kind()` is
+    /// `"ERROR"`; the caller can inspect its text or children for
+    /// domain-specific diagnosis. Every position kind can produce one.
     Error(tree_sitter::Node<'tree>),
     /// A present node whose kind fits no matching position.
-    Unexpected(tree_sitter::Node<'tree>),
+    ///
+    /// A choice whose gate selected an alternative its extractor then
+    /// declined, or a supertype classification handed a node of a kind
+    /// outside the supertype. The caller can inspect the node to decide
+    /// whether to use it or discard it.
+    Unexpected(U),
     /// No node exists where the grammar expected one.
-    Absent,
+    ///
+    /// The child list was shorter than expected, or the child at the cursor
+    /// did not fit this position, and tree-sitter did not insert a MISSING
+    /// placeholder.
+    Absent(A),
 }
-impl<'tree, T> NodeSlot<'tree, T> {
+/// A position filled by the next child, taken by kind: a wrapper, a
+/// supertype member, or a raw partial.
+///
+/// Never `Unexpected`: a child that fails the kind test is left for a later
+/// position or the sink, and the position records `Absent`.
+pub type ChildSlot<'tree, T> = NodeSlot<'tree, T, tree_sitter::Node<'tree>, Never, NoChild>;
+/// A position filled by an inline sequence, carried as a nested
+/// `<Rule>Children`.
+///
+/// Never `Missing` (a sequence is not a node, so tree-sitter has nothing to
+/// insert) and never `Unexpected` (a non-matching shape records `Absent`).
+pub type SeqSlot<'tree, T> = NodeSlot<'tree, T, Never, Never, NoChild>;
+/// A position filled by a choice, selected by full-shape matching.
+///
+/// Every state: `Unexpected` is the gate and the extractor disagreeing about
+/// a child that is plainly there.
+pub type ChoiceSlot<'tree, T> =
+    NodeSlot<'tree, T, tree_sitter::Node<'tree>, tree_sitter::Node<'tree>, NoChild>;
+/// A supertype rule's own node, classified by its kind.
+///
+/// Never `Absent`: the node being classified is in hand. `Unexpected` is a
+/// kind outside the supertype.
+pub type ClassifiedSlot<'tree, T> =
+    NodeSlot<'tree, T, tree_sitter::Node<'tree>, tree_sitter::Node<'tree>, Never>;
+/// The payload of a node-carrying recovery state: a node where the position
+/// can produce the state, [`Never`] where it cannot.
+///
+/// Generic code over slots reads the node through this, so one body serves
+/// every position kind and the `Never` case costs it nothing: that arm is
+/// simply unreachable, with no node invented to fill it.
+pub trait RecoveryNode<'tree>: Copy {
+    /// The node this state carries.
+    fn node(self) -> tree_sitter::Node<'tree>;
+}
+impl<'tree> RecoveryNode<'tree> for tree_sitter::Node<'tree> {
+    fn node(self) -> Self {
+        self
+    }
+}
+impl<'tree> RecoveryNode<'tree> for Never {
+    fn node(self) -> tree_sitter::Node<'tree> {
+        match self {}
+    }
+}
+/// The payload of `Absent`: [`NoChild`] where the position can be empty,
+/// [`Never`] where it cannot.
+///
+/// The one operation is the value an absence yields, so generic code answers
+/// for an empty position without a wildcard arm that would also, falsely,
+/// answer for a position that is never empty.
+pub trait Absence: Copy {
+    /// `value`, for a position that is empty; unreachable otherwise.
+    fn when_absent<X>(self, value: X) -> X;
+}
+impl Absence for NoChild {
+    fn when_absent<X>(self, value: X) -> X {
+        value
+    }
+}
+impl Absence for Never {
+    fn when_absent<X>(self, _value: X) -> X {
+        match self {}
+    }
+}
+impl<'tree, T, M, U, A> NodeSlot<'tree, T, M, U, A> {
     /// Read the present payload, or the recovery state that occurred.
+    ///
+    /// Maps `Present(t)` to `Ok(t)`; every other variant maps to the
+    /// matching [`Recovery`] variant, preserving the offending node (or, for
+    /// `Absent`, the fact that there was no node at all). There is no
+    /// `ok()`/`into_ok()`/`typed()` shortcut that discards *which* recovery
+    /// state occurred: callers who need the payload either call this method
+    /// and handle `Err(Recovery)`, or match `NodeSlot` exhaustively
+    /// themselves.
     ///
     /// # Errors
     ///
     /// Returns the matching [`Recovery`] variant whenever `self` is not
-    /// `Present`, preserving the offending node.
-    #[must_use = "the payload is gone if this Result is dropped"]
-    pub fn present_or_recover(self) -> Result<T, Recovery<'tree>> {
+    /// `Present`: `Recovery::Missing`/`Error`/`Unexpected` (each carrying the
+    /// offending node) for the three node-carrying failure states, or
+    /// `Recovery::Absent` when no node existed at this position at all.
+    #[must_use = "the payload is gone if this Result is dropped; match on it or propagate the error"]
+    pub fn present_or_recover(self) -> Result<T, Recovery<'tree, M, U, A>> {
         match self {
             Self::Present(value) => Ok(value),
-            Self::Missing(node) => Err(Recovery::Missing(node)),
+            Self::Missing(missing) => Err(Recovery::Missing(missing)),
             Self::Error(node) => Err(Recovery::Error(node)),
-            Self::Unexpected(node) => Err(Recovery::Unexpected(node)),
-            Self::Absent => Err(Recovery::Absent),
+            Self::Unexpected(unexpected) => Err(Recovery::Unexpected(unexpected)),
+            Self::Absent(absent) => Err(Recovery::Absent(absent)),
         }
     }
 }
-impl<'tree, T: AsRawNode<'tree>> NodeSlot<'tree, T> {
+impl<'tree, T, M: Copy, U: Copy, A: Copy> NodeSlot<'tree, T, M, U, A> {
+    /// The slot by value, borrowing only the present payload.
+    ///
+    /// A match through a reference must name every variant, including one
+    /// whose payload is [`Never`]; a match by value may omit it. A consumer
+    /// holding `&NodeSlot` (every generated accessor hands out a reference)
+    /// matches `slot.view()` instead and writes only the arms its position
+    /// kind has. Nothing is collapsed: the four non-present states are
+    /// carried across unchanged.
+    #[must_use]
+    pub const fn view(&self) -> SlotView<'_, 'tree, T, M, U, A> {
+        match self {
+            Self::Present(value) => SlotView::Present(value),
+            Self::Missing(missing) => SlotView::Missing(*missing),
+            Self::Error(node) => SlotView::Error(*node),
+            Self::Unexpected(unexpected) => SlotView::Unexpected(*unexpected),
+            Self::Absent(absent) => SlotView::Absent(*absent),
+        }
+    }
+}
+impl<'tree, T, M, U, A> NodeSlot<'tree, T, M, U, A>
+where
+    T: AsRawNode<'tree>,
+    M: RecoveryNode<'tree>,
+    U: RecoveryNode<'tree>,
+    A: Absence,
+{
     /// The underlying node at this position, regardless of slot state.
+    ///
+    /// This is the one helper that does not defeat the closed guarantee: it
+    /// never yields the typed payload `T` itself (so it cannot be used to
+    /// bypass [`NodeSlot::present_or_recover`] or an exhaustive match to
+    /// read `T`), only the underlying node, which is useful uniformly across
+    /// all five states for structural purposes such as span or position
+    /// reporting. Returns `None` only for `Absent`, where no node exists at
+    /// all.
     #[must_use]
     pub fn raw_node(&self) -> Option<tree_sitter::Node<'tree>> {
         match self {
             Self::Present(value) => Some(value.raw_node()),
-            Self::Missing(node) | Self::Error(node) | Self::Unexpected(node) => Some(*node),
-            Self::Absent => None,
+            Self::Missing(missing) => Some(missing.node()),
+            Self::Error(node) => Some(*node),
+            Self::Unexpected(unexpected) => Some(unexpected.node()),
+            Self::Absent(absent) => absent.when_absent(None),
         }
     }
     /// The node at this position when a MISSING placeholder counts as
@@ -200,18 +358,25 @@ impl<'tree, T: AsRawNode<'tree>> NodeSlot<'tree, T> {
     pub fn node_or_placeholder(&self) -> Option<tree_sitter::Node<'tree>> {
         match self {
             Self::Present(value) => Some(value.raw_node()),
-            Self::Missing(node) => Some(*node),
-            Self::Error(_) | Self::Unexpected(_) | Self::Absent => None,
+            Self::Missing(missing) => Some(missing.node()),
+            Self::Error(_) | Self::Unexpected(_) | Self::Absent(_) => None,
         }
     }
 }
-impl<'tree, T: FromNodeKind<'tree> + Clone> NodeSlot<'tree, T> {
+impl<'tree, T, U, A> NodeSlot<'tree, T, tree_sitter::Node<'tree>, U, A>
+where
+    T: FromNodeKind<'tree> + Clone,
+    U: Copy,
+    A: Copy,
+{
     /// [`Self::node_or_placeholder`] without discarding the type.
     ///
     /// The bound is the point. `T: FromNodeKind` says this position can
     /// be identified from a node alone, so a MISSING placeholder here
     /// can be CLASSIFIED rather than handed back raw, and a caller who
-    /// needs a `T` gets one instead of re-asserting it.
+    /// needs a `T` gets one instead of re-asserting it. The method exists
+    /// only where `Missing` carries a node: a sequence position has no
+    /// placeholder to classify.
     ///
     /// # Why this returns a six-state enum and not `Option<T>`
     ///
@@ -230,16 +395,16 @@ impl<'tree, T: FromNodeKind<'tree> + Clone> NodeSlot<'tree, T> {
     /// claimed EVERY consumer wanted them apart, which stopped being true
     /// as soon as the projection had consumers.
     #[must_use]
-    pub fn typed_or_placeholder(&self) -> SlotValue<'tree, T> {
+    pub fn typed_or_placeholder(&self) -> SlotValue<'tree, T, U, A> {
         match self {
             Self::Present(value) => SlotValue::Present(value.clone()),
-            Self::Missing(node) => match T::from_node(*node) {
-                Some(value) => SlotValue::Placeholder(value),
-                None => SlotValue::UnclassifiedPlaceholder(*node),
-            },
+            Self::Missing(node) => T::from_node(*node).map_or_else(
+                || SlotValue::UnclassifiedPlaceholder(*node),
+                SlotValue::Placeholder,
+            ),
             Self::Error(node) => SlotValue::Error(*node),
-            Self::Unexpected(node) => SlotValue::Unexpected(*node),
-            Self::Absent => SlotValue::Absent,
+            Self::Unexpected(unexpected) => SlotValue::Unexpected(*unexpected),
+            Self::Absent(absent) => SlotValue::Absent(*absent),
         }
     }
 }
@@ -249,9 +414,10 @@ impl<'tree, T: FromNodeKind<'tree> + Clone> NodeSlot<'tree, T> {
 /// nothing [`NodeSlot`] knows is lost on the way through: the two states
 /// where the position identifies itself carry a `T`, and the states
 /// where it does not stay separate so they can reach separate
-/// diagnostics.
+/// diagnostics. `U` and `A` are the slot's own `Unexpected` and `Absent`
+/// payloads, so the narrowing survives the projection.
 #[derive(Debug, Clone)]
-pub enum SlotValue<'tree, T> {
+pub enum SlotValue<'tree, T, U, A> {
     /// A well-formed node of the expected type.
     Present(T),
     /// A tree-sitter MISSING placeholder whose kind `T` describes.
@@ -273,23 +439,57 @@ pub enum SlotValue<'tree, T> {
     /// See [`NodeSlot::Error`].
     Error(tree_sitter::Node<'tree>),
     /// See [`NodeSlot::Unexpected`].
-    Unexpected(tree_sitter::Node<'tree>),
+    Unexpected(U),
     /// See [`NodeSlot::Absent`].
-    Absent,
+    Absent(A),
 }
 /// Why a [`NodeSlot`] did not hold a present value.
+///
+/// This is exactly `NodeSlot` minus the `Present` case: the four ways a
+/// child position can fail to yield a valid, expected-kind node, narrowed
+/// by the same payload parameters. Produced only by
+/// [`NodeSlot::present_or_recover`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Recovery<'tree> {
+pub enum Recovery<'tree, M, U, A> {
     /// See [`NodeSlot::Missing`].
-    Missing(tree_sitter::Node<'tree>),
+    Missing(M),
     /// See [`NodeSlot::Error`].
     Error(tree_sitter::Node<'tree>),
     /// See [`NodeSlot::Unexpected`].
-    Unexpected(tree_sitter::Node<'tree>),
+    Unexpected(U),
     /// See [`NodeSlot::Absent`].
-    Absent,
+    Absent(A),
 }
-impl<'tree, T> SlotValue<'tree, T> {
+/// A [`NodeSlot`] seen through a reference: the present payload borrowed,
+/// the four recovery states copied out.
+///
+/// Produced by [`NodeSlot::view`]. It exists so that a consumer holding a
+/// reference can match BY VALUE, which is what lets an arm whose payload is
+/// [`Never`] be omitted.
+///
+/// `Clone` and `Copy` are written out rather than derived: a derive would
+/// demand `T: Copy`, and a choice or supertype enum is only `Clone`, while
+/// the view holds `T` by reference and copies the rest.
+#[derive(Debug)]
+pub enum SlotView<'a, 'tree, T, M, U, A> {
+    /// See [`NodeSlot::Present`].
+    Present(&'a T),
+    /// See [`NodeSlot::Missing`].
+    Missing(M),
+    /// See [`NodeSlot::Error`].
+    Error(tree_sitter::Node<'tree>),
+    /// See [`NodeSlot::Unexpected`].
+    Unexpected(U),
+    /// See [`NodeSlot::Absent`].
+    Absent(A),
+}
+impl<T, M: Copy, U: Copy, A: Copy> Clone for SlotView<'_, '_, T, M, U, A> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T, M: Copy, U: Copy, A: Copy> Copy for SlotView<'_, '_, T, M, U, A> {}
+impl<T, U, A> SlotValue<'_, T, U, A> {
     /// The value where the position IDENTIFIES ITSELF, and nothing
     /// otherwise: the two-state reading of the six.
     ///
@@ -307,17 +507,24 @@ impl<'tree, T> SlotValue<'tree, T> {
             Self::UnclassifiedPlaceholder(_)
             | Self::Error(_)
             | Self::Unexpected(_)
-            | Self::Absent => None,
+            | Self::Absent(_) => None,
         }
     }
 }
-/// A skippable node (comment or other grammar `extra`) preceding a slot.
+/// A skippable node (a comment, or other grammar `extra`) that may
+/// precede a slot or collection.
+///
+/// The inner field is `pub`: an extra has no invariant to protect (it is
+/// any node tree-sitter classified as an `extra` in `node-types.json`,
+/// matched by generated code against the grammar's `extra` kind set), so
+/// there is nothing a constructor would need to validate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Extra<'tree>(pub tree_sitter::Node<'tree>);
-/// The value of an absorbed-anonymous LEAF choice alternative: a bare
-/// regex tree-sitter absorbs into the enclosing node, so when it matches
-/// the enclosing node is a CHILDLESS LEAF whose OWN text is the value.
-/// It carries that enclosing node (read `.0.utf8_text(..)` for the leaf
+/// The value of an absorbed-anonymous LEAF choice alternative.
+///
+/// A bare regex tree-sitter absorbs into the enclosing node, so when it
+/// matches the enclosing node is a CHILDLESS LEAF whose OWN text is the
+/// value. It carries that enclosing node (read `.0.utf8_text(..)` for the leaf
 /// text). Crucially it is NOT a child of the node: it surfaces no child
 /// placement, so no-silent-drop (P2) is preserved (a childless leaf has
 /// zero children to place). Distinct from [`Extra`] (a real skippable
@@ -325,10 +532,11 @@ pub struct Extra<'tree>(pub tree_sitter::Node<'tree>);
 /// this is the node's OWN span, fully typed, not a partial.
 #[derive(Debug, Clone, Copy)]
 pub struct LeafText<'tree>(pub tree_sitter::Node<'tree>);
-/// The value of an absorbed-anonymous SEQUENCE-MEMBER token: a bare regex
-/// tree-sitter absorbs while sitting between two materialized siblings, so
-/// it produces NO child of its own and its text is a SUB-SPAN of the
-/// enclosing node (between the previous sibling's end and the next
+/// The value of an absorbed-anonymous SEQUENCE-MEMBER token.
+///
+/// A bare regex tree-sitter absorbs while sitting between two materialized
+/// siblings, so it produces NO child of its own and its text is a SUB-SPAN
+/// of the enclosing node (between the previous sibling's end and the next
 /// sibling's start). It carries the enclosing `node` and that byte
 /// `range`; read `&source[leaf.range.clone()]` (with the same source bytes
 /// the tree was parsed from) for the absorbed text, or `leaf.node` for
@@ -345,12 +553,21 @@ pub struct LeafSpan<'tree> {
     /// `node.byte_range()`), between the adjacent siblings.
     pub range: std::ops::Range<usize>,
 }
-/// A slot or collection, with the run of leading extras before it.
+/// A slot or collection (`S`), together with the run of leading extras that
+/// preceded it in the CST.
+///
+/// This is the runtime counterpart of `TypedRepr::Positioned` (decision
+/// B2): tree-sitter's `extra` nodes (comments, and any other grammar-marked
+/// extra) can appear between meaningful siblings, and generated traversal
+/// code must consume them without losing them. `S` is generic rather than
+/// fixed to `NodeSlot<T>` because a `Positioned` can wrap either a single
+/// slot (`TypedRepr::Positioned(Slot(..))`) or a repeated collection
+/// (`TypedRepr::Positioned(Vec(..))`).
 #[derive(Debug, Clone)]
 pub struct Positioned<'tree, S> {
     /// Extras (in document order) that appeared before `slot`.
     leading_extras: Vec<Extra<'tree>>,
-    /// The slot or collection this position holds.
+    /// The slot or collection this position ultimately holds.
     slot: S,
 }
 impl<'tree, S> Positioned<'tree, S> {
@@ -374,9 +591,33 @@ impl<'tree, S> Positioned<'tree, S> {
     }
 }
 /// Expose the underlying `tree_sitter::Node` of a typed wrapper.
+///
+/// Generated per-kind wrappers implement this so that [`NodeSlot::raw_node`]
+/// can extract the underlying node regardless of which wrapper type `T` is.
+/// Deliberately minimal: it carries exactly the one method needed and
+/// nothing speculative.
 pub trait AsRawNode<'tree> {
     /// The underlying tree-sitter node.
     fn raw_node(&self) -> tree_sitter::Node<'tree>;
+}
+/// The single node kind a wrapper names.
+///
+/// Implemented for WRAPPERS ONLY, which is the whole distinction from
+/// [`FromNodeKind`]. A wrapper answers for exactly one kind, so it can
+/// name it as a constant; a choice or supertype enum answers for several,
+/// so there is no single answer and `T: NamedKind` refuses it at compile
+/// time rather than picking one.
+///
+/// It exists because a consumer that holds a typed value and needs that
+/// value's kind as a STRING otherwise writes the string out by hand. That
+/// is the same fact in two places with nothing holding them equal, and it
+/// is what diagnostic context arguments, error-message interpolation and
+/// per-kind dispatch tables were all doing. `T::KIND` is the literal the
+/// generated module's own `from_node` compares against, so there is one
+/// owner.
+pub trait NamedKind {
+    /// The node kind, exactly as tree-sitter reports it.
+    const KIND: &'static str;
 }
 /// Classify a raw node into a typed value, by its KIND.
 ///
@@ -391,24 +632,6 @@ pub trait AsRawNode<'tree> {
 /// than a property they have to know, so a generic helper over slots
 /// simply does not compile for the positions where it would have to
 /// invent something.
-/// The single node kind a wrapper names.
-///
-/// Implemented for WRAPPERS ONLY, which is the whole distinction from
-/// [`FromNodeKind`]. A wrapper answers for exactly one kind, so it can
-/// name it as a constant; a choice or supertype enum answers for several,
-/// so there is no single answer and `T: NamedKind` refuses it at compile
-/// time rather than picking one.
-///
-/// It exists because a consumer that holds a typed value and needs that
-/// value's kind as a STRING otherwise writes the string out by hand. That
-/// is the same fact in two places with nothing holding them equal, and it
-/// is what diagnostic context arguments, error-message interpolation and
-/// per-kind dispatch tables were all doing. `T::KIND` is the literal this
-/// module's own `from_node` compares against, so there is one owner.
-pub trait NamedKind {
-    /// The node kind, exactly as tree-sitter reports it.
-    const KIND: &'static str;
-}
 pub trait FromNodeKind<'tree>: Sized {
     /// The typed value for `node`, or `None` if `node` is not one.
     ///
@@ -9897,13 +10120,13 @@ static SHAPES_269: [&ReconShape; 2] = [&SHAPE_425, &SHAPE_250];
 #[derive(Debug, Clone)]
 pub struct ActDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ActTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ActTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -9936,10 +10159,10 @@ pub fn extract_act_dependent_tier<'tree>(
                             NodeSlot::Present(ActTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -9960,10 +10183,10 @@ pub fn extract_act_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -9993,10 +10216,10 @@ pub fn extract_act_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -10022,10 +10245,10 @@ pub fn extract_act_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10057,13 +10280,13 @@ pub fn extract_act_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ActivitiesHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ActivitiesPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ActivitiesPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -10096,10 +10319,10 @@ pub fn extract_activities_header<'tree>(
                             NodeSlot::Present(ActivitiesPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10120,10 +10343,10 @@ pub fn extract_activities_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10144,10 +10367,10 @@ pub fn extract_activities_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10168,10 +10391,10 @@ pub fn extract_activities_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10203,13 +10426,13 @@ pub fn extract_activities_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct AddDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AddTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AddTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -10242,10 +10465,10 @@ pub fn extract_add_dependent_tier<'tree>(
                             NodeSlot::Present(AddTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10266,10 +10489,10 @@ pub fn extract_add_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10299,10 +10522,10 @@ pub fn extract_add_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -10328,10 +10551,10 @@ pub fn extract_add_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10363,13 +10586,13 @@ pub fn extract_add_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct AltAnnotationChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LBrackEqQuestionNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LBrackEqQuestionNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>,
     /// Positional member 2.
-    pub text: Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>>,
+    pub text: Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, RightBracketNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -10379,7 +10602,7 @@ pub struct AltAnnotationChildren<'tree> {
 impl<'tree> AltAnnotationChildren<'tree> {
     /// The `text` grammar field (accessor method `text`).
     #[must_use]
-    pub fn text(&self) -> &Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>> {
+    pub fn text(&self) -> &Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>> {
         &self.text
     }
 }
@@ -10408,10 +10631,10 @@ pub fn extract_alt_annotation<'tree>(
                             NodeSlot::Present(LBrackEqQuestionNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10432,10 +10655,10 @@ pub fn extract_alt_annotation<'tree>(
                             NodeSlot::Present(SpaceNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10456,10 +10679,10 @@ pub fn extract_alt_annotation<'tree>(
                             NodeSlot::Present(AnnotationContentNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10480,10 +10703,10 @@ pub fn extract_alt_annotation<'tree>(
                             NodeSlot::Present(RightBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10515,13 +10738,13 @@ pub fn extract_alt_annotation_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct AltDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AltTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AltTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -10554,10 +10777,10 @@ pub fn extract_alt_dependent_tier<'tree>(
                             NodeSlot::Present(AltTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10578,10 +10801,10 @@ pub fn extract_alt_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10611,10 +10834,10 @@ pub fn extract_alt_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -10640,10 +10863,10 @@ pub fn extract_alt_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -10791,7 +11014,7 @@ impl<'tree> FromNodeKind<'tree> for BaseAnnotationChoice<'tree> {
 pub struct BaseAnnotationChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, BaseAnnotationChoice<'tree>>>,
+    pub content: Positioned<'tree, ClassifiedSlot<'tree, BaseAnnotationChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -10957,9 +11180,9 @@ impl<'tree> FromNodeKind<'tree> for BaseAnnotationsChild0Child1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct BaseAnnotationsChild0Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, BaseAnnotationsChild0Child1Choice<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, BaseAnnotationsChild0Child1Choice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -11103,9 +11326,9 @@ impl<'tree> FromNodeKind<'tree> for BaseAnnotationsChild1Child1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct BaseAnnotationsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, BaseAnnotationsChild1Child1Choice<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, BaseAnnotationsChild1Child1Choice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -11116,11 +11339,11 @@ impl<'tree> BaseAnnotationsChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct BaseAnnotationsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BaseAnnotationsChild0Children<'tree>>>,
+    pub child_0: Positioned<'tree, SeqSlot<'tree, BaseAnnotationsChild0Children<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, BaseAnnotationsChild1Children<'tree>>>>,
+        Vec<Positioned<'tree, SeqSlot<'tree, BaseAnnotationsChild1Children<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -11176,10 +11399,10 @@ pub fn extract_base_annotations<'tree>(
                                                     NodeSlot::Present(WhitespacesNode(__c))
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     };
                                     Positioned::new(leading_extras, slot)
@@ -11388,11 +11611,11 @@ pub fn extract_base_annotations<'tree>(
                                                             )
                                                         }
                                                     }
-                                                    _ => NodeSlot::Absent,
+                                                    _ => NodeSlot::Absent(NoChild),
                                                 }
                                             }
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     };
                                     Positioned::new(leading_extras, slot)
@@ -11408,10 +11631,10 @@ pub fn extract_base_annotations<'tree>(
                             }
                         })
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -11469,10 +11692,10 @@ pub fn extract_base_annotations<'tree>(
                                                                 NodeSlot::Present(WhitespacesNode(__c))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -11681,11 +11904,11 @@ pub fn extract_base_annotations<'tree>(
                                                                         )
                                                                     }
                                                                 }
-                                                                _ => NodeSlot::Absent,
+                                                                _ => NodeSlot::Absent(NoChild),
                                                             }
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -11701,10 +11924,10 @@ pub fn extract_base_annotations<'tree>(
                                         }
                                     })
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         };
                         Positioned::new(leading_extras, slot)
@@ -11811,7 +12034,7 @@ impl<'tree> FromNodeKind<'tree> for BaseContentItemChoice<'tree> {
 pub struct BaseContentItemChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, BaseContentItemChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, BaseContentItemChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -11858,7 +12081,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11872,7 +12095,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11885,7 +12108,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11902,7 +12125,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11919,7 +12142,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11934,7 +12157,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11948,7 +12171,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11960,7 +12183,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11972,7 +12195,7 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -11984,10 +12207,10 @@ pub fn extract_base_content_item<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -12017,13 +12240,13 @@ pub fn extract_base_content_item_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct BckHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BckPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BckPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -12054,10 +12277,10 @@ pub fn extract_bck_header<'tree>(node: BckHeaderNode<'tree>) -> BckHeaderChildre
                             NodeSlot::Present(BckPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12078,10 +12301,10 @@ pub fn extract_bck_header<'tree>(node: BckHeaderNode<'tree>) -> BckHeaderChildre
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12102,10 +12325,10 @@ pub fn extract_bck_header<'tree>(node: BckHeaderNode<'tree>) -> BckHeaderChildre
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12126,10 +12349,10 @@ pub fn extract_bck_header<'tree>(node: BckHeaderNode<'tree>) -> BckHeaderChildre
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12161,9 +12384,9 @@ pub fn extract_bck_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct BeginHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AtBeginNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AtBeginNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -12194,10 +12417,10 @@ pub fn extract_begin_header<'tree>(node: BeginHeaderNode<'tree>) -> BeginHeaderC
                             NodeSlot::Present(AtBeginNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12218,10 +12441,10 @@ pub fn extract_begin_header<'tree>(node: BeginHeaderNode<'tree>) -> BeginHeaderC
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12251,9 +12474,9 @@ pub fn extract_begin_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct BgHeaderChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -12264,11 +12487,11 @@ impl<'tree> BgHeaderChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct BgHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BgPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BgPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, BgHeaderChild1Children<'tree>>>>,
+    pub child_1: Positioned<'tree, Option<SeqSlot<'tree, BgHeaderChild1Children<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -12299,10 +12522,10 @@ pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'
                             NodeSlot::Present(BgPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12356,10 +12579,10 @@ pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'
                                                         NodeSlot::Present(HeaderSepNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -12384,10 +12607,10 @@ pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'
                                                         NodeSlot::Present(FreeTextNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -12403,10 +12626,10 @@ pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'
                                 }
                             })
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -12432,10 +12655,10 @@ pub fn extract_bg_header<'tree>(node: BgHeaderNode<'tree>) -> BgHeaderChildren<'
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12466,17 +12689,17 @@ pub fn extract_bg_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct BirthOfHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BirthOfPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BirthOfPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, HeaderGapNode<'tree>>>>,
+    pub child_1: Positioned<'tree, Option<ChildSlot<'tree, HeaderGapNode<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, SpeakerNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, SpeakerNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, DateContentsNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, DateContentsNode<'tree>>>,
     /// Positional member 5.
-    pub child_5: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_5: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -12509,10 +12732,10 @@ pub fn extract_birth_of_header<'tree>(
                             NodeSlot::Present(BirthOfPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12542,10 +12765,10 @@ pub fn extract_birth_of_header<'tree>(
                                 NodeSlot::Present(HeaderGapNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -12571,10 +12794,10 @@ pub fn extract_birth_of_header<'tree>(
                             NodeSlot::Present(SpeakerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12595,10 +12818,10 @@ pub fn extract_birth_of_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12619,10 +12842,10 @@ pub fn extract_birth_of_header<'tree>(
                             NodeSlot::Present(DateContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12643,10 +12866,10 @@ pub fn extract_birth_of_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12680,17 +12903,17 @@ pub fn extract_birth_of_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct BirthplaceOfHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BirthplaceOfPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BirthplaceOfPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, HeaderGapNode<'tree>>>>,
+    pub child_1: Positioned<'tree, Option<ChildSlot<'tree, HeaderGapNode<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, SpeakerNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, SpeakerNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 5.
-    pub child_5: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_5: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -12723,10 +12946,10 @@ pub fn extract_birthplace_of_header<'tree>(
                             NodeSlot::Present(BirthplaceOfPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12756,10 +12979,10 @@ pub fn extract_birthplace_of_header<'tree>(
                                 NodeSlot::Present(HeaderGapNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -12785,10 +13008,10 @@ pub fn extract_birthplace_of_header<'tree>(
                             NodeSlot::Present(SpeakerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12809,10 +13032,10 @@ pub fn extract_birthplace_of_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12833,10 +13056,10 @@ pub fn extract_birthplace_of_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12857,10 +13080,10 @@ pub fn extract_birthplace_of_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12894,9 +13117,9 @@ pub fn extract_birthplace_of_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct BlankHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BlankPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BlankPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -12927,10 +13150,10 @@ pub fn extract_blank_header<'tree>(node: BlankHeaderNode<'tree>) -> BlankHeaderC
                             NodeSlot::Present(BlankPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12951,10 +13174,10 @@ pub fn extract_blank_header<'tree>(node: BlankHeaderNode<'tree>) -> BlankHeaderC
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -12985,7 +13208,7 @@ pub fn extract_blank_header_from_error_recovery<'tree>(
 pub struct BlankLineChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub content: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13014,10 +13237,10 @@ pub fn extract_blank_line<'tree>(node: BlankLineNode<'tree>) -> BlankLineChildre
                         NodeSlot::Present(NewlineNode(__c))
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             } else {
-                NodeSlot::Absent
+                NodeSlot::Absent(NoChild)
             }
         };
         Positioned::new(leading_extras, slot)
@@ -13045,15 +13268,15 @@ pub fn extract_blank_line_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct BulletChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletStartNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BulletStartNode<'tree>>>,
     /// Positional member 1.
-    pub start_time: Positioned<'tree, NodeSlot<'tree, BulletTimestampNode<'tree>>>,
+    pub start_time: Positioned<'tree, ChildSlot<'tree, BulletTimestampNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, AnonNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, AnonNode<'tree>>>,
     /// Positional member 3.
-    pub end_time: Positioned<'tree, NodeSlot<'tree, BulletTimestampNode<'tree>>>,
+    pub end_time: Positioned<'tree, ChildSlot<'tree, BulletTimestampNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, BulletEndNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, BulletEndNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13063,12 +13286,12 @@ pub struct BulletChildren<'tree> {
 impl<'tree> BulletChildren<'tree> {
     /// The `end_time` grammar field (accessor method `end_time`).
     #[must_use]
-    pub fn end_time(&self) -> &Positioned<'tree, NodeSlot<'tree, BulletTimestampNode<'tree>>> {
+    pub fn end_time(&self) -> &Positioned<'tree, ChildSlot<'tree, BulletTimestampNode<'tree>>> {
         &self.end_time
     }
     /// The `start_time` grammar field (accessor method `start_time`).
     #[must_use]
-    pub fn start_time(&self) -> &Positioned<'tree, NodeSlot<'tree, BulletTimestampNode<'tree>>> {
+    pub fn start_time(&self) -> &Positioned<'tree, ChildSlot<'tree, BulletTimestampNode<'tree>>> {
         &self.start_time
     }
 }
@@ -13095,10 +13318,10 @@ pub fn extract_bullet<'tree>(node: BulletNode<'tree>) -> BulletChildren<'tree> {
                             NodeSlot::Present(BulletStartNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13119,10 +13342,10 @@ pub fn extract_bullet<'tree>(node: BulletNode<'tree>) -> BulletChildren<'tree> {
                             NodeSlot::Present(BulletTimestampNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13143,10 +13366,10 @@ pub fn extract_bullet<'tree>(node: BulletNode<'tree>) -> BulletChildren<'tree> {
                             NodeSlot::Present(AnonNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13167,10 +13390,10 @@ pub fn extract_bullet<'tree>(node: BulletNode<'tree>) -> BulletChildren<'tree> {
                             NodeSlot::Present(BulletTimestampNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13191,10 +13414,10 @@ pub fn extract_bullet<'tree>(node: BulletNode<'tree>) -> BulletChildren<'tree> {
                             NodeSlot::Present(BulletEndNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13226,13 +13449,13 @@ pub fn extract_bullet_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct CodDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, CodTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, CodTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13265,10 +13488,10 @@ pub fn extract_cod_dependent_tier<'tree>(
                             NodeSlot::Present(CodTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13289,10 +13512,10 @@ pub fn extract_cod_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13322,10 +13545,10 @@ pub fn extract_cod_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -13351,10 +13574,10 @@ pub fn extract_cod_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13386,9 +13609,9 @@ pub fn extract_cod_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct CodeSwitchAnnotationChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ColonNode<'tree>>>,
     /// Positional member 1.
-    pub code: Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>>,
+    pub code: Positioned<'tree, ChildSlot<'tree, LanguageCodeNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13398,19 +13621,19 @@ pub struct CodeSwitchAnnotationChild1Children<'tree> {
 impl<'tree> CodeSwitchAnnotationChild1Children<'tree> {
     /// The `code` grammar field (accessor method `code`).
     #[must_use]
-    pub fn code(&self) -> &Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>> {
+    pub fn code(&self) -> &Positioned<'tree, ChildSlot<'tree, LanguageCodeNode<'tree>>> {
         &self.code
     }
 }
 #[derive(Debug, Clone)]
 pub struct CodeSwitchAnnotationChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LBrackAtSNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LBrackAtSNode<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Option<NodeSlot<'tree, CodeSwitchAnnotationChild1Children<'tree>>>>,
+        Positioned<'tree, Option<SeqSlot<'tree, CodeSwitchAnnotationChild1Children<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, RightBracketNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13443,10 +13666,10 @@ pub fn extract_code_switch_annotation<'tree>(
                             NodeSlot::Present(LBrackAtSNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13500,10 +13723,10 @@ pub fn extract_code_switch_annotation<'tree>(
                                                         NodeSlot::Present(ColonNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -13528,10 +13751,10 @@ pub fn extract_code_switch_annotation<'tree>(
                                                         NodeSlot::Present(LanguageCodeNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -13547,10 +13770,10 @@ pub fn extract_code_switch_annotation<'tree>(
                                 }
                             })
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -13576,10 +13799,10 @@ pub fn extract_code_switch_annotation<'tree>(
                             NodeSlot::Present(RightBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13610,13 +13833,13 @@ pub fn extract_code_switch_annotation_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct CohDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, CohTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, CohTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13649,10 +13872,10 @@ pub fn extract_coh_dependent_tier<'tree>(
                             NodeSlot::Present(CohTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13673,10 +13896,10 @@ pub fn extract_coh_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13706,10 +13929,10 @@ pub fn extract_coh_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -13735,10 +13958,10 @@ pub fn extract_coh_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13770,13 +13993,13 @@ pub fn extract_coh_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ColorWordsHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ColorWordsPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ColorWordsPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13809,10 +14032,10 @@ pub fn extract_color_words_header<'tree>(
                             NodeSlot::Present(ColorWordsPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13833,10 +14056,10 @@ pub fn extract_color_words_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13857,10 +14080,10 @@ pub fn extract_color_words_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13881,10 +14104,10 @@ pub fn extract_color_words_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13916,13 +14139,13 @@ pub fn extract_color_words_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ComDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ComTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ComTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsAndPicsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsAndPicsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -13955,10 +14178,10 @@ pub fn extract_com_dependent_tier<'tree>(
                             NodeSlot::Present(ComTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -13979,10 +14202,10 @@ pub fn extract_com_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -14012,10 +14235,10 @@ pub fn extract_com_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsAndPicsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -14041,10 +14264,10 @@ pub fn extract_com_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -14076,13 +14299,13 @@ pub fn extract_com_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct CommentHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, CommentPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, CommentPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, TextWithBulletsAndPicsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, TextWithBulletsAndPicsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -14115,10 +14338,10 @@ pub fn extract_comment_header<'tree>(
                             NodeSlot::Present(CommentPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -14139,10 +14362,10 @@ pub fn extract_comment_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -14163,10 +14386,10 @@ pub fn extract_comment_header<'tree>(
                             NodeSlot::Present(TextWithBulletsAndPicsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -14187,10 +14410,10 @@ pub fn extract_comment_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -14324,7 +14547,7 @@ impl<'tree> AsRawNode<'tree> for ContentItemChoice<'tree> {
 pub struct ContentItemChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, ContentItemChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, ContentItemChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -14370,7 +14593,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -14385,7 +14608,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -14402,7 +14625,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -14417,7 +14640,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -14431,7 +14654,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -14445,7 +14668,7 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -14510,10 +14733,10 @@ pub fn extract_content_item<'tree>(node: ContentItemNode<'tree>) -> ContentItemC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -14617,10 +14840,10 @@ impl<'tree> FromNodeKind<'tree> for ContentsChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct ContentsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ContentsChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, ContentsChild0Choice<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, ContentsChild1Choice<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, ChoiceSlot<'tree, ContentsChild1Choice<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -14667,7 +14890,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -14681,7 +14904,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -14694,7 +14917,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -14708,10 +14931,10 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
-                            _ => NodeSlot::Absent,
+                            _ => NodeSlot::Absent(NoChild),
                         }
                     }
                 }
@@ -14765,7 +14988,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                         } else if let Some(__c) = __at.take_declined_span(end) {
                                             NodeSlot::Unexpected(__c)
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     }
                                     Some(ChoiceSelection {
@@ -14781,7 +15004,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                         } else if let Some(__c) = __at.take_declined_span(end) {
                                             NodeSlot::Unexpected(__c)
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     }
                                     Some(ChoiceSelection {
@@ -14795,7 +15018,7 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                         } else if let Some(__c) = __at.take_declined_span(end) {
                                             NodeSlot::Unexpected(__c)
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     }
                                     Some(ChoiceSelection {
@@ -14811,10 +15034,10 @@ pub fn extract_contents<'tree>(node: ContentsNode<'tree>) -> ContentsChildren<'t
                                         } else if let Some(__c) = __at.take_declined_span(end) {
                                             NodeSlot::Unexpected(__c)
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     }
-                                    _ => NodeSlot::Absent,
+                                    _ => NodeSlot::Absent(NoChild),
                                 }
                             }
                         }
@@ -14879,7 +15102,7 @@ impl<'tree> FromNodeKind<'tree> for DateContentsChoice<'tree> {
 pub struct DateContentsChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, DateContentsChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, DateContentsChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -14923,7 +15146,7 @@ pub fn extract_date_contents<'tree>(node: DateContentsNode<'tree>) -> DateConten
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -14937,10 +15160,10 @@ pub fn extract_date_contents<'tree>(node: DateContentsNode<'tree>) -> DateConten
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -14970,13 +15193,13 @@ pub fn extract_date_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct DateHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, DatePrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, DatePrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, DateContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, DateContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -15007,10 +15230,10 @@ pub fn extract_date_header<'tree>(node: DateHeaderNode<'tree>) -> DateHeaderChil
                             NodeSlot::Present(DatePrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15031,10 +15254,10 @@ pub fn extract_date_header<'tree>(node: DateHeaderNode<'tree>) -> DateHeaderChil
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15055,10 +15278,10 @@ pub fn extract_date_header<'tree>(node: DateHeaderNode<'tree>) -> DateHeaderChil
                             NodeSlot::Present(DateContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15079,10 +15302,10 @@ pub fn extract_date_header<'tree>(node: DateHeaderNode<'tree>) -> DateHeaderChil
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15114,13 +15337,13 @@ pub fn extract_date_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct DefDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, DefTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, DefTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -15153,10 +15376,10 @@ pub fn extract_def_dependent_tier<'tree>(
                             NodeSlot::Present(DefTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15177,10 +15400,10 @@ pub fn extract_def_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15210,10 +15433,10 @@ pub fn extract_def_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -15239,10 +15462,10 @@ pub fn extract_def_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15488,7 +15711,7 @@ impl<'tree> FromNodeKind<'tree> for DependentTierChoice<'tree> {
 pub struct DependentTierChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, DependentTierChoice<'tree>>>,
+    pub content: Positioned<'tree, ClassifiedSlot<'tree, DependentTierChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -15521,9 +15744,9 @@ pub fn extract_dependent_tier<'tree>(
 #[derive(Debug, Clone)]
 pub struct EgHeaderChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -15534,11 +15757,11 @@ impl<'tree> EgHeaderChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct EgHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, EgPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, EgPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, EgHeaderChild1Children<'tree>>>>,
+    pub child_1: Positioned<'tree, Option<SeqSlot<'tree, EgHeaderChild1Children<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -15569,10 +15792,10 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
                             NodeSlot::Present(EgPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15626,10 +15849,10 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
                                                         NodeSlot::Present(HeaderSepNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -15654,10 +15877,10 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
                                                         NodeSlot::Present(FreeTextNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -15673,10 +15896,10 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
                                 }
                             })
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -15702,10 +15925,10 @@ pub fn extract_eg_header<'tree>(node: EgHeaderNode<'tree>) -> EgHeaderChildren<'
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15736,9 +15959,9 @@ pub fn extract_eg_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct EndHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AtEndNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AtEndNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -15769,10 +15992,10 @@ pub fn extract_end_header<'tree>(node: EndHeaderNode<'tree>) -> EndHeaderChildre
                             NodeSlot::Present(AtEndNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15793,10 +16016,10 @@ pub fn extract_end_header<'tree>(node: EndHeaderNode<'tree>) -> EndHeaderChildre
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15826,13 +16049,13 @@ pub fn extract_end_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct EngDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, EngTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, EngTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -15865,10 +16088,10 @@ pub fn extract_eng_dependent_tier<'tree>(
                             NodeSlot::Present(EngTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15889,10 +16112,10 @@ pub fn extract_eng_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15922,10 +16145,10 @@ pub fn extract_eng_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -15951,10 +16174,10 @@ pub fn extract_eng_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -15986,13 +16209,13 @@ pub fn extract_eng_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ErrDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ErrTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ErrTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -16025,10 +16248,10 @@ pub fn extract_err_dependent_tier<'tree>(
                             NodeSlot::Present(ErrTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16049,10 +16272,10 @@ pub fn extract_err_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16082,10 +16305,10 @@ pub fn extract_err_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -16111,10 +16334,10 @@ pub fn extract_err_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16146,9 +16369,9 @@ pub fn extract_err_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct EventChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, EventMarkerNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, EventMarkerNode<'tree>>>,
     /// Positional member 1.
-    pub description: Positioned<'tree, NodeSlot<'tree, EventSegmentNode<'tree>>>,
+    pub description: Positioned<'tree, ChildSlot<'tree, EventSegmentNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -16158,7 +16381,7 @@ pub struct EventChildren<'tree> {
 impl<'tree> EventChildren<'tree> {
     /// The `description` grammar field (accessor method `description`).
     #[must_use]
-    pub fn description(&self) -> &Positioned<'tree, NodeSlot<'tree, EventSegmentNode<'tree>>> {
+    pub fn description(&self) -> &Positioned<'tree, ChildSlot<'tree, EventSegmentNode<'tree>>> {
         &self.description
     }
 }
@@ -16185,10 +16408,10 @@ pub fn extract_event<'tree>(node: EventNode<'tree>) -> EventChildren<'tree> {
                             NodeSlot::Present(EventMarkerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16209,10 +16432,10 @@ pub fn extract_event<'tree>(node: EventNode<'tree>) -> EventChildren<'tree> {
                             NodeSlot::Present(EventSegmentNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16241,13 +16464,13 @@ pub fn extract_event_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ExpDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ExpTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ExpTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -16280,10 +16503,10 @@ pub fn extract_exp_dependent_tier<'tree>(
                             NodeSlot::Present(ExpTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16304,10 +16527,10 @@ pub fn extract_exp_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16337,10 +16560,10 @@ pub fn extract_exp_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -16366,10 +16589,10 @@ pub fn extract_exp_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16401,13 +16624,13 @@ pub fn extract_exp_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ExplanationAnnotationChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LBrackEqNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LBrackEqNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>,
     /// Positional member 2.
-    pub text: Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>>,
+    pub text: Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, RightBracketNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -16417,7 +16640,7 @@ pub struct ExplanationAnnotationChildren<'tree> {
 impl<'tree> ExplanationAnnotationChildren<'tree> {
     /// The `text` grammar field (accessor method `text`).
     #[must_use]
-    pub fn text(&self) -> &Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>> {
+    pub fn text(&self) -> &Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>> {
         &self.text
     }
 }
@@ -16446,10 +16669,10 @@ pub fn extract_explanation_annotation<'tree>(
                             NodeSlot::Present(LBrackEqNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16470,10 +16693,10 @@ pub fn extract_explanation_annotation<'tree>(
                             NodeSlot::Present(SpaceNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16494,10 +16717,10 @@ pub fn extract_explanation_annotation<'tree>(
                             NodeSlot::Present(AnnotationContentNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16518,10 +16741,10 @@ pub fn extract_explanation_annotation<'tree>(
                             NodeSlot::Present(RightBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16553,13 +16776,13 @@ pub fn extract_explanation_annotation_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct FacDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, FacTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, FacTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -16592,10 +16815,10 @@ pub fn extract_fac_dependent_tier<'tree>(
                             NodeSlot::Present(FacTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16616,10 +16839,10 @@ pub fn extract_fac_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16649,10 +16872,10 @@ pub fn extract_fac_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -16678,10 +16901,10 @@ pub fn extract_fac_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16713,9 +16936,9 @@ pub fn extract_fac_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct FinalCodesChild0Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PostcodeNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PostcodeNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -16726,9 +16949,9 @@ impl<'tree> FinalCodesChild0Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct FinalCodesChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PostcodeNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PostcodeNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -16739,10 +16962,10 @@ impl<'tree> FinalCodesChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct FinalCodesChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, FinalCodesChild0Children<'tree>>>,
+    pub child_0: Positioned<'tree, SeqSlot<'tree, FinalCodesChild0Children<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, FinalCodesChild1Children<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, FinalCodesChild1Children<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -16795,10 +17018,10 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                                     NodeSlot::Present(WhitespacesNode(__c))
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     };
                                     Positioned::new(leading_extras, slot)
@@ -16821,10 +17044,10 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                                     NodeSlot::Present(PostcodeNode(__c))
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     };
                                     Positioned::new(leading_extras, slot)
@@ -16840,10 +17063,10 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                             }
                         })
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -16901,10 +17124,10 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -16929,10 +17152,10 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                                             NodeSlot::Present(PostcodeNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -16948,10 +17171,10 @@ pub fn extract_final_codes<'tree>(node: FinalCodesNode<'tree>) -> FinalCodesChil
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -16984,13 +17207,13 @@ pub fn extract_final_codes_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct FloDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, FloTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, FloTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -17023,10 +17246,10 @@ pub fn extract_flo_dependent_tier<'tree>(
                             NodeSlot::Present(FloTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17047,10 +17270,10 @@ pub fn extract_flo_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17080,10 +17303,10 @@ pub fn extract_flo_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -17109,10 +17332,10 @@ pub fn extract_flo_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17144,13 +17367,13 @@ pub fn extract_flo_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct FontHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, FontPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, FontPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -17181,10 +17404,10 @@ pub fn extract_font_header<'tree>(node: FontHeaderNode<'tree>) -> FontHeaderChil
                             NodeSlot::Present(FontPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17205,10 +17428,10 @@ pub fn extract_font_header<'tree>(node: FontHeaderNode<'tree>) -> FontHeaderChil
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17229,10 +17452,10 @@ pub fn extract_font_header<'tree>(node: FontHeaderNode<'tree>) -> FontHeaderChil
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17253,10 +17476,10 @@ pub fn extract_font_header<'tree>(node: FontHeaderNode<'tree>) -> FontHeaderChil
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17346,10 +17569,10 @@ impl<'tree> FromNodeKind<'tree> for FreeTextChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct FreeTextChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, FreeTextChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, FreeTextChild0Choice<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, FreeTextChild1Choice<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, ChoiceSlot<'tree, FreeTextChild1Choice<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -17396,7 +17619,7 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -17410,10 +17633,10 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
-                            _ => NodeSlot::Absent,
+                            _ => NodeSlot::Absent(NoChild),
                         }
                     }
                 }
@@ -17465,7 +17688,7 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                                         } else if let Some(__c) = __at.take_declined_span(end) {
                                             NodeSlot::Unexpected(__c)
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     }
                                     Some(ChoiceSelection {
@@ -17481,10 +17704,10 @@ pub fn extract_free_text<'tree>(node: FreeTextNode<'tree>) -> FreeTextChildren<'
                                         } else if let Some(__c) = __at.take_declined_span(end) {
                                             NodeSlot::Unexpected(__c)
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     }
-                                    _ => NodeSlot::Absent,
+                                    _ => NodeSlot::Absent(NoChild),
                                 }
                             }
                         }
@@ -17560,16 +17783,18 @@ impl<'tree> FromNodeKind<'tree> for FullDocumentChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct FullDocumentChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, Option<NodeSlot<'tree, Utf8HeaderNode<'tree>>>>,
+    pub child_0: Positioned<'tree, Option<ChildSlot<'tree, Utf8HeaderNode<'tree>>>>,
     /// Positional member 1.
-    pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, FullDocumentChild1Choice<'tree>>>>>,
+    pub child_1: Positioned<
+        'tree,
+        Vec<Positioned<'tree, ChildSlot<'tree, FullDocumentChild1Choice<'tree>>>>,
+    >,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, BeginHeaderNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, BeginHeaderNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, LineNode<'tree>>>>>,
+    pub child_3: Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, LineNode<'tree>>>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, EndHeaderNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, EndHeaderNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -17609,10 +17834,10 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
                                 NodeSlot::Present(Utf8HeaderNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -17689,11 +17914,11 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
                                             )
                                         }
                                     }
-                                    _ => NodeSlot::Absent,
+                                    _ => NodeSlot::Absent(NoChild),
                                 }
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -17717,10 +17942,10 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
                             NodeSlot::Present(BeginHeaderNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17754,10 +17979,10 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
                                     NodeSlot::Present(LineNode(__c))
                                 }
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -17781,10 +18006,10 @@ pub fn extract_full_document<'tree>(node: FullDocumentNode<'tree>) -> FullDocume
                             NodeSlot::Present(EndHeaderNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17817,13 +18042,13 @@ pub fn extract_full_document_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct GHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, GPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, GPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -17854,10 +18079,10 @@ pub fn extract_g_header<'tree>(node: GHeaderNode<'tree>) -> GHeaderChildren<'tre
                             NodeSlot::Present(GPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17878,10 +18103,10 @@ pub fn extract_g_header<'tree>(node: GHeaderNode<'tree>) -> GHeaderChildren<'tre
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17902,10 +18127,10 @@ pub fn extract_g_header<'tree>(node: GHeaderNode<'tree>) -> GHeaderChildren<'tre
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17926,10 +18151,10 @@ pub fn extract_g_header<'tree>(node: GHeaderNode<'tree>) -> GHeaderChildren<'tre
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -17960,13 +18185,13 @@ pub fn extract_g_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct GlsDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, GlsTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, GlsTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -17999,10 +18224,10 @@ pub fn extract_gls_dependent_tier<'tree>(
                             NodeSlot::Present(GlsTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18023,10 +18248,10 @@ pub fn extract_gls_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18056,10 +18281,10 @@ pub fn extract_gls_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -18085,10 +18310,10 @@ pub fn extract_gls_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18120,13 +18345,13 @@ pub fn extract_gls_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct GpxDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, GpxTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, GpxTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -18159,10 +18384,10 @@ pub fn extract_gpx_dependent_tier<'tree>(
                             NodeSlot::Present(GpxTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18183,10 +18408,10 @@ pub fn extract_gpx_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18216,10 +18441,10 @@ pub fn extract_gpx_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -18245,10 +18470,10 @@ pub fn extract_gpx_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18280,9 +18505,9 @@ pub fn extract_gpx_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct GraContentsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, GraRelationNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, GraRelationNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -18293,12 +18518,10 @@ impl<'tree> GraContentsChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct GraContentsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, GraRelationNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, GraRelationNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<
-        'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, GraContentsChild1Children<'tree>>>>,
-    >,
+    pub child_1:
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, GraContentsChild1Children<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -18329,10 +18552,10 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                             NodeSlot::Present(GraRelationNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18390,10 +18613,10 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -18418,10 +18641,10 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                                                             NodeSlot::Present(GraRelationNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -18437,10 +18660,10 @@ pub fn extract_gra_contents<'tree>(node: GraContentsNode<'tree>) -> GraContentsC
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -18473,13 +18696,13 @@ pub fn extract_gra_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct GraDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, GraTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, GraTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, GraContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, GraContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -18512,10 +18735,10 @@ pub fn extract_gra_dependent_tier<'tree>(
                             NodeSlot::Present(GraTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18536,10 +18759,10 @@ pub fn extract_gra_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18560,10 +18783,10 @@ pub fn extract_gra_dependent_tier<'tree>(
                             NodeSlot::Present(GraContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18584,10 +18807,10 @@ pub fn extract_gra_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18619,15 +18842,15 @@ pub fn extract_gra_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct GraRelationChildren<'tree> {
     /// Positional member 0.
-    pub index: Positioned<'tree, NodeSlot<'tree, GraIndexNode<'tree>>>,
+    pub index: Positioned<'tree, ChildSlot<'tree, GraIndexNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 2.
-    pub head: Positioned<'tree, NodeSlot<'tree, GraHeadNode<'tree>>>,
+    pub head: Positioned<'tree, ChildSlot<'tree, GraHeadNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 4.
-    pub relation: Positioned<'tree, NodeSlot<'tree, GraRelationNameNode<'tree>>>,
+    pub relation: Positioned<'tree, ChildSlot<'tree, GraRelationNameNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -18637,17 +18860,17 @@ pub struct GraRelationChildren<'tree> {
 impl<'tree> GraRelationChildren<'tree> {
     /// The `head` grammar field (accessor method `head`).
     #[must_use]
-    pub fn head(&self) -> &Positioned<'tree, NodeSlot<'tree, GraHeadNode<'tree>>> {
+    pub fn head(&self) -> &Positioned<'tree, ChildSlot<'tree, GraHeadNode<'tree>>> {
         &self.head
     }
     /// The `index` grammar field (accessor method `index`).
     #[must_use]
-    pub fn index(&self) -> &Positioned<'tree, NodeSlot<'tree, GraIndexNode<'tree>>> {
+    pub fn index(&self) -> &Positioned<'tree, ChildSlot<'tree, GraIndexNode<'tree>>> {
         &self.index
     }
     /// The `relation` grammar field (accessor method `relation`).
     #[must_use]
-    pub fn relation(&self) -> &Positioned<'tree, NodeSlot<'tree, GraRelationNameNode<'tree>>> {
+    pub fn relation(&self) -> &Positioned<'tree, ChildSlot<'tree, GraRelationNameNode<'tree>>> {
         &self.relation
     }
 }
@@ -18674,10 +18897,10 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
                             NodeSlot::Present(GraIndexNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18698,10 +18921,10 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18722,10 +18945,10 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
                             NodeSlot::Present(GraHeadNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18746,10 +18969,10 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18770,10 +18993,10 @@ pub fn extract_gra_relation<'tree>(node: GraRelationNode<'tree>) -> GraRelationC
                             NodeSlot::Present(GraRelationNameNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18806,13 +19029,13 @@ pub fn extract_gra_relation_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct GroupWithAnnotationsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LessThanNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LessThanNode<'tree>>>,
     /// Positional member 1.
-    pub content_2: Positioned<'tree, NodeSlot<'tree, ContentsNode<'tree>>>,
+    pub content_2: Positioned<'tree, ChildSlot<'tree, ContentsNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, GreaterThanNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, GreaterThanNode<'tree>>>,
     /// Positional member 3.
-    pub annotations: Positioned<'tree, NodeSlot<'tree, BaseAnnotationsNode<'tree>>>,
+    pub annotations: Positioned<'tree, ChildSlot<'tree, BaseAnnotationsNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -18822,12 +19045,12 @@ pub struct GroupWithAnnotationsChildren<'tree> {
 impl<'tree> GroupWithAnnotationsChildren<'tree> {
     /// The `annotations` grammar field (accessor method `annotations`).
     #[must_use]
-    pub fn annotations(&self) -> &Positioned<'tree, NodeSlot<'tree, BaseAnnotationsNode<'tree>>> {
+    pub fn annotations(&self) -> &Positioned<'tree, ChildSlot<'tree, BaseAnnotationsNode<'tree>>> {
         &self.annotations
     }
     /// The `content` grammar field (accessor method `content`).
     #[must_use]
-    pub fn content(&self) -> &Positioned<'tree, NodeSlot<'tree, ContentsNode<'tree>>> {
+    pub fn content(&self) -> &Positioned<'tree, ChildSlot<'tree, ContentsNode<'tree>>> {
         &self.content_2
     }
 }
@@ -18856,10 +19079,10 @@ pub fn extract_group_with_annotations<'tree>(
                             NodeSlot::Present(LessThanNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18880,10 +19103,10 @@ pub fn extract_group_with_annotations<'tree>(
                             NodeSlot::Present(ContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18904,10 +19127,10 @@ pub fn extract_group_with_annotations<'tree>(
                             NodeSlot::Present(GreaterThanNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -18928,10 +19151,10 @@ pub fn extract_group_with_annotations<'tree>(
                             NodeSlot::Present(BaseAnnotationsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -19141,7 +19364,7 @@ impl<'tree> FromNodeKind<'tree> for HeaderChoice<'tree> {
 pub struct HeaderChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, HeaderChoice<'tree>>>,
+    pub content: Positioned<'tree, ClassifiedSlot<'tree, HeaderChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -19230,10 +19453,10 @@ impl<'tree> FromNodeKind<'tree> for HeaderGapChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct HeaderGapChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, HeaderGapChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, HeaderGapChild0Choice<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, HeaderGapChild1Choice<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, ChoiceSlot<'tree, HeaderGapChild1Choice<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -19278,7 +19501,7 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -19290,10 +19513,10 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
-                            _ => NodeSlot::Absent,
+                            _ => NodeSlot::Absent(NoChild),
                         }
                     }
                 }
@@ -19344,7 +19567,7 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                                         } else if let Some(__c) = __at.take_declined_span(end) {
                                             NodeSlot::Unexpected(__c)
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     }
                                     Some(ChoiceSelection {
@@ -19356,10 +19579,10 @@ pub fn extract_header_gap<'tree>(node: HeaderGapNode<'tree>) -> HeaderGapChildre
                                         } else if let Some(__c) = __at.take_declined_span(end) {
                                             NodeSlot::Unexpected(__c)
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     }
-                                    _ => NodeSlot::Absent,
+                                    _ => NodeSlot::Absent(NoChild),
                                 }
                             }
                         }
@@ -19394,11 +19617,11 @@ pub fn extract_header_gap_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct HeaderSepChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ColonNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TabNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TabNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -19429,10 +19652,10 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
                             NodeSlot::Present(ColonNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -19453,10 +19676,10 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
                             NodeSlot::Present(TabNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -19486,10 +19709,10 @@ pub fn extract_header_sep<'tree>(node: HeaderSepNode<'tree>) -> HeaderSepChildre
                                 NodeSlot::Present(SepTrailingSpaceNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -19533,7 +19756,7 @@ pub enum IdAgeChoice<'tree> {
 pub struct IdAgeChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, IdAgeChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, IdAgeChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -19576,7 +19799,7 @@ pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -19588,10 +19811,10 @@ pub fn extract_id_age<'tree>(node: IdAgeNode<'tree>) -> IdAgeChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -19620,73 +19843,73 @@ pub fn extract_id_age_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct IdContentsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, IdLanguagesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, IdLanguagesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, Option<NodeSlot<'tree, IdCorpusNode<'tree>>>>,
+    pub child_3: Positioned<'tree, Option<ChildSlot<'tree, IdCorpusNode<'tree>>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_4: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 5.
-    pub child_5: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_5: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 6.
-    pub child_6: Positioned<'tree, NodeSlot<'tree, IdSpeakerNode<'tree>>>,
+    pub child_6: Positioned<'tree, ChildSlot<'tree, IdSpeakerNode<'tree>>>,
     /// Positional member 7.
-    pub child_7: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_7: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 8.
-    pub child_8: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_8: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 9.
-    pub child_9: Positioned<'tree, Option<NodeSlot<'tree, IdAgeNode<'tree>>>>,
+    pub child_9: Positioned<'tree, Option<ChildSlot<'tree, IdAgeNode<'tree>>>>,
     /// Positional member 10.
-    pub child_10: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_10: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 11.
-    pub child_11: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_11: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 12.
-    pub child_12: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_12: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 13.
-    pub child_13: Positioned<'tree, Option<NodeSlot<'tree, IdSexNode<'tree>>>>,
+    pub child_13: Positioned<'tree, Option<ChildSlot<'tree, IdSexNode<'tree>>>>,
     /// Positional member 14.
-    pub child_14: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_14: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 15.
-    pub child_15: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_15: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 16.
-    pub child_16: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_16: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 17.
-    pub child_17: Positioned<'tree, Option<NodeSlot<'tree, IdGroupNode<'tree>>>>,
+    pub child_17: Positioned<'tree, Option<ChildSlot<'tree, IdGroupNode<'tree>>>>,
     /// Positional member 18.
-    pub child_18: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_18: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 19.
-    pub child_19: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_19: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 20.
-    pub child_20: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_20: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 21.
-    pub child_21: Positioned<'tree, Option<NodeSlot<'tree, IdSesNode<'tree>>>>,
+    pub child_21: Positioned<'tree, Option<ChildSlot<'tree, IdSesNode<'tree>>>>,
     /// Positional member 22.
-    pub child_22: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_22: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 23.
-    pub child_23: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_23: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 24.
-    pub child_24: Positioned<'tree, NodeSlot<'tree, IdRoleNode<'tree>>>,
+    pub child_24: Positioned<'tree, ChildSlot<'tree, IdRoleNode<'tree>>>,
     /// Positional member 25.
-    pub child_25: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_25: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 26.
-    pub child_26: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_26: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 27.
-    pub child_27: Positioned<'tree, Option<NodeSlot<'tree, IdEducationNode<'tree>>>>,
+    pub child_27: Positioned<'tree, Option<ChildSlot<'tree, IdEducationNode<'tree>>>>,
     /// Positional member 28.
-    pub child_28: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_28: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 29.
-    pub child_29: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_29: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 30.
-    pub child_30: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_30: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 31.
-    pub child_31: Positioned<'tree, Option<NodeSlot<'tree, IdCustomFieldNode<'tree>>>>,
+    pub child_31: Positioned<'tree, Option<ChildSlot<'tree, IdCustomFieldNode<'tree>>>>,
     /// Positional member 32.
-    pub child_32: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_32: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 33.
-    pub child_33: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_33: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -19717,10 +19940,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(IdLanguagesNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -19741,10 +19964,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -19774,10 +19997,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -19812,10 +20035,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(IdCorpusNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -19850,10 +20073,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -19879,10 +20102,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -19903,10 +20126,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(IdSpeakerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -19927,10 +20150,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -19960,10 +20183,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -19998,10 +20221,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(IdAgeNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20036,10 +20259,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20065,10 +20288,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20098,10 +20321,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20136,10 +20359,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(IdSexNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20174,10 +20397,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20203,10 +20426,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20236,10 +20459,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20274,10 +20497,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(IdGroupNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20312,10 +20535,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20341,10 +20564,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20374,10 +20597,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20412,10 +20635,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(IdSesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20450,10 +20673,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20479,10 +20702,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20503,10 +20726,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(IdRoleNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20527,10 +20750,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20560,10 +20783,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20598,10 +20821,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(IdEducationNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20636,10 +20859,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20665,10 +20888,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20698,10 +20921,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20736,10 +20959,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(IdCustomFieldNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20774,10 +20997,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -20803,10 +21026,10 @@ pub fn extract_id_contents<'tree>(node: IdContentsNode<'tree>) -> IdContentsChil
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20868,13 +21091,13 @@ pub fn extract_id_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct IdHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, IdPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, IdPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, IdContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, IdContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -20905,10 +21128,10 @@ pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'
                             NodeSlot::Present(IdPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20929,10 +21152,10 @@ pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20953,10 +21176,10 @@ pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'
                             NodeSlot::Present(IdContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -20977,10 +21200,10 @@ pub fn extract_id_header<'tree>(node: IdHeaderNode<'tree>) -> IdHeaderChildren<'
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21020,7 +21243,7 @@ pub enum IdLanguagesChoice<'tree> {
 pub struct IdLanguagesChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, IdLanguagesChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, IdLanguagesChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -21066,7 +21289,7 @@ pub fn extract_id_languages<'tree>(node: IdLanguagesNode<'tree>) -> IdLanguagesC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -21078,10 +21301,10 @@ pub fn extract_id_languages<'tree>(node: IdLanguagesNode<'tree>) -> IdLanguagesC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -21149,7 +21372,7 @@ impl<'tree> FromNodeKind<'tree> for IdSesChoice<'tree> {
 pub struct IdSesChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, IdSesChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, IdSesChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -21194,7 +21417,7 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -21208,7 +21431,7 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -21222,7 +21445,7 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -21236,10 +21459,10 @@ pub fn extract_id_ses<'tree>(node: IdSesNode<'tree>) -> IdSesChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -21302,7 +21525,7 @@ impl<'tree> FromNodeKind<'tree> for IdSexChoice<'tree> {
 pub struct IdSexChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, IdSexChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, IdSexChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -21345,7 +21568,7 @@ pub fn extract_id_sex<'tree>(node: IdSexNode<'tree>) -> IdSexChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -21359,7 +21582,7 @@ pub fn extract_id_sex<'tree>(node: IdSexNode<'tree>) -> IdSexChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -21373,10 +21596,10 @@ pub fn extract_id_sex<'tree>(node: IdSexNode<'tree>) -> IdSexChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -21405,13 +21628,13 @@ pub fn extract_id_sex_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct IntDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, IntTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, IntTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -21444,10 +21667,10 @@ pub fn extract_int_dependent_tier<'tree>(
                             NodeSlot::Present(IntTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21468,10 +21691,10 @@ pub fn extract_int_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21501,10 +21724,10 @@ pub fn extract_int_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -21530,10 +21753,10 @@ pub fn extract_int_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21565,17 +21788,17 @@ pub fn extract_int_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct L1OfHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, L1OfPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, L1OfPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, HeaderGapNode<'tree>>>>,
+    pub child_1: Positioned<'tree, Option<ChildSlot<'tree, HeaderGapNode<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, SpeakerNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, SpeakerNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, LanguageCodeNode<'tree>>>,
     /// Positional member 5.
-    pub child_5: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_5: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -21606,10 +21829,10 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
                             NodeSlot::Present(L1OfPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21639,10 +21862,10 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
                                 NodeSlot::Present(HeaderGapNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -21668,10 +21891,10 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
                             NodeSlot::Present(SpeakerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21692,10 +21915,10 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21716,10 +21939,10 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
                             NodeSlot::Present(LanguageCodeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21740,10 +21963,10 @@ pub fn extract_l1_of_header<'tree>(node: L1OfHeaderNode<'tree>) -> L1OfHeaderChi
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21777,13 +22000,13 @@ pub fn extract_l1_of_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct LangcodeChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LBrackNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LBrackNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>,
     /// Positional member 2.
-    pub code: Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>>,
+    pub code: Positioned<'tree, ChildSlot<'tree, LanguageCodeNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, RightBracketNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -21793,7 +22016,7 @@ pub struct LangcodeChildren<'tree> {
 impl<'tree> LangcodeChildren<'tree> {
     /// The `code` grammar field (accessor method `code`).
     #[must_use]
-    pub fn code(&self) -> &Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>> {
+    pub fn code(&self) -> &Positioned<'tree, ChildSlot<'tree, LanguageCodeNode<'tree>>> {
         &self.code
     }
 }
@@ -21820,10 +22043,10 @@ pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'t
                             NodeSlot::Present(LBrackNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21844,10 +22067,10 @@ pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'t
                             NodeSlot::Present(SpaceNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21868,10 +22091,10 @@ pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'t
                             NodeSlot::Present(LanguageCodeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21892,10 +22115,10 @@ pub fn extract_langcode<'tree>(node: LangcodeNode<'tree>) -> LangcodeChildren<'t
                             NodeSlot::Present(RightBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -21927,13 +22150,13 @@ pub fn extract_langcode_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct LanguagesContentsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_0: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, LanguageCodeNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -21944,11 +22167,11 @@ impl<'tree> LanguagesContentsChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct LanguagesContentsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LanguageCodeNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LanguageCodeNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, LanguagesContentsChild1Children<'tree>>>>,
+        Vec<Positioned<'tree, SeqSlot<'tree, LanguagesContentsChild1Children<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -21982,10 +22205,10 @@ pub fn extract_languages_contents<'tree>(
                             NodeSlot::Present(LanguageCodeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -22054,10 +22277,10 @@ pub fn extract_languages_contents<'tree>(
                                                                 ))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 }),
                                                 Presence::Empty => {
@@ -22087,10 +22310,10 @@ pub fn extract_languages_contents<'tree>(
                                                             NodeSlot::Present(CommaNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -22115,10 +22338,10 @@ pub fn extract_languages_contents<'tree>(
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -22143,10 +22366,10 @@ pub fn extract_languages_contents<'tree>(
                                                             NodeSlot::Present(LanguageCodeNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -22164,10 +22387,10 @@ pub fn extract_languages_contents<'tree>(
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -22200,13 +22423,13 @@ pub fn extract_languages_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct LanguagesHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LanguagesPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LanguagesPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, LanguagesContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, LanguagesContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -22239,10 +22462,10 @@ pub fn extract_languages_header<'tree>(
                             NodeSlot::Present(LanguagesPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -22263,10 +22486,10 @@ pub fn extract_languages_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -22287,10 +22510,10 @@ pub fn extract_languages_header<'tree>(
                             NodeSlot::Present(LanguagesContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -22311,10 +22534,10 @@ pub fn extract_languages_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -22575,7 +22798,7 @@ impl<'tree> AsRawNode<'tree> for LineChoice<'tree> {
 pub struct LineChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, LineChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, LineChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -22794,7 +23017,7 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -22806,7 +23029,7 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -22818,7 +23041,7 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -22833,10 +23056,10 @@ pub fn extract_line<'tree>(node: LineNode<'tree>) -> LineChildren<'tree> {
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -22927,7 +23150,7 @@ impl<'tree> FromNodeKind<'tree> for LinkerChoice<'tree> {
 pub struct LinkerChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, LinkerChoice<'tree>>>,
+    pub content: Positioned<'tree, ClassifiedSlot<'tree, LinkerChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -23023,9 +23246,9 @@ impl<'tree> FromNodeKind<'tree> for LinkersChild0Child0Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct LinkersChild0Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LinkersChild0Child0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LinkersChild0Child0Choice<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -23101,9 +23324,9 @@ impl<'tree> FromNodeKind<'tree> for LinkersChild1Child0Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct LinkersChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LinkersChild1Child0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LinkersChild1Child0Choice<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -23114,10 +23337,10 @@ impl<'tree> LinkersChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct LinkersChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LinkersChild0Children<'tree>>>,
+    pub child_0: Positioned<'tree, SeqSlot<'tree, LinkersChild0Children<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, LinkersChild1Children<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, LinkersChild1Children<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -23250,11 +23473,11 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                                             )
                                                         }
                                                     }
-                                                    _ => NodeSlot::Absent,
+                                                    _ => NodeSlot::Absent(NoChild),
                                                 }
                                             }
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     };
                                     Positioned::new(leading_extras, slot)
@@ -23279,10 +23502,10 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                                     NodeSlot::Present(WhitespacesNode(__c))
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     };
                                     Positioned::new(leading_extras, slot)
@@ -23298,10 +23521,10 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                             }
                         })
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23437,11 +23660,11 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                                                         )
                                                                     }
                                                                 }
-                                                                _ => NodeSlot::Absent,
+                                                                _ => NodeSlot::Absent(NoChild),
                                                             }
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -23464,10 +23687,10 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                                                 NodeSlot::Present(WhitespacesNode(__c))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -23483,10 +23706,10 @@ pub fn extract_linkers<'tree>(node: LinkersNode<'tree>) -> LinkersChildren<'tree
                                         }
                                     })
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         };
                         Positioned::new(leading_extras, slot)
@@ -23518,13 +23741,13 @@ pub fn extract_linkers_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct LocationHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LocationPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LocationPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -23557,10 +23780,10 @@ pub fn extract_location_header<'tree>(
                             NodeSlot::Present(LocationPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23581,10 +23804,10 @@ pub fn extract_location_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23605,10 +23828,10 @@ pub fn extract_location_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23629,10 +23852,10 @@ pub fn extract_location_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23696,7 +23919,7 @@ impl<'tree> FromNodeKind<'tree> for LongFeatureChoice<'tree> {
 pub struct LongFeatureChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, LongFeatureChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, LongFeatureChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -23742,7 +23965,7 @@ pub fn extract_long_feature<'tree>(node: LongFeatureNode<'tree>) -> LongFeatureC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -23757,10 +23980,10 @@ pub fn extract_long_feature<'tree>(node: LongFeatureNode<'tree>) -> LongFeatureC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -23790,11 +24013,11 @@ pub fn extract_long_feature_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct LongFeatureBeginChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AmpersandNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AmpersandNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, LongFeatureBeginMarkerNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, LongFeatureBeginMarkerNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, LongFeatureLabelNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, LongFeatureLabelNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -23827,10 +24050,10 @@ pub fn extract_long_feature_begin<'tree>(
                             NodeSlot::Present(AmpersandNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23851,10 +24074,10 @@ pub fn extract_long_feature_begin<'tree>(
                             NodeSlot::Present(LongFeatureBeginMarkerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23875,10 +24098,10 @@ pub fn extract_long_feature_begin<'tree>(
                             NodeSlot::Present(LongFeatureLabelNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23909,11 +24132,11 @@ pub fn extract_long_feature_begin_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct LongFeatureEndChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AmpersandNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AmpersandNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, LongFeatureEndMarkerNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, LongFeatureEndMarkerNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, LongFeatureLabelNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, LongFeatureLabelNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -23946,10 +24169,10 @@ pub fn extract_long_feature_end<'tree>(
                             NodeSlot::Present(AmpersandNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23970,10 +24193,10 @@ pub fn extract_long_feature_end<'tree>(
                             NodeSlot::Present(LongFeatureEndMarkerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -23994,10 +24217,10 @@ pub fn extract_long_feature_end<'tree>(
                             NodeSlot::Present(LongFeatureLabelNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24028,11 +24251,11 @@ pub fn extract_long_feature_end_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MainPhoGroupChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PhoBeginGroupNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PhoBeginGroupNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, ContentsNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, ContentsNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, PhoEndGroupNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, PhoEndGroupNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -24063,10 +24286,10 @@ pub fn extract_main_pho_group<'tree>(node: MainPhoGroupNode<'tree>) -> MainPhoGr
                             NodeSlot::Present(PhoBeginGroupNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24087,10 +24310,10 @@ pub fn extract_main_pho_group<'tree>(node: MainPhoGroupNode<'tree>) -> MainPhoGr
                             NodeSlot::Present(ContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24111,10 +24334,10 @@ pub fn extract_main_pho_group<'tree>(node: MainPhoGroupNode<'tree>) -> MainPhoGr
                             NodeSlot::Present(PhoEndGroupNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24145,11 +24368,11 @@ pub fn extract_main_pho_group_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MainSinGroupChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, SinBeginGroupNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, SinBeginGroupNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, ContentsNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, ContentsNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, SinEndGroupNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, SinEndGroupNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -24180,10 +24403,10 @@ pub fn extract_main_sin_group<'tree>(node: MainSinGroupNode<'tree>) -> MainSinGr
                             NodeSlot::Present(SinBeginGroupNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24204,10 +24427,10 @@ pub fn extract_main_sin_group<'tree>(node: MainSinGroupNode<'tree>) -> MainSinGr
                             NodeSlot::Present(ContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24228,10 +24451,10 @@ pub fn extract_main_sin_group<'tree>(node: MainSinGroupNode<'tree>) -> MainSinGr
                             NodeSlot::Present(SinEndGroupNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24262,17 +24485,17 @@ pub fn extract_main_sin_group_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MainTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, StarNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, StarNode<'tree>>>,
     /// Positional member 1.
-    pub speaker: Positioned<'tree, NodeSlot<'tree, SpeakerNode<'tree>>>,
+    pub speaker: Positioned<'tree, ChildSlot<'tree, SpeakerNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, ColonNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, TabNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, TabNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, Option<NodeSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
+    pub child_4: Positioned<'tree, Option<ChildSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
     /// Positional member 5.
-    pub child_5: Positioned<'tree, NodeSlot<'tree, TierBodyNode<'tree>>>,
+    pub child_5: Positioned<'tree, ChildSlot<'tree, TierBodyNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -24282,7 +24505,7 @@ pub struct MainTierChildren<'tree> {
 impl<'tree> MainTierChildren<'tree> {
     /// The `speaker` grammar field (accessor method `speaker`).
     #[must_use]
-    pub fn speaker(&self) -> &Positioned<'tree, NodeSlot<'tree, SpeakerNode<'tree>>> {
+    pub fn speaker(&self) -> &Positioned<'tree, ChildSlot<'tree, SpeakerNode<'tree>>> {
         &self.speaker
     }
 }
@@ -24309,10 +24532,10 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
                             NodeSlot::Present(StarNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24333,10 +24556,10 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
                             NodeSlot::Present(SpeakerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24357,10 +24580,10 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
                             NodeSlot::Present(ColonNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24381,10 +24604,10 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
                             NodeSlot::Present(TabNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24414,10 +24637,10 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
                                 NodeSlot::Present(SepTrailingSpaceNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -24443,10 +24666,10 @@ pub fn extract_main_tier<'tree>(node: MainTierNode<'tree>) -> MainTierChildren<'
                             NodeSlot::Present(TierBodyNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24480,11 +24703,11 @@ pub fn extract_main_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MediaContentsChild5Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, MediaStatusNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, MediaStatusNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -24495,17 +24718,17 @@ impl<'tree> MediaContentsChild5Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct MediaContentsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, MediaFilenameNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, MediaFilenameNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_1: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, MediaTypeNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, MediaTypeNode<'tree>>>,
     /// Positional member 5.
-    pub child_5: Positioned<'tree, Option<NodeSlot<'tree, MediaContentsChild5Children<'tree>>>>,
+    pub child_5: Positioned<'tree, Option<SeqSlot<'tree, MediaContentsChild5Children<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -24538,10 +24761,10 @@ pub fn extract_media_contents<'tree>(
                             NodeSlot::Present(MediaFilenameNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24571,10 +24794,10 @@ pub fn extract_media_contents<'tree>(
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -24600,10 +24823,10 @@ pub fn extract_media_contents<'tree>(
                             NodeSlot::Present(CommaNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24624,10 +24847,10 @@ pub fn extract_media_contents<'tree>(
                             NodeSlot::Present(WhitespacesNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24648,10 +24871,10 @@ pub fn extract_media_contents<'tree>(
                             NodeSlot::Present(MediaTypeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -24705,10 +24928,10 @@ pub fn extract_media_contents<'tree>(
                                                         NodeSlot::Present(CommaNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -24733,10 +24956,10 @@ pub fn extract_media_contents<'tree>(
                                                         NodeSlot::Present(WhitespacesNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -24761,10 +24984,10 @@ pub fn extract_media_contents<'tree>(
                                                         NodeSlot::Present(MediaStatusNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -24781,10 +25004,10 @@ pub fn extract_media_contents<'tree>(
                                 }
                             })
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -24823,11 +25046,11 @@ pub fn extract_media_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MediaFilenameDoubleQuoteChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, DoubleQuoteNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, DoubleQuoteNode<'tree>>>,
     /// Positional member 1.
     pub child_1: LeafSpan<'tree>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, DoubleQuoteNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, DoubleQuoteNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -24846,7 +25069,7 @@ pub enum MediaFilenameChoice<'tree> {
 pub struct MediaFilenameChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, MediaFilenameChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, MediaFilenameChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -24918,10 +25141,10 @@ pub fn extract_media_filename<'tree>(
                                                             NodeSlot::Present(DoubleQuoteNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -24947,10 +25170,10 @@ pub fn extract_media_filename<'tree>(
                                                             NodeSlot::Present(DoubleQuoteNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -24973,7 +25196,7 @@ pub fn extract_media_filename<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -24985,10 +25208,10 @@ pub fn extract_media_filename<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -25018,13 +25241,13 @@ pub fn extract_media_filename_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MediaHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, MediaPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, MediaPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, MediaContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, MediaContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -25055,10 +25278,10 @@ pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderC
                             NodeSlot::Present(MediaPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25079,10 +25302,10 @@ pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderC
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25103,10 +25326,10 @@ pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderC
                             NodeSlot::Present(MediaContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25127,10 +25350,10 @@ pub fn extract_media_header<'tree>(node: MediaHeaderNode<'tree>) -> MediaHeaderC
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25202,7 +25425,7 @@ impl<'tree> FromNodeKind<'tree> for MediaStatusChoice<'tree> {
 pub struct MediaStatusChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, MediaStatusChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, MediaStatusChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -25247,7 +25470,7 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -25261,7 +25484,7 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -25275,7 +25498,7 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -25290,10 +25513,10 @@ pub fn extract_media_status<'tree>(node: MediaStatusNode<'tree>) -> MediaStatusC
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -25363,7 +25586,7 @@ impl<'tree> FromNodeKind<'tree> for MediaTypeChoice<'tree> {
 pub struct MediaTypeChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, MediaTypeChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, MediaTypeChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -25407,7 +25630,7 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -25420,7 +25643,7 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -25434,7 +25657,7 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -25449,10 +25672,10 @@ pub fn extract_media_type<'tree>(node: MediaTypeNode<'tree>) -> MediaTypeChildre
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -25482,13 +25705,13 @@ pub fn extract_media_type_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ModDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ModTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ModTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, PhoGroupsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, PhoGroupsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -25521,10 +25744,10 @@ pub fn extract_mod_dependent_tier<'tree>(
                             NodeSlot::Present(ModTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25545,10 +25768,10 @@ pub fn extract_mod_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25569,10 +25792,10 @@ pub fn extract_mod_dependent_tier<'tree>(
                             NodeSlot::Present(PhoGroupsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25593,10 +25816,10 @@ pub fn extract_mod_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25628,13 +25851,13 @@ pub fn extract_mod_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ModsylDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ModsylTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ModsylTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -25667,10 +25890,10 @@ pub fn extract_modsyl_dependent_tier<'tree>(
                             NodeSlot::Present(ModsylTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25691,10 +25914,10 @@ pub fn extract_modsyl_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25724,10 +25947,10 @@ pub fn extract_modsyl_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -25753,10 +25976,10 @@ pub fn extract_modsyl_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25788,10 +26011,10 @@ pub fn extract_modsyl_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MorContentChildren<'tree> {
     /// Positional member 0.
-    pub main: Positioned<'tree, NodeSlot<'tree, MorWordNode<'tree>>>,
+    pub main: Positioned<'tree, ChildSlot<'tree, MorWordNode<'tree>>>,
     /// Positional member 1.
     pub post_clitics:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, MorPostCliticNode<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, MorPostCliticNode<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -25801,14 +26024,15 @@ pub struct MorContentChildren<'tree> {
 impl<'tree> MorContentChildren<'tree> {
     /// The `main` grammar field (accessor method `main`).
     #[must_use]
-    pub fn main(&self) -> &Positioned<'tree, NodeSlot<'tree, MorWordNode<'tree>>> {
+    pub fn main(&self) -> &Positioned<'tree, ChildSlot<'tree, MorWordNode<'tree>>> {
         &self.main
     }
     /// The `post_clitics` grammar field (accessor method `post_clitics`).
     #[must_use]
     pub fn post_clitics(
         &self,
-    ) -> &Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, MorPostCliticNode<'tree>>>>> {
+    ) -> &Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, MorPostCliticNode<'tree>>>>>
+    {
         &self.post_clitics
     }
 }
@@ -25835,10 +26059,10 @@ pub fn extract_mor_content<'tree>(node: MorContentNode<'tree>) -> MorContentChil
                             NodeSlot::Present(MorWordNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -25872,10 +26096,10 @@ pub fn extract_mor_content<'tree>(node: MorContentNode<'tree>) -> MorContentChil
                                     NodeSlot::Present(MorPostCliticNode(__c))
                                 }
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -25908,9 +26132,9 @@ pub fn extract_mor_content_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MorContentsChild0MorContentChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, MorContentNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, MorContentNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -26050,10 +26274,10 @@ impl<'tree> FromNodeKind<'tree> for MorContentsChild0MorContentChild2Child1Choic
 #[derive(Debug, Clone)]
 pub struct MorContentsChild0MorContentChild2Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, NodeSlot<'tree, MorContentsChild0MorContentChild2Child1Choice<'tree>>>,
+        Positioned<'tree, ChildSlot<'tree, MorContentsChild0MorContentChild2Child1Choice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -26064,17 +26288,15 @@ impl<'tree> MorContentsChild0MorContentChild2Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct MorContentsChild0MorContentChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, MorContentNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, MorContentNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, MorContentsChild0MorContentChild1Children<'tree>>>>,
+        Vec<Positioned<'tree, SeqSlot<'tree, MorContentsChild0MorContentChild1Children<'tree>>>>,
     >,
     /// Positional member 2.
-    pub child_2: Positioned<
-        'tree,
-        Option<NodeSlot<'tree, MorContentsChild0MorContentChild2Children<'tree>>>,
-    >,
+    pub child_2:
+        Positioned<'tree, Option<SeqSlot<'tree, MorContentsChild0MorContentChild2Children<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -26201,9 +26423,9 @@ pub enum MorContentsChild0Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct MorContentsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, MorContentsChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, MorContentsChild0Choice<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_1: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -26277,10 +26499,10 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                 ))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -26339,10 +26561,10 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                                                     NodeSlot::Present(WhitespacesNode(__c))
                                                                                                 }
                                                                                             } else {
-                                                                                                NodeSlot::Absent
+                                                                                                NodeSlot::Absent(NoChild)
                                                                                             }
                                                                                         } else {
-                                                                                            NodeSlot::Absent
+                                                                                            NodeSlot::Absent(NoChild)
                                                                                         }
                                                                                     };
                                                                                     Positioned::new(leading_extras, slot)
@@ -26365,10 +26587,10 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                                                     NodeSlot::Present(MorContentNode(__c))
                                                                                                 }
                                                                                             } else {
-                                                                                                NodeSlot::Absent
+                                                                                                NodeSlot::Absent(NoChild)
                                                                                             }
                                                                                         } else {
-                                                                                            NodeSlot::Absent
+                                                                                            NodeSlot::Absent(NoChild)
                                                                                         }
                                                                                     };
                                                                                     Positioned::new(leading_extras, slot)
@@ -26384,10 +26606,10 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                             }
                                                                         })
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             };
                                                             Positioned::new(leading_extras, slot)
@@ -26452,10 +26674,10 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                                                 NodeSlot::Present(WhitespacesNode(__c))
                                                                                             }
                                                                                         } else {
-                                                                                            NodeSlot::Absent
+                                                                                            NodeSlot::Absent(NoChild)
                                                                                         }
                                                                                     } else {
-                                                                                        NodeSlot::Absent
+                                                                                        NodeSlot::Absent(NoChild)
                                                                                     }
                                                                                 };
                                                                                 Positioned::new(
@@ -26635,11 +26857,11 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                                                         )
                                                                                                     }
                                                                                                 }
-                                                                                                _ => NodeSlot::Absent,
+                                                                                                _ => NodeSlot::Absent(NoChild),
                                                                                             }
                                                                                         }
                                                                                     } else {
-                                                                                        NodeSlot::Absent
+                                                                                        NodeSlot::Absent(NoChild)
                                                                                     }
                                                                                 };
                                                                                 Positioned::new(
@@ -26662,10 +26884,10 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                                                         }
                                                                     })
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             } else {
-                                                                NodeSlot::Absent
+                                                                NodeSlot::Absent(NoChild)
                                                             }
                                                         })
                                                     }
@@ -26695,7 +26917,7 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -26804,10 +27026,10 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
-                            _ => NodeSlot::Absent,
+                            _ => NodeSlot::Absent(NoChild),
                         }
                     }
                 }
@@ -26839,10 +27061,10 @@ pub fn extract_mor_contents<'tree>(node: MorContentsNode<'tree>) -> MorContentsC
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -26877,13 +27099,13 @@ pub fn extract_mor_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MorDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, MorTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, MorTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, MorContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, MorContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -26916,10 +27138,10 @@ pub fn extract_mor_dependent_tier<'tree>(
                             NodeSlot::Present(MorTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -26940,10 +27162,10 @@ pub fn extract_mor_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -26964,10 +27186,10 @@ pub fn extract_mor_dependent_tier<'tree>(
                             NodeSlot::Present(MorContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -26988,10 +27210,10 @@ pub fn extract_mor_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27023,9 +27245,9 @@ pub fn extract_mor_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MorFeatureChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, HyphenNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, HyphenNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, MorFeatureValueNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, MorFeatureValueNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -27056,10 +27278,10 @@ pub fn extract_mor_feature<'tree>(node: MorFeatureNode<'tree>) -> MorFeatureChil
                             NodeSlot::Present(HyphenNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27080,10 +27302,10 @@ pub fn extract_mor_feature<'tree>(node: MorFeatureNode<'tree>) -> MorFeatureChil
                             NodeSlot::Present(MorFeatureValueNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27113,9 +27335,9 @@ pub fn extract_mor_feature_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MorPostCliticChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TildeNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TildeNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, MorWordNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, MorWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -27148,10 +27370,10 @@ pub fn extract_mor_post_clitic<'tree>(
                             NodeSlot::Present(TildeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27172,10 +27394,10 @@ pub fn extract_mor_post_clitic<'tree>(
                             NodeSlot::Present(MorWordNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27205,13 +27427,13 @@ pub fn extract_mor_post_clitic_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct MorWordChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, MorPosNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, MorPosNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PipeNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PipeNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, MorLemmaNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, MorLemmaNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, MorFeatureNode<'tree>>>>>,
+    pub child_3: Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, MorFeatureNode<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -27242,10 +27464,10 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
                             NodeSlot::Present(MorPosNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27266,10 +27488,10 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
                             NodeSlot::Present(PipeNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27290,10 +27512,10 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
                             NodeSlot::Present(MorLemmaNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27327,10 +27549,10 @@ pub fn extract_mor_word<'tree>(node: MorWordNode<'tree>) -> MorWordChildren<'tre
                                     NodeSlot::Present(MorFeatureNode(__c))
                                 }
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -27364,9 +27586,9 @@ pub fn extract_mor_word_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct NewEpisodeHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, NewEpisodePrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, NewEpisodePrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -27399,10 +27621,10 @@ pub fn extract_new_episode_header<'tree>(
                             NodeSlot::Present(NewEpisodePrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27423,10 +27645,10 @@ pub fn extract_new_episode_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -27550,7 +27772,7 @@ impl<'tree> FromNodeKind<'tree> for NonColonSeparatorChoice<'tree> {
 pub struct NonColonSeparatorChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, NonColonSeparatorChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, NonColonSeparatorChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -27595,7 +27817,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27607,7 +27829,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27619,7 +27841,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27633,7 +27855,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27650,7 +27872,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27664,7 +27886,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27678,7 +27900,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27690,7 +27912,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27705,7 +27927,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27719,7 +27941,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27733,7 +27955,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27746,7 +27968,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27760,7 +27982,7 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27774,10 +27996,10 @@ pub fn extract_non_colon_separator<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -27841,7 +28063,7 @@ impl<'tree> FromNodeKind<'tree> for NonvocalChoice<'tree> {
 pub struct NonvocalChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, NonvocalChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, NonvocalChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -27886,7 +28108,7 @@ pub fn extract_nonvocal<'tree>(node: NonvocalNode<'tree>) -> NonvocalChildren<'t
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27900,7 +28122,7 @@ pub fn extract_nonvocal<'tree>(node: NonvocalNode<'tree>) -> NonvocalChildren<'t
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -27914,10 +28136,10 @@ pub fn extract_nonvocal<'tree>(node: NonvocalNode<'tree>) -> NonvocalChildren<'t
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -27947,11 +28169,11 @@ pub fn extract_nonvocal_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct NonvocalBeginChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AmpersandNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AmpersandNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NonvocalBeginMarkerNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NonvocalBeginMarkerNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, LongFeatureLabelNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, LongFeatureLabelNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -27984,10 +28206,10 @@ pub fn extract_nonvocal_begin<'tree>(
                             NodeSlot::Present(AmpersandNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28008,10 +28230,10 @@ pub fn extract_nonvocal_begin<'tree>(
                             NodeSlot::Present(NonvocalBeginMarkerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28032,10 +28254,10 @@ pub fn extract_nonvocal_begin<'tree>(
                             NodeSlot::Present(LongFeatureLabelNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28066,11 +28288,11 @@ pub fn extract_nonvocal_begin_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct NonvocalEndChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AmpersandNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AmpersandNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NonvocalEndMarkerNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NonvocalEndMarkerNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, LongFeatureLabelNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, LongFeatureLabelNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -28101,10 +28323,10 @@ pub fn extract_nonvocal_end<'tree>(node: NonvocalEndNode<'tree>) -> NonvocalEndC
                             NodeSlot::Present(AmpersandNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28125,10 +28347,10 @@ pub fn extract_nonvocal_end<'tree>(node: NonvocalEndNode<'tree>) -> NonvocalEndC
                             NodeSlot::Present(NonvocalEndMarkerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28149,10 +28371,10 @@ pub fn extract_nonvocal_end<'tree>(node: NonvocalEndNode<'tree>) -> NonvocalEndC
                             NodeSlot::Present(LongFeatureLabelNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28183,13 +28405,13 @@ pub fn extract_nonvocal_end_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct NonvocalSimpleChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AmpersandNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AmpersandNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NonvocalBeginMarkerNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NonvocalBeginMarkerNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, LongFeatureLabelNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, LongFeatureLabelNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, RightBraceNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, RightBraceNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -28222,10 +28444,10 @@ pub fn extract_nonvocal_simple<'tree>(
                             NodeSlot::Present(AmpersandNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28246,10 +28468,10 @@ pub fn extract_nonvocal_simple<'tree>(
                             NodeSlot::Present(NonvocalBeginMarkerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28270,10 +28492,10 @@ pub fn extract_nonvocal_simple<'tree>(
                             NodeSlot::Present(LongFeatureLabelNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28294,10 +28516,10 @@ pub fn extract_nonvocal_simple<'tree>(
                             NodeSlot::Present(RightBraceNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28359,7 +28581,7 @@ impl<'tree> FromNodeKind<'tree> for NonwordChoice<'tree> {
 pub struct NonwordChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, NonwordChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, NonwordChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -28402,7 +28624,7 @@ pub fn extract_nonword<'tree>(node: NonwordNode<'tree>) -> NonwordChildren<'tree
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -28414,10 +28636,10 @@ pub fn extract_nonword<'tree>(node: NonwordNode<'tree>) -> NonwordChildren<'tree
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -28446,9 +28668,9 @@ pub fn extract_nonword_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct NonwordWithOptionalAnnotationsChildren<'tree> {
     /// Positional member 0.
-    pub nonword: Positioned<'tree, NodeSlot<'tree, NonwordNode<'tree>>>,
+    pub nonword: Positioned<'tree, ChildSlot<'tree, NonwordNode<'tree>>>,
     /// Positional member 1.
-    pub annotations: Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>>,
+    pub annotations: Positioned<'tree, Option<ChildSlot<'tree, BaseAnnotationsNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -28460,12 +28682,12 @@ impl<'tree> NonwordWithOptionalAnnotationsChildren<'tree> {
     #[must_use]
     pub fn annotations(
         &self,
-    ) -> &Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>> {
+    ) -> &Positioned<'tree, Option<ChildSlot<'tree, BaseAnnotationsNode<'tree>>>> {
         &self.annotations
     }
     /// The `nonword` grammar field (accessor method `nonword`).
     #[must_use]
-    pub fn nonword(&self) -> &Positioned<'tree, NodeSlot<'tree, NonwordNode<'tree>>> {
+    pub fn nonword(&self) -> &Positioned<'tree, ChildSlot<'tree, NonwordNode<'tree>>> {
         &self.nonword
     }
 }
@@ -28494,10 +28716,10 @@ pub fn extract_nonword_with_optional_annotations<'tree>(
                             NodeSlot::Present(NonwordNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28527,10 +28749,10 @@ pub fn extract_nonword_with_optional_annotations<'tree>(
                                 NodeSlot::Present(BaseAnnotationsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -28566,13 +28788,13 @@ pub fn extract_nonword_with_optional_annotations_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct NumberHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, NumberPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, NumberPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, NumberOptionNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, NumberOptionNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -28603,10 +28825,10 @@ pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHead
                             NodeSlot::Present(NumberPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28627,10 +28849,10 @@ pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHead
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28651,10 +28873,10 @@ pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHead
                             NodeSlot::Present(NumberOptionNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28675,10 +28897,10 @@ pub fn extract_number_header<'tree>(node: NumberHeaderNode<'tree>) -> NumberHead
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -28764,7 +28986,7 @@ impl<'tree> FromNodeKind<'tree> for NumberOptionChoice<'tree> {
 pub struct NumberOptionChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, NumberOptionChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, NumberOptionChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -28807,7 +29029,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -28819,7 +29041,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -28831,7 +29053,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -28843,7 +29065,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -28855,7 +29077,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -28867,7 +29089,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -28879,7 +29101,7 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -28893,10 +29115,10 @@ pub fn extract_number_option<'tree>(node: NumberOptionNode<'tree>) -> NumberOpti
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -28962,7 +29184,7 @@ impl<'tree> FromNodeKind<'tree> for OptionNameChoice<'tree> {
 pub struct OptionNameChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, OptionNameChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, OptionNameChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -29005,7 +29227,7 @@ pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -29017,7 +29239,7 @@ pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -29032,10 +29254,10 @@ pub fn extract_option_name<'tree>(node: OptionNameNode<'tree>) -> OptionNameChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -29065,11 +29287,11 @@ pub fn extract_option_name_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct OptionsContentsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, OptionNameNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, OptionNameNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -29080,11 +29302,11 @@ impl<'tree> OptionsContentsChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct OptionsContentsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, OptionNameNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, OptionNameNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, OptionsContentsChild1Children<'tree>>>>,
+        Vec<Positioned<'tree, SeqSlot<'tree, OptionsContentsChild1Children<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -29118,10 +29340,10 @@ pub fn extract_options_contents<'tree>(
                             NodeSlot::Present(OptionNameNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29179,10 +29401,10 @@ pub fn extract_options_contents<'tree>(
                                                             NodeSlot::Present(CommaNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -29207,10 +29429,10 @@ pub fn extract_options_contents<'tree>(
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -29235,10 +29457,10 @@ pub fn extract_options_contents<'tree>(
                                                             NodeSlot::Present(OptionNameNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -29255,10 +29477,10 @@ pub fn extract_options_contents<'tree>(
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -29291,13 +29513,13 @@ pub fn extract_options_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct OptionsHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, OptionsPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, OptionsPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, OptionsContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, OptionsContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -29330,10 +29552,10 @@ pub fn extract_options_header<'tree>(
                             NodeSlot::Present(OptionsPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29354,10 +29576,10 @@ pub fn extract_options_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29378,10 +29600,10 @@ pub fn extract_options_header<'tree>(
                             NodeSlot::Present(OptionsContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29402,10 +29624,10 @@ pub fn extract_options_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29437,13 +29659,13 @@ pub fn extract_options_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct OrtDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, OrtTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, OrtTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -29476,10 +29698,10 @@ pub fn extract_ort_dependent_tier<'tree>(
                             NodeSlot::Present(OrtTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29500,10 +29722,10 @@ pub fn extract_ort_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29533,10 +29755,10 @@ pub fn extract_ort_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -29562,10 +29784,10 @@ pub fn extract_ort_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29597,15 +29819,15 @@ pub fn extract_ort_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct OtherSpokenEventChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AmpersandNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AmpersandNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, StarNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, StarNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, SpeakerNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, SpeakerNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, ColonNode<'tree>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, StandaloneWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -29638,10 +29860,10 @@ pub fn extract_other_spoken_event<'tree>(
                             NodeSlot::Present(AmpersandNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29662,10 +29884,10 @@ pub fn extract_other_spoken_event<'tree>(
                             NodeSlot::Present(StarNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29686,10 +29908,10 @@ pub fn extract_other_spoken_event<'tree>(
                             NodeSlot::Present(SpeakerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29710,10 +29932,10 @@ pub fn extract_other_spoken_event<'tree>(
                             NodeSlot::Present(ColonNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29734,10 +29956,10 @@ pub fn extract_other_spoken_event<'tree>(
                             NodeSlot::Present(StandaloneWordNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29770,13 +29992,13 @@ pub fn extract_other_spoken_event_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PageHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PagePrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PagePrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, PageNumberNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, PageNumberNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -29807,10 +30029,10 @@ pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChil
                             NodeSlot::Present(PagePrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29831,10 +30053,10 @@ pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChil
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29855,10 +30077,10 @@ pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChil
                             NodeSlot::Present(PageNumberNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29879,10 +30101,10 @@ pub fn extract_page_header<'tree>(node: PageHeaderNode<'tree>) -> PageHeaderChil
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29914,13 +30136,13 @@ pub fn extract_page_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ParDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ParTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ParTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -29953,10 +30175,10 @@ pub fn extract_par_dependent_tier<'tree>(
                             NodeSlot::Present(ParTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -29977,10 +30199,10 @@ pub fn extract_par_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30010,10 +30232,10 @@ pub fn extract_par_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -30039,10 +30261,10 @@ pub fn extract_par_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30074,13 +30296,13 @@ pub fn extract_par_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ParaAnnotationChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LBrackEqBangNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LBrackEqBangNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>,
     /// Positional member 2.
-    pub text: Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>>,
+    pub text: Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, RightBracketNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -30090,7 +30312,7 @@ pub struct ParaAnnotationChildren<'tree> {
 impl<'tree> ParaAnnotationChildren<'tree> {
     /// The `text` grammar field (accessor method `text`).
     #[must_use]
-    pub fn text(&self) -> &Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>> {
+    pub fn text(&self) -> &Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>> {
         &self.text
     }
 }
@@ -30119,10 +30341,10 @@ pub fn extract_para_annotation<'tree>(
                             NodeSlot::Present(LBrackEqBangNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30143,10 +30365,10 @@ pub fn extract_para_annotation<'tree>(
                             NodeSlot::Present(SpaceNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30167,10 +30389,10 @@ pub fn extract_para_annotation<'tree>(
                             NodeSlot::Present(AnnotationContentNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30191,10 +30413,10 @@ pub fn extract_para_annotation<'tree>(
                             NodeSlot::Present(RightBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30226,9 +30448,9 @@ pub fn extract_para_annotation_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ParticipantChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, ParticipantWordNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, ParticipantWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -30239,14 +30461,12 @@ impl<'tree> ParticipantChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct ParticipantChildren<'tree> {
     /// Positional member 0.
-    pub code: Positioned<'tree, NodeSlot<'tree, SpeakerNode<'tree>>>,
+    pub code: Positioned<'tree, ChildSlot<'tree, SpeakerNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<
-        'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, ParticipantChild1Children<'tree>>>>,
-    >,
+    pub child_1:
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, ParticipantChild1Children<'tree>>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -30256,7 +30476,7 @@ pub struct ParticipantChildren<'tree> {
 impl<'tree> ParticipantChildren<'tree> {
     /// The `code` grammar field (accessor method `code`).
     #[must_use]
-    pub fn code(&self) -> &Positioned<'tree, NodeSlot<'tree, SpeakerNode<'tree>>> {
+    pub fn code(&self) -> &Positioned<'tree, ChildSlot<'tree, SpeakerNode<'tree>>> {
         &self.code
     }
 }
@@ -30283,10 +30503,10 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                             NodeSlot::Present(SpeakerNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30344,10 +30564,10 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -30374,10 +30594,10 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                                             ))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -30393,10 +30613,10 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -30429,10 +30649,10 @@ pub fn extract_participant<'tree>(node: ParticipantNode<'tree>) -> ParticipantCh
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -30468,11 +30688,11 @@ pub fn extract_participant_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ParticipantsContentsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, ParticipantNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, ParticipantNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -30483,11 +30703,11 @@ impl<'tree> ParticipantsContentsChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct ParticipantsContentsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ParticipantNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ParticipantNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, ParticipantsContentsChild1Children<'tree>>>>,
+        Vec<Positioned<'tree, SeqSlot<'tree, ParticipantsContentsChild1Children<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -30521,10 +30741,10 @@ pub fn extract_participants_contents<'tree>(
                             NodeSlot::Present(ParticipantNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30582,10 +30802,10 @@ pub fn extract_participants_contents<'tree>(
                                                             NodeSlot::Present(CommaNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -30610,10 +30830,10 @@ pub fn extract_participants_contents<'tree>(
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -30638,10 +30858,10 @@ pub fn extract_participants_contents<'tree>(
                                                             NodeSlot::Present(ParticipantNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -30658,10 +30878,10 @@ pub fn extract_participants_contents<'tree>(
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -30694,13 +30914,13 @@ pub fn extract_participants_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ParticipantsHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ParticipantsPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ParticipantsPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, ParticipantsContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, ParticipantsContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -30733,10 +30953,10 @@ pub fn extract_participants_header<'tree>(
                             NodeSlot::Present(ParticipantsPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30757,10 +30977,10 @@ pub fn extract_participants_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30781,10 +31001,10 @@ pub fn extract_participants_header<'tree>(
                             NodeSlot::Present(ParticipantsContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30805,10 +31025,10 @@ pub fn extract_participants_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30840,13 +31060,13 @@ pub fn extract_participants_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PercentAnnotationChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LBrackPercentNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LBrackPercentNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>,
     /// Positional member 2.
-    pub text: Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>>,
+    pub text: Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, RightBracketNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -30856,7 +31076,7 @@ pub struct PercentAnnotationChildren<'tree> {
 impl<'tree> PercentAnnotationChildren<'tree> {
     /// The `text` grammar field (accessor method `text`).
     #[must_use]
-    pub fn text(&self) -> &Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>> {
+    pub fn text(&self) -> &Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>> {
         &self.text
     }
 }
@@ -30885,10 +31105,10 @@ pub fn extract_percent_annotation<'tree>(
                             NodeSlot::Present(LBrackPercentNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30909,10 +31129,10 @@ pub fn extract_percent_annotation<'tree>(
                             NodeSlot::Present(SpaceNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30933,10 +31153,10 @@ pub fn extract_percent_annotation<'tree>(
                             NodeSlot::Present(AnnotationContentNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30957,10 +31177,10 @@ pub fn extract_percent_annotation<'tree>(
                             NodeSlot::Present(RightBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -30992,13 +31212,13 @@ pub fn extract_percent_annotation_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PhoDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PhoTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PhoTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, PhoGroupsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, PhoGroupsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31031,10 +31251,10 @@ pub fn extract_pho_dependent_tier<'tree>(
                             NodeSlot::Present(PhoTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -31055,10 +31275,10 @@ pub fn extract_pho_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -31079,10 +31299,10 @@ pub fn extract_pho_dependent_tier<'tree>(
                             NodeSlot::Present(PhoGroupsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -31103,10 +31323,10 @@ pub fn extract_pho_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -31138,11 +31358,11 @@ pub fn extract_pho_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PhoGroupPhoBeginGroupChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PhoBeginGroupNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PhoBeginGroupNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PhoGroupedContentNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PhoGroupedContentNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, PhoEndGroupNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, PhoEndGroupNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31161,7 +31381,7 @@ pub enum PhoGroupChoice<'tree> {
 pub struct PhoGroupChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, PhoGroupChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, PhoGroupChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31204,7 +31424,7 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -31245,10 +31465,10 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                                                             ))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31275,10 +31495,10 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                                                             )
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31303,10 +31523,10 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                                                             NodeSlot::Present(PhoEndGroupNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31329,10 +31549,10 @@ pub fn extract_pho_group<'tree>(node: PhoGroupNode<'tree>) -> PhoGroupChildren<'
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -31362,9 +31582,9 @@ pub fn extract_pho_group_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PhoGroupedContentChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PhoWordsNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PhoWordsNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31375,11 +31595,11 @@ impl<'tree> PhoGroupedContentChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct PhoGroupedContentChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PhoWordsNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PhoWordsNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, PhoGroupedContentChild1Children<'tree>>>>,
+        Vec<Positioned<'tree, SeqSlot<'tree, PhoGroupedContentChild1Children<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -31413,10 +31633,10 @@ pub fn extract_pho_grouped_content<'tree>(
                             NodeSlot::Present(PhoWordsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -31474,10 +31694,10 @@ pub fn extract_pho_grouped_content<'tree>(
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31502,10 +31722,10 @@ pub fn extract_pho_grouped_content<'tree>(
                                                             NodeSlot::Present(PhoWordsNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31521,10 +31741,10 @@ pub fn extract_pho_grouped_content<'tree>(
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -31557,9 +31777,9 @@ pub fn extract_pho_grouped_content_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PhoGroupsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PhoGroupNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PhoGroupNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31570,10 +31790,10 @@ impl<'tree> PhoGroupsChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct PhoGroupsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PhoGroupNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PhoGroupNode<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, PhoGroupsChild1Children<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, PhoGroupsChild1Children<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31604,10 +31824,10 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                             NodeSlot::Present(PhoGroupNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -31665,10 +31885,10 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31693,10 +31913,10 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                                                             NodeSlot::Present(PhoGroupNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31712,10 +31932,10 @@ pub fn extract_pho_groups<'tree>(node: PhoGroupsNode<'tree>) -> PhoGroupsChildre
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -31748,9 +31968,9 @@ pub fn extract_pho_groups_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PhoWordsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, Plus_2Node<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, Plus_2Node<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, PhoWordNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, PhoWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31761,10 +31981,10 @@ impl<'tree> PhoWordsChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct PhoWordsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PhoWordNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PhoWordNode<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, PhoWordsChild1Children<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, PhoWordsChild1Children<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31795,10 +32015,10 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                             NodeSlot::Present(PhoWordNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -31856,10 +32076,10 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                                             NodeSlot::Present(Plus_2Node(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31884,10 +32104,10 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                                             NodeSlot::Present(PhoWordNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -31903,10 +32123,10 @@ pub fn extract_pho_words<'tree>(node: PhoWordsNode<'tree>) -> PhoWordsChildren<'
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -31939,13 +32159,13 @@ pub fn extract_pho_words_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PhoalnDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PhoalnTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PhoalnTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -31978,10 +32198,10 @@ pub fn extract_phoaln_dependent_tier<'tree>(
                             NodeSlot::Present(PhoalnTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32002,10 +32222,10 @@ pub fn extract_phoaln_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32035,10 +32255,10 @@ pub fn extract_phoaln_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -32064,10 +32284,10 @@ pub fn extract_phoaln_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32099,13 +32319,13 @@ pub fn extract_phoaln_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PhosylDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PhosylTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PhosylTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -32138,10 +32358,10 @@ pub fn extract_phosyl_dependent_tier<'tree>(
                             NodeSlot::Present(PhosylTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32162,10 +32382,10 @@ pub fn extract_phosyl_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32195,10 +32415,10 @@ pub fn extract_phosyl_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -32224,10 +32444,10 @@ pub fn extract_phosyl_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32259,13 +32479,13 @@ pub fn extract_phosyl_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PidHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, PidPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, PidPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -32296,10 +32516,10 @@ pub fn extract_pid_header<'tree>(node: PidHeaderNode<'tree>) -> PidHeaderChildre
                             NodeSlot::Present(PidPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32320,10 +32540,10 @@ pub fn extract_pid_header<'tree>(node: PidHeaderNode<'tree>) -> PidHeaderChildre
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32344,10 +32564,10 @@ pub fn extract_pid_header<'tree>(node: PidHeaderNode<'tree>) -> PidHeaderChildre
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32368,10 +32588,10 @@ pub fn extract_pid_header<'tree>(node: PidHeaderNode<'tree>) -> PidHeaderChildre
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32403,13 +32623,13 @@ pub fn extract_pid_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct PostcodeChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LBrackPlusNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LBrackPlusNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>,
     /// Positional member 2.
-    pub code: Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>>,
+    pub code: Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, RightBracketNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -32419,7 +32639,7 @@ pub struct PostcodeChildren<'tree> {
 impl<'tree> PostcodeChildren<'tree> {
     /// The `code` grammar field (accessor method `code`).
     #[must_use]
-    pub fn code(&self) -> &Positioned<'tree, NodeSlot<'tree, AnnotationContentNode<'tree>>> {
+    pub fn code(&self) -> &Positioned<'tree, ChildSlot<'tree, AnnotationContentNode<'tree>>> {
         &self.code
     }
 }
@@ -32446,10 +32666,10 @@ pub fn extract_postcode<'tree>(node: PostcodeNode<'tree>) -> PostcodeChildren<'t
                             NodeSlot::Present(LBrackPlusNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32470,10 +32690,10 @@ pub fn extract_postcode<'tree>(node: PostcodeNode<'tree>) -> PostcodeChildren<'t
                             NodeSlot::Present(SpaceNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32494,10 +32714,10 @@ pub fn extract_postcode<'tree>(node: PostcodeNode<'tree>) -> PostcodeChildren<'t
                             NodeSlot::Present(AnnotationContentNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32518,10 +32738,10 @@ pub fn extract_postcode<'tree>(node: PostcodeNode<'tree>) -> PostcodeChildren<'t
                             NodeSlot::Present(RightBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32593,7 +32813,7 @@ impl<'tree> FromNodeKind<'tree> for PreBeginHeaderChoice<'tree> {
 pub struct PreBeginHeaderChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, PreBeginHeaderChoice<'tree>>>,
+    pub content: Positioned<'tree, ClassifiedSlot<'tree, PreBeginHeaderChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -32626,11 +32846,11 @@ pub fn extract_pre_begin_header<'tree>(
 #[derive(Debug, Clone)]
 pub struct QuotationChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LeftDoubleQuoteNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LeftDoubleQuoteNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, ContentsNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, ContentsNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, RightDoubleQuoteNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, RightDoubleQuoteNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -32661,10 +32881,10 @@ pub fn extract_quotation<'tree>(node: QuotationNode<'tree>) -> QuotationChildren
                             NodeSlot::Present(LeftDoubleQuoteNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32685,10 +32905,10 @@ pub fn extract_quotation<'tree>(node: QuotationNode<'tree>) -> QuotationChildren
                             NodeSlot::Present(ContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32709,10 +32929,10 @@ pub fn extract_quotation<'tree>(node: QuotationNode<'tree>) -> QuotationChildren
                             NodeSlot::Present(RightDoubleQuoteNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32743,9 +32963,9 @@ pub fn extract_quotation_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct QuotationWithOptionalAnnotationsChildren<'tree> {
     /// Positional member 0.
-    pub quotation: Positioned<'tree, NodeSlot<'tree, QuotationNode<'tree>>>,
+    pub quotation: Positioned<'tree, ChildSlot<'tree, QuotationNode<'tree>>>,
     /// Positional member 1.
-    pub annotations: Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>>,
+    pub annotations: Positioned<'tree, Option<ChildSlot<'tree, BaseAnnotationsNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -32757,12 +32977,12 @@ impl<'tree> QuotationWithOptionalAnnotationsChildren<'tree> {
     #[must_use]
     pub fn annotations(
         &self,
-    ) -> &Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>> {
+    ) -> &Positioned<'tree, Option<ChildSlot<'tree, BaseAnnotationsNode<'tree>>>> {
         &self.annotations
     }
     /// The `quotation` grammar field (accessor method `quotation`).
     #[must_use]
-    pub fn quotation(&self) -> &Positioned<'tree, NodeSlot<'tree, QuotationNode<'tree>>> {
+    pub fn quotation(&self) -> &Positioned<'tree, ChildSlot<'tree, QuotationNode<'tree>>> {
         &self.quotation
     }
 }
@@ -32791,10 +33011,10 @@ pub fn extract_quotation_with_optional_annotations<'tree>(
                             NodeSlot::Present(QuotationNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32824,10 +33044,10 @@ pub fn extract_quotation_with_optional_annotations<'tree>(
                                 NodeSlot::Present(BaseAnnotationsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -32863,13 +33083,13 @@ pub fn extract_quotation_with_optional_annotations_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct RecordingQualityHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, RecordingQualityPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, RecordingQualityPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, RecordingQualityOptionNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, RecordingQualityOptionNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -32902,10 +33122,10 @@ pub fn extract_recording_quality_header<'tree>(
                             NodeSlot::Present(RecordingQualityPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32926,10 +33146,10 @@ pub fn extract_recording_quality_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32950,10 +33170,10 @@ pub fn extract_recording_quality_header<'tree>(
                             NodeSlot::Present(RecordingQualityOptionNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -32974,10 +33194,10 @@ pub fn extract_recording_quality_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33059,7 +33279,7 @@ impl<'tree> FromNodeKind<'tree> for RecordingQualityOptionChoice<'tree> {
 pub struct RecordingQualityOptionChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, RecordingQualityOptionChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, RecordingQualityOptionChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -33104,7 +33324,7 @@ pub fn extract_recording_quality_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -33116,7 +33336,7 @@ pub fn extract_recording_quality_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -33128,7 +33348,7 @@ pub fn extract_recording_quality_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -33140,7 +33360,7 @@ pub fn extract_recording_quality_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -33152,7 +33372,7 @@ pub fn extract_recording_quality_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -33169,10 +33389,10 @@ pub fn extract_recording_quality_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -33202,9 +33422,9 @@ pub fn extract_recording_quality_option_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ReplacementChild2Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_0: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, StandaloneWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -33215,9 +33435,9 @@ impl<'tree> ReplacementChild2Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct ReplacementChild3Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_0: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, StandaloneWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -33228,18 +33448,16 @@ impl<'tree> ReplacementChild3Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct ReplacementChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LeftBracketNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LeftBracketNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, ColonNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, ReplacementChild2Children<'tree>>>,
+    pub child_2: Positioned<'tree, SeqSlot<'tree, ReplacementChild2Children<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<
-        'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, ReplacementChild3Children<'tree>>>>,
-    >,
+    pub child_3:
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, ReplacementChild3Children<'tree>>>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, RightBracketNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, RightBracketNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -33270,10 +33488,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                             NodeSlot::Present(LeftBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33294,10 +33512,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                             NodeSlot::Present(ColonNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33351,10 +33569,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                                         NodeSlot::Present(WhitespacesNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         }),
                                         Presence::Empty => {
@@ -33384,10 +33602,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                                     NodeSlot::Present(StandaloneWordNode(__c))
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         } else {
-                                            NodeSlot::Absent
+                                            NodeSlot::Absent(NoChild)
                                         }
                                     };
                                     Positioned::new(leading_extras, slot)
@@ -33403,10 +33621,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                             }
                         })
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33475,10 +33693,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                                                 ))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 }),
                                                 Presence::Empty => {
@@ -33510,10 +33728,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                                             ))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -33529,10 +33747,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -33556,10 +33774,10 @@ pub fn extract_replacement<'tree>(node: ReplacementNode<'tree>) -> ReplacementCh
                             NodeSlot::Present(RightBracketNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33592,13 +33810,13 @@ pub fn extract_replacement_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct RoomLayoutHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, RoomLayoutPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, RoomLayoutPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -33631,10 +33849,10 @@ pub fn extract_room_layout_header<'tree>(
                             NodeSlot::Present(RoomLayoutPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33655,10 +33873,10 @@ pub fn extract_room_layout_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33679,10 +33897,10 @@ pub fn extract_room_layout_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33703,10 +33921,10 @@ pub fn extract_room_layout_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33770,7 +33988,7 @@ impl<'tree> FromNodeKind<'tree> for SeparatorChoice<'tree> {
 pub struct SeparatorChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, SeparatorChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, SeparatorChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -33816,7 +34034,7 @@ pub fn extract_separator<'tree>(node: SeparatorNode<'tree>) -> SeparatorChildren
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -33828,10 +34046,10 @@ pub fn extract_separator<'tree>(node: SeparatorNode<'tree>) -> SeparatorChildren
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -33861,11 +34079,11 @@ pub fn extract_separator_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ShorteningChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LParenNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LParenNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WordSegmentNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WordSegmentNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, RParenNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, RParenNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -33896,10 +34114,10 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
                             NodeSlot::Present(LParenNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33920,10 +34138,10 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
                             NodeSlot::Present(WordSegmentNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33944,10 +34162,10 @@ pub fn extract_shortening<'tree>(node: ShorteningNode<'tree>) -> ShorteningChild
                             NodeSlot::Present(RParenNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -33978,13 +34196,13 @@ pub fn extract_shortening_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct SinDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, SinTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, SinTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, SinGroupsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, SinGroupsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34017,10 +34235,10 @@ pub fn extract_sin_dependent_tier<'tree>(
                             NodeSlot::Present(SinTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34041,10 +34259,10 @@ pub fn extract_sin_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34065,10 +34283,10 @@ pub fn extract_sin_dependent_tier<'tree>(
                             NodeSlot::Present(SinGroupsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34089,10 +34307,10 @@ pub fn extract_sin_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34124,11 +34342,11 @@ pub fn extract_sin_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct SinGroupSinBeginGroupChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, SinBeginGroupNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, SinBeginGroupNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SinGroupedContentNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SinGroupedContentNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, SinEndGroupNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, SinEndGroupNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34147,7 +34365,7 @@ pub enum SinGroupChoice<'tree> {
 pub struct SinGroupChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, SinGroupChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, SinGroupChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34190,7 +34408,7 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -34231,10 +34449,10 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                                                             ))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -34261,10 +34479,10 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                                                             )
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -34289,10 +34507,10 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                                                             NodeSlot::Present(SinEndGroupNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -34315,10 +34533,10 @@ pub fn extract_sin_group<'tree>(node: SinGroupNode<'tree>) -> SinGroupChildren<'
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -34348,9 +34566,9 @@ pub fn extract_sin_group_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct SinGroupedContentChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SinWordNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SinWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34361,11 +34579,11 @@ impl<'tree> SinGroupedContentChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct SinGroupedContentChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, SinWordNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, SinWordNode<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, SinGroupedContentChild1Children<'tree>>>>,
+        Vec<Positioned<'tree, SeqSlot<'tree, SinGroupedContentChild1Children<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -34399,10 +34617,10 @@ pub fn extract_sin_grouped_content<'tree>(
                             NodeSlot::Present(SinWordNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34460,10 +34678,10 @@ pub fn extract_sin_grouped_content<'tree>(
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -34488,10 +34706,10 @@ pub fn extract_sin_grouped_content<'tree>(
                                                             NodeSlot::Present(SinWordNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -34507,10 +34725,10 @@ pub fn extract_sin_grouped_content<'tree>(
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -34543,9 +34761,9 @@ pub fn extract_sin_grouped_content_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct SinGroupsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, SinGroupNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, SinGroupNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34556,10 +34774,10 @@ impl<'tree> SinGroupsChild1Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct SinGroupsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, SinGroupNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, SinGroupNode<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SinGroupsChild1Children<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, SinGroupsChild1Children<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34590,10 +34808,10 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                             NodeSlot::Present(SinGroupNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34651,10 +34869,10 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -34679,10 +34897,10 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                                             NodeSlot::Present(SinGroupNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             };
                                             Positioned::new(leading_extras, slot)
@@ -34698,10 +34916,10 @@ pub fn extract_sin_groups<'tree>(node: SinGroupsNode<'tree>) -> SinGroupsChildre
                                     }
                                 })
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -34742,7 +34960,7 @@ pub enum SinWordChoice<'tree> {
 pub struct SinWordChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, SinWordChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, SinWordChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34785,7 +35003,7 @@ pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tre
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -34797,10 +35015,10 @@ pub fn extract_sin_word<'tree>(node: SinWordNode<'tree>) -> SinWordChildren<'tre
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -34829,13 +35047,13 @@ pub fn extract_sin_word_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct SitDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, SitTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, SitTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -34868,10 +35086,10 @@ pub fn extract_sit_dependent_tier<'tree>(
                             NodeSlot::Present(SitTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34892,10 +35110,10 @@ pub fn extract_sit_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34925,10 +35143,10 @@ pub fn extract_sit_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -34954,10 +35172,10 @@ pub fn extract_sit_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -34989,13 +35207,13 @@ pub fn extract_sit_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct SituationHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, SituationPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, SituationPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -35028,10 +35246,10 @@ pub fn extract_situation_header<'tree>(
                             NodeSlot::Present(SituationPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -35052,10 +35270,10 @@ pub fn extract_situation_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -35076,10 +35294,10 @@ pub fn extract_situation_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -35100,10 +35318,10 @@ pub fn extract_situation_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -35651,7 +35869,7 @@ impl<'tree> AsRawNode<'tree> for SourceFileChoice<'tree> {
 pub struct SourceFileChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, SourceFileChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, SourceFileChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -35696,7 +35914,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -35708,7 +35926,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -35720,7 +35938,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -35906,7 +36124,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -36100,7 +36318,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -36142,7 +36360,7 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -36156,10 +36374,10 @@ pub fn extract_source_file<'tree>(node: SourceFileNode<'tree>) -> SourceFileChil
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -36189,13 +36407,13 @@ pub fn extract_source_file_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct SpaDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, SpaTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, SpaTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -36228,10 +36446,10 @@ pub fn extract_spa_dependent_tier<'tree>(
                             NodeSlot::Present(SpaTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36252,10 +36470,10 @@ pub fn extract_spa_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36285,10 +36503,10 @@ pub fn extract_spa_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -36314,10 +36532,10 @@ pub fn extract_spa_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36409,15 +36627,15 @@ impl<'tree> FromNodeKind<'tree> for StandaloneWordChild2Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct StandaloneWordChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, Option<NodeSlot<'tree, StandaloneWordChild0Choice<'tree>>>>,
+    pub child_0: Positioned<'tree, Option<ChoiceSlot<'tree, StandaloneWordChild0Choice<'tree>>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WordBodyNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WordBodyNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, StandaloneWordChild2Choice<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChoiceSlot<'tree, StandaloneWordChild2Choice<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, Option<NodeSlot<'tree, WordLangSuffixNode<'tree>>>>,
+    pub child_3: Positioned<'tree, Option<ChildSlot<'tree, WordLangSuffixNode<'tree>>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, Option<NodeSlot<'tree, PosTagNode<'tree>>>>,
+    pub child_4: Positioned<'tree, Option<ChildSlot<'tree, PosTagNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -36477,7 +36695,7 @@ pub fn extract_standalone_word<'tree>(
                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                         NodeSlot::Unexpected(__c)
                                     } else {
-                                        NodeSlot::Absent
+                                        NodeSlot::Absent(NoChild)
                                     }
                                 }
                                 Some(ChoiceSelection {
@@ -36489,10 +36707,10 @@ pub fn extract_standalone_word<'tree>(
                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                         NodeSlot::Unexpected(__c)
                                     } else {
-                                        NodeSlot::Absent
+                                        NodeSlot::Absent(NoChild)
                                     }
                                 }
-                                _ => NodeSlot::Absent,
+                                _ => NodeSlot::Absent(NoChild),
                             }
                         }
                     }
@@ -36520,10 +36738,10 @@ pub fn extract_standalone_word<'tree>(
                             NodeSlot::Present(WordBodyNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36571,7 +36789,7 @@ pub fn extract_standalone_word<'tree>(
                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                         NodeSlot::Unexpected(__c)
                                     } else {
-                                        NodeSlot::Absent
+                                        NodeSlot::Absent(NoChild)
                                     }
                                 }
                                 Some(ChoiceSelection {
@@ -36588,10 +36806,10 @@ pub fn extract_standalone_word<'tree>(
                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                         NodeSlot::Unexpected(__c)
                                     } else {
-                                        NodeSlot::Absent
+                                        NodeSlot::Absent(NoChild)
                                     }
                                 }
-                                _ => NodeSlot::Absent,
+                                _ => NodeSlot::Absent(NoChild),
                             }
                         }
                     }
@@ -36628,10 +36846,10 @@ pub fn extract_standalone_word<'tree>(
                                 NodeSlot::Present(WordLangSuffixNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -36666,10 +36884,10 @@ pub fn extract_standalone_word<'tree>(
                                 NodeSlot::Present(PosTagNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -36707,13 +36925,13 @@ pub fn extract_standalone_word_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct THeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -36744,10 +36962,10 @@ pub fn extract_t_header<'tree>(node: THeaderNode<'tree>) -> THeaderChildren<'tre
                             NodeSlot::Present(TPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36768,10 +36986,10 @@ pub fn extract_t_header<'tree>(node: THeaderNode<'tree>) -> THeaderChildren<'tre
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36792,10 +37010,10 @@ pub fn extract_t_header<'tree>(node: THeaderNode<'tree>) -> THeaderChildren<'tre
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36816,10 +37034,10 @@ pub fn extract_t_header<'tree>(node: THeaderNode<'tree>) -> THeaderChildren<'tre
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36850,13 +37068,13 @@ pub fn extract_t_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TapeLocationHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TapeLocationPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TapeLocationPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -36889,10 +37107,10 @@ pub fn extract_tape_location_header<'tree>(
                             NodeSlot::Present(TapeLocationPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36913,10 +37131,10 @@ pub fn extract_tape_location_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36937,10 +37155,10 @@ pub fn extract_tape_location_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -36961,10 +37179,10 @@ pub fn extract_tape_location_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -37080,7 +37298,7 @@ impl<'tree> FromNodeKind<'tree> for TerminatorChoice<'tree> {
 pub struct TerminatorChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, TerminatorChoice<'tree>>>,
+    pub content: Positioned<'tree, ClassifiedSlot<'tree, TerminatorChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -37111,9 +37329,9 @@ pub fn extract_terminator<'tree>(node: tree_sitter::Node<'tree>) -> TerminatorCh
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsChild0BulletChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BulletNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -37133,9 +37351,9 @@ pub enum TextWithBulletsChild0Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsChild1BulletChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BulletNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -37155,11 +37373,11 @@ pub enum TextWithBulletsChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TextWithBulletsChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, TextWithBulletsChild0Choice<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, TextWithBulletsChild1Choice<'tree>>>>,
+        Vec<Positioned<'tree, ChoiceSlot<'tree, TextWithBulletsChild1Choice<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -37209,7 +37427,7 @@ pub fn extract_text_with_bullets<'tree>(
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -37248,10 +37466,10 @@ pub fn extract_text_with_bullets<'tree>(
                                                                 NodeSlot::Present(BulletNode(__c))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -37288,10 +37506,10 @@ pub fn extract_text_with_bullets<'tree>(
                                                                             NodeSlot::Present(SpaceNode(__c))
                                                                         }
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             };
                                                             Positioned::new(leading_extras, slot)
@@ -37317,7 +37535,7 @@ pub fn extract_text_with_bullets<'tree>(
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -37333,10 +37551,10 @@ pub fn extract_text_with_bullets<'tree>(
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
-                            _ => NodeSlot::Absent,
+                            _ => NodeSlot::Absent(NoChild),
                         }
                     }
                 }
@@ -37390,7 +37608,7 @@ pub fn extract_text_with_bullets<'tree>(
                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                 NodeSlot::Unexpected(__c)
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         }
                                         Some(ChoiceSelection { alternative: 1, end }) => {
@@ -37424,10 +37642,10 @@ pub fn extract_text_with_bullets<'tree>(
                                                                             NodeSlot::Present(BulletNode(__c))
                                                                         }
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             };
                                                             Positioned::new(leading_extras, slot)
@@ -37464,10 +37682,10 @@ pub fn extract_text_with_bullets<'tree>(
                                                                                         NodeSlot::Present(SpaceNode(__c))
                                                                                     }
                                                                                 } else {
-                                                                                    NodeSlot::Absent
+                                                                                    NodeSlot::Absent(NoChild)
                                                                                 }
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         };
                                                                         Positioned::new(leading_extras, slot)
@@ -37492,7 +37710,7 @@ pub fn extract_text_with_bullets<'tree>(
                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                 NodeSlot::Unexpected(__c)
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         }
                                         Some(ChoiceSelection { alternative: 2, end }) => {
@@ -37506,10 +37724,10 @@ pub fn extract_text_with_bullets<'tree>(
                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                 NodeSlot::Unexpected(__c)
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         }
-                                        _ => NodeSlot::Absent,
+                                        _ => NodeSlot::Absent(NoChild),
                                     }
                                 }
                             }
@@ -37544,9 +37762,9 @@ pub fn extract_text_with_bullets_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsAndPicsChild0BulletChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BulletNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -37557,9 +37775,9 @@ impl<'tree> TextWithBulletsAndPicsChild0BulletChildren<'tree> {}
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsAndPicsChild0InlinePicChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, InlinePicNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, InlinePicNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -37581,9 +37799,9 @@ pub enum TextWithBulletsAndPicsChild0Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsAndPicsChild1BulletChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, BulletNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -37594,9 +37812,9 @@ impl<'tree> TextWithBulletsAndPicsChild1BulletChildren<'tree> {}
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsAndPicsChild1InlinePicChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, InlinePicNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, InlinePicNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, SpaceNode<'tree>>>>>,
+    pub child_1: Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, SpaceNode<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -37618,11 +37836,11 @@ pub enum TextWithBulletsAndPicsChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct TextWithBulletsAndPicsChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TextWithBulletsAndPicsChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, TextWithBulletsAndPicsChild0Choice<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, TextWithBulletsAndPicsChild1Choice<'tree>>>>,
+        Vec<Positioned<'tree, ChoiceSlot<'tree, TextWithBulletsAndPicsChild1Choice<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -37674,7 +37892,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -37713,10 +37931,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 NodeSlot::Present(BulletNode(__c))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -37753,10 +37971,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                             NodeSlot::Present(SpaceNode(__c))
                                                                         }
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             };
                                                             Positioned::new(leading_extras, slot)
@@ -37784,7 +38002,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -37825,10 +38043,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                 ))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -37865,10 +38083,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                             NodeSlot::Present(SpaceNode(__c))
                                                                         }
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             };
                                                             Positioned::new(leading_extras, slot)
@@ -37896,7 +38114,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
                             Some(ChoiceSelection {
@@ -37912,10 +38130,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                 } else if let Some(__c) = __at.take_declined_span(end) {
                                     NodeSlot::Unexpected(__c)
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             }
-                            _ => NodeSlot::Absent,
+                            _ => NodeSlot::Absent(NoChild),
                         }
                     }
                 }
@@ -37969,7 +38187,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                 NodeSlot::Unexpected(__c)
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         }
                                         Some(ChoiceSelection { alternative: 1, end }) => {
@@ -38003,10 +38221,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                             NodeSlot::Present(BulletNode(__c))
                                                                         }
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             };
                                                             Positioned::new(leading_extras, slot)
@@ -38043,10 +38261,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                                         NodeSlot::Present(SpaceNode(__c))
                                                                                     }
                                                                                 } else {
-                                                                                    NodeSlot::Absent
+                                                                                    NodeSlot::Absent(NoChild)
                                                                                 }
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         };
                                                                         Positioned::new(leading_extras, slot)
@@ -38073,7 +38291,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                 NodeSlot::Unexpected(__c)
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         }
                                         Some(ChoiceSelection { alternative: 2, end }) => {
@@ -38107,10 +38325,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                             NodeSlot::Present(InlinePicNode(__c))
                                                                         }
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             };
                                                             Positioned::new(leading_extras, slot)
@@ -38147,10 +38365,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                                                                         NodeSlot::Present(SpaceNode(__c))
                                                                                     }
                                                                                 } else {
-                                                                                    NodeSlot::Absent
+                                                                                    NodeSlot::Absent(NoChild)
                                                                                 }
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         };
                                                                         Positioned::new(leading_extras, slot)
@@ -38177,7 +38395,7 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                 NodeSlot::Unexpected(__c)
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         }
                                         Some(ChoiceSelection { alternative: 3, end }) => {
@@ -38191,10 +38409,10 @@ pub fn extract_text_with_bullets_and_pics<'tree>(
                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                 NodeSlot::Unexpected(__c)
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         }
-                                        _ => NodeSlot::Absent,
+                                        _ => NodeSlot::Absent(NoChild),
                                     }
                                 }
                             }
@@ -38229,13 +38447,13 @@ pub fn extract_text_with_bullets_and_pics_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct ThumbnailHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ThumbnailPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ThumbnailPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -38268,10 +38486,10 @@ pub fn extract_thumbnail_header<'tree>(
                             NodeSlot::Present(ThumbnailPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38292,10 +38510,10 @@ pub fn extract_thumbnail_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38316,10 +38534,10 @@ pub fn extract_thumbnail_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38340,10 +38558,10 @@ pub fn extract_thumbnail_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38375,9 +38593,9 @@ pub fn extract_thumbnail_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TierBodyLanguageCodeChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LangcodeNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LangcodeNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -38388,14 +38606,14 @@ impl<'tree> TierBodyLanguageCodeChildren<'tree> {}
 #[derive(Debug, Clone)]
 pub struct TierBodyChildren<'tree> {
     /// Positional member 0.
-    pub linkers: Positioned<'tree, Option<NodeSlot<'tree, LinkersNode<'tree>>>>,
+    pub linkers: Positioned<'tree, Option<ChildSlot<'tree, LinkersNode<'tree>>>>,
     /// Positional member 1.
     pub language_code:
-        Positioned<'tree, Option<NodeSlot<'tree, TierBodyLanguageCodeChildren<'tree>>>>,
+        Positioned<'tree, Option<SeqSlot<'tree, TierBodyLanguageCodeChildren<'tree>>>>,
     /// Positional member 2.
-    pub content_2: Positioned<'tree, NodeSlot<'tree, ContentsNode<'tree>>>,
+    pub content_2: Positioned<'tree, ChildSlot<'tree, ContentsNode<'tree>>>,
     /// Positional member 3.
-    pub ending: Positioned<'tree, NodeSlot<'tree, UtteranceEndNode<'tree>>>,
+    pub ending: Positioned<'tree, ChildSlot<'tree, UtteranceEndNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -38405,24 +38623,24 @@ pub struct TierBodyChildren<'tree> {
 impl<'tree> TierBodyChildren<'tree> {
     /// The `content` grammar field (accessor method `content`).
     #[must_use]
-    pub fn content(&self) -> &Positioned<'tree, NodeSlot<'tree, ContentsNode<'tree>>> {
+    pub fn content(&self) -> &Positioned<'tree, ChildSlot<'tree, ContentsNode<'tree>>> {
         &self.content_2
     }
     /// The `ending` grammar field (accessor method `ending`).
     #[must_use]
-    pub fn ending(&self) -> &Positioned<'tree, NodeSlot<'tree, UtteranceEndNode<'tree>>> {
+    pub fn ending(&self) -> &Positioned<'tree, ChildSlot<'tree, UtteranceEndNode<'tree>>> {
         &self.ending
     }
     /// The `language_code` grammar field (accessor method `language_code`).
     #[must_use]
     pub fn language_code(
         &self,
-    ) -> &Positioned<'tree, Option<NodeSlot<'tree, TierBodyLanguageCodeChildren<'tree>>>> {
+    ) -> &Positioned<'tree, Option<SeqSlot<'tree, TierBodyLanguageCodeChildren<'tree>>>> {
         &self.language_code
     }
     /// The `linkers` grammar field (accessor method `linkers`).
     #[must_use]
-    pub fn linkers(&self) -> &Positioned<'tree, Option<NodeSlot<'tree, LinkersNode<'tree>>>> {
+    pub fn linkers(&self) -> &Positioned<'tree, Option<ChildSlot<'tree, LinkersNode<'tree>>>> {
         &self.linkers
     }
 }
@@ -38458,10 +38676,10 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                                 NodeSlot::Present(LinkersNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -38520,10 +38738,10 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                                                         NodeSlot::Present(LangcodeNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -38548,10 +38766,10 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                                                         NodeSlot::Present(WhitespacesNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -38567,10 +38785,10 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                                 }
                             })
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -38596,10 +38814,10 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                             NodeSlot::Present(ContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38620,10 +38838,10 @@ pub fn extract_tier_body<'tree>(node: TierBodyNode<'tree>) -> TierBodyChildren<'
                             NodeSlot::Present(UtteranceEndNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38655,11 +38873,11 @@ pub fn extract_tier_body_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TierSepChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, ColonNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, ColonNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TabNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TabNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, SepTrailingSpaceNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -38690,10 +38908,10 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
                             NodeSlot::Present(ColonNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38714,10 +38932,10 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
                             NodeSlot::Present(TabNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38747,10 +38965,10 @@ pub fn extract_tier_sep<'tree>(node: TierSepNode<'tree>) -> TierSepChildren<'tre
                                 NodeSlot::Present(SepTrailingSpaceNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -38785,13 +39003,13 @@ pub fn extract_tier_sep_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TimDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TimTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TimTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -38824,10 +39042,10 @@ pub fn extract_tim_dependent_tier<'tree>(
                             NodeSlot::Present(TimTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38848,10 +39066,10 @@ pub fn extract_tim_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38881,10 +39099,10 @@ pub fn extract_tim_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -38910,10 +39128,10 @@ pub fn extract_tim_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -38977,7 +39195,7 @@ impl<'tree> FromNodeKind<'tree> for TimeDurationContentsChoice<'tree> {
 pub struct TimeDurationContentsChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, TimeDurationContentsChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, TimeDurationContentsChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -39023,7 +39241,7 @@ pub fn extract_time_duration_contents<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -39037,10 +39255,10 @@ pub fn extract_time_duration_contents<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -39070,13 +39288,13 @@ pub fn extract_time_duration_contents_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TimeDurationHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TimeDurationPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TimeDurationPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, TimeDurationContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, TimeDurationContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -39109,10 +39327,10 @@ pub fn extract_time_duration_header<'tree>(
                             NodeSlot::Present(TimeDurationPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39133,10 +39351,10 @@ pub fn extract_time_duration_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39157,10 +39375,10 @@ pub fn extract_time_duration_header<'tree>(
                             NodeSlot::Present(TimeDurationContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39181,10 +39399,10 @@ pub fn extract_time_duration_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39216,13 +39434,13 @@ pub fn extract_time_duration_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TimeStartHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TimeStartPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TimeStartPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, TimeDurationContentsNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, TimeDurationContentsNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -39255,10 +39473,10 @@ pub fn extract_time_start_header<'tree>(
                             NodeSlot::Present(TimeStartPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39279,10 +39497,10 @@ pub fn extract_time_start_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39303,10 +39521,10 @@ pub fn extract_time_start_header<'tree>(
                             NodeSlot::Present(TimeDurationContentsNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39327,10 +39545,10 @@ pub fn extract_time_start_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39362,13 +39580,13 @@ pub fn extract_time_start_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TranscriberHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TranscriberPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TranscriberPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -39401,10 +39619,10 @@ pub fn extract_transcriber_header<'tree>(
                             NodeSlot::Present(TranscriberPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39425,10 +39643,10 @@ pub fn extract_transcriber_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39449,10 +39667,10 @@ pub fn extract_transcriber_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39473,10 +39691,10 @@ pub fn extract_transcriber_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39508,13 +39726,13 @@ pub fn extract_transcriber_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TranscriptionHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TranscriptionPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TranscriptionPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, TranscriptionOptionNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, TranscriptionOptionNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -39547,10 +39765,10 @@ pub fn extract_transcription_header<'tree>(
                             NodeSlot::Present(TranscriptionPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39571,10 +39789,10 @@ pub fn extract_transcription_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39595,10 +39813,10 @@ pub fn extract_transcription_header<'tree>(
                             NodeSlot::Present(TranscriptionOptionNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39619,10 +39837,10 @@ pub fn extract_transcription_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39710,7 +39928,7 @@ impl<'tree> FromNodeKind<'tree> for TranscriptionOptionChoice<'tree> {
 pub struct TranscriptionOptionChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, TranscriptionOptionChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, TranscriptionOptionChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -39756,7 +39974,7 @@ pub fn extract_transcription_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -39768,7 +39986,7 @@ pub fn extract_transcription_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -39780,7 +39998,7 @@ pub fn extract_transcription_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -39792,7 +40010,7 @@ pub fn extract_transcription_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -39804,7 +40022,7 @@ pub fn extract_transcription_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -39816,7 +40034,7 @@ pub fn extract_transcription_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -39828,7 +40046,7 @@ pub fn extract_transcription_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -39845,10 +40063,10 @@ pub fn extract_transcription_option<'tree>(
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -39878,29 +40096,29 @@ pub fn extract_transcription_option_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct TypesHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, TypesPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, TypesPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, TypesDesignNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, TypesDesignNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_3: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 5.
-    pub child_5: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_5: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 6.
-    pub child_6: Positioned<'tree, NodeSlot<'tree, TypesActivityNode<'tree>>>,
+    pub child_6: Positioned<'tree, ChildSlot<'tree, TypesActivityNode<'tree>>>,
     /// Positional member 7.
-    pub child_7: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_7: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 8.
-    pub child_8: Positioned<'tree, NodeSlot<'tree, CommaNode<'tree>>>,
+    pub child_8: Positioned<'tree, ChildSlot<'tree, CommaNode<'tree>>>,
     /// Positional member 9.
-    pub child_9: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_9: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 10.
-    pub child_10: Positioned<'tree, NodeSlot<'tree, TypesGroupNode<'tree>>>,
+    pub child_10: Positioned<'tree, ChildSlot<'tree, TypesGroupNode<'tree>>>,
     /// Positional member 11.
-    pub child_11: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_11: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -39931,10 +40149,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                             NodeSlot::Present(TypesPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39955,10 +40173,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -39979,10 +40197,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                             NodeSlot::Present(TypesDesignNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40012,10 +40230,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -40041,10 +40259,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                             NodeSlot::Present(CommaNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40074,10 +40292,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -40103,10 +40321,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                             NodeSlot::Present(TypesActivityNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40136,10 +40354,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -40165,10 +40383,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                             NodeSlot::Present(CommaNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40198,10 +40416,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -40227,10 +40445,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                             NodeSlot::Present(TypesGroupNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40251,10 +40469,10 @@ pub fn extract_types_header<'tree>(node: TypesHeaderNode<'tree>) -> TypesHeaderC
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40294,13 +40512,13 @@ pub fn extract_types_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct UnsupportedDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, UnsupportedTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, UnsupportedTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
     pub child_2: LeafSpan<'tree>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -40333,10 +40551,10 @@ pub fn extract_unsupported_dependent_tier<'tree>(
                             NodeSlot::Present(UnsupportedTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40357,10 +40575,10 @@ pub fn extract_unsupported_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40382,10 +40600,10 @@ pub fn extract_unsupported_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40417,13 +40635,13 @@ pub fn extract_unsupported_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct UnsupportedHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, UnsupportedHeaderPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, UnsupportedHeaderPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, RestOfLineNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, RestOfLineNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -40456,10 +40674,10 @@ pub fn extract_unsupported_header<'tree>(
                             NodeSlot::Present(UnsupportedHeaderPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40480,10 +40698,10 @@ pub fn extract_unsupported_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40504,10 +40722,10 @@ pub fn extract_unsupported_header<'tree>(
                             NodeSlot::Present(RestOfLineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40528,10 +40746,10 @@ pub fn extract_unsupported_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40565,7 +40783,7 @@ pub struct UnsupportedLineChildren<'tree> {
     /// Positional member 0.
     pub child_0: LeafSpan<'tree>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -40599,10 +40817,10 @@ pub fn extract_unsupported_line<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40632,9 +40850,9 @@ pub fn extract_unsupported_line_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct Utf8HeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, AtUTF8Node<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, AtUTF8Node<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -40665,10 +40883,10 @@ pub fn extract_utf8_header<'tree>(node: Utf8HeaderNode<'tree>) -> Utf8HeaderChil
                             NodeSlot::Present(AtUTF8Node(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40689,10 +40907,10 @@ pub fn extract_utf8_header<'tree>(node: Utf8HeaderNode<'tree>) -> Utf8HeaderChil
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -40935,10 +41153,10 @@ impl<'tree> FromNodeKind<'tree> for UtteranceChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct UtteranceChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, MainTierNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, MainTierNode<'tree>>>,
     /// Positional member 1.
     pub child_1:
-        Positioned<'tree, Vec<Positioned<'tree, NodeSlot<'tree, UtteranceChild1Choice<'tree>>>>>,
+        Positioned<'tree, Vec<Positioned<'tree, ChildSlot<'tree, UtteranceChild1Choice<'tree>>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -40969,10 +41187,10 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
                             NodeSlot::Present(MainTierNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -41384,11 +41602,11 @@ pub fn extract_utterance<'tree>(node: UtteranceNode<'tree>) -> UtteranceChildren
                                             )
                                         }
                                     }
-                                    _ => NodeSlot::Absent,
+                                    _ => NodeSlot::Absent(NoChild),
                                 }
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     };
                     Positioned::new(leading_extras, slot)
@@ -41512,9 +41730,9 @@ impl<'tree> FromNodeKind<'tree> for UtteranceEndChild0Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct UtteranceEndChild2Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_0: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, BulletNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, BulletNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -41525,15 +41743,15 @@ impl<'tree> UtteranceEndChild2Children<'tree> {}
 #[derive(Debug, Clone)]
 pub struct UtteranceEndChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, Option<NodeSlot<'tree, UtteranceEndChild0Choice<'tree>>>>,
+    pub child_0: Positioned<'tree, Option<ChildSlot<'tree, UtteranceEndChild0Choice<'tree>>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, Option<NodeSlot<'tree, FinalCodesNode<'tree>>>>,
+    pub child_1: Positioned<'tree, Option<ChildSlot<'tree, FinalCodesNode<'tree>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, UtteranceEndChild2Children<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<SeqSlot<'tree, UtteranceEndChild2Children<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, Option<NodeSlot<'tree, WhitespacesNode<'tree>>>>,
+    pub child_3: Positioned<'tree, Option<ChildSlot<'tree, WhitespacesNode<'tree>>>>,
     /// Positional member 4.
-    pub child_4: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_4: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -41707,11 +41925,11 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                         )
                                     }
                                 }
-                                _ => NodeSlot::Absent,
+                                _ => NodeSlot::Absent(NoChild),
                             }
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -41746,10 +41964,10 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                 NodeSlot::Present(FinalCodesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -41817,10 +42035,10 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                                             NodeSlot::Present(WhitespacesNode(__c))
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             }),
                                             Presence::Empty => {
@@ -41850,10 +42068,10 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                                         NodeSlot::Present(BulletNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -41869,10 +42087,10 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                 }
                             })
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -41907,10 +42125,10 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                                 NodeSlot::Present(WhitespacesNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -41936,10 +42154,10 @@ pub fn extract_utterance_end<'tree>(node: UtteranceEndNode<'tree>) -> UtteranceE
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -41972,13 +42190,13 @@ pub fn extract_utterance_end_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct VideosHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, VideosPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, VideosPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -42009,10 +42227,10 @@ pub fn extract_videos_header<'tree>(node: VideosHeaderNode<'tree>) -> VideosHead
                             NodeSlot::Present(VideosPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42033,10 +42251,10 @@ pub fn extract_videos_header<'tree>(node: VideosHeaderNode<'tree>) -> VideosHead
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42057,10 +42275,10 @@ pub fn extract_videos_header<'tree>(node: VideosHeaderNode<'tree>) -> VideosHead
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42081,10 +42299,10 @@ pub fn extract_videos_header<'tree>(node: VideosHeaderNode<'tree>) -> VideosHead
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42116,13 +42334,13 @@ pub fn extract_videos_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct WarningHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WarningPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WarningPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -42155,10 +42373,10 @@ pub fn extract_warning_header<'tree>(
                             NodeSlot::Present(WarningPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42179,10 +42397,10 @@ pub fn extract_warning_header<'tree>(
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42203,10 +42421,10 @@ pub fn extract_warning_header<'tree>(
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42227,10 +42445,10 @@ pub fn extract_warning_header<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42262,13 +42480,13 @@ pub fn extract_warning_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct WindowHeaderChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WindowPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WindowPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, HeaderSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, HeaderSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, FreeTextNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, FreeTextNode<'tree>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -42299,10 +42517,10 @@ pub fn extract_window_header<'tree>(node: WindowHeaderNode<'tree>) -> WindowHead
                             NodeSlot::Present(WindowPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42323,10 +42541,10 @@ pub fn extract_window_header<'tree>(node: WindowHeaderNode<'tree>) -> WindowHead
                             NodeSlot::Present(HeaderSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42347,10 +42565,10 @@ pub fn extract_window_header<'tree>(node: WindowHeaderNode<'tree>) -> WindowHead
                             NodeSlot::Present(FreeTextNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42371,10 +42589,10 @@ pub fn extract_window_header<'tree>(node: WindowHeaderNode<'tree>) -> WindowHead
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42406,11 +42624,11 @@ pub fn extract_window_header_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct WorDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WorTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WorTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, WorTierBodyNode<'tree>>>,
+    pub child_2: Positioned<'tree, ChildSlot<'tree, WorTierBodyNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -42443,10 +42661,10 @@ pub fn extract_wor_dependent_tier<'tree>(
                             NodeSlot::Present(WorTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42467,10 +42685,10 @@ pub fn extract_wor_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42491,10 +42709,10 @@ pub fn extract_wor_dependent_tier<'tree>(
                             NodeSlot::Present(WorTierBodyNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -42525,9 +42743,9 @@ pub fn extract_wor_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct WorTierBodyLanguageCodeChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, LangcodeNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, LangcodeNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -42585,9 +42803,9 @@ impl<'tree> FromNodeKind<'tree> for WorTierBodyChild1Child0Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct WorTierBodyChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WorTierBodyChild1Child0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, WorTierBodyChild1Child0Choice<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -42690,16 +42908,14 @@ impl<'tree> FromNodeKind<'tree> for WorTierBodyChild2Choice<'tree> {
 pub struct WorTierBodyChildren<'tree> {
     /// Positional member 0.
     pub language_code:
-        Positioned<'tree, Option<NodeSlot<'tree, WorTierBodyLanguageCodeChildren<'tree>>>>,
+        Positioned<'tree, Option<SeqSlot<'tree, WorTierBodyLanguageCodeChildren<'tree>>>>,
     /// Positional member 1.
-    pub child_1: Positioned<
-        'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, WorTierBodyChild1Children<'tree>>>>,
-    >,
+    pub child_1:
+        Positioned<'tree, Vec<Positioned<'tree, SeqSlot<'tree, WorTierBodyChild1Children<'tree>>>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, WorTierBodyChild2Choice<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, WorTierBodyChild2Choice<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -42711,7 +42927,7 @@ impl<'tree> WorTierBodyChildren<'tree> {
     #[must_use]
     pub fn language_code(
         &self,
-    ) -> &Positioned<'tree, Option<NodeSlot<'tree, WorTierBodyLanguageCodeChildren<'tree>>>> {
+    ) -> &Positioned<'tree, Option<SeqSlot<'tree, WorTierBodyLanguageCodeChildren<'tree>>>> {
         &self.language_code
     }
 }
@@ -42771,10 +42987,10 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                         NodeSlot::Present(LangcodeNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -42799,10 +43015,10 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                         NodeSlot::Present(WhitespacesNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -42818,10 +43034,10 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                 }
                             })
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -42900,7 +43116,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                                                         NodeSlot::Unexpected(__c)
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 }
                                                                 Some(ChoiceSelection { alternative: 1, end }) => {
@@ -42914,7 +43130,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                                                         NodeSlot::Unexpected(__c)
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 }
                                                                 Some(ChoiceSelection { alternative: 2, end }) => {
@@ -42924,7 +43140,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                                                         NodeSlot::Unexpected(__c)
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 }
                                                                 Some(ChoiceSelection { alternative: 3, end }) => {
@@ -42938,7 +43154,7 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                                                         NodeSlot::Unexpected(__c)
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 }
                                                                 Some(ChoiceSelection { alternative: 4, end }) => {
@@ -42952,10 +43168,10 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                                     } else if let Some(__c) = __at.take_declined_span(end) {
                                                                         NodeSlot::Unexpected(__c)
                                                                     } else {
-                                                                        NodeSlot::Absent
+                                                                        NodeSlot::Absent(NoChild)
                                                                     }
                                                                 }
-                                                                _ => NodeSlot::Absent,
+                                                                _ => NodeSlot::Absent(NoChild),
                                                             }
                                                         }
                                                     }
@@ -42980,10 +43196,10 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                                                 NodeSlot::Present(WhitespacesNode(__c))
                                                             }
                                                         } else {
-                                                            NodeSlot::Absent
+                                                            NodeSlot::Absent(NoChild)
                                                         }
                                                     } else {
-                                                        NodeSlot::Absent
+                                                        NodeSlot::Absent(NoChild)
                                                     }
                                                 };
                                                 Positioned::new(leading_extras, slot)
@@ -42999,10 +43215,10 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                         }
                                     })
                                 } else {
-                                    NodeSlot::Absent
+                                    NodeSlot::Absent(NoChild)
                                 }
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         };
                         Positioned::new(leading_extras, slot)
@@ -43169,11 +43385,11 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                                         )
                                     }
                                 }
-                                _ => NodeSlot::Absent,
+                                _ => NodeSlot::Absent(NoChild),
                             }
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -43199,10 +43415,10 @@ pub fn extract_wor_tier_body<'tree>(node: WorTierBodyNode<'tree>) -> WorTierBody
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -43235,7 +43451,7 @@ pub fn extract_wor_tier_body_from_error_recovery<'tree>(
 pub struct WorWordItemChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>>,
+    pub content: Positioned<'tree, ChildSlot<'tree, StandaloneWordNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -43264,10 +43480,10 @@ pub fn extract_wor_word_item<'tree>(node: WorWordItemNode<'tree>) -> WorWordItem
                         NodeSlot::Present(StandaloneWordNode(__c))
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             } else {
-                NodeSlot::Absent
+                NodeSlot::Absent(NoChild)
             }
         };
         Positioned::new(leading_extras, slot)
@@ -43430,11 +43646,11 @@ impl<'tree> AsRawNode<'tree> for WordBodyWordSegmentChild1Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct WordBodyWordSegmentChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WordBodyWordSegmentChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, WordBodyWordSegmentChild0Choice<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyWordSegmentChild1Choice<'tree>>>>,
+        Vec<Positioned<'tree, ChoiceSlot<'tree, WordBodyWordSegmentChild1Choice<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -43683,18 +43899,18 @@ impl<'tree> AsRawNode<'tree> for WordBodyOverlapPointChild3Choice<'tree> {
 #[derive(Debug, Clone)]
 pub struct WordBodyOverlapPointChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WordBodyOverlapPointChild0Choice<'tree>>>,
+    pub child_0: Positioned<'tree, ChoiceSlot<'tree, WordBodyOverlapPointChild0Choice<'tree>>>,
     /// Positional member 1.
     pub child_1: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyOverlapPointChild1Choice<'tree>>>>,
+        Vec<Positioned<'tree, ChoiceSlot<'tree, WordBodyOverlapPointChild1Choice<'tree>>>>,
     >,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, NodeSlot<'tree, WordBodyOverlapPointChild2Choice<'tree>>>,
+    pub child_2: Positioned<'tree, ChoiceSlot<'tree, WordBodyOverlapPointChild2Choice<'tree>>>,
     /// Positional member 3.
     pub child_3: Positioned<
         'tree,
-        Vec<Positioned<'tree, NodeSlot<'tree, WordBodyOverlapPointChild3Choice<'tree>>>>,
+        Vec<Positioned<'tree, ChoiceSlot<'tree, WordBodyOverlapPointChild3Choice<'tree>>>>,
     >,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
@@ -43714,7 +43930,7 @@ pub enum WordBodyChoice<'tree> {
 pub struct WordBodyChildren<'tree> {
     /// The rule's whole content, as a single position: the carrier
     /// convention (spec Section 5) mirroring `fold::slot_of`.
-    pub content: Positioned<'tree, NodeSlot<'tree, WordBodyChoice<'tree>>>,
+    pub content: Positioned<'tree, ChoiceSlot<'tree, WordBodyChoice<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -43805,7 +44021,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
                                                             Some(ChoiceSelection {
@@ -43824,7 +44040,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
                                                             Some(ChoiceSelection {
@@ -43843,10 +44059,10 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
-                                                            _ => NodeSlot::Absent,
+                                                            _ => NodeSlot::Absent(NoChild),
                                                         }
                                                     }
                                                 }
@@ -43901,7 +44117,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 1, end }) => {
@@ -43915,7 +44131,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 2, end }) => {
@@ -43929,7 +44145,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 3, end }) => {
@@ -44057,10 +44273,10 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
-                                                                        _ => NodeSlot::Absent,
+                                                                        _ => NodeSlot::Absent(NoChild),
                                                                     }
                                                                 }
                                                             }
@@ -44087,7 +44303,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
                         Some(ChoiceSelection {
@@ -44147,7 +44363,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
                                                             Some(ChoiceSelection {
@@ -44166,7 +44382,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
                                                             Some(ChoiceSelection {
@@ -44185,7 +44401,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
                                                             Some(ChoiceSelection {
@@ -44204,7 +44420,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
                                                             Some(ChoiceSelection {
@@ -44223,10 +44439,10 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
-                                                            _ => NodeSlot::Absent,
+                                                            _ => NodeSlot::Absent(NoChild),
                                                         }
                                                     }
                                                 }
@@ -44281,7 +44497,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 1, end }) => {
@@ -44295,7 +44511,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 2, end }) => {
@@ -44309,7 +44525,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 3, end }) => {
@@ -44323,7 +44539,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 4, end }) => {
@@ -44337,10 +44553,10 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
-                                                                        _ => NodeSlot::Absent,
+                                                                        _ => NodeSlot::Absent(NoChild),
                                                                     }
                                                                 }
                                                             }
@@ -44391,7 +44607,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
                                                             Some(ChoiceSelection {
@@ -44410,7 +44626,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
                                                             Some(ChoiceSelection {
@@ -44429,10 +44645,10 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                 {
                                                                     NodeSlot::Unexpected(__c)
                                                                 } else {
-                                                                    NodeSlot::Absent
+                                                                    NodeSlot::Absent(NoChild)
                                                                 }
                                                             }
-                                                            _ => NodeSlot::Absent,
+                                                            _ => NodeSlot::Absent(NoChild),
                                                         }
                                                     }
                                                 }
@@ -44487,7 +44703,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 1, end }) => {
@@ -44501,7 +44717,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 2, end }) => {
@@ -44515,7 +44731,7 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
                                                                         Some(ChoiceSelection { alternative: 3, end }) => {
@@ -44649,10 +44865,10 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                                                                             } else if let Some(__c) = __at.take_declined_span(end) {
                                                                                 NodeSlot::Unexpected(__c)
                                                                             } else {
-                                                                                NodeSlot::Absent
+                                                                                NodeSlot::Absent(NoChild)
                                                                             }
                                                                         }
-                                                                        _ => NodeSlot::Absent,
+                                                                        _ => NodeSlot::Absent(NoChild),
                                                                     }
                                                                 }
                                                             }
@@ -44681,10 +44897,10 @@ pub fn extract_word_body<'tree>(node: WordBodyNode<'tree>) -> WordBodyChildren<'
                             } else if let Some(__c) = __at.take_declined_span(end) {
                                 NodeSlot::Unexpected(__c)
                             } else {
-                                NodeSlot::Absent
+                                NodeSlot::Absent(NoChild)
                             }
                         }
-                        _ => NodeSlot::Absent,
+                        _ => NodeSlot::Absent(NoChild),
                     }
                 }
             }
@@ -44714,9 +44930,9 @@ pub fn extract_word_body_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct WordWithOptionalAnnotationsChild1Children<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, WhitespacesNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, WhitespacesNode<'tree>>>,
     /// Positional member 1.
-    pub replacement: Positioned<'tree, NodeSlot<'tree, ReplacementNode<'tree>>>,
+    pub replacement: Positioned<'tree, ChildSlot<'tree, ReplacementNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -44726,21 +44942,19 @@ pub struct WordWithOptionalAnnotationsChild1Children<'tree> {
 impl<'tree> WordWithOptionalAnnotationsChild1Children<'tree> {
     /// The `replacement` grammar field (accessor method `replacement`).
     #[must_use]
-    pub fn replacement(&self) -> &Positioned<'tree, NodeSlot<'tree, ReplacementNode<'tree>>> {
+    pub fn replacement(&self) -> &Positioned<'tree, ChildSlot<'tree, ReplacementNode<'tree>>> {
         &self.replacement
     }
 }
 #[derive(Debug, Clone)]
 pub struct WordWithOptionalAnnotationsChildren<'tree> {
     /// Positional member 0.
-    pub word: Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>>,
+    pub word: Positioned<'tree, ChildSlot<'tree, StandaloneWordNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<
-        'tree,
-        Option<NodeSlot<'tree, WordWithOptionalAnnotationsChild1Children<'tree>>>,
-    >,
+    pub child_1:
+        Positioned<'tree, Option<SeqSlot<'tree, WordWithOptionalAnnotationsChild1Children<'tree>>>>,
     /// Positional member 2.
-    pub annotations: Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>>,
+    pub annotations: Positioned<'tree, Option<ChildSlot<'tree, BaseAnnotationsNode<'tree>>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -44752,12 +44966,12 @@ impl<'tree> WordWithOptionalAnnotationsChildren<'tree> {
     #[must_use]
     pub fn annotations(
         &self,
-    ) -> &Positioned<'tree, Option<NodeSlot<'tree, BaseAnnotationsNode<'tree>>>> {
+    ) -> &Positioned<'tree, Option<ChildSlot<'tree, BaseAnnotationsNode<'tree>>>> {
         &self.annotations
     }
     /// The `word` grammar field (accessor method `word`).
     #[must_use]
-    pub fn word(&self) -> &Positioned<'tree, NodeSlot<'tree, StandaloneWordNode<'tree>>> {
+    pub fn word(&self) -> &Positioned<'tree, ChildSlot<'tree, StandaloneWordNode<'tree>>> {
         &self.word
     }
 }
@@ -44786,10 +45000,10 @@ pub fn extract_word_with_optional_annotations<'tree>(
                             NodeSlot::Present(StandaloneWordNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -44843,10 +45057,10 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                                         NodeSlot::Present(WhitespacesNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -44871,10 +45085,10 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                                         NodeSlot::Present(ReplacementNode(__c))
                                                     }
                                                 } else {
-                                                    NodeSlot::Absent
+                                                    NodeSlot::Absent(NoChild)
                                                 }
                                             } else {
-                                                NodeSlot::Absent
+                                                NodeSlot::Absent(NoChild)
                                             }
                                         };
                                         Positioned::new(leading_extras, slot)
@@ -44890,10 +45104,10 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                 }
                             })
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -44928,10 +45142,10 @@ pub fn extract_word_with_optional_annotations<'tree>(
                                 NodeSlot::Present(BaseAnnotationsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -44967,13 +45181,13 @@ pub fn extract_word_with_optional_annotations_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct XDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, XTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, XTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -45006,10 +45220,10 @@ pub fn extract_x_dependent_tier<'tree>(
                             NodeSlot::Present(XTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -45030,10 +45244,10 @@ pub fn extract_x_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -45063,10 +45277,10 @@ pub fn extract_x_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -45092,10 +45306,10 @@ pub fn extract_x_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -45127,13 +45341,13 @@ pub fn extract_x_dependent_tier_from_error_recovery<'tree>(
 #[derive(Debug, Clone)]
 pub struct XphointDependentTierChildren<'tree> {
     /// Positional member 0.
-    pub child_0: Positioned<'tree, NodeSlot<'tree, XphointTierPrefixNode<'tree>>>,
+    pub child_0: Positioned<'tree, ChildSlot<'tree, XphointTierPrefixNode<'tree>>>,
     /// Positional member 1.
-    pub child_1: Positioned<'tree, NodeSlot<'tree, TierSepNode<'tree>>>,
+    pub child_1: Positioned<'tree, ChildSlot<'tree, TierSepNode<'tree>>>,
     /// Positional member 2.
-    pub child_2: Positioned<'tree, Option<NodeSlot<'tree, TextWithBulletsNode<'tree>>>>,
+    pub child_2: Positioned<'tree, Option<ChildSlot<'tree, TextWithBulletsNode<'tree>>>>,
     /// Positional member 3.
-    pub child_3: Positioned<'tree, NodeSlot<'tree, NewlineNode<'tree>>>,
+    pub child_3: Positioned<'tree, ChildSlot<'tree, NewlineNode<'tree>>>,
     /// Extras that trail the last child of this node (spec Section 5).
     pub trailing_extras: Vec<Extra<'tree>>,
     /// Children that filled no grammar position: the Unexpected sink
@@ -45166,10 +45380,10 @@ pub fn extract_xphoint_dependent_tier<'tree>(
                             NodeSlot::Present(XphointTierPrefixNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -45190,10 +45404,10 @@ pub fn extract_xphoint_dependent_tier<'tree>(
                             NodeSlot::Present(TierSepNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)
@@ -45223,10 +45437,10 @@ pub fn extract_xphoint_dependent_tier<'tree>(
                                 NodeSlot::Present(TextWithBulletsNode(__c))
                             }
                         } else {
-                            NodeSlot::Absent
+                            NodeSlot::Absent(NoChild)
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 }),
                 Presence::Empty => {
@@ -45252,10 +45466,10 @@ pub fn extract_xphoint_dependent_tier<'tree>(
                             NodeSlot::Present(NewlineNode(__c))
                         }
                     } else {
-                        NodeSlot::Absent
+                        NodeSlot::Absent(NoChild)
                     }
                 } else {
-                    NodeSlot::Absent
+                    NodeSlot::Absent(NoChild)
                 }
             };
             Positioned::new(leading_extras, slot)

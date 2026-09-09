@@ -24,14 +24,64 @@ use crate::spec::metadata::{SpecErrorCode, Status};
 /// respelling it here: a literal `"deprecated"` in this arm would go stale the
 /// day the vocabulary is renamed, which is the drift this whole module exists
 /// to remove.
-fn status_badge(status: Status) -> &'static str {
+fn status_badge(status: Status, opt_in: &OptInRules) -> String {
     match status {
-        Status::Implemented => "✅ Active",
-        Status::NotImplemented => "⏳ Planned",
+        // An implemented check that only runs under an option is still
+        // active, and saying "Active" alone would be read by anyone running
+        // `chatter validate` as a claim their clean result contradicts. The
+        // qualifier is DERIVED from what the spec's own examples declare.
+        Status::Implemented => match opt_in.rendered() {
+            Some(options) => format!("✅ Active (requires {options})"),
+            None => "✅ Active".to_owned(),
+        },
+        Status::NotImplemented => "⏳ Planned".to_owned(),
         // Active too: the rule fires. What it cannot do is be triggered from a
         // CHAT file, so it carries no corpus fixture and names its own test.
-        Status::UnreachableFromChat => "✅ Active (not reachable from CHAT)",
-        Status::Deprecated => Status::Deprecated.as_str(),
+        Status::UnreachableFromChat => "✅ Active (not reachable from CHAT)".to_owned(),
+        Status::Deprecated => Status::Deprecated.as_str().to_owned(),
+    }
+}
+
+/// The opt-in rule flags a spec's own demonstrations need, if any.
+///
+/// # Why a type rather than a `BTreeSet` passed around
+///
+/// Two renderers ask this question and each would otherwise decide for itself
+/// what an empty set, a set containing only the default, and a mixed set
+/// mean. The set is the DATA; this is the reading of it, and it has one owner.
+/// `rendered()` returning `None` is "nothing to say", never an empty string,
+/// which is the distinction [`status_callout`] was already making for exactly
+/// the same reason.
+struct OptInRules(std::collections::BTreeSet<&'static str>);
+
+impl OptInRules {
+    /// Read off the flag the spec's own code requires, if it requires one.
+    ///
+    /// One profile, off the CODE, not a union over the examples. The union
+    /// version could render "requires `--strict-linkers`" for a code with one
+    /// default demonstration and one strict one, which is false for that
+    /// code: the flag is required only when the rule cannot run without it.
+    ///
+    /// The FLAG comes from `RuleProfile::cli_flag`, not from bending the
+    /// option name into one. That was `format!("--{}", name.replace('_',
+    /// "-"))` for an afternoon: a spelling of the flag that no test compared
+    /// to clap's.
+    fn of(spec: &ErrorSpec) -> Self {
+        Self(spec.rules().cli_flag().into_iter().collect())
+    }
+
+    /// The flags as a reader sees them, or `None` when the check needs none.
+    fn rendered(&self) -> Option<String> {
+        if self.0.is_empty() {
+            return None;
+        }
+        Some(
+            self.0
+                .iter()
+                .map(|flag| format!("`{flag}`"))
+                .collect::<Vec<_>>()
+                .join(" and "),
+        )
     }
 }
 
@@ -44,10 +94,18 @@ fn status_badge(status: Status) -> &'static str {
 /// so the landing page reported an ACTIVE rule with a symbol its own legend
 /// did not define.
 ///
-/// Both active states are `✅` here, which is what the badge already said in
-/// words. `Deprecated` keeps `?`, and [`LEGEND`] explains it.
-fn status_icon(status: Status) -> &'static str {
+/// It disagreed a second time on 2026-09-08, and that is why this takes an
+/// [`OptInRules`] now. `status_badge` and `status_callout` gained the opt-in
+/// dimension and this did not, because nothing forced it to: eight codes' own
+/// pages said "requires `--strict-linkers`" while the index gave them the same
+/// `✅` as an always-on rule, under a legend reading "active in the validator".
+/// Taking the same argument makes a fourth dimension a compile error at all
+/// three sites rather than at the two somebody remembers.
+fn status_icon(status: Status, opt_in: &OptInRules) -> &'static str {
     match status {
+        // Active, on request. A reader scanning the table has to see the
+        // difference here, not only on the page they may not open.
+        Status::Implemented if opt_in.rendered().is_some() => "🔧",
         Status::Implemented | Status::UnreachableFromChat => "✅",
         Status::NotImplemented => "⏳",
         Status::Deprecated => "?",
@@ -57,7 +115,7 @@ fn status_icon(status: Status) -> &'static str {
 /// The legend the index prints, kept beside the glyphs it explains.
 ///
 /// The previous legend named two glyphs where the table could emit three.
-const LEGEND: &str = "Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? = deprecated.\n\n";
+const LEGEND: &str = "Status: ✅ = active in the validator, 🔧 = active only when its rule option is enabled, ⏳ = documented but not yet enforced, ? = deprecated.\n\n";
 
 /// Render the callout that explains the badge meaning to readers.
 ///
@@ -71,11 +129,19 @@ const LEGEND: &str = "Status: ✅ = active in the validator, ⏳ = documented bu
 /// semicolon: `> deprecated; ` and `> ✅ Active (not reachable from CHAT); `.
 /// Making the absent case a variant means the caller has to decide, and it
 /// cannot decide by accident.
-fn status_callout(status: Status) -> Option<&'static str> {
+fn status_callout(status: Status, opt_in: &OptInRules) -> Option<String> {
     match status {
-        Status::Implemented => Some("This check is active in the validator."),
+        Status::Implemented => Some(match opt_in.rendered() {
+            Some(options) => format!(
+                "This check is active in the validator, but only when {options} is \
+                 enabled. A validation run with the default rules does not report it."
+            ),
+            None => "This check is active in the validator.".to_owned(),
+        }),
         Status::NotImplemented => Some(
-            "This check is documented but not yet enforced by the validator. The error code will not fire until implementation is complete.",
+            "This check is documented but not yet enforced by the validator. The error code \
+             will not fire until implementation is complete."
+                .to_owned(),
         ),
         // A badge that already says everything: "deprecated" and "not reachable
         // from CHAT" need no gloss. Written out so that giving either a real
@@ -171,14 +237,15 @@ fn render_spec(spec: &ErrorSpec, placement: SpecPlacement) -> String {
     let status = spec.status();
     let kind = spec.kind();
     let mut output = String::new();
-    let badge = status_badge(status);
+    let opt_in = OptInRules::of(spec);
+    let badge = status_badge(status, &opt_in);
 
     output.push_str(&placement.title(spec));
 
     // Status callout (blockquote) placed first so it is the first operational
     // fact the reader sees. The separator belongs to the callout, not to the
     // badge, so a status with no callout does not publish one.
-    match status_callout(status) {
+    match status_callout(status, &opt_in) {
         Some(callout) => output.push_str(&format!("> {badge}; {callout}\n\n")),
         None => output.push_str(&format!("> {badge}\n\n")),
     }
@@ -312,7 +379,7 @@ pub fn generate_error_index(by_code: &SpecsByCode) -> String {
             spec.error.name,
             spec.kind(),
             level_cell,
-            status_icon(spec.status()),
+            status_icon(spec.status(), &OptInRules::of(spec)),
         ));
     }
     output.push('\n');
@@ -352,6 +419,27 @@ mod tests {
              chat = '''\n@UTF8\n@Begin\nxx .\n@End\n'''\n\
              +++\n\n## Description\n\n\
              Word contains illegal untranscribed marker\n{rule_section}"
+        );
+        ErrorSpec::from_frontmatter("spec/errors/test.md", &source, &registry)
+            .expect("the fixture spec loads")
+    }
+
+    /// A fixture spec whose CODE declares the strict-linkers option.
+    ///
+    /// Separate from [`spec`] rather than a fifth parameter on it: every other
+    /// caller would then state a rules profile it does not care about, and a
+    /// value nobody chose reads as a decision.
+    fn opt_in_spec(code: &str, name: &str) -> ErrorSpec {
+        let registry = crate::test_registry::declaring_with_rules(
+            &[(code, Status::Implemented)],
+            talkbank_spec_vocabulary::frontmatter::RuleProfile::StrictLinkers,
+        );
+        let source = format!(
+            "+++\ncode = '{code}'\nname = '{name}'\n\n\
+             [[example]]\nlevel = 'utterance'\nclaim = 'violates'\n\
+             chat = '\u{27}\u{27}\u{27}\n@UTF8\n@Begin\nxx .\n@End\n\u{27}\u{27}\u{27}\n\
+             +++\n\n## Description\n\n\
+             A linker with nothing to continue\n"
         );
         ErrorSpec::from_frontmatter("spec/errors/test.md", &source, &registry)
             .expect("the fixture spec loads")
@@ -415,6 +503,62 @@ mod tests {
         assert!(output.contains("**Status**: ✅ Active"));
         assert!(output.contains("> ✅ Active; This check is active in the validator."));
         assert!(output.contains("## CHAT Rule\n\nUntranscribed speech must be marked 'xxx'."));
+    }
+
+    /// An opt-in code's page names the flag, in every place a reader looks,
+    /// and says a default run is silent.
+    ///
+    /// SURVIVES a type change, and says which category: this is WHAT IS
+    /// PUBLISHED, which no signature describes. Nothing covered the badge
+    /// qualifier, the callout sentence or the index glyph when they were
+    /// written, and `test_generate_error_page_active` asserts a PREFIX of the
+    /// status line that matches the opt-in rendering too, so it could not
+    /// have noticed either way.
+    #[test]
+    fn an_opt_in_code_publishes_the_flag_it_needs() {
+        let output = page_for(vec![opt_in_spec("E351", "MissingQuoteBegin")]);
+        assert!(
+            output.contains("**Status**: \u{2705} Active (requires `--strict-linkers`)"),
+            "the status line must qualify the badge: {output}"
+        );
+        assert!(
+            output.contains("only when `--strict-linkers` is enabled"),
+            "the callout must name the option: {output}"
+        );
+        assert!(
+            output.contains("A validation run with the default rules does not report it."),
+            "the callout must say what a default run does: {output}"
+        );
+    }
+
+    /// The index distinguishes an opt-in rule from an always-on one.
+    ///
+    /// The two rendered identically for an hour: `status_badge` and
+    /// `status_callout` took the opt-in dimension and `status_icon` did not,
+    /// so a page said "requires `--strict-linkers`" while the index gave the
+    /// same code the glyph its own legend defines as "active in the
+    /// validator".
+    #[test]
+    fn the_index_marks_an_opt_in_rule_differently() {
+        let always_on = generate_error_index(&SpecsByCode::group(vec![spec(
+            "E241",
+            "IllegalUntranscribed",
+            Status::Implemented,
+            None,
+        )]));
+        let opt_in = generate_error_index(&SpecsByCode::group(vec![opt_in_spec(
+            "E351",
+            "MissingQuoteBegin",
+        )]));
+        assert!(
+            always_on.contains("| \u{2705} |"),
+            "always-on row: {always_on}"
+        );
+        assert!(opt_in.contains("| \u{1F527} |"), "opt-in row: {opt_in}");
+        assert!(
+            opt_in.contains("active only when its rule option is enabled"),
+            "the legend must define the glyph it emits: {opt_in}"
+        );
     }
 
     /// Not-implemented specs should be clearly marked as planned so readers

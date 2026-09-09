@@ -36,10 +36,18 @@ walkdir = { workspace = true } #unified
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
+# The independent backend, DIRECTLY: one word-validation message (E232) is
+# reachable from CHAT text only through it, and a transitive dependency
+# through `talkbank-transform` is not a name a test can import.
+talkbank-parser-re2c = { workspace = true }
 proptest = { workspace = true }
 rstest = { workspace = true }
 sha2 = "0.11"
 talkbank-transform = { workspace = true }
+# A real directory on disk, for the one tree question that cannot be asked of
+# the overlay: `files_under` calls `is_dir`, so "absent" and "empty" differ
+# only against a filesystem.
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
@@ -62,6 +70,11 @@ workspace = true
 [[bin]]
 name = "audit_content_catch_alls"
 path = "src/bin/audit_content_catch_alls.rs"
+test = false
+
+[[bin]]
+name = "audit_gate_probes"
+path = "src/bin/audit_gate_probes.rs"
 test = false
 
 [[bin]]

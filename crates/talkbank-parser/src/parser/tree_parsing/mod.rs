@@ -21,10 +21,6 @@ pub mod freecode;
 pub mod header;
 pub mod helpers;
 pub mod main_tier;
-// Some items (BULLET_CHAR, parse_bullet_text, parse_media_bullet) are not
-// currently called outside tests but remain for future coarsened-grammar
-// token parsing paths.
-#[allow(dead_code)]
 pub mod media_bullet;
 pub mod node_types {}
 pub mod parser_helpers;

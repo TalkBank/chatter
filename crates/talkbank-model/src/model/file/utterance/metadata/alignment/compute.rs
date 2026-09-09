@@ -1,7 +1,5 @@
-use super::count_based::{build_mor_tier_from_items, build_tier_to_tier_alignment};
-use super::diagnostics::{
-    first_non_dummy_span, skipped_alignment_warning, unknown_alignment_warning,
-};
+use super::count_based::build_tier_to_tier_alignment;
+use super::diagnostics::{known_span, skipped_alignment_warning, unknown_alignment_warning};
 use crate::alignment::indices::{MainWordIndex, PhoItemIndex};
 use crate::model::dependent_tier::{WordAlignment, is_pause_marker};
 use crate::model::{AlignmentSet, AlignmentUnits, ParseHealthState, ParseHealthTier};
@@ -50,7 +48,7 @@ fn alignment_blocked_warning(
             left.label,
             left.span,
             right.label,
-            right.span,
+            Some(right.span),
         ),
         _ => skipped_alignment_warning(
             alignment_name,
@@ -59,17 +57,21 @@ fn alignment_blocked_warning(
             left.span,
             right.label,
             health.is_tier_clean(right.tier),
-            right.span,
+            Some(right.span),
         ),
     }
 }
 
+/// The blocked warning for an alignment whose partner is a GROUP of tiers
+/// (`%xphoaln` against `%mod` and `%pho`): `right_span` is the first partner
+/// present with a known location, or `None` when there is none, in which
+/// case the partner side gets no label.
 fn grouped_alignment_blocked_warning(
     health: ParseHealthState,
     alignment_name: &str,
     left: TierSide<'_>,
     right_label: &str,
-    right_span: Span,
+    right_span: Option<Span>,
     right_clean: bool,
 ) -> ParseError {
     match health {
@@ -101,55 +103,32 @@ impl Utterance {
         let mut metadata = AlignmentSet::new(units);
         let health = self.parse_health;
 
-        let (mor_items, mor_span) = if let Some(tier) = self.mor_tier() {
-            (Some(tier.items.to_vec()), tier.span)
-        } else {
-            (None, Span::DUMMY)
-        };
-        let (gra_relations, gra_span) = if let Some(tier) = self.gra_tier() {
-            (Some(tier.relations.0.clone()), tier.span)
-        } else {
-            (None, Span::DUMMY)
-        };
-        let pho_span = self.pho_tier().map_or(Span::DUMMY, |t| t.span);
-        let mod_span = self.mod_tier().map_or(Span::DUMMY, |t| t.span);
-        let sin_span = self.sin_tier().map_or(Span::DUMMY, |t| t.span);
-
-        if let Some(items) = mor_items.as_ref() {
-            // build_mor_tier_from_items returns None when the utterance has
-            // no existing %mor: tier to inherit terminator/span from. In
-            // that case alignment metadata is also absent; there's nothing
-            // to align against the main tier.
-            if let Some(mor) = build_mor_tier_from_items(self, items) {
-                if health.can_align_main_to_mor() {
-                    metadata.mor = Some(crate::alignment::align_main_to_mor(&self.main, &mor));
-                } else {
-                    metadata.mor = Some(crate::alignment::MorAlignment::new().with_error(
-                        alignment_blocked_warning(
-                            health,
-                            "main↔%mor",
-                            TierSide {
-                                label: "main tier",
-                                span: self.main.span,
-                                tier: ParseHealthTier::Main,
-                            },
-                            TierSide {
-                                label: "%mor tier",
-                                span: mor_span,
-                                tier: ParseHealthTier::Mor,
-                            },
-                        ),
-                    ));
-                }
+        if let Some(mor) = self.mor_tier() {
+            if health.can_align_main_to_mor() {
+                metadata.mor = Some(crate::alignment::align_main_to_mor(&self.main, mor));
+            } else {
+                metadata.mor = Some(crate::alignment::MorAlignment::new().with_error(
+                    alignment_blocked_warning(
+                        health,
+                        "main↔%mor",
+                        TierSide {
+                            label: "main tier",
+                            span: self.main.span,
+                            tier: ParseHealthTier::Main,
+                        },
+                        TierSide {
+                            label: "%mor tier",
+                            span: mor.span,
+                            tier: ParseHealthTier::Mor,
+                        },
+                    ),
+                ));
             }
         }
 
-        if let (Some(items), Some(relations)) = (mor_items.as_ref(), gra_relations.as_ref()) {
+        if let (Some(mor), Some(gra)) = (self.mor_tier(), self.gra_tier()) {
             if health.can_align_mor_to_gra() {
-                if let Some(mor) = build_mor_tier_from_items(self, items) {
-                    let gra = crate::model::GraTier::new_gra(relations.clone()).with_span(gra_span);
-                    metadata.gra = Some(crate::alignment::align_mor_to_gra(&mor, &gra));
-                }
+                metadata.gra = Some(crate::alignment::align_mor_to_gra(mor, gra));
             } else {
                 metadata.gra = Some(crate::alignment::GraAlignment::new().with_error(
                     alignment_blocked_warning(
@@ -157,12 +136,12 @@ impl Utterance {
                         "%mor↔%gra",
                         TierSide {
                             label: "%mor tier",
-                            span: mor_span,
+                            span: mor.span,
                             tier: ParseHealthTier::Mor,
                         },
                         TierSide {
                             label: "%gra tier",
-                            span: gra_span,
+                            span: gra.span,
                             tier: ParseHealthTier::Gra,
                         },
                     ),
@@ -171,6 +150,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.pho_tier() {
+            let pho_span = tier.span;
             if health.can_align_main_to_pho() {
                 metadata.pho = Some(crate::alignment::align_main_to_pho(&self.main, tier));
             } else {
@@ -208,6 +188,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.mod_tier() {
+            let mod_span = tier.span;
             if health.can_align_main_to_mod() {
                 metadata.mod_ = Some(crate::alignment::align_main_to_pho(&self.main, tier));
             } else {
@@ -231,6 +212,7 @@ impl Utterance {
         }
 
         if let Some(tier) = self.sin_tier() {
+            let sin_span = tier.span;
             if health.can_align_main_to_sin() {
                 metadata.sin = Some(crate::alignment::align_main_to_sin(&self.main, tier));
             } else {
@@ -253,11 +235,8 @@ impl Utterance {
             }
         }
 
-        let modsyl_span = self.modsyl_tier().map_or(Span::DUMMY, |t| t.span);
-        let phosyl_span = self.phosyl_tier().map_or(Span::DUMMY, |t| t.span);
-        let phoaln_span = self.phoaln_tier().map_or(Span::DUMMY, |t| t.span);
-
         if let (Some(modsyl), Some(mod_tier)) = (self.modsyl_tier(), self.mod_tier()) {
+            let (modsyl_span, mod_span) = (modsyl.span, mod_tier.span);
             if health.can_align_modsyl_to_mod() {
                 metadata.modsyl = Some(build_tier_to_tier_alignment(
                     modsyl.word_count(),
@@ -289,6 +268,7 @@ impl Utterance {
         }
 
         if let (Some(phosyl), Some(pho_tier)) = (self.phosyl_tier(), self.pho_tier()) {
+            let (phosyl_span, pho_span) = (phosyl.span, pho_tier.span);
             if health.can_align_phosyl_to_pho() {
                 metadata.phosyl = Some(build_tier_to_tier_alignment(
                     phosyl.word_count(),
@@ -320,6 +300,7 @@ impl Utterance {
         }
 
         if let Some(phoaln) = self.phoaln_tier() {
+            let phoaln_span = phoaln.span;
             let phoaln_wc = phoaln.word_count();
             if health.can_align_phoaln() {
                 let mut alignment = crate::alignment::PhoAlignment::new();
@@ -390,21 +371,25 @@ impl Utterance {
 
                 metadata.phoaln = Some(alignment);
             } else {
-                metadata.phoaln = Some(crate::alignment::PhoAlignment::new().with_error(
-                    grouped_alignment_blocked_warning(
-                        health,
-                        "%phoaln↔%mod/%pho",
-                        TierSide {
-                            label: "%phoaln tier",
-                            span: phoaln_span,
-                            tier: ParseHealthTier::Phoaln,
-                        },
-                        "%mod/%pho tiers",
-                        first_non_dummy_span([mod_span, pho_span]),
-                        health.is_tier_clean(ParseHealthTier::Mod)
-                            && health.is_tier_clean(ParseHealthTier::Pho),
+                metadata.phoaln = Some(
+                    crate::alignment::PhoAlignment::new().with_error(
+                        grouped_alignment_blocked_warning(
+                            health,
+                            "%phoaln↔%mod/%pho",
+                            TierSide {
+                                label: "%phoaln tier",
+                                span: phoaln_span,
+                                tier: ParseHealthTier::Phoaln,
+                            },
+                            "%mod/%pho tiers",
+                            self.mod_tier()
+                                .and_then(|t| known_span(t.span))
+                                .or_else(|| self.pho_tier().and_then(|t| known_span(t.span))),
+                            health.is_tier_clean(ParseHealthTier::Mod)
+                                && health.is_tier_clean(ParseHealthTier::Pho),
+                        ),
                     ),
-                ));
+                );
             }
         }
 
@@ -415,15 +400,5 @@ impl Utterance {
     /// Recompute alignments using a default validation context.
     pub fn compute_alignments_default(&mut self) {
         self.compute_alignments(&ValidationContext::default());
-    }
-
-    /// Return `true` when no alignment diagnostics are currently recorded.
-    pub fn alignments_valid(&self) -> bool {
-        self.alignment_diagnostics.is_empty()
-    }
-
-    /// Return borrowed alignment diagnostics currently attached to the utterance.
-    pub fn collect_alignment_errors(&self) -> Vec<&crate::ParseError> {
-        self.alignment_diagnostics.iter().collect()
     }
 }

@@ -65,16 +65,16 @@ pub(super) fn parse_word(parser: &TreeSitterParser, input: &str) -> ParseResult<
         .filter(|c| c.kind() == STANDALONE_WORD)
         .ok_or_else(|| {
             let mut errors = ParseErrors::new();
-            let actual = root
-                .child(0)
-                .map(|c| c.kind().to_string())
-                .unwrap_or_default();
+            let found = match root.child(0) {
+                Some(child) => format!("got '{}'", child.kind()),
+                None => "got no node at all".to_string(),
+            };
             errors.push(ParseError::new(
                 ErrorCode::InvalidWordFormat,
                 Severity::Error,
                 SourceLocation::from_offsets(0, input.len()),
                 ErrorContext::new(input, 0..input.len(), input),
-                format!("Expected standalone_word fragment, got '{actual}'"),
+                format!("Expected standalone_word fragment, {found}"),
             ));
             errors
         })?;

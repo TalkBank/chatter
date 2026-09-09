@@ -20,14 +20,71 @@ use talkbank_model::{ChatFile, WriteChat};
 use super::worker::ParserDispatch;
 
 /// Result of a roundtrip test on a single file.
+///
+/// Until 2026-09-09 this was `{ passed: bool, failure_reason: Option<String>,
+/// diff: Option<String> }`, three fields whose agreement nothing held: a
+/// failure without a reason was representable, and the runner invented one
+/// ("Roundtrip failed") for it. A failure carries its reason now.
 #[derive(Debug)]
-pub struct RoundtripResult {
-    /// Whether the roundtrip passed (serialization is idempotent).
-    pub passed: bool,
-    /// Human-readable failure reason, if any.
-    pub failure_reason: Option<String>,
-    /// Text diff of first few differing lines, if any.
-    pub diff: Option<String>,
+pub enum RoundtripResult {
+    /// Serialization is idempotent.
+    Passed,
+    /// It is not, or could not be tried.
+    Failed(RoundtripFailure),
+}
+
+/// Why a roundtrip failed.
+#[derive(Debug)]
+pub enum RoundtripFailure {
+    /// The model would not serialize on the given pass.
+    Serialization {
+        /// Which of the two passes refused.
+        pass: SerializationPass,
+        /// The writer's own error.
+        error: String,
+    },
+    /// The two passes serialized differently.
+    Mismatch {
+        /// The first few differing lines, from [`build_text_diff`].
+        diff: String,
+    },
+}
+
+/// The two serializations a roundtrip makes.
+#[derive(Debug, Clone, Copy)]
+pub enum SerializationPass {
+    /// The already-parsed file, written.
+    First,
+    /// The re-parse of that text, written again.
+    Second,
+}
+
+impl RoundtripFailure {
+    /// The failure as one line for a report.
+    #[must_use]
+    pub fn reason(&self) -> String {
+        match self {
+            Self::Serialization { pass, error } => {
+                let which = match pass {
+                    SerializationPass::First => 1,
+                    SerializationPass::Second => 2,
+                };
+                format!("Serialization failed (pass {which}): {error}")
+            }
+            Self::Mismatch { .. } => {
+                "Roundtrip mismatch (serialization not idempotent)".to_string()
+            }
+        }
+    }
+
+    /// The text diff, which only a mismatch has.
+    #[must_use]
+    pub fn diff(&self) -> Option<&str> {
+        match self {
+            Self::Serialization { .. } => None,
+            Self::Mismatch { diff } => Some(diff),
+        }
+    }
 }
 
 /// Run roundtrip test: serialize → re-parse → serialize → compare.
@@ -38,11 +95,10 @@ pub(super) fn run_roundtrip(chat_file: &ChatFile, parser: &ParserDispatch) -> Ro
     // Pass 1: serialize the already-parsed ChatFile
     let mut serialized_a = String::new();
     if let Err(err) = chat_file.write_chat(&mut serialized_a) {
-        return RoundtripResult {
-            passed: false,
-            failure_reason: Some(format!("Serialization failed (pass 1): {}", err)),
-            diff: None,
-        };
+        return RoundtripResult::Failed(RoundtripFailure::Serialization {
+            pass: SerializationPass::First,
+            error: err.to_string(),
+        });
     }
 
     // Pass 2: re-parse the serialized output (parse-only, skip validation,
@@ -53,27 +109,19 @@ pub(super) fn run_roundtrip(chat_file: &ChatFile, parser: &ParserDispatch) -> Ro
     // Serialize again (pass 2 output)
     let mut serialized_b = String::new();
     if let Err(err) = reparsed.write_chat(&mut serialized_b) {
-        return RoundtripResult {
-            passed: false,
-            failure_reason: Some(format!("Serialization failed (pass 2): {}", err)),
-            diff: None,
-        };
+        return RoundtripResult::Failed(RoundtripFailure::Serialization {
+            pass: SerializationPass::Second,
+            error: err.to_string(),
+        });
     }
 
     // Compare: is serialization idempotent?
-    if serialized_a != serialized_b {
-        let diff = build_text_diff(&serialized_a, &serialized_b);
-        RoundtripResult {
-            passed: false,
-            failure_reason: Some("Roundtrip mismatch (serialization not idempotent)".to_string()),
-            diff: Some(diff),
-        }
+    if serialized_a == serialized_b {
+        RoundtripResult::Passed
     } else {
-        RoundtripResult {
-            passed: true,
-            failure_reason: None,
-            diff: None,
-        }
+        RoundtripResult::Failed(RoundtripFailure::Mismatch {
+            diff: build_text_diff(&serialized_a, &serialized_b),
+        })
     }
 }
 

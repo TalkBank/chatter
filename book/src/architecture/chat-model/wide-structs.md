@@ -1,7 +1,7 @@
 # Wide Struct Audit
 
 **Status:** Current
-**Last modified:** 2026-05-29 22:34 EDT
+**Last modified:** 2026-09-08 18:27 EDT
 
 A repository-wide audit rule for struct shape. Applies to the crates in
 `TalkBank/chatter` (model, parser, transform, CLI, CLAN, LSP, cache, and
@@ -37,7 +37,7 @@ records.
 DB rows, HTTP response shapes, JSON schema mirrors. Acceptable as long as
 they don't become the internal runtime shape.
 
-Examples: `WordJsonSchema`, `DbMetadata`, `CoverageReport`, `CorpusManifest`.
+Examples: `WordJsonSchema`, `DbMetadata`, `CoverageReport`.
 
 ### 3. Real aggregate, may stay wide
 

@@ -19,6 +19,62 @@ use tree_sitter::Node;
 ///
 /// This function is used to transform tree-sitter's internal "ERROR" nodes
 /// into actionable, user-friendly error messages that don't expose parser internals.
+/// An ERROR node whose text opens a bracket or a parenthesis and never
+/// closes it: E312 or E313. One owner for the pattern, read by the generic
+/// analyzer below and by the main-tier word-error classifier
+/// (`main_tier/content/errors.rs`), so an unclosed `[` gets the same name
+/// on the tier body, inside a group and on a dependent tier. Until
+/// 2026-09-08 only the generic analyzer knew the pattern, and the bracketed
+/// constructs happened to route their ERROR nodes there, which made
+/// "inside a group" the one place chatter could say "unclosed bracket".
+///
+/// "Never closes" means no closing delimiter anywhere in the text, not
+/// merely not at the end: recovery often grows an ERROR node past a closed
+/// annotation (`[/] hello`), and the older test on the last character
+/// called that an unclosed bracket, which it is not.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UnclosedDelimiter {
+    /// Opens with `[` and holds no `]`.
+    Bracket,
+    /// Opens with `(` and holds no `)`.
+    Parenthesis,
+}
+
+impl UnclosedDelimiter {
+    /// The pattern, over the ERROR node's own text.
+    pub(crate) fn in_error_text(error_text: &str) -> Option<Self> {
+        match error_text.chars().next()? {
+            '[' if !error_text.contains(']') => Some(Self::Bracket),
+            '(' if !error_text.contains(')') => Some(Self::Parenthesis),
+            _ => None,
+        }
+    }
+
+    /// The diagnostic, spanning the whole ERROR node, worded for `context`.
+    pub(crate) fn into_diagnostic(self, node: Node, error_text: &str, context: &str) -> ParseError {
+        let (code, what, suggestion) = match self {
+            Self::Bracket => (
+                ErrorCode::UnclosedBracket,
+                "bracket",
+                "Add closing bracket ']' or check bracket nesting",
+            ),
+            Self::Parenthesis => (
+                ErrorCode::UnclosedParenthesis,
+                "parenthesis",
+                "Add closing parenthesis ')' to complete the group",
+            ),
+        };
+        ParseError::new(
+            code,
+            Severity::Error,
+            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            ErrorContext::new(error_text, 0..error_text.len(), error_text),
+            format!("Unclosed {what} in {context}"),
+        )
+        .with_suggestion(suggestion)
+    }
+}
+
 pub(crate) fn analyze_error_node(node: Node, source: &str, context: &str) -> ParseError {
     let error_text = match node.utf8_text(source.as_bytes()) {
         Ok(text) => text,
@@ -51,32 +107,8 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, context: &str) -> Par
         .with_suggestion("Check for missing or malformed elements");
     }
 
-    // Pattern: Unclosed bracket
-    if matches!(error_text.chars().next(), Some('['))
-        && !matches!(error_text.chars().next_back(), Some(']'))
-    {
-        return ParseError::new(
-            ErrorCode::UnclosedBracket,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            format!("Unclosed bracket in {}", context),
-        )
-        .with_suggestion("Add closing bracket ']' or check bracket nesting");
-    }
-
-    // Pattern: Unclosed parenthesis
-    if matches!(error_text.chars().next(), Some('('))
-        && !matches!(error_text.chars().next_back(), Some(')'))
-    {
-        return ParseError::new(
-            ErrorCode::UnclosedParenthesis,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            format!("Unclosed parenthesis in {}", context),
-        )
-        .with_suggestion("Add closing parenthesis ')' to complete the group");
+    if let Some(unclosed) = UnclosedDelimiter::in_error_text(error_text) {
+        return unclosed.into_diagnostic(node, error_text, context);
     }
 
     // Pattern: Incomplete annotation

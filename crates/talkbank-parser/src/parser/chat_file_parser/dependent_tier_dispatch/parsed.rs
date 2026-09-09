@@ -204,24 +204,21 @@ pub(super) fn attach_wor(
     }
 }
 
-/// Report a single summary error for a dependent tier that has parse errors.
+/// Report every recovery node in a dependent tier that has parse errors, in
+/// the tier's own words, instead of parsing the broken tier element by
+/// element (which cascades into many errors); the tier is then dropped.
 ///
-/// This implements fail-fast: instead of parsing a broken tier element-by-element
-/// (which cascades into many errors), we report one error and drop the tier.
+/// The walk is the whole tier, not its direct children: a `%mor` word with
+/// an empty part of speech is an ERROR two levels down, and the diagnostic
+/// it produces here is what marks the tier's alignment domain tainted. Until
+/// 2026-09-08 the utterance parser walked every tier for that reason before
+/// attaching it, and the two reports met at the same span.
 fn report_tier_parse_error(tier_node: Node, input: &str, tier_name: &str, errors: &impl ErrorSink) {
-    use crate::parser::tree_parsing::parser_helpers::error_analysis::analyze_dependent_tier_error_with_context;
+    use crate::parser::tree_parsing::parser_helpers::check_for_errors_recursive_with_context;
 
-    // Count error nodes for the summary message
-    let mut cursor = tier_node.walk();
-    for child in tier_node.children(&mut cursor) {
-        if child.is_error() || child.is_missing() {
-            errors.report(analyze_dependent_tier_error_with_context(
-                child,
-                input,
-                Some(tier_name),
-            ));
-        }
-    }
+    let mut found = Vec::new();
+    check_for_errors_recursive_with_context(tier_node, input, &mut found, Some(tier_name));
+    errors.report_all(found);
 }
 
 /// Empty `%mor` standing in for a tier that failed to parse.

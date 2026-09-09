@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! CST Structure Assertions
 //!
 //! These functions verify that tree-sitter CST nodes match expected grammar structure.
@@ -11,6 +10,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::generated_traversal::{Absence, RecoveryNode};
+use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -49,36 +50,6 @@ pub fn assert_child_count_exact(
     }
     true
 }
-
-/// Assert that a node has at least the expected number of children
-///
-/// **Purpose:** Catch grammar changes that remove required children
-pub fn assert_child_count_min(
-    node: Node,
-    minimum: u32,
-    source: &str,
-    errors: &impl ErrorSink,
-    context: &str,
-) -> bool {
-    let actual = node.child_count();
-    if actual < minimum {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!(
-                "CST structure mismatch in {}: expected at least {} children, found {}. Grammar may have changed!",
-                context, minimum, actual
-            ),
-        ).with_suggestion(format!(
-            "Check tree-sitter grammar for '{}' - structure has changed", node.kind()
-        )));
-        return false;
-    }
-    true
-}
-
 /// Assert that child at position has expected kind
 ///
 /// **Purpose:** Catch when grammar changes reorder children or change types
@@ -108,52 +79,6 @@ pub fn assert_child_kind(
                 format!(
                     "CST structure mismatch in {} at position {}: expected '{}', found '{}'. Grammar may have changed!",
                     context, position, expected_kind, actual_kind
-                ),
-            ).with_suggestion(format!(
-                "Check tree-sitter grammar for '{}' - child at position {} has changed", node.kind(), position
-            )));
-            return false;
-        }
-        true
-    } else {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!(
-                "CST structure mismatch in {}: no child at position {}. Grammar may have changed!",
-                context, position
-            ),
-        ).with_suggestion(format!(
-            "Check tree-sitter grammar for '{}' - expected {} children", node.kind(), position + 1
-        )));
-        false
-    }
-}
-
-/// Assert that child at position matches one of several expected kinds
-///
-/// **Purpose:** Handle cases where multiple node types are valid at a position
-pub fn assert_child_kind_one_of(
-    node: Node,
-    position: u32,
-    expected_kinds: &[&str],
-    source: &str,
-    errors: &impl ErrorSink,
-    context: &str,
-) -> bool {
-    if let Some(child) = node.child(position) {
-        let actual_kind = child.kind();
-        if !expected_kinds.contains(&actual_kind) {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), actual_kind),
-                format!(
-                    "CST structure mismatch in {} at position {}: expected one of {:?}, found '{}'. Grammar may have changed!",
-                    context, position, expected_kinds, actual_kind
                 ),
             ).with_suggestion(format!(
                 "Check tree-sitter grammar for '{}' - child at position {} has changed", node.kind(), position
@@ -217,54 +142,6 @@ pub fn expect_child<'a>(
         } else {
             ParseOutcome::rejected()
         }
-    } else {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!(
-                "CST structure mismatch in {}: no child at position {}. Grammar may have changed!",
-                context, position
-            ),
-        ).with_suggestion(format!(
-            "Check tree-sitter grammar for '{}' - expected at least {} children", node.kind(), position + 1
-        )));
-        ParseOutcome::rejected()
-    }
-}
-
-/// Get child at position without kind checking (for when kind can vary)
-///
-/// **Purpose:** Safe child access that just checks existence
-///
-/// **CRITICAL**: This function checks for MISSING nodes (tree-sitter error recovery placeholders)
-/// and reports them as errors.
-pub fn expect_child_at<'a>(
-    node: Node<'a>,
-    position: u32,
-    source: &str,
-    errors: &impl ErrorSink,
-    context: &str,
-) -> ParseOutcome<Node<'a>> {
-    if let Some(child) = node.child(position) {
-        // CRITICAL: Check for MISSING nodes - these are placeholders from error recovery
-        if child.is_missing() {
-            errors.report(ParseError::new(
-                ErrorCode::MissingRequiredElement,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), child.kind()),
-                format!(
-                    "Tree-sitter error recovery: MISSING '{}' node inserted at {} position {}",
-                    child.kind(), context, position
-                ),
-            ).with_suggestion(
-                "This CHAT construct appears to be invalid or malformed. Check the CHAT format specification for correct syntax."
-            ).with_help_url("https://talkbank.org/0info/manuals/CHAT.html"));
-            return ParseOutcome::rejected();
-        }
-        ParseOutcome::parsed(child)
     } else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
@@ -366,15 +243,119 @@ pub fn extract_utf8_text<'a>(
 ///
 /// Use `present_or_recover` where the RECOVERY variant is wanted; use this
 /// where the call site only asks "is it there".
-pub(crate) fn present<'a, 'tree, T>(
-    slot: &'a crate::generated_traversal::NodeSlot<'tree, T>,
+pub(crate) fn present<'a, 'tree, T, M, U, A>(
+    slot: &'a crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
 ) -> Option<&'a T> {
     use crate::generated_traversal::NodeSlot;
     match slot {
         NodeSlot::Present(value) => Some(value),
-        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
-            None
+        NodeSlot::Missing(_)
+        | NodeSlot::Error(_)
+        | NodeSlot::Unexpected(_)
+        | NodeSlot::Absent(_) => None,
+    }
+}
+
+/// What a typed position held, once its recovery states have been reported.
+///
+/// `Recovered` is a MISSING placeholder or an ERROR or displaced node, already
+/// reported through [`expect_present`]; the caller decides what a reported
+/// recovery means for the construct (a `%mor` tier rejects itself on any).
+#[derive(Debug)]
+pub(crate) enum SlotState<'a, T> {
+    /// The node the grammar expected here.
+    Present(&'a T),
+    /// The optional position is empty.
+    Absent,
+    /// A recovery state, reported.
+    Recovered,
+}
+
+/// A typed position whose Present node carries something to parse, with
+/// every recovery state reported in one place: a MISSING placeholder
+/// through [`check_not_missing`] with `context`, an ERROR or a displaced
+/// node through [`unexpected_node_error`] with the same `context`. One owner
+/// for the four-arm match the `%mor` word and tier parsers had each written
+/// per position (eleven copies between them).
+pub(crate) fn expect_present<'a, 'tree, T, M, U, A>(
+    slot: &'a crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
+    context: &str,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> SlotState<'a, T>
+where
+    M: RecoveryNode<'tree>,
+    U: RecoveryNode<'tree>,
+    A: Absence,
+{
+    use crate::generated_traversal::NodeSlot;
+    match slot {
+        NodeSlot::Present(value) => SlotState::Present(value),
+        NodeSlot::Absent(absent) => absent.when_absent(SlotState::Absent),
+        NodeSlot::Missing(missing) => {
+            check_not_missing(missing.node(), source, errors, context);
+            SlotState::Recovered
         }
+        NodeSlot::Error(bad) => {
+            errors.report(unexpected_node_error(*bad, source, context));
+            SlotState::Recovered
+        }
+        NodeSlot::Unexpected(bad) => {
+            errors.report(unexpected_node_error(bad.node(), source, context));
+            SlotState::Recovered
+        }
+    }
+}
+
+/// A typed position whose Present node carries nothing to parse: a separator
+/// comma, the whitespace around it, a delimiter. Present and Absent need
+/// nothing; a MISSING placeholder is reported as the recovery it is, through
+/// [`check_not_missing`] with `context`; an ERROR or a displaced node means
+/// the enclosing shape broke at that node, which `on_bad` reports in the
+/// words for that position. One owner for the three-arm match that the
+/// `@Participants` and `@Languages` list walkers had each written out per
+/// structural slot.
+pub(crate) fn expect_structure<'tree, T, M, U, A>(
+    slot: &crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
+    context: &str,
+    source: &str,
+    errors: &impl ErrorSink,
+    on_bad: impl FnOnce(Node),
+) where
+    M: RecoveryNode<'tree>,
+    U: RecoveryNode<'tree>,
+{
+    use crate::generated_traversal::NodeSlot;
+    match slot {
+        NodeSlot::Present(_) | NodeSlot::Absent(_) => {}
+        NodeSlot::Missing(missing) => {
+            check_not_missing(missing.node(), source, errors, context);
+        }
+        NodeSlot::Error(bad) => on_bad(*bad),
+        NodeSlot::Unexpected(bad) => on_bad(bad.node()),
+    }
+}
+
+/// A typed delimiter position (`<`, `>`, a quotation mark, a group bracket).
+/// Present needs nothing and so does Absent; a MISSING placeholder is left to
+/// the whole-tree recovery backstop, which already reports every MISSING
+/// node once, so reporting it here again would double the diagnostic (the
+/// old `kind()` walks let a MISSING delimiter through silently for the same
+/// reason, if by accident); an ERROR or a displaced node is the construct
+/// losing its shape at that node, which `on_bad` reports.
+///
+/// The difference from [`expect_structure`] is the MISSING policy, and it
+/// is deliberate: the list walkers had always reported their MISSING commas
+/// locally, and the bracketed constructs never had.
+pub(crate) fn expect_delimiter<'tree, T, M, U: RecoveryNode<'tree>, A>(
+    slot: &crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
+    on_bad: impl FnOnce(Node),
+) {
+    use crate::generated_traversal::NodeSlot;
+    match slot {
+        NodeSlot::Present(_) | NodeSlot::Missing(_) | NodeSlot::Absent(_) => {}
+        NodeSlot::Error(bad) => on_bad(*bad),
+        NodeSlot::Unexpected(bad) => on_bad(bad.node()),
     }
 }
 

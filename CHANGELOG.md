@@ -9,7 +9,139 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-09-09
+
+### Removed
+
+- `walk_overlap_points` and `OverlapPointVisit` from
+  `talkbank_model::alignment::helpers`: a visitor over overlap markers with
+  no caller in any tree, carrying a third private walk of its own (and a
+  position convention for intra-word closing markers that differed from
+  the collector's). `extract_overlap_info` is the one API.
+- `talkbank_transform`'s corpus discovery and manifest API (`discover_corpora`,
+  `build_manifest`, `corpus_summary`, `format_manifest`, `CorpusManifest`,
+  `CorpusEntry`, `FileEntry`, `CorpusFileStatus`, `FailureReason`,
+  `ErrorDetail`, `ErrorLocation`, `ManifestError`). No command in this
+  repository and no known dependant
+  used it; its only caller was its own test. `TierContent`'s
+  `to_content_string_no_bullets` and `write_tier_content_no_bullets`,
+  `ValidationContext::with_quotation_validation` and `with_bullets_mode`
+  with the `bullets_mode` field they set (the `bullets` `@Options` was
+  removed from CHAT and the flag was always false, so E362's check on
+  bullet monotonicity now simply runs), and the parser API's always-false
+  `bullets_mode()`; none had a caller anywhere. Breaking for a library user
+  who called any of them.
+- The `Utterance` builder helpers with no caller: `with_preceding_headers`,
+  `with_user_defined` and every per-tier `with_*` except `with_mor`,
+  `with_gra`, `with_sin` and `with_com` (`add_dependent_tier` is the one
+  route they were sugar over and remains); the semantic-diff renderers `short_summary`, `short_summary_with_source`,
+  `render_with_source`, `render_comparison`, `render_comparison_short` and
+  `render_tree_diff` on `SemanticDiffReport` with the `RenderMode` they took
+  and the tree renderer behind them, and the `Utterance` accessors `mor`,
+  `gra` (the cloning aliases; `mor_tier` and `gra_tier` stay, as do `pho`
+  and `sin`), `mor_tier_mut`, `computed_language_metadata`,
+  `wor_alignable_word_count`, `pho_alignable_word_count` and
+  `sin_alignable_word_count`. None had a caller in this repository's root
+  workspace, in talkbank-tools or in the downstream Batchalign, and a
+  whole-workspace coverage run showed every one unreached; the two cloning
+  aliases had one caller in the spec runtime tools (a separate workspace),
+  moved to the borrowing accessors. Breaking for a library user who called
+  any of them; `SemanticDiffReport::render` (also its `Display`) remains,
+  and the alignable count that is used, `mor_alignable_word_count`,
+  remains.
+- `TreeSitterParser::parse_utterance_cst`. It forwarded to the free
+  `parse_utterance_node` and had no caller in this repository or in any
+  repository known to depend on it; a whole-workspace coverage run showed
+  it unreached. Breaking for a library user who called it; the public
+  routes are `TreeSitterParser::parse_utterance` (one utterance from its
+  text) and `TreeSitterParser::parse_utterance_fragment`.
+- `talkbank_parser::parse_dependent_tier` (the free function) and
+  `talkbank_parser::tiers::parse_mod_tier_from_unparsed`. Neither had a
+  caller in this repository or in any repository known to depend on it. The
+  first returned an untyped `UserDefinedTier` for every tier, where the
+  `talkbank_model::ChatParser::parse_dependent_tier` route returns the typed
+  `DependentTier`; a whole-workspace coverage run showed both entirely
+  unreached, `%mod` parsing having gone through the typed `%pho` tier parser
+  for as long as the typed traversal has existed. Breaking for a library
+  user who called either; use the `talkbank_model::ChatParser` trait's
+  methods.
+
+### Added
+
+- `talkbank_model::content::word::Word::new(NonEmptyString, WordText)`: the
+  checked constructor, taking the two proofs a word's texts must carry. The
+  tree-sitter parser builds through it; `new_unchecked` remains for test
+  support and the front ends not yet migrated.
+
 ### Changed
+
+- `talkbank_parser::generated_traversal::NodeSlot` is `NodeSlot<'tree, T, M, U, A>`:
+  the payloads of `Missing`, `Unexpected` and `Absent` are the node (or
+  `NoChild`) where the position can produce the state and the uninhabited
+  `Never` where it cannot, and every generated accessor names its position's
+  kind through one of four aliases (`ChildSlot`, `SeqSlot`, `ChoiceSlot`,
+  `ClassifiedSlot`). `Absent` carries `NoChild`; `Recovery` and `SlotValue`
+  carry the same parameters; `NodeSlot::view` gives a borrowed slot's
+  states back by value as a `SlotView`, so a match through a reference can
+  omit the arms the position kind rules out. Breaking for a library user
+  matching the slot directly: an arm for a state the position cannot
+  produce no longer compiles, which is the point. The parser's own
+  hand-written arms for those states, each carrying a diagnostic for a
+  case that cannot happen, are gone with it.
+- A content-bearing recovery node inside a `%mor` tier is E702 at any
+  depth. It was E702 for a direct child of the tier and E316 for a node
+  below one, because the utterance parser walked every dependent tier's
+  children before attaching it and reported them without the tier's name,
+  and the typed dispatch then reported the direct children again: a `%wor`
+  line with an unparsable word carried the same E316 twice at the same span.
+  One reporter now walks the whole tier in the tier's words. Three E316
+  examples and E711's first are E702's (`subsumed_by`), E702's first example
+  is a `violates` claim, and the E342 text for a MISSING node inside a tier
+  names the tier ("in gra tier").
+- Counting and extraction take `PositionalDomain` (`Mor`, `Pho`, `Sin`), a
+  new type with no `Wor`: `count_tier_positions`,
+  `count_tier_positions_until`, `collect_tier_items`, `TierCountable`,
+  `AlignableTier::DOMAIN`, and `talkbank_transform::extract::{extract_words,
+  collect_utterance_content}`. `TierDomain` keeps `Wor` and stays the
+  vocabulary of the walkers and of `counts_for_tier`; `PositionalDomain`
+  converts into it, and `TryFrom<TierDomain>` refuses `Wor` with
+  `NotPositional`. The `%wor` count and pairing are
+  `WorMainTierProjection`'s, and the two `Wor` arms in the counter and the
+  one in the extractor were a second implementation of that count, agreeing
+  with the projection only by test; a probe over every reference-corpus
+  file and every spec example found them equal before they were deleted.
+  The overlap-marker position walk in `alignment::helpers::overlap` still
+  counts on the `%wor` scale with its own traversal and is not changed
+  here.
+  `WorMainTierProjection::slots` is crate-private (pair through
+  `bind_timing`). A downstream caller passing `TierDomain::Mor` to any of
+  these writes `PositionalDomain::Mor`; one asking a `%wor` count calls
+  `MainTier::wor_projection().slot_count()`. This is a breaking Rust API
+  change.
+- Two validity rulings (maintainer, 2026-09-08), both grounded on real CLAN
+  CHECK. A bullet INSIDE a main-tier utterance is timing evidence for the
+  media-consistency family: `hello \u{15}100_200\u{15} world .` is E752
+  without an `@Media` header (CLAN CHECK 112 fires on it) and satisfies a
+  declared `@Media` (it was E544 before, and valid without the header). And
+  whitespace-only content on a bullet-payload tier (`%com`, `%add`, `%exp`,
+  `%gpx`, `%int`, `%sit`, `%spa`, `%act`, `%cod`) declares nothing: E756
+  beside E758, as `%eng` already was (CLAN CHECK 31 rejects the same lines).
+  Transcripts that relied on either gap now validate differently.
+
+- Diagnostics inside an angle group, a quotation, a pho group or a sin
+  group are now the ones the tier body gives for the same material. The
+  four constructs parsed their contents through a second, hand-written
+  walker with its own generic ERROR analysis; the one typed `contents`
+  walker serves both now. Visible changes: a curly single quote inside a
+  quotation is E256 (it was E331); a stray `[` inside a construct is E316
+  at that byte (it was three E330 "expected X" messages); an ERROR
+  fragment that opens a bracket or parenthesis and never closes it is E312
+  or E313 on the tier body as well as inside a construct (`hel(lo .` was
+  E316; a parenthesis that opens the whole utterance still fails at file
+  level), and "never closes" means no closer anywhere in the fragment, not
+  merely not at its end. E331
+  (`UnexpectedNodeInContext`) has no known route from CHAT input any more
+  and is recorded as unreachable.
 
 - `WordLengthening::count`, its `with_count` argument, and re2c's AST
   lengthening count now use `NonZeroUsize` instead of `u8`. JSON keeps the
@@ -18,6 +150,132 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- The phonological tiers accept superscript one, two and three (U+00B9,
+  U+00B2, U+00B3), the only superscript forms those digits have, wherever
+  the other superscript digits were already accepted, and the last three
+  modifier tone letters of their block (U+A71D to U+A71F, the raised and
+  low exclamation-mark letters, `ꜞ` among them) as the rest of the block
+  already was. A `%pho` or `%mod` word carrying one was E316 unparsable
+  content (TalkBank/chatter#6, #7): 52 of 52 sessions of one tone-language
+  corpus, 18 of 96 in a second, 3 of 58 in a third, and 2 in a fourth.
+
+- E715 and E734 no longer report a `%pho` or `%mod` tier one token long
+  when the main tier carries a pause inside a `<...>` group: a pause was
+  counted as a phonological token at the top level of the utterance but
+  not inside a group, while the phonological tiers carry it in both
+  places, as the Phon team's French corpora show at scale (72 records in
+  49 sessions of one corpus, every one a pause inside an overlap or
+  retrace group; TalkBank/chatter#5). The counting walker's own 2026-08-08
+  note had held that arm open for exactly this evidence.
+
+- E740 and E741 no longer report a `%mod` or `%pho` word that carries the
+  linking tie `‿` (U+203F) as a mismatch against its `%xphoaln`
+  reconstruction: the tie joins two symbols into one segment or marks the
+  absence of a break, is never a phone, and has no alignment column, so
+  the source word is compared modulo the tie as it already was modulo
+  the stress and syllable-boundary marks (a pair side carrying a tie is
+  not a bare segment and is compared as written). TalkBank/chatter#3,
+  with the inventory in #4: until now every such word in two PhonBank
+  corpora was a spurious mismatch.
+
+- A group with no code after it (`<w> .`) is E342 alone, and the model
+  keeps the bare group that was written. The grammar requires a code there,
+  tree-sitter inserts a MISSING placeholder, and the annotation decoder used
+  to read the placeholder's kind and build a full retrace nobody wrote: the
+  validator then reported E757 and E370 against constructs the file does not
+  contain, and the E342 spec example's roundtrip diverged. The decoder skips
+  MISSING nodes now. CHECK-parity for CHECK 51 expects E342; the E342
+  example leaves the backend-parity baseline, both parsers agreeing.
+- E710 is reported only by the `%gra` relation parser. The dependent-tier
+  recovery analyzer had a branch that fired on the substring `%gra:` anywhere
+  in an ERROR node's text and called it E710, "non-numeric index": an `%eng`
+  or `%x` body mentioning `%gra:`, or junk after a well-formed `%gra`
+  relation, was reported as an invalid relation. The branch is gone; such a
+  node is the generic E316 (E258 for a double comma, E760 for a `%mor` item
+  with an empty part of speech, as before). The E760 branch's own gate
+  accepted `%mor:` anywhere in the text for the same reason and now needs
+  the line, the tier context, or a text that starts with the prefix.
+- A MISSING node is reported once. The whole-tree recovery backstop
+  suppresses a candidate already covered by a region diagnostic by span
+  overlap, and widened only its own zero-width MISSING span to a byte, so a
+  region's E342 for the same point (itself zero-width) never covered it:
+  every MISSING node inside a dependent tier or a header list carried two
+  E342 texts at one span. A zero-width region diagnostic at the same point
+  now covers the candidate when it reports the same code; a different code
+  there (E376 for an empty replacement beside its MISSING word segment)
+  still leaves the E342 reported, as E208.md documents.
+- Overlap-marker positions count a replaced word inside a group once. The
+  collector behind `extract_overlap_info` (and so `top_onset_fraction`,
+  `estimate_onset_ms`, and the cross-utterance E347 and E704 checks, which
+  read the paired positions; E373 reads only the indices and was not
+  affected) walked with two private
+  traversals, and the bracketed one scanned a replaced word's replacement
+  words too, so `<doggie [: dog]>` under a marker counted two words where
+  the `%wor` projection counts one and every later marker position, and
+  the onset fraction, drifted. The collector now walks with the shared
+  `walk_content` at the `%wor` domain, the projection's own leaf set, so
+  `total_words` is the projection's slot count by construction; a snapshot
+  of every marker-bearing utterance in the reference corpus and the spec
+  examples was byte-identical across the change, and the group case is
+  pinned.
+- `chatter debug sanitize` redacts `%act` and `%cod` tiers. Both carry the
+  same bullet payload as `%com`, and passed through the strict sanitizer
+  with their text intact under a comment deferring their redaction; an
+  action line is free text about the participant. A parse-backed table of
+  every dependent-tier kind through the sanitizer is the pin.
+- `chatter debug sanitize` redacts the words on `%wor`. The tier repeats
+  every main-tier word beside its bullet and passed through untouched, so a
+  sanitized file with a `%wor` tier still carried the whole utterance in
+  clear. The tier is now judged the way timing recovery judges it, before
+  the main tier is rewritten: `WorMainTierProjection::bind_timing` for the
+  counts, then `corroborate_wor_timing` for the words. A tier that
+  corroborated the main tier has each word rewritten as its paired
+  main-tier word's display text, now that word's placeholder (`w1w1` for a
+  compound), so it corroborates the sanitized main tier exactly as before;
+  a tier that drifted in count, or carried a word the main tier did not,
+  takes fresh placeholders rather than a manufactured agreement, and
+  disagrees after as it did before. Bullets are kept byte-exact, and
+  sanitizing the output again reproduces it. The test that
+  claimed to pin `%wor` offsets wrote them as bare `1000_1100` tokens, which
+  the model parses as words; it passed only because nothing touched the
+  tier. It now pins whole lines, drift and compounds included.
+  `CountMatchedWorTimings::pairs` exposes the owner's pairing.
+- `chatter validate --roundtrip` counts a file's roundtrip on every run.
+  When the file's validity and roundtrip verdicts were both served from the
+  cache, the summary said `Passed: 0` for a file whose roundtrip had
+  passed, and `Failed: 0` for one whose roundtrip had failed: the cached
+  branch built the file's status and never touched either roundtrip
+  counter. The status now records whether the roundtrip ran
+  (`FileStatus::Valid { roundtrip: RoundtripVerdict }`, a new public field
+  and type) and both counters are derived from it.
+- E370 (a retrace marker with nothing after it to retrace) is labelled at
+  the marker's own bytes whatever the spacing around it. The rule used to
+  find the marker by rendering the main tier back to CHAT text and taking
+  the offset there, which was right only when the source was already
+  canonical: on `<hello  there> [/] .` the label sat one byte early. The
+  parser now records the marker token's own span on the retrace
+  (`Retrace::marker_span`, a new public field, `None` for a retrace built
+  without a source) and the rule reports there.
+- Overlap markers inside an angle group, a quotation, a pho group or a sin
+  group are kept in the model and written back. The constructs' old
+  contents walker handed each item to a second walk over the item's
+  children, and an `overlap_point` is a single token with none, so
+  `<hello \u{2308} there \u{2309}> [/] hello there .` parsed clean,
+  validated clean and wrote back with both markers gone.
+- `%gra` structural diagnostics (E721, E722, E723, E724) no longer fire on a
+  tier the parser had to shorten. A relation the model cannot hold is rejected
+  and dropped, and the rules for sequential indices, root count and cycles
+  describe the graph the author wrote, not what survived; E722 in particular
+  reported "no ROOT relation" against a tier whose only surviving relation was
+  a ROOT. A new `JudgeableGra` witness is the sole route to those rules and
+  asks both questions that decide it, parse recovery and prior alignment
+  findings.
+- The re2c backend records parse recovery on a dependent tier it could not
+  build as written: a `%gra` that lost a relation, a `%mor` whose conversion
+  failed, a `%wor` body it could not re-lex. Cross-tier alignment previously
+  compared such a tier against its neighbours and reported the difference its
+  own recovery had created, so `%mor` and `%gra` counts disagreed (E720) on a
+  transcript where they agree.
 - Both parsers preserve lengthening runs beyond 255 colons without integer
   overflow or truncation. The default model marker now consistently contains
   one colon, with no zero-count repair during serialization.
@@ -2726,7 +2984,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/TalkBank/chatter/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/TalkBank/chatter/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/TalkBank/chatter/compare/v0.20.2...v0.21.0
 [0.20.2]: https://github.com/TalkBank/chatter/compare/v0.20.1...v0.20.2

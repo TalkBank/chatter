@@ -27,6 +27,21 @@ use super::generated_error_code::ErrorCode;
 pub enum CheckStatus {
     /// Enforced: the check fires when its condition is detected.
     Active,
+    /// Enforced, but only when the caller enables a rule option.
+    ///
+    /// # Why this is not `Active`
+    ///
+    /// The rule exists and fires, so it is not `Planned`; and a default
+    /// `chatter validate` run never reaches it, so reporting it as `Active`
+    /// is a claim the user's own clean result contradicts. Eight codes were
+    /// reported that way the day this variant was added, and the earlier
+    /// answer to the same tension had been to mark them `not_implemented` in
+    /// the registry, which said something false about rules that fire.
+    ///
+    /// The option a code needs is not carried here: this enum is about the
+    /// binary's enforcement state, and the option is a per-code fact the
+    /// registry owns and the generated error index publishes.
+    OptIn,
     /// Documented in `spec/errors/` but not yet enforced.
     Planned,
 }
@@ -67,9 +82,12 @@ impl ErrorCode {
     /// the specs in BOTH directions, and R1 deleted it by removing the second
     /// copy rather than by checking it harder.
     pub fn check_status(&self) -> CheckStatus {
-        match Self::planned().iter().find(|planned| *planned == self) {
-            Some(_) => CheckStatus::Planned,
-            None => CheckStatus::Active,
+        if Self::planned().contains(self) {
+            return CheckStatus::Planned;
         }
+        if Self::opt_in().contains(self) {
+            return CheckStatus::OptIn;
+        }
+        CheckStatus::Active
     }
 }

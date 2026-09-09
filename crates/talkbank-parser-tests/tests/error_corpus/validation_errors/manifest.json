@@ -166,9 +166,16 @@
       "code": "E231",
       "claim": {
         "subsumed_by": [
-          "E316"
+          "E313"
         ]
       },
+      "status": "implemented",
+      "source_spec": "spec/errors/E231.md"
+    },
+    {
+      "fixture": "E231_2.cha",
+      "code": "E231",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E231.md"
     },
@@ -475,7 +482,7 @@
           "E522"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E302.md"
     },
     {
@@ -548,6 +555,13 @@
     {
       "fixture": "E306_2.cha",
       "code": "E306",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E306.md"
+    },
+    {
+      "fixture": "E306_3.cha",
+      "code": "E306",
       "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E306.md"
@@ -602,7 +616,7 @@
           "E762"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E309.md"
     },
     {
@@ -641,17 +655,20 @@
           "E375"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
+      "source_spec": "spec/errors/E312.md"
+    },
+    {
+      "fixture": "E312_2.cha",
+      "code": "E312",
+      "claim": "violates",
+      "status": "implemented",
       "source_spec": "spec/errors/E312.md"
     },
     {
       "fixture": "E313_1.cha",
       "code": "E313",
-      "claim": {
-        "subsumed_by": [
-          "E316"
-        ]
-      },
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E313.md"
     },
@@ -663,6 +680,13 @@
       "source_spec": "spec/errors/E313.md"
     },
     {
+      "fixture": "E313_3.cha",
+      "code": "E313",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E313.md"
+    },
+    {
       "fixture": "E314_1.cha",
       "code": "E314",
       "claim": {
@@ -670,14 +694,14 @@
           "E375"
         ]
       },
-      "status": "implemented",
+      "status": "unreachable_from_chat",
       "source_spec": "spec/errors/E314.md"
     },
     {
       "fixture": "E314_2.cha",
       "code": "E314",
       "claim": "legal",
-      "status": "implemented",
+      "status": "unreachable_from_chat",
       "source_spec": "spec/errors/E314.md"
     },
     {
@@ -710,6 +734,20 @@
     },
     {
       "fixture": "E316_10.cha",
+      "code": "E316",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316.md"
+    },
+    {
+      "fixture": "E316_11.cha",
+      "code": "E316",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E316.md"
+    },
+    {
+      "fixture": "E316_12.cha",
       "code": "E316",
       "claim": "legal",
       "status": "implemented",
@@ -753,21 +791,33 @@
     {
       "fixture": "E316_7.cha",
       "code": "E316",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E702"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E316.md"
     },
     {
       "fixture": "E316_8.cha",
       "code": "E316",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E702"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E316.md"
     },
     {
       "fixture": "E316_9.cha",
       "code": "E316",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E702"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E316.md"
     },
@@ -779,7 +829,7 @@
           "E602"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E319.md"
     },
     {
@@ -790,7 +840,7 @@
           "E316"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E320.md"
     },
     {
@@ -801,7 +851,7 @@
           "E375"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E321.md"
     },
     {
@@ -895,6 +945,13 @@
       "source_spec": "spec/errors/E330.md"
     },
     {
+      "fixture": "E330_3.cha",
+      "code": "E330",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E330.md"
+    },
+    {
       "fixture": "E331_1.cha",
       "code": "E331",
       "claim": {
@@ -902,21 +959,34 @@
           "E316"
         ]
       },
-      "status": "not_implemented",
+      "status": "unreachable_from_chat",
+      "source_spec": "spec/errors/E331.md"
+    },
+    {
+      "fixture": "E331_2.cha",
+      "code": "E331",
+      "claim": {
+        "subsumed_by": [
+          "E256"
+        ]
+      },
+      "status": "unreachable_from_chat",
       "source_spec": "spec/errors/E331.md"
     },
     {
       "fixture": "E341_1.cha",
       "code": "E341",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E341.md"
     },
     {
       "fixture": "E341_2.cha",
       "code": "E341",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E341.md"
     },
     {
@@ -941,31 +1011,49 @@
       "source_spec": "spec/errors/E342.md"
     },
     {
+      "fixture": "E342_4.cha",
+      "code": "E342",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E342.md"
+    },
+    {
+      "fixture": "E342_5.cha",
+      "code": "E342",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E342.md"
+    },
+    {
       "fixture": "E344_1.cha",
       "code": "E344",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E344.md"
     },
     {
       "fixture": "E344_2.cha",
       "code": "E344",
       "claim": "legal",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E344.md"
     },
     {
       "fixture": "E346_1.cha",
       "code": "E346",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E346.md"
     },
     {
       "fixture": "E346_2.cha",
       "code": "E346",
       "claim": "legal",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E346.md"
     },
     {
@@ -986,35 +1074,40 @@
       "fixture": "E351_1.cha",
       "code": "E351",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E351.md"
     },
     {
       "fixture": "E352_1.cha",
       "code": "E352",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E352.md"
     },
     {
       "fixture": "E353_1.cha",
       "code": "E353",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E353.md"
     },
     {
       "fixture": "E354_1.cha",
       "code": "E354",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E354.md"
     },
     {
       "fixture": "E355_1.cha",
       "code": "E355",
       "claim": "violates",
-      "status": "not_implemented",
+      "rules": "strict_linkers",
+      "status": "implemented",
       "source_spec": "spec/errors/E355.md"
     },
     {
@@ -1067,14 +1160,21 @@
           "E316"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E360.md"
     },
     {
       "fixture": "E360_2.cha",
       "code": "E360",
       "claim": "legal",
-      "status": "not_implemented",
+      "status": "implemented",
+      "source_spec": "spec/errors/E360.md"
+    },
+    {
+      "fixture": "E360_3.cha",
+      "code": "E360",
+      "claim": "violates",
+      "status": "implemented",
       "source_spec": "spec/errors/E360.md"
     },
     {
@@ -1369,7 +1469,7 @@
       "code": "E382",
       "claim": {
         "subsumed_by": [
-          "E316"
+          "E702"
         ]
       },
       "status": "not_implemented",
@@ -1380,7 +1480,7 @@
       "code": "E382",
       "claim": {
         "subsumed_by": [
-          "E316"
+          "E702"
         ]
       },
       "status": "not_implemented",
@@ -1597,6 +1697,13 @@
       "source_spec": "spec/errors/E506.md"
     },
     {
+      "fixture": "E506_3.cha",
+      "code": "E506",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E506.md"
+    },
+    {
       "fixture": "E507_1.cha",
       "code": "E507",
       "claim": "violates",
@@ -1625,7 +1732,7 @@
           "E516"
         ]
       },
-      "status": "implemented",
+      "status": "not_implemented",
       "source_spec": "spec/errors/E508.md"
     },
     {
@@ -1678,14 +1785,14 @@
           "E513"
         ]
       },
-      "status": "implemented",
+      "status": "unreachable_from_chat",
       "source_spec": "spec/errors/E512.md"
     },
     {
       "fixture": "E512_2.cha",
       "code": "E512",
       "claim": "legal",
-      "status": "implemented",
+      "status": "unreachable_from_chat",
       "source_spec": "spec/errors/E512.md"
     },
     {
@@ -2144,6 +2251,13 @@
       "source_spec": "spec/errors/E544.md"
     },
     {
+      "fixture": "E544_4.cha",
+      "code": "E544",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E544.md"
+    },
+    {
       "fixture": "E545_1.cha",
       "code": "E545",
       "claim": "violates",
@@ -2314,12 +2428,15 @@
     {
       "fixture": "E702_1.cha",
       "code": "E702",
-      "claim": {
-        "subsumed_by": [
-          "E316"
-        ]
-      },
-      "status": "not_implemented",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E702.md"
+    },
+    {
+      "fixture": "E702_2.cha",
+      "code": "E702",
+      "claim": "violates",
+      "status": "implemented",
       "source_spec": "spec/errors/E702.md"
     },
     {
@@ -2396,8 +2513,19 @@
     {
       "fixture": "E708_1.cha",
       "code": "E708",
+      "claim": {
+        "subsumed_by": [
+          "E604"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E708.md"
+    },
+    {
+      "fixture": "E708_2.cha",
+      "code": "E708",
       "claim": "violates",
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E708.md"
     },
     {
@@ -2419,14 +2547,21 @@
       "source_spec": "spec/errors/E710.md"
     },
     {
+      "fixture": "E710_2.cha",
+      "code": "E710",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E710.md"
+    },
+    {
       "fixture": "E711_1.cha",
       "code": "E711",
       "claim": {
         "subsumed_by": [
-          "E316"
+          "E702"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
       "source_spec": "spec/errors/E711.md"
     },
     {
@@ -2437,7 +2572,14 @@
           "E760"
         ]
       },
-      "status": "not_implemented",
+      "status": "implemented",
+      "source_spec": "spec/errors/E711.md"
+    },
+    {
+      "fixture": "E711_3.cha",
+      "code": "E711",
+      "claim": "violates",
+      "status": "implemented",
       "source_spec": "spec/errors/E711.md"
     },
     {
@@ -2484,6 +2626,13 @@
     },
     {
       "fixture": "E715_2.cha",
+      "code": "E715",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E715.md"
+    },
+    {
+      "fixture": "E715_3.cha",
       "code": "E715",
       "claim": "legal",
       "status": "implemented",
@@ -2693,6 +2842,13 @@
       "source_spec": "spec/errors/E734.md"
     },
     {
+      "fixture": "E734_3.cha",
+      "code": "E734",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E734.md"
+    },
+    {
       "fixture": "E735_1.cha",
       "code": "E735",
       "claim": "violates",
@@ -2738,6 +2894,13 @@
       "fixture": "E741_1.cha",
       "code": "E741",
       "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E741.md"
+    },
+    {
+      "fixture": "E741_2.cha",
+      "code": "E741",
+      "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E741.md"
     },
@@ -2854,6 +3017,13 @@
       "source_spec": "spec/errors/E752.md"
     },
     {
+      "fixture": "E752_2.cha",
+      "code": "E752",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E752.md"
+    },
+    {
       "fixture": "E753_1.cha",
       "code": "E753",
       "claim": "violates",
@@ -2890,6 +3060,20 @@
     },
     {
       "fixture": "E756_4.cha",
+      "code": "E756",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E756.md"
+    },
+    {
+      "fixture": "E756_5.cha",
+      "code": "E756",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E756.md"
+    },
+    {
+      "fixture": "E756_6.cha",
       "code": "E756",
       "claim": "violates",
       "status": "implemented",

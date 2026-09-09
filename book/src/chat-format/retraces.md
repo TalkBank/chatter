@@ -1,7 +1,7 @@
 # Retraces and Repetitions
 
 **Status:** Current
-**Last updated:** 2026-08-07 17:24 EDT
+**Last updated:** 2026-09-08 22:31 EDT
 
 Retraces mark content that the speaker said but then corrected, repeated,
 or abandoned. They are one of the most consequential constructs in CHAT
@@ -231,14 +231,20 @@ Exact corpus-shaped contrast:
 
 ### Implementation
 
-Counting: `count_alignable_item()` in `alignment/helpers/count.rs`:
+Both the counter and the walker ask one owner, `alignment/helpers/descent.rs`,
+what a domain does with a retrace: `%mor` excludes it, every other domain
+enters it. The counter takes a `PositionalDomain` and converts it for the
+descent rule; the walker takes the `TierDomain` directly.
+
+Counting and extraction: `walk_alignable_item()` in
+`alignment/helpers/count.rs`, one walk whose sink either counts or collects:
 
 ```rust,ignore
-UtteranceContent::Retrace(retrace) => {
-    if domain == TierDomain::Mor {
-        0  // excluded from morphological alignment
-    } else {
-        count_bracketed_alignable_content(&retrace.content, domain, true)
+UtteranceContent::Retrace(_) | UtteranceContent::AnnotatedRetrace(_) | /* other containers */ => {
+    match descend(item.structure(), Some(domain.into())) {
+        Descent::Into(entered) => walk_alignable_bracketed(entered.content(), domain, sink),
+        Descent::Atomic(unit) => sink(AlignablePosition::Atomic(unit)),
+        Descent::Excluded => {} // %mor: a retrace is not aligned
     }
 }
 ```
@@ -246,9 +252,9 @@ UtteranceContent::Retrace(retrace) => {
 Walking: `walk_words()` in `alignment/helpers/walk/mod.rs`:
 
 ```rust,ignore
-UtteranceContent::Retrace(retrace) => {
-    if !matches!(domain, Some(TierDomain::Mor)) {
-        walk_bracketed_content(&retrace.content.content, domain, f);
+UtteranceContent::Retrace(_) | UtteranceContent::AnnotatedRetrace(_) | /* other containers */ => {
+    if let Some(into) = descend(item.structure(), domain).entered() {
+        walk_bracketed_content(&into.content().content, domain, f);
     }
 }
 ```

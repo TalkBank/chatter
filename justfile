@@ -40,9 +40,21 @@ build:
 build-release:
     cargo build --workspace --release
 
-# Run the full workspace test suite via cargo.
-test:
-    cargo test --workspace --tests --locked
+# The compiled workspace test targets, at the tier the CALLER names.
+#
+# `CHATTER_GATE_TIER` is what a gate's `Precondition` is compared against: an
+# input this checkout does not have is a SKIP in the inner loop and a hard
+# FAILURE at the pre-push gate. Parameterised, and private, because the tier
+# belongs to the caller rather than to the command. It was exported from `test`
+# on 2026-09-08 and `test-all` depends on `test`, so `just gate` inherited
+# `inner-loop` and could have skipped a gate and stayed green, which is
+# precisely the state the mechanism exists to forbid and which the recipe
+# comment then claimed was impossible.
+_test tier:
+    CHATTER_GATE_TIER={{ tier }} cargo test --workspace --tests --locked
+
+# Run the full workspace test suite via cargo. The inner loop.
+test: (_test "inner-loop")
 
 # The full TEST set: compiled tests, doctests, both workspaces, the UI suite.
 #
@@ -55,7 +67,9 @@ test:
 # ran the whole doctest suite twice over. Doctests are merged into one binary
 # per crate (edition 2024), so they are cheap to RUN; the cost is the rustdoc
 # compile, which is what the inner loop skips.
-test-all: test test-spec
+# Depends on `_test` at the STRICT tier, not on `test`: this is what `gate`
+# runs, so an absent input must fail here rather than print a skip.
+test-all: (_test "pre-push") test-spec
     cargo test --doc --workspace
     cargo test -p talkbank-derive --features ui-tests --tests ui_tests
 
@@ -106,6 +120,28 @@ check-feature-off:
 # CARGO_BUILD_JOBS, e.g. `CARGO_BUILD_JOBS=4 just coverage`.
 coverage:
     cargo llvm-cov --workspace --summary-only
+
+# Turn an llvm-cov export into an attribution worklist: which functions nothing
+# runs, which branches never declined, and how much of the coverage rests on
+# tests that FABRICATE their input rather than parsing CHAT.
+#
+# The measurement command matters and the export cannot record it, so the tool
+# makes you state it. Three shapes are floors rather than figures, and the
+# tool's docstring says why: `--lib` cannot see the spec system, `-p <crate>`
+# reports only that crate's own files, and coverage bought by a fabricated model
+# is not coverage in the sense the completeness criterion means.
+#
+#     cargo +nightly llvm-cov --branch --workspace --tests \
+#         --json --output-path /tmp/cov.json
+#     just coverage-attribution /tmp/cov.json crates/talkbank-model/src/validation
+coverage-attribution EXPORT SCOPE:
+    python3 scripts/coverage_attribution.py {{ EXPORT }} --scope {{ SCOPE }} \
+        --produced-by "cargo +nightly llvm-cov --branch --workspace --tests"
+
+# The attribution tool's own cases. Every one is a mistake it actually made
+# against real llvm-cov output, each of which produced a confident wrong number.
+check-coverage-attribution:
+    python3 -m unittest discover -s scripts -p test_coverage_attribution.py
 
 # Same coverage run, rendered as a browsable HTML report (local exploration
 # of which lines are uncovered). Opens the report when it finishes.
@@ -343,6 +379,39 @@ ci-gate-sync:
 # (`release-lint`), and per-push CI runs exactly what this runs, so a green
 # gate here IS a green CI. `git rev-parse --git-dir`, never a literal `.git`:
 # in a worktree `.git` is a file.
+# Refuse a snapshot no test loads.
+#
+# On 2026-09-07 there were 399 of them, 2.15 MB, and nothing had ever asked:
+# the question needs a real run, and the run was blocked. 332 were dead by two
+# independent witnesses (unreferenced by the run, and no test function of that
+# name anywhere in the tree) and were deleted without changing what the suite
+# proves. This is what stops them coming back.
+#
+# Wired into `gate` on 2026-09-08, when the last 56 were resolved. They fell
+# into four families, and each needed the second witness the first sweep
+# insisted on: 47 named `.cha` stems no file in the repository has, from a
+# corpus layout that was reorganised; 4 belonged to a `snapshot_tests` module
+# that kept its name after being rewritten to `assert_eq!`; 3 were superseded
+# copies left behind when their test target was renamed, with the live ones
+# present under the new name; 1 was the same, one directory up; and 1 named a
+# test file that does not exist. The first grep for a surviving `fn` of each
+# name said eight were live, which was the grep matching a PREFIX: `fn
+# pho_tier` also matches the accessor `pho_tier(`. A witness that can be
+# satisfied by a different function is not a witness.
+#
+# It costs 17.6 s in `gate` on a warm build, measured 2026-09-08, because it is
+# a second workspace test run: `cargo insta` can only see which snapshots were
+# referenced by running the tests. Folding it into `test-all` would buy that
+# back and is deliberately not done here, because `gate` cannot be run without
+# the maintainer's word and an unverifiable restructuring of it is worth less
+# than 17 seconds.
+snapshot-hygiene:
+    cargo insta test --unreferenced=reject --workspace
+
+
+
+
+
 gate:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -360,6 +429,7 @@ gate:
     just shellcheck
     just breaking-changelog-test
     just evidence-gate-test
+    just snapshot-hygiene
     just gate-receipts-test
     just verify-vendored-lexer
     just grammar-generate-check
@@ -433,8 +503,9 @@ regen:
     just traversal-gen
     just symbols-gen
     just form-markers-gen
-    python3 scripts/generate_if_changed.py crates/talkbank-parser-tests/tests/integration/generated_traversal_conformance/inventory.rs cargo run --quiet -p talkbank-parser-tests --example gen_conformance_inventory -- --stdout
+    python3 scripts/generate_if_changed.py crates/talkbank-parser-tests/src/conformance/inventory.rs cargo run --quiet -p talkbank-parser-tests --example gen_conformance_inventory -- --stdout
     just spec-gen
+    just check-mapping-gen
 
 # Refresh the schema before later builds embed it. Select only the generator:
 # the currency test in the same binary sees the old compile-time schema.
@@ -465,6 +536,22 @@ traversal-gen:
         "$tsgu/target/release/examples/generate_typed_traversal" \
         grammar/src/grammar.json grammar/src/node-types.json \
         --edition "$edition" --toolchain "$toolchain"
+
+# The CHECK mapping inventory, `docs/audits/check-parity-audit.md`.
+#
+# Last in `regen` because it reads `ErrorCode::iter()`, whose enum `spec-gen`
+# generates from the code registry: a status change in
+# `spec/codes/error-codes.toml` moves a row in this table.
+#
+# It was in no recipe at all until 2026-09-07, while `check_mapping_audit`
+# gated it in `just test` and this file's own header promised that `regen`
+# rebuilt every derived artifact. Changing E508's status that day left it
+# stale, and the only instruction for repairing it was a sentence inside the
+# artifact. That is the serial-discovery failure the `regen` comment above
+# already describes, one artifact further on.
+[doc("Regenerate the CHECK mapping inventory.")]
+check-mapping-gen:
+    cargo run --quiet -p talkbank-parser-tests --bin audit_check_parity
 
 [doc("Regenerate every artifact derived from spec/.")]
 spec-gen:

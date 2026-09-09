@@ -5,31 +5,19 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Codes>
 
 use crate::generated_traversal::{
-    AsRawNode, LanguagesHeaderNode, NodeSlot, extract_languages_contents, extract_languages_header,
+    AsRawNode, LanguagesHeaderNode, NoChild, NodeSlot, SlotView, extract_languages_contents,
+    extract_languages_header,
 };
 use crate::node_types::LANGUAGES_HEADER;
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::parser::tree_parsing::parser_helpers::present;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_unexpected};
+use crate::parser::tree_parsing::parser_helpers::{
+    check_not_missing, expect_structure, present, surface_displaced,
+};
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::{Header, LanguageCode, WarningText};
-
-/// Build `Header::Unknown` for malformed `@Languages` input.
-fn unknown_languages_header(node: Node, source: &str, parse_reason: impl Into<String>) -> Header {
-    let text = match node.utf8_text(source.as_bytes()) {
-        Ok(raw) if !raw.is_empty() => raw.to_string(),
-        _ => "@Languages".to_string(),
-    };
-
-    Header::Unknown {
-        text: WarningText::new(text),
-        parse_reason: Some(parse_reason.into()),
-        suggested_fix: Some("Expected @Languages:\t<code>[, <code>...]".to_string()),
-    }
-}
+use talkbank_model::model::{Header, LanguageCode};
 
 /// Decode UTF-8 child text for a language-code field, delegating to the
 /// shared `decode_present_child` helper.
@@ -47,6 +35,22 @@ fn decode_child_text(
     decode_present_child(child, source, errors, context, |err| {
         format!("Failed to extract UTF-8 text from {}: {}", context, err)
     })
+}
+
+/// E507 at a node that sits where the language list expected something
+/// else: the list has lost its shape there, whatever the node holds.
+fn report_list_shape(bad: Node, message: String, source: &str, errors: &impl ErrorSink) {
+    errors.report(ParseError::new(
+        ErrorCode::EmptyLanguagesHeader,
+        Severity::Error,
+        SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
+        ErrorContext::new(
+            source,
+            bad.start_byte()..bad.end_byte(),
+            "languages_contents",
+        ),
+        message,
+    ));
 }
 
 /// Push a decoded language-code text onto `codes`, reporting (rather than
@@ -103,8 +107,9 @@ fn push_language_code(
 /// comma-separated codes are the typed repeat `child_1`, each element a
 /// `LanguagesContentsChild1Children` group of
 /// `(optional(whitespaces), comma, whitespaces, language_code)`. Every
-/// `NodeSlot` is matched exhaustively (`Present`/`Missing`/`Error`/
-/// `Unexpected`/`Absent`, no `_ =>`), so a tree-sitter MISSING `language_code`
+/// `NodeSlot` is matched exhaustively over the states its position can
+/// produce (`Present`/`Missing`/`Error`/`Absent`, no `_ =>`), so a tree-sitter
+/// MISSING `language_code`
 /// placeholder is now a TYPE-DISTINCT `NodeSlot::Missing` value that can never
 /// reach [`LanguageCode::new`]: it is reported as a `MissingRequiredElement`
 /// diagnostic instead, matching the diagnostic `check_not_missing` emits for
@@ -153,14 +158,16 @@ pub fn parse_languages_header(
             ),
             "Missing languages_contents in @Languages header",
         ));
-        surface_unexpected(&children.unexpected, source, errors);
-        return unknown_languages_header(
+        surface_displaced(&children.unexpected, "languages_header", source, errors);
+        return super::super::unknown_header(
             node,
             source,
+            "@Languages",
+            "Expected @Languages:\t<code>[, <code>...]",
             "Missing languages_contents in @Languages header",
         );
     };
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "languages_header", source, errors);
 
     // Decompose `languages_contents` into its typed child slots: `child_0` is
     // the required first `language_code`; `child_1` is the typed repeat of
@@ -171,22 +178,22 @@ pub fn parse_languages_header(
     // position the pre-existing panic bug lived at: a MISSING placeholder here
     // is now a type-distinct `NodeSlot::Missing`, never reaching
     // `LanguageCode::new`.
-    match contents_children.child_0.slot() {
-        NodeSlot::Present(code_node) => {
+    match contents_children.child_0.slot().view() {
+        SlotView::Present(code_node) => {
             if let ParseOutcome::Parsed(text) =
                 decode_child_text(code_node.raw_node(), source, errors, "language_code")
             {
                 push_language_code(&mut codes, code_node.raw_node(), text, source, errors);
             }
         }
-        NodeSlot::Missing(missing_node) => {
+        SlotView::Missing(missing_node) => {
             // The fix: report the same "MISSING required element" diagnostic
             // `check_not_missing` emits for the analogous first-@Participants
             // position, instead of ever calling `LanguageCode::new` on the
             // placeholder's empty text.
-            check_not_missing(*missing_node, source, errors, "languages_contents");
+            check_not_missing(missing_node, source, errors, "languages_contents");
         }
-        NodeSlot::Error(bad) | NodeSlot::Unexpected(bad) => {
+        SlotView::Error(bad) => {
             errors.report(ParseError::new(
                 ErrorCode::EmptyLanguagesHeader,
                 Severity::Error,
@@ -202,7 +209,7 @@ pub fn parse_languages_header(
                 ),
             ));
         }
-        NodeSlot::Absent => {
+        SlotView::Absent(NoChild) => {
             // No node at all: mirrors the OLD raw-node walk's silent
             // `if idx < child_count` short-circuit when `languages_contents`
             // has no children whatsoever. Not observed in practice (an empty
@@ -220,75 +227,61 @@ pub fn parse_languages_header(
     // `extract_languages_contents`), but every state is still matched
     // exhaustively per the project rule against `_ =>` on typed enums.
     for item in contents_children.child_1.slot() {
-        match item.slot() {
-            NodeSlot::Present(group) => {
+        match item.slot().view() {
+            SlotView::Present(group) => {
                 // Leading whitespace before the comma is purely structural
                 // (matches the OLD walk's silent skip loop): every state is a
                 // no-op, matched explicitly so it is never silently dropped.
-                match group.child_0.slot() {
+                match group.child_0.slot().as_ref().map(NodeSlot::view) {
                     None => {}
                     Some(
-                        NodeSlot::Present(_)
-                        | NodeSlot::Missing(_)
-                        | NodeSlot::Error(_)
-                        | NodeSlot::Unexpected(_)
-                        | NodeSlot::Absent,
+                        SlotView::Present(_)
+                        | SlotView::Missing(_)
+                        | SlotView::Error(_)
+                        | SlotView::Absent(NoChild),
                     ) => {}
                 }
 
-                // Comma (structural, required within a Present group).
-                match group.child_1.slot() {
-                    NodeSlot::Present(_) => {}
-                    NodeSlot::Missing(missing_node) => {
-                        check_not_missing(*missing_node, source, errors, "languages_contents");
-                    }
-                    NodeSlot::Error(bad) | NodeSlot::Unexpected(bad) => {
-                        errors.report(ParseError::new(
-                            ErrorCode::EmptyLanguagesHeader,
-                            Severity::Error,
-                            SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-                            ErrorContext::new(
-                                source,
-                                bad.start_byte()..bad.end_byte(),
-                                "languages_contents",
-                            ),
+                // Comma, then the whitespace after it: structural, required
+                // within a Present group, and reported through the shared
+                // verb with this list's own words.
+                expect_structure(
+                    group.child_1.slot(),
+                    "languages_contents",
+                    source,
+                    errors,
+                    |bad| {
+                        report_list_shape(
+                            bad,
                             format!("Expected ',' in @Languages code list, got: {}", bad.kind()),
-                        ));
-                    }
-                    NodeSlot::Absent => {}
-                }
-
-                // Whitespace after the comma (structural, required within a
-                // Present group).
-                match group.child_2.slot() {
-                    NodeSlot::Present(_) => {}
-                    NodeSlot::Missing(missing_node) => {
-                        check_not_missing(*missing_node, source, errors, "languages_contents");
-                    }
-                    NodeSlot::Error(bad) | NodeSlot::Unexpected(bad) => {
-                        errors.report(ParseError::new(
-                            ErrorCode::EmptyLanguagesHeader,
-                            Severity::Error,
-                            SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-                            ErrorContext::new(
-                                source,
-                                bad.start_byte()..bad.end_byte(),
-                                "languages_contents",
-                            ),
+                            source,
+                            errors,
+                        );
+                    },
+                );
+                expect_structure(
+                    group.child_2.slot(),
+                    "languages_contents",
+                    source,
+                    errors,
+                    |bad| {
+                        report_list_shape(
+                            bad,
                             format!(
                                 "Expected whitespace after ',' in @Languages code list, got: {}",
                                 bad.kind()
                             ),
-                        ));
-                    }
-                    NodeSlot::Absent => {}
-                }
+                            source,
+                            errors,
+                        );
+                    },
+                );
 
                 // The repeated language code: the SAME fix as `child_0` above
                 // applies here (a MISSING placeholder is type-distinct and
                 // never reaches `LanguageCode::new`).
-                match group.child_3.slot() {
-                    NodeSlot::Present(code_node) => {
+                match group.child_3.slot().view() {
+                    SlotView::Present(code_node) => {
                         if let ParseOutcome::Parsed(text) =
                             decode_child_text(code_node.raw_node(), source, errors, "language_code")
                         {
@@ -301,10 +294,10 @@ pub fn parse_languages_header(
                             );
                         }
                     }
-                    NodeSlot::Missing(missing_node) => {
-                        check_not_missing(*missing_node, source, errors, "languages_contents");
+                    SlotView::Missing(missing_node) => {
+                        check_not_missing(missing_node, source, errors, "languages_contents");
                     }
-                    NodeSlot::Error(bad) | NodeSlot::Unexpected(bad) => {
+                    SlotView::Error(bad) => {
                         errors.report(ParseError::new(
                             ErrorCode::EmptyLanguagesHeader,
                             Severity::Error,
@@ -320,16 +313,16 @@ pub fn parse_languages_header(
                             ),
                         ));
                     }
-                    NodeSlot::Absent => {}
+                    SlotView::Absent(NoChild) => {}
                 }
 
                 // The group's own unexpected sink (spec Section 7): surfaced
                 // independently of the outer `languages_contents` sink below,
                 // matching the B2 `Bg`/`Eg`/`@Media`-status nested-group
                 // precedent.
-                surface_unexpected(&group.unexpected, source, errors);
+                surface_displaced(&group.unexpected, "languages_contents", source, errors);
             }
-            NodeSlot::Error(bad) => {
+            SlotView::Error(bad) => {
                 errors.report(ParseError::new(
                     ErrorCode::EmptyLanguagesHeader,
                     Severity::Error,
@@ -342,7 +335,7 @@ pub fn parse_languages_header(
                     "Unparsable content in @Languages code list".to_string(),
                 ));
             }
-            NodeSlot::Missing(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+            SlotView::Missing(_) | SlotView::Absent(NoChild) => {
                 // Unreachable for this repeat shape: the generator classifies
                 // a whole repeat item as `Present`/`Error`/`Absent` only (see
                 // `generated_traversal.rs`'s `extract_languages_contents`
@@ -352,7 +345,12 @@ pub fn parse_languages_header(
         }
     }
 
-    surface_unexpected(&contents_children.unexpected, source, errors);
+    surface_displaced(
+        &contents_children.unexpected,
+        "languages_contents",
+        source,
+        errors,
+    );
 
     Header::Languages {
         codes: codes.into(),

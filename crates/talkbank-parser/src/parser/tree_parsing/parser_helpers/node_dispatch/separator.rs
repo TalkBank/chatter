@@ -6,13 +6,13 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, NodeSlot, NonColonSeparatorChoice, NonColonSeparatorNode,
+    AsRawNode, FromNodeKind, NoChild, NodeSlot, NonColonSeparatorChoice, NonColonSeparatorNode,
     SeparatorChoice, SeparatorNode, SlotValue, extract_non_colon_separator, extract_separator,
 };
 use crate::model::Separator;
 use crate::node_types::COLON;
 use crate::parser::node_span::span_of;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -103,7 +103,9 @@ fn parse_non_colon_separator_node(
         // (The `*CHI:\t.` fixture and the E253/E306 versus E330/E342 shift
         // belong to the MISSING arm below, which is what actually handles them;
         // the comment claiming them here sent readers to the wrong arm.)
-        NodeSlot::Absent => reject(node, source, errors, "non_colon_separator has no children"),
+        NodeSlot::Absent(NoChild) => {
+            reject(node, source, errors, "non_colon_separator has no children")
+        }
         // A MISSING node is classified LIKE A PRESENT ONE, deliberately, and it
         // is the same call `main_tier/structure/contents.rs` records for its
         // own migration: the pre-migration `node.child(0)` never checked
@@ -200,7 +202,7 @@ fn parse_separator_node(
 ) -> ParseOutcome<Separator> {
     let node = typed.raw_node();
     let children = extract_separator(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "separator", source, errors);
 
     match children.content.slot().typed_or_placeholder() {
         SlotValue::Present(choice) | SlotValue::Placeholder(choice) => match choice {
@@ -224,7 +226,7 @@ fn parse_separator_node(
         SlotValue::Error(error) => {
             reject(error, source, errors, "separator contains an ERROR node")
         }
-        SlotValue::Absent => reject(
+        SlotValue::Absent(NoChild) => reject(
             node,
             source,
             errors,

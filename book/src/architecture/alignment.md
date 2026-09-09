@@ -1,7 +1,7 @@
 # Alignment
 
 **Status:** Current
-**Last modified:** 2026-08-30 13:26 EDT
+**Last modified:** 2026-09-08 19:57 EDT
 
 Alignment in the toolchain operates at two structural layers, plus a
 separate overlap-marker pass. Tier alignment is structural (counting and
@@ -20,13 +20,28 @@ Validates that dependent tiers have the correct number and arrangement
 of items relative to the main tier. Lives in
 `crates/talkbank-model/src/alignment/`.
 
-### TierDomain
+### TierDomain and PositionalDomain
 
 ```rust
-enum TierDomain { Mor, Pho, Sin, Wor }
+enum TierDomain { Mor, Pho, Sin, Wor }        // walks, descent, word membership
+enum PositionalDomain { Mor, Pho, Sin }       // counts and extraction
 ```
 
-The same utterance produces different counts per domain:
+`TierDomain` is the vocabulary of the walkers and the membership rule
+(`counts_for_tier`), and it has `Wor`. `PositionalDomain` is what a count or
+an extraction takes (`count_tier_positions`, `collect_tier_items`,
+`TierCountable`, `AlignableTier::DOMAIN`, `extract_words`), and it has no
+`Wor` on purpose: the `%wor` count and pairing are
+`WorMainTierProjection`'s (`MainTier::wor_projection`, then `bind_timing`
+for the count and `corroborate_wor_timing` for the words). Until 2026-09-08
+the count and extraction functions carried their own `Wor` arms, a second
+implementation of that count that agreed with the projection only by test.
+The overlap-marker position walk in `alignment/helpers/overlap.rs` is on
+the shared walker at the `%wor` domain, the projection's own leaf set.
+`PositionalDomain` converts into `TierDomain` infallibly; the reverse is a
+`TryFrom` that refuses `Wor`.
+
+The same utterance produces different counts per membership domain:
 
 | Rule | Mor | Pho | Sin | Wor |
 |---|---|---|---|---|
@@ -98,7 +113,7 @@ chunks (`pro|it~v|be&PRES` = 2 chunks: pre-clitic + main).
 | `IndexPair` | `source()`/`target()` on any pair type | `AlignmentPair`, `GraAlignmentPair` |
 | `TierAlignmentResult` | `pairs()`/`errors()`/`push_*()` accumulator | Structural alignment result types |
 | `AlignableTier` | What a structural tier provides for generic alignment | `PhoTier`, `SinTier` |
-| `TierCountable` | `count_tier_positions()` / `collect_tier_items()` methods | `[UtteranceContent]` |
+| `TierCountable` | `count_tier_positions()` / `collect_tier_items()` methods, over a `PositionalDomain` | `[UtteranceContent]` |
 
 The generic `positional_align()` function uses `AlignableTier` to
 eliminate duplication: `align_main_to_pho()` and `align_main_to_sin()` are
@@ -174,7 +189,8 @@ have their own gates (`can_align_modsyl_to_mod`,
 ## Word Extraction
 
 `extract_words()` (in `crates/talkbank-transform/src/extract.rs`) uses
-the content walker to pull words from the AST in domain-specific order.
+the content walker to pull words from the AST in domain-specific order,
+over a `PositionalDomain` (`%wor` words are the projection's).
 Returns `Vec<ExtractedWord>` with `text`, `word_index`, `is_separator`,
 `special_form`. Tag-marker separators (`,` `„` `‡`) are included as
 words in Mor domain because they have `%mor` items (`cm|cm`,
@@ -184,20 +200,11 @@ words in Mor domain because they have `%mor` items (`cm|cm`,
 
 CA overlap markers (⌈⌉⌊⌋) appear at three content levels,
 `UtteranceContent` (top-level), `BracketedItem` (inside groups), and
-`WordContent` (intra-word, `butt⌈er⌉`). Two APIs in
-`talkbank-model/src/alignment/helpers/overlap.rs`:
-
-### `walk_overlap_points`, low-level
-
-Visits every `OverlapPoint` in document order with word-position
-context. Analogous to `walk_words` but for overlap markers:
-
-```text
-walk_overlap_points(&utterance.main.content.content.0, &mut |visit| {
-    // visit.point: &OverlapPoint (kind + optional index)
-    // visit.word_position: usize (alignable words seen so far)
-});
-```
+`WordContent` (intra-word, `butt⌈er⌉`). One API in
+`talkbank-model/src/alignment/helpers/overlap.rs`, on the shared
+`walk_content` at the `%wor` domain, so its word positions are the `%wor`
+projection's slot indices (a visitor API with no caller, and two private
+walkers of the file's own, went on 2026-09-08).
 
 ### `extract_overlap_info`, region-based
 

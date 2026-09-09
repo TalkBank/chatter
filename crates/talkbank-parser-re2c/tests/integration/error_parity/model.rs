@@ -14,38 +14,71 @@ use talkbank_model::ErrorCode;
 // Domain types
 // ---------------------------------------------------------------------------
 
-/// Which spec case a measurement is about: a file, plus an index when the file
-/// holds more than one example.
+/// Which example of a spec file a measurement is about, numbered from ONE.
 ///
-/// A type rather than a formatted string so the "suffix only when the file has
-/// several examples" rule lives at ONE construction site. It had two, and the
-/// second existed only to re-derive labels for a debug pass.
+/// A newtype rather than a `usize` because this project numbers examples in two
+/// bases at once, and converting between them is the whole bug: `enumerate`
+/// counts from zero, while the observation snapshot (`"example": 3`) and the
+/// generated fixture filenames (`e313_3.txt`) both count from one. A parity
+/// label reading `E313.md#2` for the case those two call 3 sends a reader
+/// opening the fixture to the wrong file. There is exactly one constructor and
+/// it performs the conversion, so no call site is in a position to pick a base.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct ExampleOrdinal(usize);
+
+impl ExampleOrdinal {
+    /// From the position `enumerate` yields.
+    pub(super) fn from_zero_based(index: usize) -> Self {
+        Self(index + 1)
+    }
+}
+
+impl fmt::Display for ExampleOrdinal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Which spec case a measurement is about: a file, and which of its examples.
+///
+/// A type rather than a formatted string so the rendering lives at ONE site. It
+/// had two, and the second existed only to re-derive labels for a debug pass.
+///
+/// # The ordinal is unconditional, and that is the fix rather than the style
+///
+/// It used to be an `Option`, omitted when the file held exactly one example,
+/// so `E231.md` named that file's only case and `E231.md#0` named the first of
+/// several. The label is the KEY of the parity baseline, and under that rule a
+/// case's key was a function of how many SIBLINGS it had: adding a second
+/// example to `E231.md` renamed the first, which retired its baseline entry as
+/// STALE and re-raised the identical divergence as a NEW one under another
+/// name. That fired on 2026-09-07, on E231 and E710, and cost a red gate.
+///
+/// The residual hazard is smaller and is stated rather than hidden: an example
+/// INSERTED ahead of another still shifts it. Closing that needs an identity
+/// the spec itself declares, which is a spec-format change, not a rename.
 #[derive(Clone, Debug)]
 pub(super) struct SpecLabel {
     pub(super) file: String,
-    /// `None` when the file holds exactly one example.
-    pub(super) case: Option<usize>,
+    pub(super) case: ExampleOrdinal,
 }
 
 impl SpecLabel {
-    /// Label the `index`th example of a file holding `in_file` examples.
-    pub(super) fn new(file: &str, index: usize, in_file: usize) -> Self {
+    /// Label one example of `file`.
+    ///
+    /// Takes the ordinal rather than a bare index, so a caller holding an
+    /// `enumerate` counter cannot reach this at all without converting.
+    pub(super) fn new(file: &str, case: ExampleOrdinal) -> Self {
         Self {
             file: file.to_owned(),
-            case: match in_file {
-                1 => None,
-                _ => Some(index),
-            },
+            case,
         }
     }
 }
 
 impl fmt::Display for SpecLabel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.case {
-            Some(index) => write!(f, "{}#{index}", self.file),
-            None => f.write_str(&self.file),
-        }
+        write!(f, "{}#{}", self.file, self.case)
     }
 }
 

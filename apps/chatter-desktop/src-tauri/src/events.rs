@@ -179,7 +179,7 @@ pub fn to_frontend_event(event: ValidationEvent, root: &Path) -> Option<Frontend
 
 fn convert_status(status: FileStatus) -> FrontendFileStatus {
     match status {
-        FileStatus::Valid { cache_hit } => FrontendFileStatus::Valid { cache_hit },
+        FileStatus::Valid { cache_hit, .. } => FrontendFileStatus::Valid { cache_hit },
         FileStatus::Invalid {
             error_count,
             cache_hit,

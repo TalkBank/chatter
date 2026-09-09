@@ -12,13 +12,33 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use talkbank_model::ParseError;
 // ParseError used in ErrorEvent below
 
+/// Whether the roundtrip check ran on a valid file.
+///
+/// A failed roundtrip is its own [`FileStatus::RoundtripFailed`], so this
+/// only has to say whether the check ran and passed, or was never asked for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RoundtripVerdict {
+    /// The run did not ask for a roundtrip check.
+    NotRequested,
+    /// The check ran, or its cached result was read, and the file wrote
+    /// back byte for byte.
+    Passed,
+}
+
 /// File validation status (without error details - those stream separately)
 #[derive(Debug, Clone)]
 pub enum FileStatus {
-    /// File passed validation (and roundtrip, if enabled).
+    /// File passed validation, and the roundtrip check if it was requested.
     Valid {
         /// Whether the result came from the cache.
         cache_hit: bool,
+        /// Whether the roundtrip check ran on this file. The counters are
+        /// derived from this status, so a valid file whose roundtrip passed
+        /// says so here rather than in a counter someone remembered to bump:
+        /// until 2026-09-08 the cache-hit branch built this status and
+        /// forgot the counter, and a warm `--roundtrip` run reported zero
+        /// roundtrips for files whose roundtrip had passed.
+        roundtrip: RoundtripVerdict,
     },
     /// File has validation errors.
     Invalid {

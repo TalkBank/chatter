@@ -6,7 +6,8 @@
 //! and idempotence (sanitizing a sanitized file matches `wN` against
 //! `wN` and reproduces the same numbering).
 
-use smol_str::SmolStr;
+use talkbank_model::model::NonEmptyString;
+use talkbank_model::non_empty_literal;
 
 /// Sequential placeholder index for word/lemma replacement.
 ///
@@ -26,14 +27,16 @@ impl PlaceholderIndex {
     }
 }
 
-/// A placeholder string used in serialized CHAT output.
+/// A placeholder string used in serialized CHAT output: a literal prefix
+/// followed by the index, so non-empty by construction, which is what lets
+/// the sanitizer hand it to the word-text types without a check.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PlaceholderToken(SmolStr);
+pub struct PlaceholderToken(NonEmptyString);
 
 impl PlaceholderToken {
     /// Builds a word placeholder (`wN`).
     pub fn word(index: PlaceholderIndex) -> Self {
-        Self(SmolStr::new(format!("w{}", index.value())))
+        Self(non_empty_literal!("w").with_suffix(&index.value().to_string()))
     }
 
     /// Builds a `%mor` lemma placeholder (`lemmaN`).
@@ -44,18 +47,17 @@ impl PlaceholderToken {
     /// their numeric ranges interleave; the indices do not match the
     /// corresponding main-tier word.
     pub fn lemma(index: PlaceholderIndex) -> Self {
-        Self(SmolStr::new(format!("lemma{}", index.value())))
+        Self(non_empty_literal!("lemma").with_suffix(&index.value().to_string()))
     }
 
     /// Borrows the placeholder text as a string slice.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
-}
 
-impl From<PlaceholderToken> for SmolStr {
-    fn from(token: PlaceholderToken) -> Self {
-        token.0
+    /// The placeholder as the proven text it is.
+    pub fn text(&self) -> &NonEmptyString {
+        &self.0
     }
 }
 

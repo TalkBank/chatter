@@ -21,13 +21,10 @@ pub enum LeafKind {
 /// Record of a retrace marker found during collection.
 #[derive(Clone, Copy, Debug)]
 pub struct RetraceCheck {
-    /// Index of the retrace among all retraces
-    pub retrace_index: usize,
+    /// Where E370 reports: the marker's own bytes when the parser recorded
+    /// them (`Retrace::marker_span`), else the retrace's span, which is dummy
+    /// under a backend that keeps no offsets and suppresses the label.
+    pub marker_span: Span,
     /// Index in leaf stream after which content must appear
     pub after_leaf_index: usize,
-}
-
-/// Collected spans of all retrace markers in rendered output.
-pub struct RenderedSpans {
-    pub retrace_spans: Vec<Span>,
 }

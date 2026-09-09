@@ -4,28 +4,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Situation_Header>
 
 use crate::generated_traversal::{AsRawNode, SituationHeaderNode, extract_situation_header};
-use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::parser::tree_parsing::parser_helpers::present;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::{Header, SituationDescription, WarningText};
-
-/// Build `Header::Unknown` for malformed `@Situation` input.
-fn unknown_situation_header(node: Node, source: &str, parse_reason: impl Into<String>) -> Header {
-    let text = match node.utf8_text(source.as_bytes()) {
-        Ok(raw) if !raw.is_empty() => raw.to_string(),
-        _ => "@Situation".to_string(),
-    };
-
-    Header::Unknown {
-        text: WarningText::new(text),
-        parse_reason: Some(parse_reason.into()),
-        suggested_fix: Some("Expected @Situation:\t<description>".to_string()),
-    }
-}
+use talkbank_model::model::{Header, SituationDescription};
 
 /// Parse Situation header from tree-sitter node
 ///
@@ -65,10 +50,12 @@ pub fn parse_situation_header(
             ),
             "Missing situation text in @Situation header",
         ));
-        surface_unexpected(&children.unexpected, source, errors);
-        return unknown_situation_header(
+        surface_displaced(&children.unexpected, "situation_header", source, errors);
+        return super::super::unknown_header(
             node,
             source,
+            "@Situation",
+            "Expected @Situation:\t<description>",
             "Missing situation text in @Situation header",
         );
     };
@@ -86,11 +73,17 @@ pub fn parse_situation_header(
         "situation_text",
         |err| format!("Failed to extract @Situation text as UTF-8: {}", err),
     ) else {
-        surface_unexpected(&children.unexpected, source, errors);
-        return unknown_situation_header(node, source, "Could not decode @Situation text");
+        surface_displaced(&children.unexpected, "situation_header", source, errors);
+        return super::super::unknown_header(
+            node,
+            source,
+            "@Situation",
+            "Expected @Situation:\t<description>",
+            "Could not decode @Situation text",
+        );
     };
 
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "situation_header", source, errors);
     Header::Situation {
         text: SituationDescription::new(text),
     }

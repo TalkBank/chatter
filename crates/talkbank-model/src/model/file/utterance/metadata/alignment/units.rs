@@ -15,20 +15,20 @@ impl AlignmentUnits {
         let mut units = AlignmentUnits {
             main_mor: build_main_units(
                 &utterance.main.content.content,
-                crate::alignment::TierDomain::Mor,
+                crate::alignment::PositionalDomain::Mor,
             ),
             main_pho: build_main_units(
                 &utterance.main.content.content,
-                crate::alignment::TierDomain::Pho,
+                crate::alignment::PositionalDomain::Pho,
             ),
             main_sin: build_main_units(
                 &utterance.main.content.content,
-                crate::alignment::TierDomain::Sin,
+                crate::alignment::PositionalDomain::Sin,
             ),
-            main_wor: build_main_units(
-                &utterance.main.content.content,
-                crate::alignment::TierDomain::Wor,
-            ),
+            // `%wor` slots are the projection's, the one owner of that count.
+            main_wor: (0..utterance.main.wor_projection().slot_count().get())
+                .map(|index| AlignmentUnit { index, span: None })
+                .collect(),
             ..Default::default()
         };
 
@@ -110,9 +110,10 @@ impl AlignmentUnits {
 ///
 /// Lines 107-329 were a second implementation of the alignment counting rules:
 /// `count_main_item_units` / `count_bracketed_units` / `retraced_units`,
-/// arm-for-arm identical to `alignment::helpers::count`'s
-/// `count_alignable_item` / `count_bracketed_item` over all 26 content variants
-/// and all 26 bracketed variants. Two owners of one rule.
+/// arm-for-arm identical to `alignment::helpers::count`'s walk (then
+/// `count_alignable_item` / `count_bracketed_item`, now `walk_alignable_item`
+/// / `walk_alignable_bracketed_item`) over all 28 content variants and all 28
+/// bracketed variants (26 when this note was written). Two owners of one rule.
 ///
 /// The cost is not hypothetical and this file recorded it: the two copies had
 /// already disagreed about `AnnotatedRetrace` across 8,766 utterances, and
@@ -125,7 +126,7 @@ impl AlignmentUnits {
 /// are the count, written longhand.
 fn build_main_units(
     content: &[crate::model::UtteranceContent],
-    domain: crate::alignment::TierDomain,
+    domain: crate::alignment::PositionalDomain,
 ) -> Vec<AlignmentUnit> {
     (0..crate::alignment::helpers::count_tier_positions(content, domain))
         .map(|index| AlignmentUnit { index, span: None })

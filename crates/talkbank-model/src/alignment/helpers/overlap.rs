@@ -1,8 +1,9 @@
 //! Overlap marker extraction from CHAT content.
 //!
 //! Provides [`extract_overlap_info`], an in-order traversal of main-tier
-//! content that counts alignable words and records the word-relative positions
-//! of CA overlap markers (⌈⌉⌊⌋). Handles markers at all three content levels:
+//! content (the shared `walk_content` at the `%wor` domain) that counts
+//! alignable words and records the word-relative positions of CA overlap
+//! markers (⌈⌉⌊⌋). Handles markers at all three content levels:
 //!
 //! - `UtteranceContent::OverlapPoint`, space-separated: `⌈ word ⌉`
 //! - `BracketedItem::OverlapPoint`, inside groups: `<⌈ word ⌉> [/]`
@@ -10,18 +11,16 @@
 //!
 //! This parallels the overlap collection in `validation/utterance/overlap.rs`
 //! but tracks word positions rather than collecting points for validation.
-// Every match over the content enums in this file is exhaustive, so the lint
-// costs nothing today and makes it stay that way: a new `UtteranceContent` or
-// `BracketedItem` variant becomes a COMPILE ERROR here rather than a silent
-// `_ =>` that answers wrong. Four such catch-alls have already shipped as
-// defects; see `talkbank-parser-tests/src/content_catch_alls.rs`.
+// Every match in this file (over the shared walker's `ContentItem`, and over
+// `WordContent` in `scan_word`) is exhaustive, so the lint costs nothing today
+// and makes it stay that way: a new content variant becomes a COMPILE ERROR
+// in the walker's own match first and then here, rather than a silent `_ =>`
+// that answers wrong. Four such catch-alls have already shipped as defects;
+// see `talkbank-parser-tests/src/content_catch_alls.rs`.
 #![deny(clippy::wildcard_enum_match_arm)]
 
-use crate::alignment::helpers::descent::descend;
-use crate::alignment::helpers::{TierDomain, counts_for_tier};
-use crate::model::{
-    BracketedItem, OverlapIndex, OverlapPointKind, UtteranceContent, Word, WordContent,
-};
+use crate::alignment::helpers::{ContentItem, TierDomain, counts_for_tier, walk_content};
+use crate::model::{OverlapIndex, OverlapPointKind, UtteranceContent, Word, WordContent};
 
 /// A single paired overlap region within an utterance, matched by index.
 ///
@@ -156,186 +155,40 @@ pub fn extract_overlap_info(content: &[UtteranceContent]) -> OverlapMarkerInfo {
     let mut markers: Vec<MarkerOccurrence> = Vec::new();
     let mut word_count: usize = 0;
 
-    walk_content(content, &mut word_count, &mut markers);
+    // The shared walker at the `%wor` domain: the same descent and the same
+    // leaf set as `WorMainTierProjection`, so `total_words` IS the
+    // projection's slot count. Until 2026-09-08 this file walked with two
+    // private traversals of its own, and the bracketed one scanned a
+    // replaced word's replacement too, counting `<doggie [: dog]>` twice
+    // where the projection counts it once.
+    walk_content(content, Some(TierDomain::Wor), &mut |item| match item {
+        ContentItem::OverlapPoint(m) => record_marker(&mut markers, m.kind, m.index, word_count),
+        ContentItem::Word(word) => scan_word(word, &mut word_count, &mut markers),
+        // `%wor` times the original spoken word; the replacement is editorial.
+        ContentItem::ReplacedWord(replaced) => {
+            scan_word(&replaced.word, &mut word_count, &mut markers);
+        }
+        ContentItem::Separator(_)
+        | ContentItem::Event(_)
+        | ContentItem::Pause(_)
+        | ContentItem::Action(_)
+        | ContentItem::OtherSpokenEvent(_)
+        | ContentItem::Freecode(_)
+        | ContentItem::InternalBullet(_)
+        | ContentItem::LongFeatureBegin(_)
+        | ContentItem::LongFeatureEnd(_)
+        | ContentItem::UnderlineBegin(_)
+        | ContentItem::UnderlineEnd(_)
+        | ContentItem::NonvocalBegin(_)
+        | ContentItem::NonvocalEnd(_)
+        | ContentItem::NonvocalSimple(_) => {}
+    });
 
     let regions = pair_markers(&markers);
 
     OverlapMarkerInfo {
         total_words: word_count,
         regions,
-    }
-}
-
-/// Context passed to the [`walk_overlap_points`] closure for each marker.
-#[derive(Debug, Clone)]
-pub struct OverlapPointVisit<'a> {
-    /// The overlap point marker.
-    pub point: &'a crate::model::OverlapPoint,
-    /// Number of alignable words (Wor domain) seen before this marker.
-    pub word_position: usize,
-}
-
-/// Visit every overlap marker in document order, with word-position context.
-///
-/// This is the closure-based internal iterator for overlap markers, analogous
-/// to [`walk_words`](super::walk_words) for words. It walks all three
-/// content levels (UtteranceContent, BracketedItem, WordContent) and calls
-/// `visitor` for each `OverlapPoint` encountered.
-///
-/// Use this when you need per-marker access (e.g., collecting raw points for
-/// validation) rather than the pre-paired regions from [`extract_overlap_info`].
-pub fn walk_overlap_points(
-    content: &[UtteranceContent],
-    visitor: &mut impl FnMut(OverlapPointVisit<'_>),
-) {
-    let mut word_count: usize = 0;
-    walk_content_visiting(content, &mut word_count, visitor);
-}
-
-/// Walk top-level content, calling visitor for each overlap point.
-fn walk_content_visiting(
-    items: &[UtteranceContent],
-    word_count: &mut usize,
-    visitor: &mut impl FnMut(OverlapPointVisit<'_>),
-) {
-    for item in items {
-        match item {
-            UtteranceContent::OverlapPoint(m) => {
-                visitor(OverlapPointVisit {
-                    point: m,
-                    word_position: *word_count,
-                });
-            }
-            UtteranceContent::Word(word) => {
-                scan_word_visiting(word, word_count, visitor);
-            }
-            UtteranceContent::AnnotatedWord(word) => {
-                scan_word_visiting(&word.inner, word_count, visitor);
-            }
-            UtteranceContent::ReplacedWord(replaced) => {
-                scan_word_visiting(&replaced.word, word_count, visitor);
-            }
-            // Containers: ONE arm, through `descent` at the `%wor` domain.
-            //
-            // It descended UNCONDITIONALLY via `enclosed()` until 2026-08-26,
-            // which agrees with `descent` only because the `Wor` row of the
-            // table is `Enter` for every container kind. That agreement was a
-            // coincidence nothing in the types recorded, in the one traversal
-            // whose scale must match `count_tier_positions(content, Wor)` and
-            // which has already drifted from it once, moving real timing
-            // anchors. Naming the domain makes the row load-bearing.
-            UtteranceContent::Group(_)
-            | UtteranceContent::AnnotatedGroup(_)
-            | UtteranceContent::Quotation(_)
-            | UtteranceContent::AnnotatedQuotation(_)
-            | UtteranceContent::PhoGroup(_)
-            | UtteranceContent::SinGroup(_)
-            | UtteranceContent::Retrace(_)
-            | UtteranceContent::AnnotatedRetrace(_) => {
-                if let Some(into) = descend(item.structure(), Some(TierDomain::Wor)).entered() {
-                    walk_bracketed_visiting(into.content().content.as_slice(), word_count, visitor);
-                }
-            }
-            UtteranceContent::AnnotatedEvent(_)
-            | UtteranceContent::Event(_)
-            | UtteranceContent::Pause(_)
-            | UtteranceContent::Action(_)
-            | UtteranceContent::AnnotatedAction(_)
-            | UtteranceContent::Freecode(_)
-            | UtteranceContent::Separator(_)
-            | UtteranceContent::InternalBullet(_)
-            | UtteranceContent::LongFeatureBegin(_)
-            | UtteranceContent::LongFeatureEnd(_)
-            | UtteranceContent::UnderlineBegin(_)
-            | UtteranceContent::UnderlineEnd(_)
-            | UtteranceContent::NonvocalBegin(_)
-            | UtteranceContent::NonvocalEnd(_)
-            | UtteranceContent::NonvocalSimple(_)
-            | UtteranceContent::OtherSpokenEvent(_) => {}
-        }
-    }
-}
-
-/// Walk bracketed items, calling visitor for each overlap point.
-fn walk_bracketed_visiting(
-    items: &[BracketedItem],
-    word_count: &mut usize,
-    visitor: &mut impl FnMut(OverlapPointVisit<'_>),
-) {
-    for item in items {
-        match item {
-            BracketedItem::OverlapPoint(m) => {
-                visitor(OverlapPointVisit {
-                    point: m,
-                    word_position: *word_count,
-                });
-            }
-            BracketedItem::Word(word) => {
-                scan_word_visiting(word, word_count, visitor);
-            }
-            BracketedItem::AnnotatedWord(annotated) => {
-                scan_word_visiting(&annotated.inner, word_count, visitor);
-            }
-            BracketedItem::ReplacedWord(replaced) => {
-                scan_word_visiting(&replaced.word, word_count, visitor);
-            }
-            // Containers: ONE arm, through `descent` at the `%wor` domain.
-            //
-            // It descended UNCONDITIONALLY via `enclosed()` until 2026-08-26,
-            // which agrees with `descent` only because the `Wor` row of the
-            // table is `Enter` for every container kind. That agreement was a
-            // coincidence nothing in the types recorded, in the one traversal
-            // whose scale must match `count_tier_positions(content, Wor)` and
-            // which has already drifted from it once, moving real timing
-            // anchors. Naming the domain makes the row load-bearing.
-            BracketedItem::Group(_)
-            | BracketedItem::AnnotatedGroup(_)
-            | BracketedItem::Quotation(_)
-            | BracketedItem::AnnotatedQuotation(_)
-            | BracketedItem::PhoGroup(_)
-            | BracketedItem::SinGroup(_)
-            | BracketedItem::Retrace(_)
-            | BracketedItem::AnnotatedRetrace(_) => {
-                if let Some(into) = descend(item.structure(), Some(TierDomain::Wor)).entered() {
-                    walk_bracketed_visiting(into.content().content.as_slice(), word_count, visitor);
-                }
-            }
-            BracketedItem::Event(_)
-            | BracketedItem::AnnotatedEvent(_)
-            | BracketedItem::Pause(_)
-            | BracketedItem::Action(_)
-            | BracketedItem::AnnotatedAction(_)
-            | BracketedItem::Separator(_)
-            | BracketedItem::InternalBullet(_)
-            | BracketedItem::Freecode(_)
-            | BracketedItem::LongFeatureBegin(_)
-            | BracketedItem::LongFeatureEnd(_)
-            | BracketedItem::UnderlineBegin(_)
-            | BracketedItem::UnderlineEnd(_)
-            | BracketedItem::NonvocalBegin(_)
-            | BracketedItem::NonvocalEnd(_)
-            | BracketedItem::NonvocalSimple(_)
-            | BracketedItem::OtherSpokenEvent(_) => {}
-        }
-    }
-}
-
-/// Scan word content for overlap points, calling visitor for each.
-fn scan_word_visiting(
-    word: &Word,
-    word_count: &mut usize,
-    visitor: &mut impl FnMut(OverlapPointVisit<'_>),
-) {
-    for wc in word.content().iter() {
-        if let WordContent::OverlapPoint(m) = wc {
-            visitor(OverlapPointVisit {
-                point: m,
-                word_position: *word_count,
-            });
-        }
-    }
-    if counts_for_tier(word, TierDomain::Wor) {
-        *word_count += 1;
     }
 }
 
@@ -465,208 +318,16 @@ fn scan_word(word: &Word, word_count: &mut usize, markers: &mut Vec<MarkerOccurr
     }
 }
 
-/// Walk top-level content items, collecting marker occurrences.
-fn walk_content(
-    items: &[UtteranceContent],
-    word_count: &mut usize,
-    markers: &mut Vec<MarkerOccurrence>,
-) {
-    for item in items {
-        match item {
-            UtteranceContent::OverlapPoint(m) => {
-                record_marker(markers, m.kind, m.index, *word_count);
-            }
-            UtteranceContent::Word(word) => {
-                scan_word(word, word_count, markers);
-            }
-            UtteranceContent::AnnotatedWord(word) => {
-                scan_word(&word.inner, word_count, markers);
-            }
-            UtteranceContent::ReplacedWord(replaced) => {
-                // The ORIGINAL only. `word_count` is a %wor position index
-                // (both scanners increment on `counts_for_tier(_, Wor)`), and
-                // the canonical %wor rule in `count::count_alignable_replaced_word`
-                // is explicit: "%wor aligns to the originally spoken surface
-                // form, not the editorial replacement", contributing at most 1.
-                //
-                // This arm used to scan the replacement words too, so on any
-                // utterance carrying both a replacement and an overlap marker
-                // the positions this walker produced were on a DIFFERENT SCALE
-                // from `count_tier_positions(content, Wor)` and from its own
-                // sibling `walk_content_visiting`, which always scanned the
-                // original alone. `total_words` then fed `top_onset_fraction`
-                // and `estimate_onset_ms`, so the disagreement moved real
-                // timing anchors. Two copies of one traversal, drifted.
-                scan_word(&replaced.word, word_count, markers);
-            }
-            // Containers: ONE arm, through `descent` at the `%wor` domain.
-            //
-            // It descended UNCONDITIONALLY via `enclosed()` until 2026-08-26,
-            // which agrees with `descent` only because the `Wor` row of the
-            // table is `Enter` for every container kind. That agreement was a
-            // coincidence nothing in the types recorded, in the one traversal
-            // whose scale must match `count_tier_positions(content, Wor)` and
-            // which has already drifted from it once, moving real timing
-            // anchors. Naming the domain makes the row load-bearing.
-            UtteranceContent::Group(_)
-            | UtteranceContent::AnnotatedGroup(_)
-            | UtteranceContent::Quotation(_)
-            | UtteranceContent::AnnotatedQuotation(_)
-            | UtteranceContent::PhoGroup(_)
-            | UtteranceContent::SinGroup(_)
-            | UtteranceContent::Retrace(_)
-            | UtteranceContent::AnnotatedRetrace(_) => {
-                if let Some(into) = descend(item.structure(), Some(TierDomain::Wor)).entered() {
-                    walk_bracketed(into.content().content.as_slice(), word_count, markers);
-                }
-            }
-            UtteranceContent::AnnotatedEvent(_)
-            | UtteranceContent::Event(_)
-            | UtteranceContent::Pause(_)
-            | UtteranceContent::Action(_)
-            | UtteranceContent::AnnotatedAction(_)
-            | UtteranceContent::Freecode(_)
-            | UtteranceContent::Separator(_)
-            | UtteranceContent::InternalBullet(_)
-            | UtteranceContent::LongFeatureBegin(_)
-            | UtteranceContent::LongFeatureEnd(_)
-            | UtteranceContent::UnderlineBegin(_)
-            | UtteranceContent::UnderlineEnd(_)
-            | UtteranceContent::NonvocalBegin(_)
-            | UtteranceContent::NonvocalEnd(_)
-            | UtteranceContent::NonvocalSimple(_)
-            | UtteranceContent::OtherSpokenEvent(_) => {}
-        }
-    }
-}
-
-/// Walk bracketed items (inside groups), collecting marker occurrences.
-fn walk_bracketed(
-    items: &[BracketedItem],
-    word_count: &mut usize,
-    markers: &mut Vec<MarkerOccurrence>,
-) {
-    for item in items {
-        match item {
-            BracketedItem::OverlapPoint(m) => {
-                record_marker(markers, m.kind, m.index, *word_count);
-            }
-            BracketedItem::Word(word) => {
-                scan_word(word, word_count, markers);
-            }
-            BracketedItem::AnnotatedWord(annotated) => {
-                scan_word(&annotated.inner, word_count, markers);
-            }
-            BracketedItem::ReplacedWord(replaced) => {
-                scan_word(&replaced.word, word_count, markers);
-                for word in &replaced.replacement.words {
-                    scan_word(word, word_count, markers);
-                }
-            }
-            // Containers: ONE arm, through `descent` at the `%wor` domain.
-            //
-            // It descended UNCONDITIONALLY via `enclosed()` until 2026-08-26,
-            // which agrees with `descent` only because the `Wor` row of the
-            // table is `Enter` for every container kind. That agreement was a
-            // coincidence nothing in the types recorded, in the one traversal
-            // whose scale must match `count_tier_positions(content, Wor)` and
-            // which has already drifted from it once, moving real timing
-            // anchors. Naming the domain makes the row load-bearing.
-            BracketedItem::Group(_)
-            | BracketedItem::AnnotatedGroup(_)
-            | BracketedItem::Quotation(_)
-            | BracketedItem::AnnotatedQuotation(_)
-            | BracketedItem::PhoGroup(_)
-            | BracketedItem::SinGroup(_)
-            | BracketedItem::Retrace(_)
-            | BracketedItem::AnnotatedRetrace(_) => {
-                if let Some(into) = descend(item.structure(), Some(TierDomain::Wor)).entered() {
-                    walk_bracketed(into.content().content.as_slice(), word_count, markers);
-                }
-            }
-            BracketedItem::Event(_)
-            | BracketedItem::AnnotatedEvent(_)
-            | BracketedItem::Pause(_)
-            | BracketedItem::Action(_)
-            | BracketedItem::AnnotatedAction(_)
-            | BracketedItem::Separator(_)
-            | BracketedItem::InternalBullet(_)
-            | BracketedItem::Freecode(_)
-            | BracketedItem::LongFeatureBegin(_)
-            | BracketedItem::LongFeatureEnd(_)
-            | BracketedItem::UnderlineBegin(_)
-            | BracketedItem::UnderlineEnd(_)
-            | BracketedItem::NonvocalBegin(_)
-            | BracketedItem::NonvocalEnd(_)
-            | BracketedItem::NonvocalSimple(_)
-            | BracketedItem::OtherSpokenEvent(_) => {}
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    //! Arithmetic on an `OverlapMarkerInfo` value, built directly.
+    //!
+    //! Seven tests that used to sit here built content from `OverlapPoint::new`
+    //! between hand-made words; they are
+    //! `talkbank-parser-tests/tests/integration/overlap_regions_from_source.rs`
+    //! now, over parsed main tiers. This one stays: it tests the onset
+    //! estimate on an info value, not the extraction, and holds no span.
     use super::*;
-
-    use crate::model::{OverlapPoint, Word};
-
-    fn make_word(text: &str) -> UtteranceContent {
-        UtteranceContent::Word(Box::new(Word::new_unchecked(text, text)))
-    }
-
-    fn make_overlap(kind: OverlapPointKind) -> UtteranceContent {
-        UtteranceContent::OverlapPoint(OverlapPoint::new(kind, None))
-    }
-
-    #[test]
-    fn test_no_markers() {
-        let content = vec![make_word("hello"), make_word("world")];
-        let info = extract_overlap_info(&content);
-        assert_eq!(info.total_words, 2);
-        assert!(!info.has_any_markers());
-    }
-
-    #[test]
-    fn test_top_overlap_mid_utterance() {
-        // one two three ⌈ four five ⌉
-        let content = vec![
-            make_word("one"),
-            make_word("two"),
-            make_word("three"),
-            make_overlap(OverlapPointKind::TopOverlapBegin),
-            make_word("four"),
-            make_word("five"),
-            make_overlap(OverlapPointKind::TopOverlapEnd),
-        ];
-        let info = extract_overlap_info(&content);
-        assert_eq!(info.total_words, 5);
-        assert_eq!(info.regions.len(), 1);
-        let region = &info.regions[0];
-        assert_eq!(region.kind, OverlapRegionKind::Top);
-        assert_eq!(region.begin_at_word, Some(3));
-        assert_eq!(region.end_at_word, Some(5));
-        assert!(region.is_well_paired());
-        let frac = info.top_onset_fraction().unwrap();
-        assert!((frac - 0.6).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_bottom_overlap() {
-        // ⌊ yeah ⌋
-        let content = vec![
-            make_overlap(OverlapPointKind::BottomOverlapBegin),
-            make_word("yeah"),
-            make_overlap(OverlapPointKind::BottomOverlapEnd),
-        ];
-        let info = extract_overlap_info(&content);
-        assert_eq!(info.total_words, 1);
-        assert!(info.has_bottom_overlap());
-        assert_eq!(info.regions.len(), 1);
-        let region = &info.regions[0];
-        assert_eq!(region.kind, OverlapRegionKind::Bottom);
-        assert_eq!(region.begin_at_word, Some(0));
-        assert_eq!(region.end_at_word, Some(1));
-    }
 
     #[test]
     fn test_estimate_onset_ms() {
@@ -681,89 +342,5 @@ mod tests {
         };
         let onset = info.estimate_onset_ms(12660, 15585).unwrap();
         assert_eq!(onset, 14415);
-    }
-
-    #[test]
-    fn test_intra_word_markers() {
-        // butt⌈er⌉, opening at word 0, closing after word 0
-        let word = Word::new_unchecked("butt⌈er⌉", "butter").with_content(vec![
-            WordContent::Text(crate::model::WordText::new_unchecked("butt")),
-            WordContent::OverlapPoint(OverlapPoint::new(OverlapPointKind::TopOverlapBegin, None)),
-            WordContent::Text(crate::model::WordText::new_unchecked("er")),
-            WordContent::OverlapPoint(OverlapPoint::new(OverlapPointKind::TopOverlapEnd, None)),
-        ]);
-        let content = vec![UtteranceContent::Word(Box::new(word)), make_word("please")];
-        let info = extract_overlap_info(&content);
-        assert_eq!(info.total_words, 2);
-        assert!(info.has_top_overlap());
-        assert_eq!(info.regions.len(), 1);
-        assert_eq!(info.regions[0].begin_at_word, Some(0));
-        assert_eq!(info.regions[0].end_at_word, Some(1));
-    }
-
-    #[test]
-    fn test_indexed_overlaps_pair_by_index() {
-        // ⌈ one ⌉ ⌈2 two ⌉2, two separate top regions
-        use crate::model::OverlapIndex;
-        let content = vec![
-            make_overlap(OverlapPointKind::TopOverlapBegin),
-            make_word("one"),
-            UtteranceContent::OverlapPoint(OverlapPoint::new(
-                OverlapPointKind::TopOverlapEnd,
-                None,
-            )),
-            UtteranceContent::OverlapPoint(OverlapPoint::new(
-                OverlapPointKind::TopOverlapBegin,
-                Some(OverlapIndex::new(2)),
-            )),
-            make_word("two"),
-            UtteranceContent::OverlapPoint(OverlapPoint::new(
-                OverlapPointKind::TopOverlapEnd,
-                Some(OverlapIndex::new(2)),
-            )),
-        ];
-        let info = extract_overlap_info(&content);
-        assert_eq!(info.total_words, 2);
-        assert_eq!(info.regions.len(), 2);
-        // First region: unindexed
-        assert_eq!(info.regions[0].index, None);
-        assert_eq!(info.regions[0].begin_at_word, Some(0));
-        assert_eq!(info.regions[0].end_at_word, Some(1));
-        // Second region: index 2
-        assert_eq!(info.regions[1].index, Some(OverlapIndex::new(2)));
-        assert_eq!(info.regions[1].begin_at_word, Some(1));
-        assert_eq!(info.regions[1].end_at_word, Some(2));
-    }
-
-    #[test]
-    fn test_unpaired_opening_only() {
-        // ⌈ word, opening without closing (onset-only annotation)
-        let content = vec![
-            make_overlap(OverlapPointKind::TopOverlapBegin),
-            make_word("word"),
-        ];
-        let info = extract_overlap_info(&content);
-        assert_eq!(info.regions.len(), 1);
-        assert_eq!(info.regions[0].begin_at_word, Some(0));
-        assert_eq!(info.regions[0].end_at_word, None);
-        assert!(!info.regions[0].is_well_paired());
-        // Still usable for onset estimation
-        assert!(info.top_onset_fraction().is_some());
-    }
-
-    #[test]
-    fn test_orphaned_closing() {
-        // word ⌉, closing without opening
-        let content = vec![
-            make_word("word"),
-            make_overlap(OverlapPointKind::TopOverlapEnd),
-        ];
-        let info = extract_overlap_info(&content);
-        assert_eq!(info.regions.len(), 1);
-        assert_eq!(info.regions[0].begin_at_word, None);
-        assert_eq!(info.regions[0].end_at_word, Some(1));
-        assert!(!info.regions[0].is_well_paired());
-        // No onset estimation possible
-        assert!(!info.has_top_overlap());
     }
 }

@@ -47,14 +47,21 @@ const STRICT_LINKERS_FRAGMENT: &str = "+strict-linkers";
 /// than a rendering of it, and no presentation preference can invalidate it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RuleSelection {
-    /// Run strict cross-utterance linker validation (E351-E355).
+    /// Run strict cross-utterance linker validation.
     ///
-    /// When true, self-completion (`+,`) and other-completion (`++`) linkers
-    /// are checked for correct pairing with preceding terminators (`+/.` and
-    /// `+...` respectively). Off by default because many existing corpora do
-    /// not follow these strict conventions. This is rule SELECTION, not
-    /// presentation: with it off, the checks never execute and the diagnostics
-    /// do not exist to be shown or hidden.
+    /// When true, the quotation linkers (`+"`, `+"/. `, `+".`) and the
+    /// completion linkers (`+,`, `++`) are checked for correct pairing with
+    /// the terminators they continue. Off by default because many existing
+    /// corpora do not follow these strict conventions. This is rule
+    /// SELECTION, not presentation: with it off, the checks never execute and
+    /// the diagnostics do not exist to be shown or hidden.
+    ///
+    /// Which codes it turns on is deliberately not written here. This doc said
+    /// "(E351-E355)" and omitted E341, E344 and E346, which the same option
+    /// enables; the module doc for `validation::cross_utterance` said
+    /// something different and also wrong. The list that cannot drift is the
+    /// generated error index, where each such code's page states the option it
+    /// requires, derived from the spec example that demonstrates it.
     strict_linkers: bool,
 }
 
@@ -66,7 +73,7 @@ impl RuleSelection {
         }
     }
 
-    /// Enable strict cross-utterance linker validation (E351-E355).
+    /// Enable strict cross-utterance linker validation.
     pub fn with_strict_linkers(mut self) -> Self {
         self.strict_linkers = true;
         self
@@ -75,6 +82,32 @@ impl RuleSelection {
     /// Whether strict cross-utterance linker validation will run.
     pub fn strict_linkers_enabled(&self) -> bool {
         self.strict_linkers
+    }
+
+    /// How many independent options this type carries.
+    ///
+    /// # Why a domain type publishes a count of its own fields
+    ///
+    /// The spec system must be able to DEMONSTRATE every rule the validator
+    /// can run, and a rule is demonstrable only if some spec example can ask
+    /// for it. `talkbank_spec_vocabulary::frontmatter::RuleProfile` is the
+    /// list of askable rule sets; its `selection` method returns one of these
+    /// by a total match, so a profile cannot name a rule that does not exist.
+    /// The converse needs this number: an option no profile selects would be
+    /// a rule the binary runs and no example can reach.
+    ///
+    /// The body destructures `Self` field by field with no `..` rest pattern,
+    /// exactly as [`Self::cache_key_fragment`] does, so adding an option is a
+    /// compile error here until the count beside the pattern is raised, and
+    /// the spec runtime's `every_rule_option_is_askable_by_an_example` is red
+    /// until a profile selects it.
+    ///
+    /// Before this existed the pairing was prose, and the prose was the false
+    /// `status = "not_implemented"` on eight codes that fire.
+    #[must_use]
+    pub fn option_count(&self) -> usize {
+        let Self { strict_linkers: _ } = self;
+        1
     }
 
     /// Render this rule set as a deterministic, canonical text fragment for
@@ -97,12 +130,16 @@ impl RuleSelection {
     /// crate is precisely the shape of bug this method exists to prevent: two
     /// such lists once drifted apart, one folding in strict-linkers but not
     /// the suppression set. One owner, no mirror to drift.
+    ///
+    /// The compile error a new field raises here is also the reader's cue to
+    /// visit [`Self::option_count`], whose number decides whether the spec
+    /// system can demonstrate the new rule at all.
     pub fn cache_key_fragment(&self) -> String {
         let Self { strict_linkers } = self;
 
         let mut fragment = String::new();
-        // Turns on E351-E355, which a lenient run never reaches at all, so a
-        // lenient verdict is not an answer for a strict run.
+        // Turns on checks a lenient run never reaches at all, so a lenient
+        // verdict is not an answer for a strict run.
         if *strict_linkers {
             fragment.push_str(STRICT_LINKERS_FRAGMENT);
         }

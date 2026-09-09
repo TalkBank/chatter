@@ -26,7 +26,7 @@
 //! # Start here
 //!
 //! - [`TreeSitterParser`] is the main entry point for full-file parsing
-//! - [`parse_dependent_tier`] is the narrow helper for dependent-tier-only parsing
+//! - `talkbank_model::ChatParser::parse_dependent_tier` is the narrow route for dependent-tier-only parsing
 //! - [`tiers`] exposes tier-focused parser APIs without requiring callers to dig
 //!   through the internal parser implementation tree
 //!
@@ -76,7 +76,8 @@ pub(crate) mod validation {
 ///
 /// Produced by the self-contained `tree-sitter-grammar-utils` backend (the
 /// `generate_typed_traversal` example): free `extract_*` functions, a closed
-/// five-state `NodeSlot`, uniform per-rule `<Rule>Children` carriers, and a typed
+/// `NodeSlot` narrowed to the states each position can produce, uniform
+/// per-rule `<Rule>Children` carriers, and a typed
 /// `unexpected` sink. This is the single generated visitor the whole production
 /// parser is driven by: every parser region dispatches CST structure through
 /// these functions. (The former hand-walk `node.kind()` dispatch and the OLD
@@ -134,7 +135,7 @@ pub use parser::{ParseProduct, ParserInitError, TreeSitterParser};
 pub use talkbank_model::{FragmentSemanticContext, ParseErrors, ParseResult};
 
 /// Convenience re-exports for dependent-tier parsing APIs.
-pub use api::{dependent_tier::parse_dependent_tier, tiers};
+pub use api::tiers;
 
 /// Build-time fingerprint of the grammar crate's own sources (`grammar.js`
 /// and the generated `src/parser.c`), re-exported from

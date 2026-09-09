@@ -123,13 +123,18 @@ pub mod bug_annotations;
 pub mod check_mapping_audit;
 
 pub mod check_error_map;
+pub mod conformance;
 pub mod conformance_inventory;
 pub mod construct_coverage;
 pub mod content_catch_alls;
+pub mod error_code_demonstration;
 pub mod error_code_specs;
 pub mod error_corpus_gen;
+pub mod fabricated_ast;
 pub mod feature_signature;
+pub mod from_source;
 pub mod gate;
+pub mod gate_discipline;
 pub mod golden_word_validity;
 /// The NEW-backend typed CST traversal (see `talkbank-parser`'s
 /// `generated_traversal`); re-exported here for the tests in this crate
@@ -195,6 +200,25 @@ pub mod golden {
     const GOLDEN_WOR_TIER_FILE: &str = include_str!("../golden_wor_tiers.txt");
     const GOLDEN_COM_TIER_FILE: &str = include_str!("../golden_com_tiers.txt");
 
+    /// The entries of one golden list: every line that is not blank and not a
+    /// comment.
+    ///
+    /// One reader for ten lists. The three-line filter had been written out
+    /// ten times, once per loader, so "which lines are entries" had ten sites
+    /// and could be changed at nine of them.
+    ///
+    /// `pub(crate)`, unlike the loaders it serves: they are called from this
+    /// crate's `tests/` targets, which are separate crates, and this is not. The gate in
+    /// [`crate::golden_word_validity`] would have been the eleventh; it calls
+    /// this instead, which is what makes "the gate judges the same lines the
+    /// loaders return" a fact rather than a coincidence.
+    #[must_use]
+    pub(crate) fn entries_in(list: &str) -> Vec<&str> {
+        list.lines()
+            .filter(|line| !is_blank_or_comment(line))
+            .collect()
+    }
+
     /// Load the canonical word list used by golden tests.
     ///
     /// This file is generated from the reference corpus so it represents
@@ -204,10 +228,7 @@ pub mod golden {
     ///
     /// For expensive cross-parser equivalence tests, use `golden_words_featured()` instead.
     pub fn golden_words() -> Vec<&'static str> {
-        GOLDEN_WORD_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_WORD_FILE)
     }
 
     /// Load the MINIMAL word list for fast core tests (<1 second).
@@ -227,10 +248,7 @@ pub mod golden {
     /// Regenerate with:
     /// `cargo run -p talkbank-parser-tests --bin audit_golden_words`
     pub fn golden_words_minimal() -> Vec<&'static str> {
-        GOLDEN_WORD_MINIMAL_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_WORD_MINIMAL_FILE)
     }
 
     /// Load the curated featured word list for cross-parser equivalence testing.
@@ -248,10 +266,7 @@ pub mod golden {
     /// Regenerate with:
     /// `cargo run -p talkbank-parser-tests --bin audit_golden_words`
     pub fn golden_words_featured() -> Vec<&'static str> {
-        GOLDEN_WORD_FEATURED_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_WORD_FEATURED_FILE)
     }
 
     /// Load the canonical main tier list used by golden tests.
@@ -261,10 +276,7 @@ pub mod golden {
     /// `cargo run -p talkbank-parser-tests --bin generate-golden-main-tiers -- --corpus-root corpus/reference`
     /// after editing the reference corpus to regenerate the list.
     pub fn golden_main_tiers() -> Vec<&'static str> {
-        GOLDEN_MAIN_TIER_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_MAIN_TIER_FILE)
     }
 
     /// Load the canonical %mor tier list used by golden tests.
@@ -274,10 +286,7 @@ pub mod golden {
     /// `cargo run -p talkbank-parser-tests --bin generate-golden-mor-tiers -- --corpus-root corpus/reference`
     /// after editing the reference corpus to regenerate the list.
     pub fn golden_mor_tiers() -> Vec<&'static str> {
-        GOLDEN_MOR_TIER_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_MOR_TIER_FILE)
     }
 
     /// Load the canonical %gra tier list used by golden tests.
@@ -287,10 +296,7 @@ pub mod golden {
     /// `cargo run -p talkbank-parser-tests --bin generate-golden-gra-tiers -- --corpus-root corpus/reference`
     /// after editing the reference corpus to regenerate the list.
     pub fn golden_gra_tiers() -> Vec<&'static str> {
-        GOLDEN_GRA_TIER_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_GRA_TIER_FILE)
     }
 
     /// Load the canonical %pho tier list used by golden tests.
@@ -300,10 +306,7 @@ pub mod golden {
     /// `cargo run -p talkbank-parser-tests --bin generate-golden-pho-tiers -- --corpus-root corpus/reference`
     /// after editing the reference corpus to regenerate the list.
     pub fn golden_pho_tiers() -> Vec<&'static str> {
-        GOLDEN_PHO_TIER_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_PHO_TIER_FILE)
     }
 
     /// Load the canonical %sin tier list used by golden tests.
@@ -313,10 +316,7 @@ pub mod golden {
     /// `cargo run -p talkbank-parser-tests --bin generate_golden_sin_tiers -- --corpus-root corpus/reference`
     /// after editing the reference corpus to regenerate the list.
     pub fn golden_sin_tiers() -> Vec<&'static str> {
-        GOLDEN_SIN_TIER_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_SIN_TIER_FILE)
     }
 
     /// Load the canonical %wor tier list used by golden tests.
@@ -326,10 +326,7 @@ pub mod golden {
     /// `cargo run -p talkbank-parser-tests --bin generate_golden_wor_tiers -- --corpus-root corpus/reference`
     /// after editing the reference corpus to regenerate the list.
     pub fn golden_wor_tiers() -> Vec<&'static str> {
-        GOLDEN_WOR_TIER_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_WOR_TIER_FILE)
     }
 
     /// Load the canonical %com tier list used by golden tests.
@@ -339,13 +336,17 @@ pub mod golden {
     /// `cargo run -p talkbank-parser-tests --bin generate_golden_com_tiers -- --corpus-root corpus/reference`
     /// after editing the reference corpus to regenerate the list.
     pub fn golden_com_tiers() -> Vec<&'static str> {
-        GOLDEN_COM_TIER_FILE
-            .lines()
-            .filter(|line| !is_blank_or_comment(line))
-            .collect()
+        entries_in(GOLDEN_COM_TIER_FILE)
     }
 
     /// Returns whether blank or comment.
+    ///
+    /// Private again. It was made `pub` so the golden-word GATE, which reads
+    /// the list off the tree rather than from the compiled-in copy, could drop
+    /// exactly the lines the loaders drop; the gate then wrote the filter out
+    /// for itself, which is the eleventh copy of a three-line loop and the
+    /// second spelling of "which lines are entries". [`entries_in`] is what
+    /// both use now, so the predicate has one caller and needs no audience.
     fn is_blank_or_comment(line: &str) -> bool {
         for ch in line.chars() {
             if ch.is_whitespace() {

@@ -334,7 +334,7 @@ code = "E302"
 variant = "MissingNode"
 summary = "Expected tree-sitter node is missing."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E303"
@@ -383,7 +383,7 @@ code = "E309"
 variant = "UnexpectedSyntax"
 summary = "Unexpected syntax encountered during parsing."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E310"
@@ -404,7 +404,7 @@ code = "E312"
 variant = "UnclosedBracket"
 summary = "Unclosed bracket in annotation or word content."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E313"
@@ -418,7 +418,18 @@ code = "E314"
 variant = "IncompleteAnnotation"
 summary = "Annotation is syntactically incomplete."
 kind = "Invalidity"
-status = "implemented"
+# 2026-09-08: DOMINATED DEAD CODE, verified by reading rather than inferred.
+# The only construction site is the `error_text == "["` branch of
+# `analyze_error_node`, and the E312 guard above it in the same function
+# returns for any text that starts with `[` and does not end with `]`. A lone
+# `[` satisfies both halves, so the E314 branch cannot be reached whatever the
+# grammar or the recovery route produces. `spec/errors/E314.md` reached this
+# conclusion first and said the registry was what needed correcting.
+#
+# The stronger action is to DELETE the branch and retire the number, which a
+# validator with an unreachable arm arguably owes; that retires a code from the
+# public vocabulary and is a maintainer ruling, not a night-shift edit.
+status = "unreachable_from_chat"
 
 [[code]]
 code = "E315"
@@ -439,21 +450,27 @@ code = "E319"
 variant = "UnparsableLine"
 summary = "Line could not be parsed."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E320"
 variant = "UnparsableHeader"
 summary = "Header line could not be parsed."
 kind = "Invalidity"
-status = "not_implemented"
+# 2026-09-08: corrected from `not_implemented`, which the observation snapshot
+# had been disproving the whole time. A spec example emits it, and probing a
+# doubled comma in `@Participants` emits it too. The status excused the code
+# from the demonstration gate, so the rule shipped with nothing asking for its
+# example; the gate now compares every excusal against the snapshot, which is
+# how this was found.
+status = "implemented"
 
 [[code]]
 code = "E321"
 variant = "UnparsableUtterance"
 summary = "Utterance could not be parsed."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E322"
@@ -502,7 +519,7 @@ code = "E331"
 variant = "UnexpectedNodeInContext"
 summary = "Unexpected node encountered in a specific parsing context."
 kind = "Invalidity"
-status = "not_implemented"
+status = "unreachable_from_chat"
 
 [[code]]
 code = "E340"
@@ -516,7 +533,8 @@ code = "E341"
 variant = "UnbalancedQuotationCrossUtterance"
 summary = "Unbalanced quotation marks spanning across utterances."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
+rules = "strict_linkers"
 
 [[code]]
 code = "E342"
@@ -530,14 +548,16 @@ code = "E344"
 variant = "InvalidContentAnnotationNesting"
 summary = "Quotation-precedes terminator (+\".) with no preceding same-speaker +\" utterance; runs only under enable_quotation_validation."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
+rules = "strict_linkers"
 
 [[code]]
 code = "E346"
 variant = "UnmatchedContentAnnotationEnd"
 summary = "Quoted-utterance linker (+\") with no +\"/. before it and no +\". after it by the same speaker; runs only under enable_quotation_validation."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
+rules = "strict_linkers"
 
 [[code]]
 code = "E347"
@@ -558,35 +578,40 @@ code = "E351"
 variant = "MissingQuoteBegin"
 summary = "Missing opening quotation mark."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
+rules = "strict_linkers"
 
 [[code]]
 code = "E352"
 variant = "MissingQuoteEnd"
 summary = "Missing closing quotation mark."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
+rules = "strict_linkers"
 
 [[code]]
 code = "E353"
 variant = "MissingOtherCompletionContext"
 summary = "Missing context for other-completion annotation."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
+rules = "strict_linkers"
 
 [[code]]
 code = "E354"
 variant = "MissingTrailingOffTerminator"
 summary = "Missing trailing-off terminator."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
+rules = "strict_linkers"
 
 [[code]]
 code = "E355"
 variant = "InterleavedContentAnnotations"
 summary = "Interleaved scoped annotations (overlapping scopes)."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
+rules = "strict_linkers"
 
 [[code]]
 code = "E356"
@@ -621,9 +646,11 @@ code = "E360"
 variant = "InvalidMediaBullet"
 summary = "Invalid media bullet format."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
-# Marked `implemented` until 2026-08-27, and nothing could produce it.
+[[code]]
+code = "E361"
+# E361: marked `implemented` until 2026-08-27, and nothing could produce it.
 # Four independent checks agree: no source path emits the variant or the
 # string, adversarial bullets give E316 (non-numeric) or E360 (overflow),
 # a reversed pair gives E362, and this code's own spec example demonstrates
@@ -631,8 +658,15 @@ status = "not_implemented"
 # what the validator does. Whether the rule should EXIST is a separate
 # question for whoever owns it: E360 and E362 may already cover the ground,
 # in which case this follows E214 into retirement rather than into code.
-[[code]]
-code = "E361"
+#
+# This comment sat between E360's table and E361's header, where every reader
+# takes it for E360's. TOML attaches nothing: a comment is trivia, so the
+# format offers no answer and POSITION is the whole of the convention. It says
+# "adversarial bullets give ... E360 (overflow)", a contrast only E361's note
+# would draw, and asks whether "E360 and E362 may already cover the ground",
+# which a note about E360 could not ask. Moved below its own `code` line and
+# given its code's name on 2026-09-08, when E360 turned out to be reachable by
+# exactly the overflow this text names.
 variant = "InvalidTimestamp"
 summary = "Invalid timestamp value in media bullet."
 kind = "Invalidity"
@@ -859,7 +893,7 @@ code = "E508"
 variant = "EmptyDateHeader"
 summary = "Empty `@Date` header."
 kind = "Invalidity"
-status = "implemented"
+status = "not_implemented"
 
 [[code]]
 code = "E509"
@@ -887,7 +921,17 @@ code = "E512"
 variant = "EmptyParticipantCode"
 summary = "Empty participant code in `@Participants`."
 kind = "Invalidity"
-status = "implemented"
+# 2026-09-08: the rule IS implemented and no CHAT input reaches it. An entry's
+# first word is its code, so a code-less entry cannot be written; where the
+# speaker is absent tree-sitter inserts a MISSING node and `check_not_missing`
+# reports E342 before this arm. Probed with five shapes (a doubled comma, a
+# spaced empty entry, a leading comma, a trailing comma, a trailing comma with
+# spaces): E316, E320, E342, E522, E523, E550 and E758, never E512. The
+# remaining producer is the model's own entry constructor, reachable by a
+# library caller and not by a transcript. `spec/errors/E512.md` said
+# "Unreachable from raw CHAT" in its own Expected Behavior; only this line
+# lagged.
+status = "unreachable_from_chat"
 
 [[code]]
 code = "E513"
@@ -1217,7 +1261,12 @@ code = "E702"
 variant = "InvalidMorphologyFormat"
 summary = "Invalid morphology format on `%mor` tier."
 kind = "Invalidity"
-status = "not_implemented"
+# `implemented` since 2026-09-08. It was `not_implemented`, which is the status
+# that excuses a code from the demonstration gate, and it was false: the binary
+# emits E702 for `%mor:\tco| .` and for `%mor:\tv|go-PAST^v|went .`. The gate
+# caught it the moment an example demonstrating it was added, which is what R1
+# is for.
+status = "implemented"
 
 [[code]]
 code = "E704"
@@ -1252,7 +1301,7 @@ code = "E708"
 variant = "MalformedGrammarRelation"
 summary = "Malformed grammar relation on `%gra` tier."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E709"
@@ -1273,7 +1322,7 @@ code = "E711"
 variant = "MorEmptyContent"
 summary = "`%mor` word has empty stem, POS category, prefix, or suffix."
 kind = "Invalidity"
-status = "not_implemented"
+status = "implemented"
 
 [[code]]
 code = "E712"

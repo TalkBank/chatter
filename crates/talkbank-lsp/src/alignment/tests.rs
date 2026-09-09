@@ -8,78 +8,21 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use super::find_alignment_hover_info;
-use talkbank_model::model::Line;
-use talkbank_model::model::TranscriptName;
-use talkbank_model::{ErrorCode, ErrorCollector};
-use talkbank_parser::TreeSitterParser;
+use crate::test_fixtures::{parse_tree_incremental, valid_chat_with_alignments};
 use tower_lsp::lsp_types::Position;
 
-/// Helper to parse and validate a CHAT file
+/// The parsed, aligned file and the CST the hover resolvers read, for a
+/// fixture that must be valid CHAT.
 ///
-/// Fixtures here are expected to be clean, so a
-/// [`talkbank_parser::ParseProduct::Built`] carrying an error-severity
-/// diagnostic is treated as a failure, matching the pre-`ParseProduct`
-/// strict contract, rather than silently accepting a recovered model.
+/// Until 2026-09-09 this module kept its own copy of the check, and a weaker
+/// one: it refused only error-severity parse diagnostics and four validation
+/// codes, so a fixture tripping any other rule passed through. The crate's
+/// shared `valid_chat_with_alignments` refuses every diagnostic.
 fn parse_and_validate_chat_file(
     content: &str,
 ) -> Result<(talkbank_model::model::ChatFile, tree_sitter::Tree), String> {
-    let parser =
-        TreeSitterParser::new().map_err(|err| format!("Failed to create parser: {err:?}"))?;
-
-    // Parse the file
-    let mut chat_file = match parser.parse_chat_file(content) {
-        talkbank_parser::ParseProduct::Built { file, diagnostics } => {
-            if diagnostics
-                .iter()
-                .any(|d| matches!(d.severity, talkbank_model::Severity::Error))
-            {
-                return Err(format!(
-                    "Failed to parse CHAT file cleanly: {diagnostics:?}"
-                ));
-            }
-            file
-        }
-        talkbank_parser::ParseProduct::Unbuildable { diagnostics } => {
-            return Err(format!("Failed to parse CHAT file: {diagnostics:?}"));
-        }
-    };
-
-    // Compute alignments for all utterances
-    for line in &mut chat_file.lines {
-        if let Line::Utterance(utterance) = line {
-            utterance.compute_alignments_default();
-        }
-    }
-
-    let tree = parser
-        .parse_tree_incremental(content, None)
-        .map_err(|err| format!("Failed to parse CST: {err:?}"))?;
-
-    // Validate the file (but allow validation warnings - we only care about parse errors)
-    let error_sink = ErrorCollector::new();
-    chat_file.validate(&error_sink, TranscriptName::Anonymous);
-    let errors = error_sink.into_vec();
-
-    // Only fatal parse errors should fail the test (not validation warnings)
-    let fatal_errors: Vec<_> = errors
-        .iter()
-        .filter(|e| matches!(e.severity, talkbank_model::Severity::Error))
-        .filter(|e| {
-            matches!(
-                e.code,
-                ErrorCode::InternalError
-                    | ErrorCode::TestError
-                    | ErrorCode::EmptyString
-                    | ErrorCode::InvalidLineFormat
-            )
-        })
-        .collect();
-
-    if !fatal_errors.is_empty() {
-        return Err(format!("CHAT file has parse errors: {:?}", fatal_errors));
-    }
-
-    Ok((chat_file, tree))
+    let chat_file = valid_chat_with_alignments(content)?;
+    Ok((chat_file, parse_tree_incremental(content)))
 }
 
 /// Tests main tier hover shows mor alignment.
@@ -166,13 +109,15 @@ fn test_gra_tier_hover_shows_mor_and_main_alignment() -> Result<(), String> {
 @ID:	eng|test|CHI|||||Target_Child|||
 *CHI:	more cookie .
 %mor:	qn|more n|cookie .
-%gra:	1|2|DET 2|0|ROOT 3|2|OBJ 4|2|PUNCT
+%gra:	1|2|DET 2|0|ROOT 3|2|PUNCT
 @End
 "#;
 
     let (chat_file, tree) = parse_and_validate_chat_file(content)?;
 
-    // Cursor on "%gra:\t1|2|DET" (line 7)
+    // Cursor on "%gra:\t1|2|DET" (line 7). The fixture carried a fourth
+    // relation (`3|2|OBJ`) over three chunks, E720, until the shared
+    // validity helper refused it on 2026-09-09.
     let position = Position {
         line: 7,
         character: 8,

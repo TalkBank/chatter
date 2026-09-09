@@ -152,7 +152,7 @@ mod tests {
     fn test_word_validation_no_errors() {
         // Build valid word programmatically
         // Note: Don't wrap in Annotated unless there are actual annotations,
-        let word = Word::new_unchecked("hello", "hello");
+        let word = Word::simple("hello");
 
         let errors = ErrorCollector::new();
         let context = ValidationContext::new();

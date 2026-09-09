@@ -3,7 +3,7 @@
 Every error and warning code, in code order. Follow a code for its
 description, its examples, and the CHAT rule it enforces.
 
-Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? = deprecated.
+Status: ✅ = active in the validator, 🔧 = active only when its rule option is enabled, ⏳ = documented but not yet enforced, ? = deprecated.
 
 | Code | Name | Kind | Level | Status |
 |------|------|------|-------|--------|
@@ -42,48 +42,48 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E258](E258.md) | Consecutive commas | Invalidity | utterance | ✅ |
 | [E259](E259.md) | Comma after non-spoken content | Invalidity | word | ✅ |
 | [E301](E301.md) | Empty speaker code | Invalidity | utterance | ✅ |
-| [E302](E302.md) | Missing required node | Invalidity | utterance | ⏳ |
+| [E302](E302.md) | Missing required node | Invalidity | utterance | ✅ |
 | [E303](E303.md) | Header colon not followed by a TAB | Invalidity | file | ✅ |
 | [E304](E304.md) | Missing speaker code | Invalidity | utterance | ⏳ |
 | [E305](E305.md) | Missing terminator | Invalidity | utterance | ✅ |
 | [E306](E306.md) | Utterance has no content | Invalidity | utterance | ✅ |
 | [E307](E307.md) | Invalid speaker code | Invalidity | utterance | ✅ |
 | [E308](E308.md) | Undeclared speaker | Invalidity | utterance | ✅ |
-| [E309](E309.md) | Unexpected syntax | Invalidity | utterance | ⏳ |
+| [E309](E309.md) | Unexpected syntax | Invalidity | utterance | ✅ |
 | [E310](E310.md) | Parser failed to produce valid parse tree | Invalidity | utterance | ⏳ |
 | [E311](E311.md) | Unclosed replacement bracket | Invalidity | utterance | ✅ |
-| [E312](E312.md) | Unclosed bracket | Invalidity | utterance | ⏳ |
+| [E312](E312.md) | Unclosed bracket | Invalidity | utterance | ✅ |
 | [E313](E313.md) | Unclosed parenthesis | Invalidity | utterance | ✅ |
 | [E314](E314.md) | Incomplete annotation | Invalidity | utterance | ✅ |
 | [E315](E315.md) | Invalid control character | Invalidity | utterance, file | ✅ |
 | [E316](E316.md) | Unparsable content | Invalidity | utterance, tier | ✅ |
-| [E319](E319.md) | UnparsableLine | Invalidity | utterance | ⏳ |
-| [E320](E320.md) | UnparsableHeader | Invalidity | utterance | ⏳ |
-| [E321](E321.md) | UnparsableUtterance | Invalidity | utterance | ⏳ |
+| [E319](E319.md) | UnparsableLine | Invalidity | utterance | ✅ |
+| [E320](E320.md) | UnparsableHeader | Invalidity | utterance | ✅ |
+| [E321](E321.md) | UnparsableUtterance | Invalidity | utterance | ✅ |
 | [E322](E322.md) | EmptyColon | Invalidity | utterance | ⏳ |
 | [E323](E323.md) | Missing colon after speaker code | Invalidity | utterance | ⏳ |
 | [E324](E324.md) | Unrecognized utterance-level parse failure | Invalidity | utterance | ✅ |
 | [E325](E325.md) | UnexpectedUtteranceChild | Invalidity | utterance | ⏳ |
 | [E326](E326.md) | UnexpectedLineType | Invalidity | utterance | ✅ |
-| [E330](E330.md) | Internal CST traversal failure | Invalidity | utterance | ✅ |
-| [E331](E331.md) | UnexpectedNodeInContext | Invalidity | utterance | ⏳ |
+| [E330](E330.md) | Internal CST traversal failure | Invalidity | utterance, tier | ✅ |
+| [E331](E331.md) | UnexpectedNodeInContext | Invalidity | utterance | ✅ |
 | [E340](E340.md) | UnknownBaseContent | Invalidity |  | ✅ |
-| [E341](E341.md) | UnbalancedQuotationCrossUtterance | Invalidity | utterance | ⏳ |
-| [E342](E342.md) | Missing required element (recovery placeholder) | Invalidity | word, utterance | ✅ |
-| [E344](E344.md) | Quotation-precedes terminator without a quoted linker | Invalidity | utterance | ⏳ |
-| [E346](E346.md) | Quoted-utterance linker outside a quotation sequence | Invalidity | utterance | ⏳ |
+| [E341](E341.md) | UnbalancedQuotationCrossUtterance | Invalidity | utterance | 🔧 |
+| [E342](E342.md) | Missing required element (recovery placeholder) | Invalidity | word, utterance, tier | ✅ |
+| [E344](E344.md) | Quotation-precedes terminator without a quoted linker | Invalidity | utterance | 🔧 |
+| [E346](E346.md) | Quoted-utterance linker outside a quotation sequence | Invalidity | utterance | 🔧 |
 | [E347](E347.md) | Unbalanced cross-speaker overlap (indexed markers) | Invalidity | utterance | ✅ |
 | [E348](E348.md) | Unpaired overlap marker within utterance | Invalidity | utterance | ⏳ |
-| [E351](E351.md) | MissingQuoteBegin | Invalidity | utterance | ⏳ |
-| [E352](E352.md) | MissingQuoteEnd | Invalidity | utterance | ⏳ |
-| [E353](E353.md) | MissingOtherCompletionContext | Invalidity | utterance | ⏳ |
-| [E354](E354.md) | MissingTrailingOffTerminator | Invalidity | utterance | ⏳ |
-| [E355](E355.md) | InterleavedScopedAnnotations | Invalidity | utterance | ⏳ |
+| [E351](E351.md) | MissingQuoteBegin | Invalidity | utterance | 🔧 |
+| [E352](E352.md) | MissingQuoteEnd | Invalidity | utterance | 🔧 |
+| [E353](E353.md) | MissingOtherCompletionContext | Invalidity | utterance | 🔧 |
+| [E354](E354.md) | MissingTrailingOffTerminator | Invalidity | utterance | 🔧 |
+| [E355](E355.md) | InterleavedScopedAnnotations | Invalidity | utterance | 🔧 |
 | [E356](E356.md) | UnmatchedUnderlineBegin | Invalidity | utterance | ✅ |
 | [E357](E357.md) | UnmatchedUnderlineEnd | Invalidity | utterance | ✅ |
 | [E358](E358.md) | Unmatched long-feature begin | Invalidity | utterance | ✅ |
 | [E359](E359.md) | Unmatched long-feature end | Invalidity | utterance | ✅ |
-| [E360](E360.md) | Invalid media bullet | Invalidity | utterance | ⏳ |
+| [E360](E360.md) | Invalid media bullet | Invalidity | utterance | ✅ |
 | [E361](E361.md) | Invalid bullet timestamp | Invalidity | utterance | ⏳ |
 | [E362](E362.md) | Bullet times backwards | Invalidity | utterance | ✅ |
 | [E363](E363.md) | Postcode without content | Invalidity | utterance | ✅ |
@@ -114,7 +114,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E505](E505.md) | Invalid @ID format | Invalidity | header | ✅ |
 | [E506](E506.md) | Empty @Participants header | Invalidity | header | ✅ |
 | [E507](E507.md) | Empty @Languages header | Invalidity | header | ✅ |
-| [E508](E508.md) | Empty @Date header (parser) | Invalidity | header | ✅ |
+| [E508](E508.md) | Empty @Date header (parser) | Invalidity | header | ⏳ |
 | [E509](E509.md) | Empty @Media header | Invalidity | header | ✅ |
 | [E510](E510.md) | Empty language field in @ID | Invalidity | header | ✅ |
 | [E511](E511.md) | Empty speaker field in @ID | Invalidity | header | ✅ |
@@ -164,15 +164,15 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E604](E604.md) | %gra Tier Without %mor Tier | Invalidity | utterance | ✅ |
 | [E605](E605.md) | Unsupported Dependent Tier | Invalidity | utterance | ✅ |
 | [E701](E701.md) | Per-speaker start-time not monotonically increasing | Invalidity | utterance | ✅ |
-| [E702](E702.md) | %mor item without a separator | Invalidity | tier | ⏳ |
+| [E702](E702.md) | Unparsable content in a %mor item | Invalidity | tier | ✅ |
 | [E704](E704.md) | Speaker self-overlap, overlapping overlap markers | Invalidity | tier | ✅ |
 | [E705](E705.md) | %mor has fewer items than the main tier has words | Invalidity | tier | ✅ |
 | [E706](E706.md) | %mor has more items than the main tier has words | Invalidity | tier | ✅ |
 | [E707](E707.md) | Mor terminator presence mismatch | Invalidity | tier | ⏳ |
-| [E708](E708.md) | Malformed grammar relation on %gra tier | Invalidity | tier | ⏳ |
+| [E708](E708.md) | Malformed grammar relation on %gra tier | Invalidity | tier | ✅ |
 | [E709](E709.md) | Invalid grammar index | Invalidity | tier | ✅ |
 | [E710](E710.md) | Unexpected node in %gra | Invalidity | tier | ✅ |
-| [E711](E711.md) | Mor empty content | Invalidity | tier | ⏳ |
+| [E711](E711.md) | Mor empty content | Invalidity | tier | ✅ |
 | [E712](E712.md) | %gra word index out of range | Invalidity | tier | ✅ |
 | [E713](E713.md) | Gra head index invalid | Invalidity | tier | ✅ |
 | [E714](E714.md) | %pho has fewer tokens than the main tier has words | Invalidity | tier | ✅ |
@@ -215,7 +215,7 @@ Status: ✅ = active in the validator, ⏳ = documented but not yet enforced, ? 
 | [E752](E752.md) | Timing bullets without an @Media header | Invalidity | file | ✅ |
 | [E753](E753.md) | Word consisting only of repetition segments | Invalidity | utterance | ✅ |
 | [E755](E755.md) | Utterance language not declared in @Languages | Invalidity | utterance | ✅ |
-| [E756](E756.md) | Empty dependent tier | Invalidity | utterance | ✅ |
+| [E756](E756.md) | Empty dependent tier | Invalidity | utterance, tier | ✅ |
 | [E757](E757.md) | Bracketed code glued to the following content | Style | utterance | ✅ |
 | [E758](E758.md) | Trailing space in a line's tier separator (non-CA file) | Invalidity | utterance, header | ✅ |
 | [E759](E759.md) | Annotation at utterance start has nothing to attach to | Invalidity | utterance | ✅ |

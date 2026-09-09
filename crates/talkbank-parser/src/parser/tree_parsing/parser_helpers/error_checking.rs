@@ -11,11 +11,6 @@ use tree_sitter::Node;
 
 use super::error_analysis::analyze_dependent_tier_error_with_context;
 
-/// Recursively walks a subtree and collects parse errors.
-pub(crate) fn check_for_errors_recursive(node: Node, source: &str, errors: &mut Vec<ParseError>) {
-    check_for_errors_recursive_with_context(node, source, errors, None);
-}
-
 /// Recursively walks a subtree and tracks tier context for better diagnostics.
 pub(crate) fn check_for_errors_recursive_with_context(
     node: Node,
@@ -87,7 +82,7 @@ pub(crate) fn check_for_errors_recursive_with_context(
 /// any node already covered by a (richer) region diagnostic before emitting.
 ///
 /// Recursion stops at a recovery node: its subtree is accounted for by the node
-/// itself. The caller owns `out` (mirroring [`check_for_errors_recursive`]) so
+/// itself. The caller owns `out` (mirroring [`check_for_errors_recursive_with_context`]) so
 /// it can dedup against already-reported spans before emitting.
 pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<ParseError>) {
     if node.is_error() {
@@ -118,8 +113,30 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
 
         let start = node.start_byte();
         let end = node.end_byte();
-        let text = node.utf8_text(source.as_bytes()).unwrap_or("");
-        let first_line = text.lines().next().unwrap_or(text).trim();
+        // The node's text drives every classification below; a node whose
+        // bytes are not UTF-8 is reported as that fact rather than classified
+        // over an empty text the analyzer invented.
+        let text = match node.utf8_text(source.as_bytes()) {
+            Ok(text) => text,
+            Err(error) => {
+                out.push(ParseError::new(
+                    ErrorCode::TreeParsingError,
+                    Severity::Error,
+                    SourceLocation::from_offsets(start, end),
+                    ErrorContext::new(source, start..end, ""),
+                    format!("UTF-8 decoding error in recovery node: {error}"),
+                ));
+                return;
+            }
+        };
+        // The first line as `str::lines` would cut it (at the first `\n`, its
+        // `\r` going with the trim), without an empty text invented for a
+        // text that has no line at all.
+        let first_line = match text.split_once('\n') {
+            Some((first, _)) => first,
+            None => text,
+        }
+        .trim();
 
         // Dedicated-code classification before the generic E316 catch-all
         // (same pure rules as the region analyzers; see
@@ -176,19 +193,10 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
             )
         {
             out.push(
-                ParseError::new(
-                    ErrorCode::AnnotationAtUtteranceStart,
-                    Severity::Error,
+                super::error_analysis::dedicated::annotation_at_utterance_start(
+                    code_token,
                     SourceLocation::from_offsets(start, end),
                     ErrorContext::new(source, start..end, text),
-                    format!(
-                        "Annotation '{code_token}' at utterance start has no content to attach to"
-                    ),
-                )
-                .with_suggestion(
-                    "Retraces, overlap markers, replacements, and quotation codes scope over \
-                     the material BEFORE them; put the annotated content first, or remove the \
-                     code",
                 ),
             );
             return;
@@ -245,37 +253,47 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
     }
 }
 
-/// Surface a NEW-backend carrier's `unexpected` sink (spec Section 7: children
-/// that filled no grammar position) using the SAME [`collect_recovery_nodes`]
-/// mapping the whole-tree backstop uses (dedicated recovery code or generic
-/// `UnparsableContent`/E316 for `ERROR`; `MissingRequiredElement`/E342 for
-/// `MISSING`), reported at the most specific structurally proven span.
+/// Surface a carrier's `unexpected` sink WITH its displaced nodes.
+///
+/// Replaced `surface_unexpected` on 2026-09-09: that verb reported only what
+/// [`collect_recovery_nodes`] reports (ERROR and MISSING nodes) and nothing
+/// else, so a WELL-FORMED node that filled no grammar position (a displaced
+/// sibling that itself parsed cleanly) was dropped without a diagnostic,
+/// where the hand walks this traversal replaces named every child they did
+/// not expect. Here such a node is reported as unexpected at `context`, and a
+/// node carrying recovery goes to the classifier as before (dedicated
+/// recovery code or generic `UnparsableContent`/E316 for `ERROR`;
+/// `MissingRequiredElement`/E342 for `MISSING`), reported at the most
+/// specific structurally proven span.
 ///
 /// This is the shared mechanism every migrated visitor-driven carrier (Task
-/// B1 onward) uses to surface its own `unexpected` sink, mirroring the
-/// pattern `document_lowering.rs` established for Task B1
-/// (`DocumentLowering::surface_unexpected`). Because the whole-tree backstop
-/// still runs today and dedups by span overlap, an emission here is
-/// auto-suppressed as a backstop duplicate, so this can never introduce a
-/// NEW diagnostic while the backstop is present; it is the per-carrier
-/// mechanism that lets the backstop be deleted once every region surfaces its
-/// own recovery (migration Task D). In practice most carriers' `unexpected`
-/// sinks are empty for valid CHAT and for the recovery fixtures exercised by
-/// each cluster's characterization tests, so calling this is a no-op today.
-pub(crate) fn surface_unexpected(
+/// B1 onward) uses to surface its own `unexpected` sink. Because the
+/// whole-tree backstop still runs today and dedups by span overlap, a
+/// recovery-node emission here is auto-suppressed as a backstop duplicate, so
+/// that half can never introduce a NEW diagnostic while the backstop is
+/// present; it is the per-carrier mechanism that lets the backstop be deleted
+/// once every region surfaces its own recovery (migration Task D). In
+/// practice most carriers' `unexpected` sinks are empty for valid CHAT and
+/// for the recovery fixtures exercised by each cluster's characterization
+/// tests, so calling this is usually a no-op.
+pub(crate) fn surface_displaced(
     unexpected: &[Node],
+    context: &str,
     source: &str,
     errors: &impl crate::error::ErrorSink,
 ) {
-    if unexpected.is_empty() {
-        return;
-    }
-    let mut candidates = Vec::new();
     for node in unexpected {
-        collect_recovery_nodes(*node, source, &mut candidates);
-    }
-    for candidate in candidates {
-        errors.report(candidate);
+        if node.is_error() || node.is_missing() || node.has_error() {
+            let mut candidates = Vec::new();
+            collect_recovery_nodes(*node, source, &mut candidates);
+            for candidate in candidates {
+                errors.report(candidate);
+            }
+        } else {
+            errors.report(crate::parser::tree_parsing::helpers::unexpected_node_error(
+                *node, source, context,
+            ));
+        }
     }
 }
 

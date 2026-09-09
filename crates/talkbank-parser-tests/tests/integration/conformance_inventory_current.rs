@@ -12,7 +12,7 @@
 
 //! Staleness guard for the mechanical conformance inventory.
 //!
-//! `tests/integration/generated_traversal_conformance/inventory.rs` is derived, byte-for-
+//! `src/conformance/inventory.rs` is derived, byte-for-
 //! byte, from `crates/talkbank-parser/src/generated_traversal.rs` (the
 //! generated typed CST traversal) and `grammar/src/node-types.json` by the
 //! committed generator (`conformance_inventory::generate_inventory`, runnable as
@@ -48,7 +48,7 @@ fn conformance_inventory_is_current() {
 
     assert_eq!(
         regenerated, committed,
-        "tests/integration/generated_traversal_conformance/inventory.rs is STALE: it no longer matches a \
+        "src/conformance/inventory.rs is STALE: it no longer matches a \
          fresh regeneration from generated_traversal.rs + node-types.json. Regenerate it \
          with `cargo run -p talkbank-parser-tests --example gen_conformance_inventory` (never \
          hand-edit the inventory)."

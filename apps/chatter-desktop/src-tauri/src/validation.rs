@@ -35,7 +35,8 @@ impl From<ParserKindRequest> for ParserKind {
 
 impl From<&ValidateRequest> for ValidationConfig {
     fn from(request: &ValidateRequest) -> Self {
-        // `strict_linkers` selects RULES (it turns on E351-E355), so it lives
+        // `strict_linkers` selects RULES (it turns on the opt-in
+        // cross-utterance linker checks), so it lives
         // in the rule selection, which is also what keys the cache. The desktop
         // request carries no `--suppress` equivalent yet, so the presentation
         // policy stays the default: show everything the validator computed.

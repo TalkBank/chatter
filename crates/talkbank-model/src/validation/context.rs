@@ -92,11 +92,6 @@ pub struct SharedValidationData {
     /// Includes: E341 (quotation follows), E344 (quotation precedes),
     /// E346 (quoted linker), E352 (self-completion linker)
     pub enable_quotation_validation: bool,
-
-    /// Whether this file is in bullets mode (from @Options: bullets)
-    /// In bullets mode, timestamp monotonicity validation is disabled.
-    /// This allows overlapping speech, out-of-sequence editing, and reference timestamps.
-    pub bullets_mode: bool,
 }
 
 impl Default for SharedValidationData {
@@ -108,7 +103,6 @@ impl Default for SharedValidationData {
             declared_languages: Vec::new(),
             ca_mode: false,
             enable_quotation_validation: false,
-            bullets_mode: false,
         }
     }
 }
@@ -244,24 +238,6 @@ impl ValidationContext {
     /// CA mode relaxes selected punctuation/terminator expectations.
     pub fn with_ca_mode(mut self, ca_mode: bool) -> Self {
         Arc::make_mut(&mut self.shared).ca_mode = ca_mode;
-        self
-    }
-
-    /// Enables or disables strict quotation cross-utterance checks.
-    ///
-    /// This is off by default because many real corpora do not follow strict
-    /// sequential quotation-linker patterns.
-    pub fn with_quotation_validation(mut self, enable: bool) -> Self {
-        Arc::make_mut(&mut self.shared).enable_quotation_validation = enable;
-        self
-    }
-
-    /// Sets whether bullets mode is active.
-    ///
-    /// Bullets mode disables strict timestamp monotonicity checks so edited or
-    /// overlapping timelines can still roundtrip.
-    pub fn with_bullets_mode(mut self, bullets_mode: bool) -> Self {
-        Arc::make_mut(&mut self.shared).bullets_mode = bullets_mode;
         self
     }
 

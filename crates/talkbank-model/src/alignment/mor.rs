@@ -6,7 +6,7 @@
 
 use super::format::format_positional_mismatch;
 use super::helpers::{
-    TierDomain, TierPosition, collect_tier_items, count_tier_positions,
+    PositionalDomain, TierPosition, collect_tier_items, count_tier_positions,
     to_chat_display_string as to_string,
 };
 use super::indices::{MainWordIndex, MorItemIndex};
@@ -139,7 +139,7 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
     }
 
     // Extract alignable content indices from main tier
-    let alignable_count = count_tier_positions(&main.content.content, TierDomain::Mor);
+    let alignable_count = count_tier_positions(&main.content.content, PositionalDomain::Mor);
 
     // Terminator is now a separate field, not counted in items
     let expected_mor_count = alignable_count;
@@ -157,7 +157,7 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
 
     // Handle length mismatch
     if expected_mor_count > mor_count {
-        let main_items = collect_tier_items(&main.content.content, TierDomain::Mor);
+        let main_items = collect_tier_items(&main.content.content, PositionalDomain::Mor);
         let mor_items: Vec<TierPosition> = mor
             .items
             .iter()
@@ -187,7 +187,7 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
             alignment = alignment.with_pair(AlignmentPair::new(Some(MainWordIndex::new(i)), None));
         }
     } else if mor_count > expected_mor_count {
-        let main_items = collect_tier_items(&main.content.content, TierDomain::Mor);
+        let main_items = collect_tier_items(&main.content.content, PositionalDomain::Mor);
         let mor_items: Vec<TierPosition> = mor
             .items
             .iter()
@@ -302,7 +302,7 @@ fn render_mor_items(mor: &MorTier) -> Vec<String> {
 /// exhaustive content traversal. Terminators are appended after lexical
 /// units to mirror alignment reporting.
 fn collect_alignable_main_items(main: &MainTier) -> Vec<String> {
-    let mut items: Vec<String> = collect_tier_items(&main.content.content, TierDomain::Mor)
+    let mut items: Vec<String> = collect_tier_items(&main.content.content, PositionalDomain::Mor)
         .into_iter()
         .map(|item| item.text)
         .collect();

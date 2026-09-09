@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::generated_traversal::{
-    AsRawNode, NodeSlot, SinDependentTierNode, SinGroupNode, SinGroupsNode,
+    AsRawNode, ChildSlot, NoChild, SinDependentTierNode, SinGroupNode, SinGroupsNode, SlotView,
     extract_sin_dependent_tier, extract_sin_groups,
 };
 use crate::parser::node_span::span_of;
@@ -16,7 +16,7 @@ use talkbank_model::model::{SinItem, SinTier};
 
 use super::groups::{extract_sin_group_items, push_sin_separator};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_unexpected};
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
 
 /// Converts one `%sin` tier node into `SinTier`.
 ///
@@ -55,7 +55,7 @@ pub fn parse_sin_tier(
     let span = span_of(node);
 
     let children = extract_sin_dependent_tier(typed);
-    surface_unexpected(&children.unexpected, source, errors);
+    surface_displaced(&children.unexpected, "sin_dependent_tier", source, errors);
 
     match children
         .child_2
@@ -93,24 +93,21 @@ fn parse_sin_groups(
 
     push_sin_group(groups.child_0.slot(), source, errors, &mut items);
     for element in groups.child_1.slot() {
-        match element.slot() {
-            NodeSlot::Present(pair) => {
+        match element.slot().view() {
+            SlotView::Present(pair) => {
                 push_sin_separator(pair.child_0.slot(), source, errors, "sin_groups");
                 push_sin_group(pair.child_1.slot(), source, errors, &mut items);
-                surface_unexpected(&pair.unexpected, source, errors);
+                surface_displaced(&pair.unexpected, "sin_groups", source, errors);
             }
-            // The generated repeat classifies a whole item as `Present` /
-            // `Error` / `Absent` only (the established `@Languages`/gra/pho
-            // repeat finding); matched exhaustively regardless, per the
-            // no-`_`-on-project-enums rule.
-            NodeSlot::Missing(raw) | NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-                errors.report(unexpected_node_error(*raw, source, "sin_groups"));
+            // An inline sequence is never MISSING or displaced; `SeqSlot` says so.
+            SlotView::Error(raw) => {
+                errors.report(unexpected_node_error(raw, source, "sin_groups"));
             }
-            NodeSlot::Absent => {}
+            SlotView::Absent(NoChild) => {}
         }
     }
 
-    surface_unexpected(&groups.unexpected, source, errors);
+    surface_displaced(&groups.unexpected, "sin_groups", source, errors);
     items
 }
 
@@ -135,21 +132,21 @@ fn parse_sin_groups(
 /// (`parse_sin_tier` is only entered when the tier node has no tree-sitter error);
 /// they are handled explicitly for exhaustiveness.
 fn push_sin_group<'tree>(
-    slot: &NodeSlot<'tree, SinGroupNode<'tree>>,
+    slot: &ChildSlot<'tree, SinGroupNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<SinItem>,
 ) {
-    match slot {
-        NodeSlot::Present(group_node) => {
+    match slot.view() {
+        SlotView::Present(group_node) => {
             items.extend(extract_sin_group_items(*group_node, source, errors));
         }
-        NodeSlot::Missing(raw) => {
-            check_not_missing(*raw, source, errors, "sin_groups");
+        SlotView::Missing(raw) => {
+            check_not_missing(raw, source, errors, "sin_groups");
         }
-        NodeSlot::Error(raw) | NodeSlot::Unexpected(raw) => {
-            errors.report(unexpected_node_error(*raw, source, "sin_groups"));
+        SlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw, source, "sin_groups"));
         }
-        NodeSlot::Absent => {}
+        SlotView::Absent(NoChild) => {}
     }
 }

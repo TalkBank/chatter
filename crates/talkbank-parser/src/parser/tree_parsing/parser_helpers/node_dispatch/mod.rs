@@ -9,10 +9,14 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Pauses>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#OverlapMarkers>
 
-// ca and overlap modules removed, CA markers are now parsed by the direct parser
-// (Phase 2 word coarsening), and overlap_point parsing lives in content/base/
+// `ca` dispatches CA element and delimiter tokens through the GENERATED
+// symbol tables; the word converter is its caller (word-internal tokens are
+// the only place they occur). Overlap-point parsing lives in
+// `main_tier/content/base`, shared by the standalone and word-internal token.
+mod ca;
 mod pause;
 mod separator;
 
+pub(crate) use ca::{parse_ca_delimiter_node, parse_ca_element_node};
 pub(crate) use pause::parse_pause_node;
 pub(crate) use separator::parse_separator_like;

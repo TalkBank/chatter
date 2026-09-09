@@ -31,6 +31,22 @@ pub(crate) fn parse_overlap_point(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
+    match parse_overlap_point_token(node, source, errors) {
+        ParseOutcome::Parsed(point) => ParseOutcome::parsed(UtteranceContent::OverlapPoint(point)),
+        ParseOutcome::Rejected => ParseOutcome::rejected(),
+    }
+}
+
+/// The overlap point an `overlap_point` token names, wherever the token
+/// sits: as a content item of its own (the caller above) or inside a word,
+/// as in `butt⌈er⌉`, where the word converter used to keep a second copy of
+/// the marker table with a `TopOverlapBegin` fallback for a character the
+/// grammar cannot produce.
+pub(crate) fn parse_overlap_point_token(
+    node: Node,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<OverlapPoint> {
     // Extract text from atomic token
     let text = match node.utf8_text(source.as_bytes()) {
         Ok(t) => t,
@@ -90,7 +106,5 @@ pub(crate) fn parse_overlap_point(
         .and_then(|digit_char| digit_char.to_digit(10).map(OverlapIndex::new));
 
     let span = crate::error::Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    ParseOutcome::parsed(UtteranceContent::OverlapPoint(
-        OverlapPoint::new(kind, index).with_span(span),
-    ))
+    ParseOutcome::parsed(OverlapPoint::new(kind, index).with_span(span))
 }

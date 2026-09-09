@@ -210,6 +210,62 @@ fn report_leading_zero_bullet_times<'a>(tokens: &[Token<'a>], errors: &impl Erro
     }
 }
 
+/// Report E360 for every media-bullet timestamp whose digits do not fit a
+/// `u64`, mirroring the tree-sitter parser's own rejection.
+///
+/// Token-level for the same reason as the check above: the raw digit text
+/// exists only here. Once the conversion has run, both timestamps are `0` and
+/// nothing downstream can tell an overflowed bullet from `0_0`. Unlike that
+/// check this reports at the token's REAL span, which `LexedSource::token_at`
+/// has always carried; a first draft copied the sibling's `Span::DUMMY` and
+/// the fabricated-AST ratchet refused it, correctly.
+///
+/// # What this costs, and why it is still worth doing here
+///
+/// The conversion's `unwrap_or(0)` is unchanged, so the model still carries a
+/// fabricated pair and the file still draws E362 ("start must be less than
+/// end", of `0` and `0`) and E752 behind this. Those two are the fabrication
+/// speaking, and removing them means making the conversion fallible through
+/// five call sites that hold no error sink. What this does fix is the rule the
+/// user is told about: before it, a bullet re2c could not represent was
+/// reported ONLY as a backwards range, which is a statement about the input
+/// that the input does not support.
+fn report_unrepresentable_bullet_times(lexed: &super::LexedSource<'_>, errors: &impl ErrorSink) {
+    for (index, tok) in lexed.tokens().iter().enumerate() {
+        let Token::MediaBullet {
+            start_time,
+            end_time,
+            ..
+        } = tok
+        else {
+            continue;
+        };
+        for (component, which) in [(start_time, "start"), (end_time, "end")] {
+            if component.parse::<u64>().is_err() {
+                // A REAL span, taken from the lexer's own parallel storage.
+                // The sibling check above reports at `Span::DUMMY`, and
+                // copying that here is what the fabricated-AST ratchet
+                // refused: a diagnostic that cannot say where it happened
+                // imports the sentinel this project is removing. `token_at`
+                // has carried the location all along.
+                let (_, at) = lexed.token_at(index);
+                errors.report(ParseError::new(
+                    talkbank_model::errors::codes::ErrorCode::InvalidMediaBullet,
+                    talkbank_model::Severity::Error,
+                    talkbank_model::SourceLocation::new(talkbank_model::Span::from_usize(
+                        at.start, at.end,
+                    )),
+                    None,
+                    format!(
+                        "Invalid media bullet: the {which} time '{component}' is \
+                         numeric but too large to read as milliseconds"
+                    ),
+                ));
+            }
+        }
+    }
+}
+
 /// Parse a complete CHAT file from a temporary token slice, reporting
 /// parse failures to the given error sink.
 pub(crate) fn parse_file_with_errors<'a>(
@@ -219,6 +275,7 @@ pub(crate) fn parse_file_with_errors<'a>(
     let tokens = lexed.tokens();
     let source = lexed.source();
     report_leading_zero_bullet_times(tokens, errors);
+    report_unrepresentable_bullet_times(lexed, errors);
     report_space_inside_angle_group(tokens, errors);
     report_annotation_spacing(lexed, errors);
     let mut pos = 0;

@@ -23,7 +23,9 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
-use crate::generated_traversal::{AsRawNode, NodeSlot, SlotValue, TierBodyChildren};
+use crate::generated_traversal::{
+    AsRawNode, NoChild, NodeSlot, SlotValue, SlotView, TierBodyChildren,
+};
 use tree_sitter::Node;
 
 use super::super::super::content::{
@@ -55,14 +57,13 @@ pub(super) fn parse_tier_body(
     // (decoded by the shared linker parser); every other state maps to an empty
     // linker list, matching the pre-migration absent-linkers behavior with no new
     // diagnostic.
-    let linkers = match body.linkers.slot() {
-        Some(NodeSlot::Present(linkers_node)) => {
+    let linkers = match body.linkers.slot().as_ref().map(NodeSlot::view) {
+        Some(SlotView::Present(linkers_node)) => {
             parse_linkers(linkers_node.raw_node(), source, errors)
         }
-        Some(
-            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
-        )
-        | None => Vec::new(),
+        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => {
+            Vec::new()
+        }
     };
 
     // Optional language-switch token (the `[- code]` precode) plus its source
@@ -96,11 +97,11 @@ pub(super) fn parse_tier_body(
         }
         // A MISSING placeholder of a kind `contents` does not name has no
         // `contents` node to walk either, so it is the same case.
-        SlotValue::Unexpected(node) | SlotValue::UnclassifiedPlaceholder(node) => {
+        SlotValue::UnclassifiedPlaceholder(node) => {
             report_unexpected_tier_body_child(node, source, errors);
             Vec::new()
         }
-        SlotValue::Absent => Vec::new(),
+        SlotValue::Absent(NoChild) => Vec::new(),
     };
 
     // Ending: the `utterance_end` block (terminator, postcodes, trailing bullet).
@@ -140,7 +141,7 @@ pub(super) fn parse_tier_body(
         // terminator-less-but-otherwise-well-formed line, which still yields a
         // `Present` `utterance_end` (its OWN inner terminator slot is merely
         // absent) rather than reaching this arm.
-        SlotValue::Unexpected(_) | SlotValue::Absent => {
+        SlotValue::Absent(NoChild) => {
             report_missing_child(
                 carrier.clone(),
                 original_input,
@@ -172,7 +173,13 @@ pub(super) fn parse_tier_body(
     // route and was the only position any spec example covered. A node is not a
     // different kind of problem because recovery placed it elsewhere, so the
     // sink asks the classifier that matches the REGION.
-    surface_main_tier_sink(&body.unexpected, MainTierRegion::Body, source, errors);
+    surface_main_tier_sink(
+        &body.unexpected,
+        MainTierRegion::Body,
+        "tier_body",
+        source,
+        errors,
+    );
 
     TierBodyData {
         linkers,
@@ -215,27 +222,30 @@ fn parse_optional_langcode(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParsedLangcode {
-    let group = match body.language_code.slot() {
-        Some(NodeSlot::Present(group)) => group,
-        Some(
-            NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent,
-        )
-        | None => {
+    let group = match body.language_code.slot().as_ref().map(NodeSlot::view) {
+        Some(SlotView::Present(group)) => group,
+        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => {
             return ParsedLangcode {
                 code: None,
                 span: None,
             };
         }
     };
-    surface_main_tier_sink(&group.unexpected, MainTierRegion::Body, source, errors);
+    surface_main_tier_sink(
+        &group.unexpected,
+        MainTierRegion::Body,
+        "tier_body",
+        source,
+        errors,
+    );
 
     // Only a `Present` langcode token proceeds to decode, matching the OLD
     // `.ok()` collapse (which yielded `Some` for `Present` ONLY): a zero-width
     // MISSING langcode placeholder maps to no code and no diagnostic, the same
     // as Error/Unexpected/Absent, exactly like the pre-migration behavior.
-    let node = match group.child_0.slot() {
-        NodeSlot::Present(langcode_node) => langcode_node.raw_node(),
-        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+    let node = match group.child_0.slot().view() {
+        SlotView::Present(langcode_node) => langcode_node.raw_node(),
+        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
             return ParsedLangcode {
                 code: None,
                 span: None,

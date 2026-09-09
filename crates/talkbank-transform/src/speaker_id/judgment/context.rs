@@ -77,7 +77,10 @@ fn id_header_age_months(chat: &ChatFile) -> Option<AgeMonths> {
             continue;
         };
         let months_part = rest.trim_end_matches('.');
-        let months_only = months_part.split('.').next().unwrap_or(months_part);
+        let months_only = match months_part.split_once('.') {
+            Some((months, _)) => months,
+            None => months_part,
+        };
         let Ok(years) = years_str.trim().parse::<u32>() else {
             continue;
         };

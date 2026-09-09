@@ -38,7 +38,7 @@
 //! implemented are a tracked backlog (skipped via the manifest status); the
 //! parse-error and CHECK-parity corpora are always-reject and always checked.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use talkbank_model::model::TranscriptName;
 
@@ -46,19 +46,16 @@ use talkbank_model::ErrorCollector;
 use talkbank_model::ParseOutcome;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::test_error::TestError;
+use talkbank_spec_vocabulary::frontmatter::RuleProfile;
 
-/// Minimal view of the validation corpus manifest: just enough to learn which
-/// fixtures correspond to validation rules that are not yet implemented.
-#[derive(serde::Deserialize)]
-struct ManifestEntry {
-    fixture: String,
-    status: String,
-}
-
-#[derive(serde::Deserialize)]
-struct Manifest {
-    fixtures: Vec<ManifestEntry>,
-}
+// The manifest types are the GENERATOR'S OWN, read from the crate both cargo
+// workspaces share. A SECOND hand-written mirror of them stood here until
+// 2026-09-08 (`fixture: String`, `status: String`, filtered with
+// `entry.status != "implemented"`), a sibling of the one deleted from
+// `validation_error_corpus.rs` in the same change and worse in two ways: a
+// renamed `Status` variant would have silently reclassified every fixture
+// instead of failing to deserialize, and it carried no `rules`, so its oracle
+// validated opt-in fixtures under the default rule set.
 
 /// Raw tree-sitter parse: the grammar's own view of error recovery, independent
 /// of how the production parser walks it.
@@ -134,6 +131,7 @@ fn chatter_surfaces_diagnostic(
     parser: &TreeSitterParser,
     source: &str,
     name: TranscriptName<'_>,
+    rules: RuleProfile,
 ) -> bool {
     let parse_errors = ErrorCollector::new();
     let outcome = parser.parse_chat_file_fragment(source, 0, &parse_errors);
@@ -143,31 +141,62 @@ fn chatter_surfaces_diagnostic(
     match outcome {
         ParseOutcome::Parsed(mut chat_file) => {
             let validation_errors = ErrorCollector::new();
-            chat_file.validate_with_alignment(&validation_errors, name);
+            // Under the fixture's OWN rules. With the default set, an opt-in
+            // rule's fixture reports nothing, this oracle reads that as a
+            // swallowed recovery node, and the natural-looking fix is to
+            // weaken the oracle.
+            chat_file.validate_with_alignment_and_rules(
+                rules.selection(),
+                &validation_errors,
+                name,
+            );
             !validation_errors.is_empty()
         }
         ParseOutcome::Rejected => true,
     }
 }
 
-/// Fixture filenames whose validation rule is NOT yet implemented (or is
-/// deprecated), read from the validation corpus manifest. These are a tracked
-/// backlog: chatter is known not to catch them yet, so the oracle skips them
-/// rather than flagging a known gap as a regression. The same manifest status
-/// drives `validation_errors_detected`'s skip logic.
-fn unimplemented_validation_fixtures() -> Result<HashSet<String>, TestError> {
+/// What the validation manifest says about the fixtures this oracle walks.
+///
+/// Two facts, read in one pass, because they come from one file and asking for
+/// them separately means parsing it twice and letting the answers disagree.
+struct ManifestView {
+    /// Fixture filenames whose validation rule is NOT yet implemented (or is
+    /// deprecated). A tracked backlog: chatter is known not to catch them, so
+    /// the oracle skips them rather than flagging a known gap as a regression.
+    /// The same manifest status drives `validation_errors_detected`'s skips.
+    skip: HashSet<String>,
+    /// The rules each remaining fixture must be validated under.
+    ///
+    /// A fixture whose rule is opt-in reports NOTHING under the default rule
+    /// set, which this oracle would read as a swallowed recovery node; and the
+    /// natural-looking fix for that false alarm is to weaken the oracle.
+    rules: BTreeMap<String, RuleProfile>,
+}
+
+/// Read the manifest once, for both questions.
+fn manifest_view() -> Result<ManifestView, TestError> {
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/error_corpus/validation_errors/manifest.json");
     let text = std::fs::read_to_string(&manifest_path)
         .map_err(|err| TestError::Failure(format!("read validation manifest: {err}")))?;
-    let manifest: Manifest = serde_json::from_str(&text)
-        .map_err(|err| TestError::Failure(format!("parse validation manifest: {err}")))?;
-    Ok(manifest
-        .fixtures
-        .into_iter()
-        .filter(|entry| entry.status != "implemented")
-        .map(|entry| entry.fixture)
-        .collect())
+    let manifest: talkbank_spec_vocabulary::validation_manifest::ValidationManifest =
+        serde_json::from_str(&text)
+            .map_err(|err| TestError::Failure(format!("parse validation manifest: {err}")))?;
+
+    let mut view = ManifestView {
+        skip: HashSet::new(),
+        rules: BTreeMap::new(),
+    };
+    for entry in manifest.fixtures {
+        let name = entry.fixture.as_str().to_owned();
+        if entry.status == talkbank_spec_vocabulary::Status::Implemented {
+            view.rules.insert(name, entry.rules);
+        } else {
+            view.skip.insert(name);
+        }
+    }
+    Ok(view)
 }
 
 /// Across the whole error corpus, any recovery-bearing fixture we intend to
@@ -175,7 +204,7 @@ fn unimplemented_validation_fixtures() -> Result<HashSet<String>, TestError> {
 #[test]
 fn no_recovery_node_in_accepted_file() -> Result<(), TestError> {
     let parser = TreeSitterParser::new().map_err(|err| TestError::ParserInit(err.to_string()))?;
-    let skip = unimplemented_validation_fixtures()?;
+    let manifest = manifest_view()?;
     let fixtures = collect_cha_fixtures(&error_corpus_dirs())?;
     if fixtures.is_empty() {
         return Err(TestError::Failure(
@@ -189,7 +218,7 @@ fn no_recovery_node_in_accepted_file() -> Result<(), TestError> {
 
     for fixture in &fixtures {
         let name = fixture.file_name().and_then(|n| n.to_str()).unwrap_or("?");
-        if skip.contains(name) {
+        if manifest.skip.contains(name) {
             skipped_backlog += 1;
             continue;
         }
@@ -201,7 +230,15 @@ fn no_recovery_node_in_accepted_file() -> Result<(), TestError> {
         }
         checked += 1;
 
-        if !chatter_surfaces_diagnostic(&parser, &source, TranscriptName::for_path(fixture)) {
+        // A fixture outside the validation corpus has no manifest entry and
+        // so declares no rules; the default set is the honest answer for it,
+        // and it is written out rather than defaulted silently.
+        let rules = match manifest.rules.get(name) {
+            Some(declared) => *declared,
+            None => RuleProfile::Default,
+        };
+        if !chatter_surfaces_diagnostic(&parser, &source, TranscriptName::for_path(fixture), rules)
+        {
             swallowed.push(format!(
                 "{name}: {recovery_nodes} tree-sitter recovery node(s) but chatter surfaced NO \
                  diagnostic (swallowed, file silently accepted)"

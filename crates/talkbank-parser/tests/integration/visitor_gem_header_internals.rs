@@ -21,9 +21,8 @@
 //!
 //! - `@Bg` (`bg_header`)  : optional `free_text` child (`BgHeaderChildren.child_2:
 //!   Option<FreeTextNode>`), parsed via
-//!   `parse_optional_gem_label`. Special bespoke logic:
-//!   label-absent AND `header_contains_colon` -> `LazyGem`,
-//!   else `BeginGem`.
+//!   `parse_optional_gem_label` -> `BeginGem`, always; an `@Bg` never lowers
+//!   as `LazyGem` (an earlier draft's colon rule, gone since 2026-09-09).
 //! - `@Eg` (`eg_header`)  : optional `free_text` child (`EgHeaderChildren.child_2:
 //!   Option<FreeTextNode>`), parsed via
 //!   `parse_optional_gem_label` -> `EndGem`.

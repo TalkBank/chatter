@@ -113,6 +113,17 @@ fn test_participants_single() -> Result<(), talkbank_parser_tests::test_error::T
 
 #[test]
 /// Tests expected behavior.
+fn test_pid_simple() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: a construct example is expected to parse completely cleanly.
+    let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file("@UTF8\n@PID:\t11312/a-00013825-1\n@Begin\n@End"))?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
 fn test_situation_simple() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
     // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
@@ -954,6 +965,17 @@ fn test_pho_example_10() -> Result<(), talkbank_parser_tests::test_error::TestEr
     // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
     // contract: a construct example is expected to parse completely cleanly.
     let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword .\n%pho:\tfoo+bar\n@End"))?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
+fn test_pho_example_11() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: a construct example is expected to parse completely cleanly.
+    let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tword .\n%pho:\tma¹⁵ kjaꜞ\n@End"))?;
 
     Ok(())
 }

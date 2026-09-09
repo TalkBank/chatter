@@ -1,215 +1,161 @@
-//! Parsing for nonvocal markers in base content.
+//! Parsing for nonvocal markers in base content, over the generated typed
+//! traversal.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
-use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
+use crate::error::ErrorSink;
+use crate::generated_traversal::{
+    AsRawNode, FromNodeKind, NonvocalChoice, NonvocalNode, extract_nonvocal,
+    extract_nonvocal_begin, extract_nonvocal_end, extract_nonvocal_simple,
 };
 use crate::model::{NonvocalBegin, NonvocalEnd, NonvocalLabel, NonvocalSimple, UtteranceContent};
-use crate::node_types::{
-    AMPERSAND, LONG_FEATURE_LABEL, NONVOCAL_BEGIN, NONVOCAL_BEGIN_MARKER, NONVOCAL_END,
-    NONVOCAL_END_MARKER, NONVOCAL_SIMPLE, RIGHT_BRACE,
-};
-use crate::parser::tree_parsing::parser_helpers::cst_assertions::{
-    assert_child_count_exact, assert_child_kind_one_of, expect_child, expect_child_at,
-};
-use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
+use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, surface_displaced};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
-/// Parse nonvocal markers such as laughter, inhalations, or other tagged events into `UtteranceContent`.
+use super::super::report_tree_shape;
+use super::{delimiter, marker_label, span_of};
+
+/// Parse one `nonvocal` node: a begin marker (`&{n=label`), an end marker
+/// (`&}n=label`) or a self-contained one (`&{n=label}`), over the generated
+/// traversal.
 ///
-/// Nonvocal markers use the `&` prefix inside the main tier and can either open a scoped
-/// nonvocal span (`&{n=label`), close that scope (`&}n=label`), or appear as a single
-/// self-contained token (`&{n=label}`).
-/// We verify the exact child structure produced by the tree-sitter grammar and extract the
-/// label text so that downstream features such as alignment and tooling can locate the
-/// named nonvocal events with their spans. The parser also keeps a precise span so the
-/// runtime can map the annotation back to the CHAT text described in the Main Tier appendix.
+/// Grammar: `nonvocal: choice(nonvocal_begin, nonvocal_end,
+/// nonvocal_simple)`, each `seq(ampersand, <marker>, long_feature_label)`,
+/// the simple form closed by `right_brace`. The label is read from its
+/// typed position; the delimiters are structure, reported when they lose
+/// their shape, and a marker whose shape is not intact is not built. Until 2026-09-09 this asserted child counts and kinds
+/// by position and matched `kind()` strings.
 pub(crate) fn parse_nonvocal(
     node: Node,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    // Nonvocal scope - check if it's begin, end, or simple
-    if !assert_child_count_exact(node, 1, source, errors, "nonvocal") {
+    let Some(typed) = NonvocalNode::from_node(node) else {
+        report_tree_shape(
+            node,
+            format!("Expected a nonvocal node, found '{}'", node.kind()),
+            source,
+            errors,
+        );
         return ParseOutcome::rejected();
-    }
-
-    if !assert_child_kind_one_of(
-        node,
-        0,
-        &[NONVOCAL_BEGIN, NONVOCAL_END, NONVOCAL_SIMPLE],
-        source,
-        errors,
-        "nonvocal",
-    ) {
-        return ParseOutcome::rejected();
-    }
-
-    let ParseOutcome::Parsed(nonvocal_child) = expect_child_at(node, 0, source, errors, "nonvocal")
+    };
+    let children = extract_nonvocal(typed);
+    surface_displaced(&children.unexpected, "nonvocal", source, errors);
+    let SlotState::Present(choice) =
+        expect_present(children.content.slot(), "nonvocal", source, errors)
     else {
         return ParseOutcome::rejected();
     };
-
-    match nonvocal_child.kind() {
-        NONVOCAL_BEGIN => {
-            if !assert_child_count_exact(nonvocal_child, 3, source, errors, "nonvocal_begin") {
-                return ParseOutcome::rejected();
-            }
-            if expect_child(
-                nonvocal_child,
-                0,
-                AMPERSAND,
-                source,
-                errors,
-                "nonvocal_begin",
-            )
-            .is_none()
-                || expect_child(
-                    nonvocal_child,
-                    1,
-                    NONVOCAL_BEGIN_MARKER,
-                    source,
-                    errors,
+    let built = match choice {
+        NonvocalChoice::NonvocalBegin(node) => {
+            let inner = extract_nonvocal_begin(*node);
+            surface_displaced(&inner.unexpected, "nonvocal_begin", source, errors);
+            // Every delimiter is checked (and reported) before the verdict;
+            // a marker whose shape is not intact is not built.
+            let intact = inner.unexpected.is_empty()
+                & delimiter(
+                    inner.child_0.slot(),
+                    "'&'",
                     "nonvocal_begin",
+                    source,
+                    errors,
                 )
-                .is_none()
-            {
-                return ParseOutcome::rejected();
-            }
-            let ParseOutcome::Parsed(label_node) = expect_child(
-                nonvocal_child,
-                2,
-                LONG_FEATURE_LABEL,
-                source,
-                errors,
+                & delimiter(
+                    inner.child_1.slot(),
+                    "'{n='",
+                    "nonvocal_begin",
+                    source,
+                    errors,
+                );
+            let span = span_of(node.raw_node());
+            marker_label(
+                inner.child_2.slot(),
                 "nonvocal_begin",
-            ) else {
-                return ParseOutcome::rejected();
-            };
-            let label_text =
-                extract_utf8_text(label_node, source, errors, "nonvocal_begin_label", "");
-            let span = Span::new(
-                nonvocal_child.start_byte() as u32,
-                nonvocal_child.end_byte() as u32,
-            );
-            let marker = NonvocalBegin::new(NonvocalLabel::new(label_text)).with_span(span);
-            ParseOutcome::parsed(UtteranceContent::NonvocalBegin(marker))
-        }
-        NONVOCAL_END => {
-            if !assert_child_count_exact(nonvocal_child, 3, source, errors, "nonvocal_end") {
-                return ParseOutcome::rejected();
-            }
-            if expect_child(nonvocal_child, 0, AMPERSAND, source, errors, "nonvocal_end").is_none()
-                || expect_child(
-                    nonvocal_child,
-                    1,
-                    NONVOCAL_END_MARKER,
-                    source,
-                    errors,
-                    "nonvocal_end",
-                )
-                .is_none()
-            {
-                return ParseOutcome::rejected();
-            }
-            let ParseOutcome::Parsed(label_node) = expect_child(
-                nonvocal_child,
-                2,
-                LONG_FEATURE_LABEL,
+                "nonvocal_begin_label",
                 source,
                 errors,
-                "nonvocal_end",
-            ) else {
-                return ParseOutcome::rejected();
-            };
-            let label_text =
-                extract_utf8_text(label_node, source, errors, "nonvocal_end_label", "");
-            let span = Span::new(
-                nonvocal_child.start_byte() as u32,
-                nonvocal_child.end_byte() as u32,
-            );
-            let marker = NonvocalEnd::new(NonvocalLabel::new(label_text)).with_span(span);
-            ParseOutcome::parsed(UtteranceContent::NonvocalEnd(marker))
-        }
-        NONVOCAL_SIMPLE => {
-            if !assert_child_count_exact(nonvocal_child, 4, source, errors, "nonvocal_simple") {
-                return ParseOutcome::rejected();
-            }
-            if expect_child(
-                nonvocal_child,
-                0,
-                AMPERSAND,
-                source,
-                errors,
-                "nonvocal_simple",
             )
-            .is_none()
-                || expect_child(
-                    nonvocal_child,
-                    1,
-                    NONVOCAL_BEGIN_MARKER,
+            .filter(|_| intact)
+            .map(|label| {
+                UtteranceContent::NonvocalBegin(
+                    NonvocalBegin::new(NonvocalLabel::new(label)).with_span(span),
+                )
+            })
+        }
+        NonvocalChoice::NonvocalEnd(node) => {
+            let inner = extract_nonvocal_end(*node);
+            surface_displaced(&inner.unexpected, "nonvocal_end", source, errors);
+            // Every delimiter is checked (and reported) before the verdict;
+            // a marker whose shape is not intact is not built.
+            let intact = inner.unexpected.is_empty()
+                & delimiter(inner.child_0.slot(), "'&'", "nonvocal_end", source, errors)
+                & delimiter(
+                    inner.child_1.slot(),
+                    "'}n='",
+                    "nonvocal_end",
                     source,
                     errors,
-                    "nonvocal_simple",
-                )
-                .is_none()
-                || expect_child(
-                    nonvocal_child,
-                    3,
-                    RIGHT_BRACE,
-                    source,
-                    errors,
-                    "nonvocal_simple",
-                )
-                .is_none()
-            {
-                return ParseOutcome::rejected();
-            }
-            let ParseOutcome::Parsed(label_node) = expect_child(
-                nonvocal_child,
-                2,
-                LONG_FEATURE_LABEL,
+                );
+            let span = span_of(node.raw_node());
+            marker_label(
+                inner.child_2.slot(),
+                "nonvocal_end",
+                "nonvocal_end_label",
                 source,
                 errors,
+            )
+            .filter(|_| intact)
+            .map(|label| {
+                UtteranceContent::NonvocalEnd(
+                    NonvocalEnd::new(NonvocalLabel::new(label)).with_span(span),
+                )
+            })
+        }
+        NonvocalChoice::NonvocalSimple(node) => {
+            let inner = extract_nonvocal_simple(*node);
+            surface_displaced(&inner.unexpected, "nonvocal_simple", source, errors);
+            // Every delimiter is checked (and reported) before the verdict;
+            // a marker whose shape is not intact is not built.
+            let intact = inner.unexpected.is_empty()
+                & delimiter(
+                    inner.child_0.slot(),
+                    "'&'",
+                    "nonvocal_simple",
+                    source,
+                    errors,
+                )
+                & delimiter(
+                    inner.child_1.slot(),
+                    "'{n='",
+                    "nonvocal_simple",
+                    source,
+                    errors,
+                )
+                & delimiter(
+                    inner.child_3.slot(),
+                    "'}'",
+                    "nonvocal_simple",
+                    source,
+                    errors,
+                );
+            let span = span_of(node.raw_node());
+            marker_label(
+                inner.child_2.slot(),
                 "nonvocal_simple",
-            ) else {
-                return ParseOutcome::rejected();
-            };
-            let label_text =
-                extract_utf8_text(label_node, source, errors, "nonvocal_simple_label", "");
-            let span = Span::new(
-                nonvocal_child.start_byte() as u32,
-                nonvocal_child.end_byte() as u32,
-            );
-            let marker = NonvocalSimple::new(NonvocalLabel::new(label_text)).with_span(span);
-            ParseOutcome::parsed(UtteranceContent::NonvocalSimple(marker))
+                "nonvocal_simple_label",
+                source,
+                errors,
+            )
+            .filter(|_| intact)
+            .map(|label| {
+                UtteranceContent::NonvocalSimple(
+                    NonvocalSimple::new(NonvocalLabel::new(label)).with_span(span),
+                )
+            })
         }
-        _ => {
-            if nonvocal_child.is_error() {
-                errors.report(ParseError::new(
-                    ErrorCode::MalformedWordContent,
-                    Severity::Error,
-                    SourceLocation::from_offsets(
-                        nonvocal_child.start_byte(),
-                        nonvocal_child.end_byte(),
-                    ),
-                    ErrorContext::new(
-                        source,
-                        nonvocal_child.start_byte()..nonvocal_child.end_byte(),
-                        "",
-                    ),
-                    format!(
-                        "Malformed nonvocal at byte {}..{}",
-                        nonvocal_child.start_byte(),
-                        nonvocal_child.end_byte()
-                    ),
-                ));
-            }
-            ParseOutcome::rejected()
-        }
-    }
+    };
+    ParseOutcome::from(built)
 }

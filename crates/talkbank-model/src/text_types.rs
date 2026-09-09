@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn cleaned_text_serializes_transparently() {
-        let word = Word::new_unchecked("test", "test");
+        let word = Word::simple("test");
         let text = ChatCleanedText::from_word(&word);
         let json = serde_json::to_string(&text).unwrap();
         assert_eq!(json, "\"test\"");

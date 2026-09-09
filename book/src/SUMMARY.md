@@ -85,6 +85,7 @@
 - [Setup](contributing/setup.md)
 - [Grammar Workflow](contributing/grammar-workflow.md)
 - [Spec Workflow](contributing/spec-workflow.md)
+- [Correctness Architecture](contributing/correctness-architecture.md)
 - [Testing](contributing/testing.md)
 - [Coding Standards](contributing/coding-standards.md)
 - [Coding Standards (Extended)](contributing/coding-standards-extended.md)

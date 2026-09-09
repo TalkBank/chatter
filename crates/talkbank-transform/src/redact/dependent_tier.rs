@@ -26,9 +26,22 @@ pub(crate) fn keep_dependent_tier(tier: &DependentTier) -> bool {
 
 /// Sanitizes a dependent tier in place. Caller filters out tiers that
 /// [`keep_dependent_tier`] returns `false` for.
+///
+/// `%act` and `%cod` carry the same bullet payload as `%com`, and until
+/// 2026-09-08 passed through untouched under a comment deferring their
+/// redaction; an action line is free text about the participant, so they
+/// take the placeholder like every other free-text tier. `%wor` lists the
+/// utterance's own words beside their timings and passed through untouched
+/// too, which re-exposed every word the main tier had just hidden; it is
+/// rewritten by [`super::wor::WorPlan`], whose verdict is taken before the
+/// main tier changes, so this function leaves it alone.
 pub(crate) fn sanitize_dependent_tier(tier: &mut DependentTier, state: &mut PlaceholderState) {
     match tier {
         DependentTier::Mor(mor) => redact_mor_tier(mor, state),
+        // Rewritten by `WorPlan::apply`, after the main tier.
+        DependentTier::Wor(_) => {}
+        DependentTier::Act(t) => t.content = redacted_bullet(),
+        DependentTier::Cod(t) => t.content = redacted_bullet(),
         DependentTier::Add(t) => t.content = redacted_bullet(),
         DependentTier::Com(t) => t.content = redacted_bullet(),
         DependentTier::Exp(t) => t.content = redacted_bullet(),
@@ -57,7 +70,7 @@ pub(crate) fn sanitize_dependent_tier(tier: &mut DependentTier, state: &mut Plac
             }
         }
         // Numeric / structural tiers, no lexical content.
-        DependentTier::Gra(_) | DependentTier::Wor(_) | DependentTier::Tim(_) => {}
+        DependentTier::Gra(_) | DependentTier::Tim(_) => {}
         // Phonological tiers, should already be filtered by `keep_dependent_tier`.
         DependentTier::Pho(_)
         | DependentTier::Mod(_)
@@ -66,8 +79,6 @@ pub(crate) fn sanitize_dependent_tier(tier: &mut DependentTier, state: &mut Plac
         | DependentTier::Phosyl(_)
         | DependentTier::Phoaln(_)
         | DependentTier::Xphoint(_) => {}
-        // Inline-bullet items; per-item redaction deferred.
-        DependentTier::Act(_) | DependentTier::Cod(_) => {}
     }
 }
 

@@ -76,42 +76,16 @@ pub fn meta_repo_root() -> &'static Path {
     })
 }
 
-/// Load fixture lines from a file in tests/fixtures/.
-/// Returns a Vec of logical CHAT lines (entries separated by blank lines).
-/// Skips comment lines starting with #.
+/// The entries of one checked-in fixture.
+///
+/// ONE owner, in the library, where the strictness lives: see
+/// [`talkbank_parser_re2c::tests_support::load_fixture`]. This was a second
+/// copy of the same twenty lines, and the copies had drifted in exactly the
+/// way two copies do: this one printed "Skipping fixture" before returning an
+/// empty Vec and the other returned it silently, so the same defect reported
+/// itself differently depending on which test hit it. Neither failed.
 pub fn load_fixture(name: &str) -> Vec<String> {
-    let path = format!("{}/tests/fixtures/{name}.txt", env!("CARGO_MANIFEST_DIR"));
-    let content = match std::fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Skipping fixture {name}: {e}");
-            return vec![];
-        }
-    };
-
-    let mut entries = Vec::new();
-    let mut current = String::new();
-
-    for line in content.lines() {
-        if line.starts_with('#') {
-            continue;
-        }
-        if line.is_empty() {
-            if !current.is_empty() {
-                entries.push(std::mem::take(&mut current));
-            }
-        } else {
-            if !current.is_empty() {
-                current.push('\n');
-            }
-            current.push_str(line);
-        }
-    }
-    if !current.is_empty() {
-        entries.push(current);
-    }
-
-    entries
+    talkbank_parser_re2c::tests_support::load_fixture(name)
 }
 
 /// Load fixtures and verify all lex cleanly (zero error tokens).

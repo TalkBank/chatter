@@ -27,10 +27,18 @@
 //!
 //! The snapshot covers `not_implemented`, `deprecated` and
 //! `unreachable_from_chat` specs too. An observation is not an assertion: for
-//! the six unimplemented linker specs the honest record is "nothing fires",
+//! a spec whose rule nothing enforces the honest record is "nothing fires",
 //! and the 2026-08-20 adjudication of the inheriting examples was possible
 //! only by RUNNING exactly the specs the gates skip. Skipping them here would
 //! rebuild the blind spot the adjudication had to climb out of.
+//!
+//! This paragraph named "the six unimplemented linker specs" as the worked
+//! example until 2026-09-08, when they turned out not to be unimplemented:
+//! their rules are opt-in, the runner had no way to ask for them, and the
+//! snapshot's "nothing fires" was recording the runner's limitation as a fact
+//! about the code. Eight of them now fire here, because an example runs under
+//! the rules its code declares. The paragraph's point survives its example,
+//! which is the useful half.
 //!
 //! # What is deliberately NOT in the file
 //!

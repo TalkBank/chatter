@@ -9,6 +9,7 @@ use talkbank_model::Span;
 use talkbank_model::model::CaOptionEffect;
 use talkbank_model::model::content::word::ca::normalize_ca_omissions_in_lines;
 use talkbank_model::model::*;
+use talkbank_model::non_empty_literal;
 
 use super::*;
 
@@ -89,55 +90,81 @@ pub fn utterance_to_model(
     errors: &(impl ErrorSink + ?Sized),
 ) -> talkbank_model::model::Utterance {
     let main = main_tier_to_model(&u.main_tier, source, errors);
-    // Skip tiers whose AST→model conversion failed (e.g. a `%mor:`
-    // line with a missing or unrecognized terminator). Cross-tier
-    // validators surface the absence as a typed diagnostic.
+    // One pass, so what was lowered and what that cost cannot disagree. It was
+    // two: a `filter_map` that dropped failed tiers, and a second walk of the
+    // SAME list re-deriving one taint from one AST variant. The second walk
+    // could only see the rejection the AST spells out, so a tier the lowering
+    // itself could not build whole (a `%gra` that lost a relation, a `%mor`
+    // whose `try_from` failed, a `%wor` body that would not parse) was dropped
+    // or shortened with nothing recording it, and every cross-tier check then
+    // read our own recovery as a fault in the transcript.
+    let mut parse_health = talkbank_model::model::ParseHealthState::Clean;
     let dep_tiers = u
         .dependent_tiers
         .iter()
         .filter_map(|entry| {
-            dependent_tier_to_model(&entry.tier, source)
+            dependent_tier_to_model(&entry.tier, source, errors, &mut parse_health)
                 .map(|tier| DependentTierEntry::with_separator(tier, entry.separator))
         })
         .collect();
-    let mut parse_health = talkbank_model::model::ParseHealthState::Clean;
-    for tier in &u.dependent_tiers {
-        if matches!(tier.tier, ast::DependentTierParsed::RejectedMor(_)) {
-            parse_health.taint(talkbank_model::model::ParseHealthTier::Mor);
-        }
-    }
     talkbank_model::model::Utterance {
         preceding_headers: Default::default(),
         main,
         dependent_tiers: dep_tiers,
         alignments: None,
         alignment_diagnostics: Vec::new(),
-        // Rejected morphology remains tainted even though there is no model
-        // tier to convert. Do not align other tiers against recovered absence.
+        // Every domain the lowering could not build as written, not just
+        // rejected morphology, which is all this used to say.
         parse_health,
         utterance_language: Default::default(),
         language_metadata: Default::default(),
     }
 }
 
-/// Convert a parsed dependent tier to model `DependentTier`.
+/// Convert a parsed dependent tier to model `DependentTier`, recording on
+/// `health` anything the lowering could not build whole.
 ///
-/// Returns `None` when the AST→model conversion fails for that tier
-/// (currently `%mor:` with a missing or unrecognized terminator).
-/// Cross-tier validators surface the resulting absence; this layer
-/// just declines to construct a `MorTier` from malformed input.
+/// Returns `None` when the conversion fails outright, and taints that tier's
+/// domain in the same step. The rule, and it holds for **every arm that
+/// returns `None` or comes back shorter**: a tier this function could not
+/// build as the author wrote it taints its own domain. Nothing downstream can
+/// otherwise tell recovery from transcription, so alignment compares a tier
+/// against a neighbour it no longer matches and reports the difference as the
+/// author's.
+///
+/// TWO ARMS ARE OUTSIDE IT, deliberately and not yet justified: `%phoaln` and
+/// `%xphoint` bodies that will not parse become `DependentTier::Unsupported`
+/// rather than `None`, and taint nothing, although `ParseHealthTier::Phoaln`
+/// and `::Xphoint` both exist and the canonical backend taints them for the
+/// same input. It is the safe direction (nothing is suppressed) and it is a
+/// divergence, named here rather than left for the next reader to discover.
 pub fn dependent_tier_to_model(
     tier: &ast::DependentTierParsed<'_>,
     source: SourceText<'_>,
+    errors: &(impl ErrorSink + ?Sized),
+    health: &mut talkbank_model::model::ParseHealthState,
 ) -> Option<talkbank_model::model::DependentTier> {
+    use talkbank_model::model::ParseHealthTier;
+
     Some(match tier {
-        ast::DependentTierParsed::RejectedMor(_) => return None,
-        ast::DependentTierParsed::Mor(mor) => {
-            talkbank_model::model::DependentTier::Mor(MorTier::try_from(mor).ok()?)
+        ast::DependentTierParsed::RejectedMor(_) => {
+            health.taint(ParseHealthTier::Mor);
+            return None;
         }
-        ast::DependentTierParsed::Gra(gra) => {
-            talkbank_model::model::DependentTier::Gra(GraTier::from(gra))
-        }
+        ast::DependentTierParsed::Mor(mor) => match MorTier::try_from(mor) {
+            Ok(mor) => talkbank_model::model::DependentTier::Mor(mor),
+            // Was `.ok()?`, which dropped the tier and tainted nothing: the
+            // separate taint walk this replaced could only see the AST's own
+            // `RejectedMor`, so a `%mor` that failed HERE left an utterance
+            // that looks as though it never had one.
+            Err(_) => {
+                health.taint(ParseHealthTier::Mor);
+                return None;
+            }
+        },
+        ast::DependentTierParsed::Gra(gra) => talkbank_model::model::DependentTier::Gra(
+            crate::convert::gra_tier_to_model(gra, source, errors).into_tier(health),
+        ),
         ast::DependentTierParsed::Pho(pho) => {
             talkbank_model::model::DependentTier::Pho(convert_pho_tier(
                 pho,
@@ -297,9 +324,15 @@ pub fn dependent_tier_to_model(
                 // `%wor` tier with no words.
                 "wor" => {
                     let raw_text: String = content.iter().map(|t| t.text()).collect();
-                    talkbank_model::model::DependentTier::Wor(crate::convert::wor_tier_from_input(
-                        &raw_text,
-                    )?)
+                    match crate::convert::wor_tier_from_input(&raw_text) {
+                        Some(wor) => talkbank_model::model::DependentTier::Wor(wor),
+                        // Taints for the reason the `%mor` arm above states.
+                        // `?` propagated the absence and recorded nothing.
+                        None => {
+                            health.taint(ParseHealthTier::Wor);
+                            return None;
+                        }
+                    }
                 }
                 // Phon project syllabification tiers (with or without x prefix)
                 "modsyl" | "xmodsyl" => {
@@ -341,7 +374,7 @@ pub fn dependent_tier_to_model(
                             let text = NonEmptyString::new(raw_text.as_str()).ok();
                             talkbank_model::model::DependentTier::Unsupported(
                                 talkbank_model::model::UserDefinedDependentTier {
-                                    label: NonEmptyString::new_unchecked("phoaln"),
+                                    label: non_empty_literal!("phoaln"),
                                     content: text,
                                     span: Span::DUMMY,
                                 },
@@ -370,7 +403,7 @@ pub fn dependent_tier_to_model(
                                 let text = NonEmptyString::new(raw_text.as_str()).ok();
                                 talkbank_model::model::DependentTier::Unsupported(
                                     talkbank_model::model::UserDefinedDependentTier {
-                                        label: NonEmptyString::new_unchecked("xphoint"),
+                                        label: non_empty_literal!("xphoint"),
                                         content: text,
                                         span: Span::DUMMY,
                                     },

@@ -10,8 +10,6 @@
 mod context;
 mod impls;
 mod report;
-mod source_utils;
-mod tree_renderer;
 mod types;
 
 // Re-export path types (defined here to avoid circular deps)
@@ -20,7 +18,6 @@ pub use self::path::{PathSegment, SemanticPath};
 // Re-export core types
 pub use context::{SemanticDiffContext, normalize_span, normalize_span_option};
 pub use report::SemanticDiffReport;
-pub use tree_renderer::RenderMode;
 pub use types::{DEFAULT_MAX_DIFFS, SemanticDiffKind, SemanticDifference};
 
 /// Trait for computing semantic differences between values.

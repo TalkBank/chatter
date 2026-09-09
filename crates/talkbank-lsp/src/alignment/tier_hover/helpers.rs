@@ -181,9 +181,9 @@ mod tests {
         find_source_index_for_target, find_target_index_for_source, find_text_item_index_at_offset,
         format_mor_word_label,
     };
+    use crate::test_fixtures::{first_utterance, valid_chat};
     use talkbank_model::Span;
     use talkbank_model::alignment::{AlignmentPair, GraAlignmentPair};
-    use talkbank_model::model::{Mor, MorTier, MorWord, PosCategory};
 
     #[test]
     fn source_lookup_matches_target_index_in_pair_not_row_position() {
@@ -225,37 +225,36 @@ mod tests {
     /// A `%gra` relation on a post-clitic must resolve to the clitic's lemma,
     /// not to the next `%mor` item's lemma.
     ///
-    /// Fixture models `*CHI: it's cookies .` / `%mor: pron|it~aux|be noun|cookie .`
-    /// which expands to four `%gra` chunks: `it` (item 0), `be` (post-clitic
-    /// of item 0), `cookie` (item 1), terminator. Semantic word indices used
-    /// by `%gra` relations are 1-indexed over that chunk sequence, so word 2
-    /// is the `be` clitic, not `cookie`.
+    /// `*CHI: it's cookie .` under `%mor: pron|it~aux|be n|cookie .` expands
+    /// to four `%gra` chunks: `it` (item 0), `be` (post-clitic of item 0),
+    /// `cookie` (item 1), terminator. Semantic word indices used by `%gra`
+    /// relations are 1-indexed over that chunk sequence, so word 2 is the
+    /// `be` clitic, not `cookie`.
     ///
     /// Before the fix, `format_mor_word_label` indexed `mor.items` directly
     /// with `word_index - 1`, so word 2 returned `"cookie"` and word 3 fell
     /// off the end into a `"word 3"` fallback. Root cause: semantic word
     /// indices address mor *chunks*, not mor *items*.
     #[test]
-    fn gra_word_label_with_post_clitic_resolves_to_clitic_lemma() {
-        let its = Mor::new(MorWord::new(PosCategory::new("pron"), "it"))
-            .with_post_clitic(MorWord::new(PosCategory::new("aux"), "be"));
-        let cookie = Mor::new(MorWord::new(PosCategory::new("noun"), "cookie"));
-        let mor = MorTier::new_mor(
-            vec![its, cookie],
-            talkbank_model::Terminator::Period {
-                span: talkbank_model::Span::DUMMY,
-            },
-        );
+    fn gra_word_label_with_post_clitic_resolves_to_clitic_lemma() -> Result<(), String> {
+        let file = valid_chat(
+            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+             @ID:\teng|corpus|CHI|||||Target_Child|||\n\
+             *CHI:\tit's cookie .\n%mor:\tpron|it~aux|be n|cookie .\n@End\n",
+        )?;
+        let utterance = first_utterance(file)?;
+        let mor = utterance
+            .mor_tier()
+            .ok_or_else(|| "the %mor line built no tier".to_string())?;
 
-        // Semantic word 1 → chunk 0 → main of item 0 → "it". Already correct today.
-        assert_eq!(format_mor_word_label(Some(&mor), 1), "it");
-
-        // Semantic word 2 → chunk 1 → post-clitic of item 0 → "be".
-        // BUG: currently returns "cookie" because the function indexes mor.items[1].
-        assert_eq!(format_mor_word_label(Some(&mor), 2), "be");
-
-        // Semantic word 3 → chunk 2 → main of item 1 → "cookie".
-        // BUG: currently returns "word 3" because mor.items[2] is None.
-        assert_eq!(format_mor_word_label(Some(&mor), 3), "cookie");
+        // Semantic word 1: chunk 0, the main word of item 0.
+        assert_eq!(format_mor_word_label(Some(mor), 1), "it");
+        // Semantic word 2: chunk 1, the post-clitic of item 0, which the
+        // items-indexed version returned as "cookie".
+        assert_eq!(format_mor_word_label(Some(mor), 2), "be");
+        // Semantic word 3: chunk 2, the main word of item 1, which the
+        // items-indexed version fell off the end of into "word 3".
+        assert_eq!(format_mor_word_label(Some(mor), 3), "cookie");
+        Ok(())
     }
 }

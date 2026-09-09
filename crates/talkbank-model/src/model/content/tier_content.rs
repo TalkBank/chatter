@@ -271,77 +271,6 @@ impl TierContent {
         let _ = self.write_tier_content(&mut output);
         output
     }
-
-    /// Writes payload region while omitting all bullet markers.
-    ///
-    /// Skips the terminal bullet and any `InternalBullet` content items.
-    /// Everything else (linkers, language code, words, terminator, postcodes)
-    /// is written normally. Useful for producing clean display text (e.g.
-    /// TextGrid interval labels) from the AST without cloning.
-    pub(crate) fn write_tier_content_no_bullets<W: std::fmt::Write>(
-        &self,
-        w: &mut W,
-    ) -> std::fmt::Result {
-        use super::UtteranceContent;
-
-        // Linkers
-        for (i, linker) in self.linkers.iter().enumerate() {
-            if i > 0 {
-                w.write_char(' ')?;
-            }
-            linker.write_chat(w)?;
-        }
-
-        // Language code
-        if let Some(ref lang_code) = self.language_code {
-            if !self.linkers.is_empty() {
-                w.write_char(' ')?;
-            }
-            w.write_str("[- ")?;
-            lang_code.write_chat(w)?;
-            w.write_char(']')?;
-        }
-
-        // Content items, skip InternalBullet
-        let mut item_count = 0;
-        for item in self.content.iter() {
-            if matches!(item, UtteranceContent::InternalBullet(_)) {
-                continue;
-            }
-            let needs_space =
-                item_count > 0 || !self.linkers.is_empty() || self.language_code.is_some();
-            if needs_space {
-                w.write_char(' ')?;
-            }
-            item.write_chat(w)?;
-            item_count += 1;
-        }
-
-        // Terminator
-        if let Some(ref term) = self.terminator {
-            if item_count > 0 || !self.linkers.is_empty() || self.language_code.is_some() {
-                w.write_char(' ')?;
-            }
-            term.write_chat(w)?;
-        }
-
-        // Postcodes
-        for postcode in &self.postcodes {
-            w.write_char(' ')?;
-            postcode.write_chat(w)?;
-        }
-
-        // Terminal bullet intentionally omitted
-
-        Ok(())
-    }
-
-    /// Render tier content while omitting all bullet markers.
-    pub fn to_content_string_no_bullets(&self) -> String {
-        let mut output = String::new();
-        let _ = self.write_tier_content_no_bullets(&mut output);
-        output
-    }
 }
 
 impl Default for TierContent {
@@ -548,8 +477,6 @@ impl Validate for TierContentItems {
         };
         // DEFAULT: Missing field text is reported as empty to match the offending value.
         let field_text = context.field_text.clone().unwrap_or_default();
-        // DEFAULT: Missing label falls back to "content" for error messaging.
-        let _field_label = context.field_label.unwrap_or("content");
         let error_context = ErrorContext::new(field_text.clone(), span, field_text.clone());
 
         if self.0.is_empty() {
@@ -715,58 +642,5 @@ impl crate::validation::Validate for TierPostcodes {
         _context: &crate::validation::ValidationContext,
         _errors: &impl crate::ErrorSink,
     ) {
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::model::{OverlapPoint, OverlapPointKind, Separator, Word};
-    use crate::validation::ValidationContext;
-    use crate::{ErrorCollector, ParseError, Span};
-
-    /// Validates a `TierContentItems` payload and returns collected parse errors.
-    fn run_validation(items: TierContentItems) -> Vec<ParseError> {
-        let mut context = ValidationContext::new();
-        context.field_span = Some(Span::from_usize(0, 0));
-        context.field_text = Some("test".to_string());
-        let errors = ErrorCollector::new();
-        items.validate(&context, &errors);
-        errors.into_vec()
-    }
-
-    /// Regression: trailing separators remain valid in CHAT before terminators.
-    #[test]
-    fn trailing_separator_is_valid() {
-        // Per CHAT specification, separators can appear anywhere, including before terminators
-        let items = TierContentItems::new(vec![
-            UtteranceContent::Word(Box::new(Word::new_unchecked("hi", "hi"))),
-            UtteranceContent::Separator(Separator::Comma { span: Span::DUMMY }),
-        ]);
-
-        let errors = run_validation(items);
-        assert!(
-            errors.is_empty(),
-            "Separators are allowed at the end of utterances (before terminators). No error should be reported."
-        );
-    }
-
-    /// Regression: overlap markers after separators still count as meaningful content.
-    #[test]
-    fn separator_followed_by_overlap_is_valid() {
-        let items = TierContentItems::new(vec![
-            UtteranceContent::Word(Box::new(Word::new_unchecked("hello", "hello"))),
-            UtteranceContent::Separator(Separator::Comma { span: Span::DUMMY }),
-            UtteranceContent::OverlapPoint(OverlapPoint::new(
-                OverlapPointKind::TopOverlapBegin,
-                None,
-            )),
-        ]);
-
-        let errors = run_validation(items);
-        assert!(
-            errors.is_empty(),
-            "Overlap marker after separator should count as content"
-        );
     }
 }

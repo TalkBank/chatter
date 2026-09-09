@@ -62,7 +62,8 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::gate::{Gate, GateOutcome, listing};
+use crate::gate::tree::RelPath;
+use crate::gate::{Gate, Outcome, ProbeSuite, ReadTree, Tier, Tree, UnprovenRule, listing};
 use crate::test_error::TestError;
 
 /// Tree-sitter node-kind identity within one grammar.
@@ -122,28 +123,28 @@ impl CoveredPairs {
 ///
 /// Kind IDs are collected without per-node allocation and remain bundled with
 /// the [`tree_sitter::Language`] that gives those IDs meaning.
-fn pairs_in(files: &[PathBuf]) -> Result<CoveredPairs, TestError> {
+fn pairs_in(tree: &ReadTree, files: &[RelPath]) -> Result<CoveredPairs, String> {
     let language: tree_sitter::Language = tree_sitter_talkbank::LANGUAGE.into();
     let mut parser = tree_sitter::Parser::new();
     parser
         .set_language(&language)
-        .map_err(|e| TestError::ParserInit(format!("cannot load the CHAT grammar: {e}")))?;
+        .map_err(|e| format!("cannot load the CHAT grammar: {e}"))?;
 
     let mut pairs = BTreeSet::new();
     for file in files {
-        let source = std::fs::read_to_string(file)?;
-        let tree = parser
+        let source = tree.read_to_string(file).map_err(|e| e.to_string())?;
+        let parsed = parser
             .parse(&source, None)
-            .ok_or_else(|| TestError::Failure(format!("parse returned nothing for {file:?}")))?;
-        walk(tree.root_node(), &mut pairs);
+            .ok_or_else(|| format!("parse returned nothing for {file}"))?;
+        walk(parsed.root_node(), &mut pairs);
     }
     if pairs.is_empty() {
         // An empty census is a broken measurement, not a corpus with no
         // structure in it, and the two read identically downstream.
-        return Err(TestError::Failure(format!(
+        return Err(format!(
             "no construct pairs found in {} file(s)",
             files.len()
-        )));
+        ));
     }
     Ok(CoveredPairs { language, pairs })
 }
@@ -177,16 +178,30 @@ fn walk(node: tree_sitter::Node<'_>, pairs: &mut BTreeSet<ConstructPair>) {
 /// function is mechanical dedup work, not a correctness fix; the case rule here
 /// is the permissive one so that adopting it can never LOSE a file.
 pub fn cha_files_under(root: &Path) -> Result<Vec<PathBuf>, TestError> {
-    let mut files: Vec<PathBuf> = walkdir::WalkDir::new(root)
+    let tree = Tree::rooted(root).into_read();
+    let files = cha_files_in(&tree, "").map_err(TestError::Failure)?;
+    Ok(files
         .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_file())
-        .map(walkdir::DirEntry::into_path)
-        .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("cha")))
+        .map(|file| root.join(file.as_str()))
+        .collect())
+}
+
+/// Every `.cha` under one directory OF A TREE, sorted.
+///
+/// The tree-reading half of [`cha_files_under`], which the gate uses so that a
+/// probe can plant a corpus. Walk errors are propagated rather than dropped:
+/// the predecessor's `filter_map(Result::ok)` meant an unreadable subdirectory
+/// silently shrank the file set while the gate still reported clean, which is
+/// a gate passing having measured less than it claims.
+fn cha_files_in(tree: &ReadTree, dir: &str) -> Result<Vec<RelPath>, String> {
+    let files: Vec<RelPath> = tree
+        .files_under(dir)
+        .map_err(|err| err.to_string())?
+        .into_iter()
+        .filter(|path| path.extension_is("cha"))
         .collect();
-    files.sort();
     if files.is_empty() {
-        return Err(TestError::Failure(format!("no .cha files under {root:?}")));
+        return Err(format!("no .cha files under {:?}", tree.root().join(dir)));
     }
     Ok(files)
 }
@@ -237,36 +252,218 @@ const UNCOVERED_PAIRS: &[(&str, &str)] = &[
 /// Reference-corpus combination coverage, as a registered gate.
 pub struct ConstructCoverageGate;
 
+/// The corpus this gate measures, in one spelling.
+const REFERENCE_CORPUS: &str = "corpus/reference";
+
+/// Rules of this gate no plant can reach.
+///
+/// See [`crate::gate::UnprovenRule`]. Two of these are compile-time inputs and
+/// two are directions the gate deliberately does not enforce, which is worth
+/// saying out loud beside a suite of green probes.
+const UNPROVEN: &[UnprovenRule] = &[
+    UnprovenRule::new(
+        "R4: a policy name that is not a grammar node kind",
+        "`resolve_named_kind` compares `UNCOVERED_PAIRS` against \
+         `tree_sitter_talkbank::LANGUAGE`. Both are compile-time inputs: the \
+         const is Rust source and the node-kind vocabulary is linked in from \
+         the committed `grammar/src/parser.c`. No edit to any file the gate \
+         READS reaches it.",
+    ),
+    UnprovenRule::new(
+        "the `parse returned nothing` branch",
+        "`tree_sitter::Parser::parse` returns `None` only after a timeout or a \
+         cancellation flag, and this gate sets neither. A dead branch, kept \
+         because the alternative is fabricating a tree from nothing.",
+    ),
+    UnprovenRule::new(
+        "R5's DISCOVERY direction, which the gate does not enforce",
+        "Deleting a still-uncovered entry from `UNCOVERED_PAIRS` leaves the gate \
+         green. Only the retire direction is ratcheted, so the list can rot by \
+         getting SHORTER. Discovery needs the wild corpus and belongs to the \
+         corpus-differential runner. This is the gate's real blind spot.",
+    ),
+    UnprovenRule::new(
+        "the two numbers in the clean summary",
+        "`covered.len()` and `UNCOVERED_PAIRS.len()` are printed and compared to \
+         nothing, which is the shape `gate`'s own module doc says this trait \
+         exists to close, surviving on the Ok side. A probe cannot prove a \
+         check that does not exist; naming it is the only available action.",
+    ),
+    UnprovenRule::new(
+        "R5 for 18 of its 23 listed pairs",
+        "The content probes reach 5 instances. All 23 flow through one \
+         `contains_named` loop and one failure text, so per-instance probes \
+         would prove the same code path again; three of the rest would need \
+         materially different constructs planted (a mid-content bullet, a \
+         continuation inside a bullet-carrying tier, a `$pos` on a real word).",
+    ),
+];
+
+/// The corpus file one probe writes invalid bytes into, and whose name that
+/// same probe requires the failure to carry.
+/// The one corpus file four probes reach for: three plant an edit into it and
+/// one writes invalid bytes into it, and that fourth probe also requires the
+/// failure to NAME it.
+///
+/// One spelling, because a rename that missed the assertion would leave a probe
+/// asserting on a path nothing writes, which passes only when the gate fails
+/// for some other reason.
+const MOR_GRA_FIXTURE: &str = "corpus/reference/tiers/mor-gra.cha";
+
 impl Gate for ConstructCoverageGate {
     fn name(&self) -> &'static str {
         "reference-corpus combination coverage"
     }
 
-    fn check(&self) -> GateOutcome {
-        let root = crate::repo_paths::workspace_root().join("corpus/reference");
-        let files =
-            cha_files_under(&root).map_err(|e| format!("cannot list the reference corpus: {e}"))?;
-        let covered = pairs_in(&files).map_err(|e| format!("cannot measure coverage: {e}"))?;
+    fn check(&self, tree: ReadTree) -> Outcome {
+        // ABSENT and EMPTY are different facts. A filtered clone that omits
+        // `corpus/` has nothing to say about combination coverage and must not
+        // be reported as a corpus defect; a corpus DIRECTORY holding no `.cha`
+        // is a broken measurement and fails. The predecessor collapsed both
+        // into one failure text.
+        if !tree.dir_exists(REFERENCE_CORPUS) {
+            return Outcome::unavailable(
+                format!(
+                    "{REFERENCE_CORPUS}/ is not in this checkout; a sparse or \
+                     filtered clone omits it"
+                ),
+                Tier::PrePush,
+            );
+        }
+
+        let files = match cha_files_in(&tree, REFERENCE_CORPUS) {
+            Ok(files) => files,
+            Err(why) => {
+                return Outcome::failed(format!("cannot list the reference corpus: {why}"));
+            }
+        };
+        let covered = match pairs_in(&tree, &files) {
+            Ok(covered) => covered,
+            Err(why) => return Outcome::failed(format!("cannot measure coverage: {why}")),
+        };
 
         let mut retired = Vec::new();
         for &(parent, child) in UNCOVERED_PAIRS {
             let pair = NamedConstructPair { parent, child };
-            if covered.contains_named(pair)? {
-                retired.push(pair);
+            match covered.contains_named(pair) {
+                Ok(true) => retired.push(pair),
+                Ok(false) => {}
+                Err(why) => return Outcome::failed(why),
             }
         }
 
         if retired.is_empty() {
-            return Ok(format!(
+            return tree.clean(format!(
                 "{} construct pair(s) covered; {} combination gap(s) remaining",
                 covered.len(),
                 UNCOVERED_PAIRS.len(),
             ));
         }
-        Err(listing(
+        Outcome::failed(listing(
             "FAIL: listed as uncovered but the reference corpus DOES produce them.\n\
              Delete them from UNCOVERED_PAIRS in the commit that covered them:",
             &retired,
         ))
+    }
+
+    /// Five of these plant a listed pair INTO the corpus, which is the ratchet's
+    /// one rule; the other three are about refusing a measurement it cannot
+    /// make, and the last is about declining to make one at all. The three
+    /// chosen pairs each have a token with no equal-length competitor in its
+    /// position, so none of them can quietly fail to appear.
+    fn probes(&self) -> ProbeSuite {
+        ProbeSuite::must_fail(
+            "a %mor tier terminated with +... (mor_contents -> trailing_off)",
+            "mor_contents -> trailing_off",
+            |edit| {
+                edit.replace_once(
+                    MOR_GRA_FIXTURE,
+                    "noun|cookie-Plur .",
+                    "noun|cookie-Plur +...",
+                )
+            },
+        )
+        .declining(
+            "the reference corpus is not in this checkout at all",
+            "corpus/reference/ is not in this checkout",
+            Tier::PrePush,
+            |edit| {
+                edit.remove_dir(REFERENCE_CORPUS);
+                Ok(())
+            },
+        )
+        .refusing(
+            "an @ID SES field holding a bare ethnicity (id_ses -> ethnicity_value)",
+            "id_ses -> ethnicity_value",
+            |edit| {
+                edit.replace_once(
+                    "corpus/reference/core/headers-time-and-types.cha",
+                    "White,MC",
+                    "White",
+                )
+            },
+        )
+        .refusing(
+            "a tag marker inside a %wor body (wor_tier_body -> tag_marker)",
+            "wor_tier_body -> tag_marker",
+            |edit| {
+                edit.replace_once(
+                    "corpus/reference/tiers/wor.cha",
+                    "\u{15}300_600\u{15} .",
+                    "\u{15}300_600\u{15} \u{201E} .",
+                )
+            },
+        )
+        .refusing(
+            "a trailing separator space on a main tier (main_tier -> sep_trailing_space)",
+            "main_tier -> sep_trailing_space",
+            |edit| {
+                edit.replace_once(
+                    MOR_GRA_FIXTURE,
+                    "\tit's I want cookies .",
+                    "\t it's I want cookies .",
+                )
+            },
+        )
+        .refusing(
+            "a trailing separator space on a dependent tier (tier_sep -> sep_trailing_space)",
+            "tier_sep -> sep_trailing_space",
+            |edit| edit.replace_once(MOR_GRA_FIXTURE, "%gra:\t1|4|NSUBJ", "%gra:\t 1|4|NSUBJ"),
+        )
+        .refusing(
+            "the corpus directory is there and holds no .cha",
+            "no .cha files under",
+            |edit| {
+                edit.hide_files_under(REFERENCE_CORPUS);
+                Ok(())
+            },
+        )
+        .refusing(
+            "a corpus file whose bytes are not UTF-8",
+            // The PLANTED FILE and the READ's own words. Two things were wrong
+            // with naming "cannot measure coverage": it is the wrapper
+            // `pairs_in` puts around every failure it has, so the probe passed
+            // on the grammar-load failure and the empty-census refusal alike;
+            // and it named no file, so any non-UTF-8 corpus file satisfied it.
+            // A probe should be satisfiable only by the tree it planted.
+            "mor-gra.cha: stream did not contain valid UTF-8",
+            |edit| {
+                edit.write_bytes(MOR_GRA_FIXTURE, vec![0xFF]);
+                Ok(())
+            },
+        )
+        .refusing(
+            "a corpus of one empty file, so the census is empty",
+            "no construct pairs found",
+            |edit| {
+                edit.hide_files_under(REFERENCE_CORPUS);
+                edit.write(&format!("{REFERENCE_CORPUS}/probe-empty.cha"), "");
+                Ok(())
+            },
+        )
+    }
+
+    fn unproven_rules(&self) -> &'static [UnprovenRule] {
+        UNPROVEN
     }
 }

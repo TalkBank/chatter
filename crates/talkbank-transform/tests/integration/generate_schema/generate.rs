@@ -84,7 +84,7 @@ fn generated_ref_siblings_enforce_tag_and_payload() -> Result<(), Box<dyn std::e
         "$ref": "#/$defs/BracketedItem",
     });
     let validator = jsonschema::validator_for(&schema)?;
-    let mut word = serde_json::to_value(talkbank_model::Word::new_unchecked("hello", "hello"))?;
+    let mut word = serde_json::to_value(talkbank_model::Word::simple("hello"))?;
     word["type"] = serde_json::json!("word");
     assert!(validator.is_valid(&word));
     word["type"] = serde_json::json!("unknown_tag");

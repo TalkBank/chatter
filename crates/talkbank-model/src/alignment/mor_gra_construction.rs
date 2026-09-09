@@ -73,6 +73,11 @@ pub fn try_align_mor_gra(
 
 #[cfg(test)]
 mod tests {
+    //! These build their inputs by hand ON PURPOSE: `try_align_mor_gra` is a
+    //! CONSTRUCTOR fed by a tagger with `Mor` items and relations it made,
+    //! never by parsed text, so a hand-built argument list is exactly what
+    //! production hands it. Every `Span::DUMMY` here is the constructor's
+    //! own span argument.
     use super::*;
     use crate::model::dependent_tier::{MorWord, PosCategory};
 

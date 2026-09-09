@@ -23,10 +23,10 @@ mod special;
 mod structured;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{AsRawNode, HeaderChoice, NodeSlot, extract_header};
+use crate::generated_traversal::{AsRawNode, HeaderChoice, SlotView, extract_header};
 use crate::model::Header;
 use crate::node_types::THUMBNAIL_HEADER;
-use crate::parser::tree_parsing::parser_helpers::surface_unexpected;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -40,8 +40,8 @@ pub fn parse_header_node(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let children = extract_header(header_node);
-    let outcome = match children.content.slot() {
-        NodeSlot::Present(choice) => dispatch_header_choice(choice.clone(), input, errors),
+    let outcome = match children.content.slot().view() {
+        SlotView::Present(choice) => dispatch_header_choice(choice.clone(), input, errors),
         // `dispatch_line` only routes a Present concrete `header` subtype node
         // here, so these slots are unreachable in practice. The pre-migration
         // code (supertypes mode of `resolve_header_node`) always produced a
@@ -49,15 +49,15 @@ pub fn parse_header_node(
         // point either; preserve that by rejecting with NO new diagnostic (the
         // whole-tree recovery backstop plus validation still cover any genuine
         // recovery node).
-        NodeSlot::Error(_) | NodeSlot::Missing(_) | NodeSlot::Unexpected(_) | NodeSlot::Absent => {
+        SlotView::Error(_) | SlotView::Missing(_) | SlotView::Unexpected(_) => {
             ParseOutcome::rejected()
         }
     };
     // A self-classifying supertype extraction like `extract_header` never
     // populates `unexpected` in practice (there is no separate grammar
     // position it could fail to consume), but surface it anyway so every
-    // migrated carrier uses the SAME mechanism (see `surface_unexpected`).
-    surface_unexpected(&children.unexpected, input, errors);
+    // migrated carrier uses the SAME mechanism (see `surface_displaced`).
+    surface_displaced(&children.unexpected, "header", input, errors);
     outcome
 }
 

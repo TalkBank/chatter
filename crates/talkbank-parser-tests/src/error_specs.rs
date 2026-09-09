@@ -43,6 +43,8 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use crate::gate::tree::{ReadTree, RelPath, Tree};
+
 use talkbank_model::ErrorCode;
 
 use talkbank_spec_vocabulary::SpecErrorCode;
@@ -101,6 +103,15 @@ pub struct SpecFile {
     /// over. `load` is the only constructor and it resolves, so possession of
     /// a `SpecFile` proves the code is registered.
     status: Status,
+    /// The rules the CODE this file documents runs under, resolved at load.
+    ///
+    /// The second per-code fact this workspace reads, and resolved the same
+    /// way and for the same reason as `status`: a harness that measures an
+    /// example must run it the way the rule runs, or it measures a rule that
+    /// never executed. The backend-parity harness did exactly that until
+    /// 2026-09-08, comparing two parsers over eight opt-in codes with the
+    /// option off, so both reported nothing and agreed vacuously.
+    rules: talkbank_spec_vocabulary::frontmatter::RuleProfile,
 }
 
 /// The code a spec FILENAME names: `E375_replacement....md` -> `E375`.
@@ -167,6 +178,12 @@ impl SpecFile {
         &self.front.code
     }
 
+    /// The rules this spec's code runs under. See the field.
+    #[must_use]
+    pub fn rules(&self) -> talkbank_spec_vocabulary::frontmatter::RuleProfile {
+        self.rules
+    }
+
     /// This spec's examples, in file order.
     #[must_use]
     pub fn examples(&self) -> &[ExampleFrontmatter] {
@@ -219,51 +236,69 @@ pub fn spec_dir(repo_root: &Path) -> std::path::PathBuf {
 /// clean, and a clean report from a broken read is indistinguishable from a
 /// clean report from a healthy one.
 pub fn load(repo_root: &Path) -> Result<Vec<SpecFile>, String> {
+    load_from(&Tree::rooted(repo_root).into_read())
+}
+
+/// Where the error specs live, as one tree-relative spelling.
+pub const SPEC_ERRORS: &str = "spec/errors";
+
+/// The same load, reading through a [`Tree`].
+///
+/// The gate reads through this so that a probe can plant a spec corpus without
+/// touching the checkout. [`load`] is the same function over a tree with no
+/// overrides, which is what every caller outside this crate still uses.
+///
+/// # Errors
+///
+/// When the registry cannot be read or violates a rule, when the directory
+/// holds no spec files, when a file is unreadable or malformed, or when a
+/// filename and its frontmatter name different codes.
+pub fn load_from(tree: &ReadTree) -> Result<Vec<SpecFile>, String> {
     // ONE spelling of where the specs and the registry live, derived from one
-    // root, and `spec_dir` is exported so a caller building a failure message
-    // does not re-derive it. Neither caller could previously have said that
-    // the registry it resolves against came from the same checkout.
-    let dir = spec_dir(repo_root);
-    let registry = CodeRegistry::load(repo_root).map_err(|why| why.to_string())?;
-    // ONE enumeration, shared with the spec-side loader. This had its own
-    // `read_dir` plus `sort_by_key(file_name)`, which agreed with
-    // `spec_file_paths`'s full-path sort only because `spec/errors` is flat.
-    // Bare `?`: the shared walker's error already names the directory, so
-    // wrapping it printed the path and a verb twice.
-    let paths = talkbank_spec_vocabulary::spec_file_paths(&dir)?;
+    // tree, so the registry a spec resolves against provably comes from the
+    // same checkout as the spec.
+    let registry_path = RelPath::new(talkbank_spec_vocabulary::registry::REGISTRY_PATH);
+    let registry_text = tree
+        .read_to_string(&registry_path)
+        .map_err(|err| format!("cannot read {err}"))?;
+    let registry = CodeRegistry::parse(&registry_text).map_err(|why| why.to_string())?;
+
+    // The SAME predicate as `talkbank_spec_vocabulary::spec_file_paths`, not
+    // the same rule written twice: this used to spell it out again, and the
+    // two spellings already disagreed on `E999.MD`, which this reader took and
+    // that one did not. Only the enumeration differs now, which is the
+    // irreducible part: that one walks the filesystem and this one reads
+    // through the tree overlay so a probe can plant a spec corpus.
+    //
+    // No sort: `files_under` collects through a `BTreeSet` and returns in
+    // order, so sorting again was work whose result could not differ.
+    let paths: Vec<RelPath> = tree
+        .files_under(SPEC_ERRORS)
+        .map_err(|err| err.to_string())?
+        .into_iter()
+        .filter(|path| talkbank_spec_vocabulary::is_spec_file_name(path.file_name()))
+        .collect();
 
     let mut specs = Vec::new();
     for path in paths {
-        // No fallible arm: `spec_file_paths` only yields a path whose STEM is
-        // valid UTF-8 and code-shaped, so a file name exists and is UTF-8 by
-        // construction. An error branch here would be unreachable, and an
-        // unreachable branch needs a fabricated message to fill it.
-        let filename = match path.file_name().and_then(|name| name.to_str()) {
-            Some(name) => name.to_owned(),
-            None => continue,
-        };
-        let content = std::fs::read_to_string(&path)
-            .map_err(|err| format!("cannot read {}: {err}", path.display()))?;
-        // ONE call, because the schema crate owns the verb now. This was a
-        // `split` then a `toml::from_str` with its own error prefix, which is
-        // the same two steps the spec-side loader was writing separately.
+        let filename = path.file_name().to_owned();
+        let content = tree
+            .read_to_string(&path)
+            .map_err(|err| format!("cannot read {err}"))?;
         // ONE call: read and resolve are one decision, owned by the schema
-        // crate. They were two steps here and two more in the spec workspace,
-        // which is the seam `frontmatter::read` was created to close one step
-        // down. A spec naming a code the registry does not declare is refused
+        // crate. A spec naming a code the registry does not declare is refused
         // here, so no consumer downstream holds an `Option<Status>`.
         let (front, entry, _body) =
             talkbank_spec_vocabulary::frontmatter::read_resolved(&content, &registry)
                 .map_err(|why| format!("{filename}: {why}"))?;
         let status = entry.status();
+        let rules = entry.rules();
 
         // The FILENAME and the DECLARED code are two statements of one fact.
         // Phase 1b made the second one available and left them uncompared,
         // which is a drift nothing would have reported: rename a spec file and
         // the parity suite asserts one code while three coverage gates count
-        // another, silently and forever. Merging them is R1's job (`ErrorCode`
-        // generated from the specs); refusing a disagreement is not, and costs
-        // four lines.
+        // another, silently and forever.
         if let Some(stem_code) = stem_code_of(&filename)
             && stem_code != front.code.as_str()
         {
@@ -277,10 +312,14 @@ pub fn load(repo_root: &Path) -> Result<Vec<SpecFile>, String> {
             filename,
             front,
             status,
+            rules,
         });
     }
     if specs.is_empty() {
-        return Err(format!("no spec files under {}", dir.display()));
+        return Err(format!(
+            "no spec files under {}",
+            tree.root().join(SPEC_ERRORS).display()
+        ));
     }
     Ok(specs)
 }

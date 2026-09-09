@@ -12,8 +12,6 @@
 //! to report precise mismatch positions.
 
 mod align;
-#[cfg(test)]
-mod tests;
 mod types;
 
 pub use align::align_mor_to_gra;

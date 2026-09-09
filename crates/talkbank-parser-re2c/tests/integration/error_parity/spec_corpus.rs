@@ -12,7 +12,7 @@ use talkbank_model::{ErrorCode, ErrorCollector};
 use talkbank_parser_tests::error_specs::{self, Status};
 use talkbank_spec_vocabulary::frontmatter::ExampleFrontmatter;
 
-use super::model::{Expected, Reported, SpecLabel};
+use super::model::{ExampleOrdinal, Expected, Reported, SpecLabel};
 
 // ---------------------------------------------------------------------------
 // Reading the spec suite
@@ -30,13 +30,26 @@ pub(super) struct SpecCase {
 pub(super) struct SpecInput {
     text: String,
     source: Option<PathBuf>,
+    /// The rules this example's CODE runs under, carried here for the same
+    /// reason its source is: a rule-dependent code must not become invisible
+    /// when the corpus is loaded.
+    ///
+    /// Without it this harness validated every example under the DEFAULT rule
+    /// set, so the eight opt-in linker codes reported nothing on BOTH
+    /// backends and their parity cases agreed vacuously. Two parsers that
+    /// both run no check agree about nothing.
+    rules: talkbank_spec_vocabulary::frontmatter::RuleProfile,
 }
 
 impl SpecInput {
-    fn from_example(example: &ExampleFrontmatter) -> Self {
+    fn from_example(
+        example: &ExampleFrontmatter,
+        rules: talkbank_spec_vocabulary::frontmatter::RuleProfile,
+    ) -> Self {
         Self {
             text: example.chat.as_str().to_owned(),
             source: example.source.as_ref().map(PathBuf::from),
+            rules,
         }
     }
 
@@ -54,7 +67,7 @@ impl SpecInput {
             .source
             .as_deref()
             .map_or(TranscriptName::Anonymous, TranscriptName::for_path);
-        file.validate_with_alignment(&errors, name);
+        file.validate_with_alignment_and_rules(self.rules.selection(), &errors, name);
         Reported::of(
             errors
                 .into_vec()
@@ -127,11 +140,18 @@ fn expected_for(
 /// three readers legitimately disagree about it.
 ///
 /// Only `NotImplemented` is skipped here. `spec/runtime-tools` also skips
-/// `Deprecated` and `UnreachableFromChat`, so three specs are measured here
-/// that it skips (`E210.md`, `E213.md`,
-/// `E768.md`). Checked before leaving the
-/// difference in place: none of the three diverges, so none is in the baseline
-/// and none adds ratchet noise.
+/// `Deprecated` and `UnreachableFromChat`, so every spec in either of those
+/// states is measured HERE and skipped THERE.
+///
+/// The set is deliberately not enumerated. It was, as three files, and two
+/// status corrections on 2026-09-08 made it five without the comment moving,
+/// which is the drift a list beside a live registry always has. The rule is
+/// the durable statement; `rg 'status = "(deprecated|unreachable_from_chat)"'
+/// over `spec/codes/error-codes.toml` is the membership.
+///
+/// Why the difference is left in place: a spec measured here that diverges
+/// would appear in `KNOWN_DIVERGENCES`, and any such entry is adjudicated like
+/// every other, so the wider scope adds evidence rather than noise.
 fn measurable(status: Status) -> Measure {
     match status {
         Status::NotImplemented => Measure::Skip,
@@ -171,13 +191,12 @@ pub(super) fn load_spec_corpus() -> Result<SpecCorpus, String> {
         }
 
         let examples = spec.examples();
-        let in_file = examples.len();
         for (index, example) in examples.iter().enumerate() {
-            let label = SpecLabel::new(&filename, index, in_file);
+            let label = SpecLabel::new(&filename, ExampleOrdinal::from_zero_based(index));
             match expected_for(example, spec.declared_code(), &filename)? {
                 Some(expected) => corpus.cases.push(SpecCase {
                     label,
-                    input: SpecInput::from_example(example),
+                    input: SpecInput::from_example(example, spec.rules()),
                     expected,
                 }),
                 // A `legal` claim asserts an absence, which this harness
@@ -207,7 +226,7 @@ fn declared_source_controls_filename_validation() {
     let mut case = corpus
         .cases
         .into_iter()
-        .find(|case| case.label.to_string() == "E531.md")
+        .find(|case| case.label.to_string() == "E531.md#1")
         .unwrap();
     let declared = case.input.source.take().expect("E531 declares its source");
     let canonical = talkbank_parser::TreeSitterParser::new().unwrap();

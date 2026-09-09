@@ -130,6 +130,59 @@ impl NonEmptyString {
         }
     }
 
+    /// A string that begins with `head`: non-empty by construction, so
+    /// nothing is checked and nothing can fail. The one route to a
+    /// `NonEmptyString` built from a possibly-empty tail, for a value the
+    /// program composes from a known first character (a `%x` tier label,
+    /// stored with its `x`) rather than reads from input.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use talkbank_model::model::NonEmptyString;
+    ///
+    /// assert_eq!(NonEmptyString::from_head_and_tail('x', "mor").as_str(), "xmor");
+    /// assert_eq!(NonEmptyString::from_head_and_tail('x', "").as_str(), "x");
+    /// ```
+    pub fn from_head_and_tail(head: char, tail: &str) -> Self {
+        let mut text = String::with_capacity(head.len_utf8() + tail.len());
+        text.push(head);
+        text.push_str(tail);
+        Self(smol_str::SmolStr::from(text))
+    }
+
+    /// This text followed by `tail`: non-empty because this is, so nothing is
+    /// checked and nothing can fail. The append that keeps the proof.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use talkbank_model::non_empty_literal;
+    ///
+    /// assert_eq!(non_empty_literal!("w").with_suffix("12").as_str(), "w12");
+    /// ```
+    #[must_use]
+    pub fn with_suffix(&self, tail: &str) -> Self {
+        let mut text = String::with_capacity(self.0.len() + tail.len());
+        text.push_str(&self.0);
+        text.push_str(tail);
+        Self(smol_str::SmolStr::from(text))
+    }
+
+    /// The route the [`non_empty_literal!`](crate::non_empty_literal) macro
+    /// takes after proving its literal non-empty at compile time. Callable
+    /// directly, which is why the fabrication ratchet counts its name beside
+    /// `new_unchecked`: a call that is not the macro's is a fabrication, and
+    /// carries the same debug assertion that one does.
+    #[doc(hidden)]
+    pub fn from_checked_literal(literal: &'static str) -> Self {
+        debug_assert!(
+            !literal.is_empty(),
+            "NonEmptyString::from_checked_literal called with an empty literal"
+        );
+        Self(smol_str::SmolStr::new_static(literal))
+    }
+
     /// Construct without checking emptiness.
     ///
     /// # Safety
@@ -215,6 +268,31 @@ impl Validate for NonEmptyString {
             .with_suggestion("Provide a non-empty value"),
         );
     }
+}
+
+/// A [`NonEmptyString`] from a string literal, proven non-empty by the
+/// compiler: an empty literal is a compile error, so the value needs no
+/// runtime check and no `Result`. A literal of another kind (a number, a
+/// byte string) is refused where the typed constant is declared.
+///
+/// ```
+/// use talkbank_model::non_empty_literal;
+///
+/// assert_eq!(non_empty_literal!("lemma").as_str(), "lemma");
+/// ```
+///
+/// ```compile_fail
+/// use talkbank_model::non_empty_literal;
+///
+/// let _ = non_empty_literal!("");
+/// ```
+#[macro_export]
+macro_rules! non_empty_literal {
+    ($literal:literal) => {{
+        const LITERAL: &'static str = $literal;
+        const _: () = assert!(!LITERAL.is_empty(), "a non-empty literal is empty");
+        $crate::model::NonEmptyString::from_checked_literal(LITERAL)
+    }};
 }
 
 #[cfg(test)]

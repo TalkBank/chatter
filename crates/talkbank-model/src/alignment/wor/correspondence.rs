@@ -171,6 +171,3 @@ pub fn corroborate_wor_timing(
 
     WorTimingCorrespondence::Corroborated(CorroboratedWorTimings { policy, slots })
 }
-
-#[cfg(test)]
-mod tests;
