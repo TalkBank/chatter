@@ -1,7 +1,7 @@
 # Developer Verification Checks
 
 **Status:** Current
-**Last modified:** 2026-09-06 10:18 EDT
+**Last modified:** 2026-09-10 00:45 EDT
 
 What to run locally, and what each thing costs. The commands are `just`
 recipes; `just --list` shows them all.
@@ -34,13 +34,21 @@ and an untracked hook is a gate that exists on exactly one machine.
 
 | Hook | Refuses |
 |---|---|
+| `pre-commit` | staged document dates older than the prospective commit/squash date, then chains to the optional local hook |
 | `commit-msg` | a `type(scope)!:` subject that does not touch `CHANGELOG.md`; and production Rust staged with no test, spec, corpus or fixture beside it |
 | `pre-push` | a push with no `just gate` stamp, or a stamp taken on different bytes |
 
-Neither has a bypass flag, and `pre-push` runs no checks of its own: it reads
+These hooks have no bypass flag, and `pre-push` runs no checks of its own: it reads
 the stamp `just gate` writes, because git has already opened its connection to
 the remote by the time a pre-push hook runs, so a multi-minute hook is closed
 by the SSH idle timeout and fails a push that had passed.
+
+`just doc-dates` checks pending worktree changes and unpublished changes since
+the configured upstream against today's date. The commit hook checks the Git
+index instead, so an unstaged correction cannot conceal a stale staged header.
+Detached CI checks actual committed history. The small date check is repeated
+at commit time because committing changes history without changing the tree
+covered by the full gate receipt. Headers are never automatically rewritten.
 
 **The red-evidence gate has one way past it, and it is not a flag.** If a change
 genuinely admits neither a test nor a type, say so in a `Red:` trailer on its

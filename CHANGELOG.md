@@ -25,6 +25,9 @@ version and are listed under "Changed" / "Removed".
 
 ### Fixed
 
+- Documentation-date checks now include pending commit/squash changes before
+  publication. The commit hook checks the actual index, preventing an unstaged
+  repair or an older gate receipt from masking stale staged date headers.
 - Merge builds the derived participant map through the canonical header join
   and validates the assembled AST, including tier alignment, before returning
   success. Callers no longer need serialization and reparsing to obtain a

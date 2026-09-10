@@ -480,7 +480,8 @@ symbols-gen:
 # left listed, so the list can only shrink. Do not bulk-stamp dates to empty it;
 # read the page first.
 doc-dates:
-    python3 {{ justfile_directory() }}/scripts/check_doc_dates.py
+    python3 -m unittest scripts/test_check_doc_dates.py
+    python3 {{ justfile_directory() }}/scripts/check_doc_dates.py --prospective
 # Regenerate every artifact derived from spec/ (tests, fixtures, registries).
 #
 # One command for what used to be four hand-typed `cargo run --manifest-path`

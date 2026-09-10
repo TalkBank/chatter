@@ -37,14 +37,24 @@ they are wrong about the published history, which is what a reader of the repo
 sees. Stamp the affected docs with the squash date, and only after confirming
 each one is actually current: six were affected by the 2026-08-12 squash, all
 of them documenting work inside it.
+
+`--prospective` also checks changes since the configured upstream against
+today's local date, before a commit or squash can re-date them. Without an
+upstream (including detached CI), it checks uncommitted changes against HEAD.
+New, unstaged and staged documents participate; deleted documents do not.
+The gate and commit hook both use this mode: a content-only gate receipt cannot
+prove a history-dependent date check after a later commit. CI still checks the
+actual committed dates. No dates are automatically rewritten.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime
 import re
 import subprocess
 import sys
+from enum import Enum
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -87,18 +97,37 @@ EXCLUDED_PARTS = ("/generated/",)
 EXCLUDED_NAMES = ("CHANGELOG.md", "PULL_REQUEST_TEMPLATE.md")
 
 
-def tracked_markdown() -> list[str]:
+class Snapshot(Enum):
+    """The bytes being checked: a proposed gate tree or the actual Git index."""
+
+    WORKTREE = "worktree"
+    INDEX = "index"
+
+    def read(self, path: str) -> str:
+        if self is Snapshot.INDEX:
+            return subprocess.run(
+                ["git", "show", f":{path}"], cwd=REPO_ROOT,
+                capture_output=True, text=True, check=True,
+            ).stdout
+        return (REPO_ROOT / path).read_text(encoding="utf-8")
+
+
+def tracked_markdown(snapshot: Snapshot) -> list[str]:
+    options = ["--cached"]
+    if snapshot is Snapshot.WORKTREE:
+        options.extend(["--others", "--exclude-standard"])
     out = subprocess.run(
-        ["git", "ls-files", "*.md"],
+        ["git", "ls-files", *options, "-z", "*.md"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,
-    ).stdout.split()
+    ).stdout.split("\0")
     return [
         path
-        for path in out
-        if not path.startswith(EXCLUDED_PREFIXES)
+        for path in sorted(set(out))
+        if path and (snapshot is Snapshot.INDEX or (REPO_ROOT / path).is_file())
+        and not path.startswith(EXCLUDED_PREFIXES)
         and not any(part in path for part in EXCLUDED_PARTS)
         and Path(path).name not in EXCLUDED_NAMES
     ]
@@ -139,35 +168,82 @@ def last_commit_date(path: str) -> str | None:
     return out or None
 
 
-def stale_reason(path: str) -> str | None:
+def prospective_paths(snapshot: Snapshot) -> set[str]:
+    """Changes a commit/squash would re-date, including not-yet-staged pages.
+
+    A configured upstream is the last published boundary. Detached CI or a
+    branch without an upstream uses HEAD and checks its uncommitted changes;
+    committed history is still checked separately. No second checkout is made.
+    """
+    upstream = subprocess.run(
+        ["git", "rev-parse", "--verify", "@{upstream}"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+    )
+    base = upstream.stdout.strip() if upstream.returncode == 0 else "HEAD"
+    options = ["--cached"] if snapshot is Snapshot.INDEX else []
+    changed = subprocess.run(
+        ["git", "diff", *options, "--name-only", "-z", base, "--", "*.md"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+    ).stdout
+    paths = set(changed.split("\0"))
+    if snapshot is Snapshot.INDEX:
+        return paths
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z", "*.md"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+    ).stdout
+    return paths | set(untracked.split("\0"))
+
+
+def stale_reason(path: str, snapshot: Snapshot, prospective_date: str | None = None) -> str | None:
     """Why `path` is stale, or None when its header is honest."""
-    text = (REPO_ROOT / path).read_text(encoding="utf-8")
+    text = snapshot.read(path)
     if GIT_DERIVED_DATE in text:
         return None
     match = DATE_HEADER.search(text)
     if match is None:
         return "no `Last modified` header"
     committed = last_commit_date(path)
+    if prospective_date is not None:
+        committed = max(committed, prospective_date) if committed else prospective_date
     if committed is None:
         return None
     stated = match.group(1)
     if stated < committed:
-        return f"header says {stated}, last commit {committed}"
+        boundary = "prospective commit" if prospective_date else "last commit"
+        return f"header says {stated}, {boundary} {committed}"
     return None
 
 
-def read_baseline() -> set[str]:
-    if not BASELINE.exists():
+def read_baseline(snapshot: Snapshot) -> set[str]:
+    path = str(BASELINE.relative_to(REPO_ROOT))
+    if snapshot is Snapshot.INDEX:
+        present = subprocess.run(
+            ["git", "ls-files", "--cached", "--", path], cwd=REPO_ROOT,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    else:
+        present = BASELINE.is_file()
+    if not present:
         return set()
     return {
         line.strip()
-        for line in BASELINE.read_text(encoding="utf-8").splitlines()
+        for line in snapshot.read(path).splitlines()
         if line.strip() and not line.startswith("#")
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--prospective", action="store_true",
+        help="also check pending commit/squash changes against today's local date",
+    )
+    parser.add_argument(
+        "--snapshot", choices=[snapshot.value for snapshot in Snapshot],
+        default=Snapshot.WORKTREE.value,
+        help="check worktree bytes for a gate or index bytes for a commit",
+    )
     parser.add_argument(
         "--write-baseline",
         action="store_true",
@@ -177,7 +253,13 @@ def main() -> int:
 
     refuse_if_shallow()
 
-    stale = {path: reason for path in tracked_markdown() if (reason := stale_reason(path))}
+    snapshot = Snapshot(args.snapshot)
+    pending = prospective_paths(snapshot) if args.prospective else set()
+    today = datetime.datetime.now().astimezone().date().isoformat()
+    stale = {
+        path: reason for path in tracked_markdown(snapshot)
+        if (reason := stale_reason(path, snapshot, today if path in pending else None))
+    }
 
     if args.write_baseline:
         BASELINE.write_text(
@@ -194,8 +276,8 @@ def main() -> int:
         print(f"baseline written: {len(stale)} doc(s)")
         return 0
 
-    baseline = read_baseline()
-    new = {path: reason for path, reason in stale.items() if path not in baseline}
+    baseline = read_baseline(snapshot)
+    new = {path: reason for path, reason in stale.items() if path not in baseline or path in pending}
     fixed = sorted(baseline - set(stale))
 
     for path, reason in sorted(new.items()):

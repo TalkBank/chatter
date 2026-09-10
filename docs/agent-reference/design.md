@@ -1,6 +1,6 @@
 # Design reference
 
-**Last modified:** 2026-09-09 20:37 EDT
+**Last modified:** 2026-09-10 00:45 EDT
 
 Read the sections relevant to your task. [AGENTS.md](../../AGENTS.md)
 is the canonical policy entry point and resolves workflow conflicts here.
