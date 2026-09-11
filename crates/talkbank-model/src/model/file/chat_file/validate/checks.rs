@@ -84,10 +84,15 @@ pub(super) fn check_media_linkage_has_timing(
 ) {
     use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
-    // Find the first @Media header with no status. Multiple @Media headers
+    // Find the first expected recording with no status. A missing medium
+    // declares absence, not linkage, even without a separate status token.
+    // Multiple @Media headers
     // would individually need checking, but in practice a file has at most
     // one, and if any is unqualified, the check fires at that header's span.
-    let unqualified_media = media_headers(headers).find(|(media, _)| media.status.is_none());
+    let unqualified_media = media_headers(headers).find(|(media, _)| {
+        media.status.is_none()
+            && media.declared_recording() == crate::model::header::DeclaredRecording::Expected
+    });
     let Some((_media, span)) = unqualified_media else {
         // No @Media, or @Media has a status, check does not apply.
         return;

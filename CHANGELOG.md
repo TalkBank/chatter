@@ -9,6 +9,16 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-09-11
+
+### Fixed
+
+- A `@Media` declaration with the `missing` medium no longer triggers E544
+  for absent timing. An explicitly absent recording does not promise linked
+  media; expected recordings still require timing or an appropriate status.
+- Added a specification example and generated regression fixture for the
+  missing-medium declaration.
+
 ## [0.24.0] - 2026-09-10
 
 ### Changed
@@ -3021,7 +3031,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.24.1...HEAD
+[0.24.1]: https://github.com/TalkBank/chatter/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/TalkBank/chatter/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/TalkBank/chatter/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/TalkBank/chatter/compare/v0.21.0...v0.22.0
