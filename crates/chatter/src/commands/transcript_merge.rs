@@ -117,6 +117,7 @@ pub(crate) fn merge_exit_code(error: &MergeError) -> i32 {
         | MergeError::DonorMetadataOrder
         | MergeError::AmbiguousSectionPlacement { .. }
         | MergeError::AmbiguousSectionOrder { .. }
+        | MergeError::AmbiguousUtteranceOrder { .. }
         | MergeError::InvalidOutput(_)
         | MergeError::InvalidParticipantJoin { .. }
         | MergeError::UnpositionedUtterance { .. }

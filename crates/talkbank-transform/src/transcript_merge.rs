@@ -49,6 +49,14 @@ use talkbank_model::model::{ChatFile, Line, Utterance};
 /// out-of-transform consumer needs it.
 #[derive(Debug, thiserror::Error)]
 pub enum MergeError {
+    /// Neither source order nor genuine timing anchors order the two frontiers.
+    #[error("source order is ambiguous between {reference:?} and {donor:?}")]
+    AmbiguousUtteranceOrder {
+        /// Selected reference utterance.
+        reference: MergeOrigin,
+        /// Selected donor utterance.
+        donor: MergeOrigin,
+    },
     /// Reordering an invalid donor's opening metadata would silently repair it.
     #[error("donor @ID occurs after an opening @Comment; repair header order before merging")]
     DonorMetadataOrder,
@@ -555,6 +563,30 @@ pub fn merge_chat_files(
     retain: &[SpeakerCode],
     strip_tiers: &[String],
 ) -> Result<Merged, MergeError> {
+    merge_with_placement(f1, f2, retain, strip_tiers, ordered::Placement::Timed)
+}
+
+/// Merge using immutable source order and genuine time anchors, without adding
+/// time bullets to untimed utterances. Cross-source order must be uniquely
+/// implied by strict anchor comparisons; equal or incomparable frontiers refuse.
+/// This proves structural order only. Common-media and external provenance
+/// admission remain the caller's responsibility.
+pub fn merge_chat_files_by_source_order(
+    reference: &ChatFile,
+    donor: &ChatFile,
+    retain: &[SpeakerCode],
+    strip_tiers: &[String],
+) -> Result<Merged, MergeError> {
+    merge_with_placement(reference, donor, retain, strip_tiers, ordered::Placement::SourceOrder)
+}
+
+fn merge_with_placement(
+    f1: &ChatFile,
+    f2: &ChatFile,
+    retain: &[SpeakerCode],
+    strip_tiers: &[String],
+    placement: ordered::Placement,
+) -> Result<Merged, MergeError> {
     // Precondition: donor (File 2) must not declare a language reference
     // (File 1) doesn't have. Donor under-claiming (ASR run in a fixed
     // language mode) is expected and fine; donor over-claiming is
@@ -605,7 +637,7 @@ pub fn merge_chat_files(
         Line::Utterance(u) => u.main.content.bullet.is_some(),
         _ => false,
     });
-    if !any_bulleted {
+    if placement == ordered::Placement::Timed && !any_bulleted {
         return Err(MergeError::NoTimelineInFile1);
     }
 
@@ -694,6 +726,7 @@ pub fn merge_chat_files(
         retain,
         strip_tiers,
         ordered::OpeningAdditions::from_donor(f2, retain, &dedupe_codes, inserted_participants)?,
+        placement,
     )
 }
 

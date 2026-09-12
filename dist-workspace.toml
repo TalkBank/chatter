@@ -22,8 +22,9 @@ precise-builds = true
 # browser-downloaded tarballs get a documented right-click-Open note.
 macos-sign = true
 
-# GitHub Actions runs the release workflow on `git tag v*` push.
+# Release artifacts are built through an explicit GitHub Actions dispatch.
 ci = "github"
+dispatch-releases = true
 
 # Do NOT ship a standalone self-updater binary. `chatter update` self-updates
 # IN-PROCESS: it embeds axoupdater as a library, reads the cargo-dist install

@@ -9,6 +9,22 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-09-12
+
+### Added
+
+- An explicit source-order merge policy derives a unique interleaving from
+  source ordering and available timing evidence without synthesizing timestamps.
+  Ambiguous ordering is refused; the existing timed merge policy remains the
+  default.
+
+### Changed
+
+- `MergeError` includes `AmbiguousUtteranceOrder`; downstream exhaustive
+  matches must handle the new variant.
+- CLI release artifacts are published through an explicit release workflow
+  dispatch.
+
 ## [0.24.1] - 2026-09-11
 
 ### Fixed
@@ -3032,6 +3048,7 @@ First public release.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
 [Unreleased]: https://github.com/TalkBank/chatter/compare/v0.24.1...HEAD
+[0.24.2]: https://github.com/TalkBank/chatter/compare/v0.24.1...v0.24.2
 [0.24.1]: https://github.com/TalkBank/chatter/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/TalkBank/chatter/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/TalkBank/chatter/compare/v0.22.0...v0.23.0

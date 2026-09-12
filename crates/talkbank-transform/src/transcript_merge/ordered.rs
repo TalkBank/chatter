@@ -6,6 +6,31 @@ use std::collections::{VecDeque, vec_deque::IntoIter};
 use std::iter::Peekable;
 use talkbank_model::{Span, TierSeparator};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Placement {
+    Timed,
+    SourceOrder,
+}
+
+/// Bounds are copied only from selected source AST time anchors. Missing bounds
+/// remain unknown; neither endpoint is a fabricated utterance timestamp.
+struct OrderBounds {
+    lower: Option<u64>,
+    upper: Option<u64>,
+}
+
+impl OrderBounds {
+    fn precedes(&self, other: &Self) -> Option<bool> {
+        if matches!((self.upper, other.lower), (Some(left), Some(right)) if left < right) {
+            Some(true)
+        } else if matches!((other.upper, self.lower), (Some(left), Some(right)) if left < right) {
+            Some(false)
+        } else {
+            None
+        }
+    }
+}
+
 struct HeaderEvent {
     header: Box<Header>,
     span: Span,
@@ -27,7 +52,8 @@ impl HeaderEvent {
 struct PositionedUtterance {
     utterance: Box<Utterance>,
     origin: MergeOrigin,
-    start: u64,
+    start: Option<u64>,
+    order: OrderBounds,
 }
 
 enum SourceEvent {
@@ -42,6 +68,7 @@ struct SectionBoundary {
     header: HeaderEvent,
     previous_end: Option<u64>,
     next_start: Option<u64>,
+    order: OrderBounds,
 }
 
 impl SectionBoundary {
@@ -51,12 +78,12 @@ impl SectionBoundary {
 
     fn precedes(&self, utterance: &PositionedUtterance) -> Result<bool, MergeError> {
         if self.has_ordered_neighbors() {
-            if self.next_start.is_some_and(|next| utterance.start >= next) {
+            if matches!((self.next_start, utterance.start), (Some(next), Some(start)) if start >= next) {
                 return Ok(true);
             }
             if self
                 .previous_end
-                .is_some_and(|previous| utterance.start < previous)
+                .is_some_and(|previous| utterance.start.is_some_and(|start| start < previous))
             {
                 return Ok(false);
             }
@@ -96,6 +123,7 @@ enum PendingEvent {
     Section {
         header: HeaderEvent,
         previous_end: Option<u64>,
+        previous_start: Option<u64>,
     },
     Utterance(PositionedUtterance),
     End(HeaderEvent),
@@ -111,14 +139,16 @@ struct SourceAdmission {
     events: Vec<PendingEvent>,
     previous: Option<(u64, MergeOrigin)>,
     previous_end: Option<u64>,
+    placement: Placement,
 }
 
 impl SourceAdmission {
-    fn new() -> Self {
+    fn new(placement: Placement) -> Self {
         Self {
             events: Vec::new(),
             previous: None,
             previous_end: None,
+            placement,
         }
     }
 
@@ -132,6 +162,7 @@ impl SourceAdmission {
             PendingEvent::Section {
                 header,
                 previous_end: self.previous_end,
+                previous_start: self.previous.map(|(start, _)| start),
             }
         } else {
             PendingEvent::Header(header)
@@ -144,15 +175,12 @@ impl SourceAdmission {
         utterance: Box<Utterance>,
         origin: MergeOrigin,
     ) -> Result<(), MergeError> {
-        let timing = &utterance
-            .main
-            .content
-            .bullet
-            .as_ref()
-            .ok_or(MergeError::UnpositionedUtterance { origin })?
-            .timing;
-        let start = timing.start_ms;
-        if let Some((previous_start, previous)) = self.previous
+        let timing = utterance.main.content.bullet.as_ref().map(|bullet| &bullet.timing);
+        if self.placement == Placement::Timed && timing.is_none() {
+            return Err(MergeError::UnpositionedUtterance { origin });
+        }
+        let start = timing.map(|timing| timing.start_ms);
+        if let (Some((previous_start, previous)), Some(start)) = (self.previous, start)
             && start < previous_start
         {
             return Err(MergeError::SourceTimelineReversal {
@@ -160,13 +188,17 @@ impl SourceAdmission {
                 current: origin,
             });
         }
-        self.previous = Some((start, origin));
-        self.previous_end = Some(timing.end_ms);
+        let lower = start.or(self.previous.map(|(start, _)| start));
+        if let Some(timing) = timing {
+            self.previous = Some((timing.start_ms, origin));
+            self.previous_end = Some(timing.end_ms);
+        }
         self.events
             .push(PendingEvent::Utterance(PositionedUtterance {
                 utterance,
                 origin,
                 start,
+                order: OrderBounds { lower, upper: start },
             }));
         Ok(())
     }
@@ -181,13 +213,16 @@ impl SourceAdmission {
                 PendingEvent::Section {
                     header,
                     previous_end,
+                    previous_start,
                 } => SourceEvent::Section(SectionBoundary {
                     header,
                     previous_end,
                     next_start,
+                    order: OrderBounds { lower: previous_start, upper: next_start },
                 }),
-                PendingEvent::Utterance(utterance) => {
-                    next_start = Some(utterance.start);
+                PendingEvent::Utterance(mut utterance) => {
+                    utterance.order.upper = utterance.start.or(next_start);
+                    next_start = utterance.start.or(next_start);
                     SourceEvent::Utterance(utterance)
                 }
             };
@@ -207,6 +242,7 @@ struct AdmittedMerge {
     donor: OrderedSource,
     reference_fates: Vec<ReferenceFate>,
     donor_fates: Vec<DonorFate>,
+    placement: Placement,
 }
 
 impl AdmittedMerge {
@@ -226,20 +262,43 @@ impl AdmittedMerge {
                     Some(SourceEvent::Header(_) | SourceEvent::End(_)),
                 ) => false,
                 (Some(SourceEvent::Section(reference)), Some(SourceEvent::Section(donor))) => {
-                    reference.precedes_section(donor)?
+                    match self.placement {
+                        Placement::Timed => reference.precedes_section(donor)?,
+                        Placement::SourceOrder => reference.order.precedes(&donor.order).ok_or_else(|| MergeError::AmbiguousSectionOrder {
+                            reference: reference.header.header.to_chat_string(),
+                            donor: donor.header.header.to_chat_string(),
+                        })?,
+                    }
                 }
                 (Some(SourceEvent::Section(header)), Some(SourceEvent::Utterance(utterance))) => {
-                    header.precedes(utterance)?
+                    match self.placement {
+                        Placement::Timed => header.precedes(utterance)?,
+                        Placement::SourceOrder => header.order.precedes(&utterance.order).ok_or_else(|| MergeError::AmbiguousSectionPlacement {
+                            header: header.header.header.to_chat_string(), previous_end: header.previous_end,
+                            next_start: header.next_start, competing: utterance.origin,
+                        })?,
+                    }
                 }
                 (Some(SourceEvent::Utterance(utterance)), Some(SourceEvent::Section(header))) => {
-                    !header.precedes(utterance)?
+                    match self.placement {
+                        Placement::Timed => !header.precedes(utterance)?,
+                        Placement::SourceOrder => !header.order.precedes(&utterance.order).ok_or_else(|| MergeError::AmbiguousSectionPlacement {
+                            header: header.header.header.to_chat_string(), previous_end: header.previous_end,
+                            next_start: header.next_start, competing: utterance.origin,
+                        })?,
+                    }
                 }
                 (
                     Some(SourceEvent::Utterance(_)),
                     Some(SourceEvent::Header(_) | SourceEvent::End(_)),
                 ) => false,
                 (Some(SourceEvent::Utterance(reference)), Some(SourceEvent::Utterance(donor))) => {
-                    reference.start <= donor.start
+                    match self.placement {
+                        Placement::Timed => reference.start <= donor.start,
+                        Placement::SourceOrder => reference.order.precedes(&donor.order).ok_or(MergeError::AmbiguousUtteranceOrder {
+                            reference: reference.origin, donor: donor.origin,
+                        })?,
+                    }
                 }
             };
             let source = if reference_next {
@@ -364,6 +423,7 @@ pub(super) fn merge(
     retain: &[SpeakerCode],
     strip_tiers: &[String],
     mut additions: OpeningAdditions,
+    placement: Placement,
 ) -> Result<Merged, MergeError> {
     let retained = |speaker: &SpeakerCode| retain.contains(speaker);
     let opening_end = reference
@@ -381,7 +441,7 @@ pub(super) fn merge(
             matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::ID(_)))
                 .then_some(index)
         });
-    let mut reference_admission = SourceAdmission::new();
+    let mut reference_admission = SourceAdmission::new(placement);
     let mut reference_fates = Vec::new();
     for (index, line) in reference.lines.iter().enumerate() {
         if index == opening_end {
@@ -430,7 +490,7 @@ pub(super) fn merge(
             }
         }
     }
-    let mut donor_admission = SourceAdmission::new();
+    let mut donor_admission = SourceAdmission::new(placement);
     let mut donor_fates = Vec::new();
     let donor_opening_end = donor
         .lines
@@ -473,6 +533,7 @@ pub(super) fn merge(
         donor: donor_admission.finish(),
         reference_fates,
         donor_fates,
+        placement,
     }
     .assemble()
 }

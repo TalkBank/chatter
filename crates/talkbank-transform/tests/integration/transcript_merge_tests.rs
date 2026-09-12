@@ -27,7 +27,7 @@ use talkbank_model::model::ChatFile;
 use talkbank_model::model::{Header, Line};
 use talkbank_transform::transcript_merge::{
     DonorFate, DonorIdx, MergeError, MergeOrigin, Merged, ReferenceFate, ReferenceIdx,
-    default_strip_tiers, merge_chat_files,
+    default_strip_tiers, merge_chat_files, merge_chat_files_by_source_order,
 };
 
 /// File 1 fixture for cycle 2. CHI carries:
@@ -212,6 +212,143 @@ fn merge_refuses_unpositioned_content_and_source_time_reversal() {
         merge_chat_files(&reversed, &donor, &retain, &[]),
         Err(MergeError::SourceTimelineReversal { .. })
     ));
+}
+
+#[test]
+fn source_order_merge_preserves_untimed_rows_and_origins_when_bracket_is_unique() {
+    let options = ParseValidateOptions::default();
+    let mut reference = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let mut donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options).unwrap();
+    first_source_order_utterance(&mut reference).main.content.bullet = None;
+    let timing = &mut first_source_order_utterance(&mut donor).main.content.bullet.as_mut().unwrap().timing;
+    timing.start_ms = 7000;
+    timing.end_ms = 8000;
+    let merged = merge_chat_files_by_source_order(&reference, &donor, &[SpeakerCode::new("CHI")], &[]).unwrap();
+    assert_eq!(merged.origins(), &[
+        MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(0))),
+        MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(1))),
+        MergeOrigin::Inserted(DonorIdx::new(UtteranceIdx::new(0))),
+    ]);
+    let first = merged.utterances_with_origin().next().unwrap().0;
+    assert!(first.main.content.bullet.is_none());
+    assert!(first.semantic_eq(reference.utterances().next().unwrap()));
+    assert_eq!(merged.report(|_, _| {}).file().headers().filter(|h| matches!(h, Header::End)).count(), 1);
+}
+
+#[test]
+fn source_order_merge_refuses_incomparable_untimed_frontiers() {
+    let options = ParseValidateOptions::default();
+    let mut reference = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options).unwrap();
+    first_source_order_utterance(&mut reference).main.content.bullet = None;
+    assert!(matches!(merge_chat_files_by_source_order(&reference, &donor, &[SpeakerCode::new("CHI")], &[]),
+        Err(MergeError::AmbiguousUtteranceOrder { .. })));
+}
+
+#[test]
+fn source_order_merge_refuses_equal_cross_source_anchors() {
+    let options = ParseValidateOptions::default();
+    let reference = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let mut donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options).unwrap();
+    first_source_order_utterance(&mut donor).main.content.bullet.as_mut().unwrap().timing.start_ms = 500;
+    assert!(matches!(merge_chat_files_by_source_order(&reference, &donor, &[SpeakerCode::new("CHI")], &[]),
+        Err(MergeError::AmbiguousUtteranceOrder { .. })));
+    assert!(merge_chat_files(&reference, &donor, &[SpeakerCode::new("CHI")], &[]).is_ok());
+}
+
+#[test]
+fn source_order_merge_preserves_overlapping_intervals_without_stamping() {
+    let options = ParseValidateOptions::default();
+    let reference = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let mut donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options).unwrap();
+    let timing = &mut first_source_order_utterance(&mut donor).main.content.bullet.as_mut().unwrap().timing;
+    timing.start_ms = 1000;
+    timing.end_ms = 6000;
+    let merged = merge_chat_files_by_source_order(&reference, &donor, &[SpeakerCode::new("CHI")], &[]).unwrap();
+    let inserted = merged.utterances_with_origin().nth(1).unwrap().0;
+    assert!(inserted.semantic_eq(donor.utterances().next().unwrap()));
+}
+
+#[test]
+fn source_order_merge_refuses_source_anchor_reversal() {
+    let options = ParseValidateOptions::default();
+    let mut reference = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options).unwrap();
+    first_source_order_utterance(&mut reference).main.content.bullet.as_mut().unwrap().timing.start_ms = 6000;
+    assert!(matches!(merge_chat_files_by_source_order(&reference, &donor, &[SpeakerCode::new("CHI")], &[]),
+        Err(MergeError::SourceTimelineReversal { .. })));
+}
+
+fn first_source_order_utterance(file: &mut ChatFile) -> &mut talkbank_model::Utterance {
+    file.lines.as_mut_slice().iter_mut().find_map(|line| match line {
+        Line::Utterance(utterance) => Some(utterance.as_mut()),
+        Line::Header { .. } => None,
+    }).unwrap()
+}
+
+#[test]
+fn source_order_boundary_sections_preserve_headers_or_refuse_ambiguous_placement() {
+    let options = ParseValidateOptions::default();
+    let sections = talkbank_transform::parse_and_validate(
+        include_str!("../../../../corpus/reference/edge-cases/postcodes-and-gems.cha"), options.clone(),
+    ).unwrap();
+    let begin = sections.lines.iter().find(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::BeginGem { .. }))
+    }).unwrap().clone();
+    let end = sections.lines.iter().find(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::EndGem { .. }))
+    }).unwrap().clone();
+    let mut reference = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, options.clone()).unwrap();
+    let mut donor = talkbank_transform::parse_and_validate(FIX_ASR_LABELED_RICH, options).unwrap();
+    let positions: Vec<_> = reference.lines.iter().enumerate().filter_map(|(index, line)| {
+        matches!(line, Line::Utterance(_)).then_some(index)
+    }).collect();
+    reference.lines.insert(positions[1], end.clone());
+    reference.lines.insert(positions[0], begin.clone());
+    assert!(matches!(merge_chat_files_by_source_order(&reference, &donor, &[SpeakerCode::new("CHI")], &[]),
+        Err(MergeError::AmbiguousSectionPlacement { .. })));
+    let timing = &mut first_source_order_utterance(&mut donor).main.content.bullet.as_mut().unwrap().timing;
+    timing.start_ms = 7000;
+    timing.end_ms = 8000;
+    let merged = merge_chat_files_by_source_order(&reference, &donor, &[SpeakerCode::new("CHI")], &[]).unwrap();
+    assert_eq!(merged.origins(), &[
+        MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(0))),
+        MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(1))),
+        MergeOrigin::Inserted(DonorIdx::new(UtteranceIdx::new(0))),
+    ]);
+    let output = merged.report(|_, _| {}).into_file();
+    let actual: Vec<_> = output.lines.iter().filter(|line| {
+        matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::BeginGem { .. } | Header::EndGem { .. }))
+    }).collect();
+    assert_eq!(actual.len(), 2);
+    assert!(actual[0].semantic_eq(&begin));
+    assert!(actual[1].semantic_eq(&end));
+}
+
+#[test]
+fn source_order_boundary_entirely_untimed_single_selected_source_is_preserved() {
+    let mut reference = talkbank_transform::parse_and_validate(FIX_REF_RICH_CHI, ParseValidateOptions::default()).unwrap();
+    for line in reference.lines.as_mut_slice() {
+        match line {
+            Line::Utterance(utterance) => utterance.main.content.bullet = None,
+            Line::Header { header, .. } => {
+                if let Header::Media(media) = header.as_mut() {
+                    media.status = Some(talkbank_model::MediaStatus::Unlinked);
+                }
+            }
+        }
+    }
+    let donor = reference.clone();
+    let merged = merge_chat_files_by_source_order(&reference, &donor, &[SpeakerCode::new("CHI")], &[]).unwrap();
+    assert_eq!(merged.origins(), &[
+        MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(0))),
+        MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(1))),
+    ]);
+    assert_eq!(merged.donor_fates(), &[DonorFate::ExcludedByRetain, DonorFate::ExcludedByRetain]);
+    assert!(merged.utterances_with_origin().all(|(u, _)| u.main.content.bullet.is_none()));
+    let reported = merged.report(|_, _| {});
+    assert_eq!(reported.file().lines.len(), reference.lines.len());
+    assert!(reported.file().lines.iter().zip(reference.lines.iter()).all(|(output, source)| output.semantic_eq(source)));
 }
 
 #[test]

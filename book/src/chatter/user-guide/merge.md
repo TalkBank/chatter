@@ -1,7 +1,7 @@
 # Merge (`chatter merge`)
 
 **Status:** Draft
-**Last modified:** 2026-09-10 00:28 EDT
+**Last modified:** 2026-09-12 07:38 EDT
 
 `chatter merge` combines two CHAT transcripts that cover the same media
 recording into one. The caller designates which speakers' utterances are
@@ -12,6 +12,16 @@ The command is **structural**: it does not invent or rewrite utterance
 content, does not run ASR, does not run forced alignment, does not
 infer speaker identity. It is the moment in a multi-input CHAT
 workflow where two parsed transcripts become one.
+
+The library also exposes `merge_chat_files_by_source_order` for inputs with
+untimed utterances. It preserves source-relative order and derives cross-source
+placement only from genuine time anchors in the selected AST utterances. It
+never adds a missing time bullet. If the source chains and strict anchor
+comparisons do not uniquely order competing utterances or section markers, it
+refuses the merge; equal cross-source anchors are not silently tie-broken.
+Intervals may overlap when their distinct starts establish order. This API
+does not establish common-media identity or speaker authority for the caller.
+The command and existing `merge_chat_files` timing contract remain unchanged.
 
 ## When to use it
 
