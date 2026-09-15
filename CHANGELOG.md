@@ -9,6 +9,53 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-15
+
+### Added
+
+- Source-bound donor selection for structural merging preserves original header
+  boundaries after utterance removal or splitting. Selected donor origins map
+  back to original parents; recorded header brackets constrain order without
+  synthesizing utterance timestamps.
+- Selected-donor merges accept source-bound relative order constraints
+  (`RelativeOrderConstraint`, `with_relative_order`), an opt-in timed gem
+  exterior policy (`with_timed_gem_exterior`; the placements it decided are
+  reported as `GemExteriorPlacement`), an opt-in flagged draft order that
+  serializes unresolved frontiers reference first with a review comment
+  (`with_flagged_draft_order`, `DraftOrderReview`), and header-only references.
+- `merge_chat_files_with_donor_selection_draft` returns a `MergeDraft` before
+  validation. Its only edit, `set_terminal_bullet`, replaces an end-of-line
+  bullet and is recorded as a `BulletEdit`; `Merged::bullet_edits` reports the
+  edits after `validate`.
+- `talkbank_model::validation` exposes `SPEAKER_OVERLAP_TOLERANCE_MS` and
+  `has_transcribed_content`.
+
+### Changed
+
+- `MergeError::InvalidDonorSelection` reports inconsistent selection coordinates.
+  Downstream exhaustive matches must handle this new variant.
+- A repeated `@Languages` header is reported as E501.
+- Source-order merges serialize utterances with exactly equal starts reference
+  first; section markers at the same instant are refused as ambiguous.
+- Merges refuse a missing, repeated or empty `@Languages` declaration in either
+  input (`MergeError::InvalidLanguageDeclaration`), and selected-donor merges
+  refuse a selected child whose bullet lies outside its parent's.
+- `MergeError` adds `InvalidLanguageDeclaration`, `InvalidRelativeOrder`,
+  `RelativeOrderTimingConflict` and `InvalidGemExterior`. Downstream exhaustive
+  matches must handle them; the CLI reports each as a precondition (exit 2).
+- Releases publish only after the desktop installers are built and verified;
+  the draft carries the CHANGELOG notes, and the app banner is added after
+  publication.
+- Release artifacts are built with cargo-dist 0.33.0. Its shell installer keeps
+  the `env` PATH helper beside the install receipt (by default
+  `~/.config/chatter`) for flat installs, and moves an existing helper there.
+
+### Security
+
+- rustls is updated to 0.23.45 (RUSTSEC-2026-0285), which rejects TLS 1.3
+  handshake messages accepted across encryption level boundaries. It reaches
+  the CLI's self-update and LLM client and the desktop app's updater.
+
 ## [0.24.2] - 2026-09-12
 
 ### Added
@@ -3047,7 +3094,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.24.1...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/TalkBank/chatter/compare/v0.24.2...v0.25.0
 [0.24.2]: https://github.com/TalkBank/chatter/compare/v0.24.1...v0.24.2
 [0.24.1]: https://github.com/TalkBank/chatter/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/TalkBank/chatter/compare/v0.23.0...v0.24.0

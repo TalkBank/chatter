@@ -27,7 +27,18 @@
 //! preconditions, no tier stripping and no domain newtypes. All three
 //! arrived; the note did not.
 
+mod draft_order;
+mod gem_exterior;
 mod ordered;
+mod relative_order;
+mod selection;
+pub use draft_order::{DraftOrderReason, DraftOrderReview};
+pub use gem_exterior::{GemExterior, GemExteriorPlacement};
+pub use relative_order::RelativeOrderConstraint;
+pub use selection::{
+    SourceBoundDonorSelection, merge_chat_files_with_donor_selection,
+    merge_chat_files_with_donor_selection_draft,
+};
 
 use talkbank_model::ParticipantRole;
 use talkbank_model::SpeakerCode;
@@ -35,6 +46,26 @@ use talkbank_model::UtteranceIdx;
 use talkbank_model::WriteChat;
 use talkbank_model::model::header::{Header, LanguageCodes, ParticipantEntries, ParticipantEntry};
 use talkbank_model::model::{ChatFile, Line, Utterance};
+
+/// Which transcript failed a merge-input precondition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeInput {
+    /// Contributor/reference transcript.
+    Reference,
+    /// Additional donor transcript.
+    Donor,
+}
+
+/// A declaration cannot be replaced by an inferred empty language set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguageDeclarationProblem {
+    /// No language header exists.
+    Missing,
+    /// More than one header exists; choosing one would discard evidence.
+    Repeated,
+    /// The sole header contains no language codes.
+    Empty,
+}
 
 /// Errors that can arise from the merge operation.
 ///
@@ -49,6 +80,36 @@ use talkbank_model::model::{ChatFile, Line, Utterance};
 /// out-of-transform consumer needs it.
 #[derive(Debug, thiserror::Error)]
 pub enum MergeError {
+    /// Language subset comparison requires actual, unambiguous declarations.
+    #[error("{input:?} language declaration is {problem:?}")]
+    InvalidLanguageDeclaration {
+        /// Transcript that must be repaired before merge admission.
+        input: MergeInput,
+        /// Reason declaration admission failed.
+        problem: LanguageDeclarationProblem,
+    },
+    /// The selected donor does not preserve source parent/header coordinates.
+    #[error(
+        "invalid donor selection: parent order, speaker, header boundary or original timeline mismatch"
+    )]
+    InvalidDonorSelection,
+    /// Relative ordering proposals contradict each other or their bound inputs.
+    #[error("invalid or contradictory source-bound relative order")]
+    InvalidRelativeOrder,
+    /// An attested ordering conflicts with disjoint timing bounds at these frontiers.
+    /// Bounds may come from neighboring speech; this does not certify either bullet.
+    #[error(
+        "relative order conflicts with timing bounds between reference {reference:?} and donor {donor:?}"
+    )]
+    RelativeOrderTimingConflict {
+        /// Utterance coordinate in the bound reference source.
+        reference: ReferenceIdx,
+        /// Utterance coordinate in the selected donor source.
+        donor: DonorIdx,
+    },
+    /// Gem exterior placement needs one paired, nonempty, fully timed gem.
+    #[error("invalid source-bound timed gem exterior")]
+    InvalidGemExterior,
     /// Neither source order nor genuine timing anchors order the two frontiers.
     #[error("source order is ambiguous between {reference:?} and {donor:?}")]
     AmbiguousUtteranceOrder {
@@ -305,7 +366,9 @@ pub enum DonorFate {
     Inserted {
         /// How many dependent tiers `strip_tiers` removed from this utterance.
         ///
-        /// Zero means it arrived byte-preserved. A bare `Inserted` used to
+        /// Zero means it arrived byte-preserved, unless [`Merged::bullet_edits`]
+        /// names its output utterance: a draft edit replaces its end-of-line
+        /// bullet after assembly. A bare `Inserted` used to
         /// claim that of every donor utterance, which is a lie of omission:
         /// stripping applies to the donor side and to it alone, so an inserted
         /// utterance is carried over AND edited. The merge knew the number at
@@ -385,9 +448,26 @@ pub struct Merged {
     origins: Vec<MergeOrigin>,
     reference_fates: Vec<ReferenceFate>,
     donor_fates: Vec<DonorFate>,
+    gem_exterior_placements: Vec<GemExteriorPlacement>,
+    draft_order_reviews: Vec<DraftOrderReview>,
+    bullet_edits: Vec<BulletEdit>,
 }
 
 impl Merged {
+    /// End-of-line bullets replaced on the draft before validation, in output
+    /// order, at most one per utterance. Empty for every merge that did not go
+    /// through [`MergeDraft::set_terminal_bullet`].
+    pub fn bullet_edits(&self) -> &[BulletEdit] {
+        &self.bullet_edits
+    }
+    /// Ambiguous frontiers serialized by the explicitly enabled draft policy.
+    pub fn draft_order_reviews(&self) -> &[DraftOrderReview] {
+        &self.draft_order_reviews
+    }
+    /// Recorded strict exterior relations under the caller's opt-in gem policy.
+    pub fn gem_exterior_placements(&self) -> &[GemExteriorPlacement] {
+        &self.gem_exterior_placements
+    }
     /// Each output utterance with where it came from, in output order.
     ///
     /// The accessor to reach for: it cannot be mis-paired, because the pairing
@@ -524,6 +604,182 @@ impl Merged {
     }
 }
 
+/// A merged transcript assembled in output order, before model validation.
+///
+/// # Typestate
+///
+/// Assembly produces a `MergeDraft`, and [`MergeDraft::validate`] is the only
+/// route to a [`Merged`], so every reportable merge result has passed full
+/// model validation. A draft admits exactly one edit: replacing an output
+/// utterance's end-of-line bullet with [`MergeDraft::set_terminal_bullet`]. It
+/// offers no way to add, remove or reorder utterances or headers, so the
+/// one-origin-per-output-utterance invariant documented on [`Merged`] holds for
+/// an edited draft by construction.
+///
+/// This lets a caller repair timing that would fail validation, such as a start
+/// that runs backwards once two sources are interleaved, before validating.
+/// Every edit is recorded as a [`BulletEdit`] and carried into [`Merged`], so a
+/// validated merge always says which timings are not the ones it assembled.
+#[derive(Debug, Clone)]
+pub struct MergeDraft {
+    file: ChatFile,
+    origins: Vec<MergeOrigin>,
+    reference_fates: Vec<ReferenceFate>,
+    donor_fates: Vec<DonorFate>,
+    gem_exterior_placements: Vec<GemExteriorPlacement>,
+    draft_order_reviews: Vec<DraftOrderReview>,
+    /// Keyed by output ordinal: one record per edited utterance, in output order.
+    bullet_edits: std::collections::BTreeMap<usize, BulletEdit>,
+}
+
+/// One end-of-line bullet replaced on a [`MergeDraft`] before validation.
+///
+/// Recorded by [`MergeDraft::set_terminal_bullet`] itself rather than by the
+/// caller, so the record cannot be forgotten or disagree with the file. Evidence
+/// the merge computed at assembly, such as [`Merged::gem_exterior_placements`],
+/// [`Merged::draft_order_reviews`] and [`DonorFate::Inserted`], describes the
+/// assembled timing; for an edited utterance this record says what replaced it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BulletEdit {
+    output: usize,
+    assembled: talkbank_model::model::MediaTiming,
+    replacement: talkbank_model::model::MediaTiming,
+}
+
+impl BulletEdit {
+    /// The zero-based output utterance whose end-of-line bullet was replaced.
+    #[must_use]
+    pub fn output(&self) -> usize {
+        self.output
+    }
+    /// The timing the merge assembled, before any edit.
+    #[must_use]
+    pub fn assembled(&self) -> talkbank_model::model::MediaTiming {
+        self.assembled
+    }
+    /// The timing the utterance carries after the last edit.
+    #[must_use]
+    pub fn replacement(&self) -> talkbank_model::model::MediaTiming {
+        self.replacement
+    }
+}
+
+/// Why [`MergeDraft::set_terminal_bullet`] refused an edit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum BulletEditError {
+    /// The draft has no output utterance with this ordinal.
+    #[error("the merged draft has no output utterance {output}")]
+    NoSuchUtterance {
+        /// The zero-based output utterance ordinal that was requested.
+        output: usize,
+    },
+    /// The utterance has no end-of-line bullet. A draft edit replaces timing;
+    /// it never gives an utterance timing it did not have.
+    #[error("output utterance {output} has no end-of-line bullet to replace")]
+    NoTerminalBullet {
+        /// The zero-based output utterance ordinal that was requested.
+        output: usize,
+    },
+}
+
+impl MergeDraft {
+    /// Each output utterance with where it came from, in output order.
+    pub fn utterances_with_origin(&self) -> impl Iterator<Item = (&Utterance, MergeOrigin)> {
+        self.file.utterances().zip(self.origins.iter().copied())
+    }
+
+    /// Where each output utterance came from, in output order.
+    #[must_use]
+    pub fn origins(&self) -> &[MergeOrigin] {
+        &self.origins
+    }
+
+    /// The assembled transcript, not yet validated, borrowed.
+    #[must_use]
+    pub fn file(&self) -> &ChatFile {
+        &self.file
+    }
+
+    /// The bullet edits made so far, in output order.
+    pub fn bullet_edits(&self) -> impl Iterator<Item = &BulletEdit> {
+        self.bullet_edits.values()
+    }
+
+    /// Replace the end-of-line bullet of output utterance `output`, recording
+    /// the edit. Editing an utterance again keeps its assembled timing in the
+    /// record; restoring that timing removes the record.
+    pub fn set_terminal_bullet(
+        &mut self,
+        output: usize,
+        bullet: talkbank_model::model::Bullet,
+    ) -> Result<(), BulletEditError> {
+        let mut lines = self.file.lines.take();
+        let edited = match lines
+            .iter_mut()
+            .filter_map(|line| {
+                if let Line::Utterance(utterance) = line {
+                    Some(utterance)
+                } else {
+                    None
+                }
+            })
+            .nth(output)
+        {
+            None => Err(BulletEditError::NoSuchUtterance { output }),
+            Some(utterance) => match utterance.main.content.bullet.as_mut() {
+                None => Err(BulletEditError::NoTerminalBullet { output }),
+                Some(existing) => {
+                    let assembled = self
+                        .bullet_edits
+                        .get(&output)
+                        .map_or(existing.timing, |edit| edit.assembled);
+                    *existing = bullet;
+                    if existing.timing == assembled {
+                        self.bullet_edits.remove(&output);
+                    } else {
+                        self.bullet_edits.insert(
+                            output,
+                            BulletEdit {
+                                output,
+                                assembled,
+                                replacement: existing.timing,
+                            },
+                        );
+                    }
+                    Ok(())
+                }
+            },
+        };
+        self.file.lines = lines.into();
+        edited
+    }
+
+    /// Validate the draft with the full model policy, producing the reportable
+    /// merge result.
+    pub fn validate(self) -> Result<Merged, MergeError> {
+        let file = self
+            .file
+            .validate_with_policy(
+                talkbank_model::validation::ValidationPolicy::new(
+                    talkbank_model::RuleSelection::new(),
+                    talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+                ),
+                &talkbank_model::NullErrorSink,
+                talkbank_model::model::TranscriptName::Anonymous,
+            )
+            .map_err(|failure| MergeError::InvalidOutput(Box::new(failure)))?;
+        Ok(Merged {
+            file,
+            origins: self.origins,
+            reference_fates: self.reference_fates,
+            donor_fates: self.donor_fates,
+            gem_exterior_placements: self.gem_exterior_placements,
+            draft_order_reviews: self.draft_order_reviews,
+            bullet_edits: self.bullet_edits.into_values().collect(),
+        })
+    }
+}
+
 /// A merged transcript whose notices have been offered to a sink.
 ///
 /// The existence of one of these is the proof that [`Merged::report`] ran. It
@@ -563,12 +819,15 @@ pub fn merge_chat_files(
     retain: &[SpeakerCode],
     strip_tiers: &[String],
 ) -> Result<Merged, MergeError> {
-    merge_with_placement(f1, f2, retain, strip_tiers, ordered::Placement::Timed)
+    merge_with_placement(f1, f2, retain, strip_tiers, ordered::Placement::Timed, None)
+        .and_then(MergeDraft::validate)
 }
 
 /// Merge using immutable source order and genuine time anchors, without adding
 /// time bullets to untimed utterances. Cross-source order must be uniquely
-/// implied by strict anchor comparisons; equal or incomparable frontiers refuse.
+/// implied by strict anchor comparisons; incomparable frontiers refuse. Timed
+/// utterances with equal recorded starts use reference-first serialization,
+/// without claiming acoustic precedence. Missing starts are never time ties.
 /// This proves structural order only. Common-media and external provenance
 /// admission remain the caller's responsibility.
 pub fn merge_chat_files_by_source_order(
@@ -577,7 +836,15 @@ pub fn merge_chat_files_by_source_order(
     retain: &[SpeakerCode],
     strip_tiers: &[String],
 ) -> Result<Merged, MergeError> {
-    merge_with_placement(reference, donor, retain, strip_tiers, ordered::Placement::SourceOrder)
+    merge_with_placement(
+        reference,
+        donor,
+        retain,
+        strip_tiers,
+        ordered::Placement::SourceOrder,
+        None,
+    )
+    .and_then(MergeDraft::validate)
 }
 
 fn merge_with_placement(
@@ -586,25 +853,16 @@ fn merge_with_placement(
     retain: &[SpeakerCode],
     strip_tiers: &[String],
     placement: ordered::Placement,
-) -> Result<Merged, MergeError> {
+    selection: Option<&SourceBoundDonorSelection<'_>>,
+) -> Result<MergeDraft, MergeError> {
     // Precondition: donor (File 2) must not declare a language reference
     // (File 1) doesn't have. Donor under-claiming (ASR run in a fixed
     // language mode) is expected and fine; donor over-claiming is
     // suspicious enough to refuse (a wrong-file pairing, or a language
     // the annotator missed either way needs a human look, not a silent
     // merge). Exact-equality is the special case where both sets match.
-    let f1_langs = extract_languages(f1);
-    let f2_langs = extract_languages(f2);
-    let donor_over_claims = f2_langs
-        .as_slice()
-        .iter()
-        .any(|code| !f1_langs.as_slice().contains(code));
-    if donor_over_claims {
-        return Err(MergeError::LanguageMismatch {
-            file1: f1_langs,
-            file2: f2_langs,
-        });
-    }
+    let reference_languages = DeclaredLanguages::admit(f1, MergeInput::Reference)?;
+    DeclaredLanguages::admit(f2, MergeInput::Donor)?.require_subset_of(&reference_languages)?;
 
     let in_retain = |speaker: &SpeakerCode| retain.iter().any(|s| s == speaker);
 
@@ -623,7 +881,12 @@ fn merge_with_placement(
             _ => false,
         })
         .collect();
-    if retained_utts_in_f1.is_empty() {
+    // The selected-donor API can preserve a genuinely header-only reference.
+    // An empty retain set is intentional here, not a missing-speaker fallback.
+    // Other entry points and nonempty references keep the original refusal.
+    let header_only_selection =
+        selection.is_some() && retain.is_empty() && f1.utterances().next().is_none();
+    if retained_utts_in_f1.is_empty() && !header_only_selection {
         return Err(MergeError::RetainSpeakersMissing {
             retain: retain.to_vec(),
         });
@@ -725,24 +988,62 @@ fn merge_with_placement(
         f2,
         retain,
         strip_tiers,
-        ordered::OpeningAdditions::from_donor(f2, retain, &dedupe_codes, inserted_participants)?,
+        ordered::OpeningAdditions::from_donor(
+            selection.map_or(f2, |s| s.original()),
+            retain,
+            &dedupe_codes,
+            inserted_participants,
+        )?,
         placement,
+        selection,
     )
 }
 
-/// Extract the declared `@Languages` codes from `chat_file`. Returns
-/// an empty `LanguageCodes` when no `@Languages` header is present; if
-/// multiple `@Languages` rows somehow appear, the first wins (CHAT
-/// validation should already have rejected the duplicate, but the
-/// merge precondition stays robust against malformed input).
-fn extract_languages(chat_file: &ChatFile) -> LanguageCodes {
-    chat_file
-        .headers()
-        .find_map(|h| match h {
-            Header::Languages { codes } => Some(codes.clone()),
+/// Nonempty declaration borrowed from the exact input. No constructor accepts
+/// bare codes, so subset comparison cannot interpret absence as a declaration.
+struct DeclaredLanguages<'a>(&'a LanguageCodes);
+
+impl<'a> DeclaredLanguages<'a> {
+    fn admit(file: &'a ChatFile, input: MergeInput) -> Result<Self, MergeError> {
+        let mut declarations = file.headers().filter_map(|header| match header {
+            Header::Languages { codes } => Some(codes),
             _ => None,
-        })
-        .unwrap_or_default()
+        });
+        let codes = declarations
+            .next()
+            .ok_or(MergeError::InvalidLanguageDeclaration {
+                input,
+                problem: LanguageDeclarationProblem::Missing,
+            })?;
+        if declarations.next().is_some() {
+            return Err(MergeError::InvalidLanguageDeclaration {
+                input,
+                problem: LanguageDeclarationProblem::Repeated,
+            });
+        }
+        if codes.as_slice().is_empty() {
+            return Err(MergeError::InvalidLanguageDeclaration {
+                input,
+                problem: LanguageDeclarationProblem::Empty,
+            });
+        }
+        Ok(Self(codes))
+    }
+
+    fn require_subset_of(&self, reference: &Self) -> Result<(), MergeError> {
+        if self
+            .0
+            .as_slice()
+            .iter()
+            .any(|code| !reference.0.as_slice().contains(code))
+        {
+            return Err(MergeError::LanguageMismatch {
+                file1: reference.0.clone(),
+                file2: self.0.clone(),
+            });
+        }
+        Ok(())
+    }
 }
 
 /// Speaker codes declared in `chat_file`'s `@Participants` header,

@@ -1846,6 +1846,15 @@
       "spec": "E501.md",
       "example": 3,
       "parse": [],
+      "validation": [
+        "E501"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E501.md",
+      "example": 4,
+      "parse": [],
       "validation": [],
       "roundtrip": "byte_exact"
     },

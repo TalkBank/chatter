@@ -37,7 +37,7 @@ use crate::codes::temporal::{E701, E704};
 /// `tests/temporal_validation_tests.rs`, because the comparison below is a
 /// single `>` and flipping it to `>=` changes behaviour at exactly one value
 /// that no other case in that file visits.
-const SPEAKER_OVERLAP_TOLERANCE_MS: u64 = 500;
+pub const SPEAKER_OVERLAP_TOLERANCE_MS: u64 = 500;
 
 /// Validates temporal constraints on utterance bullets.
 ///
@@ -124,7 +124,7 @@ fn collect_bullets(file: &ChatFile) -> Vec<BulletInfo<'_>> {
 /// Classifying through [`ContentStructure`] means this predicate cannot hold a
 /// different opinion about which variants are containers than the traversals
 /// around it, which is the drift that produced both bugs.
-fn has_transcribed_content(content: &[UtteranceContent]) -> bool {
+pub fn has_transcribed_content(content: &[UtteranceContent]) -> bool {
     content
         .iter()
         .any(|item| item.structure().any_word(&word_is_transcribed))

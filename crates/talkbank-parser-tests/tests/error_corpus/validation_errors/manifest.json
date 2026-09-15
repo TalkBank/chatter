@@ -1608,6 +1608,13 @@
     {
       "fixture": "E501_3.cha",
       "code": "E501",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_4.cha",
+      "code": "E501",
       "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E501.md"

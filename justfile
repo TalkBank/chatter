@@ -431,6 +431,7 @@ gate:
     just evidence-gate-test
     just snapshot-hygiene
     just gate-receipts-test
+    just release-verifier-test
     just verify-vendored-lexer
     just grammar-generate-check
     just node-types-check
@@ -440,6 +441,11 @@ gate:
     just book
     just test-all
     gate_finish
+
+# The desktop release candidate verifier's own tests (Node's built-in runner).
+# The verifier gates publication in release-desktop.yml; its tests ran nowhere.
+release-verifier-test:
+    node --test scripts/release/verify-desktop-candidate.test.mjs
 
 # RELEASE-TIME LINT. Run before the release squash, never per push: each of
 # these is a separate cargo unit that recompiles the workspace, and a finding

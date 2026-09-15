@@ -60,6 +60,27 @@ struct Row {
 
 const ROWS: &[Row] = &[
     Row {
+        what: "an identical second language declaration is still a duplicate",
+        header: "@Languages:\teng",
+        fired: &[Fired {
+            code: "E501",
+            message: "Duplicate @Languages",
+        }],
+    },
+    Row {
+        what: "a conflicting second language declaration is a duplicate",
+        header: "@Languages:\teng, fra",
+        fired: &[Fired {
+            code: "E501",
+            message: "Duplicate @Languages",
+        }],
+    },
+    Row {
+        what: "comments may repeat without becoming singleton headers",
+        header: "@Comment:\tfirst comment\n@Comment:\tsecond comment",
+        fired: &[],
+    },
+    Row {
         what: "an unknown header is exactly one E525, naming it",
         header: "@Unknown:\tsomething",
         fired: &[Fired {
@@ -167,6 +188,32 @@ fn document(header: &str) -> String {
 }
 
 /// Every row's verdict holds over the header the parser builds from it.
+/// E501 points at the repeated header, the line to delete, not at the first
+/// occurrence, which is legitimate.
+#[test]
+fn a_repeated_header_is_reported_at_the_repeated_line() -> Result<(), TestError> {
+    let source = "@UTF8\n@Begin\n@Languages:\teng\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n";
+    let reported = diagnostics_of(source, Rules::Default)?;
+    let duplicate = reported
+        .iter()
+        .find(|e| e.code.as_str() == "E501")
+        .ok_or_else(|| TestError::Failure("no E501 reported".to_string()))?;
+    let second = source
+        .match_indices("@Languages")
+        .nth(1)
+        .map(|(at, _)| at)
+        .ok_or_else(|| TestError::Failure("fixture has one @Languages".to_string()))?;
+    let line_end = second + source[second..].find('\n').unwrap_or(0);
+    let start = duplicate.location.span.start as usize;
+    if (second..line_end).contains(&start) {
+        Ok(())
+    } else {
+        Err(TestError::Failure(format!(
+            "E501 starts at byte {start}; the repeated @Languages line is bytes {second}..{line_end}"
+        )))
+    }
+}
+
 #[test]
 fn every_header_value_rule_holds_over_a_parsed_header() -> Result<(), TestError> {
     let mut wrong = Vec::new();

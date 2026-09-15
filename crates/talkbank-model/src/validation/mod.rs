@@ -70,6 +70,7 @@ pub use config::RuleSelection;
 pub use context::{SharedValidationData, ValidationContext, language_allows_numbers};
 pub use lexical::report_control_characters;
 pub use state::{AlignmentValidation, ValidChatFile, ValidationFailure, ValidationPolicy};
+pub use temporal::{SPEAKER_OVERLAP_TOLERANCE_MS, has_transcribed_content};
 pub use r#trait::Validate;
 
 // Re-export async helpers when feature is enabled

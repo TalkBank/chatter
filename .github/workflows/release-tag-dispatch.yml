@@ -1,0 +1,18 @@
+name: Dispatch coordinated release
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke the same release path used for manual publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh workflow run release.yml --ref "$RELEASE_TAG" -f "tag=$RELEASE_TAG"

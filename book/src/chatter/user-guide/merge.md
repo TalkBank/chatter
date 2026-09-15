@@ -1,7 +1,7 @@
 # Merge (`chatter merge`)
 
 **Status:** Draft
-**Last modified:** 2026-09-12 07:38 EDT
+**Last modified:** 2026-09-15 12:06 EDT
 
 `chatter merge` combines two CHAT transcripts that cover the same media
 recording into one. The caller designates which speakers' utterances are
@@ -18,10 +18,26 @@ untimed utterances. It preserves source-relative order and derives cross-source
 placement only from genuine time anchors in the selected AST utterances. It
 never adds a missing time bullet. If the source chains and strict anchor
 comparisons do not uniquely order competing utterances or section markers, it
-refuses the merge; equal cross-source anchors are not silently tie-broken.
-Intervals may overlap when their distinct starts establish order. This API
+refuses the merge. Two utterances from different sources with exactly equal
+start times are serialized reference first: a stable convention, not a claim
+about which was spoken first. Section markers at the same instant are not
+tie-broken; that ambiguity is refused. Intervals may overlap when their distinct
+starts establish order. This API
 does not establish common-media identity or speaker authority for the caller.
 The command and existing `merge_chat_files` timing contract remain unchanged.
+
+Every library merge first assembles a `MergeDraft`, then validates it; only a
+validated draft becomes a `Merged` result. For a selected-donor merge,
+`merge_chat_files_with_donor_selection_draft` returns the draft before
+validation. A draft admits exactly one edit, replacing an output utterance's
+end-of-line bullet, so it cannot gain, lose or reorder utterances. A caller can
+use it to repair timing that would fail validation and then call `validate`.
+The draft records every edit itself: `MergeDraft::bullet_edits` and, after
+validation, `Merged::bullet_edits` give each edited utterance's assembled and
+replacement timing, one record per utterance in output order. Evidence the merge
+computed at assembly (gem exterior placements, draft order reviews, donor fates)
+describes the assembled timing; for an edited utterance the record says what
+replaced it.
 
 ## When to use it
 
@@ -478,6 +494,40 @@ Note: the MLU sanity-scan is unreliable for the FluencyBank clinical-interview
 corpus (children out-narrate the adult, so MLU ratios invert relative to typical
 child-language recordings). Holistic-pending review via `--judgment holistic`
 is the trustworthy alternative there.
+
+## Selected-donor merges (library)
+
+A donor transcript is often edited before merging: some of its utterances are
+removed, and some are split into shorter children. `SourceBoundDonorSelection::bind`
+takes the original donor, the selected donor and each selected utterance's
+original parent, and checks that the selection still describes the original:
+parents appear in order, each child keeps its parent's speaker, and a timed
+child's bullet lies inside its timed parent's bullet. Header brackets are taken
+from the original timeline. `merge_chat_files_with_donor_selection` and its
+draft form merge a reference with such a selection. Four opt-in refinements
+build on it.
+
+- **Relative order** (`with_relative_order`, `RelativeOrderConstraint`). The
+  caller states that a reference utterance comes before or after a donor
+  utterance, for example from matched words. When the two utterances' intervals
+  are disjoint and contradict the stated order, the merge refuses with
+  `MergeError::RelativeOrderTimingConflict`, naming both. When their intervals
+  overlap, the stated order is followed; if their starts then run backwards,
+  validation reports it (E362), and a caller using the draft can repair the
+  bullets before validating.
+- **Timed gem exterior** (`with_timed_gem_exterior`). A donor utterance timed
+  strictly before or after a paired, fully timed reference gem is placed outside
+  it instead of being refused as an ambiguous section placement. Utterances that
+  cross or touch the gem's span are still refused. `Merged::gem_exterior_placements`
+  reports only the placements this policy decided.
+- **Flagged draft order** (`with_flagged_draft_order`). A frontier the sources
+  cannot order is serialized reference first, with a generated `@Comment`
+  asking for review, and recorded in `Merged::draft_order_reviews`. Known
+  contradictions between stated order and timing are still refused.
+- **Header-only references.** With an empty retain set, a reference that has
+  headers but no utterances can be merged with a selection: the output keeps the
+  reference headers, every selected donor utterance, and the donor's opening
+  metadata, placed before `@End`.
 
 ## Implementation notes (for contributors)
 

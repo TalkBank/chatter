@@ -114,6 +114,11 @@ pub fn run_merge(file1: &Path, file2: &Path, retain: &[String], output: Option<&
 pub(crate) fn merge_exit_code(error: &MergeError) -> i32 {
     match error {
         MergeError::RetainSpeakersMissing { .. }
+        | MergeError::InvalidLanguageDeclaration { .. }
+        | MergeError::InvalidDonorSelection
+        | MergeError::InvalidRelativeOrder
+        | MergeError::RelativeOrderTimingConflict { .. }
+        | MergeError::InvalidGemExterior
         | MergeError::DonorMetadataOrder
         | MergeError::AmbiguousSectionPlacement { .. }
         | MergeError::AmbiguousSectionOrder { .. }

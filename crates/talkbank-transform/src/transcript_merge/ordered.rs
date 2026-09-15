@@ -54,6 +54,17 @@ struct PositionedUtterance {
     origin: MergeOrigin,
     start: Option<u64>,
     order: OrderBounds,
+    // Enclosing observed intervals, used only with explicit correspondence.
+    // Unlike start-order bounds, overlap does not establish precedence.
+    interval_order: CorrespondenceBounds,
+}
+
+struct CorrespondenceBounds(OrderBounds);
+
+impl CorrespondenceBounds {
+    fn precedes(&self, other: &Self) -> Option<bool> {
+        self.0.precedes(&other.0)
+    }
 }
 
 enum SourceEvent {
@@ -71,6 +82,12 @@ struct SectionBoundary {
     order: OrderBounds,
 }
 
+/// Exactly one direction is supported by the two section brackets.
+enum SectionOrder {
+    Before,
+    After,
+}
+
 impl SectionBoundary {
     fn has_ordered_neighbors(&self) -> bool {
         !matches!((self.previous_end, self.next_start), (Some(before), Some(after)) if before > after)
@@ -78,7 +95,8 @@ impl SectionBoundary {
 
     fn precedes(&self, utterance: &PositionedUtterance) -> Result<bool, MergeError> {
         if self.has_ordered_neighbors() {
-            if matches!((self.next_start, utterance.start), (Some(next), Some(start)) if start >= next) {
+            if matches!((self.next_start, utterance.start), (Some(next), Some(start)) if start >= next)
+            {
                 return Ok(true);
             }
             if self
@@ -96,18 +114,19 @@ impl SectionBoundary {
         })
     }
 
-    fn precedes_section(&self, other: &Self) -> Result<bool, MergeError> {
-        if self.has_ordered_neighbors()
+    fn precedes_section(&self, other: &Self) -> Result<SectionOrder, MergeError> {
+        let before = self.has_ordered_neighbors()
             && other.has_ordered_neighbors()
-            && matches!((self.next_start, other.previous_end), (Some(left), Some(right)) if left <= right)
-        {
-            return Ok(true);
-        }
-        if self.has_ordered_neighbors()
+            && matches!((self.next_start, other.previous_end), (Some(left), Some(right)) if left <= right);
+        let after = self.has_ordered_neighbors()
             && other.has_ordered_neighbors()
-            && matches!((other.next_start, self.previous_end), (Some(left), Some(right)) if left <= right)
-        {
-            return Ok(false);
+            && matches!((other.next_start, self.previous_end), (Some(left), Some(right)) if left <= right);
+        match (before, after) {
+            (true, false) => return Ok(SectionOrder::Before),
+            (false, true) => return Ok(SectionOrder::After),
+            // Neither proof, or mutually contradictory proofs at a shared
+            // instant. Utterance tie policy does not order section headers.
+            (false, false) | (true, true) => {}
         }
         Err(MergeError::AmbiguousSectionOrder {
             reference: self.header.header.to_chat_string(),
@@ -119,6 +138,7 @@ impl SectionBoundary {
 /// During admission, a section has its preceding neighbor but not yet its
 /// following neighbor. Only `finish` can issue the fully bracketed stream.
 enum PendingEvent {
+    BoundSection(SectionBoundary),
     Header(HeaderEvent),
     Section {
         header: HeaderEvent,
@@ -175,11 +195,17 @@ impl SourceAdmission {
         utterance: Box<Utterance>,
         origin: MergeOrigin,
     ) -> Result<(), MergeError> {
-        let timing = utterance.main.content.bullet.as_ref().map(|bullet| &bullet.timing);
+        let timing = utterance
+            .main
+            .content
+            .bullet
+            .as_ref()
+            .map(|bullet| &bullet.timing);
         if self.placement == Placement::Timed && timing.is_none() {
             return Err(MergeError::UnpositionedUtterance { origin });
         }
         let start = timing.map(|timing| timing.start_ms);
+        let end = timing.map(|timing| timing.end_ms);
         if let (Some((previous_start, previous)), Some(start)) = (self.previous, start)
             && start < previous_start
         {
@@ -198,7 +224,11 @@ impl SourceAdmission {
                 utterance,
                 origin,
                 start,
-                order: OrderBounds { lower, upper: start },
+                order: OrderBounds {
+                    lower,
+                    upper: start,
+                },
+                interval_order: CorrespondenceBounds(OrderBounds { lower, upper: end }),
             }));
         Ok(())
     }
@@ -206,8 +236,10 @@ impl SourceAdmission {
     fn finish(self) -> OrderedSource {
         let mut events = VecDeque::with_capacity(self.events.len());
         let mut next_start = None;
+        let mut next_end = None;
         for event in self.events.into_iter().rev() {
             let admitted = match event {
+                PendingEvent::BoundSection(boundary) => SourceEvent::Section(boundary),
                 PendingEvent::Header(header) => SourceEvent::Header(header),
                 PendingEvent::End(header) => SourceEvent::End(header),
                 PendingEvent::Section {
@@ -218,10 +250,16 @@ impl SourceAdmission {
                     header,
                     previous_end,
                     next_start,
-                    order: OrderBounds { lower: previous_start, upper: next_start },
+                    order: OrderBounds {
+                        lower: previous_start,
+                        upper: next_start,
+                    },
                 }),
                 PendingEvent::Utterance(mut utterance) => {
                     utterance.order.upper = utterance.start.or(next_start);
+                    let observed_end = utterance.interval_order.0.upper;
+                    utterance.interval_order.0.upper = observed_end.or(next_end);
+                    next_end = observed_end.or(next_end);
                     next_start = utterance.start.or(next_start);
                     SourceEvent::Utterance(utterance)
                 }
@@ -243,62 +281,170 @@ struct AdmittedMerge {
     reference_fates: Vec<ReferenceFate>,
     donor_fates: Vec<DonorFate>,
     placement: Placement,
+    relative_order: Option<super::relative_order::OrderConstraints>,
+    timed_gem: Option<super::gem_exterior::TimedGem>,
+    draft_order: super::draft_order::DraftOrderPolicy,
 }
 
 impl AdmittedMerge {
-    fn assemble(mut self) -> Result<Merged, MergeError> {
+    fn assemble(mut self) -> Result<MergeDraft, MergeError> {
         let mut lines = Vec::new();
         let mut origins = Vec::new();
+        let mut gem_exterior_placements = Vec::new();
+        let mut draft_order_reviews = Vec::new();
+        // Donor utterances whose placement the gem exterior policy decided: each
+        // was compared against a reference gem marker and the policy answered.
+        // Only these carry gem exterior evidence; a donor utterance ordered by an
+        // ordinary comparison is not evidence of the policy.
+        let mut gem_decided: Vec<MergeOrigin> = Vec::new();
         loop {
-            let reference_next = match (self.reference.events.peek(), self.donor.events.peek()) {
-                (None, None) => break,
-                (Some(_), None) => true,
-                (None, Some(_)) => false,
-                // End belongs after the donor's remaining source events.
-                (Some(SourceEvent::End(_)), Some(_)) => false,
-                (Some(SourceEvent::Header(_)), Some(_)) => true,
-                (
-                    Some(SourceEvent::Section(_)),
-                    Some(SourceEvent::Header(_) | SourceEvent::End(_)),
-                ) => false,
-                (Some(SourceEvent::Section(reference)), Some(SourceEvent::Section(donor))) => {
-                    match self.placement {
-                        Placement::Timed => reference.precedes_section(donor)?,
-                        Placement::SourceOrder => reference.order.precedes(&donor.order).ok_or_else(|| MergeError::AmbiguousSectionOrder {
-                            reference: reference.header.header.to_chat_string(),
-                            donor: donor.header.header.to_chat_string(),
-                        })?,
-                    }
+            let ordering = (|| -> Result<Option<bool>, MergeError> {
+                Ok(Some(
+                    match (self.reference.events.peek(), self.donor.events.peek()) {
+                        (None, None) => return Ok(None),
+                        (Some(_), None) => true,
+                        (None, Some(_)) => false,
+                        // End belongs after the donor's remaining source events.
+                        (Some(SourceEvent::End(_)), Some(_)) => false,
+                        (Some(SourceEvent::Header(_)), Some(_)) => true,
+                        (
+                            Some(SourceEvent::Section(_)),
+                            Some(SourceEvent::Header(_) | SourceEvent::End(_)),
+                        ) => false,
+                        (
+                            Some(SourceEvent::Section(reference)),
+                            Some(SourceEvent::Section(donor)),
+                        ) => match self.placement {
+                            Placement::Timed => {
+                                matches!(reference.precedes_section(donor)?, SectionOrder::Before)
+                            }
+                            Placement::SourceOrder => reference
+                                .order
+                                .precedes(&donor.order)
+                                .ok_or_else(|| MergeError::AmbiguousSectionOrder {
+                                    reference: reference.header.header.to_chat_string(),
+                                    donor: donor.header.header.to_chat_string(),
+                                })?,
+                        },
+                        (
+                            Some(SourceEvent::Section(header)),
+                            Some(SourceEvent::Utterance(utterance)),
+                        ) => {
+                            let exterior =
+                                self.timed_gem.as_ref().and_then(|gem| {
+                                    utterance.utterance.main.content.bullet.as_ref().and_then(
+                                        |bullet| gem.precedes(&header.header.header, bullet),
+                                    )
+                                });
+                            if let Some(precedes) = exterior {
+                                precedes
+                            } else {
+                                match self.placement {
+                                    Placement::Timed => header.precedes(utterance)?,
+                                    Placement::SourceOrder => header
+                                        .order
+                                        .precedes(&utterance.order)
+                                        .ok_or_else(|| MergeError::AmbiguousSectionPlacement {
+                                            header: header.header.header.to_chat_string(),
+                                            previous_end: header.previous_end,
+                                            next_start: header.next_start,
+                                            competing: utterance.origin,
+                                        })?,
+                                }
+                            }
+                        }
+                        (
+                            Some(SourceEvent::Utterance(utterance)),
+                            Some(SourceEvent::Section(header)),
+                        ) => match self.placement {
+                            Placement::Timed => !header.precedes(utterance)?,
+                            Placement::SourceOrder => !header
+                                .order
+                                .precedes(&utterance.order)
+                                .ok_or_else(|| MergeError::AmbiguousSectionPlacement {
+                                    header: header.header.header.to_chat_string(),
+                                    previous_end: header.previous_end,
+                                    next_start: header.next_start,
+                                    competing: utterance.origin,
+                                })?,
+                        },
+                        (
+                            Some(SourceEvent::Utterance(_)),
+                            Some(SourceEvent::Header(_) | SourceEvent::End(_)),
+                        ) => false,
+                        (
+                            Some(SourceEvent::Utterance(reference)),
+                            Some(SourceEvent::Utterance(donor)),
+                        ) => {
+                            let attested = self
+                                .relative_order
+                                .as_ref()
+                                .and_then(|order| order.precedes(reference.origin, donor.origin));
+                            let observed =
+                                if reference.start.is_some() && reference.start == donor.start {
+                                    Some(true)
+                                } else {
+                                    reference.order.precedes(&donor.order)
+                                };
+                            let disjoint = reference.interval_order.precedes(&donor.interval_order);
+                            if matches!((attested,disjoint),(Some(a),Some(b)) if a != b) {
+                                return Err(match (reference.origin, donor.origin) {
+                                    (
+                                        MergeOrigin::Retained(reference),
+                                        MergeOrigin::Inserted(donor),
+                                    ) => {
+                                        MergeError::RelativeOrderTimingConflict { reference, donor }
+                                    }
+                                    _ => MergeError::InvalidDonorSelection,
+                                });
+                            }
+                            match self.placement {
+                                Placement::Timed => reference.start <= donor.start,
+                                // Stable serialization convention, not acoustic precedence.
+                                // Missing starts and header brackets are not time ties.
+                                Placement::SourceOrder => attested.or(observed).ok_or(
+                                    MergeError::AmbiguousUtteranceOrder {
+                                        reference: reference.origin,
+                                        donor: donor.origin,
+                                    },
+                                )?,
+                            }
+                        }
+                    },
+                ))
+            })();
+            if ordering.is_ok()
+                && let (
+                    Some(gem),
+                    Some(SourceEvent::Section(header)),
+                    Some(SourceEvent::Utterance(utterance)),
+                ) = (
+                    &self.timed_gem,
+                    self.reference.events.peek(),
+                    self.donor.events.peek(),
+                )
+            {
+                let answered = utterance
+                    .utterance
+                    .main
+                    .content
+                    .bullet
+                    .as_ref()
+                    .is_some_and(|bullet| gem.precedes(&header.header.header, bullet).is_some());
+                if answered && !gem_decided.contains(&utterance.origin) {
+                    gem_decided.push(utterance.origin);
                 }
-                (Some(SourceEvent::Section(header)), Some(SourceEvent::Utterance(utterance))) => {
-                    match self.placement {
-                        Placement::Timed => header.precedes(utterance)?,
-                        Placement::SourceOrder => header.order.precedes(&utterance.order).ok_or_else(|| MergeError::AmbiguousSectionPlacement {
-                            header: header.header.header.to_chat_string(), previous_end: header.previous_end,
-                            next_start: header.next_start, competing: utterance.origin,
-                        })?,
-                    }
-                }
-                (Some(SourceEvent::Utterance(utterance)), Some(SourceEvent::Section(header))) => {
-                    match self.placement {
-                        Placement::Timed => !header.precedes(utterance)?,
-                        Placement::SourceOrder => !header.order.precedes(&utterance.order).ok_or_else(|| MergeError::AmbiguousSectionPlacement {
-                            header: header.header.header.to_chat_string(), previous_end: header.previous_end,
-                            next_start: header.next_start, competing: utterance.origin,
-                        })?,
-                    }
-                }
-                (
-                    Some(SourceEvent::Utterance(_)),
-                    Some(SourceEvent::Header(_) | SourceEvent::End(_)),
-                ) => false,
-                (Some(SourceEvent::Utterance(reference)), Some(SourceEvent::Utterance(donor))) => {
-                    match self.placement {
-                        Placement::Timed => reference.start <= donor.start,
-                        Placement::SourceOrder => reference.order.precedes(&donor.order).ok_or(MergeError::AmbiguousUtteranceOrder {
-                            reference: reference.origin, donor: donor.origin,
-                        })?,
-                    }
+            }
+            let reference_next = match ordering {
+                Ok(None) => break,
+                Ok(Some(order)) => order,
+                Err(error) => {
+                    let review = self.draft_order.resolve(error, origins.len())?;
+                    lines.push(Line::header(Header::Comment {
+                        content: talkbank_model::model::BulletContent::from_text(review.comment()),
+                    }));
+                    draft_order_reviews.push(review);
+                    true
                 }
             };
             let source = if reference_next {
@@ -313,11 +459,23 @@ impl AdmittedMerge {
                     }
                     SourceEvent::Section(boundary) => lines.push(boundary.header.into_line()),
                     SourceEvent::Utterance(positioned) => {
+                        if let (Some(gem), MergeOrigin::Inserted(donor), Some(bullet)) = (
+                            &self.timed_gem,
+                            positioned.origin,
+                            positioned.utterance.main.content.bullet.as_ref(),
+                        ) && gem_decided.contains(&positioned.origin)
+                            && let Some(evidence) = gem.evidence(donor, bullet)
+                        {
+                            gem_exterior_placements.push(evidence);
+                        }
                         lines.push(Line::Utterance(positioned.utterance));
                         origins.push(positioned.origin);
                     }
                 }
             }
+        }
+        if let Some(order) = &self.relative_order {
+            order.verify(&origins)?;
         }
         let errors = talkbank_model::ErrorCollector::new();
         let participants =
@@ -327,21 +485,16 @@ impl AdmittedMerge {
         if !diagnostics.is_empty() {
             return Err(MergeError::InvalidParticipantJoin { diagnostics });
         }
-        let file = ChatFile::with_participants(lines, participants)
-            .validate_with_policy(
-                talkbank_model::validation::ValidationPolicy::new(
-                    talkbank_model::RuleSelection::new(),
-                    talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
-                ),
-                &talkbank_model::NullErrorSink,
-                talkbank_model::model::TranscriptName::Anonymous,
-            )
-            .map_err(|failure| MergeError::InvalidOutput(Box::new(failure)))?;
-        Ok(Merged {
-            file,
+        // Validation is the draft's own transition (`MergeDraft::validate`), so a
+        // caller may repair timing between assembly and validation.
+        Ok(MergeDraft {
+            file: ChatFile::with_participants(lines, participants),
             origins,
             reference_fates: self.reference_fates,
             donor_fates: self.donor_fates,
+            gem_exterior_placements,
+            draft_order_reviews,
+            bullet_edits: std::collections::BTreeMap::new(),
         })
     }
 }
@@ -411,6 +564,10 @@ fn starts_body(line: &Line) -> bool {
     }
 }
 
+fn is_end(line: &Line) -> bool {
+    matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::End))
+}
+
 fn inject_headers(admission: &mut SourceAdmission, additions: &mut VecDeque<HeaderEvent>) {
     for event in additions.drain(..) {
         admission.header(event);
@@ -424,17 +581,22 @@ pub(super) fn merge(
     strip_tiers: &[String],
     mut additions: OpeningAdditions,
     placement: Placement,
-) -> Result<Merged, MergeError> {
+    selection: Option<&SourceBoundDonorSelection<'_>>,
+) -> Result<MergeDraft, MergeError> {
     let retained = |speaker: &SpeakerCode| retain.contains(speaker);
+    // Where donor opening metadata joins the reference: before the first body
+    // line, or before `@End` when the reference has no body (a header-only
+    // reference). `None` only for a document with neither, which gets the
+    // metadata after its last line. A count of opening lines cannot express the
+    // header-only case: it equals the line count, and the injection was skipped.
     let opening_end = reference
         .lines
         .iter()
-        .position(starts_body)
-        .unwrap_or(reference.lines.len());
+        .position(|line| starts_body(line) || is_end(line));
     let last_id = reference
         .lines
         .iter()
-        .take(opening_end)
+        .take(opening_end.unwrap_or(reference.lines.len()))
         .enumerate()
         .rev()
         .find_map(|(index, line)| {
@@ -444,7 +606,7 @@ pub(super) fn merge(
     let mut reference_admission = SourceAdmission::new(placement);
     let mut reference_fates = Vec::new();
     for (index, line) in reference.lines.iter().enumerate() {
-        if index == opening_end {
+        if Some(index) == opening_end {
             inject_headers(&mut reference_admission, &mut additions.events);
         }
         match line {
@@ -490,13 +652,17 @@ pub(super) fn merge(
             }
         }
     }
+    if opening_end.is_none() {
+        inject_headers(&mut reference_admission, &mut additions.events);
+    }
     let mut donor_admission = SourceAdmission::new(placement);
     let mut donor_fates = Vec::new();
     let donor_opening_end = donor
         .lines
         .iter()
-        .position(starts_body)
-        .unwrap_or(donor.lines.len());
+        .take_while(|line| !starts_body(line))
+        .count();
+    let mut source_headers = selection.map(|selection| selection.headers().iter());
     for (index, line) in donor.lines.iter().enumerate() {
         match line {
             Line::Header {
@@ -506,7 +672,25 @@ pub(super) fn merge(
             } => {
                 // The first utterance ends opening-metadata reconciliation,
                 // even when that utterance is excluded by speaker authority.
-                if index >= donor_opening_end && !matches!(header.as_ref(), Header::End) {
+                if let Some(contexts) = &mut source_headers {
+                    let context = contexts.next().ok_or(MergeError::InvalidDonorSelection)?;
+                    match context {
+                        selection::HeaderContext::Opening | selection::HeaderContext::End => {}
+                        selection::HeaderContext::Body(bracket) => {
+                            donor_admission.events.push(PendingEvent::BoundSection(
+                                SectionBoundary {
+                                    header: copied_header(header, *span, *separator),
+                                    previous_end: bracket.previous_end(),
+                                    next_start: bracket.next_start(),
+                                    order: OrderBounds {
+                                        lower: bracket.previous_start(),
+                                        upper: bracket.next_start(),
+                                    },
+                                },
+                            ));
+                        }
+                    }
+                } else if index >= donor_opening_end && !matches!(header.as_ref(), Header::End) {
                     donor_admission.header(copied_header(header, *span, *separator));
                 }
             }
@@ -534,6 +718,80 @@ pub(super) fn merge(
         reference_fates,
         donor_fates,
         placement,
+        relative_order: selection
+            .map(|selected| selected.order_for(reference))
+            .transpose()?
+            .flatten(),
+        timed_gem: selection
+            .map(|selected| selected.gem_for(reference))
+            .transpose()?
+            .flatten(),
+        draft_order: match selection {
+            Some(selected) => selected.draft_policy_for(reference)?,
+            None => super::draft_order::DraftOrderPolicy::Strict,
+        },
     }
     .assemble()
+}
+
+#[cfg(test)]
+mod section_order_tests {
+    use super::*;
+
+    #[test]
+    fn section_order_requires_one_direction_not_two() {
+        let fixture = crate::parse_and_validate(
+            include_str!("../../../../corpus/reference/edge-cases/postcodes-and-gems.cha"),
+            Default::default(),
+        )
+        .unwrap();
+        let header = fixture.lines.iter().find(|line| {
+            matches!(line, Line::Header { header, .. } if matches!(header.as_ref(), Header::BeginGem { .. }))
+        }).unwrap();
+        let boundary = |previous_end, next_start| {
+            let Line::Header {
+                header,
+                span,
+                separator,
+            } = header.clone()
+            else {
+                panic!("selected fixture section header");
+            };
+            SectionBoundary {
+                header: HeaderEvent {
+                    header,
+                    span,
+                    separator,
+                },
+                previous_end: Some(previous_end),
+                next_start: Some(next_start),
+                order: OrderBounds {
+                    lower: Some(0),
+                    upper: Some(next_start),
+                },
+            }
+        };
+        let earlier = boundary(50, 50);
+        let later = boundary(100, 100);
+        assert!(matches!(
+            earlier.precedes_section(&later),
+            Ok(SectionOrder::Before)
+        ));
+        assert!(matches!(
+            later.precedes_section(&earlier),
+            Ok(SectionOrder::After)
+        ));
+        assert!(matches!(
+            later.precedes_section(&boundary(100, 100)),
+            Err(MergeError::AmbiguousSectionOrder { .. })
+        ));
+        assert!(matches!(
+            boundary(40, 120).precedes_section(&later),
+            Err(MergeError::AmbiguousSectionOrder { .. })
+        ));
+        assert!(matches!(
+            boundary(120, 80).precedes_section(&later),
+            Err(MergeError::AmbiguousSectionOrder { .. })
+        ));
+    }
 }

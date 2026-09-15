@@ -11,6 +11,33 @@ use crate::model::{Header, SpeakerCode};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
 use std::collections::{HashMap, HashSet};
 
+/// How often one header name occurs, keeping the location a duplicate report
+/// needs. E501 points at the first REPEATED occurrence, the line to delete; the
+/// first occurrence is legitimate, so it is not stored at all.
+#[derive(Clone, Copy)]
+enum Occurrences {
+    Once,
+    Repeated { count: usize, first_repeat: Span },
+}
+
+impl Occurrences {
+    fn record(&mut self, span: Span) {
+        *self = match *self {
+            Occurrences::Once => Occurrences::Repeated {
+                count: 2,
+                first_repeat: span,
+            },
+            Occurrences::Repeated {
+                count,
+                first_repeat,
+            } => Occurrences::Repeated {
+                count: count + 1,
+                first_repeat,
+            },
+        };
+    }
+}
+
 /// Returns a gem label as `&str`, or `""` for unlabeled gems.
 fn label_or_empty(label: Option<&str>) -> &str {
     // DEFAULT: Unlabeled gems are represented by an empty label string.
@@ -29,7 +56,7 @@ pub(crate) fn check_headers(
     errors: &impl ErrorSink,
     source_len: usize,
 ) {
-    let mut header_counts: HashMap<String, (usize, Span)> = HashMap::new();
+    let mut header_counts: HashMap<String, Occurrences> = HashMap::new();
     let mut declared_participants: HashSet<SpeakerCode> = HashSet::new();
     let mut id_speakers: Vec<(SpeakerCode, Span)> = Vec::new();
 
@@ -37,8 +64,8 @@ pub(crate) fn check_headers(
         let name_lower = header.name().to_lowercase();
         header_counts
             .entry(name_lower)
-            .and_modify(|(count, _)| *count += 1)
-            .or_insert((1, *span));
+            .and_modify(|seen| seen.record(*span))
+            .or_insert(Occurrences::Once);
 
         if let Header::Participants { entries } = header {
             for entry in entries {
@@ -51,11 +78,21 @@ pub(crate) fn check_headers(
         }
     }
 
-    let single_only_headers = ["Types", "Media", "Videos", "UTF8", "Begin", "End"];
+    let single_only_headers = [
+        "Languages",
+        "Types",
+        "Media",
+        "Videos",
+        "UTF8",
+        "Begin",
+        "End",
+    ];
     for name in &single_only_headers {
         let name_lower = name.to_lowercase();
-        if let Some(&(count, span)) = header_counts.get(&name_lower)
-            && count > 1
+        if let Some(&Occurrences::Repeated {
+            count,
+            first_repeat: span,
+        }) = header_counts.get(&name_lower)
         {
             let mut err = ParseError::new(
                 ErrorCode::DuplicateHeader,

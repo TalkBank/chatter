@@ -297,6 +297,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: grammar/.nvmrc
+      - name: Desktop release candidate verifier tests
+        run: just release-verifier-test
 
       # Install ONLY the tree-sitter CLI, not the package's full dev tree.
       # `npm ci` here would also build the `tree-sitter` Node BINDING, whose
