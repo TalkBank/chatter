@@ -15,7 +15,9 @@ pub fn get_cache_key_with_suffix(path: &Path, suffix: &str) -> String {
     use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
-    path.to_string_lossy().hash(&mut hasher);
+    // Keep the native path's equality/hash contract: equivalent separators
+    // share a key, and distinct non-Unicode names are not lossily collapsed.
+    path.hash(&mut hasher);
     suffix.hash(&mut hasher);
     format!("{:x}", hasher.finish())
 }

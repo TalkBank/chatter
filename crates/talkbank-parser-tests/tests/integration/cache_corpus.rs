@@ -52,6 +52,18 @@ fn canonical_cache_is_learned_cold_and_reused_without_losing_diagnostics() {
             "{}",
             path.display()
         );
+        let equivalent_path = path
+            .parent()
+            .expect("canonical fixture has a parent")
+            .join(".")
+            .join(path.file_name().expect("canonical fixture has a filename"));
+        assert_eq!(path, &equivalent_path);
+        assert_eq!(
+            cache.get(&equivalent_path, config.check_alignment),
+            Some(expected),
+            "equivalent path must reuse the canonical cache fact: {}",
+            equivalent_path.display()
+        );
         if expected == CacheOutcome::Valid {
             assert_eq!(
                 ValidationCache::get_roundtrip(cache.as_ref(), path, config.check_alignment),

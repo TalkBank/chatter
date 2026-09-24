@@ -1,7 +1,7 @@
 # Validation Cache
 
 **Status:** Current
-**Last modified:** 2026-09-06 03:52 EDT
+**Last modified:** 2026-09-24 01:32 EDT
 
 The persistent CHAT validation cache, used by `chatter validate` and the
 desktop validation runner. The LSP maintains its own in-memory document cache. Distinct from the audio-task cache used by upstream
@@ -60,6 +60,13 @@ flowchart TD
 Validation uses a partial unique index on `(path_hash, version, check_alignment)`
 where `parser_kind IS NULL`; roundtrip uses a second partial index including
 `parser_kind` where it is non-NULL. `file_path` remains a maintenance index.
+
+The key hashes the native `Path`, not its lossy display string. Platform path
+equality therefore governs equivalent separator spellings (including Windows
+`/` and `\`), while distinct non-Unicode names remain distinct. This does not
+resolve symlinks or normalize filename Unicode. Both validation and roundtrip
+use this shared key function. Entries created with the older display-string
+hash may be relearned; no destructive cache migration is required.
 
 ## Identity and handle states
 

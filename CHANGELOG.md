@@ -17,6 +17,11 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- Validation and roundtrip cache keys retain native path identity instead of
+  hashing lossy display text. Equivalent separator spellings now reuse the
+  same cache fact, including mixed Windows separators; existing cache entries
+  may be relearned without deleting the cache.
+
 - English cardinal generation composes short-scale units correctly instead of
   multiplying complete table phrases (for example, 2000 now yields "two
   thousand", not "two one thousand"). Authored reference controls cover scales
