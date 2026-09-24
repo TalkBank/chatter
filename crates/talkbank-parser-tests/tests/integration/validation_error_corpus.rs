@@ -28,7 +28,7 @@
 //!    cannot silently ship with no triggering example anywhere.
 use std::fs;
 use std::path::PathBuf;
-use talkbank_model::model::TranscriptName;
+use talkbank_model::model::{FileStem, TranscriptName};
 
 use talkbank_model::ErrorCollector;
 use talkbank_model::ParseOutcome;
@@ -44,11 +44,291 @@ use talkbank_parser_tests::test_error::TestError;
 // `talkbank-spec-vocabulary` deleted both structs and the drift with them.
 use talkbank_spec_vocabulary::SpecErrorCode;
 use talkbank_spec_vocabulary::paths::RepoRelativePath;
+use talkbank_spec_vocabulary::validation_manifest::FixtureTranscriptName;
 use talkbank_spec_vocabulary::validation_manifest::ValidationManifest as Manifest;
 
 /// The validation corpus dir under this crate (where the generator writes).
 fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/error_corpus/validation_errors")
+}
+
+/// Independent syntax faults must survive both recovery and typed validation.
+#[test]
+fn speaker_boundary_specs_report_length_and_ascii_faults_independently() {
+    use talkbank_model::ErrorCode;
+    let parser = TreeSitterParser::new().expect("parser");
+    for (example, length_fault, character_fault) in [
+        (1, false, false),
+        (2, true, false),
+        (3, false, true),
+        (4, true, true),
+    ] {
+        let source =
+            fs::read_to_string(corpus_dir().join(format!("E307_boundaries_{example}.cha")))
+                .expect("canonical speaker boundary");
+        let sink = ErrorCollector::new();
+        let file = parser.parse_chat_file_streaming(&source, &sink);
+        file.validate(&sink, TranscriptName::Anonymous);
+        let diagnostics = sink.into_vec();
+        let mut sites = std::collections::BTreeMap::<(u32, u32), (bool, bool)>::new();
+        for error in diagnostics
+            .iter()
+            .filter(|error| error.code == ErrorCode::InvalidSpeaker)
+        {
+            let span = error.location.span;
+            let faults = sites.entry((span.start, span.end)).or_default();
+            if error.message.contains("exceeds maximum length") {
+                faults.0 = true;
+            } else if error.message.contains("contains invalid character") {
+                faults.1 = true;
+            } else {
+                panic!("unclassified speaker finding: {error:?}");
+            }
+        }
+        assert_eq!(
+            !sites.is_empty(),
+            length_fault || character_fault,
+            "example {example}: {diagnostics:?}"
+        );
+        for (span, faults) in sites {
+            assert_eq!(
+                faults,
+                (length_fault, character_fault),
+                "each retained code needs every applicable finding: example {example}, span {span:?}"
+            );
+        }
+    }
+}
+
+/// Named rule counts and source spans survive nested traversal and recovery.
+#[test]
+fn leading_bullet_specs_preserve_scope_diagnostics_and_timing() {
+    use talkbank_model::ErrorCode;
+    use talkbank_model::model::WriteChat;
+    let parser = TreeSitterParser::new().expect("parser");
+    for (example, expected) in [
+        (1, 1),
+        (2, 0),
+        (3, 0),
+        (4, 0),
+        (5, 1),
+        (6, 0),
+        (7, 1),
+        (8, 2),
+        (9, 0),
+    ] {
+        let source = fs::read_to_string(corpus_dir().join(format!("E770_{example}.cha")))
+            .expect("canonical leading-bullet spec");
+        let sink = ErrorCollector::new();
+        let mut file = parser.parse_chat_file_streaming(&source, &sink);
+        let parse = sink.into_vec();
+        assert_eq!(
+            parse.is_empty(),
+            example != 9,
+            "example {example}: {parse:?}"
+        );
+        let sink = ErrorCollector::new();
+        file.validate_with_alignment(
+            &sink,
+            TranscriptName::Named(FileStem::from_stem("leading-bullet")),
+        );
+        let diagnostics = sink.into_vec();
+        let leading: Vec<_> = diagnostics
+            .iter()
+            .filter(|error| error.code == ErrorCode::TimingBulletBeforeContent)
+            .collect();
+        assert_eq!(
+            leading.len(),
+            expected,
+            "example {example}: {diagnostics:?}"
+        );
+        for (index, error) in leading.iter().enumerate() {
+            let span = error.location.span;
+            assert_eq!(
+                &source[span.start as usize..span.end as usize],
+                ["\u{15}100_200\u{15}", "\u{15}200_300\u{15}"][index]
+            );
+        }
+        if example != 9 {
+            assert_eq!(file.to_chat_string(), source, "example {example}");
+        }
+    }
+}
+
+/// Parsing and serialization preserve each timing scope, including invalid tiers.
+#[test]
+fn bullet_retention_specs_preserve_each_timing_scope() {
+    use talkbank_model::model::{UtteranceContent, WriteChat};
+    let parser = TreeSitterParser::new().expect("parser");
+    for (example, internal_count, terminal) in [(1, 1, true), (2, 1, true), (3, 1, false)] {
+        let source =
+            fs::read_to_string(corpus_dir().join(format!("E305_bullet_retention_{example}.cha")))
+                .expect("canonical timing specimen");
+        let errors = ErrorCollector::new();
+        let file = parser.parse_chat_file_streaming(&source, &errors);
+        assert!(errors.into_vec().is_empty(), "example {example}");
+        let utterance = file.utterances().next().expect("one utterance");
+        let content = &utterance.main.content;
+        assert_eq!(
+            content
+                .content
+                .iter()
+                .filter(|item| matches!(item, UtteranceContent::InternalBullet(_)))
+                .count(),
+            internal_count,
+            "example {example}"
+        );
+        assert_eq!(content.bullet.is_some(), terminal, "example {example}");
+        assert_eq!(
+            file.to_chat_string(),
+            source,
+            "retain every timing scope: example {example}"
+        );
+    }
+}
+
+/// Named spec inputs preserve normalization-side advice without turning
+/// canonical equivalence into a filename mismatch or modifying source bytes.
+#[test]
+fn media_normalization_specs_identify_the_noncanonical_side() {
+    use talkbank_model::model::WriteChat;
+    use talkbank_model::{ErrorCode, Severity};
+    let dir = corpus_dir();
+    let manifest: Manifest = serde_json::from_str(
+        &fs::read_to_string(dir.join("manifest.json")).expect("canonical manifest"),
+    )
+    .expect("typed fixture manifest");
+    let parser = TreeSitterParser::new().expect("parser");
+    for (fixture, expected_message) in [
+        (
+            "W109_1.cha",
+            "The file name uses a nonstandard Unicode spelling (such as a letter plus a separate accent mark); rename it to \"Höchste.cha\" using the standard spelling.",
+        ),
+        (
+            "W109_2.cha",
+            "The @Media name uses a nonstandard Unicode spelling (such as a letter plus a separate accent mark); use \"Schlüssel\".",
+        ),
+        (
+            "W109_3.cha",
+            "The @Media name uses a nonstandard Unicode spelling (such as a letter plus a separate accent mark); use \"ạ́\". The file name uses a nonstandard Unicode spelling (such as a letter plus a separate accent mark); rename it to \"ạ́.cha\" using the standard spelling.",
+        ),
+        (
+            "W109_5.cha",
+            "The @Media name uses a nonstandard Unicode spelling (such as a letter plus a separate accent mark); use \"Schlüssel\". The file name uses a nonstandard Unicode spelling (such as a letter plus a separate accent mark); rename it to \"Schlüssel.cha\" using the standard spelling.",
+        ),
+    ] {
+        let entry = manifest
+            .fixtures
+            .iter()
+            .find(|entry| entry.fixture.as_str() == fixture)
+            .expect("canonical normalization example");
+        let FixtureTranscriptName::Named(stem) = &entry.transcript_name else {
+            panic!("normalization requires the authored transcript name");
+        };
+        let source = fs::read_to_string(dir.join(fixture)).expect("canonical fixture");
+        let errors = ErrorCollector::new();
+        let mut file = parser.parse_chat_file_streaming(&source, &errors);
+        assert!(errors.into_vec().is_empty(), "clean syntax: {fixture}");
+        let errors = ErrorCollector::new();
+        file.validate_with_alignment(&errors, TranscriptName::Named(FileStem::from_stem(stem)));
+        let diagnostics = errors.into_vec();
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|error| error.code == ErrorCode::MediaFilenameMismatch)
+        );
+        let warnings: Vec<_> = diagnostics
+            .iter()
+            .filter(|error| error.code == ErrorCode::MediaFilenameNonCanonicalUnicode)
+            .collect();
+        assert_eq!(warnings.len(), 1, "{fixture}: {diagnostics:?}");
+        assert_eq!(warnings[0].severity, Severity::Warning);
+        assert_eq!(warnings[0].message, expected_message);
+        assert_eq!(
+            file.to_chat_string(),
+            source,
+            "normalization advice is not a repair"
+        );
+    }
+}
+
+/// Parse recovery is a refusal, but must not discard healthy sibling tiers.
+#[test]
+fn free_text_recovery_specs_preserve_unaffected_sibling_tiers() {
+    use talkbank_model::ErrorCode;
+    use talkbank_model::model::WriteChat;
+    enum Admission {
+        Clean,
+        Recovered {
+            label: &'static str,
+            retained: &'static [&'static str],
+        },
+    }
+    let parser = TreeSitterParser::new().expect("parser");
+    for (example, admission) in [
+        (4, Admission::Clean),
+        (
+            5,
+            Admission::Recovered {
+                label: "%com:",
+                retained: &["eng", "com", "xnote"],
+            },
+        ),
+        (
+            6,
+            Admission::Recovered {
+                label: "%xnote:",
+                retained: &["eng", "com"],
+            },
+        ),
+    ] {
+        let source = fs::read_to_string(corpus_dir().join(format!("E330_{example}.cha")))
+            .expect("canonical free-text recovery spec");
+        let errors = ErrorCollector::new();
+        let file = parser.parse_chat_file_streaming(&source, &errors);
+        let diagnostics = errors.into_vec();
+        let utterance = file.utterances().next().expect("unaffected main tier");
+        let labels: Vec<_> = utterance
+            .dependent_tiers
+            .iter()
+            .map(|tier| tier.kind())
+            .collect();
+        match admission {
+            Admission::Clean => {
+                assert!(diagnostics.is_empty(), "{diagnostics:?}");
+                assert_eq!(labels, ["eng", "com", "xnote"]);
+                assert_eq!(file.to_chat_string(), source);
+            }
+            Admission::Recovered { label, retained } => {
+                let mut codes: Vec<_> = diagnostics.iter().map(|error| error.code).collect();
+                codes.sort_by_key(|code| code.to_string());
+                assert_eq!(
+                    codes,
+                    [ErrorCode::UnparsableContent, ErrorCode::TreeParsingError]
+                );
+                assert_eq!(labels, retained);
+                let start = source.find(label).expect("authored damaged tier");
+                let end = start + source[start..].find('\n').expect("tier newline") + 1;
+                assert!(
+                    diagnostics
+                        .iter()
+                        .all(|error| error.location.span.start as usize >= start
+                            && error.location.span.end as usize <= end),
+                    "{diagnostics:?}"
+                );
+                for sibling in utterance
+                    .dependent_tiers
+                    .iter()
+                    .filter(|tier| !label.starts_with(&format!("%{}:", tier.kind())))
+                {
+                    assert!(
+                        source.contains(&sibling.to_chat_string()),
+                        "recovery changed a healthy sibling"
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// Verify each implemented fixture SATISFIES ITS CLAIM, absences included.
@@ -102,7 +382,12 @@ fn validation_errors_detected() -> Result<(), TestError> {
             .collect();
         if let ParseOutcome::Parsed(mut chat_file) = parse_result {
             let validation_errors = ErrorCollector::new();
-            let fixture_path = dir.join(&entry.fixture);
+            let transcript_name = match &entry.transcript_name {
+                FixtureTranscriptName::Anonymous => TranscriptName::Anonymous,
+                FixtureTranscriptName::Named(stem) => {
+                    TranscriptName::Named(FileStem::from_stem(stem))
+                }
+            };
             // The fixture runs under the rules its own code declares. Before
             // the manifest carried them, every fixture ran under the default
             // rule set, so a fixture for an opt-in rule could only ever report
@@ -111,7 +396,7 @@ fn validation_errors_detected() -> Result<(), TestError> {
             chat_file.validate_with_alignment_and_rules(
                 entry.rules.selection(),
                 &validation_errors,
-                TranscriptName::for_path(&fixture_path),
+                transcript_name,
             );
             codes.extend(
                 validation_errors

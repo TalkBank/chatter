@@ -61,7 +61,7 @@ fn force_refresh_scales_to_corpus_sized_input() -> Result<(), TestError> {
     assert_success(&forced, "forced validate over generated corpus");
 
     // A HANG DETECTOR, not a speed test, which is the only form of timing
-    // assertion this project allows (CLAUDE.md danger rule 9b).
+    // assertion this project allows (AGENTS.md danger rule 9b).
     //
     // The ceiling is an ORDER OF MAGNITUDE above a healthy run, not a snug
     // fit, because a wall-clock threshold tuned to one machine fails on

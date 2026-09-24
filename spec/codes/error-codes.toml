@@ -519,7 +519,7 @@ code = "E331"
 variant = "UnexpectedNodeInContext"
 summary = "Unexpected node encountered in a specific parsing context."
 kind = "Invalidity"
-status = "unreachable_from_chat"
+status = "implemented"
 
 [[code]]
 code = "E340"
@@ -978,7 +978,7 @@ status = "implemented"
 [[code]]
 code = "E519"
 variant = "InvalidLanguageCode"
-summary = "Invalid ISO 639 language code."
+summary = "Invalid ISO 639 language code, or an `@ID` language not declared in `@Languages`."
 kind = "Invalidity"
 status = "implemented"
 
@@ -1174,7 +1174,7 @@ status = "implemented"
 [[code]]
 code = "E549"
 variant = "DuplicateSpeakerDeclaration"
-summary = "The same speaker code is declared more than once in the `@Participants`\nheader. Each participant must be declared exactly once. Corresponds to\nCLAN CHECK error 13."
+summary = "The same speaker code is repeated in `@Participants` or has more than\none `@ID` header. Each participant and speaker ID must be declared once.\nCorresponds to CLAN CHECK error 13."
 kind = "Invalidity"
 status = "implemented"
 
@@ -1710,6 +1710,20 @@ kind = "Invalidity"
 status = "unreachable_from_chat"
 
 # ---------------------------------------------------------------------
+[[code]]
+code = "E769"
+variant = "SemicolonOnMainTier"
+summary = "A semicolon separator appears on a main tier.\n\nModern CHAT disallows semicolons on main tiers; use separate utterances\nor an appropriate CHAT/CA marker. The typed separator is retained for\nprecise diagnostics and lossless handling of legacy input."
+kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "E770"
+variant = "TimingBulletBeforeContent"
+summary = "A main-tier timing bullet occurs before any utterance material.\n\nA timing bullet scopes preceding material; words (including explicit zero),\nevents, actions and pauses can establish that scope. Linkers, precodes and\nstructural markers cannot. Parsed timing evidence is retained unchanged."
+kind = "Invalidity"
+status = "implemented"
+
 # Generic/Unknown. The macro REQUIRES a variant named `UnknownError` and
 # refuses to expand without one; it no longer generates a fallback arm,
 # so nothing resolves a code string to it. Position is NOT irrelevant:
@@ -1733,4 +1747,11 @@ code = "W108"
 variant = "SpeakerNotFoundInParticipants"
 summary = "Speaker code not found in `@Participants` (non-fatal)."
 kind = "Invalidity"
+status = "implemented"
+
+[[code]]
+code = "W109"
+variant = "MediaFilenameNonCanonicalUnicode"
+summary = "`@Media` filename and the file being parsed name the same media\n(Unicode-canonically, NFC-equal), but one or both spellings are not\nthemselves in NFC form (e.g. a decomposed accented letter: base letter\nplus combining mark, instead of the precomposed codepoint). Both\nspellings render identically and are not a real filename mismatch\n(see [`MediaFilenameMismatch`]), but TalkBank filenames and `@Media`\nnames are canonically UTF-8 NFC, so the non-conforming spelling should\nbe canonicalized.\n\n[`MediaFilenameMismatch`]: Self::MediaFilenameMismatch"
+kind = "Style"
 status = "implemented"

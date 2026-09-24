@@ -1,7 +1,7 @@
 # Rediarize (`chatter rediarize`)
 
 **Status:** Draft
-**Last updated:** 2026-08-30 16:26 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 `chatter rediarize` re-attributes utterance speakers in a CHAT file
 from an external diarization. Given a transcript whose utterances
@@ -188,6 +188,12 @@ silently ignored.
 
 ## Behavior contract
 
+The Rust `rediarize` API requires an error sink. After reconciling headers it
+uses the canonical participant join, reporting inconsistencies before exposing
+the resulting participant map. The returned mutable model is not a full
+validation certificate. The content-level wrapper refuses to serialize when
+that join reports errors; it does not silently discard them.
+
 - Every utterance with a time bullet is assigned to the track with the
   greatest union of millisecond coverage against the bullet's span.
   An utterance already on its max-overlap track counts as
@@ -199,6 +205,8 @@ silently ignored.
   exactly the set of tracks the output actually uses: new tracks get
   entries cloned from an existing participant (same role),
   declarations for tracks no longer used are dropped.
+- Header-only transcripts preserve their declarations: no utterances means
+  there is no attribution evidence for pruning participants.
 - Utterance content, dependent tiers, and all other headers are
   preserved as-is.
 

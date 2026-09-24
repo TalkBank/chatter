@@ -1,7 +1,7 @@
 # What the GUI CLANc CHECK does that unix CHECK does not
 
 **Status:** Reference
-**Last updated:** 2026-07-08 12:48 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 Policy (maintainer ruling, 2026-07-08): **unix CHECK is the authoritative
 parity bar** (it is what `clan-run.sh` grounds against and what upstream
@@ -64,4 +64,4 @@ CLAN itself, and it predates us.
   chatter-stricter modernization.
 - If the policy ever changes to include the GUI bar, grounding would
   need the Mac CLANc binary (per-host versions vary; see the meta
-  repo CLAUDE.md on `/Applications/CLANc/`), not `clan-run.sh`.
+  repo AGENTS.md on `/Applications/CLANc/`), not `clan-run.sh`.

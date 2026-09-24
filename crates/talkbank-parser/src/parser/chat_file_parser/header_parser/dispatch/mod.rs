@@ -1,7 +1,7 @@
-//! Header-node dispatch driven by the NEW backend's free `extract_header`.
+//! Header dispatch through the generated source-bound supertype extractor.
 //!
 //! LEVEL 1 (which-header-kind dispatch): the concrete header subtype CST node is
-//! classified by the free [`extract_header`] function into a typed
+//! classified by `SourceSlice::extract_header` into an associated
 //! `HeaderChoice`, then routed to its per-kind logic by `dispatch_header_choice`,
 //! which matches all 34 `HeaderChoice` variants exhaustively (no `_` catch-all
 //! that could silently drop a header). This replaces the pre-migration 5-step
@@ -23,7 +23,9 @@ mod special;
 mod structured;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{AsRawNode, HeaderChoice, SlotView, extract_header};
+use crate::generated_traversal::{
+    AsRawNode, HeaderChoice, HeaderChoiceSourceView, SourceField, SourceSlice, SourceSlotView,
+};
 use crate::model::Header;
 use crate::node_types::THUMBNAIL_HEADER;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
@@ -32,16 +34,16 @@ use tree_sitter::Node;
 
 /// Parse a header CST node into a typed `Header`.
 ///
-/// Classifies `header_node` with the free [`extract_header`] and routes a
+/// Classifies `header_node` with source-bound extraction and routes a
 /// present concrete header to `dispatch_header_choice`.
 pub fn parse_header_node(
-    header_node: Node,
-    input: &str,
+    header_node: SourceSlice<'_, '_>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let children = extract_header(header_node);
-    let outcome = match children.content.slot().view() {
-        SlotView::Present(choice) => dispatch_header_choice(choice.clone(), input, errors),
+    let input = header_node.source();
+    let children = header_node.extract_header();
+    let outcome = match children.field_content().slot().view() {
+        SourceSlotView::Present(choice) => dispatch_header_choice(choice, errors),
         // `dispatch_line` only routes a Present concrete `header` subtype node
         // here, so these slots are unreachable in practice. The pre-migration
         // code (supertypes mode of `resolve_header_node`) always produced a
@@ -49,7 +51,7 @@ pub fn parse_header_node(
         // point either; preserve that by rejecting with NO new diagnostic (the
         // whole-tree recovery backstop plus validation still cover any genuine
         // recovery node).
-        SlotView::Error(_) | SlotView::Missing(_) | SlotView::Unexpected(_) => {
+        SourceSlotView::Error(_) | SourceSlotView::Missing(_) | SourceSlotView::Unexpected(_) => {
             ParseOutcome::rejected()
         }
     };
@@ -57,7 +59,7 @@ pub fn parse_header_node(
     // populates `unexpected` in practice (there is no separate grammar
     // position it could fail to consume), but surface it anyway so every
     // migrated carrier uses the SAME mechanism (see `surface_displaced`).
-    surface_displaced(&children.unexpected, "header", input, errors);
+    surface_displaced(&children.children().unexpected, "header", input, errors);
     outcome
 }
 
@@ -71,63 +73,91 @@ pub fn parse_header_node(
 /// grammar change that adds a `header` subtype must add an arm here, which fails
 /// to compile until handled, so no header can be silently dropped.
 ///
-/// Each `HeaderChoice` variant now holds the NEW backend's typed leaf wrapper
-/// (e.g. `LanguagesHeaderNode`), not a bare `Node` as the OLD `HeaderChoice`
-/// did; `.raw_node()` (`AsRawNode`) recovers the same raw node the per-kind
-/// functions (unchanged, still `Node`-typed) expect.
-fn dispatch_header_choice(
-    choice: HeaderChoice,
-    input: &str,
+/// Each generated source-view variant retains its producer association.
+/// Migrated families receive the admitted `SourceBound` directly; transitional
+/// adapters split its node and source only at their existing leaf boundary.
+fn dispatch_header_choice<'tree>(
+    choice: SourceField<'_, 'tree, '_, HeaderChoice<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    match choice {
+    // The adapters below keep other header families on their existing lowering
+    // API while bound participant, media and scalar lowering retain source identity.
+    macro_rules! lower {
+        (bound $parse:path, $field:expr) => {
+            match crate::parser::typed_cst::read_source_field($field, errors) {
+                Some(bound) => $parse(bound, errors),
+                None => ParseOutcome::rejected(),
+            }
+        };
+        ($parse:path, $field:expr) => {
+            match crate::parser::typed_cst::read_source_field($field, errors) {
+                Some(bound) => $parse(bound.node(), bound.source(), errors),
+                None => ParseOutcome::rejected(),
+            }
+        };
+    }
+    match choice.view() {
         // Marker-only headers (no node content used).
-        HeaderChoice::NewEpisodeHeader(_) => ParseOutcome::parsed(Header::NewEpisode),
-        HeaderChoice::BlankHeader(_) => ParseOutcome::parsed(Header::Blank),
+        HeaderChoiceSourceView::NewEpisodeHeader(_) => ParseOutcome::parsed(Header::NewEpisode),
+        HeaderChoiceSourceView::BlankHeader(_) => ParseOutcome::parsed(Header::Blank),
 
         // Structured headers (dedicated sub-parsers in tree_parsing/header/).
-        HeaderChoice::LanguagesHeader(n) => structured::languages(n, input, errors),
-        HeaderChoice::ParticipantsHeader(n) => structured::participants(n, input, errors),
-        HeaderChoice::IdHeader(n) => structured::id(n, input, errors),
-        HeaderChoice::MediaHeader(n) => structured::media(n, input, errors),
-        HeaderChoice::SituationHeader(n) => structured::situation(n, input, errors),
-        HeaderChoice::TypesHeader(n) => structured::types(n, input, errors),
+        HeaderChoiceSourceView::LanguagesHeader(n) => lower!(structured::languages, n),
+        HeaderChoiceSourceView::ParticipantsHeader(n) => {
+            match crate::parser::typed_cst::read_source_field(n, errors) {
+                Some(bound) => structured::participants(bound, errors),
+                None => ParseOutcome::rejected(),
+            }
+        }
+        HeaderChoiceSourceView::IdHeader(n) => lower!(structured::id, n),
+        HeaderChoiceSourceView::MediaHeader(n) => {
+            match crate::parser::typed_cst::read_source_field(n, errors) {
+                Some(bound) => structured::media(bound, errors),
+                None => ParseOutcome::rejected(),
+            }
+        }
+        HeaderChoiceSourceView::SituationHeader(n) => lower!(structured::situation, n),
+        HeaderChoiceSourceView::TypesHeader(n) => lower!(structured::types, n),
 
         // Special (mixed-shape) headers.
-        HeaderChoice::CommentHeader(n) => special::comment(n, input, errors),
-        HeaderChoice::NumberHeader(n) => special::number(n, input, errors),
-        HeaderChoice::RecordingQualityHeader(n) => special::recording_quality(n, input, errors),
-        HeaderChoice::TranscriptionHeader(n) => special::transcription(n, input, errors),
-        HeaderChoice::BirthOfHeader(n) => special::birth_of(n, input, errors),
-        HeaderChoice::BirthplaceOfHeader(n) => special::birthplace_of(n, input, errors),
-        HeaderChoice::L1OfHeader(n) => special::l1_of(n, input, errors),
-        HeaderChoice::OptionsHeader(n) => special::options(n, input, errors),
+        HeaderChoiceSourceView::CommentHeader(n) => lower!(bound special::comment, n),
+        HeaderChoiceSourceView::NumberHeader(n) => lower!(bound special::number, n),
+        HeaderChoiceSourceView::RecordingQualityHeader(n) => {
+            lower!(bound special::recording_quality, n)
+        }
+        HeaderChoiceSourceView::TranscriptionHeader(n) => lower!(bound special::transcription, n),
+        HeaderChoiceSourceView::BirthOfHeader(n) => lower!(bound special::birth_of, n),
+        HeaderChoiceSourceView::BirthplaceOfHeader(n) => lower!(bound special::birthplace_of, n),
+        HeaderChoiceSourceView::L1OfHeader(n) => lower!(bound special::l1_of, n),
+        HeaderChoiceSourceView::OptionsHeader(n) => lower!(special::options, n),
 
         // GEM headers.
-        HeaderChoice::BgHeader(n) => gem::bg(n, input, errors),
-        HeaderChoice::EgHeader(n) => gem::eg(n, input, errors),
-        HeaderChoice::GHeader(n) => gem::g(n, input, errors),
+        HeaderChoiceSourceView::BgHeader(n) => lower!(gem::bg, n),
+        HeaderChoiceSourceView::EgHeader(n) => lower!(gem::eg, n),
+        HeaderChoiceSourceView::GHeader(n) => lower!(gem::g, n),
 
         // Simple scalar headers.
-        HeaderChoice::DateHeader(n) => simple::date(n, input, errors),
-        HeaderChoice::TapeLocationHeader(n) => simple::tape_location(n, input, errors),
-        HeaderChoice::TimeDurationHeader(n) => simple::time_duration(n, input, errors),
-        HeaderChoice::TimeStartHeader(n) => simple::time_start(n, input, errors),
-        HeaderChoice::LocationHeader(n) => simple::location(n, input, errors),
-        HeaderChoice::RoomLayoutHeader(n) => simple::room_layout(n, input, errors),
-        HeaderChoice::TranscriberHeader(n) => simple::transcriber(n, input, errors),
-        HeaderChoice::WarningHeader(n) => simple::warning(n, input, errors),
-        HeaderChoice::ActivitiesHeader(n) => simple::activities(n, input, errors),
-        HeaderChoice::BckHeader(n) => simple::bck(n, input, errors),
-        HeaderChoice::PageHeader(n) => simple::page(n, input, errors),
-        HeaderChoice::VideosHeader(n) => simple::videos(n, input, errors),
-        HeaderChoice::THeader(n) => simple::t(n, input, errors),
-        HeaderChoice::UnsupportedHeader(n) => simple::unsupported(n.raw_node(), input, errors),
+        HeaderChoiceSourceView::DateHeader(n) => lower!(bound simple::date, n),
+        HeaderChoiceSourceView::TapeLocationHeader(n) => lower!(bound simple::tape_location, n),
+        HeaderChoiceSourceView::TimeDurationHeader(n) => lower!(bound simple::time_duration, n),
+        HeaderChoiceSourceView::TimeStartHeader(n) => lower!(bound simple::time_start, n),
+        HeaderChoiceSourceView::LocationHeader(n) => lower!(bound simple::location, n),
+        HeaderChoiceSourceView::RoomLayoutHeader(n) => lower!(bound simple::room_layout, n),
+        HeaderChoiceSourceView::TranscriberHeader(n) => lower!(bound simple::transcriber, n),
+        HeaderChoiceSourceView::WarningHeader(n) => lower!(bound simple::warning, n),
+        HeaderChoiceSourceView::ActivitiesHeader(n) => lower!(bound simple::activities, n),
+        HeaderChoiceSourceView::BckHeader(n) => lower!(bound simple::bck, n),
+        HeaderChoiceSourceView::PageHeader(n) => lower!(bound simple::page, n),
+        HeaderChoiceSourceView::VideosHeader(n) => lower!(bound simple::videos, n),
+        HeaderChoiceSourceView::THeader(n) => lower!(bound simple::t, n),
+        HeaderChoiceSourceView::UnsupportedHeader(n) => {
+            simple::unsupported(n.raw_node(), n.source(), errors)
+        }
 
         // Gap: `thumbnail_header` is the one `header` subtype with no model
         // variant. Preserve the pre-migration `ends_with("_header")`
         // fall-through, which reported `UnknownHeader` and rejected.
-        HeaderChoice::ThumbnailHeader(n) => thumbnail(n.raw_node(), input, errors),
+        HeaderChoiceSourceView::ThumbnailHeader(n) => thumbnail(n.raw_node(), n.source(), errors),
     }
 }
 

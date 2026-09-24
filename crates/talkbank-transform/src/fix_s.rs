@@ -63,21 +63,26 @@ fn append_missing_explicit_language_declarations(chat_file: &mut ChatFile) -> us
         return 0;
     }
 
-    let Some(header_idx) = chat_file.lines.iter().rposition(|line| {
-        matches!(
-            line,
-            Line::Header { header, .. } if matches!(header.as_ref(), Header::Languages { .. })
-        )
-    }) else {
+    // Keep the selected header's typed mutable collection, not an index whose
+    // kind must be checked again. Reverse traversal preserves last-header policy.
+    let Some(codes) = chat_file
+        .lines
+        .as_mut_slice()
+        .iter_mut()
+        .rev()
+        .find_map(|line| match line {
+            Line::Header { header, .. } => match header.as_mut() {
+                Header::Languages { codes } => Some(codes),
+                _ => None,
+            },
+            Line::Utterance(_) => None,
+        })
+    else {
         return 0;
     };
 
     chat_file.languages.extend(missing.iter().cloned());
-    if let Line::Header { header, .. } = &mut chat_file.lines.as_mut_slice()[header_idx]
-        && let Header::Languages { codes } = header.as_mut()
-    {
-        codes.extend(missing.iter().cloned());
-    }
+    codes.extend(missing.iter().cloned());
 
     missing.len()
 }

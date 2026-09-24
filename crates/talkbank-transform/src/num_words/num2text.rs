@@ -212,6 +212,17 @@ fn expand_single_number(word: &str, lang: &str) -> String {
 
     // NUM2LANG lookup: exact match first, then integer decomposition
     if let Some(table) = NUM2LANG.get(&lang_lower) {
+        // English table phrases include their multiplier ("one thousand").
+        // They are not scale-unit names suitable for generic multiplication.
+        if lang_lower == "eng" {
+            return match word.parse::<u64>() {
+                Ok(n) => match super::english_cardinal::expand(n, table) {
+                    Some(expanded) => expanded,
+                    None => word.to_owned(),
+                },
+                Err(_) => word.to_owned(),
+            };
+        }
         // 1. Exact table lookup (handles 1-99, hundreds, etc.)
         if let Some(value) = table.get(word) {
             return value.clone();

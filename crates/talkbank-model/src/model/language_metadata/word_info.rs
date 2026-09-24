@@ -87,15 +87,16 @@ impl WordLanguages {
 ///
 /// ```text
 /// @Languages: eng, spa
-/// *CHI: I want @s galletas @s please .
+/// *CHI: I want galletas@s please .
 /// ```
 ///
 /// Language metadata:
 /// - Word 0 "I": languages=Single("eng"), source=Default
 /// - Word 1 "want": languages=Single("eng"), source=Default
 /// - Word 2 "galletas": languages=Single("spa"), source=WordShortcut
-/// - Word 3 "please": languages=Single("eng"), source=WordShortcut
-/// - Word 4 ".": languages=Single("eng"), source=Default
+/// - Word 3 "please": languages=Single("eng"), source=Default
+///
+/// The terminator is not a word and receives no metadata entry.
 ///
 /// **Example 2: Code-mixed word**
 ///
@@ -107,7 +108,6 @@ impl WordLanguages {
 /// Language metadata:
 /// - Word 0 "hello": languages=Single("eng"), source=Default
 /// - Word 1 "habla": languages=Multiple(["eng", "spa"]), source=WordExplicit
-/// - Word 2 ".": languages=Single("eng"), source=Default
 ///
 /// **Example 3: Ambiguous word**
 ///
@@ -119,7 +119,6 @@ impl WordLanguages {
 /// Language metadata:
 /// - Word 0 "hello": languages=Single("eng"), source=Default
 /// - Word 1 "word": languages=Ambiguous(["eng", "spa"]), source=WordExplicit
-/// - Word 2 ".": languages=Single("eng"), source=Default
 ///
 /// # References
 ///

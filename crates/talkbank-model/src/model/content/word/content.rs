@@ -748,41 +748,23 @@ impl Validate for WordCliticBoundary {
 /// or `{}` → nothing extra (internally tagged) to preserve backward-compatible JSON.
 ///
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>
-#[derive(Clone, Debug, PartialEq, JsonSchema, SemanticEq, SpanShift)]
+#[derive(Clone, Debug, Default, PartialEq, JsonSchema, SemanticEq, SpanShift)]
+#[schemars(with = "UnderlineMarkerWire")]
 pub struct UnderlineMarker {
-    /// Source span for error reporting (not serialized to JSON)
+    /// Known source location; wire-decoded markers have no source location.
     #[schemars(skip)]
-    pub span: crate::Span,
+    #[semantic_eq(skip)]
+    span: Option<crate::Span>,
 }
 
-impl Default for UnderlineMarker {
-    /// A marker carrying no source location.
-    ///
-    /// Hand-written rather than derived, because [`crate::Span`] deliberately
-    /// has no `Default`: the sentinel is a choice, and a derive makes it
-    /// silently.
-    ///
-    /// # The remaining honesty gap, stated rather than papered over
-    ///
-    /// This comment used to end "every caller is a test building a fixture
-    /// whose location is genuinely irrelevant, which is the one case where
-    /// asking for the sentinel is honest." That was FALSE when it was written
-    /// and was found so by counting: three of the callers are the serde
-    /// visitor arms immediately below, which run in production whenever a
-    /// legacy JSON transcript is read. Those forms carry no span, so the marker
-    /// really does have no location, and `Span::DUMMY` is then a fabricated
-    /// answer to a question with a true one: "unknown".
-    ///
-    /// The honest type is `Option<Span>` on the marker. That is a model shape
-    /// change, so it drags the JSON Schema and the roundtrip goldens with it
-    /// and does not belong in a drive-by. It is recorded here, at the value,
-    /// rather than in a queue, and the claim above is corrected in place rather
-    /// than left standing with a note underneath.
-    fn default() -> Self {
-        Self {
-            span: crate::Span::DUMMY,
-        }
-    }
+/// The two legacy wire shapes, shared by decoding and schema generation.
+/// The surrounding enum determines whether a marker is a null payload or an
+/// internally tagged object; neither representation carries source provenance.
+#[derive(serde::Deserialize, JsonSchema)]
+#[serde(untagged)]
+enum UnderlineMarkerWire {
+    Unit,
+    Object {},
 }
 
 impl serde::Serialize for UnderlineMarker {
@@ -793,54 +775,34 @@ impl serde::Serialize for UnderlineMarker {
 }
 
 impl<'de> serde::Deserialize<'de> for UnderlineMarker {
-    /// Accepts legacy underline marker encodings (`null` or empty map) during decode.
+    /// Accepts legacy underline marker encodings through the schema's wire type.
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        // Accept null or empty map
-        /// Visitor that normalizes all legacy encodings into a default marker.
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = UnderlineMarker;
-            /// Describes accepted JSON shapes for diagnostics.
-            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str("null or empty map")
-            }
-            /// Decodes unit/null-like values.
-            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
-                Ok(UnderlineMarker::default())
-            }
-            /// Decodes explicit JSON `null`.
-            fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
-                Ok(UnderlineMarker::default())
-            }
-            /// Decodes legacy empty-object form.
-            fn visit_map<A: serde::de::MapAccess<'de>>(
-                self,
-                _map: A,
-            ) -> Result<Self::Value, A::Error> {
-                Ok(UnderlineMarker::default())
-            }
-        }
-        deserializer.deserialize_any(Visitor)
+        UnderlineMarkerWire::deserialize(deserializer).map(|wire| match wire {
+            UnderlineMarkerWire::Unit | UnderlineMarkerWire::Object {} => Self::default(),
+        })
     }
 }
 
 impl UnderlineMarker {
-    /// Builds an underline marker with dummy span metadata.
+    /// Builds an underline marker whose source location is unknown.
     pub fn new() -> Self {
-        Self {
-            span: crate::Span::DUMMY,
-        }
+        Self::default()
     }
 
     /// Sets source span metadata.
     pub fn with_span(mut self, span: crate::Span) -> Self {
-        self.span = span;
+        self.span = (!span.is_dummy()).then_some(span);
         self
     }
 
     /// Builds an underline marker from explicit span metadata.
     pub fn from_span(span: crate::Span) -> Self {
-        Self { span }
+        Self::new().with_span(span)
+    }
+
+    /// Returns the source location, or `None` for source-independent markers.
+    pub fn span(&self) -> Option<crate::Span> {
+        self.span
     }
 }
 

@@ -210,6 +210,51 @@ pub fn sin_tier_parser<'tokens, 'a: 'tokens>()
 // Text tier (for %com, %act, %cod, %exp, etc.)
 // ═══════════════════════════════════════════════════════════
 
+/// Text-tier tokens after inline-bullet policy admission. Rejected bullets are
+/// diagnosed at their lexer spans and omitted, retaining surrounding content.
+pub(crate) struct AdmittedTextTierTokens<'source>(Vec<Token<'source>>);
+
+impl<'source> AdmittedTextTierTokens<'source> {
+    pub(crate) fn admit(
+        lexed: &super::LexedSource<'source>,
+        range: std::ops::Range<usize>,
+        errors: &impl talkbank_model::ErrorSink,
+    ) -> Self {
+        let mut admitted = Vec::new();
+        for (token, span) in lexed.located(range) {
+            if let Token::MediaBullet {
+                start_time,
+                end_time,
+                ..
+            } = token
+                && matches!(
+                    (start_time.parse::<u64>(), end_time.parse::<u64>()),
+                    (Ok(0), Ok(0))
+                )
+            {
+                errors.report(talkbank_model::ParseError::new(
+                    talkbank_model::ErrorCode::InvalidMediaBullet,
+                    talkbank_model::Severity::Error,
+                    talkbank_model::SourceLocation::from_offsets(span.start, span.end),
+                    talkbank_model::ErrorContext::new(lexed.source(), span.start..span.end, ""),
+                    "Invalid bullet: both start and end timestamps are 0",
+                ));
+            } else {
+                admitted.push(token.clone());
+            }
+        }
+        Self(admitted)
+    }
+
+    pub(crate) fn tokens(&self) -> &[Token<'source>] {
+        &self.0
+    }
+
+    pub(crate) fn into_tokens(self) -> Vec<Token<'source>> {
+        self.0
+    }
+}
+
 /// Parse a text tier body (text_with_bullets).
 pub fn text_tier_parser<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, TextTierParsed<'a>> + Clone {

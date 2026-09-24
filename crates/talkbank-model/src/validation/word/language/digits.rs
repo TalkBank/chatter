@@ -13,16 +13,35 @@ use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLoca
 use super::helpers::mixed_language_allows_numbers;
 use super::resolve::LanguageResolution;
 
+/// A numeral and an embedded tone/homonym digit have different admission rules.
+#[derive(Clone, Copy)]
+enum DigitUse {
+    Numeral,
+    WordComponent,
+}
+
+impl DigitUse {
+    fn classify(text: &str) -> Option<Self> {
+        if !contains_digits(text) {
+            None
+        } else if text.bytes().all(|byte| byte.is_ascii_digit()) {
+            Some(Self::Numeral)
+        } else {
+            Some(Self::WordComponent)
+        }
+    }
+}
+
 /// Validate whether digits are allowed for a word under resolved language context.
 ///
 /// Current policy is permissive for mixed/ambiguous codes: if any candidate
-/// language allows digits, the token is accepted. Single-language words reduce
-/// to the same check over one candidate.
+/// language allows embedded digits, that use is accepted. Bare numerals must
+/// be written out; tone-language admission cannot license them.
 ///
 /// # Behavior
 /// - Skips validation for Omission words (0 prefix is valid CHAT)
 /// - If word contains digits, checks candidate languages via `resolution`
-/// - Emits `E220` only when no candidate language permits digits
+/// - Emits `E220` for numerals or when no candidate permits embedded digits
 pub(crate) fn check_word_digits_multi(
     word: &Word,
     resolution: &LanguageResolution,
@@ -33,9 +52,9 @@ pub(crate) fn check_word_digits_multi(
         return;
     }
 
-    if !contains_digits(word.cleaned_text()) {
+    let Some(digit_use) = DigitUse::classify(word.cleaned_text()) else {
         return;
-    }
+    };
 
     // UNKNOWN IS NOT DISALLOWED. An unresolved language means we do not know
     // which rules apply, and reporting "digits are not legal in language X"
@@ -55,10 +74,13 @@ pub(crate) fn check_word_digits_multi(
 
     // For mixed/ambiguous language markers, allow digits if at least one candidate
     // language allows them. This matches permissive CHAT usage in reference data.
-    let allows_digits = resolution
-        .languages()
-        .iter()
-        .any(|lang| mixed_language_allows_numbers(lang.as_str()));
+    let allows_digits = match digit_use {
+        DigitUse::Numeral => false,
+        DigitUse::WordComponent => resolution
+            .languages()
+            .iter()
+            .any(|lang| mixed_language_allows_numbers(lang.as_str())),
+    };
 
     if !allows_digits {
         errors.report(
@@ -68,13 +90,17 @@ pub(crate) fn check_word_digits_multi(
                 SourceLocation::new(word.span),
                 ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
                 format!(
-                    "\"{}\" is not a legal word in language(s) \"{}\": numeric digits not allowed",
+                    "\"{}\" is not a legal word in language(s) \"{}\": {}",
                     word.cleaned_text(),
-                    resolution.as_display_string()
+                    resolution.as_display_string(),
+                    match digit_use {
+                        DigitUse::Numeral => "bare numerals must be written out in words",
+                        DigitUse::WordComponent => "numeric digits not allowed",
+                    }
                 ),
             )
             .with_suggestion(
-                "Languages that allow numbers: zho, cym, vie, tha, nan, yue, min, hak".to_string(),
+                "Write numbers according to their pronunciation; use embedded tone or homonym digits only in language contexts that permit them.",
             ),
         );
     }

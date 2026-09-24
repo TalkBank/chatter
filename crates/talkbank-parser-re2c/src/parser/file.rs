@@ -380,7 +380,7 @@ pub(crate) fn parse_file_with_errors<'a>(
                 // `illegal_curly_quote` node and keeps the adjacent words. The
                 // chumsky combinators have no `ErrorSink` access, so the
                 // diagnostic is emitted here, mirroring the MISSING-token
-                // recovery policy (see this crate's CLAUDE.md).
+                // recovery policy (see this crate's AGENTS.md).
                 //
                 // Misplaced linkers (E766, linker after content) get the same
                 // treatment: report each by name and strip it, so the rest of

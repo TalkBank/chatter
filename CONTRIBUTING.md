@@ -1,6 +1,6 @@
 # Contributing to chatter
 
-**Last modified:** 2026-09-06 02:34 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 ## Development setup
 
@@ -53,7 +53,7 @@ review above is the contract.
 
 ## Coding conventions
 
-The repo's conventions are codified in each crate's CLAUDE.md and the
+The repo's conventions are codified in each crate's AGENTS.md and the
 workspace-level `[workspace.lints.clippy]` table in `Cargo.toml`.
 High-friction rules to know up front:
 

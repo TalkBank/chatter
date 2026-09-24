@@ -70,7 +70,7 @@ export default function ValidationSettingsPanel({ settings, onChange, disabled }
               }
             >
               <option value="tree-sitter">Tree-sitter (default)</option>
-              <option value="re2c">Re2c</option>
+              <option value="re2c">Re2c (experimental, incomplete)</option>
             </select>
           </label>
 

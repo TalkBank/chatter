@@ -1,9 +1,9 @@
 # Chatter agent guidance
 
-**Last modified:** 2026-09-10 00:45 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
-Canonical guidance for all coding agents. `CLAUDE.md` imports this file; read
-applicable nested guidance and the task-relevant references below.
+Canonical guidance for all coding agents. Read applicable nested guidance and
+the task-relevant references below.
 
 ## Scope and safety
 

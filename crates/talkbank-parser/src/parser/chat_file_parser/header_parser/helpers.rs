@@ -61,11 +61,11 @@ pub(crate) fn parse_optional_gem_label(
         }
     };
     if let Some(first) = piece(children.child_0.slot(), input, errors) {
-        push(first.clone().into());
+        push((*first).into());
     }
     for element in children.child_1.slot() {
         if let Some(next) = piece(element.slot(), input, errors) {
-            push(next.clone().into());
+            push((*next).into());
         }
     }
     surface_displaced(&children.unexpected, "free_text", input, errors);

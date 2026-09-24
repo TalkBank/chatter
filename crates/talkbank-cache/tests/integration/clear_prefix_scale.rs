@@ -51,7 +51,7 @@ fn clear_prefix_is_bulk_not_per_file() {
     let elapsed = started.elapsed();
 
     assert_eq!(removed, 4000, "every entry under the prefix is cleared");
-    // A HANG DETECTOR, per CLAUDE.md danger rule 9b: an order of magnitude
+    // A HANG DETECTOR, per AGENTS.md danger rule 9b: an order of magnitude
     // above a healthy run, never a snug fit. `removed == 4000` above is the
     // counted assertion, but it cannot tell a bulk DELETE from a per-file loop
     // (both remove 4000), so a timing check still earns its place here. What it

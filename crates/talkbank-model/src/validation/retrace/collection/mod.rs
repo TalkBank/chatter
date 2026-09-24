@@ -46,7 +46,9 @@ fn collect(
         ContentStructure::Word(_) => leaf_kinds.push(LeafKind::RealContent),
         ContentStructure::Leaf(leaf) => leaf_kinds.push(match leaf.content {
             LeafContent::Spoken => LeafKind::RealContent,
-            LeafContent::Notation => LeafKind::NonRealContent,
+            LeafContent::Notation
+            | LeafContent::UnderlineBegin(_)
+            | LeafContent::UnderlineEnd(_) => LeafKind::NonRealContent,
         }),
         ContentStructure::Group(group) => {
             collect_enclosed(group.content(), leaf_kinds, retrace_checks);

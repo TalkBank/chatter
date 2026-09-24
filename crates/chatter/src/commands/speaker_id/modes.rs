@@ -33,10 +33,7 @@ use super::support::{
 use super::writes::{append_pending_entry, write_match_report, write_pending_entry};
 
 /// Carries the relabeled CHAT plus everything an override-file entry
-/// needs to record about the decision. Exposed `pub(crate)` so the
-/// per-session `chatter pipeline` shim can reuse the
-/// reference-mode helpers without duplicating their LowConfidence /
-/// `--write-pending` handling.
+/// needs to record about the decision.
 pub(crate) struct ReferenceModeOutcome {
     pub(crate) relabeled: String,
     pub(crate) report: talkbank_transform::speaker_id::DonorMatchReport,
@@ -77,8 +74,7 @@ pub(super) fn run_explicit_mode(
 /// entry's `suggested` field carries the algorithm's would-have-been
 /// decision so the operator can accept-as-is in `chatter adjudicate`.
 /// All inputs to one reference-mode invocation. Constructed by the
-/// CLI orchestrators (`chatter speaker-id` and `chatter pipeline`)
-/// from their respective clap surfaces.
+/// `speaker-id` handler from its clap arguments.
 pub(crate) struct ReferenceModeArgs<'a> {
     /// Already-loaded donor CHAT text (the caller's `fs::read_to_string`
     /// result).
@@ -359,8 +355,7 @@ fn resolve_session_context(
 /// env fallback) but the current judgment mode never consults it.
 /// Deliberately a warning, not an error: deterministic runs must keep
 /// working, but an operator-supplied input must never be ignored
-/// silently. Called by the deterministic paths of `chatter speaker-id`,
-/// `chatter pipeline`, and `chatter batch`.
+/// silently. Called by the deterministic paths of `chatter speaker-id`.
 pub(crate) fn warn_session_context_ignored_if_configured(flag_path: Option<&Path>) {
     if let Some((path, source)) = resolve_session_context(flag_path) {
         warn!(
@@ -423,8 +418,7 @@ const ENV_LLM_CACHE: &str = "CHATTER_LLM_CACHE";
 /// environment variable (endpoint and model are required after that
 /// fallback; the API key stays optional).
 ///
-/// `pub(crate)` so that `commands::pipeline` can call the holistic handler
-/// directly without duplicating the LLM wiring.
+/// Used by the `speaker-id` handler.
 pub(crate) struct HolisticModeArgs<'a> {
     /// Donor input path, needed for session-ID derivation and messages.
     pub(crate) input: &'a Path,
@@ -471,8 +465,7 @@ pub(crate) struct HolisticModeArgs<'a> {
 /// On success the suggestion is appended and the process exits 0 via a normal
 /// return.
 ///
-/// `pub(crate)` so that `commands::pipeline` can call this handler for
-/// `--judgment holistic` without duplicating the LLM wiring.
+/// Invoked by the `speaker-id` handler for `--judgment holistic`.
 pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
     let HolisticModeArgs {
         input,

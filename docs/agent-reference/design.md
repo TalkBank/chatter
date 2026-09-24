@@ -1,6 +1,6 @@
 # Design reference
 
-**Last modified:** 2026-09-10 00:45 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 Read the sections relevant to your task. [AGENTS.md](../../AGENTS.md)
 is the canonical policy entry point and resolves workflow conflicts here.
@@ -91,7 +91,7 @@ signature cannot describe. A surviving test says which of those it is.
 4. "Consecutive" on the main tier always means in-order recursive traversal
    (`walk_words`), never flat-index adjacency.
 5. Parse, don't validate: strict plus catch-all grammar pattern for closed
-   header-value sets (`grammar/CLAUDE.md`).
+   header-value sets (`grammar/AGENTS.md`).
 6. **The production parser is driven by the generated typed CST traversal
    (`generated_traversal`, `NodeSlot`); hand-walking `node.kind()` and
    classifying ERROR-node text are banned.** The whole-tree recovery backstop

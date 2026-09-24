@@ -20,6 +20,7 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
     Severity, SourceLocation,
 };
+use crate::generated_traversal::ParsedSource;
 use crate::model::{ChatFile, Header, Line};
 use crate::parser::TreeSitterParser;
 use talkbank_model::LineMap;
@@ -69,13 +70,34 @@ impl TreeSitterParser {
         input: &str,
         old_tree: Option<&Tree>,
     ) -> ParseResult<Tree> {
+        self.parse_source_incremental(input, old_tree)
+            .map(ParsedSource::into_tree)
+    }
+
+    /// Parse while retaining the producer-owned source association.
+    ///
+    /// Unlike a bare tree, the returned owner cannot be paired with unrelated
+    /// text or edited while its nodes are borrowed. Cancellation and inputs
+    /// exceeding tree-sitter's 32-bit coordinate space are reported as errors.
+    ///
+    /// If `old_tree` is supplied, the caller must have applied every intervening
+    /// source edit with `Tree::edit`. The raw tree does not encode that proof:
+    /// runtime completion alone does not certify readable node ranges. The
+    /// returned owner's root and child admission therefore remain fallible.
+    pub fn parse_source_incremental<'source>(
+        &self,
+        input: &'source str,
+        old_tree: Option<&Tree>,
+    ) -> ParseResult<ParsedSource<'source>> {
+        talkbank_model::FragmentRangeError::check(0, input.len())
+            .map_err(|error| ParseErrors::from(vec![error.into_diagnostic()]))?;
         debug!(
             "Parsing CHAT file to CST ({} bytes, old_tree: {})",
             input.len(),
             old_tree.is_some()
         );
 
-        match self.parser.borrow_mut().parse(input, old_tree) {
+        match ParsedSource::parse(&mut self.parser.borrow_mut(), input, old_tree) {
             Some(tree) => Ok(tree),
             None => {
                 let error = ParseError::new(

@@ -1,7 +1,7 @@
 # Re2c parser parity
 
 **Status:** Current
-**Last updated:** 2026-09-07
+**Last updated:** 2026-09-24 00:21 EDT
 
 The re2c backend does not yet match tree-sitter on every declared invalid
 example. Tree-sitter remains the CHAT validity authority. Passing the re2c
@@ -34,6 +34,37 @@ be removed when a fix makes the backends agree. Do not add a baseline entry
 merely to make a failing test pass.
 
 ## Measured snapshot
+
+### Interim 0.26 specification expansion (2026-09-24)
+
+The expanded invalid-example comparison measured588 cases across248 spec
+files:444 equal diagnostic sets and144 differences. Tree-sitter satisfied all
+588 declared expectations; re2c satisfied472, missed86 and was silent on30.
+The325 legal-claim examples are checked separately by the fixture runner.
+
+New baseline entries retain the observed diagnostic sets for malformed words,
+headers, tier boundaries, scoped annotations, pictures and timing overflow.
+The canonical results match the authored specifications; the experimental
+backend's generic, missing or extra diagnostics do not supersede those rules.
+Space-indented tiers remain a known re2c recovery limitation. This inventory
+records incomplete behavior for the interim release, not a parity certification.
+
+### Inline all-zero bullet repair (2026-09-22)
+
+The canonical `E360.md#4` example exposed re2c silently accepting an all-zero
+inline bullet on `%com` while tree-sitter emitted E360. Text-tier tokens now pass
+a shared admission step before full-file or fragment conversion. It reports
+E360 at the original lexer span and omits the rejected bullet without discarding
+surrounding content. Fragment diagnostics use the admitted origin-rebasing sink.
+
+Focused re2c verification passed 36 unit and 272 integration tests, with 20
+ignored. The existing invalid-spec comparison passed without adding a divergence
+entry. A canonical-fixture regression checks E360 locations through both
+backends at zero, ordinary and near-maximum fragment offsets. This fixes that
+specific silence; it does not establish complete backend parity or supersede
+the historical full diagnostic-count measurement below.
+
+### Earlier full diagnostic-count measurement (2026-09-07)
 
 The command above passed on 2026-09-07 after the form-suffix recovery fix
 following v0.22.0. Five former exceptions now agree.

@@ -1,7 +1,7 @@
 # Bullet Validation
 
 **Status:** Current
-**Last updated:** 2026-05-01 05:19 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 Media bullets are timestamps embedded in CHAT utterances that link transcript
 text to audio/video. They appear as `•start_end•` at the end of a main tier
@@ -179,9 +179,13 @@ the cascading state corruption that CLAN's implementation suffers from.
 
 ### E729: Not in default validation
 
-E729 (CLAN Error 84, cross-speaker overlap) is implemented but not called
-during default validation. It exists for future use in a strict-bullet mode
-equivalent to CLAN's `+c0` flag.
+E729 (CLAN Error 84, cross-speaker overlap) is reserved and unimplemented.
+Chatter does not expose a strict-bullet mode equivalent to CHECK's `+c0`.
+The parity manifest records a deliberate divergence for option-gated CHECK
+84/85/110: these are not requirements to reject ordinary conversational CHAT.
+E730/E732 are likewise reserved; E731 does not add a zero-tolerance duplicate
+of the implemented E704 timing rule. The four specs retain real bullet-bearing
+default-mode controls, including E704's accepted exact-500-ms boundary.
 
 ### Untranscribed utterances are skipped
 
@@ -257,11 +261,11 @@ Each utterance with a bullet produces a `BulletInfo` containing:
 - `utterance_idx`: 0-based index in the file
 - `speaker`: the speaker code (e.g., `"CHI"`, `"PIL"`)
 - `bullet`: the `Bullet` struct with `start_ms` and `end_ms`
-- `has_timeable_content`: whether the utterance contains transcribed words
-  (used to skip untranscribed-only turns for E704)
 
 Only main speaker tiers are collected. Dependent tiers (`%mor`, `%gra`, etc.)
-are excluded.
+are excluded. Possession of a collected bullet supplies the timing evidence;
+there is no lexical-eligibility flag. Untranscribed speech (`xxx`, `yyy`, `www`)
+still occupies time and constrains the same speaker's following turn.
 
 ### Per-speaker tracking
 

@@ -444,6 +444,21 @@ pub async fn export_results(
     })
 }
 
+/// Typed admission for text export. Missing paths or rendered diagnostics are
+/// malformed input, not a reason to fabricate a question-mark placeholder.
+#[derive(serde::Deserialize)]
+struct TextExportFile {
+    path: String,
+    errors: Vec<TextExportDiagnostic>,
+    status: Option<crate::events::FrontendFileStatus>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TextExportDiagnostic {
+    rendered_text: String,
+}
+
 pub fn export_results_request(request: ExportResultsRequest) -> Result<(), ExportError> {
     let output = match request.format {
         ExportFormat::Json => {
@@ -458,16 +473,30 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Expor
             // panel shows), instead of hand-rebuilding a poorer one-line
             // "path:line: code msg" form from raw JSON fields. Keeps exported
             // text byte-identical to what the app displayed.
-            let parsed: Vec<serde_json::Value> = serde_json::from_str(&request.results)
+            let parsed: Vec<TextExportFile> = serde_json::from_str(&request.results)
                 .map_err(|source| ExportError::MalformedResults { source })?;
             let mut lines = Vec::new();
             for file_entry in &parsed {
-                let path = file_entry["path"].as_str().unwrap_or("?");
-                if let Some(errors) = file_entry["errors"].as_array() {
-                    for error in errors {
-                        let rendered_text = error["renderedText"].as_str().unwrap_or("?");
-                        lines.push(format!("{path}\n{rendered_text}"));
+                use crate::events::FrontendFileStatus;
+                let status = match &file_entry.status {
+                    None => "Validation pending".to_owned(),
+                    Some(FrontendFileStatus::Valid { .. }) => "Valid".to_owned(),
+                    Some(FrontendFileStatus::Invalid { error_count, .. }) => {
+                        format!("Validation failed ({error_count} diagnostics)")
                     }
+                    Some(FrontendFileStatus::ReadError { message }) => {
+                        format!("Read error: {message}")
+                    }
+                    Some(FrontendFileStatus::ParseError { message }) => {
+                        format!("Parse error: {message}")
+                    }
+                    Some(FrontendFileStatus::RoundtripFailed { reason, .. }) => {
+                        format!("Roundtrip failed: {reason}")
+                    }
+                };
+                lines.push(format!("{}\n{status}", file_entry.path));
+                for error in &file_entry.errors {
+                    lines.push(error.rendered_text.clone());
                 }
             }
             lines.join("\n")

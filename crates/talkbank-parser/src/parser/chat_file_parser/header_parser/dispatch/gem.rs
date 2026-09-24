@@ -5,25 +5,12 @@
 //! from the pre-migration string-dispatch arms; the label is read only from
 //! the typed `free_text` position (see `parse_gem_label`).
 //!
-//! LEVEL 2: the optional `free_text` content child is read through the NEW
-//! backend's free, typed `extract_<kind>(node)` (replacing the local
-//! `find_child_by_kind(header_actual, FREE_TEXT)` scan, and, as of Task B2, the
-//! OLD `TypedTraversal.extract_<kind>` trait-receiver call). The NEW backend does
-//! not skip whitespace, so `bg_header`/`eg_header` no longer expose the
-//! `header_sep` + `free_text` pair as two flat OPTIONAL positions the way the OLD
-//! module's `child_2: Option<NodeSlot<FreeTextNode>>` did; they are grouped into
-//! ONE optional GROUP position (`child_1: Option<NodeSlot<BgHeaderChild1Children>>`
-//! / `EgHeaderChild1Children`, each `{ child_0: header_sep, child_1: free_text }`)
-//! because the whole `seq(header_sep, free_text)` pair is what is optional at the
-//! grammar level, not `free_text` alone. `g_header` is unaffected (its `free_text`
-//! is grammar-REQUIRED, so it stays a flat `child_2: &NodeSlot<FreeTextNode>`, same
-//! index as the OLD module). In every case the slot is mapped to the
-//! `Option<FreeTextNode>` that `parse_gem_label` / `parse_optional_gem_label`
-//! takes, exhaustively, with no `_ =>` arm that silently drops variants:
-//! `Present` hands over the typed node (for `Bg`/`Eg`, reached by descending one
-//! level into the group's own `child_1`, i.e. the `free_text` member of the
-//! pair); every recovery state maps to `None`, no label, with the whole-tree
-//! pass naming the recovery (`gem_headers_from_source.rs` pins the shapes).
+//! All three kinds permit bare markers. Their generated traversal represents
+//! the optional separator/label pair as one group, not independently optional
+//! fields. Labels come only from that typed group's free-text position.
+//! Missing/error slots remain recovery states; the whole-tree diagnostic pass
+//! is retained, and displaced children are surfaced at both group and header
+//! boundaries (`gem_headers_from_source.rs` pins recovery shapes).
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Bg_Header>
@@ -133,18 +120,23 @@ pub(super) fn g(
     input: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    // LEVEL 2: read the required free_text child through the typed positional slot
-    // (extract_g_header child_2: &NodeSlot<FreeTextNode>, the SAME index as the OLD
-    // module: g_header's free_text is grammar-required, so there is no optional
-    // group to descend into here). `present_or_recover().ok()` maps Present to the
-    // typed node and every recovery variant to None (a MISSING or ERROR free_text
-    // is the whole-tree pass's to name), the option `parse_gem_label` takes.
     let children = extract_g_header(typed);
-    let free_text_child = children.child_2.slot().clone().present_or_recover().ok();
+    let group = children
+        .child_1
+        .slot()
+        .clone()
+        .and_then(|s| s.present_or_recover().ok());
+    let free_text_child = group
+        .as_ref()
+        .and_then(|group| present(group.child_1.slot()))
+        .copied();
     let outcome = match parse_gem_label(free_text_child, input, errors) {
         ParseOutcome::Parsed(label) => ParseOutcome::parsed(Header::LazyGem { label }),
         ParseOutcome::Rejected => ParseOutcome::rejected(),
     };
+    if let Some(group) = &group {
+        surface_displaced(&group.unexpected, "g_header", input, errors);
+    }
     surface_displaced(&children.unexpected, "g_header", input, errors);
     outcome
 }

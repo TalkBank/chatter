@@ -74,13 +74,13 @@ pub fn is_allowed_participant_role(role: &str) -> bool {
 pub fn suggest_similar_role(invalid_role: &str) -> &'static str {
     let lower = invalid_role.to_lowercase();
 
-    if lower.contains("child") || lower.contains("chi") {
+    if lower.contains("chi") {
         "Child or Target_Child"
-    } else if lower.contains("moth") || lower.contains("mom") || lower.contains("mot") {
+    } else if lower.contains("mom") || lower.contains("mot") {
         "Mother"
-    } else if lower.contains("fath") || lower.contains("dad") || lower.contains("fat") {
+    } else if lower.contains("dad") || lower.contains("fat") {
         "Father"
-    } else if lower.contains("adult") || lower.contains("adu") {
+    } else if lower.contains("adu") {
         "Adult or Target_Adult"
     } else if lower.contains("teach") {
         "Teacher"

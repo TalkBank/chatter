@@ -1,7 +1,6 @@
 use clap::Subcommand;
 use std::path::PathBuf;
 
-use talkbank_transform::sanity_scan::SanityScanThreshold;
 use talkbank_transform::speaker_id::ConfidenceThreshold;
 
 use super::cache_commands::CacheCommands;
@@ -11,6 +10,7 @@ use super::judgment_args::JudgmentArgs;
 
 /// Top-level `talkbank` subcommands.
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)] // Clap owns one command per process; keep its declarative argument layout.
 pub enum Commands {
     /// Validate CHAT file(s)
     Validate {
@@ -134,31 +134,6 @@ pub enum Commands {
         check_xphon: bool,
     },
 
-    /// EXPERIMENTAL. Merge two CHAT transcripts of the same media into one.
-    ///
-    /// Speakers listed in `--retain` come from FILE1 (byte-preserved);
-    /// all other speakers come from FILE2. Utterances are interleaved
-    /// by start-time. See `book/src/chatter/user-guide/merge.md` for
-    /// the full contract.
-    Merge {
-        /// First CHAT file. Retain-set speakers' utterances come
-        /// from here.
-        file1: PathBuf,
-
-        /// Second CHAT file. All other speakers' utterances come
-        /// from here.
-        file2: PathBuf,
-
-        /// Comma-separated speaker codes whose utterances come from
-        /// FILE1 (e.g. `CHI` or `CHI,SI2`).
-        #[arg(long, value_delimiter = ',')]
-        retain: Vec<String>,
-
-        /// Output path (prints to stdout if omitted).
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-    },
-
     /// EXPERIMENTAL. Assign CHAT-conformant speaker codes to an anonymously-labeled
     /// CHAT file. Supports explicit-mapping mode (via `--mapping`) and
     /// reference mode (via `--reference` + `--anchor` +
@@ -238,7 +213,7 @@ pub enum Commands {
         session_id: Option<String>,
 
         /// Judgment engine + LLM connection + session context (shared
-        /// with `pipeline` and `batch`).
+        /// for speaker identity assessment).
         #[command(flatten)]
         judgment: JudgmentArgs,
 
@@ -287,155 +262,6 @@ pub enum Commands {
         contested_at: Option<f64>,
     },
 
-    /// EXPERIMENTAL. Batch driver: loop `chatter pipeline` over matched donor /
-    /// reference pairs in two directories. Files match by basename;
-    /// donors without a matching reference are warned and skipped.
-    /// Low-confidence refusals are aggregated (with optional
-    /// pending-file write) but don't abort the batch.
-    Batch {
-        /// Directory of donor CHAT files (ASR output).
-        donor_dir: PathBuf,
-
-        /// Directory of reference CHAT files. Reference for donor
-        /// `X.cha` is `reference_dir/X.cha`.
-        reference_dir: PathBuf,
-
-        /// Anchor speaker code in each reference file (typically
-        /// `CHI`).
-        #[arg(long)]
-        anchor: String,
-
-        /// Inserted-role spec for the donor's non-anchor speakers
-        /// (e.g., `INV:Investigator`).
-        #[arg(long = "inserted-role")]
-        inserted_role: String,
-
-        /// Speaker codes whose utterances come from the reference in
-        /// each merge step.
-        #[arg(long, value_delimiter = ',')]
-        retain: Vec<String>,
-
-        /// Minimum winner→runner-up Jaccard margin (default 2.0×).
-        #[arg(long, default_value = "2.0")]
-        confidence_threshold: ConfidenceThreshold,
-
-        /// Aggregate low-confidence refusals into this pending file.
-        /// One operator run of `chatter adjudicate` resolves them all.
-        #[arg(long = "write-pending")]
-        write_pending: Option<PathBuf>,
-
-        /// Override-file path threaded to every per-session
-        /// `chatter pipeline` invocation. Sessions that have an
-        /// entry are processed via override-file replay; others
-        /// fall through to reference mode. Pass-2 workflow.
-        #[arg(long = "override-file")]
-        override_file: Option<PathBuf>,
-
-        /// Audit-trail destination for clean-winner auto-decisions.
-        /// Pass-1 workflow: each session that succeeds via reference
-        /// mode appends its mapping + scores + margin to this file
-        /// with `mode = "auto"`. Required for the post-merge
-        /// `chatter sanity-scan` pass.
-        #[arg(long = "write-override")]
-        write_override: Option<PathBuf>,
-
-        /// Run the post-merge sanity scan after the per-session
-        /// pipeline loop completes. Requires `--write-override` (the
-        /// scan reads pass-1 auto-decisions) and `--write-pending`
-        /// (flagged sessions get appended). Exit code 4 fires when
-        /// the scan flags any session.
-        #[arg(long = "sanity-scan", requires_all = ["write_override", "write_pending"])]
-        sanity_scan: bool,
-
-        /// Ratio threshold for the sanity-scan mean-word-count
-        /// heuristic. Only consulted when `--sanity-scan` is set.
-        #[arg(long = "sanity-scan-threshold", default_value_t = SanityScanThreshold::DEFAULT.0)]
-        sanity_scan_threshold: f64,
-
-        /// Skip donors whose merged output already exists in the
-        /// output directory. Lets the operator resume an interrupted
-        /// batch or add new donors without redoing finished work.
-        /// Default: re-process every matched donor.
-        #[arg(long = "skip-existing")]
-        skip_existing: bool,
-
-        /// Judgment engine + LLM connection + session context (shared
-        /// with `speaker-id` and `pipeline`; threaded to every
-        /// per-session `chatter pipeline` subprocess).
-        #[command(flatten)]
-        judgment: JudgmentArgs,
-
-        /// Output directory for merged files (created if absent).
-        #[arg(short, long)]
-        output: PathBuf,
-    },
-
-    /// EXPERIMENTAL. End-to-end per-session shortcut: run speaker-id in reference
-    /// mode to relabel an anonymous donor, then merge the relabeled
-    /// donor with the reference. One CLI invocation instead of two
-    /// for the common case.
-    Pipeline {
-        /// Donor CHAT file with anonymous speaker codes (the ASR
-        /// output).
-        donor: PathBuf,
-
-        /// Reference CHAT file carrying the authoritative anchor
-        /// speaker (typically the hand-coded child transcript).
-        reference: PathBuf,
-
-        /// Speaker code in the reference whose content the algorithm
-        /// matches against to identify the donor's anchor speaker.
-        #[arg(long)]
-        anchor: String,
-
-        /// Role spec for the donor's non-anchor speakers,
-        /// `CODE:ROLE` (e.g. `INV:Investigator`).
-        #[arg(long = "inserted-role")]
-        inserted_role: String,
-
-        /// Speaker codes whose utterances come from the reference in
-        /// the final merge step. Typically the same as `--anchor`.
-        #[arg(long, value_delimiter = ',')]
-        retain: Vec<String>,
-
-        /// Minimum winner→runner-up Jaccard margin (default 2.0×).
-        #[arg(long, default_value = "2.0")]
-        confidence_threshold: ConfidenceThreshold,
-
-        /// On low-confidence refusal, append a pending-adjudication
-        /// entry to this file (created if absent). Exit code 4 still
-        /// fires.
-        #[arg(long = "write-pending")]
-        write_pending: Option<PathBuf>,
-
-        /// Override-file path. If the file contains an entry for
-        /// this session (basename-stem of `donor`), the pipeline
-        /// uses the recorded decision via override-file replay
-        /// mode instead of running reference mode. Sessions
-        /// without an entry fall through to reference mode. The
-        /// same `chatter pipeline` command works for both pass 1
-        /// (no entries yet) and pass 2 (entries from prior
-        /// adjudication).
-        #[arg(long = "override-file")]
-        override_file: Option<PathBuf>,
-
-        /// Audit-trail destination for the clean-winner
-        /// auto-decision. When set and reference mode produces a
-        /// merge, the pipeline appends a `mode = "auto"` entry for
-        /// this session to the named file.
-        #[arg(long = "write-override")]
-        write_override: Option<PathBuf>,
-
-        /// Judgment engine + LLM connection + session context (shared
-        /// with `speaker-id` and `batch`).
-        #[command(flatten)]
-        judgment: JudgmentArgs,
-
-        /// Output path for the merged CHAT file (required).
-        #[arg(short, long)]
-        output: PathBuf,
-    },
-
     /// EXPERIMENTAL. Adjudicate pending speaker-id (and future) decisions and
     /// write the resolved entries to an override file. See
     /// `book/src/architecture/adjudication-workflow.md`.
@@ -477,8 +303,7 @@ pub enum Commands {
     /// resolves via `chatter adjudicate`. See
     /// `book/src/architecture/adjudication-workflow.md`.
     SanityScan {
-        /// Directory of merged CHAT files (produced by `chatter
-        /// batch` or `chatter pipeline`). Each file's basename stem
+        /// Directory of CHAT files to inspect. Each file's basename stem
         /// is treated as its session ID.
         merged_dir: PathBuf,
 

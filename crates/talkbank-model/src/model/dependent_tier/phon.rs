@@ -515,7 +515,8 @@ impl std::fmt::Display for WordAlignment {
 ///
 /// # Alignment
 ///
-/// Word N in %phoaln aligns positionally with word N in both %mod and %pho.
+/// Each side advances independently: a one-sided pause consumes a position
+/// only on the tier bearing that pause. Ordinary lexical words consume both.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct PhoalnTier {
     /// Per-word alignment data.

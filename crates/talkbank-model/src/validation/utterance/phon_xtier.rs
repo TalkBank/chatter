@@ -20,10 +20,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Bullets>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Phonology_Tier>
 
-use crate::model::Utterance;
 use crate::model::dependent_tier::{
     PhoItem, PhoTier, SylTier, SylWordKind, classify_syl_word, reconstruct_syl_word,
 };
+use crate::model::{MediaTiming, Utterance};
 use crate::{ErrorCode, ErrorSink, ParseError, Severity, Span};
 
 /// 1 ms rounding tolerance for the `%xphoint` media-bounds check.
@@ -231,10 +231,8 @@ fn validate_phoaln(utterance: &Utterance, errors: &impl ErrorSink) {
         return;
     };
     let reconstruction_clean = utterance.parse_health.can_align_phoaln();
-    let mod_tier = utterance.mod_tier();
-    let pho_tier = utterance.pho_tier();
-
-    for (i, word) in phoaln.words.iter().enumerate() {
+    for (i, binding) in utterance.phoaln_word_bindings().enumerate() {
+        let word = binding.word();
         // E739: a pair with both sides null (∅↔∅) is never legal. (Missing-arrow
         // and empty-side pairs are rejected earlier at parse time.)
         for pair in &word.pairs {
@@ -255,7 +253,7 @@ fn validate_phoaln(utterance: &Utterance, errors: &impl ErrorSink) {
             .collect();
         check_phoaln_reconstruction(
             &model_side,
-            source_word(mod_tier, i),
+            binding.model_word(),
             phoaln.span,
             i,
             "%mod",
@@ -271,7 +269,7 @@ fn validate_phoaln(utterance: &Utterance, errors: &impl ErrorSink) {
             .collect();
         check_phoaln_reconstruction(
             &actual_side,
-            source_word(pho_tier, i),
+            binding.actual_word(),
             phoaln.span,
             i,
             "%pho",
@@ -331,6 +329,32 @@ fn check_phoaln_reconstruction(
 // %xphoint
 // ---------------------------------------------------------------------------
 
+/// Evidence of at least one observed phone interval, not proof of its validity.
+/// First and last endpoints cannot be independently absent. Borrowing the
+/// original intervals also retains the previous start for monotonicity checks.
+struct PhoneExtent<'a> {
+    first: &'a MediaTiming,
+    last: &'a MediaTiming,
+}
+
+impl<'a> PhoneExtent<'a> {
+    fn new(timing: &'a MediaTiming) -> Self {
+        Self {
+            first: timing,
+            last: timing,
+        }
+    }
+
+    fn observe(&mut self, timing: &'a MediaTiming) {
+        self.last = timing;
+    }
+
+    fn exceeds_media_bounds(&self, media: &MediaTiming) -> bool {
+        media.start_ms.saturating_sub(self.first.start_ms) > MEDIA_BOUNDS_TOLERANCE_MS
+            || self.last.end_ms.saturating_sub(media.end_ms) > MEDIA_BOUNDS_TOLERANCE_MS
+    }
+}
+
 fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
     let Some(xphoint) = utterance.xphoint_tier() else {
         return;
@@ -359,9 +383,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
         );
     }
 
-    let mut prev_start: Option<u64> = None;
-    let mut first_start: Option<u64> = None;
-    let mut last_end: Option<u64> = None;
+    let mut extent: Option<PhoneExtent<'_>> = None;
 
     for (i, group) in xphoint.groups.iter().enumerate() {
         // E745: group phones reproduce the %pho word.
@@ -407,8 +429,8 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
                 );
             }
             // E743: starts are non-decreasing.
-            if let Some(prev) = prev_start
-                && timing.start_ms < prev
+            if let Some(previous) = &extent
+                && timing.start_ms < previous.last.start_ms
             {
                 errors.report(
                     ParseError::at_span(
@@ -417,29 +439,24 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
                         span,
                         format!(
                             "%xphoint interval start {} is before the previous start {}",
-                            timing.start_ms, prev
+                            timing.start_ms, previous.last.start_ms
                         ),
                     )
                     .with_suggestion("Order intervals so each start is at or after the previous"),
                 );
             }
-            prev_start = Some(timing.start_ms);
-            if first_start.is_none() {
-                first_start = Some(timing.start_ms);
+            match &mut extent {
+                Some(observed) => observed.observe(timing),
+                None => extent = Some(PhoneExtent::new(timing)),
             }
-            last_end = Some(timing.end_ms);
         }
     }
 
     // E744: first start / last end fall within the record's media bullet.
-    if let (Some(first), Some(last), Some(media)) =
-        (first_start, last_end, utterance.media_bullet())
-    {
+    if let (Some(observed), Some(media)) = (extent, utterance.media_bullet()) {
         let media_start = media.timing.start_ms;
         let media_end = media.timing.end_ms;
-        let starts_before = first + MEDIA_BOUNDS_TOLERANCE_MS < media_start;
-        let ends_after = last > media_end + MEDIA_BOUNDS_TOLERANCE_MS;
-        if starts_before || ends_after {
+        if observed.exceeds_media_bounds(&media.timing) {
             errors.report(
                 ParseError::at_span(
                     ErrorCode::XphointMediaBoundsViolation,
@@ -447,7 +464,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
                     span,
                     format!(
                         "%xphoint interval span {}-{} falls outside the record media bullet {}-{}",
-                        first, last, media_start, media_end
+                        observed.first.start_ms, observed.last.end_ms, media_start, media_end
                     ),
                 )
                 .with_suggestion("Keep phone intervals within the *SPK: line's media bullet"),

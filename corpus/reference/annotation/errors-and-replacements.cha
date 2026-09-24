@@ -15,4 +15,6 @@
 *CHI:	this is child [: a+er b] speaking .
 *CHI:	this is child [% a+er b] speaking .
 *CHI:	this is [e] child speaking .
+@Comment:	Authored exclusion control: Mor omits the replacement; spoken domains retain child.
+*CHI:	this is child [: children] [e] speaking .
 @End

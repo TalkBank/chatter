@@ -47,6 +47,17 @@ pub struct ParticipantEntry {
     pub role: ParticipantRole,
 }
 
+impl crate::model::WriteChat for ParticipantEntry {
+    /// Writes one entry, without the enclosing header label or list separator.
+    fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
+        write!(w, "{}", self.speaker_code)?;
+        if let Some(name) = &self.name {
+            write!(w, " {}", name)?;
+        }
+        write!(w, " {}", self.role)
+    }
+}
+
 impl crate::validation::Validate for ParticipantEntry {
     /// Validates speaker-code formatting and role membership against CHAT role vocabulary.
     fn validate(

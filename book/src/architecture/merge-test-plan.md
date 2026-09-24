@@ -1,13 +1,18 @@
 # Merge Pipeline, Test Plan
 
+> Historical design: references below to the `chatter merge` CLI describe the
+> former command. `merge`, `pipeline`, and `batch` have been removed.
+> The structural library remains.
+> See the [removal notice](../chatter/user-guide/merge.md).
+
 **Status:** Draft
-**Last modified:** 2026-09-10 00:30 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 This page is the test-coverage roadmap for the new merge pipeline
 (`chatter speaker-id` + `chatter merge` + `chatter adjudicate` +
 the override-file format + the underlying
 `talkbank-transform::speaker_id` types). It exists because, per this
-repo's root `CLAUDE.md`
+repo's root `AGENTS.md`
 red/green TDD rule, every new feature starts with failing tests
 at the highest level the feature lives at, and we want to
 enumerate those tests *before* writing the implementation, so
@@ -113,7 +118,7 @@ discarded, `0` discarded, `@l` / `@n` / `@c` suffix dropped,
 Each spec file in `spec/constructs/speaker-id/token-cleaner/` has
 the standard `# name`, `## Input`, `## Expected tokens`, and
 `## Metadata` sections per the spec authoring template at
-`spec/CLAUDE.md` in the workspace root (outside the book).
+`spec/AGENTS.md` in the workspace root (outside the book).
 
 ### L1.2, Jaccard scoring
 

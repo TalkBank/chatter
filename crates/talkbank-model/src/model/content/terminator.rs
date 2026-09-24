@@ -29,7 +29,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// - `+//.` - Self-interruption
 /// - `+/?` - Interrupted question
 /// - `+//?` - Self-interrupted question
-/// - `+/??` - Broken off question
+/// - `+!?` - Broken off question
 ///
 /// # CHAT Format Examples
 ///
@@ -38,8 +38,10 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// *MOT: what do you want ?    Question
 /// *CHI: look at this !        Exclamation
 /// *CHI: I was going to +...   Trailing off
-/// *MOT: did you +/. yes I did Interrupted by CHI
-/// *CHI: um the +//. the dog   Self-interruption
+/// *MOT: did you +/.          Interrupted by CHI
+/// *CHI: yes I did .          Next speaker's utterance
+/// *CHI: um the +//.          Self-interruption
+/// *CHI: the dog .            Next utterance
 /// ```
 ///
 /// # References

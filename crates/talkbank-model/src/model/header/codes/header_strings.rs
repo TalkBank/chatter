@@ -263,6 +263,12 @@ pub enum MediaFilenameProblem {
 }
 
 impl MediaFilename {
+    /// Whether the media token already has its standard Unicode spelling.
+    /// Remote URLs are opaque and are never candidates for normalization.
+    pub fn needs_unicode_normalization(&self) -> bool {
+        !self.is_remote_url() && !unicode_normalization::is_nfc(self.as_str())
+    }
+
     /// Parses a `@Media` filename, rejecting anything that could not be
     /// written to a `@Media` line and read back unchanged.
     ///

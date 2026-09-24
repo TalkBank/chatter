@@ -1,10 +1,12 @@
 # Merge Command Family: Scope-Rule Classification
 
+**Last modified:** 2026-09-24 00:21 EDT
+
 **Status:** Current. Verdicts ratified by the maintainer 2026-06-12.
 **Last updated:** 2026-06-12 16:29 EDT
 
 Pre-release review of the transcript-merge command family against the
-repo scope rule (CLAUDE.md: every subcommand must be useful to CHAT
+repo scope rule (AGENTS.md: every subcommand must be useful to CHAT
 users in general, never specific to one corpus, one data provider, or
 one workflow). Question answered per surface: does it stay in chatter,
 or does it belong in a downstream project?
@@ -19,13 +21,13 @@ backing `talkbank-transform` modules (`adjudication.rs`,
 
 | Surface | Verdict | Strongest grounds |
 |---------|---------|-------------------|
-| `chatter merge` (transcript_merge) | STAYS, general | Pure structural AST merge of two CHAT files sharing a timeline; no ASR/inference/domain logic; `book/src/chatter/user-guide/merge.md` already documents it corpus-agnostically. |
+| `chatter merge` (transcript_merge) | CLI REMOVED; library retained | Structural assembly is not fuzzy speech-event reconciliation. The public command was misleading; typed library APIs remain for callers with resolved source selection. |
 | `chatter speaker-id` | STAYS, general | Three independent modes (explicit mapping, reference-text Jaccard, override-file replay); the LLM judgment mode consumes the free-vocabulary `--session-context` JSON seam, whose module doc states corpus-specific conversion lives outside this repository; example codes (PAR0, CHI, INV) are illustrative prompt text, not hardcoded. |
-| `chatter pipeline` | STAYS, general | Thin composition of speaker-id reference mode + merge; no domain logic of its own. |
-| `chatter batch` | STAYS, general | Pure subprocess orchestrator over donor/reference directory pairs (basename matching); aggregates outcomes; threads settings. |
+| `chatter pipeline` | REMOVED | Speaker mapping plus structural assembly did not provide event correspondence. |
+| `chatter batch` | REMOVED | The directory driver exposed the same removed pipeline. |
 | `chatter sanity-scan` | STAYS, general, with a documented bias | Interface (override-file integration, pending entries) fully generic; the default heuristic (anchor/inserted mean-utterance word-count asymmetry) is child-language oriented. It is optional and tunable (`--threshold`); the module doc invites replacing the signal. Follow-up: state the child-language orientation in `--help` and the book page. |
 | `chatter adjudicate` | STAYS, general | Human-approval layer over generic decision kinds (speaker-id low confidence, parent-role lookup, sanity-scan flag) via an extensible Prompter trait. |
-| `merge_preflight` (internal module, not a subcommand) | STAYS, general | Shared fail-closed validation gate: every merge input must pass the same checks as `chatter validate` before any merge work. |
+| `merge_preflight` (internal module, not a subcommand) | REMOVED | Unused CLI preflight removed with pipeline and batch; library validation remains. |
 
 ## Cross-cutting findings
 

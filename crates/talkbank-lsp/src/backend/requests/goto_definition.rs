@@ -256,7 +256,7 @@ fn find_gra_aligned_definition(
     // %gra relations address the %mor *chunk* sequence, but the
     // main↔%mor alignment is keyed by %mor *item* positions. Collapse
     // post-clitic chunks to their host item before indexing, see
-    // `crates/talkbank-lsp/CLAUDE.md` for the three index spaces and the
+    // `crates/talkbank-lsp/AGENTS.md` for the three index spaces and the
     // 2026-04-16 bug that motivated this projection.
     let mor_tier = utterance.mor_tier()?;
     let host_item_idx = mor_tier.item_index_of_chunk(mor_chunk_idx.as_usize())?;

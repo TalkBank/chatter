@@ -113,14 +113,10 @@ pub fn content_item_to_model(
                 Some(scoped) => UtteranceContent::AnnotatedGroup(Annotated::new(group, scoped)),
             }
         }
-        ast::ContentItem::Quotation(q) => {
-            let content: Vec<BracketedItem> = q
-                .contents
-                .iter()
-                .map(|i| content_item_to_bracketed(i, source))
-                .collect();
-            UtteranceContent::Quotation(Quotation::new(BracketedContent::new(content)))
-        }
+        ast::ContentItem::Quotation(q) => match ModelQuotation::from_parsed(q, source) {
+            ModelQuotation::Bare(quotation) => UtteranceContent::Quotation(quotation),
+            ModelQuotation::Annotated(quotation) => UtteranceContent::AnnotatedQuotation(quotation),
+        },
         ast::ContentItem::OverlapPoint { kind, index } => {
             UtteranceContent::OverlapPoint(overlap_point(*kind, *index))
         }
@@ -176,6 +172,29 @@ pub fn content_item_to_model(
                 .map(|i| content_item_to_bracketed(i, source))
                 .collect();
             UtteranceContent::SinGroup(SinGroup::new(BracketedContent::new(items)))
+        }
+    }
+}
+
+/// One conversion owner for bare/annotated quotations in either container.
+/// Nonempty annotation admission happens once, before choosing the enclosing
+/// content representation; bracketed conversion cannot silently discard it.
+enum ModelQuotation {
+    Bare(Quotation),
+    Annotated(Annotated<Quotation>),
+}
+
+impl ModelQuotation {
+    fn from_parsed(quotation: &ast::Quotation<'_>, source: SourceText<'_>) -> Self {
+        let content = quotation
+            .contents
+            .iter()
+            .map(|item| content_item_to_bracketed(item, source))
+            .collect();
+        let model = Quotation::new(BracketedContent::new(content));
+        match AnnotatedContentAnnotations::new(annotations_to_scoped(&quotation.annotations)) {
+            None => Self::Bare(model),
+            Some(annotations) => Self::Annotated(Annotated::new(model, annotations)),
         }
     }
 }
@@ -567,14 +586,10 @@ pub(crate) fn content_item_to_bracketed(
                 .collect();
             BracketedItem::SinGroup(SinGroup::new(BracketedContent::new(items)))
         }
-        ast::ContentItem::Quotation(q) => {
-            let items: Vec<BracketedItem> = q
-                .contents
-                .iter()
-                .map(|i| content_item_to_bracketed(i, source))
-                .collect();
-            BracketedItem::Quotation(Quotation::new(BracketedContent::new(items)))
-        }
+        ast::ContentItem::Quotation(q) => match ModelQuotation::from_parsed(q, source) {
+            ModelQuotation::Bare(quotation) => BracketedItem::Quotation(quotation),
+            ModelQuotation::Annotated(quotation) => BracketedItem::AnnotatedQuotation(quotation),
+        },
     }
 }
 
@@ -624,21 +639,15 @@ pub(crate) fn scoped_annotation_to_model(
             };
             ContentAnnotation::Error(ScopedError { code })
         }
-        ast::ScopedAnnotationParsed::OverlapPrecedes(s) => {
-            let index = if s.is_empty() {
-                None
-            } else {
-                s.parse().ok().map(OverlapMarkerIndex::new)
-            };
-            ContentAnnotation::OverlapBegin(ScopedOverlapBegin { index })
+        ast::ScopedAnnotationParsed::OverlapPrecedes(index) => {
+            ContentAnnotation::OverlapBegin(ScopedOverlapBegin {
+                index: index.index(),
+            })
         }
-        ast::ScopedAnnotationParsed::OverlapFollows(s) => {
-            let index = if s.is_empty() {
-                None
-            } else {
-                s.parse().ok().map(OverlapMarkerIndex::new)
-            };
-            ContentAnnotation::OverlapEnd(ScopedOverlapEnd { index })
+        ast::ScopedAnnotationParsed::OverlapFollows(index) => {
+            ContentAnnotation::OverlapEnd(ScopedOverlapEnd {
+                index: index.index(),
+            })
         }
         ast::ScopedAnnotationParsed::Explanation(s) => {
             ContentAnnotation::Explanation(ScopedExplanation { text: (*s).into() })

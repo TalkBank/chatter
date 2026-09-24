@@ -2,7 +2,7 @@
 #
 # Run shellcheck over every tracked shell script in this repository and fail if
 # any finding remains at shellcheck's default (strictest) severity. This is the
-# canonical gate mandated by CLAUDE.md; the pre-commit hook and CI both call it,
+# canonical gate mandated by AGENTS.md; the pre-commit hook and CI both call it,
 # and this script must itself stay clean. (A comment must not start with the
 # word "shellcheck" or the tool reads it as a malformed inline directive.)
 #
@@ -11,7 +11,7 @@
 # vendored trees are not tracked in this repo, so `git ls-files` scopes the
 # sweep correctly without explicit excludes. zsh scripts are intentionally NOT
 # matched: shellcheck cannot analyze zsh, so shell scripts we own must be
-# bash/sh to be gateable (see CLAUDE.md).
+# bash/sh to be gateable (see AGENTS.md).
 #
 # Usage:
 #   scripts/lint/shellcheck-all.sh            # check every tracked shell script

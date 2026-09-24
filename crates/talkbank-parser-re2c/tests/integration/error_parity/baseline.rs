@@ -134,6 +134,160 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilen
 /// belongs beside it as a comment. That is the case the docstring above asks
 /// for, and a comment carries it without requiring the other 98 to lie.
 pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
+    // Interim 0.26 corpus expansion: canonical results satisfy the authored
+    // specs; these experimental-backend limitations are retained, not fixed.
+    // tree-sitter [E203, E316] vs re2c [E321]; spec expects [E203]
+    ("E203.md#3", Conflicting),
+    // tree-sitter [E203, E316] vs re2c [E321]; spec expects [E203]
+    ("E203.md#6", Conflicting),
+    // tree-sitter [E203, E316] vs re2c [E321]; spec expects [E203]
+    ("E203.md#7", Conflicting),
+    // tree-sitter [E342, E375] vs re2c [(silent)]; spec expects [E342, E375]
+    ("E207.md#10", Re2cSilent),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E207.md#6", Re2cSilent),
+    // tree-sitter [E207, E750] vs re2c [(silent)]; spec expects [E207]
+    ("E207.md#8", Re2cSilent),
+    // tree-sitter [E233] vs re2c [E209, E232, E233]; spec expects [E233]
+    ("E233.md#2", Re2cExtra),
+    // tree-sitter [E315, E316] vs re2c [E315, E321]; spec expects [E315, E316]
+    ("E243_word_controls.md#2", Conflicting),
+    // tree-sitter [E256] vs re2c [E321]; spec expects [E256]
+    ("E256.md#3", Conflicting),
+    // tree-sitter [E256] vs re2c [E321]; spec expects [E256]
+    ("E256.md#4", Conflicting),
+    // tree-sitter [E303] vs re2c [E303, E538]; spec expects [E303]
+    ("E303.md#7", Re2cExtra),
+    // tree-sitter [E316] vs re2c [E538]; spec expects [E316]
+    ("E303.md#8", Conflicting),
+    // tree-sitter [E307, E316, E320, E506, E513, E522, E523] vs re2c [E307, E321]; spec expects [E307]
+    ("E307.md#4", Conflicting),
+    // tree-sitter [E307, E316, E506, E513, E522, E523] vs re2c [E307, E321]; spec expects [E307]
+    ("E307.md#5", Conflicting),
+    // tree-sitter [E307, E316, E320, E506, E513, E522, E523] vs re2c [E307, E321]; spec expects [E307]
+    ("E307_boundaries.md#3", Conflicting),
+    // tree-sitter [E307, E316, E320, E506, E513, E522, E523] vs re2c [E307, E321]; spec expects [E307]
+    ("E307_boundaries.md#4", Conflicting),
+    // tree-sitter [E315, E316, E342] vs re2c [E315, E321]; spec expects [E315]
+    ("E315.md#4", Conflicting),
+    // tree-sitter [E316, E320] vs re2c [(silent)]; spec expects [E316]
+    ("E316.md#13", Re2cSilent),
+    // tree-sitter [E507] vs re2c [(silent)]; spec expects [E507]
+    ("E316.md#14", Re2cSilent),
+    // tree-sitter [E316] vs re2c [E303, E326]; spec expects [E316]
+    ("E316.md#15", Conflicting),
+    // tree-sitter [E316, E331, E502, E504] vs re2c [E504, E525]; spec expects [E316]
+    ("E316.md#16", Conflicting),
+    // tree-sitter [E316] vs re2c [E316, E605]; spec expects [E316]
+    ("E316.md#18", Re2cExtra),
+    // tree-sitter [E316, E544] vs re2c [E321, E544]; spec expects [E316]
+    ("E316.md#20", Conflicting),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E316.md#22", Re2cSilent),
+    // tree-sitter [E342] vs re2c [E534]; spec expects [E342]
+    ("E316.md#24", Conflicting),
+    // tree-sitter [E303, E504] vs re2c [E303, E507]; spec expects [E303]
+    ("E316.md#25", Conflicting),
+    // tree-sitter [E303] vs re2c [E303, E525]; spec expects [E303]
+    ("E316.md#27", Re2cExtra),
+    // tree-sitter [E303] vs re2c [E303, E518]; spec expects [E303]
+    ("E316.md#28", Re2cExtra),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E316.md#29", Re2cSilent),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E316.md#30", Re2cSilent),
+    // tree-sitter [E316, E544] vs re2c [E321, E544]; spec expects [E316]
+    ("E316.md#34", Conflicting),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E316_inline_picture.md#2", Re2cSilent),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E316_inline_picture.md#3", Re2cSilent),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E316_inline_picture.md#4", Re2cSilent),
+    // tree-sitter [E316] vs re2c [E321]; spec expects [E316]
+    ("E316_speaker_colon.md#2", Conflicting),
+    // tree-sitter [E326] vs re2c [(silent)]; spec expects [E326]
+    ("E326.md#4", Re2cSilent),
+    // tree-sitter [E326] vs re2c [(silent)]; spec expects [E326]
+    ("E326.md#6", Re2cSilent),
+    // tree-sitter [E326] vs re2c [E319]; spec expects [E326]
+    ("E326.md#8", Conflicting),
+    // tree-sitter [E316, E330, E756] vs re2c [(silent)]; spec expects [E330]
+    ("E330.md#5", Re2cSilent),
+    // tree-sitter [E316, E330] vs re2c [(silent)]; spec expects [E330]
+    ("E330.md#6", Re2cSilent),
+    // tree-sitter [E536] vs re2c [E544]; spec expects [E536]
+    ("E342.md#7", Conflicting),
+    // tree-sitter [E342, E378] vs re2c [E378]; spec expects [E342]
+    ("E342_empty_scoped_content.md#2", Re2cIncomplete),
+    // tree-sitter [E342] vs re2c [(silent)]; spec expects [E342]
+    ("E342_empty_scoped_content.md#4", Re2cSilent),
+    // tree-sitter [E360, E544] vs re2c [(silent)]; spec expects [E360]
+    ("E360.md#10", Re2cSilent),
+    // tree-sitter [E360, E544] vs re2c [(silent)]; spec expects [E360]
+    ("E360.md#8", Re2cSilent),
+    // tree-sitter [E370] vs re2c [E321]; spec expects [E370]
+    ("E370.md#3", Conflicting),
+    // tree-sitter [E316] vs re2c [E207]; spec expects [E316]
+    ("E373.md#5", Conflicting),
+    // tree-sitter [E220, E375] vs re2c [E207]; spec expects [E375]
+    ("E375.md#10", Conflicting),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E375.md#12", Re2cSilent),
+    // tree-sitter [E375] vs re2c [(silent)]; spec expects [E375]
+    ("E375.md#14", Re2cSilent),
+    // tree-sitter [E342, E375] vs re2c [(silent)]; spec expects [E375]
+    ("E375.md#16", Re2cSilent),
+    // tree-sitter [E375] vs re2c [E207]; spec expects [E375]
+    ("E375.md#18", Conflicting),
+    // tree-sitter [E375] vs re2c [(silent)]; spec expects [E375]
+    ("E375.md#20", Re2cSilent),
+    // tree-sitter [E375] vs re2c [(silent)]; spec expects [E375]
+    ("E375.md#22", Re2cSilent),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E375.md#24", Re2cSilent),
+    // tree-sitter [E375] vs re2c [E321]; spec expects [E375]
+    ("E375.md#6", Conflicting),
+    // tree-sitter [E375] vs re2c [E321]; spec expects [E375]
+    ("E375.md#8", Conflicting),
+    // tree-sitter [E375] vs re2c [(silent)]; spec expects [E375]
+    ("E375.md#9", Re2cSilent),
+    // tree-sitter [E220, E375] vs re2c [E207, E305]; spec expects [E375]
+    ("E375_repetition_recovery.md#2", Conflicting),
+    // tree-sitter [E220, E312, E375] vs re2c [E305]; spec expects [E375]
+    ("E375_repetition_recovery.md#3", Conflicting),
+    // tree-sitter [E501, E502] vs re2c [(silent)]; spec expects [E501]
+    ("E501.md#6", Re2cSilent),
+    // tree-sitter [E342, E507, E758] vs re2c [E507, E758]; spec expects [E507]
+    ("E507.md#4", Re2cIncomplete),
+    // tree-sitter [E504, E507] vs re2c [E507]; spec expects [E507]
+    ("E507.md#5", Re2cIncomplete),
+    // tree-sitter [E509] vs re2c [E525]; spec expects [E509]
+    ("E509.md#3", Conflicting),
+    // tree-sitter [E509] vs re2c [E525, E758]; spec expects [E509]
+    ("E509.md#4", Conflicting),
+    // tree-sitter [E513, E522, E523] vs re2c [E513]; spec expects [E513]
+    ("E513.md#4", Re2cIncomplete),
+    // tree-sitter [E525] vs re2c [(silent)]; spec expects [E525]
+    ("E525.md#3", Re2cSilent),
+    // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
+    ("E530.md#5", Re2cSilent),
+    // tree-sitter [E316] vs re2c [E303]; spec expects [E316]
+    ("E530.md#6", Conflicting),
+    // tree-sitter [E535] vs re2c [E525, E752]; spec expects [E535]
+    ("E535.md#4", Conflicting),
+    // tree-sitter [E600, E702] vs re2c [E316, E600]; spec expects [E702]
+    ("E702.md#4", Conflicting),
+    // tree-sitter [E600, E702] vs re2c [E316, E600]; spec expects [E702]
+    ("E702.md#5", Conflicting),
+    // tree-sitter [E360, E544] vs re2c [E360, E362, E748]; spec expects [E360]
+    ("E748.md#5", Conflicting),
+    // tree-sitter [E757] vs re2c [(silent)]; spec expects [E757]
+    ("E757.md#20", Re2cSilent),
+    // tree-sitter [E312] vs re2c [E321]; spec expects [E312]
+    ("E759.md#4", Conflicting),
+    // tree-sitter [E243, E375] vs re2c [E321]; spec expects [E375]
+    ("E759.md#6", Conflicting),
     // E202's missing/invalid/repeated suffix cases and E203#0 were retired
     // together when rich-word recovery retained the complete suffix for
     // semantic validation (2026-09-07).

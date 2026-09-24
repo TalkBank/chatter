@@ -17,7 +17,7 @@
 //! as a drop-in replacement.
 
 use talkbank_model::errors::ErrorCollector;
-use talkbank_model::{ChatParser, ParseOutcome, SemanticEq};
+use talkbank_model::{ChatParser, ParseOutcome, SemanticDiff, SemanticEq};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_re2c::Re2cParser;
 
@@ -56,20 +56,8 @@ const DIAGNOSTIC_DIVERGENCES: &[(&str, &str)] = &[(
 
 #[test]
 fn equivalence_reference_corpus() {
-    let base = format!(
-        "{}/corpus/reference",
-        crate::fixture_utils::workspace_root().display()
-    );
-    let base_path = std::path::Path::new(&base);
-    // FAILS rather than skips. This was `eprintln!("Skipping"); return;`, so a
-    // missing corpus read exactly like a passing run, in the one test this
-    // repository calls the parity oracle. The corpus is CHECKED IN: its
-    // absence is a broken checkout, not a condition to tolerate.
-    assert!(
-        base_path.exists(),
-        "the reference corpus is checked in and {base} is not there; this test \
-         is the parity oracle and must fail rather than skip"
-    );
+    let corpus = talkbank_parser_tests::chat_corpus::ChatCorpus::reference()
+        .expect("complete reference corpus");
 
     let (ts, re2c) = both_parsers();
 
@@ -84,96 +72,80 @@ fn equivalence_reference_corpus() {
     // a file this corpus does not contain, and reported clean.
     let mut visited = vec![false; DIAGNOSTIC_DIVERGENCES.len()];
 
-    // Walk every top-level subdir of `corpus/reference/` rather than naming
-    // them. The hardcoded list this replaces visited only 6 of the 9 actual
-    // subdirs on 2026-04-30, silently bypassing reference fixtures in
-    // `edge-cases/`, `audio/`, and `word-features/`. Dynamic discovery makes
-    // future subdir additions automatically covered by the parity oracle.
-    let subdirs: Vec<std::path::PathBuf> = std::fs::read_dir(base_path)
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.is_dir())
-        .collect();
-    for dir_path in subdirs {
-        for entry in std::fs::read_dir(&dir_path).unwrap() {
-            let path = entry.unwrap().path();
-            if path.extension().is_some_and(|e| e == "cha") {
-                total += 1;
-                let content = std::fs::read_to_string(&path).unwrap();
-                let filename = path.file_name().unwrap().to_string_lossy().to_string();
+    for fixture in corpus.fixtures() {
+        total += 1;
+        let content = fixture.source();
+        let filename = fixture
+            .path()
+            .file_name()
+            .expect("fixture filename")
+            .to_string_lossy()
+            .to_string();
 
-                // Use the streaming variant on both sides; it always returns
-                // a (recovered) ChatFile and accumulates diagnostics into the
-                // error sink. This matches what `categorize_divergences` does
-                // on the wild corpus, so the parity oracle here measures the
-                // same thing: model-level semantic_eq on recovered ASTs. The
-                // non-streaming `parse_chat_file()` Err path silently dropped
-                // every fixture that exercises tree-sitter's MISSING-token
-                // recovery (because TS converts each MISSING into a
-                // Severity::Error diagnostic and refuses to return Ok).
-                let ts_errors = ErrorCollector::new();
-                let ts_file = ts.parse_chat_file_streaming(&content, &ts_errors);
-                let re2c_errors = ErrorCollector::new();
-                let re2c_result = re2c.parse_chat_file(&content, 0, &re2c_errors);
+        // Use the streaming variant on both sides; it always returns
+        // a (recovered) ChatFile and accumulates diagnostics into the
+        // error sink. This matches what `categorize_divergences` does
+        // on the wild corpus, so the parity oracle here measures the
+        // same thing: model-level semantic_eq on recovered ASTs. The
+        // non-streaming `parse_chat_file()` Err path silently dropped
+        // every fixture that exercises tree-sitter's MISSING-token
+        // recovery (because TS converts each MISSING into a
+        // Severity::Error diagnostic and refuses to return Ok).
+        let ts_errors = ErrorCollector::new();
+        let ts_file = ts.parse_chat_file_streaming(content, &ts_errors);
+        let re2c_errors = ErrorCollector::new();
+        let re2c_result = re2c.parse_chat_file(content, 0, &re2c_errors);
 
-                match re2c_result {
-                    ParseOutcome::Parsed(re2c_file) => {
-                        if ts_file.semantic_eq(&re2c_file) {
-                            passed += 1;
-                        } else {
-                            failed_files.push(format!("{filename}: semantic mismatch"));
-                        }
-                    }
-                    ParseOutcome::Rejected => {
-                        failed_files.push(format!("{filename}: re2c rejected, ts parsed"));
-                    }
-                }
-
-                // The second half, and it used to be missing entirely: the two
-                // sinks above were filled and never read.
-                let ts_codes = codes_of(&ts_errors);
-                let re2c_codes = codes_of(&re2c_errors);
-                let recorded = match DIAGNOSTIC_DIVERGENCES
-                    .iter()
-                    .position(|(name, _)| *name == filename)
-                {
-                    Some(at) => {
-                        visited[at] = true;
-                        true
-                    }
-                    None => false,
-                };
-                // All four cells written out. The compiler refused an earlier
-                // draft that grouped them wrongly, which is what an exhaustive
-                // match over the cross-product is for.
-                match (ts_codes == re2c_codes, recorded) {
-                    // Agreeing and not recorded: the ordinary case.
-                    (true, false) => {}
-                    // Diverging and recorded: the ratchet's own entries.
-                    (false, true) => {}
-                    (false, false) => diagnostic_divergences.push(format!(
-                        "{filename}: ts {ts_codes:?} vs re2c {re2c_codes:?}"
-                    )),
-                    // Recorded but now agreeing. Retiring the entry is the
-                    // deliverable of whatever fixed it; leaving it makes the
-                    // list a permanent exemption.
-                    (true, true) => diagnostic_divergences.push(format!(
-                        "{filename}: RECORDED as diverging, but the backends now \
-                         agree. Delete it from DIAGNOSTIC_DIVERGENCES."
-                    )),
+        match re2c_result {
+            ParseOutcome::Parsed(re2c_file) => {
+                if ts_file.semantic_eq(&re2c_file) {
+                    passed += 1;
+                } else {
+                    failed_files.push(format!(
+                        "{filename}: semantic mismatch\n{}",
+                        ts_file.semantic_diff(&re2c_file).render()
+                    ));
                 }
             }
+            ParseOutcome::Rejected => {
+                failed_files.push(format!("{filename}: re2c rejected, ts parsed"));
+            }
+        }
+
+        // The second half, and it used to be missing entirely: the two
+        // sinks above were filled and never read.
+        let ts_codes = codes_of(&ts_errors);
+        let re2c_codes = codes_of(&re2c_errors);
+        let recorded = match DIAGNOSTIC_DIVERGENCES
+            .iter()
+            .position(|(name, _)| *name == filename)
+        {
+            Some(at) => {
+                visited[at] = true;
+                true
+            }
+            None => false,
+        };
+        // All four cells written out. The compiler refused an earlier
+        // draft that grouped them wrongly, which is what an exhaustive
+        // match over the cross-product is for.
+        match (ts_codes == re2c_codes, recorded) {
+            // Agreeing and not recorded: the ordinary case.
+            (true, false) => {}
+            // Diverging and recorded: the ratchet's own entries.
+            (false, true) => {}
+            (false, false) => diagnostic_divergences.push(format!(
+                "{filename}: ts {ts_codes:?} vs re2c {re2c_codes:?}"
+            )),
+            // Recorded but now agreeing. Retiring the entry is the
+            // deliverable of whatever fixed it; leaving it makes the
+            // list a permanent exemption.
+            (true, true) => diagnostic_divergences.push(format!(
+                "{filename}: RECORDED as diverging, but the backends now \
+                 agree. Delete it from DIAGNOSTIC_DIVERGENCES."
+            )),
         }
     }
-
-    // A FLOOR. A corpus directory that is present and holds no `.cha` file
-    // would leave every counter at zero and every list empty, and this test
-    // would report a perfect score over nothing.
-    assert!(
-        total > 0,
-        "the reference corpus is present at {base} but holds no .cha file"
-    );
 
     eprintln!("\n=== Reference corpus equivalence ===");
     eprintln!("Total: {total}");

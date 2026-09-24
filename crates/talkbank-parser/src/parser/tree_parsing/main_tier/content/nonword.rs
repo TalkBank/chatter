@@ -14,13 +14,11 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, EventNode, FromNodeKind, NonwordChoice, NonwordNode,
-    NonwordWithOptionalAnnotationsNode, extract_event, extract_nonword,
-    extract_nonword_with_optional_annotations,
+    AsRawNode, EventNode, NonwordChoice, NonwordNode, NonwordWithOptionalAnnotationsNode,
+    extract_event, extract_nonword, extract_nonword_with_optional_annotations,
 };
 use crate::model::{Action, Event, UtteranceContent};
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 use super::super::annotations::parse_scoped_annotations;
 use super::marker_chain::fold_marker_chain;
@@ -40,25 +38,13 @@ use crate::parser::tree_parsing::parser_helpers::{
 /// actually arrives. Until 2026-09-09 this walked the children by index and
 /// `node.kind()` string, with `child(0)`/`child(1)` reaching into the event.
 ///
-/// The dispatcher hands over the raw node; a node that is not a
-/// `nonword_with_optional_annotations` is refused with a diagnostic.
+/// The generated dispatcher retains the carrier type through this boundary.
 pub(crate) fn parse_nonword_content(
-    node: Node,
+    typed: NonwordWithOptionalAnnotationsNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let Some(typed) = NonwordWithOptionalAnnotationsNode::from_node(node) else {
-        report_tree_shape(
-            node,
-            format!(
-                "Expected a nonword_with_optional_annotations node, found '{}'",
-                node.kind()
-            ),
-            source,
-            errors,
-        );
-        return ParseOutcome::rejected();
-    };
+    let node = typed.raw_node();
     let full_span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
     let children = extract_nonword_with_optional_annotations(typed);
 
@@ -79,7 +65,7 @@ pub(crate) fn parse_nonword_content(
         Some(slot) => {
             match expect_present(slot, "nonword_with_optional_annotations", source, errors) {
                 SlotState::Present(annotations) => {
-                    parse_scoped_annotations(annotations.raw_node(), source, errors)
+                    parse_scoped_annotations(*annotations, source, errors)
                 }
                 SlotState::Absent | SlotState::Recovered => Vec::new(),
             }
@@ -145,17 +131,17 @@ fn event_of(
         return None;
     };
     let raw = segment.raw_node();
-    match raw.utf8_text(source.as_bytes()) {
-        Ok(description) => Some(UtteranceContent::Event(
+    match source.get(raw.byte_range()) {
+        Some(description) => Some(UtteranceContent::Event(
             Event::new(description).with_span(span),
         )),
-        Err(err) => {
+        None => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
                 SourceLocation::from_offsets(raw.start_byte(), raw.end_byte()),
                 ErrorContext::new(source, raw.start_byte()..raw.end_byte(), ""),
-                format!("Failed to extract event description text: {err}"),
+                "Event description range is not a UTF-8 slice of the supplied source",
             ));
             None
         }

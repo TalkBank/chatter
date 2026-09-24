@@ -7,7 +7,7 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, NoChild, NodeSlot, SlotView, TierSepNode, extract_tier_sep,
+    AsRawNode, KindSlot, NoChild, NodeSlot, SlotView, TierSepNode, extract_tier_sep,
 };
 use crate::model::TextTier;
 use crate::model::{NonEmptyString, TierSeparator};
@@ -63,13 +63,13 @@ use tree_sitter::Node;
 /// every caller's own `extract_<kind>_dependent_tier`.
 fn read_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &ChildSlot<'tree, T>,
+    body: &KindSlot<'tree, T>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<NonEmptyString>
 where
-    T: AsRawNode<'tree>,
+    T: AsRawNode<'tree> + Copy,
 {
     surface_displaced(unexpected, tier_node.kind(), source, errors);
 
@@ -122,13 +122,13 @@ fn report_missing_content_node(tier_node: Node, source: &str, errors: &impl Erro
 /// constructor's doc asks for.
 pub(crate) fn read_optional_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &Option<ChildSlot<'tree, T>>,
+    body: &Option<KindSlot<'tree, T>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<TextTier>
 where
-    T: AsRawNode<'tree>,
+    T: AsRawNode<'tree> + Copy,
 {
     // Defined over the raw reader rather than repeating its `match`, so the
     // absent-body policy (surface the carrier's sink, report nothing, return a
@@ -161,13 +161,13 @@ where
 /// (E756 versus a parse error).
 pub(crate) fn read_optional_tier_body_raw_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &Option<ChildSlot<'tree, T>>,
+    body: &Option<KindSlot<'tree, T>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Option<NonEmptyString>>
 where
-    T: AsRawNode<'tree>,
+    T: AsRawNode<'tree> + Copy,
 {
     match body {
         Some(slot) => read_tier_body_text(tier_node, slot, unexpected, source, errors).map(Some),
@@ -238,7 +238,7 @@ fn decode_body_text(
 /// parse-time). A recovered child can occur between the tab and that space;
 /// both positions must come from this carrier and remain adjacent. Otherwise
 /// the space belongs to content, not the line separator.
-pub(crate) fn dependent_tier_separator(slot: &ChildSlot<'_, TierSepNode<'_>>) -> TierSeparator {
+pub(crate) fn dependent_tier_separator(slot: &KindSlot<'_, TierSepNode<'_>>) -> TierSeparator {
     let NodeSlot::Present(tier_sep) = slot else {
         return TierSeparator::CLEAN;
     };

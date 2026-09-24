@@ -71,7 +71,7 @@ pub enum FrontendEvent {
 }
 
 /// Serializable version of `FileStatus` for the frontend.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum FrontendFileStatus {
     #[serde(rename_all = "camelCase")]

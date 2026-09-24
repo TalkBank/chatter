@@ -269,15 +269,17 @@ pub(crate) fn parse_single_annotation(
         BaseAnnotationChoice::CodeSwitchAnnotation(_) => {
             let span = match annotation_node.child_by_field_name("code") {
                 None => Some(CodeSwitchSpan::Shortcut),
-                Some(code_node) => LanguageCode::new(extract_utf8_text(
+                Some(code_node) => match extract_utf8_text(
                     code_node,
                     source,
                     errors,
                     "code_switch_annotation language code",
-                    "",
-                ))
-                .ok()
-                .map(CodeSwitchSpan::Explicit),
+                ) {
+                    ParseOutcome::Parsed(text) => {
+                        LanguageCode::new(text).ok().map(CodeSwitchSpan::Explicit)
+                    }
+                    ParseOutcome::Rejected => return ParseOutcome::rejected(),
+                },
             };
             delegate_content_or_error(
                 span.map(ContentAnnotation::CodeSwitch),

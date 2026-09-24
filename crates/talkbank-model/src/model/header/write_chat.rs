@@ -38,11 +38,7 @@ impl WriteChat for Header {
                     if i > 0 {
                         write!(w, ", ")?;
                     }
-                    write!(w, "{}", entry.speaker_code)?;
-                    if let Some(name) = &entry.name {
-                        write!(w, " {}", name)?;
-                    }
-                    write!(w, " {}", entry.role)?;
+                    entry.write_chat(w)?;
                 }
                 Ok(())
             }

@@ -34,6 +34,9 @@ use crate::model::SpeakerCode;
 /// An overlap region anchored to a specific utterance.
 #[derive(Debug, Clone)]
 pub struct OverlapAnchor {
+    /// Location captured by the producer from the originating main tier.
+    /// Kept private so an anchor cannot be constructed without its origin.
+    utterance_span: crate::Span,
     /// Index of the utterance in the file's utterance list (0-based).
     pub utterance_index: usize,
     /// Speaker code of the utterance.
@@ -47,6 +50,13 @@ pub struct OverlapAnchor {
     pub region: OverlapRegion,
     /// Utterance-level timing bullet, if present.
     pub bullet: Option<(u64, u64)>,
+}
+
+impl OverlapAnchor {
+    /// Original main-tier location, independent of later index lookups.
+    pub fn utterance_span(&self) -> crate::Span {
+        self.utterance_span
+    }
 }
 
 /// A matched overlap group: one top region paired with 1..N bottom regions.
@@ -79,6 +89,8 @@ pub struct FileOverlapAnalysis {
 /// Per-utterance overlap data extracted during analysis.
 #[derive(Debug, Clone)]
 pub struct PerUtteranceOverlap {
+    /// Producer-retained origin used when constructing region anchors.
+    utterance_span: crate::Span,
     /// Utterance index.
     pub utterance_index: usize,
     /// Speaker code. See [`OverlapAnchor::speaker`] for why it is not a `String`.
@@ -133,6 +145,7 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
                 .as_ref()
                 .map(|b| (b.timing.start_ms, b.timing.end_ms));
             per_utterance.push(PerUtteranceOverlap {
+                utterance_span: utt.main.span,
                 utterance_index: per_utterance.len(),
                 speaker: utt.main.speaker.clone(),
                 info,
@@ -148,6 +161,7 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
     for pu in &per_utterance {
         for region in &pu.info.regions {
             let anchor = OverlapAnchor {
+                utterance_span: pu.utterance_span,
                 utterance_index: pu.utterance_index,
                 speaker: pu.speaker.clone(),
                 region: region.clone(),

@@ -7,8 +7,12 @@ tool's self-check against llvm-cov's own per-file summary is what found them,
 and these tests are that check applied to a fixture small enough to read.
 """
 
+import io
+import hashlib
+import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import coverage_attribution as attribution
 
@@ -65,6 +69,33 @@ class MergesInstantiations(unittest.TestCase):
         )
         self.assertEqual(disagreements, [])
         self.assertEqual(rows, {}, "one instantiation ran it, so it ran")
+
+    def test_complementary_instantiations_do_not_match_summary_union(self):
+        path = "/x/chatter/crates/c/src/a.rs"
+        data = export(
+            [
+                function("first", [path], [region(10, 1, 20, 1, 1), region(12, 1, 12, 8, 0)]),
+                function("second", [path], [region(10, 1, 20, 1, 0), region(12, 1, 12, 8, 1)]),
+            ],
+            [file_summary("crates/c/src/a.rs", 1, 2)],
+        )
+        rows, disagreements = attribution.build_rows(data, REPO, "crates/c")
+        self.assertEqual(disagreements, [])
+        self.assertEqual(rows, {})
+        every, covered = attribution.region_spans(data, REPO, "crates/c")
+        self.assertEqual(len(every), 2)
+        self.assertEqual(every, covered)
+
+    def test_non_code_regions_are_not_code_coverage(self):
+        skipped = region(11, 1, 11, 9, 0)
+        skipped[7] = 2
+        data = export(
+            [function("first", ["/x/chatter/crates/c/src/a.rs"], [region(10, 1, 20, 1, 1), skipped])],
+            [file_summary("crates/c/src/a.rs", 1, 1)],
+        )
+        rows, disagreements = attribution.build_rows(data, REPO, "crates/c")
+        self.assertEqual((rows, disagreements), ({}, []))
+        self.assertEqual(len(attribution.region_spans(data, REPO, "crates/c")[0]), 1)
 
 
 class DistinguishesRegionsSharingAStart(unittest.TestCase):
@@ -149,6 +180,25 @@ class ReportsItsOwnDisagreement(unittest.TestCase):
         self.assertIn("this tool says 1/1", disagreements[0])
         self.assertIn("llvm-cov says 1/2", disagreements[0])
 
+    def test_excluding_all_rows_cannot_claim_complete_coverage(self):
+        data = export([], [file_summary("crates/c/src/a.rs", 1, 2)])
+        output = io.StringIO()
+        with (
+            patch("sys.argv", ["coverage_attribution", "unused.json", "--scope", "crates/c", "--produced-by", "recorded command"]),
+            patch.object(Path, "read_text", return_value=json.dumps(data)),
+            patch("sys.stdout", output),
+        ):
+            self.assertEqual(attribution.main(), 2)
+        self.assertNotIn("all fully covered", output.getvalue())
+        self.assertIn("excluded files prevent a completeness claim", output.getvalue())
+        self.assertIn("recorded command", output.getvalue())
+
+    def test_summary_without_functions_is_not_silently_accepted(self):
+        _, disagreements = attribution.build_rows(
+            export([], [file_summary("crates/c/src/a.rs", 1, 2)]), REPO, "crates/c"
+        )
+        self.assertEqual(len(disagreements), 1)
+
 
 class ReadsAFunctionPathOutOfAMangledName(unittest.TestCase):
     """Reading segments to the end returns the INSTANTIATION TYPES.
@@ -165,6 +215,42 @@ class ReadsAFunctionPathOutOfAMangledName(unittest.TestCase):
         )
         self.assertIn("check_id_header", attribution.readable_path(mangled))
         self.assertNotIn("RecordingSink", attribution.readable_path(mangled))
+
+
+class BranchOutcomes(unittest.TestCase):
+    def test_branch_counters_and_file_index_are_independent(self):
+        data = export([
+            {"filenames": ["/x/chatter/crates/out.rs", "/x/chatter/crates/c/a.rs"],
+             "branches": [[1, 2, 1, 9, 0, 4, 1, 0, 4]]},
+            {"filenames": ["/x/chatter/crates/c/a.rs"],
+             "branches": [[1, 2, 1, 9, 3, 0, 0, 0, 4], [2, 2, 2, 9, 0, 5, 0, 0, 4]]},
+        ], [file_summary("crates/c/a.rs", 0, 0)])
+        self.assertEqual(attribution.branch_outcomes(data, REPO, "crates/c"), {
+            ("crates/c/a.rs", 1, 2, 1, 9): (True, True),
+            ("crates/c/a.rs", 2, 2, 2, 9): (False, True),
+        })
+
+    def test_filtered_file_functions_are_not_reported_as_measured(self):
+        data = export([{
+            "name": "filtered_test", "filenames": ["/x/chatter/crates/c/tests.rs"],
+            "regions": [region(1, 1, 2, 1, 0)],
+            "branches": [[1, 2, 1, 9, 0, 0, 0, 0, 4]],
+        }], [])
+        self.assertEqual(attribution.branch_outcomes(data, REPO, "crates/c"), {})
+        self.assertEqual(attribution.build_rows(data, REPO, "crates/c"), ({}, []))
+
+
+class SourceIdentity(unittest.TestCase):
+    def test_test_ranges_use_byte_columns_and_reject_stale_source(self):
+        source = "λ\ntest".encode()
+        evidence = {"source_sha256": hashlib.sha256(source).hexdigest(),
+                    "test_byte_ranges": [{"start": 3, "end": 7}]}
+        admitted = attribution.TestSource(source, evidence)
+        self.assertFalse(admitted.contains(1, 1))
+        self.assertTrue(admitted.contains(2, 1))
+        self.assertFalse(admitted.contains(2, 5))
+        with self.assertRaisesRegex(ValueError, "stale"):
+            attribution.TestSource(source + b" ", evidence)
 
 
 if __name__ == "__main__":

@@ -93,36 +93,28 @@ pub fn reconcile_media_timing(mut file: ChatFile) -> Result<MediaTimingState, Me
         return Ok(MediaTimingState::Untimed(UntimedChatFile(file)));
     }
 
-    let media_count = file
-        .lines
-        .iter()
-        .filter(|line| {
-            matches!(
-                line,
-                Line::Header { header, .. } if matches!(header.as_ref(), Header::Media(_))
-            )
-        })
-        .count();
-    match media_count {
-        0 => return Err(MediaTimingError::MissingMedia),
-        1 => {}
-        count => return Err(MediaTimingError::MultipleMedia { count }),
-    }
-
-    let Some(media) = file
+    // Retain the actual exclusive borrow while establishing uniqueness: a
+    // separate count must not stand in for the declaration it purportedly proves.
+    let mut declarations = file
         .lines
         .as_mut_slice()
         .iter_mut()
-        .find_map(|line| match line {
+        .filter_map(|line| match line {
             Line::Header { header, .. } => match header.as_mut() {
                 Header::Media(media) => Some(media),
                 _ => None,
             },
             Line::Utterance(_) => None,
-        })
-    else {
+        });
+    let Some(media) = declarations.next() else {
         return Err(MediaTimingError::MissingMedia);
     };
+    let additional = declarations.count();
+    if additional != 0 {
+        return Err(MediaTimingError::MultipleMedia {
+            count: additional + 1,
+        });
+    }
 
     match &media.media_type {
         MediaType::Audio | MediaType::Video => {}
@@ -150,8 +142,17 @@ pub fn reconcile_media_timing(mut file: ChatFile) -> Result<MediaTimingState, Me
 }
 
 fn has_timing_evidence(file: &ChatFile) -> bool {
+    use talkbank_model::alignment::helpers::{ContentItem, walk_content};
+
     file.utterances().any(|utterance| {
-        utterance.main.content.bullet.is_some()
+        let mut internal_timing = false;
+        walk_content(&utterance.main.content.content, None, &mut |item| {
+            if let ContentItem::InternalBullet(_) = item {
+                internal_timing = true;
+            }
+        });
+        internal_timing
+            || utterance.main.content.bullet.is_some()
             || utterance.wor_tier().is_some_and(|tier| {
                 matches!(tier.timing_evidence(), WorTimingEvidence::Recorded(_))
             })

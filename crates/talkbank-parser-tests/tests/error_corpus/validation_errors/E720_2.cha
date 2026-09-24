@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|4;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+*CHI:	it's a cookie .
+%mor:	pron|it~aux|be-Pres-S3 det|a noun|cookie .
+%gra:	1|4|NSUBJ 2|1|AUX 3|4|DET 4|0|ROOT 5|4|PUNCT
+@End

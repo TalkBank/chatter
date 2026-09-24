@@ -9,7 +9,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Action_Code>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 
-use crate::generated_traversal::{ActDependentTierNode, AsRawNode, extract_act_dependent_tier};
+use crate::generated_traversal::{ActDependentTierNode, AsRawNode, SourceBound};
 use crate::parser::node_span::span_of;
 use crate::parser::tier_parsers::text::helpers::parse_optional_text_tier_content;
 use talkbank_model::ErrorSink;
@@ -35,19 +35,17 @@ use talkbank_model::model::ActTier;
 /// widening, 2026-08-16): an absent body is the empty tier, not a parse
 /// failure, so it lowers to empty content with no diagnostic and the validator
 /// reports E756.
-pub fn parse_act_tier(
-    typed: ActDependentTierNode<'_>,
-    source: &str,
+pub fn parse_act_tier<'tree>(
+    typed: SourceBound<'tree, '_, ActDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ActTier {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = extract_act_dependent_tier(typed);
+    let children = typed.extract();
     let content = parse_optional_text_tier_content(
         typed,
-        children.child_2.slot(),
-        &children.unexpected,
-        source,
+        children.field_child_2().slot(),
+        &children.children().unexpected,
         errors,
     );
     ActTier::new(content).with_span(span)

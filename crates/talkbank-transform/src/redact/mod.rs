@@ -1,11 +1,12 @@
 //! Structural CHAT-file sanitizer.
 //!
-//! Strips contributor lexical content from a parsed `ChatFile` while
+//! Replaces supported lexical fields in a parsed `ChatFile` while
 //! preserving timing, structure, speaker codes, and CHAT validity. The
 //! output is intended for engineering use (debugging, validator
 //! reproduction, structural analysis) where the original transcript is
-//! protected by contributor consent and cannot be sent through commercial
-//! LLM tooling.
+//! protected by contributor consent. This is not a complete de-identification
+//! guarantee: unsupported fields and preserved metadata require privacy review
+//! before any disclosure.
 //!
 //! # Quick Start
 //!
@@ -30,7 +31,7 @@
 //!   words (the paired main-tier word's placeholder when the tier
 //!   corroborates the main tier, fresh ones otherwise; `wor.rs`), `%mor`
 //!   lemmas, `%pho`/`%sin`/`%mod` tiers (dropped), free-text dependent
-//!   tiers, free-text headers (`@Comment`, `@Transcriber`, ...),
+//!   tiers, the free-text header payloads listed in the sanitizer guide,
 //!   `@Participants` names, `@ID` `custom_field`/`education`, free-text
 //!   annotations.
 //!

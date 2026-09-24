@@ -21,7 +21,7 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, FinalCodesChild0Children, FinalCodesChild1Children, NoChild, NodeSlot,
+    AsRawNode, FinalCodesChild0Children, FinalCodesChild1Children, KindSlot, NoChild, NodeSlot,
     PostcodeNode, SeqSlot, SlotView, UtteranceEndNode, extract_final_codes, extract_utterance_end,
 };
 use crate::model::{Bullet, Postcode, Terminator};
@@ -30,7 +30,7 @@ use crate::parser::tree_parsing::postcode::parse_postcode_node;
 use talkbank_model::ParseOutcome;
 
 use super::super::super::content::{
-    MainTierRegion, classify_main_tier_recovery, surface_main_tier_sink,
+    MainTierBodyCarrier, MainTierRegion, classify_main_tier_recovery, surface_main_tier_sink,
 };
 use super::super::terminator::{span_of, terminator_from_new_choice};
 
@@ -114,13 +114,7 @@ pub(super) fn parse_utterance_end(
                     &mut postcodes,
                 );
             }
-            surface_main_tier_sink(
-                &codes.unexpected,
-                MainTierRegion::Body,
-                "final_codes",
-                source,
-                errors,
-            );
+            surface_main_tier_sink(&codes, source, errors);
         }
         Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => {}
     }
@@ -137,17 +131,11 @@ pub(super) fn parse_utterance_end(
     // (at either nesting level) yields no bullet, no diagnostic.
     let bullet = match end.child_2.slot().as_ref().map(NodeSlot::view) {
         Some(SlotView::Present(group)) => {
-            surface_main_tier_sink(
-                &group.unexpected,
-                MainTierRegion::Body,
-                "utterance_end",
-                source,
-                errors,
-            );
+            surface_main_tier_sink(group, source, errors);
             match group.child_1.slot().view() {
                 SlotView::Present(bullet_node) => {
                     let raw = bullet_node.raw_node();
-                    match parse_bullet_node_timestamps(raw, source, errors) {
+                    match parse_bullet_node_timestamps(*bullet_node, source, errors) {
                         Ok((start_ms, end_ms)) => {
                             Some(Bullet::new(start_ms, end_ms).with_span(span_of(raw)))
                         }
@@ -202,13 +190,7 @@ pub(super) fn parse_utterance_end(
     // it and degraded six error codes to E316. "Empty on every fixture probed
     // so far" was a statement about our fixtures, not about the grammar, and it
     // was read as the latter for months.
-    surface_main_tier_sink(
-        &end.unexpected,
-        MainTierRegion::Body,
-        "utterance_end",
-        source,
-        errors,
-    );
+    surface_main_tier_sink(&end, source, errors);
 
     UtteranceEndTail {
         terminator,
@@ -225,25 +207,17 @@ pub(super) fn parse_utterance_end(
 /// `FinalCodesChild1Children` (each element of the repeated tail). This trait
 /// lets [`push_postcode_from_final_codes_group`] handle both with one body
 /// instead of duplicating the match.
-trait FinalCodesGroup<'tree> {
-    /// The group's `unexpected` sink (R2).
-    fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>];
+trait FinalCodesGroup<'tree>: MainTierBodyCarrier<'tree> {
     /// The group's `postcode` slot (`child_1`, after the leading whitespace).
-    fn postcode_slot(&self) -> &ChildSlot<'tree, PostcodeNode<'tree>>;
+    fn postcode_slot(&self) -> &KindSlot<'tree, PostcodeNode<'tree>>;
 }
 impl<'tree> FinalCodesGroup<'tree> for FinalCodesChild0Children<'tree> {
-    fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>] {
-        &self.unexpected
-    }
-    fn postcode_slot(&self) -> &ChildSlot<'tree, PostcodeNode<'tree>> {
+    fn postcode_slot(&self) -> &KindSlot<'tree, PostcodeNode<'tree>> {
         self.child_1.slot()
     }
 }
 impl<'tree> FinalCodesGroup<'tree> for FinalCodesChild1Children<'tree> {
-    fn group_unexpected(&self) -> &[tree_sitter::Node<'tree>] {
-        &self.unexpected
-    }
-    fn postcode_slot(&self) -> &ChildSlot<'tree, PostcodeNode<'tree>> {
+    fn postcode_slot(&self) -> &KindSlot<'tree, PostcodeNode<'tree>> {
         self.child_1.slot()
     }
 }
@@ -261,17 +235,11 @@ fn push_postcode_from_final_codes_group<'tree, G: FinalCodesGroup<'tree>>(
 ) {
     match group_slot.view() {
         SlotView::Present(group) => {
-            surface_main_tier_sink(
-                group.group_unexpected(),
-                MainTierRegion::Body,
-                "final_codes",
-                source,
-                errors,
-            );
+            surface_main_tier_sink(group, source, errors);
             match group.postcode_slot().view() {
                 SlotView::Present(postcode_node) => {
                     if let ParseOutcome::Parsed(postcode) =
-                        parse_postcode_node(postcode_node.raw_node(), source, errors)
+                        parse_postcode_node(*postcode_node, source, errors)
                     {
                         postcodes.push(postcode);
                     }

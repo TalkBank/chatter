@@ -8,8 +8,32 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
-use tree_sitter::Node;
+use crate::generated_traversal::{AsRawNode, SourceSlice};
+
+/// Recovery evidence retains the code and its exact span from one bound node.
+/// Non-ASCII is a syntax fault, never evidence of a failed participant join.
+struct NonAsciiSpeaker<'source> {
+    code: &'source str,
+    span: talkbank_model::Span,
+}
+
+impl<'source> NonAsciiSpeaker<'source> {
+    fn admit(bound: SourceSlice<'_, 'source>) -> Option<Self> {
+        let (code, _) = bound.text().strip_prefix('*')?.split_once(':')?;
+        if code.is_ascii() {
+            return None;
+        }
+        let start = bound.raw_node().start_byte() + 1;
+        Some(Self {
+            code,
+            span: talkbank_model::Span::from_usize(start, start + code.len()),
+        })
+    }
+
+    fn report(self, errors: &impl ErrorSink) {
+        talkbank_model::validation::check_speaker_id(self.code, self.span, errors);
+    }
+}
 
 /// Classifies a top-level `ERROR` node into a specific parse error.
 ///
@@ -25,8 +49,10 @@ use tree_sitter::Node;
 /// third called any `%gra:` failure "non-numeric index" (E710), a guess the
 /// live owner does not make (it reports E600, that the tier could not be
 /// parsed), and the honest owner stays.
-pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSink) {
-    let error_text = extract_utf8_text(node, source, errors, "file_error", "");
+pub(crate) fn analyze_error_node(bound: SourceSlice<'_, '_>, errors: &impl ErrorSink) {
+    let node = bound.raw_node();
+    let source = bound.source();
+    let error_text = bound.text();
     let start = node.start_byte();
     let end = node.end_byte();
 
@@ -216,7 +242,7 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
     // word (no file-level ERROR), and E252 (SyllablePauseNotBetweenSpokenMaterial)
     // is emitted by the typed-model validator `check_prosodic_markers` reading the
     // parsed `WordContent::SyllablePause` position. Classifying the raw text of an
-    // ERROR node to guess the diagnostic is the banned anti-pattern (root CLAUDE.md
+    // ERROR node to guess the diagnostic is the banned anti-pattern (root AGENTS.md
     // "CST Traversal Rules"); this diagnostic was re-homed onto structure + model.
     if error_text.starts_with('*')
         && let Some(separator) = error_text.find(":\t")
@@ -267,37 +293,19 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, errors: &impl ErrorSi
                     Severity::Error,
                     SourceLocation::from_offsets(start, end),
                     ErrorContext::new(source, start..end, error_text),
-                    "Could not parse utterance containing repetition count [x N]".to_string(),
+                    "Legacy repetition count annotations are unsupported".to_string(),
                 )
                 .with_suggestion(
-                    "Check repetition format: word [x N] or <group> [x N]. \
-                     The number must follow [x with a space.",
+                    "Write each spoken repetition explicitly using [/], for example: word [/] word",
                 ),
             );
             return;
         }
     }
 
-    // Main tier with non-ASCII speaker name (e.g., *CHIé:)
-    if error_text.starts_with('*')
-        && let Some(colon_pos) = error_text.find(':')
-    {
-        let speaker = &error_text[1..colon_pos];
-        if !speaker.is_ascii() {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::SpeakerNotDefined,
-                    Severity::Error,
-                    SourceLocation::from_offsets(start, start + 1 + colon_pos),
-                    ErrorContext::new(source, start..start + 1 + colon_pos, ""),
-                    format!("Speaker '{}' contains non-ASCII characters and cannot be resolved", speaker),
-                )
-                .with_suggestion(
-                    "Speaker codes must use only uppercase ASCII letters and digits (e.g., CHI, MOT, SP1)",
-                ),
-            );
-            return;
-        }
+    if let Some(speaker) = NonAsciiSpeaker::admit(bound) {
+        speaker.report(errors);
+        return;
     }
 
     // Generic file-level error

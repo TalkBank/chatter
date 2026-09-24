@@ -1,7 +1,7 @@
 # Spec Workflow
 
 **Status:** Current
-**Last updated:** 2026-08-27 18:09 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 How to change `spec/` and leave the repository consistent. For what the fields
 MEAN, read [Spec System](../architecture/spec-system.md) first; this page is
@@ -132,6 +132,65 @@ get wrong. They are covered in full in
 exists; that is what proves the fixture actually triggers it.
 
 ## Regenerating
+
+### Mutation candidates are not golden tests
+
+For source-bound main-tier terminator deletions, use:
+
+```bash
+just spec-mutation-candidates corpus/reference/content/terminators-standard.cha
+```
+
+This runtime command admits one seed only after diagnostic-free parsing and
+alignment-aware validation, including rules about its actual transcript stem.
+Warnings also refuse admission. Add `--strict-linkers` to select the optional
+cross-utterance rules; admission does not claim validity under unselected rules.
+It produces one candidate per present typed main-tier terminator, verifies that
+the model's span matches the complete token, and preserves all other bytes.
+Missing optional terminators produce no candidate. It never rewrites the model
+or guesses a token from line endings.
+
+Output is JSON on stdout, containing the exact seed, transcript identity,
+selected linker policy, and each candidate's deleted byte range, removed text,
+and resulting CHAT. Every candidate is explicitly unreviewed, with no expected
+diagnostic. No output files are created by the command. Seed or span rejection
+occurs before candidate output; stdout I/O can still fail partway through a
+write. Retain the seed record when saving candidates so provenance does not
+depend on an input path continuing to hold the same bytes.
+
+The API lives in `spec-runtime-tools::mutation`, where live parser/model
+dependencies belong. `AdmittedSeed` privately owns its model and borrows its
+immutable source; candidates can only be constructed from that model's checked
+spans. This is AST-source association, not an assertion that the generated CST
+API has already migrated every mutation family. Only terminator deletion is
+implemented here; the legacy mutators below are not migrated.
+
+`just spec-perturb` produces **unreviewed candidates**, not diagnostic oracles.
+Its JSON records have `assessment: "unreviewed"` and no `expected_error` field.
+The removed diagnostic table had drifted from canonical rules; a mutation's
+name cannot establish which diagnostics a particular input should produce.
+
+The legacy text mutators do not admit a valid seed through the parser/model.
+They can affect continuation lines, normalize final newlines, select a speaker
+code already declared by a seed, or introduce multiple defects. Do not use
+their outputs directly as goldens or treat a syntax-error census as validity.
+Before running them, review output-name collisions and the intended input scope.
+
+Candidate output now has an explicit planning phase: duplicate destinations
+and existing output paths are refused before candidate writes begin. Execution
+uses exclusive file creation as well, so a file created after preflight cannot
+be overwritten. This protects output, not seed validity. A mid-run I/O failure
+may leave earlier newly created candidates; preserve and review them rather
+than assuming the batch was atomic or automatically deleting them. The legacy
+`--mine` summary path is separate and is not covered by this candidate contract.
+
+For promotion, retain the valid control, describe the precise mutation and its
+source relationship, justify a claim from the specification or a recorded
+ruling, then add the reviewed example to `spec/errors/` and regenerate through
+the normal owner. Review observations separately from expectations. A changed
+parser output is evidence to adjudicate, not permission to rewrite the claim.
+
+### Generate owned artifacts
 
 One command, from anywhere in the checkout:
 

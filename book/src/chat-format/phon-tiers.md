@@ -1,7 +1,7 @@
 # Phon Tiers (%xmodsyl, %xphosyl, %xphoaln, %xphoint)
 
 **Status:** Reference
-**Last updated:** 2026-07-31 09:51 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 The Phon extension tiers provide syllable-level phonological annotation,
 segmental alignment between target and actual IPA, and per-phone time
@@ -139,6 +139,11 @@ gate are on by default.)
   compare each tier's word count against `%xphoaln`'s count *after*
   excluding the one-sided pause words that do not consume a slot on that
   tier, not against `%xphoaln`'s raw word count.
+
+Reconstruction uses those same independent source positions. A pause on only
+one side must not cause subsequent alignment words to be compared with the
+wrong `%mod` or `%pho` word. Count mismatches remain errors rather than being
+hidden by the pause exception.
 
 **Content checks:**
 

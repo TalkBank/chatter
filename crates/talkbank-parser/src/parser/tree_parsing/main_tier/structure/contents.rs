@@ -10,14 +10,12 @@ use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use crate::generated_traversal::{
-    AsRawNode, BaseContentItemNode, ChoiceSlot, ContentItemCaNoBreakLinkerChoice,
-    ContentItemChoice, ContentItemNode, ContentsChild0Choice, ContentsChild1Choice,
-    ContentsChildren, ContentsNode, FromNodeKind, GroupWithAnnotationsNode, IllegalCurlyQuoteNode,
-    MainPhoGroupNode, MainSinGroupNode, NoChild, NodeSlot, OverlapPointNode,
-    QuotationWithOptionalAnnotationsNode, SeparatorNode, extract_content_item, extract_contents,
+    AsRawNode, ChoiceSlot, ContentItemChoice, ContentItemNode, ContentsChild0Choice,
+    ContentsChild1Choice, ContentsChildren, ContentsNode, FromNodeKind, NoChild, NodeSlot,
+    OverlapPointNode, SeparatorNode, extract_content_item, extract_contents,
 };
 
-use super::super::super::parser_helpers::parse_separator_like;
+use super::super::super::parser_helpers::parse_separator_node;
 use super::super::content::{
     MainTierRegion, classify_main_tier_recovery, illegal_curly_quote_error, misplaced_linker_error,
     parse_overlap_point, surface_main_tier_sink,
@@ -42,27 +40,27 @@ trait ContentsItem<'tree> {
     fn leaf(&self) -> ContentsLeaf<'tree>;
 }
 
-/// The four things a `contents` child can be, carrying the raw node the
-/// per-kind parser takes.
+/// The four things a `contents` child can be. Each parsed alternative retains
+/// its producer-issued wrapper through dispatch.
 enum ContentsLeaf<'tree> {
     /// Whitespace between items; contributes nothing.
     Whitespace,
     /// A `content_item` wrapper around a word, group, quotation or the like.
-    ContentItem(tree_sitter::Node<'tree>),
+    ContentItem(ContentItemNode<'tree>),
     /// A bare separator token, which the grammar places directly under
     /// `contents` (a colon after an overlap marker, for one).
-    Separator(tree_sitter::Node<'tree>),
+    Separator(SeparatorNode<'tree>),
     /// A bare overlap marker, likewise a direct child.
-    OverlapPoint(tree_sitter::Node<'tree>),
+    OverlapPoint(OverlapPointNode<'tree>),
 }
 
 impl<'tree> ContentsItem<'tree> for ContentsChild0Choice<'tree> {
     fn leaf(&self) -> ContentsLeaf<'tree> {
         match self {
             Self::Whitespaces(_) => ContentsLeaf::Whitespace,
-            Self::ContentItem(n) => ContentsLeaf::ContentItem(n.raw_node()),
-            Self::Separator(n) => ContentsLeaf::Separator(n.raw_node()),
-            Self::OverlapPoint(n) => ContentsLeaf::OverlapPoint(n.raw_node()),
+            Self::ContentItem(n) => ContentsLeaf::ContentItem(*n),
+            Self::Separator(n) => ContentsLeaf::Separator(*n),
+            Self::OverlapPoint(n) => ContentsLeaf::OverlapPoint(*n),
         }
     }
 }
@@ -71,9 +69,9 @@ impl<'tree> ContentsItem<'tree> for ContentsChild1Choice<'tree> {
     fn leaf(&self) -> ContentsLeaf<'tree> {
         match self {
             Self::Whitespaces(_) => ContentsLeaf::Whitespace,
-            Self::ContentItem(n) => ContentsLeaf::ContentItem(n.raw_node()),
-            Self::Separator(n) => ContentsLeaf::Separator(n.raw_node()),
-            Self::OverlapPoint(n) => ContentsLeaf::OverlapPoint(n.raw_node()),
+            Self::ContentItem(n) => ContentsLeaf::ContentItem(*n),
+            Self::Separator(n) => ContentsLeaf::Separator(*n),
+            Self::OverlapPoint(n) => ContentsLeaf::OverlapPoint(*n),
         }
     }
 }
@@ -153,13 +151,7 @@ pub(crate) fn parse_contents(
     for element in contents.child_1.slot() {
         process_contents_slot(element.slot(), region, source, errors, &mut content);
     }
-    surface_main_tier_sink(
-        &contents.unexpected,
-        MainTierRegion::Body,
-        "contents",
-        source,
-        errors,
-    );
+    surface_main_tier_sink(contents, source, errors);
     content
 }
 
@@ -185,18 +177,10 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
             let parsed = match item.leaf() {
                 ContentsLeaf::Whitespace => return,
                 ContentsLeaf::Separator(node) => {
-                    parse_separator_like(node, source, errors).map(UtteranceContent::Separator)
+                    parse_separator_node(node, source, errors).map(UtteranceContent::Separator)
                 }
                 ContentsLeaf::OverlapPoint(node) => parse_overlap_point(node, source, errors),
-                ContentsLeaf::ContentItem(node) => match ContentItemNode::from_node(node) {
-                    Some(item) => parse_content_item(item, source, errors),
-                    // The choice enum already proved the kind; a refusal here
-                    // would mean the generator disagrees with itself.
-                    None => {
-                        errors.report(unexpected_node_error(node, source, "content item"));
-                        ParseOutcome::rejected()
-                    }
-                },
+                ContentsLeaf::ContentItem(node) => parse_content_item(node, source, errors),
             };
             if let ParseOutcome::Parsed(parsed) = parsed {
                 content.push(parsed);
@@ -211,10 +195,10 @@ fn process_contents_slot<'tree, C: ContentsItem<'tree>>(
         // no arm for, and it fell to the fail-loud arm; it still does.
         NodeSlot::Missing(item_node) => {
             let node = *item_node;
-            let parsed = if SeparatorNode::from_node(node).is_some() {
-                parse_separator_like(node, source, errors).map(UtteranceContent::Separator)
-            } else if OverlapPointNode::from_node(node).is_some() {
-                parse_overlap_point(node, source, errors)
+            let parsed = if let Some(separator) = SeparatorNode::from_node(node) {
+                parse_separator_node(separator, source, errors).map(UtteranceContent::Separator)
+            } else if let Some(overlap) = OverlapPointNode::from_node(node) {
+                parse_overlap_point(overlap, source, errors)
             } else if let Some(item) = ContentItemNode::from_node(node) {
                 parse_content_item(item, source, errors)
             } else {
@@ -403,7 +387,7 @@ fn parse_content_item(
         // through the typed constructors and parsed like a present one, the
         // precedent `separator.rs` set (the old walk never checked
         // `is_missing` here either).
-        NodeSlot::Missing(placeholder) => match content_item_choice_of(*placeholder) {
+        NodeSlot::Missing(placeholder) => match ContentItemChoice::from_node(*placeholder) {
             Some(choice) => parse_content_item_choice(&choice, source, errors),
             None => {
                 errors.report(unexpected_node_error(
@@ -434,13 +418,7 @@ fn parse_content_item(
         // MISSING wrapper can be; it carries nothing to parse.
         NodeSlot::Absent(NoChild) => ParseOutcome::rejected(),
     };
-    surface_main_tier_sink(
-        &children.unexpected,
-        MainTierRegion::Body,
-        "content_item",
-        source,
-        errors,
-    );
+    surface_main_tier_sink(&children, source, errors);
     outcome
 }
 
@@ -476,30 +454,5 @@ fn parse_content_item_choice(
             errors.report(misplaced_linker_error(linker.raw_node(), source));
             ParseOutcome::rejected()
         }
-    }
-}
-
-/// Classify a raw node into the `content_item` alternative of its kind.
-///
-/// The generator gives the choice enum no `FromNodeKind` (one alternative is
-/// itself a supertype choice), so the MISSING arm above asks each wrapper in
-/// turn. A node of none of these kinds is refused.
-fn content_item_choice_of(node: Node<'_>) -> Option<ContentItemChoice<'_>> {
-    if let Some(base) = BaseContentItemNode::from_node(node) {
-        Some(ContentItemChoice::BaseContentItem(base))
-    } else if let Some(group) = GroupWithAnnotationsNode::from_node(node) {
-        Some(ContentItemChoice::GroupWithAnnotations(group))
-    } else if let Some(quotation) = QuotationWithOptionalAnnotationsNode::from_node(node) {
-        Some(ContentItemChoice::QuotationWithOptionalAnnotations(
-            quotation,
-        ))
-    } else if let Some(quote) = IllegalCurlyQuoteNode::from_node(node) {
-        Some(ContentItemChoice::IllegalCurlyQuote(quote))
-    } else if let Some(pho) = MainPhoGroupNode::from_node(node) {
-        Some(ContentItemChoice::MainPhoGroup(pho))
-    } else if let Some(sin) = MainSinGroupNode::from_node(node) {
-        Some(ContentItemChoice::MainSinGroup(sin))
-    } else {
-        ContentItemCaNoBreakLinkerChoice::from_node(node).map(ContentItemChoice::CaNoBreakLinker)
     }
 }

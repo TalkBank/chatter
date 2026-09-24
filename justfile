@@ -189,7 +189,7 @@ doc-check:
 # unwrap / expect lints relaxed, since tests may unwrap fixtures by convention.
 # A single --all-targets pass would deny expect/unwrap in tests and diverge
 # from CI (producing false positives), so this mirrors the two-pass split.
-# CI owns clippy (see CLAUDE.md clippy policy); run locally only when
+# CI owns clippy (see AGENTS.md clippy policy); run locally only when
 # working ON clippy findings.
 clippy:
     # Single pass: production strictness lives in the workspace [lints]
@@ -510,9 +510,13 @@ regen:
     just traversal-gen
     just symbols-gen
     just form-markers-gen
-    python3 scripts/generate_if_changed.py crates/talkbank-parser-tests/src/conformance/inventory.rs cargo run --quiet -p talkbank-parser-tests --example gen_conformance_inventory -- --stdout
+    just conformance-gen
     just spec-gen
     just check-mapping-gen
+
+# The generator reads current traversal source without compiling its stale consumer.
+conformance-gen:
+    python3 scripts/generate_if_changed.py crates/talkbank-parser-tests/src/conformance/inventory.rs cargo run --quiet -p talkbank-parser-tests --no-default-features --example gen_conformance_inventory -- --stdout
 
 # Refresh the schema before later builds embed it. Select only the generator:
 # the currency test in the same binary sees the old compile-time schema.
@@ -619,13 +623,18 @@ spec-node-coverage:
 spec-ca-census *ARGS:
     cargo run --quiet --release --manifest-path {{ justfile_directory() }}/spec/Cargo.toml --bin ca_census -- {{ ARGS }}
 
-# Generate error-triggering CHAT by perturbing valid corpus files.
+# Generate unreviewed CHAT mutation candidates.
 #
-# The adversarial half of spec work: CHECK parity is found by CONSTRUCTING
-# invalid input chatter wrongly accepts, never by running over valid corpora.
-[doc("Generate error-triggering CHAT by perturbing valid corpus files.")]
+# Input validity and expected diagnostics require independent review against
+# the canonical specs; this legacy byte mutator is not a golden-test oracle.
+[doc("Generate unreviewed CHAT mutation candidates; no validity or diagnostic guarantee.")]
 spec-perturb *ARGS:
     {{ spec_run }} perturb_corpus -- {{ ARGS }}
+
+# One validated seed, typed terminator spans, and stdout-only candidate output.
+[doc("Emit unreviewed terminator deletions from a diagnostic-free CHAT seed.")]
+spec-mutation-candidates *ARGS:
+    cargo run --quiet --manifest-path {{ justfile_directory() }}/spec/Cargo.toml --bin mutation_candidates -- {{ ARGS }}
 
 # Find representative CHAT files in the data repos, for corpus curation.
 spec-corpus-candidates *ARGS:

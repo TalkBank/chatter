@@ -76,7 +76,12 @@ pub fn clan_to_ud_upos(clan_tag: &str) -> Option<&'static str> {
     // not encode refinement (e.g., `pro:per` and `pro:dem` are both
     // `PRON` in UPOS; the subtype would live in a feature like
     // `PronType=Dem`).
-    let coarse = clan_tag.split(':').next()?;
+    // A tag always has a coarse segment, even when it is empty. Only the
+    // refinement is optional; do not model a nonexistent iterator result as
+    // an additional unknown-tag route.
+    let coarse = clan_tag
+        .split_once(':')
+        .map_or(clan_tag, |(coarse, _)| coarse);
     match coarse {
         // Open-class content words.
         "n" => Some("NOUN"),

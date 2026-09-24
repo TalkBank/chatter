@@ -1,6 +1,6 @@
 //! Find `match` blocks over the content enums that end in a `_ =>` catch-all.
 //!
-//! Design rule 3 in the repository's CLAUDE.md says: "Exhaustive matches on
+//! Design rule 3 in the repository's AGENTS.md says: "Exhaustive matches on
 //! `UtteranceContent`/`BracketedItem`: no `_ =>` catch-alls that discard
 //! content; all group types recurse." That rule was prose, and prose does not
 //! fire. This makes it countable.

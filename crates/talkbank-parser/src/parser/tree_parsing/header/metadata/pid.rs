@@ -6,7 +6,7 @@
 //! hunt for by name. Until 2026-09-08 this file hand-walked the node
 //! (`node.kind() != PID_HEADER`, `find_child_by_kind(node, FREE_TEXT)`, a
 //! UTF-8 decode failure on a `&str` source), three branches no input reaches
-//! and rule 6 of the repository's CLAUDE.md bans; a whole-workspace coverage
+//! and rule 6 of the repository's AGENTS.md bans; a whole-workspace coverage
 //! run showed them as most of the file.
 //!
 //! # Related CHAT Manual Sections
@@ -39,7 +39,7 @@ pub fn parse_pid_header(typed: PidHeaderNode<'_>, source: &str, errors: &impl Er
     }
     let held = match present(children.child_2.slot()) {
         Some(free_text) => {
-            match decode_present_child(free_text.raw_node(), source, errors, "pid_value", |err| {
+            match decode_present_child(free_text, source, errors, "pid_value", |err| {
                 format!("Failed to extract PID value as UTF-8: {}", err)
             }) {
                 ParseOutcome::Parsed(pid) if pid.is_empty() => Held::Empty,

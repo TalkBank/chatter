@@ -16,7 +16,7 @@
 //! `tree-sitter-grammar-utils` `generate_typed_traversal` example (the NEW
 //! self-contained backend) from this repo's `grammar/src/grammar.json` and
 //! `grammar/src/node-types.json` (see the grammar-change workflow in the repo
-//! `CLAUDE.md`). The wrapper stamps a deterministic provenance header recording
+//! `AGENTS.md`). The wrapper stamps a deterministic provenance header recording
 //! the SHA-256 of each input file.
 //!
 //! This test recomputes those digests from the committed grammar JSON and

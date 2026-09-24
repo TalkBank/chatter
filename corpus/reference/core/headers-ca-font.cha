@@ -1,0 +1,9 @@
+@UTF8
+@Font:	CAfont:13:0
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Authored control for CLAN's hidden CA-font header; ordinary fonts remain visible.
+*CHI:	hello .
+@End

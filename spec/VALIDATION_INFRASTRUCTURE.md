@@ -9,12 +9,12 @@ cargo run --bin validate_error_specs --manifest-path spec/runtime-tools/Cargo.to
 ```
 
 ## Status and Limitations
-- This is a brief reference; consult CLAUDE.md files for full workflow guidance.
+- This is a brief reference; consult AGENTS.md files for full workflow guidance.
 - Update alongside code changes to keep commands and references accurate.
 
 ## See Also
-- CLAUDE.md
-- spec/CLAUDE.md
+- AGENTS.md
+- spec/AGENTS.md
 
 ---
-Last Updated: 2026-02-05
+**Last modified:** 2026-09-24 00:21 EDT

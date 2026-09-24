@@ -74,6 +74,11 @@ impl LanguageCodes {
     /// code list COULD be enforced in one place. A caller reaching for
     /// `codes.remove(i)` would be routing around that.
     pub fn retag(&mut self, from: &LanguageCode, to: &LanguageCode) -> bool {
+        // Identity is not deduplication: the existing target is the source
+        // itself, so removing it would erase a declaration.
+        if from == to {
+            return false;
+        }
         let Some(at) = self.0.iter().position(|code| code == from) else {
             return false;
         };

@@ -9,6 +9,444 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-24
+
+- `spec-perturb` emits explicitly unreviewed candidates, not stale expected
+  diagnostic labels. Its JSON replaces `expected_error` with
+  `assessment: "unreviewed"`; reviewed spec claims remain the golden authority.
+
+### Changed
+
+- English cardinal generation composes short-scale units correctly instead of
+  multiplying complete table phrases (for example, 2000 now yields "two
+  thousand", not "two one thousand"). Authored reference controls cover scales
+  through the `u64` boundary; other languages' generation policies are unchanged.
+
+- Bullet-text tier adapters and `parse_bullet_content` now require producer-bound
+  nodes rather than separately supplied source text. `BulletTextNode` carries
+  the source lifetime as well as the tree lifetime. Generated child-range
+  admission and recovery diagnostics remain; this is source association, not
+  a guarantee of valid CHAT.
+  Inner text/bullet/picture choices and leaves now preserve the same binding;
+  the segment sink no longer accepts or stores independent source text.
+
+- A generated missing-TAB recovery node in a header separator now reports
+  specific E303 instead of generic E342, including multiword header names.
+  Other recovery nodes remain diagnosed; recovered text is not treated as valid.
+
+- Overlap analysis retains each anchor's original main-tier span; orphan
+  diagnostics no longer reconstruct it through a second utterance-index lookup.
+  `OverlapAnchor` exposes `utterance_span()`. Its origin and the per-utterance
+  origin are private, so callers obtain these records from `analyze_file_overlaps`
+  rather than struct literals. Matching and diagnostic-location policy are unchanged.
+
+- Prefix-marker language validation no longer guesses a disallowed language
+  when word-language resolution is unavailable. Missing-header diagnostics
+  remain, and an explicit disallowed word language still reports E763.
+
+- The public `LeafContent` traversal view now distinguishes underline opening
+  and closing markers with their optional source spans. Exhaustive downstream
+  matches must treat both as notation. Underline validation uses the shared
+  structural owner, preserving replacement targets and source locations without
+  maintaining a separate container list. CHAT and JSON formats are unchanged.
+
+- Incremental editor parsing now uses parser-owned source revisions. Cached
+  trees cannot be replaced independently of their source, and the parser
+  derives edits from the actual previous revision before reuse. Raw-tree
+  compatibility APIs retain their caller obligations and recovery checks.
+
+- Phon `%xphoint` media-bounds validation no longer overflows at maximum
+  timestamps. Its 1 ms tolerance and separate invalid-interval diagnostics remain.
+- E704 includes timed untranscribed speech (`xxx`, `yyy`, `www`) when checking
+  same-speaker overlap, matching CHECK. The 500 ms tolerance is unchanged.
+- Media-header lowering retains producer-bound source identity through filename,
+  type and status fields, borrowing checked text without temporary payload
+  strings. Existing recovery and validated filename admission remain in place.
+- Scalar/text headers and the single-value number, recording-quality and
+  transcription headers now retain the same source-bound payload association,
+  with borrowed text and existing malformed-header recovery preserved.
+- E220 rejects bare numeral words even in languages that permit embedded tone
+  or homonym digits. Omission notation and unresolved-language policy are
+  unchanged; numbers must be written out according to their pronunciation.
+- Chinese number spelling no longer duplicates the zero between skipped
+  four-digit groups (`100000001` becomes `一亿零一`, not `一亿零零一`).
+
+- Desktop keeps read, parse and roundtrip failures visible even without CHAT
+  diagnostics. File details, completion summaries, window titles and
+  notifications no longer misreport these failures or cancelled runs as valid.
+  Concurrent update triggers share one check/prompt/install operation, and a
+  failed native error dialog cannot reject the best-effort update command.
+  The parser selector explicitly labels re2c experimental and incomplete.
+  Plain-text exports now retain every file's status and failure reason, including
+  failures without diagnostics; malformed export records refuse before writing.
+
+- W109 now warns when both media and transcript names use the same non-NFC
+  spelling. Disk validation and fixing resolve the stored directory basename,
+  rather than trusting a normalization-equivalent argument spelling. Failed
+  resolution is an explicit I/O error. `chatter fix --code W109 --apply` can
+  normalize only the media filename token; it never renames files or changes
+  remote URLs, and a file-side warning may remain after a successful fix.
+
+- `@Time Start` reports E541 for out-of-range clock components, matching the
+  existing duration bounds: hours 0–23 and minutes/seconds 0–59. Both accepted
+  and rejected values retain their original spelling. Diagnostic rendering
+  requires model-issued refusal evidence.
+
+- Bracketed content owns all inter-item spaces. A leading timing bullet no
+  longer inserts a spurious space after an opening bracket; standalone
+  bracketed-item serialization emits the bullet payload without a separator.
+
+- Main-tier timing bullets before any utterance material now report E770,
+  including bullets inside retraced groups and after linkers. Explicit zero,
+  words, events and pauses establish material. Parse-recovered main tiers do
+  not produce this absence claim; timing evidence is retained.
+
+- Main-tier lowering preserves internal timing bullets before a terminator and
+  alongside a distinct terminal bullet. Unterminated tiers transfer only their
+  final bullet to the terminal slot, retaining earlier timing scopes instead
+  of silently discarding them. Missing-terminator diagnostics remain unchanged.
+
+- Media filename comparison uses explicit equality, mismatch and canonical-
+  equivalence outcomes. Unicode normalization advice always identifies an
+  actual noncanonical side; existing filename-matching behavior is preserved.
+
+- Standalone slash words now report E243, including nested and replacement
+  words. Repetition annotations `[/]` and free-text `%com:` slashes remain
+  valid; validation preserves the source rather than guessing a repair.
+
+- Generated CST extraction preserves source identity through document recovery,
+  child slots and choice projections. Document/header dispatch, the utterance
+  entry point, dependent-tier dispatch and participant lowering use these
+  capabilities; participant text reads no longer accept an
+  independent source string. Recovery states and range admission remain checked.
+
+- Generated single-node CST choices preserve an admitted source range through
+  variant selection. Dependent-tier attachment admits its choice once and
+  shares that proof with dispatch and parse-health classification, replacing
+  per-variant range checks without changing recovery policy.
+
+- Compound validation requires spoken material in every part. Stress or other
+  nonlexical markers no longer hide an empty first, middle, or final part;
+  E232/E233 report the defect without modifying the original word.
+
+- Unicode ellipsis in word text now reports E243, including nested and
+  replacement words. Original source text is retained; the valid CHAT
+  trailing-off terminator `+...` is unchanged.
+
+- Roundtrip difference reports only say "and more" when another difference
+  exists. Present lines are quoted and kept distinct from missing lines.
+
+- Main-tier semicolons now report E769, matching current CHAT and CHECK 48.
+  Legacy separator syntax remains parseable and roundtrippable; nested and
+  retraced semicolons receive the same source-positioned diagnostic.
+
+- Removed an unused annotation argument and unreachable exclusion check from
+  extraction's ordinary-word helper; the scoped walker remains the exclusion
+  owner. Canonical category specs retain extraction/validity separation.
+
+- Expanded E220 specs with mixed/ambiguous language controls and paired
+  candidate substitutions, preserving the existing digit-permission policy.
+  Scoped examples additionally verify language precedence through NLP
+  extraction, with the observed CHECK discrepancy documented separately.
+
+- Corrected reserved bullet-rule examples and documentation to preserve the
+  adopted default timing policy; optional CHECK continuity checks remain
+  documented divergences, not implemented Chatter requirements.
+
+- Timed pauses no longer overflow when converting minutes to bounded seconds.
+  Unrepresentable numeric projections retain their original spelling as
+  unsupported values through CHAT and JSON roundtrips.
+
+- Comma licensing now follows nested content in document order, reporting
+  commas before spoken content inside groups while retaining omission policy.
+
+- Cross-utterance quotation/completion checks now consume file-issued positions
+  instead of independent indices, retaining real first/last-position behavior
+  while eliminating silent invalid-index exits.
+
+- Expanded canonical language-context controls and mutations to verify bare
+  shortcut resolution and unresolved metadata without fabricated fallbacks.
+
+- Expanded canonical underline controls and marker-deletion cases to grouped
+  standalone markers and nested replacement text, including JSON provenance.
+
+- `@Date` and `@Birth` reject leading plus signs in day/year components;
+  fixed-width ASCII-digit admission replaces permissive integer parsing.
+  Date construction and JSON decoding share this admission with validation,
+  preserving malformed spellings as unsupported values.
+
+- Replacement words retain their source wrapper span and reject a missing
+  separator after the replacement or its trailing scoped annotations.
+
+- Bracket-to-word spacing validation now descends into retraces, groups and
+  quotations, retaining sibling boundaries and exact source locations.
+
+- Timed pauses using minutes and seconds now parse on `%mod` and `%pho`,
+  matching main-tier pause syntax. ASCII colons remain invalid in ordinary IPA words.
+
+- Phon reconstruction checks share the alignment mapping's independent
+  `%mod`/`%pho` positions, preventing false errors after one-sided pauses.
+
+- `OverlapMarkerIndex::new` is now fallible and admits only 1–9; JSON decoding
+  enforces the same range. The unused post-construction validator is removed.
+  Scoped overlap token decoders reject malformed indices instead of silently
+  changing them into unindexed markers.
+
+- Ambiguous word-language markers validate every candidate ISO code, using
+  the same E519 rules as explicit and mixed markers. Undeclared but valid
+  word-level language codes remain permitted.
+
+- Opaque postcode labels no longer trigger quotation-balance errors when
+  their text resembles quotation syntax. Actual quotation checks are unchanged.
+
+- Non-ASCII speaker IDs are consistently invalid. Typed validation and
+  main-tier recovery report E307; recovery no longer mislabels this syntax
+  fault as an undefined speaker (E522).
+
+- Bracket recovery recommends adding a separator only when its retained
+  source actually lacks whitespace; separated malformed annotations retain
+  their rejection without misleading spacing advice.
+
+- Invalid-control-character diagnostics acknowledge permitted underline
+  markers rather than describing only standalone CHAT delimiters.
+
+- `@Options` lowering uses generated typed flag slots, preserving ordered
+  supported and unsupported values and retaining empty/missing-name recovery.
+
+- Recovery diagnostics no longer recommend the retired `[x N]` repetition
+  notation. Recognizable legacy counts suggest explicit repeated speech with
+  `[/]`; fragmented bracket errors retain their less-specific diagnostics.
+
+- `OffsetAdjustingErrorSink` projects secondary labels as well as primary
+  locations, clears stale line/column coordinates, and preserves independently
+  indexed source context instead of replacing it based on text length.
+  `RebasedErrorSink` likewise clears cached primary line/column coordinates
+  after translating document offsets; unlocated spans remain unlocated.
+
+- The re2c backend retains scoped annotations and ordered retrace chains on
+  quotations, including quotations nested inside other groups.
+
+- Bare `@G` lazy gem markers now parse without a colon or label, as specified
+  by CHAT. Labels remain optional typed groups; recovery diagnostics are retained.
+
+- Splice admission refuses replacements crossing utterance boundaries; a clean
+  starting point no longer licenses changes extending into another utterance.
+  Multi-tier replacements within the same utterance remain admissible.
+- CHAT construction preserves recognized media types, including `missing`,
+  and refuses unsupported declared types instead of changing them to audio.
+  Omitted media types retain the documented audio default.
+- CHAT construction rejects partial timing pairs and timing attached to empty
+  main-tier text instead of silently discarding supplied timing.
+- CHAT construction applies declared `@Options` to utterance parsing, preserving
+  CA omission semantics before serialization. Its private build context owns a
+  nonempty language declaration and the contextual parsing operation; header
+  and utterance construction borrow their inputs from that same description.
+- Diagnostic contexts decode an omitted `expected` list as empty, matching
+  their existing serialization. Computed alignment metadata containing such
+  diagnostics can now roundtrip through JSON without inventing parse provenance.
+- Rediarization preserves header-only transcripts, including declared
+  participants. Header pruning requires admitted nonempty track evidence,
+  preventing an invalid empty `@Participants` header when there is no speech.
+- **Breaking (transform API):** `rediarize` now requires a diagnostic sink and
+  rebuilds participant metadata through the canonical header join. Its returned
+  model no longer loses participant records that reappear on parsing serialized
+  output. `rediarize_content` refuses serialization on header-join errors.
+- Sanitization uses delimiter-free placeholders for inline events, freecodes
+  and other spoken events, preserving parseable CHAT instead of introducing
+  nested bracket syntax. Documentation now distinguishes the supported fields
+  from complete de-identification and identifies preserved metadata risks.
+- Sanitization now redacts the nine documented free-text header payloads beyond
+  `@Comment`, retaining header kinds and speaker references. Exhaustive typed
+  dispatch requires an explicit policy for every future header variant.
+- Coordinated `%mor`/`%gra` replacement validates and exclusively borrows the
+  host range before mutation; reversed/empty ranges and short grammatical tiers
+  are refused atomically. Single-item replacement shares the same checked path.
+  **Breaking (model API):** `CoordinatedMutationError` adds `InvalidItemRange`;
+  single-item replacement now also refuses donor heads outside the new block.
+- Diagnostic highlights stay within their display text at UTF-8 boundaries,
+  including zero-width positions on empty lines and at end of text.
+  **Breaking (model API):** `PlainDisplayResult::text` is private; use `text()`
+  or consume the mapping with `into_text()` so text cannot drift from offsets.
+- **Breaking (model API):** `UnderlineMarker` stores an optional private source
+  span exposed by `span()`. Use `from_span`/`with_span` instead of struct literals;
+  source-independent and JSON-decoded markers now explicitly have no location.
+  Underline diagnostics still fall back to their enclosing word or tier span.
+- Underline marker decoding and JSON Schema generation share an explicit wire
+  type, so schema-checked conversion accepts the existing null word-marker
+  payload as well as internally tagged markers without changing serialized output.
+- Language-switch declaration updates retain the selected header's typed
+  mutable collection instead of indexing and checking its kind again; missing
+  headers and last-header selection keep their existing behavior.
+- Identity language retagging preserves declarations and returns unchanged
+  statistics, including files with span notation that would block a real rename.
+- Media reconciliation retains an exclusive header borrow while proving it is
+  the sole declaration, eliminating a second search and redundant missing-header
+  path while preserving exact duplicate counts.
+- Media reconciliation recognizes internal main-tier bullets through the typed
+  recursive content walker; timed documents can no longer be certified untimed
+  merely because their bullet is not utterance-final.
+- Main-tier recovery collection belongs to its admitted source-bound fragment;
+  callers can no longer supply independent nodes, source strings or offsets.
+- Participant entries own their canonical CHAT serialization; whole headers
+  delegate to the same writer used by standalone fragment clients.
+- Legacy utterance probing uses checked source admission and propagates parser
+  failure; classified input owns its complete envelope or required scaffolding.
+- Internal bullet-text carriers now enter only through generated typed nodes;
+  removed their redundant raw-node classifier and unused raw projection.
+- Unclosed-delimiter findings retain their admitted recovery node and text;
+  diagnostic conversion no longer accepts an independent node or span.
+- Re2c text-tier admission diagnoses and omits all-zero inline bullets, sharing
+  the policy across full-file and offset-aware fragment entry points.
+- E360's specification distinguishes undelimited text from actual media bullets
+  and includes a parse-backed inline all-zero timestamp rejection fixture.
+- Top-level dependent-tier and unknown-header recovery consume producer-bound
+  source slices; binding now precedes dependent-tier diagnostics and tainting.
+- Generic file-error analysis also requires a bound source slice, including the
+  line-slot recovery route, rather than independently supplied node and text.
+- Document and line-slot recovery share one source-binding diagnostic boundary;
+  a real-node regression rejects foreign trees even with identical source text.
+- Malformed dependent-tier routing admits nonempty labels without manual byte
+  indexing; exact delimiters and conservative unknown-label taint are preserved.
+- Main-tier prefix decoding retains generated kind proofs for MISSING slots;
+  speaker and colon diagnostics consume the corresponding typed nodes.
+- Inline-picture decoding admits a nonempty, delimiter-checked filename before
+  ownership conversion; incompatible source ranges still reject diagnostically.
+- Inline bullet times retain their all-zero-pair policy through a private
+  validated value, with separately parsed timestamp-boundary tests.
+- Phonology fallback retains its generated group type through checked source
+  admission, preserving fallback text and rejecting incompatible ranges safely.
+- Word and main-tier fragments retain generated typed nodes and source identity
+  in one sealed source binding, instead of independent node and slice fields.
+- Main-tier fragment admission derives original input from its parsed envelope,
+  removing independent source/input pairing and checking capacity before allocation.
+- Main-tier rejection carries producer-issued evidence of an emitted diagnostic,
+  eliminating the fragment consumer's diagnostic-free rejection fallback.
+- Non-colon separators consume generated typed placeholder admission directly;
+  unclassified-placeholder and other recovery diagnostics remain distinct.
+- Marked-token decoding checks source ranges before UTF-8 admission, reporting
+  incompatible sources instead of indexing outside them; marker refusal remains explicit.
+- Language-list recovery retains offending nodes with their grammatical roles
+  and shares one diagnostic constructor for code-slot and repeated-group faults.
+- Participant list and entry recovery likewise carry typed fault roles into a
+  shared reporter, preserving their distinct diagnostic codes and contexts.
+- Sign-tier token decoding shares a typed word/group source transition;
+  whole-group fallback retains its generated kind and checked source boundary.
+- Morphology feature values retain generated kind proofs through MISSING
+  recovery and check source ranges before decoding, preserving refusal diagnostics.
+- Word-recovery fragment diagnostics derive their spans and display contexts
+  from the admitted recovery value instead of independently paired node/text.
+- Generic recovery uses the same admitted fragment diagnostic constructor,
+  preserving full-source and subspan policies at their separate boundaries.
+- Annotated-group recovery retains its typed main-tier body ownership, so a
+  missing form suffix inside a retraced group reports E202 rather than E316.
+  Paired specification seeds and deliberate mutations cover form suffixes and
+  scoped annotations after replacements.
+- Phonology and sign groups use the same typed body-owned recovery path;
+  paired specification mutations preserve E202 for missing form suffixes
+  regardless of which group contains the word.
+- Timing-tier source spans now participate in derived rebasing for parsed,
+  unsupported and empty content, preserving document coordinates through
+  dependent-tier fragment APIs. Corpus-backed tests cover full-line and
+  content-only dependent-tier parsing.
+- Document lowering consumes source-ordered document/recovery parts; duplicate
+  `@End` retains E501 even without a final newline. Reconstructed error wrappers
+  retain generic whole-input recovery for siblings whose document role is unknown.
+  The internal lowering handoff replaces the public `DocumentRoot::into_children`
+  projection, which discarded outer recovery.
+- Generated repeat selection now retains its extraction cursor through a
+  consuming capability; leading extras and all recovery states remain preserved.
+- Utterance construction admits a readable typed main tier before conversion;
+  incompatible source ranges diagnose and taint the main tier instead of panicking.
+- Utterance recovery also requires readable source admission, conservatively
+  tainting alignment domains when no tier label can be read.
+- CA element and delimiter decoding retains generated node types through a
+  shared checked-source boundary; incompatible ranges reject without panicking.
+- Dependent-tier recovery consumes the shared readable-source carrier before
+  classifying text, retaining its diagnostic families for malformed input.
+- First and repeated language codes share typed slot admission, preserving
+  positional diagnostics and all producible recovery states.
+- Participant slots likewise share admission; only the first-slot position
+  carries the enclosing header needed to diagnose a wholly absent entry.
+- Empty-POS morphology diagnostics retain the recognized token's occurrence,
+  avoiding an earlier identical split tail when selecting the error span.
+- Generic and word recovery diagnostics share a validated readable-source
+  carrier; incompatible node ranges produce diagnostics instead of panicking.
+- Wrapped-header selection descends through producer-bound source slices.
+  Header admission takes its parsed wrapper and ordinal, rather than an
+  independently selected node; complete-input and header-counting policy remain.
+- **Breaking:** Generated wrapper/supertype child slots are now `KindSlot`.
+  Their MISSING payload retains its proven kind; use `known_or_placeholder`
+  for typed recovery. Raw and composite slots retain fallible classification.
+  Removed foreign-kind-placeholder branches only where the new producer type
+  rules them out; ordinary ERROR, absence and displaced recovery remain.
+- **Breaking:** `DocumentRoot::classify` now accepts a producer-owned
+  `ParsedSource` rather than a bare tree. Use
+  `TreeSitterParser::parse_source_incremental` to obtain it. Document lowering
+  derives source text from this owner; raw tree access remains available through
+  the consuming `into_tree` transition and `parse_tree_incremental`.
+- Other-speaker events consume generated typed slots rather than positional
+  child assertions. Failed transitional text reads reject instead of constructing
+  successful empty values; required-slot recovery remains explicit.
+- Standalone word and main-tier fragments retain producer-bound source slices
+  through admission and lowering. They share the document parser's 32-bit range
+  admission and `ParseFailed` diagnostic when tree-sitter cannot produce a tree.
+- Generated kind classifiers cover nested, kind-disjoint choices. Content
+  recovery uses that producer instead of a hand-written alternative list, and
+  content dispatch retains its typed node rather than rechecking a raw copy.
+- Wrapped header admission derives both its tree and its original-input mapping
+  from one parsed wrapper owner; lowering retains a checked source slice.
+- Shared header field decoding retains typed nodes through checked range and
+  UTF-8 admission. Language-code admission returns the validated model value,
+  without an independently supplied node/text pair.
+- Main-tier separator dispatch retains its generated `SeparatorNode`, removing
+  raw-node kind checks and bare-leaf paths outside the producer's alternatives.
+  Recovery inside separator nodes is unchanged.
+- Base-content, pause, overlap and standalone-word lowering retain generated
+  node types through dispatch. `%wor` uses the generated word-wrapper extractor
+  instead of a positional child read. Word conversion still rejects MISSING
+  placeholders; nested recovery slots remain explicit.
+- Bullet-capable text retains its generated carrier and segment choices through
+  lowering, including nested trailing spaces and picture alternatives. Structured
+  bullet readers require `BulletNode` and use generated timestamp fields with
+  closed start/end roles; range failures reject without indexing panics.
+- Unclosed-delimiter findings retain the text that established them. Removed
+  a shadowed lone-bracket diagnostic and redundant empty-text checks without
+  changing recovery priority.
+- Main-tier displaced-body reporting derives its sink and grammar context from
+  sealed typed carriers, removing independent node-slice, region and label
+  arguments. Raw slot-level recovery keeps its explicit region policy.
+- Linker decoding uses generated first/repeated groups and exhaustive typed
+  alternatives. Recovered displaced linkers retain source order and token spans;
+  the obsolete raw-kind membership helper and legacy wrapper path are removed.
+  Postcode lowering retains `PostcodeNode` through checked text admission.
+- Main-tier speaker admission retains `SpeakerNode` through checked text decoding.
+  Its private admitted value keeps nonempty text with its source span; mismatched
+  source ranges reject instead of panicking during prefix conversion.
+- User-defined tier taint classification consumes the generated typed prefix
+  slot instead of raw child zero. Only a readable Present `%xmod` prefix names
+  the model-alignment domain; recovery retains conservative taint policy.
+
+### Fixed
+
+- Main-tier recovery classification admits a readable node/source slice before
+  inspecting content, rejecting out-of-range and split-UTF-8 inputs without
+  indexing panics. Existing marker priority and bracket recovery are preserved.
+- Generated traversal cursors consume a bounded remaining-child iterator through
+  their existing typestate transitions. Exhaustion cannot advance past EOF, and
+  final recovery sweeps no longer substitute an empty tail for an invalid index.
+- Grammatical-relation field reads reject out-of-source ranges without panicking;
+  field roles retain their generated slot types and admitted indices are nonzero.
+- Header-fragment parsing preserves `@Window`, `@Font` and `@Color words` as
+  typed editor metadata, sharing the document parser's exhaustive pre-`@Begin`
+  dispatch instead of silently lowering these headers as `Unknown`.
+
+### Removed
+
+- **Breaking:** removed the experimental `chatter merge`, `chatter pipeline`,
+  and `chatter batch` CLI commands. Their structural transcript interleaving did not perform fuzzy event correspondence,
+  repair diarization, or reconcile segmentation. The `talkbank-transform`
+  structural merge APIs remain available; their reporting typestate is unchanged.
+
 ## [0.25.0] - 2026-09-15
 
 ### Added
@@ -3094,7 +3532,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/TalkBank/chatter/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/TalkBank/chatter/compare/v0.24.2...v0.25.0
 [0.24.2]: https://github.com/TalkBank/chatter/compare/v0.24.1...v0.24.2
 [0.24.1]: https://github.com/TalkBank/chatter/compare/v0.24.0...v0.24.1

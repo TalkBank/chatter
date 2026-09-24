@@ -24,9 +24,8 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, NoChild, NodeSlot, SlotValue, SlotView, TierBodyChildren,
+    AsRawNode, KindSlotValue, NoChild, NodeSlot, SlotView, TierBodyChildren,
 };
-use tree_sitter::Node;
 
 use super::super::super::content::{
     MainTierRegion, classify_main_tier_recovery, surface_main_tier_sink,
@@ -58,9 +57,7 @@ pub(super) fn parse_tier_body(
     // linker list, matching the pre-migration absent-linkers behavior with no new
     // diagnostic.
     let linkers = match body.linkers.slot().as_ref().map(NodeSlot::view) {
-        Some(SlotView::Present(linkers_node)) => {
-            parse_linkers(linkers_node.raw_node(), source, errors)
-        }
+        Some(SlotView::Present(linkers_node)) => parse_linkers(*linkers_node, source, errors),
         Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => {
             Vec::new()
         }
@@ -74,20 +71,20 @@ pub(super) fn parse_tier_body(
     } = parse_optional_langcode(body, source, errors);
 
     // Content: the `contents` block. `Present` carries a typed `ContentsNode`;
-    // `Missing` carries a bare `Node` directly under the NEW closed `NodeSlot`
+    // `Missing` retains that same typed identity as a placeholder
     // (a MISSING node is childless, so the walk yields an empty vec), matching
     // the old behavior of running the contents walk over whatever node sat at
     // this position. The contents internals are migrated separately (this
     // cluster's `contents.rs`, below).
-    let content = match body.content_2.slot().typed_or_placeholder() {
-        SlotValue::Present(contents) | SlotValue::Placeholder(contents) => {
+    let content = match body.content_2.slot().known_or_placeholder() {
+        KindSlotValue::Present(contents) | KindSlotValue::Placeholder(contents) => {
             parse_main_tier_contents(contents, source, errors)
         }
         // Unreachable on valid input: a required slot recovers as Present/MISSING,
         // never as an ERROR or a wrong kind. Surface the node (the whole-tree
         // backstop also covers ERROR nodes) and yield empty content rather than
         // fabricating model values.
-        SlotValue::Error(node) => {
+        KindSlotValue::Error(node) => {
             errors.report(classify_main_tier_recovery(
                 node,
                 source,
@@ -95,13 +92,7 @@ pub(super) fn parse_tier_body(
             ));
             Vec::new()
         }
-        // A MISSING placeholder of a kind `contents` does not name has no
-        // `contents` node to walk either, so it is the same case.
-        SlotValue::UnclassifiedPlaceholder(node) => {
-            report_unexpected_tier_body_child(node, source, errors);
-            Vec::new()
-        }
-        SlotValue::Absent(NoChild) => Vec::new(),
+        KindSlotValue::Absent(NoChild) => Vec::new(),
     };
 
     // Ending: the `utterance_end` block (terminator, postcodes, trailing bullet).
@@ -116,8 +107,8 @@ pub(super) fn parse_tier_body(
         terminator,
         postcodes,
         bullet,
-    } = match body.ending.slot().typed_or_placeholder() {
-        SlotValue::Present(ending) | SlotValue::Placeholder(ending) => {
+    } = match body.ending.slot().known_or_placeholder() {
+        KindSlotValue::Present(ending) | KindSlotValue::Placeholder(ending) => {
             parse_utterance_end(ending, source, errors)
         }
         // A stray ERROR node landed at the `utterance_end` slot position, or a
@@ -126,7 +117,7 @@ pub(super) fn parse_tier_body(
         // word-error analyzer (and then re-found the real `utterance_end`); route
         // it to the same analyzer here. No terminator is recovered; the whole-tree
         // backstop covers the surviving ERROR / MISSING nodes. Malformed-only path.
-        SlotValue::Error(error_node) | SlotValue::UnclassifiedPlaceholder(error_node) => {
+        KindSlotValue::Error(error_node) => {
             errors.report(classify_main_tier_recovery(
                 error_node,
                 source,
@@ -141,7 +132,7 @@ pub(super) fn parse_tier_body(
         // terminator-less-but-otherwise-well-formed line, which still yields a
         // `Present` `utterance_end` (its OWN inner terminator slot is merely
         // absent) rather than reaching this arm.
-        SlotValue::Absent(NoChild) => {
+        KindSlotValue::Absent(NoChild) => {
             report_missing_child(
                 carrier.clone(),
                 original_input,
@@ -173,13 +164,7 @@ pub(super) fn parse_tier_body(
     // route and was the only position any spec example covered. A node is not a
     // different kind of problem because recovery placed it elsewhere, so the
     // sink asks the classifier that matches the REGION.
-    surface_main_tier_sink(
-        &body.unexpected,
-        MainTierRegion::Body,
-        "tier_body",
-        source,
-        errors,
-    );
+    surface_main_tier_sink(body, source, errors);
 
     TierBodyData {
         linkers,
@@ -231,13 +216,7 @@ fn parse_optional_langcode(
             };
         }
     };
-    surface_main_tier_sink(
-        &group.unexpected,
-        MainTierRegion::Body,
-        "tier_body",
-        source,
-        errors,
-    );
+    surface_main_tier_sink(group, source, errors);
 
     // Only a `Present` langcode token proceeds to decode, matching the OLD
     // `.ok()` collapse (which yielded `Some` for `Present` ONLY): a zero-width
@@ -282,17 +261,4 @@ fn parse_optional_langcode(
         code: None,
         span: Some(span),
     }
-}
-
-/// Report the tier-body `StructuralOrderError` "unexpected child" diagnostic.
-///
-/// Reproduces the previous catch-all arm of the tier-body walk byte-identically.
-fn report_unexpected_tier_body_child(node: Node, source: &str, errors: &impl ErrorSink) {
-    errors.report(ParseError::new(
-        ErrorCode::StructuralOrderError,
-        Severity::Error,
-        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-        format!("Unexpected child '{}' in tier_body", node.kind()),
-    ));
 }

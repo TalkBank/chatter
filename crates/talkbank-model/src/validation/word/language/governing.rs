@@ -254,15 +254,6 @@ impl GoverningMark {
         Self { mark }
     }
 
-    /// The borrowed form, for delegating to the one rule.
-    fn borrowed(&self) -> GoverningMarker<'_> {
-        match &self.mark {
-            Mark::Own(own, _) => GoverningMarker::Own(own),
-            Mark::Span(span, _) => GoverningMarker::Span(span),
-            Mark::Utterance => GoverningMarker::Utterance,
-        }
-    }
-
     /// Which kind of mark this is.
     #[must_use]
     pub fn kind(&self) -> GoverningMarkKind {
@@ -283,9 +274,11 @@ impl GoverningMark {
         match &self.mark {
             // A marked position anchors its diagnostics at the span it was born
             // with; the pairing is structural, not a parameter to get wrong.
-            Mark::Own(_, span) | Mark::Span(_, span) => {
-                self.borrowed()
-                    .resolve_at(*span, tier_language, declared_languages)
+            Mark::Own(own, span) => {
+                GoverningMarker::Own(own).resolve_at(*span, tier_language, declared_languages)
+            }
+            Mark::Span(marker, span) => {
+                GoverningMarker::Span(marker).resolve_at(*span, tier_language, declared_languages)
             }
             // No marker, so no diagnostic and no span to place one at.
             Mark::Utterance => resolve_without_marker(tier_language),

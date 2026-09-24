@@ -127,6 +127,47 @@ fn collect_events(target: &Path) -> Vec<FrontendEvent> {
     events
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn unicode_media_warning_uses_stored_identity_through_desktop_runtime() {
+    let directory = tempfile::tempdir().expect("owned fixture directory");
+    let root = directory.path().canonicalize().expect("fixture root");
+    let stored = root.join("Schlu\u{0308}ssel.cha");
+    let composed = root.join("Schlüssel.cha");
+    std::fs::copy(
+        workspace_root()
+            .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/W109_2.cha"),
+        &stored,
+    )
+    .expect("copy canonical decomposed-media spec");
+    for target in [&stored, &composed, &root] {
+        if !target.exists() {
+            continue;
+        } // Case-sensitive volumes need not admit aliases.
+        let events = tauri::async_runtime::block_on(async { collect_events(target) });
+        let summary = summarize(&events);
+        assert!(summary.finished);
+        assert_eq!(summary.total_files, 1);
+        let diagnostics: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                FrontendEvent::Errors { diagnostics, .. } => Some(diagnostics),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let warning = diagnostics
+            .iter()
+            .find(|d| d.error.code.as_str() == "W109")
+            .expect("desktop must receive normalization warning");
+        assert!(warning.error.message.contains("The @Media name"));
+        assert!(warning.error.message.contains("The file name"));
+        assert!(!warning.rendered_html.is_empty());
+        assert!(!warning.rendered_text.is_empty());
+        assert!(!diagnostics.iter().any(|d| d.error.code.as_str() == "E531"));
+    }
+}
+
 /// Collect the reference corpus once for every read-only assertion in this
 /// binary.
 ///
@@ -617,65 +658,43 @@ fn files_with_any_errors_appear_in_error_events() {
     println!("These are the files the FileTree would show.");
 }
 
-/// Test against ~/testchat/bad/ which has both root-level and nested/ files.
-/// Skips gracefully if the directory doesn't exist (or if `HOME` is unset,
-/// which is the normal Windows-CI case; there's no `HOME` env var on
-/// Windows, and `env!("HOME")` is compile-time so it can't be used there).
+/// Recursive discovery uses canonical spec data, not an optional external
+/// corpus. The temporary directory owns both copies through event completion.
 #[test]
-fn testchat_bad_nested_directory() {
-    let Some(home) = std::env::var_os("HOME") else {
-        println!("Skipping: HOME not set");
-        return;
-    };
-    let testchat = std::path::PathBuf::from(home).join("testchat/bad");
-    if !testchat.exists() {
-        println!("Skipping: ~/testchat/bad/ not present");
-        return;
+fn canonical_spec_errors_survive_nested_directory_discovery() {
+    let directory = tempfile::tempdir().expect("owned fixture directory");
+    let root = directory.path().canonicalize().expect("fixture root");
+    let nested = root.join("nested");
+    std::fs::create_dir(&nested).expect("nested fixture directory");
+    let fixture = workspace_root()
+        .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E605_1.cha");
+    let paths = [root.join("root.cha"), nested.join("child.cha")];
+    for path in &paths {
+        std::fs::copy(&fixture, path).expect("copy canonical unsupported-tier spec");
     }
-
-    let events = collect_events(&testchat);
+    let events = tauri::async_runtime::block_on(async { collect_events(&root) });
     let summary = summarize(&events);
-
     assert!(summary.finished);
-    println!("Total files: {}", summary.total_files);
-    println!("Files with errors: {}", summary.errors_by_file.len());
-
-    // Check that nested/ files appear
-    let nested_count = summary
-        .errors_by_file
-        .keys()
-        .filter(|k| k.contains("/nested/"))
-        .count();
-    println!("Files in nested/: {nested_count}");
-
-    // Print tree structure that the frontend would build
-    let root_str = testchat.to_string_lossy();
-    println!("\nTree structure (files with errors only):");
-    let mut sorted_paths: Vec<_> = summary.errors_by_file.keys().collect();
-    sorted_paths.sort();
-    for path in &sorted_paths {
-        let rel = if path.starts_with(&*root_str) {
-            let r = &path[root_str.len()..];
-            r.strip_prefix('/').unwrap_or(r)
-        } else {
-            path.as_str()
-        };
-        let depth = rel.matches('/').count();
-        let indent = "  ".repeat(depth);
-        let name = rel.rsplit('/').next().unwrap_or(rel);
-        let errors = summary.errors_by_file[*path];
-        println!("  {indent}✗ {name} ({errors})");
+    assert_eq!(summary.total_files, paths.len());
+    assert_eq!(summary.invalid_files, paths.len());
+    assert_eq!(summary.errors_by_file.len(), paths.len());
+    for path in paths {
+        let key = path.to_string_lossy();
+        assert!(
+            summary.errors_by_file.contains_key(key.as_ref()),
+            "missing {}",
+            path.display()
+        );
+        assert!(
+            events.iter().any(|event| matches!(event,
+                FrontendEvent::Errors { file, diagnostics, .. }
+                    if file == key.as_ref() && diagnostics.iter().any(|diagnostic|
+                        diagnostic.error.code.as_str() == "E605")
+            )),
+            "missing canonical E605 for {}",
+            path.display()
+        );
     }
-
-    assert!(summary.total_files > 0, "should find files");
-    assert!(
-        !summary.errors_by_file.is_empty(),
-        "should have some files with errors"
-    );
-    assert!(
-        nested_count > 0,
-        "nested/ directory files should have errors too"
-    );
 }
 
 /// Verify that error events carry paired rendered miette HTML per diagnostic.

@@ -1163,7 +1163,7 @@ const REPLACEMENT_AT_EOF_WITHOUT_NEWLINE: &str = "@UTF8\n@Begin\n@Languages:\ten
 ///
 /// E302 was registered `not_implemented` until 2026-09-08, and that was false:
 /// with no final newline the main tier is left flattened at EOF, the whole-file
-/// path routes it through the fragment entry point, and `collect_tree_errors`
+/// path routes it through the fragment entry point, and its admitted recovery walk
 /// reports the MISSING `word_segment` that `[: ]` induces. The status could
 /// not be corrected by writing a spec example, because the corpus generator
 /// normalises exactly the byte this input depends on, so

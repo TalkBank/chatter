@@ -4,6 +4,7 @@
 @Participants:	CHI Target_Child, MOT Mother
 @ID:	eng|corpus|CHI|||||Target_Child|||
 @ID:	eng|corpus|MOT|||||Mother|||
-*CHI:	hello . 1000_2000
-*MOT:	hi . 1500_2500
+@Media:	E729_1, audio
+*CHI:	hello . 1000_2000
+*MOT:	hi . 1500_2500
 @End

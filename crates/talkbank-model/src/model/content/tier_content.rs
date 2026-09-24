@@ -158,27 +158,18 @@ impl TierContent {
         self
     }
 
-    /// Extract the last `InternalBullet` from content into the `bullet` field.
+    /// Move at most one trailing internal bullet to an unoccupied terminal slot.
     ///
-    /// The grammar's greedy `contents` rule consumes all media bullets as
-    /// content items, including the utterance-final one. This method moves
-    /// the trailing `InternalBullet`(s) to the `bullet` serialization slot
-    /// so that WriteChat emits the bullet after the terminator (correct
-    /// CHAT format: `hello . \u0015100_200\u0015`).
-    ///
-    /// Called at the parse-to-model boundary by both TreeSitter and re2c
-    /// parsers. Idempotent: does nothing if `bullet` is already set.
+    /// A terminator fixes the content boundary: bullets preceding it remain
+    /// internal. Without a terminator, the final content bullet can represent
+    /// the terminal marker. Earlier bullets retain their independent scopes.
+    /// Call after installing any grammar-routed terminal bullet; an occupied
+    /// slot is never replaced and no content is removed in that case.
     pub fn extract_terminal_bullet(&mut self) {
-        use super::utterance_content::UtteranceContent;
-        if self.bullet.is_some() {
+        if self.terminator.is_some() || self.bullet.is_some() {
             return;
         }
-        // Pop trailing InternalBullet(s). The last one becomes the terminal bullet.
-        while let Some(UtteranceContent::InternalBullet(_)) = self.content.last() {
-            if let Some(UtteranceContent::InternalBullet(b)) = self.content.pop() {
-                self.bullet = Some(b);
-            }
-        }
+        self.bullet = self.content.take_trailing_bullet();
     }
 
     /// Sets source span for content region.
@@ -409,6 +400,19 @@ impl TierContentItems {
     /// the note on `collection_newtype_ops!` in `model/macros.rs`.
     pub fn pop(&mut self) -> Option<UtteranceContent> {
         self.0.pop()
+    }
+
+    /// Transfer one owned bullet, restoring a non-bullet tail unchanged.
+    /// No independent peek can become detached from the value being removed.
+    fn take_trailing_bullet(&mut self) -> Option<Bullet> {
+        match self.0.pop() {
+            Some(UtteranceContent::InternalBullet(bullet)) => Some(bullet),
+            Some(other) => {
+                self.0.push(other);
+                None
+            }
+            None => None,
+        }
     }
 
     /// Wraps utterance content items in their on-tier order.

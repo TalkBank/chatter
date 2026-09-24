@@ -337,7 +337,49 @@ pub(super) fn check_media_unlinked_has_no_timing(
     ));
 }
 
-/// E531: validate `@Media` filename against the caller-provided file basename.
+/// A canonical-equivalence warning always identifies a noncanonical side.
+enum NonCanonicalNames {
+    Media,
+    Transcript,
+    Both,
+}
+
+/// Comparison admits either equality, a real mismatch, or a normalization
+/// notice with evidence of which spelling changed. There is no warning state
+/// for two already-canonical names.
+enum MediaNameComparison {
+    Equal,
+    Mismatch,
+    CanonicallyEqual {
+        canonical: String,
+        sides: NonCanonicalNames,
+    },
+}
+
+impl MediaNameComparison {
+    fn compare(media: &str, transcript: &str) -> Self {
+        use unicode_normalization::UnicodeNormalization;
+
+        let media_nfc: String = media.nfc().collect();
+        let transcript_nfc: String = transcript.nfc().collect();
+        if !media_nfc.eq_ignore_ascii_case(&transcript_nfc) {
+            return Self::Mismatch;
+        }
+        let sides = match (media == media_nfc, transcript == transcript_nfc) {
+            (true, true) => return Self::Equal,
+            (false, true) => NonCanonicalNames::Media,
+            (true, false) => NonCanonicalNames::Transcript,
+            (false, false) => NonCanonicalNames::Both,
+        };
+        Self::CanonicallyEqual {
+            canonical: media_nfc,
+            sides,
+        }
+    }
+}
+
+/// E531 / W109: validate `@Media` filename against the caller-provided file
+/// basename.
 pub(super) fn check_media_filename_match(
     headers: &[(&Header, crate::Span)],
     file_name: &str,
@@ -359,26 +401,62 @@ pub(super) fn check_media_filename_match(
 
         let media_filename = media_header.filename.as_str();
 
-        // Compare media filename with provided filename (case-insensitive)
-        if !media_filename.eq_ignore_ascii_case(file_name) {
-            let media_type_str = media_header.media_type.as_str();
+        match MediaNameComparison::compare(media_filename, file_name) {
+            MediaNameComparison::Equal => {}
+            MediaNameComparison::Mismatch => {
+                let media_type_str = media_header.media_type.as_str();
 
-            let mut err = ParseError::new(
-                    ErrorCode::MediaFilenameMismatch,
-                    Severity::Error,
+                let mut err = ParseError::new(
+                        ErrorCode::MediaFilenameMismatch,
+                        Severity::Error,
+                        SourceLocation::at_offset(span.start as usize),
+                        ErrorContext::new(media_filename, 0..media_filename.len(), "media_filename"),
+                        format!(
+                            "Media filename '{}' does not match file name '{}' (case-insensitive comparison)",
+                            media_filename, file_name
+                        ),
+                    )
+                    .with_suggestion(format!(
+                        "Update @Media header to: @Media:\t{}, {}",
+                        file_name, media_type_str
+                    ));
+                err.location.span = span;
+                errors.report(err);
+            }
+            MediaNameComparison::CanonicallyEqual { canonical, sides } => {
+                use unicode_normalization::UnicodeNormalization;
+                let transcript_nfc: String = file_name.nfc().collect();
+                let media_advice = format!(
+                    "The @Media name uses a nonstandard Unicode spelling (such as a letter plus a separate accent mark); use \"{canonical}\"."
+                );
+                let file_advice = format!(
+                    "The file name uses a nonstandard Unicode spelling (such as a letter plus a separate accent mark); rename it to \"{transcript_nfc}.cha\" using the standard spelling."
+                );
+                let (message, suggestion) = match sides {
+                    NonCanonicalNames::Both => (
+                        format!("{media_advice} {file_advice}"),
+                        "Run chatter fix --code W109 --apply <file> to update @Media; separately rename the file using the standard spelling. The fix does not rename files.",
+                    ),
+                    NonCanonicalNames::Media => (
+                        media_advice,
+                        "Run chatter fix --code W109 --apply <file> to update only the @Media name.",
+                    ),
+                    NonCanonicalNames::Transcript => (
+                        file_advice,
+                        "Rename the file using a tool that preserves the standard spelling; chatter fix does not rename files. Do not use Finder for this normalization repair.",
+                    ),
+                };
+                let mut warning = ParseError::new(
+                    ErrorCode::MediaFilenameNonCanonicalUnicode,
+                    Severity::Warning,
                     SourceLocation::at_offset(span.start as usize),
                     ErrorContext::new(media_filename, 0..media_filename.len(), "media_filename"),
-                    format!(
-                        "Media filename '{}' does not match file name '{}' (case-insensitive comparison)",
-                        media_filename, file_name
-                    ),
+                    message,
                 )
-                .with_suggestion(format!(
-                    "Update @Media header to: @Media:\t{}, {}",
-                    file_name, media_type_str
-                ));
-            err.location.span = span;
-            errors.report(err);
+                .with_suggestion(suggestion);
+                warning.location.span = span;
+                errors.report(warning);
+            }
         }
     }
 }

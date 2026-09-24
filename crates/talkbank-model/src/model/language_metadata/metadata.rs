@@ -6,7 +6,7 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ops::Deref;
 use talkbank_derive::SpanShift;
 
@@ -34,9 +34,9 @@ use crate::validation::{Validate, ValidationContext};
 /// ```text
 /// LanguageMetadata
 ///   ├─ tier_language: Option<LanguageCode>  (e.g., "eng")
-///   └─ word_languages: Vec<WordLanguageInfo>
-///        ├─ [0]: word_index=0, language="eng", source=Default
-///        ├─ [1]: word_index=1, language="spa", source=WordShortcut
+///   └─ word_languages: WordLanguageInfos
+///        ├─ [0]: languages=Single("eng"), source=Default
+///        ├─ [1]: languages=Single("spa"), source=WordShortcut
 ///        └─ ...
 /// ```
 ///
@@ -58,7 +58,7 @@ use crate::validation::{Validate, ValidationContext};
 ///
 /// ```text
 /// @Languages: eng, spa
-/// *CHI: I want @s galletas @s please .
+/// *CHI: I want galletas@s please .
 /// ```
 ///
 /// Language metadata:
@@ -67,7 +67,7 @@ use crate::validation::{Validate, ValidationContext};
 ///   - "I" → eng (Default)
 ///   - "want" → eng (Default)
 ///   - "galletas" → spa (WordShortcut)
-///   - "please" → eng (WordShortcut)
+///   - "please" → eng (Default)
 /// - `is_code_switching()`: true (uses both "eng" and "spa")
 ///
 /// **Example 3: Tier-scoped language change**
@@ -85,18 +85,24 @@ use crate::validation::{Validate, ValidationContext};
 /// # Use Cases
 ///
 /// **Code-switching detection:**
-/// ```rust,ignore
+/// ```rust
+/// # use talkbank_model::LanguageMetadata;
+/// # fn report_switching(language_metadata: &LanguageMetadata) {
 /// if language_metadata.is_code_switching() {
 ///     let counts = language_metadata.count_by_language();
 ///     println!("Utterance uses {} languages", counts.len());
 /// }
+/// # }
 /// ```
 ///
 /// **Per-word language lookup:**
-/// ```rust,ignore
+/// ```rust
+/// # use talkbank_model::LanguageMetadata;
+/// # fn report_third_word(language_metadata: &LanguageMetadata) {
 /// if let Some(info) = language_metadata.word_languages.as_slice().get(2) {
-///     println!("Word 2 is in language: {:?}", info.language);
+///     println!("Word 2 language assignment: {:?}", info.languages);
 /// }
+/// # }
 /// ```
 ///
 /// # References
@@ -164,36 +170,22 @@ impl LanguageMetadata {
     /// words, or when any word is explicitly marked as mixed (`@s:eng+spa`) or
     /// ambiguous (`@s:eng&spa`), even if distinct-language counts collapse.
     pub fn is_code_switching(&self) -> bool {
-        let mut languages: HashSet<_> = HashSet::new();
-        let mut has_multiple = false;
-        let mut has_ambiguous = false;
-
+        // No assignment yet versus one observed language are the only states
+        // before switching is established. Borrow that evidence, rather than
+        // cloning every code into a set and maintaining parallel flags.
+        let mut first_language: Option<&LanguageCode> = None;
         for word_info in self.word_languages.iter() {
             match &word_info.languages {
-                WordLanguages::Single(lang) => {
-                    languages.insert(lang.clone());
-                }
-                WordLanguages::Multiple(_) => {
-                    has_multiple = true;
-                    // Also collect individual languages
-                    for lang in word_info.languages.languages() {
-                        languages.insert(lang.clone());
+                WordLanguages::Single(language) => {
+                    if *first_language.get_or_insert(language) != language {
+                        return true;
                     }
                 }
-                WordLanguages::Ambiguous(_) => {
-                    has_ambiguous = true;
-                    // Also collect individual languages
-                    for lang in word_info.languages.languages() {
-                        languages.insert(lang.clone());
-                    }
-                }
+                WordLanguages::Multiple(_) | WordLanguages::Ambiguous(_) => return true,
                 WordLanguages::Unresolved => {}
             }
         }
-
-        // Code-switching if multiple distinct languages are present, or any
-        // per-word assignment is explicitly multiple/ambiguous.
-        languages.len() > 1 || has_multiple || has_ambiguous
+        false
     }
 }
 

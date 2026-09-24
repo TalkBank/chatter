@@ -19,7 +19,7 @@
 //!
 //! It ran, and still runs, exactly ONE parser. The name `parser_equivalence`
 //! was repeated as fact in the crate's own module table ("Per-file equivalence
-//! on the 74-file reference corpus"), in `CLAUDE.md`'s list of MANDATORY gates
+//! on the 74-file reference corpus"), in `AGENTS.md`'s list of MANDATORY gates
 //! for parser work, and in three book pages. The consequence was not cosmetic:
 //! the gate a parser change was required to run did not compare the backends
 //! at all, so a re2c divergence could pass every mandated check.

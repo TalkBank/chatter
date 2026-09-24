@@ -11,8 +11,9 @@ use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
 
 use super::group::{contents_of, parse_group_contents};
+use super::recovery::surface_main_tier_sink;
 use super::report_tree_shape;
-use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::expect_delimiter;
 
 /// Parse a `main_pho_group` node into `UtteranceContent::PhoGroup`.
 ///
@@ -63,7 +64,7 @@ pub(crate) fn parse_pho_group_content(
             errors,
         );
     });
-    surface_displaced(&children.unexpected, "main_pho_group", source, errors);
+    surface_main_tier_sink(&children, source, errors);
 
     if group_items.is_empty() {
         return ParseOutcome::rejected();

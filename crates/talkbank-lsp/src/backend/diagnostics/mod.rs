@@ -13,7 +13,6 @@
 mod analysis;
 mod conversion;
 mod related_info;
-mod text_diff;
 mod validation_orchestrator;
 
 // Re-export public API

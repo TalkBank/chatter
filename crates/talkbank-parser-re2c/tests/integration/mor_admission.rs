@@ -86,15 +86,15 @@ fn empty_pos_diagnostics_name_the_original_item_at_any_offset() {
     let mut cases: Vec<_> = spec
         .examples()
         .iter()
+        .filter(|example| example.claim.demonstrates_own_code())
         .map(|example| {
             let source = example.chat.as_str();
             (
                 source.to_owned(),
-                if source.contains("|home") {
-                    "|home"
-                } else {
-                    "|we"
-                },
+                source
+                    .split_whitespace()
+                    .find(|item| item.starts_with('|'))
+                    .expect("violating E760 fixture contains its empty-POS item"),
             )
         })
         .collect();

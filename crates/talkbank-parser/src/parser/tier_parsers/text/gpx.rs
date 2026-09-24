@@ -11,7 +11,7 @@
 use talkbank_model::ErrorSink;
 use talkbank_model::model::GpxTier;
 
-use crate::generated_traversal::{AsRawNode, GpxDependentTierNode, extract_gpx_dependent_tier};
+use crate::generated_traversal::{AsRawNode, GpxDependentTierNode, SourceBound};
 
 use super::helpers::{parse_optional_text_tier_content, span_of};
 
@@ -26,19 +26,17 @@ use super::helpers::{parse_optional_text_tier_content, span_of};
 /// body as `child_2.slot`, matched exhaustively by the shared
 /// `parse_optional_text_tier_content`, which also surfaces the carrier's `unexpected`
 /// sink (R2).
-pub fn parse_gpx_tier(
-    typed: GpxDependentTierNode<'_>,
-    source: &str,
+pub fn parse_gpx_tier<'tree>(
+    typed: SourceBound<'tree, '_, GpxDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> GpxTier {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = extract_gpx_dependent_tier(typed);
+    let children = typed.extract();
     let content = parse_optional_text_tier_content(
         typed,
-        children.child_2.slot(),
-        &children.unexpected,
-        source,
+        children.field_child_2().slot(),
+        &children.children().unexpected,
         errors,
     );
     GpxTier::new(content).with_span(span)

@@ -92,7 +92,34 @@ pub enum TimeDurationValue {
     Unsupported(String),
 }
 
+/// Refusal evidence issued only after duration shape and clock assessment.
+/// Its text cannot be detached from the assessed value or replaced by a caller.
+pub(crate) struct InvalidTimeDuration<'a> {
+    text: &'a str,
+}
+
+impl<'a> InvalidTimeDuration<'a> {
+    pub(crate) fn into_text(self) -> &'a str {
+        self.text
+    }
+}
+
 impl TimeDurationValue {
+    /// Preserve the existing optional-empty policy before issuing a refusal.
+    pub(crate) fn invalidity(&self) -> Option<InvalidTimeDuration<'_>> {
+        let text = self.as_str();
+        if text.is_empty() {
+            return None;
+        }
+        let invalid = match self {
+            Self::Unsupported(_) => true,
+            Self::Parsed { .. } => {
+                self.violates_depfile_pattern() || self.has_out_of_range_component()
+            }
+        };
+        invalid.then_some(InvalidTimeDuration { text })
+    }
+
     /// Parse a CHAT time duration string.
     ///
     /// Returns `Parsed` for well-formed durations, `Unsupported` otherwise.
@@ -379,7 +406,47 @@ pub enum TimeStartValue {
     Unsupported(String),
 }
 
+/// Refusal evidence issued only by the time-start assessment.
+/// The borrowed text stays associated with the value that was assessed.
+pub(crate) struct InvalidTimeStart<'a> {
+    text: &'a str,
+}
+
+impl<'a> InvalidTimeStart<'a> {
+    pub(crate) fn into_text(self) -> &'a str {
+        self.text
+    }
+}
+
 impl TimeStartValue {
+    /// Assess syntax and clock bounds without discarding recovery text.
+    /// Empty optional values retain their existing omission policy.
+    pub(crate) fn invalidity(&self) -> Option<InvalidTimeStart<'_>> {
+        let text = self.as_str();
+        if text.is_empty() {
+            return None;
+        }
+        let invalid = match self {
+            Self::Unsupported(_) => true,
+            Self::Parsed {
+                hours,
+                minutes,
+                seconds,
+                millis,
+                ..
+            } => {
+                let clock = TimeValue {
+                    hours: *hours,
+                    minutes: *minutes,
+                    seconds: *seconds,
+                    millis: *millis,
+                };
+                self.violates_depfile_pattern() || !clock.is_in_clock_range()
+            }
+        };
+        invalid.then_some(InvalidTimeStart { text })
+    }
+
     /// Parse a CHAT time start string (`MM:SS`, `HH:MM:SS`, or either with `.mmm`).
     ///
     /// Returns `Parsed` for well-formed times, `Unsupported` otherwise.

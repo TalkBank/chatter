@@ -24,9 +24,11 @@ pub(crate) mod time_values;
 // Re-export all public types
 pub use age::AgeValue;
 pub use date::{ChatDate, Month};
+pub(crate) use date::{DateDigitError, DateDigits};
 pub use header_strings::*;
 pub use language::{LanguageCode, LanguageCodeError};
 pub use participant::{ParticipantEntry, ParticipantName, ParticipantRole};
 pub use ses::{Ethnicity, SesCode, SesValue};
 pub use speaker::SpeakerCode;
+pub(crate) use time_values::{InvalidTimeDuration, InvalidTimeStart};
 pub use time_values::{TimeDurationValue, TimeSegment, TimeStartValue, TimeValue};

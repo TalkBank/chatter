@@ -465,6 +465,34 @@ fn check_duplicate_participants(headers: &[(&Header, Span)], errors: &impl Error
     }
 }
 
+/// One or more still-open begins for a label. Closing the last begin consumes
+/// this state instead of leaving a zero-count entry in the active-scope map.
+struct OpenGemScope {
+    first: Span,
+    repeated: Vec<Span>,
+}
+
+impl OpenGemScope {
+    fn open(first: Span) -> Self {
+        Self {
+            first,
+            repeated: Vec::new(),
+        }
+    }
+
+    fn reopen(&mut self, span: Span) {
+        self.repeated.push(span);
+    }
+
+    fn close(mut self) -> Option<Self> {
+        self.repeated.pop().map(|_| self)
+    }
+
+    fn count(&self) -> usize {
+        std::iter::once(&self.first).chain(&self.repeated).count()
+    }
+}
+
 /// Validate that @Bg (Begin Gem) and @Eg (End Gem) markers are properly matched.
 ///
 /// Checks:
@@ -474,50 +502,50 @@ fn check_duplicate_participants(headers: &[(&Header, Span)], errors: &impl Error
 /// - E529: Nested @Bg with same label (opening @Bg while already in that scope)
 /// - E530: @G (lazy gem) inside @Bg/@Eg scope
 fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
-    use std::collections::HashMap;
+    use std::collections::hash_map::Entry;
 
-    // Track open scopes by label (None for unlabeled gems)
-    let mut open_scopes: HashMap<Option<String>, usize> = HashMap::new();
+    // Different labels may overlap; this is not a global LIFO stack.
+    // Keys borrow the authored labels; every value owns at least one begin.
+    let mut open_scopes: HashMap<Option<&str>, OpenGemScope> = HashMap::new();
 
     for (header, span) in headers {
         match header {
             Header::BeginGem { label } => {
-                let key = label.as_ref().map(|l| l.as_str().to_string());
-                let current_count = open_scopes.get(&key).copied().unwrap_or(0);
-
-                // E529: Nested @Bg with the same label is not allowed.
-                // Different labels are permitted (stack-based LIFO scoping).
-                if current_count > 0 {
-                    let label_str = label_or_empty(key.as_deref());
-                    let mut err = ParseError::new(
-                        ErrorCode::NestedBeginGem,
-                        Severity::Error,
-                        SourceLocation::at_offset(span.start as usize),
-                        ErrorContext::new("", 0..0, ""),
-                        if label_str.is_empty() {
-                            "Nested @Bg: cannot open a new @Bg while already inside a @Bg scope with the same label"
-                                .to_string()
-                        } else {
-                            format!(
-                                "Nested @Bg:{0}: cannot open a new @Bg:{0} while already inside a @Bg:{0} scope",
-                                label_str
-                            )
-                        },
-                    )
-                    .with_suggestion(
-                        "Close the current @Bg scope with @Eg before opening another @Bg with the same label"
-                            .to_string(),
-                    );
-                    err.location.span = *span;
-                    errors.report(err);
+                let key = label.as_ref().map(|l| l.as_str());
+                match open_scopes.entry(key) {
+                    Entry::Vacant(entry) => {
+                        entry.insert(OpenGemScope::open(*span));
+                    }
+                    Entry::Occupied(mut entry) => {
+                        entry.get_mut().reopen(*span);
+                        let label_str = label_or_empty(key);
+                        let mut err = ParseError::new(
+                            ErrorCode::NestedBeginGem,
+                            Severity::Error,
+                            SourceLocation::at_offset(span.start as usize),
+                            ErrorContext::new("", 0..0, ""),
+                            if label_str.is_empty() {
+                                "Nested @Bg: cannot open a new @Bg while already inside a @Bg scope with the same label"
+                                    .to_string()
+                            } else {
+                                format!(
+                                    "Nested @Bg:{0}: cannot open a new @Bg:{0} while already inside a @Bg:{0} scope",
+                                    label_str
+                                )
+                            },
+                        )
+                        .with_suggestion(
+                            "Close the current @Bg scope with @Eg before opening another @Bg with the same label"
+                                .to_string(),
+                        );
+                        err.location.span = *span;
+                        errors.report(err);
+                    }
                 }
-
-                *open_scopes.entry(key).or_insert(0) += 1;
             }
             Header::LazyGem { label } => {
                 // E530: Check if any @Bg scope is open
-                let any_scope_open = open_scopes.values().any(|&count| count > 0);
-                if any_scope_open {
+                if !open_scopes.is_empty() {
                     let label_str = label_or_empty(label.as_ref().map(|l| l.as_str()));
                     let mut err = ParseError::new(
                         ErrorCode::LazyGemInsideScope,
@@ -542,16 +570,16 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                 }
             }
             Header::EndGem { label } => {
-                let key = label.as_ref().map(|l| l.as_str().to_string());
-                let has_any_open_scope = open_scopes.values().any(|&count| count > 0);
-                let count = open_scopes.get_mut(&key);
-
-                if let Some(count) = count {
-                    if *count > 0 {
-                        *count -= 1;
-                    } else {
-                        if has_any_open_scope {
-                            let label_str = label_or_empty(key.as_deref());
+                let key = label.as_ref().map(|l| l.as_str());
+                match open_scopes.remove(&key) {
+                    Some(scope) => {
+                        if let Some(remaining) = scope.close() {
+                            open_scopes.insert(key, remaining);
+                        }
+                    }
+                    None => {
+                        if !open_scopes.is_empty() {
+                            let label_str = label_or_empty(key);
                             let mut err = ParseError::new(
                                 ErrorCode::GemLabelMismatch,
                                 Severity::Error,
@@ -569,8 +597,8 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                             err.location.span = *span;
                             errors.report(err);
                         }
-                        // End without matching begin
-                        let label_str = label_or_empty(key.as_deref());
+                        // End without any matching begin (different label)
+                        let label_str = label_or_empty(key);
                         let mut err = ParseError::new(
                             ErrorCode::UnmatchedEndGem,
                             Severity::Error,
@@ -596,52 +624,6 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
                         err.location.span = *span;
                         errors.report(err);
                     }
-                } else {
-                    if has_any_open_scope {
-                        let label_str = label_or_empty(key.as_deref());
-                        let mut err = ParseError::new(
-                            ErrorCode::GemLabelMismatch,
-                            Severity::Error,
-                            SourceLocation::at_offset(span.start as usize),
-                            ErrorContext::new("", 0..0, ""),
-                            if label_str.is_empty() {
-                                "Gem label mismatch between @Bg/@Eg markers".to_string()
-                            } else {
-                                format!(
-                                    "Gem label mismatch: @Eg:{} does not match active @Bg scope",
-                                    label_str
-                                )
-                            },
-                        );
-                        err.location.span = *span;
-                        errors.report(err);
-                    }
-                    // End without any matching begin (different label)
-                    let label_str = label_or_empty(key.as_deref());
-                    let mut err = ParseError::new(
-                        ErrorCode::UnmatchedEndGem,
-                        Severity::Error,
-                        SourceLocation::at_offset(span.start as usize),
-                        ErrorContext::new("", 0..0, ""),
-                        if label_str.is_empty() {
-                            "Unmatched @Eg (no matching @Bg)".to_string()
-                        } else {
-                            format!(
-                                "Unmatched @Eg:{} (no matching @Bg:{})",
-                                label_str, label_str
-                            )
-                        },
-                    )
-                    .with_suggestion(if label_str.is_empty() {
-                        "Add a matching @Bg before this @Eg".to_string()
-                    } else {
-                        format!(
-                            "Add a matching @Bg:{} before this @Eg:{}",
-                            label_str, label_str
-                        )
-                    });
-                    err.location.span = *span;
-                    errors.report(err);
                 }
             }
             _ => {}
@@ -649,31 +631,30 @@ fn check_gem_balance(headers: &[(&Header, Span)], errors: &impl ErrorSink) {
     }
 
     // Check for unclosed scopes, no specific header to point at (scope was opened earlier)
-    for (label_opt, count) in open_scopes {
-        if count > 0 {
-            let label_str = label_or_empty(label_opt.as_deref());
-            errors.report(
-                ParseError::new(
-                    ErrorCode::UnmatchedBeginGem,
-                    Severity::Error,
-                    SourceLocation::at_offset(0),
-                    ErrorContext::new("", 0..0, ""),
-                    if label_str.is_empty() {
-                        format!("Unmatched @Bg: {} @Bg without matching @Eg", count)
-                    } else {
-                        format!(
-                            "Unmatched @Bg:{}: {} @Bg:{} without matching @Eg:{}",
-                            label_str, count, label_str, label_str
-                        )
-                    },
-                )
-                .with_suggestion(if label_str.is_empty() {
-                    format!("Add {} matching @Eg marker(s)", count)
+    for (label_opt, scope) in open_scopes {
+        let count = scope.count();
+        let label_str = label_or_empty(label_opt);
+        errors.report(
+            ParseError::new(
+                ErrorCode::UnmatchedBeginGem,
+                Severity::Error,
+                SourceLocation::at_offset(0),
+                ErrorContext::new("", 0..0, ""),
+                if label_str.is_empty() {
+                    format!("Unmatched @Bg: {} @Bg without matching @Eg", count)
                 } else {
-                    format!("Add {} matching @Eg:{} marker(s)", count, label_str)
-                }),
-            );
-        }
+                    format!(
+                        "Unmatched @Bg:{}: {} @Bg:{} without matching @Eg:{}",
+                        label_str, count, label_str, label_str
+                    )
+                },
+            )
+            .with_suggestion(if label_str.is_empty() {
+                format!("Add {} matching @Eg marker(s)", count)
+            } else {
+                format!("Add {} matching @Eg:{} marker(s)", count, label_str)
+            }),
+        );
     }
 }
 

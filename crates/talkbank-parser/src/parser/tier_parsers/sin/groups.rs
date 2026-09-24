@@ -9,17 +9,40 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Sign_Group>
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, NoChild, NodeSlot, SinGroupChoice, SinGroupNode, SinGroupedContentNode,
+    AsRawNode, KindSlot, NoChild, NodeSlot, SinGroupChoice, SinGroupNode, SinGroupedContentNode,
     SinWordNode, SlotView, WhitespacesNode, extract_sin_group, extract_sin_grouped_content,
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::model::{SinGroupGestures, SinItem, SinToken};
-use tree_sitter::Node;
 
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{
     check_not_missing, extract_utf8_text, surface_displaced,
 };
+
+/// The token's grammatical origin owns its read context. Recovery preserves
+/// the entire typed group; ordinary tokens retain their generated word kind.
+enum SinTokenSource<'tree> {
+    Word(SinWordNode<'tree>),
+    RecoveryGroup(SinGroupNode<'tree>),
+}
+
+impl SinTokenSource<'_> {
+    fn decode(self, source: &str, errors: &impl ErrorSink) -> Option<SinToken> {
+        let (node, context) = match self {
+            Self::Word(word) => (word.raw_node(), "sin_word"),
+            Self::RecoveryGroup(group) => (group.raw_node(), "sin_item"),
+        };
+        let talkbank_model::ParseOutcome::Parsed(text) =
+            extract_utf8_text(node, source, errors, context)
+        else {
+            return None;
+        };
+        // Preserve the existing empty-token omission policy; unreadable source
+        // has already produced a diagnostic at the checked read boundary.
+        SinToken::new(text).ok()
+    }
+}
 
 /// Extracts `SinItem` values from a `sin_group` node.
 ///
@@ -46,31 +69,23 @@ use crate::parser::tree_parsing::parser_helpers::{
 ///   the whole group as a single token via `extract_utf8_text` on the group node.
 /// - outer `Absent`: the old "no first child" branch, which returned nothing.
 ///
-/// Every arm except the two `Present` cases is unreachable from the boundary
-/// (`extract_sin_group_items` is only reached for a `Present` `sin_group` inside
-/// an error-free tier); they are handled explicitly for exhaustiveness. Matching
-/// the analogous `%pho`/`%mod` migration (Task 4d), the unreachable field-recovery
-/// arms are collapsed onto the shared `fallback_group_as_token` for uniformity:
-/// this drops the removed code's `Expected sin_grouped_content` `TreeParsingError`
-/// (which only fired for a wrong-kind `child(1)`, impossible in an error-free
-/// tier) rather than silently losing a reachable diagnostic.
+/// Recovery states remain explicit even when the admitted tier has no parser
+/// error: that boundary is not a type-level proof about every reconstructed
+/// slot. Outer and inner recovery retain the existing whole-group preservation
+/// policy through `fallback_group_as_token`, without fabricating a token.
 pub(super) fn extract_sin_group_items(
     typed: SinGroupNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<SinItem> {
-    let node = typed.raw_node();
     let children = extract_sin_group(typed);
     surface_displaced(&children.unexpected, "sin_group", source, errors);
     match children.content.slot() {
-        NodeSlot::Present(SinGroupChoice::SinWord(sin_word)) => {
-            let text = extract_utf8_text(sin_word.raw_node(), source, errors, "sin_word", "");
-            if let Ok(token) = SinToken::new(text) {
-                vec![SinItem::Token(token)]
-            } else {
-                vec![]
-            }
-        }
+        NodeSlot::Present(SinGroupChoice::SinWord(sin_word)) => SinTokenSource::Word(*sin_word)
+            .decode(source, errors)
+            .into_iter()
+            .map(SinItem::Token)
+            .collect(),
         NodeSlot::Present(SinGroupChoice::SinBeginGroup(seq)) => {
             // The bracketed group is a plain `seq`, so its interior positions are
             // the un-named `child_0` (`〔`), `child_1` (`sin_grouped_content`),
@@ -89,12 +104,12 @@ pub(super) fn extract_sin_group_items(
                 }
                 SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
                     // Fallback: preserve the entire group as a single token.
-                    fallback_group_as_token(node, source, errors)
+                    fallback_group_as_token(typed, source, errors)
                 }
             }
         }
         NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
-            fallback_group_as_token(node, source, errors)
+            fallback_group_as_token(typed, source, errors)
         }
         NodeSlot::Absent(NoChild) => vec![],
     }
@@ -103,15 +118,18 @@ pub(super) fn extract_sin_group_items(
 /// Fallback: preserve the whole `sin_group` node as a single [`SinToken`].
 ///
 /// This is the removed outer `_` arm, extracted so the outer and inner
-/// unreachable recovery arms share ONE preservation path. The whole group node's
+/// recovery arms share ONE preservation path. The whole group node's
 /// text is decoded and emitted as one `SinItem::Token`, or nothing when empty.
-fn fallback_group_as_token(node: Node, source: &str, errors: &impl ErrorSink) -> Vec<SinItem> {
-    let text = extract_utf8_text(node, source, errors, "sin_item", "");
-    if let Ok(token) = SinToken::new(text) {
-        vec![SinItem::Token(token)]
-    } else {
-        vec![]
-    }
+fn fallback_group_as_token(
+    node: SinGroupNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Vec<SinItem> {
+    SinTokenSource::RecoveryGroup(node)
+        .decode(source, errors)
+        .into_iter()
+        .map(SinItem::Token)
+        .collect()
 }
 
 /// Extracts `SinToken` values from grouped `%sin` content.
@@ -166,13 +184,12 @@ fn extract_sin_grouped_content_tokens(
 /// modeled child. It carries no content, so `Present` is a no-op; the recovery
 /// arms reuse the SAME diagnostic vocabulary the sibling content slots use
 /// (`check_not_missing` / `unexpected_node_error`). Like every other slot in
-/// this cluster, these arms are unreachable in production: the sin parser runs
-/// only when the containing tier node has no tree-sitter error, and the CHAT
-/// lexer never emits two adjacent sign tokens/groups without intervening
-/// whitespace on well-formed input. `context` is the enclosing rule name, so the
+/// this cluster, recovery remains represented by the generated slots even when
+/// the containing tier was admitted without a tree-sitter error.
+/// `context` is the enclosing rule name, so the
 /// diagnostic matches the sibling content-slot diagnostics.
 pub(super) fn push_sin_separator<'tree>(
-    slot: &ChildSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &KindSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,
@@ -200,19 +217,17 @@ pub(super) fn push_sin_separator<'tree>(
 /// - `Error`: the old `_` arm reported `unexpected_node_error`; reproduced here.
 /// - `Absent`: no child at this position; nothing is reported or pushed.
 ///
-/// The `Missing` / `Error` arms are unreachable from the boundary
-/// (this runs only for a `Present` `sin_grouped_content` inside an error-free
-/// tier); they are handled explicitly for exhaustiveness.
+/// The `Missing` / `Error` arms remain explicit; a typed grouped-content node
+/// alone is not proof that its reconstructed slots contain no recovery.
 fn push_sin_token<'tree>(
-    slot: &ChildSlot<'tree, SinWordNode<'tree>>,
+    slot: &KindSlot<'tree, SinWordNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     tokens: &mut Vec<SinToken>,
 ) {
     match slot.view() {
         SlotView::Present(sin_word) => {
-            let text = extract_utf8_text(sin_word.raw_node(), source, errors, "sin_word", "");
-            if let Ok(token) = SinToken::new(text) {
+            if let Some(token) = SinTokenSource::Word(*sin_word).decode(source, errors) {
                 tokens.push(token);
             }
         }
@@ -223,5 +238,52 @@ fn push_sin_token<'tree>(
             errors.report(unexpected_node_error(raw, source, "sin_grouped_content"));
         }
         SlotView::Absent(NoChild) => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use crate::generated_traversal::FromNodeKind;
+    use talkbank_model::{ErrorCode, ErrorCollector, Span};
+
+    /// Direct fallback boundary evidence, not a production recovery witness.
+    #[test]
+    fn typed_group_fallback_preserves_text_and_refuses_incompatible_source() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../corpus/reference/annotation/groups-sign.cha"
+        ));
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let mut pending = vec![parsed.root_node()];
+        let mut groups = 0;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            let Some(group) = SinGroupNode::from_node(node) else {
+                continue;
+            };
+            groups += 1;
+            let errors = ErrorCollector::new();
+            let items = fallback_group_as_token(group, source, &errors);
+            let [SinItem::Token(token)] = items.as_slice() else {
+                panic!("whole group must remain one token");
+            };
+            assert_eq!(token.as_ref(), &source[node.byte_range()]);
+            assert!(errors.to_vec().is_empty());
+            assert!(fallback_group_as_token(group, "", &errors).is_empty());
+            let diagnostics = errors.into_vec();
+            assert_eq!(diagnostics.len(), 1);
+            assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
+            assert_eq!(
+                diagnostics[0].location.span,
+                Span::from_usize(node.start_byte(), node.end_byte())
+            );
+        }
+        assert!(groups > 0, "fixture must supply sign groups");
     }
 }

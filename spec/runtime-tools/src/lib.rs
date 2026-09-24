@@ -23,4 +23,5 @@
 pub mod artifacts;
 pub mod description;
 pub mod error_spec_validation;
+pub mod mutation;
 pub mod observations;

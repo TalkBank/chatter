@@ -6,38 +6,17 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, NoChild, NodeSlot, NonColonSeparatorChoice, NonColonSeparatorNode,
-    SeparatorChoice, SeparatorNode, SlotValue, extract_non_colon_separator, extract_separator,
+    AsRawNode, NoChild, NonColonSeparatorChoice, NonColonSeparatorNode, SeparatorChoice,
+    SeparatorNode, SlotValue, extract_non_colon_separator, extract_separator,
 };
 use crate::model::Separator;
-use crate::node_types::COLON;
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
-/// The single mapping from a non-colon separator node to its model variant.
-///
-/// Exhaustive over the GENERATED `NonColonSeparatorChoice`, which is what makes
-/// it the only one. The same fourteen-way mapping used to be written twice in
-/// this file as `match node.kind()` arms, once here and once in
-/// `parse_separator_like`, with a third partial encoding matching the raw text
-/// `":"`, `","`, `";"`. Two of those three are gone. Each was a closed set a
-/// new grammar alternative could be added behind without breaking anything:
-/// the `_ =>` arms turned an unhandled variant into a RUNTIME rejection, on a
-/// file a user is trying to read.
-///
-/// The raw-text encoding in `parse_separator_like` SURVIVES, and deliberately:
-/// it reads a childless `separator` node, which has no child kind to classify,
-/// so there is nothing for this mapping to be given. It covers three
-/// punctuation marks and does not fall through into the fourteen. Said plainly
-/// here because this docstring is what an audit of "is the separator mapping
-/// duplicated?" will find, and it previously answered no.
-///
-/// Now a new alternative in `non_colon_separator` fails to compile here, which
-/// is the whole point of the generated traversal and is what
-/// `book/src/architecture/parsing.md` means by dispatching on generated types
-/// rather than on `node.kind()` strings.
+/// The single model mapping for the generated non-colon separator choice.
+/// Kind classification belongs to the generator; this match supplies semantics.
 fn separator_for(choice: &NonColonSeparatorChoice<'_>) -> Separator {
     // The span comes from the CHOICE, not from each variant's payload. It used
     // to be `span_of(n.raw_node())` written out fourteen times, which is the
@@ -88,8 +67,10 @@ fn parse_non_colon_separator_node(
 ) -> ParseOutcome<Separator> {
     let node = typed.raw_node();
     let children = extract_non_colon_separator(typed);
-    match children.content.slot() {
-        NodeSlot::Present(choice) => ParseOutcome::parsed(separator_for(choice)),
+    match children.content.slot().typed_or_placeholder() {
+        SlotValue::Present(choice) | SlotValue::Placeholder(choice) => {
+            ParseOutcome::parsed(separator_for(&choice))
+        }
         // Recovery states. The pre-migration code reached these through a
         // `node.child(0)` that could be absent or of an unmodeled kind, and
         // reported one generic message for all of them; the slot names which
@@ -101,12 +82,12 @@ fn parse_non_colon_separator_node(
         // `non_colon_separator`, which is the PARENT rule and not one of the
         // fourteen alternatives, so no classifier can ever answer for it.
         // (The `*CHI:\t.` fixture and the E253/E306 versus E330/E342 shift
-        // belong to the MISSING arm below, which is what actually handles them;
+        // belong to typed Placeholder admission above, which handles them;
         // the comment claiming them here sent readers to the wrong arm.)
-        NodeSlot::Absent(NoChild) => {
+        SlotValue::Absent(NoChild) => {
             reject(node, source, errors, "non_colon_separator has no children")
         }
-        // A MISSING node is classified LIKE A PRESENT ONE, deliberately, and it
+        // A kind-admitted MISSING node is handled LIKE A PRESENT ONE above, and it
         // is the same call `main_tier/structure/contents.rs` records for its
         // own migration: the pre-migration `node.child(0)` never checked
         // `is_missing`, and a MISSING node still carries its kind, so it went
@@ -119,48 +100,27 @@ fn parse_non_colon_separator_node(
         // fixture from E253/E306 to E330/E342, which the CHECK-parity manifest
         // caught. A migration that changes diagnostics is a behaviour change
         // wearing a refactor's clothes.
-        NodeSlot::Missing(missing) => match classify(*missing) {
-            Some(separator) => ParseOutcome::parsed(separator),
-            None => reject(
-                *missing,
-                source,
-                errors,
-                "non_colon_separator is a MISSING placeholder",
-            ),
-        },
-        NodeSlot::Error(error) => reject(
-            *error,
+        // The generated view owns classification. An unclassified placeholder
+        // still takes the historical refusal below, never the semantic mapping.
+        SlotValue::UnclassifiedPlaceholder(missing) => reject(
+            missing,
+            source,
+            errors,
+            "non_colon_separator is a MISSING placeholder",
+        ),
+        SlotValue::Error(error) => reject(
+            error,
             source,
             errors,
             "non_colon_separator contains an ERROR node",
         ),
-        NodeSlot::Unexpected(other) => reject(
-            *other,
+        SlotValue::Unexpected(other) => reject(
+            other,
             source,
             errors,
             format!("Unknown non_colon_separator kind '{}'", other.kind()),
         ),
     }
-}
-
-/// The `Separator` a node denotes, or `None` if it denotes none.
-///
-/// The two halves of reaching a model value from a bare node: ask the generated
-/// classifier which alternative this kind is, then map that alternative. Both
-/// callers want exactly this pair and differ only in what they do with the
-/// `None`, so pairing them here keeps [`separator_for`] the sole mapping while
-/// giving the classifier one call site per question rather than per caller.
-///
-/// NOT `NodeSlot::typed_or_placeholder`, which answers this same question for a
-/// slot and would collapse the `Present` and `Missing` arms above into one. Its
-/// `None` cannot say WHICH state produced it, and the four failing states here
-/// carry four different diagnostics: a childless node, a MISSING placeholder of
-/// no modeled kind, an ERROR subtree, and an unmodeled kind. Merging the top of
-/// the match would force the slot to be re-matched underneath to recover the
-/// distinction, with an unreachable arm for the two states already handled.
-/// Same trade-off, and the same answer, as `tier_parsers/text/helpers.rs`.
-fn classify(node: Node<'_>) -> Option<Separator> {
-    NonColonSeparatorChoice::from_node(node).map(|choice| separator_for(&choice))
 }
 
 /// Report a tree-parsing rejection at `node`.
@@ -195,7 +155,7 @@ fn reject(
 /// already documents for `non_colon_separator`: a MISSING node carries the kind
 /// the parser expected, and rejecting it instead moved `*CHI:\t.` from E253/E306
 /// to E330/E342 once before.
-fn parse_separator_node(
+fn parse_separator_contents(
     typed: SeparatorNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
@@ -235,49 +195,28 @@ fn parse_separator_node(
     }
 }
 
-/// Parse either `separator` or separator-like leaf nodes.
-pub(crate) fn parse_separator_like(
-    node: Node,
+/// Parse the separator alternative produced by `contents`.
+///
+/// The producer already classified the carrier. Bare colon/non-colon leaves
+/// cannot enter this boundary; recovery inside the separator remains explicit.
+pub(crate) fn parse_separator_node(
+    typed: SeparatorNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Separator> {
-    // Same hoist as in [`parse_separator_node`], for the same reason.
-    if let Some(non_colon) = NonColonSeparatorNode::from_node(node) {
-        return parse_non_colon_separator_node(non_colon, source, errors);
+    let node = typed.raw_node();
+    // Preserve the childless recovery policy: only the three punctuation
+    // spellings have a text interpretation, and empty/unknown text rejects.
+    if node.child_count() == 0
+        && let Some(text) = source.get(node.byte_range())
+    {
+        let span = span_of(node);
+        return match text {
+            ":" => ParseOutcome::parsed(Separator::Colon { span }),
+            "," => ParseOutcome::parsed(Separator::Comma { span }),
+            ";" => ParseOutcome::parsed(Separator::Semicolon { span }),
+            _ => ParseOutcome::rejected(),
+        };
     }
-    // `SeparatorNode::from_node` in place of the `SEPARATOR` constant, for the
-    // same reason as the hoist above.
-    if let Some(separator) = SeparatorNode::from_node(node) {
-        // A childless `separator` is a recovery shape: the node exists but
-        // holds no alternative, so the typed extractor has nothing to
-        // classify and the surface text is the only evidence left. Kept
-        // deliberately, and narrow: three punctuation marks, no fallthrough
-        // into the general mapping.
-        if node.child_count() == 0
-            && let Ok(text) = node.utf8_text(source.as_bytes())
-        {
-            let span = span_of(node);
-            return match text {
-                ":" => ParseOutcome::parsed(Separator::Colon { span }),
-                "," => ParseOutcome::parsed(Separator::Comma { span }),
-                ";" => ParseOutcome::parsed(Separator::Semicolon { span }),
-                _ => ParseOutcome::rejected(),
-            };
-        }
-        return parse_separator_node(separator, source, errors);
-    }
-    match node.kind() {
-        COLON => ParseOutcome::parsed(Separator::Colon {
-            span: span_of(node),
-        }),
-        // A BARE LEAF: a `comma` or `rising_to_high` node reached directly,
-        // not through its `non_colon_separator` parent. The generated
-        // classifier lifts it into the choice, so the ONE mapping below still
-        // does the work; a leaf of no modeled kind answers `None` and is
-        // rejected, exactly as the pre-migration catch-all arm did.
-        _ => match classify(node) {
-            Some(separator) => ParseOutcome::parsed(separator),
-            None => ParseOutcome::rejected(),
-        },
-    }
+    parse_separator_contents(typed, source, errors)
 }

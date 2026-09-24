@@ -8,7 +8,7 @@
 
 import { useMemo, useState, useCallback } from "react";
 import type { RunPhase } from "../hooks/useValidation";
-import { shouldShowAllFilesValid, totalFilesOf } from "../hooks/validationState";
+import { fileOutcome, shouldShowAllFilesValid, totalFilesOf } from "../hooks/validationState";
 import type { FileEntry, TreeNode } from "../types";
 
 interface Props {
@@ -28,7 +28,7 @@ export default function FileTree({ files, run, selectedFile, onSelectFile }: Pro
   const filesWithErrors = useMemo(() => {
     const filtered = new Map<string, FileEntry>();
     for (const [key, entry] of files) {
-      if (entry.diagnostics.length > 0) {
+      if (fileOutcome(entry).kind === "problem") {
         filtered.set(key, entry);
       }
     }
@@ -50,7 +50,7 @@ export default function FileTree({ files, run, selectedFile, onSelectFile }: Pro
   // `errorFileCount === 0` is also true for the entire window between
   // "discovery done" and "last file actually validated" whenever no error has
   // streamed in *yet* - not the same thing as every file being valid. See
-  // apps/chatter-desktop/CLAUDE.md and the desktop-vs-CLI divergence writeup
+  // apps/chatter-desktop/AGENTS.md and the desktop-vs-CLI divergence writeup
   // this test regression-guards.
   if (shouldShowAllFilesValid(run, errorFileCount)) {
     return (

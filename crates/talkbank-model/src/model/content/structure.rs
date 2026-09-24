@@ -11,13 +11,11 @@
 //! the two walkers shared no definition of "container", so there was no
 //! artifact for the compiler or a test to find the disagreement in.
 //!
-//! One owner makes that disagreement unrepresentable FOR ITS CONSUMERS. Be
-//! precise about who those are, because the first draft of this comment was
-//! not: today they are the retrace validators (`validation::retrace::visit`
-//! and `without_words`) and nobody else. `alignment::helpers::walk` still
-//! carries eight independent container matches of its own, and roughly a dozen
-//! other walkers under `validation/` and `alignment/` carry one each. Adding a
-//! container variant is a compile error HERE and a silent omission THERE.
+//! One owner makes that disagreement unrepresentable for its consumers.
+//! The CA delimiter collector now uses this walk and `WordRef::words` for both
+//! top-level and nested content, alongside the existing structural consumers.
+//! Underline leaves retain marker direction and optional source location, so
+//! underline validation also uses this owner rather than re-deriving containers.
 //!
 //! Migrating them is not mechanical, and the reason was worth recording: `Word`
 //! and `Container` were payload-free, while the walkers that would adopt them
@@ -273,7 +271,7 @@ impl<'a> AngleRef<'a> {
     }
 }
 
-/// Whether a leaf is material a listener would HEAR.
+/// Whether a leaf is audible material or notation, retaining underline markers.
 ///
 /// A CHAT fact, so the model owns it. It was written out per variant in
 /// `validation::retrace::collection`, twice, once per content enum, sixteen
@@ -283,9 +281,13 @@ pub enum LeafContent {
     /// Events, pauses and other spoken events: audible material.
     Spoken,
     /// Separators, overlap points, bullets, freecodes, actions, and the
-    /// long-feature, underline and nonvocal delimiters: notation ABOUT the
+    /// long-feature and nonvocal delimiters: notation ABOUT the
     /// utterance rather than speech in it.
     Notation,
+    /// Underline opening marker, with a location when source-derived.
+    UnderlineBegin(Option<crate::Span>),
+    /// Underline closing marker, with a location when source-derived.
+    UnderlineEnd(Option<crate::Span>),
 }
 
 /// A leaf: content that encloses nothing further.
@@ -298,7 +300,7 @@ pub enum LeafContent {
 /// facts are fields now, so neither can be read as the other.
 #[derive(Debug, Clone, Copy)]
 pub struct LeafRef<'a> {
-    /// Whether this leaf is audible material.
+    /// Audible material or notation, including underline direction/location.
     pub content: LeafContent,
     /// The annotations scoped to it, empty when it carries none.
     pub annotations: &'a [ContentAnnotation],
@@ -319,12 +321,12 @@ impl<'a> LeafRef<'a> {
 /// [`ContentStructure::Word`] was payload-free in its first version, and that
 /// is what blocked every migration onto this type: `temporal::has_transcribed_content`
 /// needs the `&Word` to ask whether it is untranscribed, and
-/// `main_tier::word_recursion` WOULD need the whole `Annotated<Word>` so it can
-/// validate the annotations rather than only the word inside them. It does not
-/// use this type today, and the distinction matters: its own header explains
-/// that it must hand each item to that item's `Validate` impl, so migrating it
-/// carelessly would drop the annotation validation. A classification that
-/// forces its callers to re-match the enum is not an owner.
+/// `main_tier::word_recursion` now uses this view to preserve each word form's
+/// validation. It establishes the annotation-selected language scope, validates
+/// bare/annotated word payloads, and delegates replaced words to their own
+/// `Validate` implementation. Unknown-annotation checks have a separate shared
+/// traversal owner; flattening replaced words here would still lose their
+/// replacement-specific rules.
 ///
 /// `Replaced` deliberately keeps the `ReplacedWord` rather than flattening to
 /// its surface word: `dog [: cat]` contributes BOTH the produced form and the
@@ -642,6 +644,12 @@ impl UtteranceContent {
             Self::Quotation(quotation) => {
                 ContentStructure::Group(GroupRef::Quotation(QuotationRef::bare(quotation)))
             }
+            Self::UnderlineBegin(marker) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineBegin(marker.span())))
+            }
+            Self::UnderlineEnd(marker) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineEnd(marker.span())))
+            }
             Self::PhoGroup(group) => ContentStructure::Group(GroupRef::Pho(group)),
             Self::SinGroup(group) => ContentStructure::Group(GroupRef::Sin(group)),
             // Listed rather than caught by `_`: a catch-all here would route a
@@ -656,8 +664,6 @@ impl UtteranceContent {
             | Self::InternalBullet(_)
             | Self::LongFeatureBegin(_)
             | Self::LongFeatureEnd(_)
-            | Self::UnderlineBegin(_)
-            | Self::UnderlineEnd(_)
             | Self::NonvocalBegin(_)
             | Self::NonvocalEnd(_)
             | Self::NonvocalSimple(_) => {
@@ -689,6 +695,12 @@ impl BracketedItem {
             Self::Quotation(quotation) => {
                 ContentStructure::Group(GroupRef::Quotation(QuotationRef::bare(quotation)))
             }
+            Self::UnderlineBegin(marker) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineBegin(marker.span())))
+            }
+            Self::UnderlineEnd(marker) => {
+                ContentStructure::Leaf(LeafRef::bare(LeafContent::UnderlineEnd(marker.span())))
+            }
             Self::PhoGroup(group) => ContentStructure::Group(GroupRef::Pho(group)),
             Self::SinGroup(group) => ContentStructure::Group(GroupRef::Sin(group)),
             Self::AnnotatedEvent(annotated) => ContentStructure::Leaf(LeafRef {
@@ -710,8 +722,6 @@ impl BracketedItem {
             | Self::Freecode(_)
             | Self::LongFeatureBegin(_)
             | Self::LongFeatureEnd(_)
-            | Self::UnderlineBegin(_)
-            | Self::UnderlineEnd(_)
             | Self::NonvocalBegin(_)
             | Self::NonvocalEnd(_)
             | Self::NonvocalSimple(_) => {

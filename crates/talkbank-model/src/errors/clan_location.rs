@@ -1,6 +1,7 @@
 //! CLAN-adjusted error location resolution.
 //!
-//! CLAN hides certain header lines (@UTF8, @PID, @Font, @ColorWords, @Window)
+//! CLAN hides certain header lines (@UTF8, @PID, @Color words, @Window,
+//! and @Font with a CAfont value)
 //! from its editor display and line numbering. When sending an error location
 //! to CLAN, the line number must be adjusted to account for these hidden lines.
 //!
@@ -9,6 +10,7 @@
 //! CLAN-compatible coordinates.
 
 use super::source_location::SourceLocation;
+use std::num::NonZeroUsize;
 
 /// CLAN-adjusted line and column for sending to the CLAN editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,7 +33,7 @@ impl std::fmt::Display for ClanHiddenLineError {
         write!(
             f,
             "Error is on line {} which is a CLAN hidden header \
-             (@UTF8/@PID/@Font/@ColorWords/@Window), CLAN does not display this line",
+             (@UTF8/@PID/@Color words/@Window or CAfont metadata), CLAN does not display this line",
             self.source_line
         )
     }
@@ -56,33 +58,45 @@ pub fn resolve_clan_location(
         _ => SourceLocation::calculate_line_column(location.span.start as usize, source),
     };
 
-    let hidden = count_clan_hidden_lines(source, line);
-    let clan_line = line as isize - hidden as isize;
-
-    if clan_line < 1 {
-        return Err(ClanHiddenLineError { source_line: line });
-    }
+    let clan_line = visible_line(source, line).ok_or(ClanHiddenLineError { source_line: line })?;
 
     Ok(ClanLocation {
-        line: clan_line as usize,
+        line: clan_line.get(),
         column,
     })
 }
 
-/// Header prefixes that CLAN hides from its editor display and line numbering.
-const CLAN_HIDDEN_PREFIXES: &[&str] = &["@UTF8", "@PID", "@Font", "@ColorWords", "@Window"];
+/// Mac CLAN's document reader matches complete, case-insensitive header names.
+/// Its font reader removes only CAfont metadata, not arbitrary font headers.
+fn is_hidden_header(line: &str) -> bool {
+    let Some((name, value)) = line.split_once(':') else {
+        return line.eq_ignore_ascii_case("@UTF8");
+    };
+    if name.eq_ignore_ascii_case("@Font") {
+        return value
+            .trim_start_matches([' ', '\t'])
+            .get(..7)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("CAfont:"));
+    }
+    ["@PID", "@Color words", "@Window"]
+        .iter()
+        .any(|header| name.eq_ignore_ascii_case(header))
+}
 
-/// Count header lines before `up_to_line` (1-indexed) that CLAN hides.
-fn count_clan_hidden_lines(source: &str, up_to_line: usize) -> usize {
-    source
-        .lines()
-        .take(up_to_line)
-        .filter(|line| {
-            CLAN_HIDDEN_PREFIXES
-                .iter()
-                .any(|prefix| line.starts_with(prefix))
-        })
-        .count()
+/// Admit only a visible, nonzero display row. A hidden source row has no
+/// display coordinate, even when visible rows precede it. Unsigned checked
+/// arithmetic also preserves cached coordinates larger than isize::MAX.
+fn visible_line(source: &str, source_line: usize) -> Option<NonZeroUsize> {
+    let mut hidden = 0;
+    for (index, line) in source.lines().take(source_line).enumerate() {
+        if is_hidden_header(line) {
+            if index + 1 == source_line {
+                return None;
+            }
+            hidden += 1;
+        }
+    }
+    source_line.checked_sub(hidden).and_then(NonZeroUsize::new)
 }
 
 #[cfg(test)]
@@ -116,7 +130,7 @@ mod tests {
 
     #[test]
     fn multiple_hidden_headers() {
-        let source = "@UTF8\n@PID:\t123\n@Font:\tWin\n@Begin\n*CHI:\thello .\n@End\n";
+        let source = "@UTF8\n@PID:\t123\n@Font:\tCAfont:13:0\n@Begin\n*CHI:\thello .\n@End\n";
         // Line 5 (*CHI:), 3 hidden headers (@UTF8, @PID, @Font) → CLAN line 2
         let result = resolve_clan_location(&loc(0, 1, Some(5), Some(1)), source).unwrap();
         assert_eq!(result, ClanLocation { line: 2, column: 1 });
@@ -149,7 +163,7 @@ mod tests {
 
     #[test]
     fn colorwords_header_is_hidden() {
-        let source = "@UTF8\n@ColorWords:\t$BLU\n@Begin\n*CHI:\thello .\n@End\n";
+        let source = "@UTF8\n@Color words:\t$BLU\n@Begin\n*CHI:\thello .\n@End\n";
         // Line 4, 2 hidden → CLAN line 2
         let result = resolve_clan_location(&loc(0, 1, Some(4), Some(1)), source).unwrap();
         assert_eq!(result, ClanLocation { line: 2, column: 1 });

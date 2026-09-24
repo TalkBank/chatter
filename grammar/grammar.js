@@ -51,6 +51,10 @@ const EVENT_SEGMENT_FORBIDDEN = EVENT_SEGMENT_FORBIDDEN_BASE
 // Used by: id_corpus, id_group, id_education, id_custom_field, and id_age catch-all.
 const TRIMMED_PIPE_FIELD = /[^ \t\|\r\n]([^\|\r\n]*[^ \t\|\r\n])?/;
 
+// Timed pauses have the same spelling on main and phonological tiers.
+// Admit the colon only inside this complete token, never as an IPA character.
+const TIMED_PAUSE = /\(\d+(?::\d+)?\.\d*\)/;
+
 // The same shape for a COMMA-delimited field: everything up to the delimiter,
 // interior spaces kept, edge whitespace excluded. Used by `media_filename`.
 // A leading `"` is excluded so the quoted alternative wins unambiguously; a
@@ -655,7 +659,7 @@ export default grammar({
     eg_header: $ => seq($.eg_prefix, optional(seq($.header_sep, $.free_text)), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#G_Header
-    g_header: $ => seq($.g_prefix, $.header_sep, $.free_text, $.newline),
+    g_header: $ => seq($.g_prefix, optional(seq($.header_sep, $.free_text)), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#New_Episode_Header
     new_episode_header: $ => seq($.new_episode_prefix, $.newline),
@@ -1138,7 +1142,7 @@ export default grammar({
       '(.)',
       '(..)',
       '(...)',
-      /\(\d+(?::\d+)?\.\d*\)/,
+      TIMED_PAUSE,
     ))),
 
     // ============================================================================
@@ -2122,7 +2126,10 @@ export default grammar({
     // attested as a diacritic on the preceding vowel (TalkBank/chatter#7),
     // and its two block-mates \ua71d and \ua71f are admitted with it as the
     // rest of the block already was.
-    pho_word: $ => /[a-zA-Z0-9\u0061-\u007a\u00b9\u00b2\u00b3\u00e6-\u2038\u203b-\ua71f\u0250-\u02af\u1d00-\u1dbf\u2016\u203f\u207f\u2197-\u2198\u2c71\u2e28-\u2e29CGVSX\(\.\)\^\u0335*]+/,
+    pho_word: $ => token(choice(
+      TIMED_PAUSE,
+      /[a-zA-Z0-9\u0061-\u007a\u00b9\u00b2\u00b3\u00e6-\u2038\u203b-\ua71f\u0250-\u02af\u1d00-\u1dbf\u2016\u203f\u207f\u2197-\u2198\u2c71\u2e28-\u2e29CGVSX\(\.\)\^\u0335*]+/,
+    )),
 
     sin_groups: $ => seq(
       $.sin_group,

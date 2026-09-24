@@ -3,7 +3,7 @@
 //! Driven by the generated typed visitor: the speaker prefix is read from the
 //! `extract_main_tier` slots (`star`, `speaker`, `colon`, `tab`) instead of a
 //! positional `node.kind()` hand-walk. Each slot is matched EXHAUSTIVELY over
-//! [`NodeSlot`] so a recovery node (MISSING / ERROR / unexpected kind) is handled
+//! `KindSlotValue` so a recovery node (MISSING / ERROR) is handled
 //! explicitly rather than silently dropped. The recovery diagnostics
 //! (`MissingSpeaker`, `EmptyColon`, the `StructuralOrderError` "unexpected child"
 //! / "missing tab" messages) are reproduced byte-identically from the previous
@@ -18,9 +18,64 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
-use crate::generated_traversal::{AsRawNode, MainTierChildren, NoChild, SlotView};
+use crate::generated_traversal::{
+    AsRawNode, ColonNode, KindMissing, KindSlotValue, MainTierChildren, NoChild, NodeSlot,
+    RecoveryNode, SpeakerNode,
+};
+use crate::parser::typed_cst::read_present_child;
 
-use super::{ParsedSpeakerPrefix, PrefixData, report_missing_child, report_unexpected_child};
+use super::{PrefixData, ReportedMainTierError, report_missing_child, report_unexpected_child};
+
+/// Admitted nonempty speaker text together with the span that supplied it.
+/// Fields are private to the admitting module; conversion consumes the result.
+pub(super) struct ParsedSpeakerPrefix {
+    code: String,
+    span: Span,
+}
+
+impl ParsedSpeakerPrefix {
+    fn admit(
+        node: SpeakerNode<'_>,
+        source: &str,
+        errors: &impl ErrorSink,
+    ) -> Result<Self, ReportedMainTierError> {
+        let raw = node.raw_node();
+        if raw.start_byte() == raw.end_byte() {
+            return Err(report_empty_speaker(node, source, errors));
+        }
+        let code = read_present_child(&node, source, "speaker", |err| {
+            format!("Cannot read main-tier speaker: {err}")
+        })
+        .map_err(|error| ReportedMainTierError::report(error, errors))?;
+        Ok(Self {
+            code,
+            span: Span::new(raw.start_byte() as u32, raw.end_byte() as u32),
+        })
+    }
+
+    pub(super) fn into_parts(self) -> (String, Span) {
+        (self.code, self.span)
+    }
+}
+
+fn report_empty_speaker(
+    typed: SpeakerNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ReportedMainTierError {
+    let node = typed.raw_node();
+    ReportedMainTierError::report(
+        ParseError::new(
+            ErrorCode::MissingSpeaker,
+            Severity::Error,
+            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
+            "Missing speaker in main tier",
+        )
+        .with_suggestion("Main tier should start with *SPEAKER:"),
+        errors,
+    )
+}
 
 /// Positional labels used in the `StructuralOrderError` "unexpected child"
 /// diagnostics. The `star` slot keeps its bespoke `(*)` message inline below, so
@@ -43,18 +98,11 @@ pub(super) fn parse_prefix(
     original_input: &str,
     errors: &impl ErrorSink,
 ) -> PrefixData {
-    // Position 0: star. A `Present` or `Missing` star keeps kind `star`, so the
-    // old `child.kind() == STAR` branch accepted both with no diagnostic; a
-    // plain `_` binding is sound here even though `Present` now carries a typed
-    // `StarNode` while `Missing` carries a bare `Node` under the NEW closed
-    // `NodeSlot` (an or-pattern of unbound wildcards does not require its
-    // alternatives to share a type). An ERROR / unexpected-kind node reproduces
-    // the bespoke "Expected 'star' (*)" structural diagnostic (an ERROR node's
-    // `kind()` is "ERROR", matching the old `found '{}'` text); an absent star
-    // reproduces the missing-star diagnostic.
-    match main.child_0.slot().view() {
-        SlotView::Present(_) | SlotView::Missing(_) => {}
-        SlotView::Error(node) => {
+    // Present and kind-proven MISSING stars preserve the existing acceptance
+    // policy. ERROR and absent slots keep their distinct diagnostics.
+    match main.child_0.slot().known_or_placeholder() {
+        KindSlotValue::Present(_) | KindSlotValue::Placeholder(_) => {}
+        KindSlotValue::Error(node) => {
             errors.report(ParseError::new(
                 ErrorCode::StructuralOrderError,
                 Severity::Error,
@@ -66,75 +114,51 @@ pub(super) fn parse_prefix(
                 ),
             ));
         }
-        SlotView::Absent(NoChild) => report_missing_child(
-            carrier.clone(),
-            original_input,
-            errors,
-            ErrorCode::MissingSpeaker,
-            "Missing star (*) at beginning of main tier",
-        ),
-    }
-
-    // Position 1: speaker. `Present` carries a typed `SpeakerNode`, `Missing`
-    // carries a bare `Node`: both need the raw node's byte range for the
-    // zero-width check, so they are collapsed into one `Option<Node>` up front
-    // (exhaustive over all 5 states, no `_ =>`) rather than duplicating the
-    // zero-width-check body per arm.
-    let mut speaker = None;
-    let speaker_raw_node = match main.speaker.slot().view() {
-        SlotView::Present(speaker_node) => Some(speaker_node.raw_node()),
-        SlotView::Missing(node) => Some(node),
-        SlotView::Error(node) => {
-            report_unexpected_child(node, source, errors, "speaker", SPEAKER_POSITION);
-            None
-        }
-        SlotView::Absent(NoChild) => {
+        KindSlotValue::Absent(NoChild) => {
             report_missing_child(
                 carrier.clone(),
                 original_input,
                 errors,
                 ErrorCode::MissingSpeaker,
-                "Missing speaker in main tier",
+                "Missing star (*) at beginning of main tier",
             );
-            None
-        }
-    };
-    // A zero-width `speaker` token (a `Present` empty node or a MISSING
-    // placeholder, both zero-width) is reported as missing. A MISSING node is
-    // always zero-width, so it shares the diagnostic path of a zero-width
-    // `Present`; the old branch keyed on `is_missing() || start == end`.
-    if let Some(node) = speaker_raw_node {
-        if node.start_byte() == node.end_byte() {
-            errors.report(
-                ParseError::new(
-                    ErrorCode::MissingSpeaker,
-                    Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-                    "Missing speaker in main tier",
-                )
-                .with_suggestion("Main tier should start with *SPEAKER:"),
-            );
-        } else {
-            speaker = Some(ParsedSpeakerPrefix {
-                code: source[node.start_byte()..node.end_byte()].to_string(),
-                span: Span::new(node.start_byte() as u32, node.end_byte() as u32),
-            });
         }
     }
 
-    // Position 2: colon. Same Present/Missing type-mismatch collapse as speaker
-    // above. A zero-width colon (a `Present` empty node or a MISSING
-    // placeholder, both zero-width) is reported as `EmptyColon`; the old branch
-    // reported `EmptyColon` whenever the colon node was zero width.
-    let colon_raw_node = match main.child_2.slot().view() {
-        SlotView::Present(colon_node) => Some(colon_node.raw_node()),
-        SlotView::Missing(node) => Some(node),
-        SlotView::Error(node) => {
-            report_unexpected_child(node, source, errors, "colon", COLON_POSITION);
-            None
+    // Retain the generated speaker type through checked text admission. A
+    // MISSING placeholder is zero-width recovery, never an admitted code.
+    let speaker = match main.speaker.slot().known_or_placeholder() {
+        KindSlotValue::Present(speaker_node) => {
+            ParsedSpeakerPrefix::admit(speaker_node, source, errors)
         }
-        SlotView::Absent(NoChild) => {
+        KindSlotValue::Placeholder(node) => Err(report_empty_speaker(node, source, errors)),
+        KindSlotValue::Error(node) => Err(report_unexpected_child(
+            node,
+            source,
+            errors,
+            "speaker",
+            SPEAKER_POSITION,
+        )),
+        KindSlotValue::Absent(NoChild) => Err(report_missing_child(
+            carrier.clone(),
+            original_input,
+            errors,
+            ErrorCode::MissingSpeaker,
+            "Missing speaker in main tier",
+        )),
+    };
+    // The producer classifies is_missing before constructing Present. Keep
+    // that proof instead of erasing it and rediscovering it from byte width.
+    match main.child_2.slot() {
+        NodeSlot::Present(_) => {}
+        NodeSlot::Missing(colon) => {
+            report_empty_colon(*colon, original_input, errors);
+        }
+        NodeSlot::Error(node) => {
+            report_unexpected_child(*node, source, errors, "colon", COLON_POSITION);
+        }
+        NodeSlot::Unexpected(never) => match *never {},
+        NodeSlot::Absent(NoChild) => {
             report_missing_child(
                 carrier.clone(),
                 original_input,
@@ -142,30 +166,24 @@ pub(super) fn parse_prefix(
                 ErrorCode::MissingColonAfterSpeaker,
                 "Missing colon (:) after speaker in main tier",
             );
-            None
         }
-    };
-    if let Some(node) = colon_raw_node
-        && node.start_byte() == node.end_byte()
-    {
-        report_empty_colon(node.start_byte(), node.end_byte(), original_input, errors);
     }
 
-    // Position 3: tab. A `Present` or `Missing` tab keeps kind `tab`, so the old
-    // `child.kind() == TAB` branch accepted both with no diagnostic (see the
-    // star-position note above on why the unbound `_ | _` arm is sound).
-    match main.child_3.slot().view() {
-        SlotView::Present(_) | SlotView::Missing(_) => {}
-        SlotView::Error(node) => {
+    // Tab identity also survives MISSING recovery without reclassification.
+    match main.child_3.slot().known_or_placeholder() {
+        KindSlotValue::Present(_) | KindSlotValue::Placeholder(_) => {}
+        KindSlotValue::Error(node) => {
             report_unexpected_child(node, source, errors, "tab", TAB_POSITION);
         }
-        SlotView::Absent(NoChild) => report_missing_child(
-            carrier,
-            original_input,
-            errors,
-            ErrorCode::StructuralOrderError,
-            "Missing tab after colon in main tier",
-        ),
+        KindSlotValue::Absent(NoChild) => {
+            report_missing_child(
+                carrier,
+                original_input,
+                errors,
+                ErrorCode::StructuralOrderError,
+                "Missing tab after colon in main tier",
+            );
+        }
     }
 
     PrefixData { speaker }
@@ -177,19 +195,71 @@ pub(super) fn parse_prefix(
 /// the colon node's (zero-width) span, the context spans the full original input,
 /// and the suggestion is preserved.
 fn report_empty_colon(
-    colon_start: usize,
-    colon_end: usize,
+    colon: KindMissing<ColonNode<'_>>,
     original_input: &str,
     errors: &impl ErrorSink,
 ) {
+    let node = colon.node();
     errors.report(
         ParseError::new(
             ErrorCode::EmptyColon,
             Severity::Error,
-            SourceLocation::from_offsets(colon_start, colon_end),
+            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
             ErrorContext::new(original_input, 0..original_input.len(), original_input),
             "Empty colon (zero-width node) in main tier".to_string(),
         )
         .with_suggestion("Add ':' after speaker code (e.g., '*CHI:')"),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use crate::error::ErrorCollector;
+    use crate::generated_traversal::FromNodeKind;
+
+    #[test]
+    fn real_speakers_admit_text_and_span_together_and_refuse_incompatible_sources() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../corpus/reference/content/linkers-multiple.cha"
+        ));
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let foreign = "é".repeat(source.len());
+        let mut pending = vec![parsed.root_node()];
+        let mut checked = 0;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            let Some(speaker) = SpeakerNode::from_node(node) else {
+                continue;
+            };
+            let errors = ErrorCollector::new();
+            let admitted = ParsedSpeakerPrefix::admit(speaker, source, &errors)
+                .unwrap_or_else(|_| panic!("fixture speaker must be admitted"));
+            let (code, span) = admitted.into_parts();
+            assert_eq!(code, &source[node.byte_range()]);
+            assert_eq!(
+                span,
+                Span::new(node.start_byte() as u32, node.end_byte() as u32)
+            );
+            assert!(errors.to_vec().is_empty());
+            assert_eq!(code.len() % 2, 1, "foreign source must cut a code point");
+            for incompatible in ["", foreign.as_str()] {
+                let errors = ErrorCollector::new();
+                assert!(ParsedSpeakerPrefix::admit(speaker, incompatible, &errors).is_err());
+                let diagnostics = errors.into_vec();
+                assert_eq!(diagnostics.len(), 1);
+                assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
+                assert_eq!(diagnostics[0].severity, Severity::Error);
+                assert_eq!(diagnostics[0].location.span, span);
+            }
+            checked += 1;
+        }
+        assert!(checked > 0, "fixture must exercise speaker admission");
+    }
 }

@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Media:	sample, audio
+*CHI:	hello world again today .
+%wor:	hello 100_200 world again 350_350 today 50_150 .
+@End

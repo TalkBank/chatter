@@ -1,5 +1,5 @@
 //! The slot-state census: which states has each typed position ever been
-//! seen in, over every CHAT file in the repository?
+//! seen in, over an admitted CHAT population?
 //!
 //! The hand-written parser carries a recovery arm for every state its
 //! position's type admits. Coverage says which arms no test reaches; this
@@ -15,94 +15,99 @@
 //! cargo run -p talkbank-parser-tests --example slot_state_census [-- <dir>...]
 //! ```
 //!
-//! With no directories, every `*.cha` under the repository root except
-//! `target/` and `node_modules/`. Output is Markdown on stdout: one table over
-//! every position, then the two lists a reader acts on.
+//! With no directories, admit the reference and error corpora. Explicit roots
+//! override that finite population. Discovery, source reads and tree production
+//! must all succeed before a census is printed; no files are silently skipped.
+//! Output is Markdown: one table over every position, then two action lists.
 
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use talkbank_parser_tests::conformance::{Container, Observation, Observed, dispatch, walk_all};
+use sha2::{Digest, Sha256};
+use talkbank_parser_tests::chat_corpus::ChatCorpus;
+use talkbank_parser_tests::conformance::{
+    Container, Observation, Observed, Position, dispatch, walk_all,
+};
 
 /// Per position: per observed state, how many visits and one file that
 /// showed it.
-type Census =
-    BTreeMap<(&'static str, &'static str, Container), BTreeMap<Observed, (usize, String)>>;
+type Census = BTreeMap<(&'static str, Position, Container), BTreeMap<Observed, (usize, String)>>;
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
-}
-
-fn chat_files(dirs: &[PathBuf]) -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = dirs
-        .iter()
-        .flat_map(|dir| {
-            walkdir::WalkDir::new(dir)
-                .into_iter()
-                .filter_entry(|e| {
-                    let name = e.file_name().to_string_lossy();
-                    name != "target" && name != "node_modules" && name != ".git"
-                })
-                .filter_map(Result::ok)
-                .filter(|e| e.path().extension().is_some_and(|ext| ext == "cha"))
-                .map(walkdir::DirEntry::into_path)
-        })
-        .collect();
-    files.sort();
-    files.dedup();
-    files
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let root = repo_root();
     let args: Vec<PathBuf> = std::env::args().skip(1).map(PathBuf::from).collect();
     let dirs = if args.is_empty() {
-        vec![root.clone()]
+        vec![
+            root.join("corpus/reference"),
+            root.join("crates/talkbank-parser-tests/tests/error_corpus"),
+        ]
     } else {
         args
     };
-    let files = chat_files(&dirs);
+    let corpora = dirs
+        .iter()
+        .map(|dir| ChatCorpus::read(dir))
+        .collect::<Result<Vec<_>, _>>()?;
+    let fixtures: BTreeMap<_, _> = corpora
+        .iter()
+        .flat_map(ChatCorpus::fixtures)
+        .map(|fixture| (fixture.path(), fixture))
+        .collect();
 
     let mut parser = tree_sitter::Parser::new();
     let lang: tree_sitter::Language = tree_sitter_talkbank::LANGUAGE.into();
     parser.set_language(&lang)?;
 
     let mut census: Census = BTreeMap::new();
-    let mut parsed = 0usize;
-    for path in &files {
-        let source = std::fs::read_to_string(path)?;
-        let Some(tree) = parser.parse(&source, None) else {
-            eprintln!("skipped (no tree): {}", path.display());
-            continue;
-        };
-        parsed += 1;
-        let shown = path
-            .strip_prefix(&root)
-            .map_or_else(|_| path.display().to_string(), |p| p.display().to_string());
+    let mut population = Sha256::new();
+    for (path, fixture) in &fixtures {
+        let tree = parser.parse(fixture.source(), None).ok_or_else(|| {
+            std::io::Error::other(format!("no parse tree for {}", path.display()))
+        })?;
+        let relative = path.strip_prefix(&root).unwrap_or(path);
+        let shown = relative
+            .to_str()
+            .ok_or_else(|| std::io::Error::other("census fixture path is not UTF-8"))?;
+        // Sorted path, NUL delimiter, fixed-width source digest. Bind the
+        // observation to the exact admitted population for later reuse.
+        population.update(shown.as_bytes());
+        population.update([0]);
+        population.update(Sha256::digest(fixture.source().as_bytes()));
         walk_all(tree.root_node(), &mut |node| {
             let mut raw: Vec<Observation> = Vec::new();
             dispatch(node, &mut raw);
             for o in raw {
                 let per_state = census
-                    .entry((o.rule_kind, o.slot, o.container))
+                    .entry((o.rule_kind, o.position, o.container))
                     .or_default();
                 let cell = per_state
                     .entry(o.observed)
-                    .or_insert_with(|| (0, shown.clone()));
+                    .or_insert_with(|| (0, shown.to_owned()));
                 cell.0 += 1;
             }
         });
     }
 
     println!("# Slot-state census\n");
+    let population_sha256: String = population
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    println!("Source population SHA-256: `{population_sha256}`\n");
     println!(
-        "{parsed} files parsed under {} root(s); {} positions observed.\n",
+        "{} admitted files parsed under {} root(s); {} positions observed.\n",
+        fixtures.len(),
         dirs.len(),
         census.len()
     );
     println!(
-        "| rule | slot | container | Present | Missing | Error | Unexpected | Absent | Empty | first non-Present example |"
+        "| rule | carrier.field | container | Present | Missing | Error | Unexpected | Absent | Empty | first non-Present example |"
     );
     println!("|---|---|---|---|---|---|---|---|---|---|");
     let states = [
@@ -144,7 +149,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         only_present.len()
     );
     println!(
-        "Their `Missing`, `Error` and `Absent` arms in the hand-written parser are reached by no file here.\n"
+        "These states were not observed in this population. This is not a proof of unreachability.\n"
     );
     for p in &only_present {
         println!("- {p}");

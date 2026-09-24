@@ -15,8 +15,8 @@
 //! **Before** (O(n²)): Each utterance with `+,` searched backward through all prior
 //! same-speaker utterances to find matching `+/.` terminator.
 //!
-//! **After** (O(n)): Single forward pass maintains per-speaker stacks of interruption indices.
-//! When `+,` is encountered, we pop from that speaker's stack for instant O(1) match.
+//! **After** (O(n)): One forward pass maintains per-speaker interruption tokens.
+//! A `+,` consumes a token for an O(1) match; tokens carry no unused indices.
 //!
 //! This is critical for large conversational files with many completion patterns.
 //!
@@ -28,105 +28,99 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SelfCompletion_Linker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
-use super::FileUtterances;
+use super::{FileUtterances, UtterancePosition};
 use crate::model::{LinkerKind, Terminator, Utterance};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
+
+/// Single-use evidence issued only for a typed interruption terminator.
+struct PendingInterruption;
+
+/// Distinct refusal states of consuming a speaker's prior interruption.
+enum CompletionRefusal {
+    NoPriorTurn,
+    NoPendingInterruption,
+}
 
 /// Validate all `+,` self-completion linkers in one forward pass.
 ///
 /// This replaces the O(n²) per-utterance backward search with a stack-based
 /// approach that processes all utterances in a single forward pass.
 ///
-/// # Why two per-speaker structures
-///
-/// To distinguish E351 ("no preceding same-speaker utterance at all") from
-/// E352 ("preceding same-speaker utterance exists but wrong terminator"),
-/// we maintain two structures per speaker:
-///
-/// 1. `interruption_stacks`, stack of indices of utterances that ended with
-///    `+/.` (the interruption terminator). A `+,` pops the top entry for
-///    instant O(1) self-completion matching.
-/// 2. `last_seen`, index of the most recent utterance from that speaker
-///    regardless of terminator. Used to detect E352 when the interruption
-///    stack is empty but the speaker has been seen before.
-///
-/// Decision on encountering `+,`:
-/// - stack non-empty: pop, good match (the popped utterance always ends with
-///   `+/.` by construction, so no further check needed).
-/// - stack empty but `last_seen` present: E352 (wrong terminator).
-/// - speaker never seen: E351 (no preceding utterance).
+/// A vacant history means E351 (no previous turn). An occupied history with
+/// no remaining token means E352. Tokens are consumed before this turn's own
+/// terminator can issue a new one, so self-completing interruptions keep the
+/// correct lifecycle without two maps or a separate match flag.
 pub(super) fn check_self_completion_all(utterances: &FileUtterances<'_>, errors: &impl ErrorSink) {
-    // Stack of interruption indices per speaker (only `+/.` terminated).
-    let mut interruption_stacks: HashMap<&str, Vec<usize>> = HashMap::new();
-    // Most recent utterance index per speaker regardless of terminator.
-    let mut last_seen: HashMap<&str, usize> = HashMap::new();
+    let mut histories: HashMap<&str, Vec<PendingInterruption>> = HashMap::new();
 
-    for (idx, utterance) in utterances.iter().enumerate() {
+    for utterance in utterances.iter() {
         let speaker = utterance.main.speaker.as_str();
+        let mut history = histories.entry(speaker);
 
         // Check if this has self-completion linker (+,)
         if has_self_completion_linker_internal(utterance) {
-            let stack_has_match = interruption_stacks
-                .get(speaker)
-                .is_some_and(|s| !s.is_empty());
-
-            if stack_has_match {
-                // Happy path: pop the matching `+/.` interruption. The
-                // popped utterance always ends with `+/.` by construction.
-                if let Some(stack) = interruption_stacks.get_mut(speaker) {
-                    let _ = stack.pop();
+            let completion = match &mut history {
+                Entry::Occupied(prior) => prior
+                    .get_mut()
+                    .pop()
+                    .ok_or(CompletionRefusal::NoPendingInterruption),
+                Entry::Vacant(_) => Err(CompletionRefusal::NoPriorTurn),
+            };
+            match completion {
+                Ok(_consumed) => {}
+                Err(CompletionRefusal::NoPendingInterruption) => {
+                    // E352: prior turns exist, but no unconsumed interruption remains.
+                    errors.report(
+                        ParseError::new(
+                            ErrorCode::MissingQuoteEnd,
+                            Severity::Error,
+                            SourceLocation::new(utterance.main.span),
+                            ErrorContext::new(
+                                format!("*{}: +, ...", speaker),
+                                utterance.main.span,
+                                "self-completion linker",
+                            ),
+                            format!(
+                                "Self-completion linker (+,) but preceding same-speaker utterance doesn't end with +/. (interruption terminator) from speaker {}",
+                                speaker
+                            ),
+                        )
+                        .with_suggestion("Change the preceding utterance terminator to +/. to mark it as interrupted")
+                    );
                 }
-            } else if last_seen.contains_key(speaker) {
-                // E352: speaker has a prior utterance, but it did not end
-                // with `+/.` (so it never entered the interruption stack).
-                errors.report(
-                    ParseError::new(
-                        ErrorCode::MissingQuoteEnd,
-                        Severity::Error,
-                        SourceLocation::new(utterance.main.span),
-                        ErrorContext::new(
-                            format!("*{}: +, ...", speaker),
-                            utterance.main.span,
-                            "self-completion linker",
-                        ),
-                        format!(
-                            "Self-completion linker (+,) but preceding same-speaker utterance doesn't end with +/. (interruption terminator) from speaker {}",
-                            speaker
-                        ),
-                    )
-                    .with_suggestion("Change the preceding utterance terminator to +/. to mark it as interrupted")
-                );
-            } else {
-                // E351: no prior utterance from this speaker at all.
-                errors.report(
-                    ParseError::new(
-                        ErrorCode::MissingQuoteBegin,
-                        Severity::Error,
-                        SourceLocation::new(utterance.main.span),
-                        ErrorContext::new(
-                            format!("*{}: +, ...", speaker),
-                            utterance.main.span,
-                            "self-completion linker",
-                        ),
-                        format!(
-                            "Self-completion linker (+,) without any preceding utterance from same speaker ({})",
-                            speaker
-                        ),
-                    )
-                    .with_suggestion("Self-completion is used to resume an interrupted utterance; ensure there's a prior interrupted utterance with +/. terminator")
-                );
+                Err(CompletionRefusal::NoPriorTurn) => {
+                    // E351: no prior utterance from this speaker at all.
+                    errors.report(
+                        ParseError::new(
+                            ErrorCode::MissingQuoteBegin,
+                            Severity::Error,
+                            SourceLocation::new(utterance.main.span),
+                            ErrorContext::new(
+                                format!("*{}: +, ...", speaker),
+                                utterance.main.span,
+                                "self-completion linker",
+                            ),
+                            format!(
+                                "Self-completion linker (+,) without any preceding utterance from same speaker ({})",
+                                speaker
+                            ),
+                        )
+                        .with_suggestion("Self-completion is used to resume an interrupted utterance; ensure there's a prior interrupted utterance with +/. terminator")
+                    );
+                }
             }
         }
 
-        // Record this utterance as the most recent for its speaker.
-        last_seen.insert(speaker, idx);
+        // Occupancy records that the speaker has now had a turn, even if that
+        // turn had no interruption. No independent last-seen map can drift.
+        let pending = history.or_default();
 
         // If it ends with `+/.`, also push onto the interruption stack.
         if let Some(ref term) = utterance.main.content.terminator
             && matches!(term, Terminator::Interruption { .. })
         {
-            interruption_stacks.entry(speaker).or_default().push(idx);
+            pending.push(PendingInterruption);
         }
     }
 }
@@ -144,18 +138,13 @@ fn has_self_completion_linker_internal(utterance: &Utterance) -> bool {
 /// Validate one `++` other-completion linker usage.
 ///
 /// Requires: Most recent utterance by DIFFERENT speaker ended with +... (trailing off)
-pub(super) fn check_other_completion(
-    utterances: &FileUtterances<'_>,
-    idx: usize,
-) -> Vec<ParseError> {
+pub(super) fn check_other_completion(position: &UtterancePosition<'_, '_>) -> Vec<ParseError> {
     let mut errors = Vec::new();
-    let Some(utterance) = utterances.get(idx) else {
-        return Vec::new();
-    };
+    let utterance = position.current();
     let speaker = utterance.main.speaker.as_str();
 
     // Check if there's any preceding utterance at all
-    if idx == 0 {
+    let Some(prev_utt) = position.preceding().next() else {
         errors.push(
             ParseError::new(
                 ErrorCode::MissingOtherCompletionContext,
@@ -171,11 +160,6 @@ pub(super) fn check_other_completion(
             .with_suggestion("Other-completion is used to finish another speaker's incomplete thought; ensure there's a prior incomplete utterance with +... terminator from a different speaker")
         );
         return errors;
-    }
-
-    // Get most recent utterance (regardless of speaker)
-    let Some(prev_utt) = utterances.get(idx - 1) else {
-        return Vec::new();
     };
 
     // Check if same speaker - should use +, instead

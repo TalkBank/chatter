@@ -11,6 +11,44 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use talkbank_derive::{SemanticEq, SpanShift, ValidationTagged};
 
+/// Date components contain digits, not the wider signed-integer syntax.
+/// Width and alphabet are admitted together before numeric interpretation.
+pub(crate) struct DateDigits<const WIDTH: usize>([u8; WIDTH]);
+
+pub(crate) enum DateDigitError {
+    Width,
+    NonDigit,
+}
+
+impl<const WIDTH: usize> DateDigits<WIDTH> {
+    pub(crate) fn parse(text: &str) -> Result<Self, DateDigitError> {
+        let bytes: [u8; WIDTH] = text
+            .as_bytes()
+            .try_into()
+            .map_err(|_| DateDigitError::Width)?;
+        if bytes.iter().all(u8::is_ascii_digit) {
+            Ok(Self(bytes.map(|byte| byte - b'0')))
+        } else {
+            Err(DateDigitError::NonDigit)
+        }
+    }
+}
+
+impl DateDigits<2> {
+    /// Two admitted decimal digits fit in u8 without parsing or narrowing.
+    pub(crate) fn day(self) -> u8 {
+        self.0[0] * 10 + self.0[1]
+    }
+}
+
+impl DateDigits<4> {
+    fn year(self) -> u16 {
+        self.0
+            .into_iter()
+            .fold(0, |value, digit| value * 10 + u16::from(digit))
+    }
+}
+
 /// Three-letter month abbreviations used in CHAT dates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
 pub enum Month {
@@ -157,10 +195,7 @@ impl ChatDate {
 
 /// Parse a two-digit day (01-31).
 fn parse_day(s: &str) -> Option<u8> {
-    if s.len() != 2 {
-        return None;
-    }
-    let day: u8 = s.parse().ok()?;
+    let day = DateDigits::<2>::parse(s).ok()?.day();
     if (1..=31).contains(&day) {
         Some(day)
     } else {
@@ -170,10 +205,7 @@ fn parse_day(s: &str) -> Option<u8> {
 
 /// Parse a four-digit year.
 fn parse_year(s: &str) -> Option<u16> {
-    if s.len() != 4 {
-        return None;
-    }
-    s.parse().ok()
+    Some(DateDigits::<4>::parse(s).ok()?.year())
 }
 
 impl std::fmt::Display for ChatDate {

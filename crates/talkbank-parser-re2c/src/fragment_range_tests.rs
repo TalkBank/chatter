@@ -3,6 +3,46 @@
 use talkbank_model::{ChatParser, ErrorCode, ErrorCollector, Span};
 
 #[test]
+fn inline_zero_bullet_diagnostics_keep_fragment_origins() {
+    let fixture = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E360_4.cha"
+    ));
+    let input = fixture
+        .lines()
+        .find_map(|line| line.strip_prefix("%com:\t"))
+        .unwrap();
+    let start = input.find('\u{15}').unwrap();
+    fn check(parser: &impl ChatParser, input: &str, start: usize) {
+        for offset in [0, 31, u32::MAX as usize - input.len()] {
+            let errors = ErrorCollector::new();
+            let _ = parser.parse_com_tier(input, offset, &errors);
+            let diagnostics = errors.into_vec();
+            let bullets: Vec<_> = diagnostics
+                .iter()
+                .filter(|error| error.code == ErrorCode::InvalidMediaBullet)
+                .collect();
+            assert_eq!(
+                bullets.len(),
+                1,
+                "{}: {diagnostics:?}",
+                parser.parser_name()
+            );
+            assert_eq!(
+                bullets[0].location.span,
+                Span::from_usize(offset + start, offset + input.len())
+            );
+        }
+    }
+    check(
+        &talkbank_parser::TreeSitterParser::new().unwrap(),
+        input,
+        start,
+    );
+    check(&crate::Re2cParser::new(), input, start);
+}
+
+#[test]
 fn fragment_ranges_support_the_full_unsigned_coordinate_space() {
     fn check(parser: &impl ChatParser) {
         let input = "café";

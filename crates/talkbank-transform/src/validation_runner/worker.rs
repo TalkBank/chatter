@@ -13,12 +13,12 @@ use super::types::{
     ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, RoundtripVerdict, ValidationEvent,
     ValidationStats,
 };
+use crate::paths::StoredTranscript;
 use crossbeam_channel::{Receiver, Sender};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use talkbank_cache::{CacheOutcome, ValidationCache};
-use talkbank_model::model::TranscriptName;
 use talkbank_model::{ChatFile, ChatParser, ErrorSink, ParseOutcome};
 use talkbank_model::{ParseError, Severity};
 use talkbank_parser::TreeSitterParser;
@@ -83,6 +83,7 @@ pub(super) fn worker_loop<C>(
         }
     };
 
+    let mut names = crate::paths::StoredNameResolver::default();
     loop {
         // Check for cancellation. Reads a LATCH, not the raw channel: polling
         // the channel here consumed the single cancel token, so only one of the
@@ -95,6 +96,26 @@ pub(super) fn worker_loop<C>(
         // Get next file from work queue
         match work_rx.recv() {
             Ok(file_path) => {
+                let stored = match names.resolve(&file_path) {
+                    Ok(stored) => stored,
+                    Err(error) => {
+                        let status = FileStatus::ReadError {
+                            message: error.to_string(),
+                        };
+                        update_stats(&stats, &status);
+                        if event_tx
+                            .send(ValidationEvent::FileComplete(FileCompleteEvent {
+                                path: file_path,
+                                status,
+                            }))
+                            .is_err()
+                        {
+                            break;
+                        }
+                        continue;
+                    }
+                };
+                let file_path = stored.path().to_path_buf();
                 // Attempt to serve from cache before touching the filesystem.
                 // CacheOutcome::Valid = cached valid; Invalid = cached invalid (re-validate for errors).
                 if config.cache.allows_reads()
@@ -197,7 +218,7 @@ pub(super) fn worker_loop<C>(
                 let source = Arc::<str>::from(content);
 
                 let (complete, chat_file) = validate_single_file_streaming(
-                    &file_path,
+                    &stored,
                     config.check_alignment,
                     config.rules,
                     &parser,
@@ -436,7 +457,7 @@ pub(super) fn update_stats(stats: &Arc<ValidationStats>, status: &FileStatus) {
 /// a display preference could reach what gets cached: that seam is exactly what
 /// let a `--suppress` list decide a cache row's value in v0.6.0.
 fn validate_single_file_streaming(
-    file_path: &Path,
+    transcript: &StoredTranscript,
     check_alignment: bool,
     rules: talkbank_model::RuleSelection,
     parser: &ParserDispatch,
@@ -448,16 +469,10 @@ fn validate_single_file_streaming(
     // Parse with error collection.
     let mut chat_file = parser.parse_chat_file_streaming(content, &collector);
 
-    // The transcript is being validated from disk, so it HAS a name, and
-    // `@Media`'s filename must match it (E531, CLAN CHECK 157).
-    //
-    // This used to be `file_path.file_stem().and_then(|s| s.to_str())` written
-    // straight into an `Option<&str>` parameter, which reads as though it
-    // always works: a path with no file name, or a name that is not UTF-8,
-    // silently produced `None` and turned E531 off again, inside the very site
-    // that had been fixed because passing `None` turned it off for the whole
-    // CLI. `TranscriptName::for_path` states that fallback in one place instead.
-    let name = TranscriptName::for_path(file_path);
+    // Disk validation requires a stored identity. Argument spellings and
+    // anonymous contexts cannot enter this function; resolution failures were
+    // reported as read errors before cache admission.
+    let name = transcript.name();
 
     if check_alignment {
         chat_file.validate_with_alignment_and_rules(rules, &collector, name);

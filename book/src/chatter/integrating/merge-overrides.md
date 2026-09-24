@@ -1,10 +1,12 @@
 # Merge Override File Format
 
+**Last modified:** 2026-09-24 00:21 EDT
+
 **Status:** Draft
 **Last updated:** 2026-07-18 03:15 EDT
 
 The merge override file is the typed, human-readable record of
-operator decisions in the `chatter speaker-id` →  `chatter merge`
+operator decisions in the `chatter speaker-id` → structural assembly
 pipeline. It serves three purposes:
 
 1. **Persistence**: operator adjudications made for one batch can

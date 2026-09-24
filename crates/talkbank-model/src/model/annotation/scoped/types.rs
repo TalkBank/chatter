@@ -5,10 +5,7 @@
 //! of stringly marker handling.
 //!
 
-use crate::validation::{Validate, ValidationContext};
-use crate::{
-    ErrorCode, ErrorContext, ErrorSink, LanguageCode, ParseError, Severity, SourceLocation, Span,
-};
+use crate::LanguageCode;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
@@ -254,48 +251,30 @@ pub struct ScopedExplanation {
     pub text: smol_str::SmolStr,
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    SemanticEq,
-    SpanShift,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, JsonSchema, SemanticEq, SpanShift)]
 /// Numeric index (1-9) for distinguishing multiple overlaps in a single utterance.
 ///
 /// References:
 /// - <https://talkbank.org/0info/manuals/CHAT.html#OverlapPrecedes_Scope>
 /// - <https://talkbank.org/0info/manuals/CHAT.html#OverlapFollows_Scope>
 #[serde(transparent)]
-pub struct OverlapMarkerIndex(u8);
+pub struct OverlapMarkerIndex(#[schemars(range(min = 1, max = 9))] u8);
+
+/// A scoped overlap index outside the single-digit range 1–9.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("scoped overlap index {0} must be a single digit from 1 to 9")]
+pub struct InvalidOverlapMarkerIndex(u8);
 
 impl OverlapMarkerIndex {
-    /// Create an overlap marker index from a digit payload.
-    ///
-    /// NOTHING CURRENTLY ENFORCES THE `1..=9` RANGE. The [`Validate`] impl
-    /// below implements it, but no model field holds an `OverlapMarkerIndex`
-    /// and there is no generic traversal that visits nested newtypes, so that
-    /// impl has no caller and never runs. This comment used to assert the
-    /// enforcement as fact; it is corrected rather than deleted because the
-    /// gap is worth knowing about. Give the type a real home and wire its
-    /// validation, or move the range into a fallible constructor here.
-    pub fn new(index: u8) -> Self {
-        Self(index)
+    /// Admit only the scoped overlap indices 1–9.
+    pub fn new(index: u8) -> Result<Self, InvalidOverlapMarkerIndex> {
+        match index {
+            1..=9 => Ok(Self(index)),
+            _ => Err(InvalidOverlapMarkerIndex(index)),
+        }
     }
 
     /// The digit payload.
-    ///
-    /// Reading it was already part of the contract while the inner field was
-    /// `pub`. The field stays private so the range invariant this type is
-    /// meant to carry (`1..=9`, see the note on [`new`](Self::new): written in
-    /// `Validate`, reached by nothing) can move into construction later
-    /// without that being a breaking change.
     pub fn get(self) -> u8 {
         self.0
     }
@@ -308,39 +287,34 @@ impl std::fmt::Display for OverlapMarkerIndex {
     }
 }
 
-impl Validate for OverlapMarkerIndex {
-    /// Enforces CHAT overlap-index range constraints (single digit `1` through `9`).
-    fn validate(&self, context: &ValidationContext, errors: &impl ErrorSink) {
-        if (1..=9).contains(&self.0) {
-            return;
+impl<'de> Deserialize<'de> for OverlapMarkerIndex {
+    /// Wire input crosses the same range-checked admission boundary.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(u8::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(test)]
+mod overlap_index_boundaries {
+    use super::OverlapMarkerIndex;
+
+    /// Numeric construction and untrusted wire input share exactly one range.
+    #[test]
+    fn admission_and_wire_range() {
+        for value in u8::MIN..=u8::MAX {
+            let admitted = OverlapMarkerIndex::new(value);
+            let decoded = serde_json::from_str::<OverlapMarkerIndex>(&value.to_string());
+            assert_eq!(admitted.is_ok(), (1..=9).contains(&value));
+            assert_eq!(decoded.is_ok(), admitted.is_ok());
+            if let Ok(index) = admitted {
+                assert_eq!(index.get(), value);
+                assert_eq!(decoded.unwrap(), index);
+                assert_eq!(serde_json::to_string(&index).unwrap(), value.to_string());
+            }
         }
-
-        let index_str = self.0.to_string();
-        let span = match context.field_span {
-            Some(span) => span,
-            None => Span::from_usize(0, index_str.len()),
-        };
-        let location = match context.field_span {
-            Some(span) => SourceLocation::new(span),
-            None => SourceLocation::at_offset(0),
-        };
-        let source_text = match context.field_text.clone() {
-            Some(text) => text,
-            None => index_str.clone(),
-        };
-        // DEFAULT: Missing label falls back to "overlap_marker_index" for error messaging.
-        let label = context.field_label.unwrap_or("overlap_marker_index");
-
-        errors.report(
-            ParseError::new(
-                ErrorCode::InvalidOverlapIndex,
-                Severity::Error,
-                location,
-                ErrorContext::new(source_text, span, label),
-                format!("Overlap marker index {} is invalid", self.0),
-            )
-            .with_suggestion("Overlap marker indices must be a single digit from 1 to 9"),
-        );
+        for invalid in ["-1", "256", "1.5", "null", "\"1\""] {
+            assert!(serde_json::from_str::<OverlapMarkerIndex>(invalid).is_err());
+        }
     }
 }
 

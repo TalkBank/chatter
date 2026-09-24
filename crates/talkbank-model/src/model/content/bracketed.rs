@@ -187,10 +187,7 @@ impl WriteChat for BracketedItem {
             BracketedItem::AnnotatedQuotation(ann) => ann.write_chat(w),
             BracketedItem::OverlapPoint(marker) => marker.write_chat(w),
             BracketedItem::Separator(sep) => sep.write_chat(w),
-            BracketedItem::InternalBullet(bullet) => {
-                w.write_char(' ')?;
-                bullet.write_chat(w)
-            }
+            BracketedItem::InternalBullet(bullet) => bullet.write_chat(w),
             BracketedItem::Freecode(freecode) => freecode.write_chat(w),
             BracketedItem::LongFeatureBegin(marker) => marker.write_chat(w),
             BracketedItem::LongFeatureEnd(marker) => marker.write_chat(w),
@@ -281,13 +278,14 @@ impl BracketedContent {
 impl WriteChat for BracketedContent {
     /// Serializes bracket-internal content only (without surrounding bracket chars).
     fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
-        for (i, item) in self.content.iter().enumerate() {
-            // Add space before items, except:
-            // - First item (i == 0)
-            // - InternalBullet items (they have their own NAK delimiters: word ␕timing␕ next)
-            if i > 0 && !matches!(item, BracketedItem::InternalBullet(_)) {
-                w.write_char(' ')?;
-            }
+        let Some((first, remaining)) = self.content.split_first() else {
+            return Ok(());
+        };
+        // The container owns separators. A first item has no predecessor,
+        // including when it is a timing bullet on an invalid main tier.
+        first.write_chat(w)?;
+        for item in remaining {
+            w.write_char(' ')?;
             item.write_chat(w)?;
         }
         Ok(())

@@ -4,7 +4,7 @@
 //! `crates/talkbank-parser-tests/tests/error_corpus/validation_errors/*.cha`
 //! fixture, or a minimal inline literal in the style already used by
 //! `crates/talkbank-transform/src/splice/admit.rs`'s own tests (never a new
-//! ad hoc `.cha` file on disk, per the root `CLAUDE.md` danger rule 9).
+//! ad hoc `.cha` file on disk, per the root `AGENTS.md` danger rule 9).
 //! Each test asserts the actual spliced BYTES via [`apply_edits`], not just
 //! that a fix exists, since the whole point of this catalog is that a
 //! plausible-looking edit can still corrupt content (see the module docs on
@@ -25,7 +25,7 @@ use talkbank_transform::splice::{BatchSafety, EditTarget, FixKind, apply_edits, 
 /// against every fixture below), and return the first diagnostic whose code
 /// is `code`, or an `Err` naming every code that actually fired.
 ///
-/// Per the root `CLAUDE.md` danger rule 7 ("test failures are bugs until
+/// Per the root `AGENTS.md` danger rule 7 ("test failures are bugs until
 /// proven otherwise"): when a fixture does not produce the expected code,
 /// the fixture (or, here, the helper) is wrong, never the assertion. This
 /// helper's first draft ran parsing only, per this crate's own precedent in

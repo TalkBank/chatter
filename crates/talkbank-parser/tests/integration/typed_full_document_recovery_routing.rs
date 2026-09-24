@@ -83,14 +83,16 @@ const STRAY_TOP_LEVEL_DATE: &str = "\
 ///
 /// The tree is leaked to give the node a `'static` lifetime for the duration of
 /// the test, which is acceptable in a single-shot test process.
-fn full_document_node(input: &str) -> tree_sitter::Node<'static> {
+fn full_document_node(input: &'static str) -> tree_sitter::Node<'static> {
     let parser = TreeSitterParser::new().expect("grammar loads");
     let tree = parser
-        .parse_tree_incremental(input, None)
+        .parse_source_incremental(input, None)
         .expect("tree-sitter parse succeeds");
     // Leak the tree so its nodes outlive this helper; the process is short-lived.
-    let tree: &'static tree_sitter::Tree = Box::leak(Box::new(tree));
-    DocumentRoot::classify(tree).node()
+    let tree = Box::leak(Box::new(tree));
+    DocumentRoot::classify(tree)
+        .expect("parser-owned source admits the document root")
+        .node()
 }
 
 #[test]

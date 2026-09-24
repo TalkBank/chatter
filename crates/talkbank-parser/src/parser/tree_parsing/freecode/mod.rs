@@ -8,9 +8,9 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
+use crate::generated_traversal::{AsRawNode, FreecodeNode};
 use crate::model::{Freecode, UtteranceContent};
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 /// Parse freecode node [^ text] into UtteranceContent.
 ///
@@ -22,19 +22,20 @@ use tree_sitter::Node;
 /// The node is now a single leaf token. Extract the code by stripping
 /// the `[^ ` prefix and `]` suffix, then trimming trailing whitespace.
 pub fn parse_freecode(
-    node: Node,
+    typed: FreecodeNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let text = match node.utf8_text(source.as_bytes()) {
-        Ok(t) => t,
-        Err(err) => {
+    let node = typed.raw_node();
+    let text = match source.get(node.byte_range()) {
+        Some(t) => t,
+        None => {
             errors.report(ParseError::new(
                 ErrorCode::EmptyUtterance,
                 Severity::Error,
                 SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
                 ErrorContext::new(source, node.start_byte()..node.end_byte(), "freecode"),
-                format!("UTF-8 decoding error in freecode: {err}"),
+                "Freecode node range is not a UTF-8 slice of the supplied source",
             ));
             return ParseOutcome::rejected();
         }

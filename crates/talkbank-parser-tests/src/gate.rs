@@ -106,7 +106,7 @@
 //! `quick_divergence_check`, `subcategorize_main_tier`) were briefly listed
 //! here as unconverted instances too. That was wrong and the entry is gone:
 //! they are `#[ignore]`d report generators that emit a taxonomy and example
-//! paths for a human to read, documented in that crate's CLAUDE.md as manual
+//! paths for a human to read, documented in that crate's AGENTS.md as manual
 //! investigations. This bug class is about checks that LOOK like gates, and an
 //! ignored report generator looks like nothing of the sort.
 

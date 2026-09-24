@@ -458,6 +458,51 @@ expression: snapshot
     },
     {
       "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Authored single-word ambiguity control for language metadata queries.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "ma",
+              "content": [
+                {
+                  "content": "ma",
+                  "type": "text"
+                }
+              ],
+              "lang": {
+                "code": [
+                  "eng",
+                  "zho"
+                ],
+                "type": "ambiguous"
+              },
+              "raw_text": "ma@s:eng&zho",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "header": {
         "type": "end"
       },
       "line_type": "header"

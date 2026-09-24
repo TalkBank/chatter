@@ -70,7 +70,9 @@ fn classify(fragment: &str) -> Result<Vec<(&'static str, usize)>, TestError> {
                 ContentStructure::Group(GroupRef::Sin(_)) => "sin",
                 ContentStructure::Leaf(leaf) => match leaf.content {
                     LeafContent::Spoken => "spoken-leaf",
-                    LeafContent::Notation => "notation-leaf",
+                    LeafContent::Notation
+                    | LeafContent::UnderlineBegin(_)
+                    | LeafContent::UnderlineEnd(_) => "notation-leaf",
                 },
             };
             (label, structure.scoped_annotations().len())

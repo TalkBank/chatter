@@ -10,11 +10,9 @@
 //!   reference corpus no position misclassifies a real child
 //!   ([`is_violation`] is its policy), and
 //! - the slot-state census (`examples/slot_state_census.rs`), which runs the
-//!   same walk over every CHAT file in the repository and reports, per
-//!   position, which states it has ever been seen in. A recovery arm in the
-//!   hand-written parser is reachable from CHAT only if the census has seen
-//!   its state at that position; the census is what turns "this arm is
-//!   uncovered" into a verdict with evidence.
+//!   same walk over an admitted CHAT population and reports, per position,
+//!   which states it has seen. Observed recovery is a reachability witness;
+//!   absence from a finite census is never proof of impossibility.
 //!
 //! Until 2026-09-09 the harness lived inside the conformance test binary and
 //! recorded only violations, so the census could not exist without a second
@@ -34,7 +32,7 @@
 //! payload kinds it is; `Inspect` is what varies per generated type,
 //! mechanically, in [`inventory`].
 
-use crate::generated_traversal::{Absence, LeafSpan, NodeSlot, Positioned, RecoveryNode, SlotView};
+use crate::generated_traversal::{Absence, LeafSpan, NodeSlot, Positioned, RecoveryNode};
 
 pub mod inventory;
 
@@ -68,6 +66,39 @@ pub enum Observed {
     Empty,
 }
 
+/// Identity of a generated carrier's field, including synthetic nested groups.
+///
+/// A field name alone is not a position: an outer carrier and its nested
+/// sequence can both declare `child_0`. Only the generated inspection macro
+/// constructs this key, from the carrier and field it actually inspects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Position {
+    carrier: &'static str,
+    field: &'static str,
+}
+
+impl Position {
+    const fn new(carrier: &'static str, field: &'static str) -> Self {
+        Self { carrier, field }
+    }
+
+    /// Generated carrier type owning this field.
+    pub const fn carrier(self) -> &'static str {
+        self.carrier
+    }
+
+    /// Field name within that carrier.
+    pub const fn field(self) -> &'static str {
+        self.field
+    }
+}
+
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.carrier, self.field)
+    }
+}
+
 /// One visit of one position: the record both consumers aggregate.
 ///
 /// It is the aggregation key as well as the per-visit record (deriving `Ord`
@@ -76,8 +107,8 @@ pub enum Observed {
 pub struct Observation {
     /// The rule (node kind) whose `extract_*` produced the position.
     pub rule_kind: &'static str,
-    /// The carrier field (slot) the position is.
-    pub slot: &'static str,
+    /// Carrier-qualified field identity, including synthetic group ownership.
+    pub position: Position,
     /// How the position holds its children.
     pub container: Container,
     /// What was there.
@@ -115,15 +146,15 @@ pub trait Inspect {
 pub trait InspectField {
     /// Record what the field `slot` of rule `rule` holds, and recurse into
     /// any present payload.
-    fn inspect_field(&self, rule: &'static str, slot: &'static str, out: &mut Vec<Observation>);
+    fn inspect_field(&self, rule: &'static str, position: Position, out: &mut Vec<Observation>);
 }
 
 /// A tracked position: delegate straight to the slot or collection it
 /// carries. The leading extras a position records are comments and
 /// whitespace, never classified content.
 impl<'tree, S: InspectField> InspectField for Positioned<'tree, S> {
-    fn inspect_field(&self, rule: &'static str, slot: &'static str, out: &mut Vec<Observation>) {
-        self.slot().inspect_field(rule, slot, out);
+    fn inspect_field(&self, rule: &'static str, position: Position, out: &mut Vec<Observation>) {
+        self.slot().inspect_field(rule, position, out);
     }
 }
 
@@ -132,7 +163,7 @@ fn observe<'tree, T, M, U, A>(
     slot: &NodeSlot<'tree, T, M, U, A>,
     container: Container,
     rule: &'static str,
-    name: &'static str,
+    position: Position,
     out: &mut Vec<Observation>,
 ) where
     T: Inspect,
@@ -140,19 +171,19 @@ fn observe<'tree, T, M, U, A>(
     U: RecoveryNode<'tree>,
     A: Absence,
 {
-    let (observed, actual_child_kind) = match slot.view() {
-        SlotView::Present(value) => {
+    let (observed, actual_child_kind) = match slot {
+        NodeSlot::Present(value) => {
             value.inspect(rule, out);
             (Observed::Present, String::new())
         }
-        SlotView::Missing(node) => (Observed::Missing, node.node().kind().to_string()),
-        SlotView::Error(node) => (Observed::Error, node.kind().to_string()),
-        SlotView::Unexpected(node) => (Observed::Unexpected, node.node().kind().to_string()),
-        SlotView::Absent(absent) => absent.when_absent((Observed::Absent, String::new())),
+        NodeSlot::Missing(node) => (Observed::Missing, node.node().kind().to_string()),
+        NodeSlot::Error(node) => (Observed::Error, node.kind().to_string()),
+        NodeSlot::Unexpected(node) => (Observed::Unexpected, node.node().kind().to_string()),
+        NodeSlot::Absent(absent) => absent.when_absent((Observed::Absent, String::new())),
     };
     out.push(Observation {
         rule_kind: rule,
-        slot: name,
+        position,
         container,
         observed,
         actual_child_kind,
@@ -166,8 +197,8 @@ where
     U: RecoveryNode<'tree>,
     A: Absence,
 {
-    fn inspect_field(&self, rule: &'static str, slot: &'static str, out: &mut Vec<Observation>) {
-        observe(self, Container::Required, rule, slot, out);
+    fn inspect_field(&self, rule: &'static str, position: Position, out: &mut Vec<Observation>) {
+        observe(self, Container::Required, rule, position, out);
     }
 }
 
@@ -178,12 +209,12 @@ where
     U: RecoveryNode<'tree>,
     A: Absence,
 {
-    fn inspect_field(&self, rule: &'static str, slot: &'static str, out: &mut Vec<Observation>) {
+    fn inspect_field(&self, rule: &'static str, position: Position, out: &mut Vec<Observation>) {
         match self {
-            Some(inner) => observe(inner, Container::Optional, rule, slot, out),
+            Some(inner) => observe(inner, Container::Optional, rule, position, out),
             None => out.push(Observation {
                 rule_kind: rule,
-                slot,
+                position,
                 container: Container::Optional,
                 observed: Observed::Empty,
                 actual_child_kind: String::new(),
@@ -199,18 +230,18 @@ where
     U: RecoveryNode<'tree>,
     A: Absence,
 {
-    fn inspect_field(&self, rule: &'static str, slot: &'static str, out: &mut Vec<Observation>) {
+    fn inspect_field(&self, rule: &'static str, position: Position, out: &mut Vec<Observation>) {
         if self.is_empty() {
             out.push(Observation {
                 rule_kind: rule,
-                slot,
+                position,
                 container: Container::Repeat,
                 observed: Observed::Empty,
                 actual_child_kind: String::new(),
             });
         }
         for element in self {
-            observe(element.slot(), Container::Repeat, rule, slot, out);
+            observe(element.slot(), Container::Repeat, rule, position, out);
         }
     }
 }
@@ -218,7 +249,7 @@ where
 /// An absorbed sequence-member token: not a child position, nothing to
 /// record.
 impl InspectField for LeafSpan<'_> {
-    fn inspect_field(&self, _rule: &'static str, _slot: &'static str, _out: &mut Vec<Observation>) {
+    fn inspect_field(&self, _rule: &'static str, _position: Position, _out: &mut Vec<Observation>) {
     }
 }
 
@@ -236,5 +267,47 @@ where
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn nested_group_positions_do_not_alias_their_outer_carrier() {
+        let source = include_str!("../../../../corpus/reference/tiers/mor-gra.cha");
+        let parser = talkbank_parser::TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let mut counts = BTreeMap::new();
+        walk_all(parsed.root_node(), &mut |node| {
+            let mut observations = Vec::new();
+            dispatch(node, &mut observations);
+            for observation in observations {
+                if observation.rule_kind == "mor_contents"
+                    && observation.position.field() == "child_0"
+                    && observation.container == Container::Required
+                {
+                    *counts.entry(observation.position).or_insert(0) += 1;
+                }
+            }
+        });
+        // Both tiers visit both positions. The former (rule, field, container)
+        // key collapsed these distinct declarations into one count of four.
+        assert_eq!(
+            counts.get(&Position::new("MorContentsChildren", "child_0")),
+            Some(&2)
+        );
+        assert_eq!(
+            counts.get(&Position::new(
+                "MorContentsChild0MorContentChildren",
+                "child_0"
+            )),
+            Some(&2),
+        );
     }
 }

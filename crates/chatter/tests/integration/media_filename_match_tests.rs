@@ -25,6 +25,91 @@ use tempfile::tempdir;
 
 use crate::common::{CliHarness, combined_output, write_fixture};
 
+const MEDIA_NFD: &str =
+    include_str!("../../../talkbank-parser-tests/tests/error_corpus/validation_errors/W109_2.cha");
+const MEDIA_NFC: &str =
+    include_str!("../../../talkbank-parser-tests/tests/error_corpus/validation_errors/W109_4.cha");
+
+/// The real fixer changes only the canonical spec's media token, never the
+/// directory entry. A file-side warning may survive a successful content fix.
+#[test]
+fn w109_fix_preserves_stored_name_and_unrelated_bytes() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    for stored_name in ["Schlüssel.cha", "Schlu\u{308}ssel.cha"] {
+        let dir = tempdir()?;
+        let path = write_fixture(dir.path(), stored_name, MEDIA_NFD)?;
+        let result = harness
+            .chatter_cmd()
+            .args(["fix", "--code", "W109", "--apply"])
+            .arg(&path)
+            .output()?;
+        let text = combined_output(&result);
+        assert!(result.status.success(), "{text}");
+        assert!(text.contains("1 fix(es) applied"), "{text}");
+        assert_eq!(std::fs::read_to_string(&path)?, MEDIA_NFC);
+        let names: Vec<_> = std::fs::read_dir(dir.path())?
+            .map(|entry| entry.map(|e| e.file_name()))
+            .collect::<Result<_, _>>()?;
+        assert_eq!(names, [std::ffi::OsString::from(stored_name)]);
+        let after = combined_output(&harness.run_validate(&path, &["--force"])?);
+        assert!(!after.contains("E531"), "{after}");
+        assert!(!after.contains("The @Media name uses"), "{after}");
+        assert_eq!(
+            after.contains("W109"),
+            stored_name.contains('\u{308}'),
+            "{after}"
+        );
+        let again = harness
+            .chatter_cmd()
+            .args(["fix", "--code", "W109", "--apply"])
+            .arg(&path)
+            .output()?;
+        assert!(combined_output(&again).contains("0 fix(es) applied"));
+        assert_eq!(std::fs::read_to_string(&path)?, MEDIA_NFC);
+    }
+    Ok(())
+}
+
+/// APFS lookup aliases must not change which stored-name side needs repair.
+#[cfg(target_os = "macos")]
+#[test]
+fn w109_uses_stored_name_for_nfc_nfd_and_directory_arguments() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let nfd = write_fixture(dir.path(), "Schlu\u{308}ssel.cha", MEDIA_NFD)?;
+    let nfc = dir.path().join("Schlüssel.cha");
+    // A normalization-sensitive volume does not offer the alias under test.
+    if !nfc.exists() {
+        return Ok(());
+    }
+    for input in [&nfc, &nfd, &dir.path().to_path_buf()] {
+        let text = combined_output(&harness.run_validate(input, &["--force"])?);
+        assert!(text.contains("W109"), "{text}");
+        assert!(text.contains("The @Media name uses"), "{text}");
+        assert!(text.contains("The file name"), "{text}");
+        assert!(!text.contains("E531"), "{text}");
+    }
+    Ok(())
+}
+
+/// Remote URL spelling is opaque: W109 never rewrites URL code points.
+#[test]
+fn w109_fix_does_not_normalize_media_urls() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let source = fixture_with_media("\"https://example.org/Schlu\u{308}ssel.mp3\"");
+    let path = write_fixture(dir.path(), "session.cha", &source)?;
+    let result = harness
+        .chatter_cmd()
+        .args(["fix", "--code", "W109", "--apply"])
+        .arg(&path)
+        .output()?;
+    assert!(result.status.success());
+    assert!(combined_output(&result).contains("0 fix(es) applied"));
+    assert_eq!(std::fs::read_to_string(path)?, source);
+    Ok(())
+}
+
 /// A minimal valid preamble plus a `@Media` line and one timing bullet (so the
 /// linkage checks E544/E552 do not also fire and the only `@Media`-related
 /// signal is the filename match). `{media}` is the `@Media` first field.
@@ -156,6 +241,60 @@ fn matching_media_filename_is_accepted_via_to_json() -> Result<(), TestError> {
             "matching media must stay valid: {text}"
         );
     }
+    Ok(())
+}
+
+/// An `@Media` name that is the same name as the datafile basename under
+/// Unicode canonical equivalence, but spelled with a different normalization
+/// form (NFD: base letter + combining mark, vs. NFC: the precomposed
+/// codepoint), is not a real filename mismatch. Transcripts can carry both
+/// spellings for the same recording; this must
+/// not report E531.
+#[test]
+fn nfd_media_name_matching_an_nfc_datafile_name_is_not_a_mismatch() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    // "Schlüssel3": NFC in the filename (precomposed U+00FC), NFD in the
+    // @Media name ("u" U+0075 + combining diaeresis U+0308).
+    let nfc_name = "Schl\u{fc}ssel3";
+    let nfd_name = "Schlu\u{308}ssel3";
+    let path = write_fixture(
+        dir.path(),
+        &format!("{nfc_name}.cha"),
+        &fixture_with_media(nfd_name),
+    )?;
+    let output = harness.run_validate(&path, &["--force"])?;
+    let text = combined_output(&output);
+    assert!(
+        !text.contains("E531"),
+        "NFC/NFD spellings of the same name must not be a filename mismatch, got:\n{text}"
+    );
+    assert!(
+        text.contains("W109"),
+        "NFC/NFD spellings of the same name must be flagged for canonicalization, got:\n{text}"
+    );
+    Ok(())
+}
+
+/// An `@Media` name and datafile basename that are both already NFC (the
+/// common case) get neither E531 nor W109.
+#[test]
+fn matching_nfc_media_filename_has_no_canonicalization_warning() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    let nfc_name = "Schl\u{fc}ssel3";
+    let path = write_fixture(
+        dir.path(),
+        &format!("{nfc_name}.cha"),
+        &fixture_with_media(nfc_name),
+    )?;
+    let output = harness.run_validate(&path, &["--force"])?;
+    let text = combined_output(&output);
+    assert!(!text.contains("E531"), "identical NFC names: {text}");
+    assert!(
+        !text.contains("W109"),
+        "identical NFC names must not get a canonicalization warning: {text}"
+    );
     Ok(())
 }
 

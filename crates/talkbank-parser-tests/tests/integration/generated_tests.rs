@@ -15,7 +15,7 @@
 //! These tests document expected behavior and regressions.
 
 // Construct tests generated from spec/constructs/ by `just spec-gen`
-// (see spec/tools/src/artifacts.rs; see spec/CLAUDE.md). The generated body
+// (see spec/tools/src/artifacts.rs; see spec/AGENTS.md). The generated body
 // is included below.
 //
 // ERROR-spec coverage is not generated here at all since R4: every error

@@ -9,7 +9,6 @@
 
 use std::fs;
 use std::path::PathBuf;
-use talkbank_model::model::TranscriptName;
 
 use talkbank_model::ChatFile;
 use talkbank_model::{ErrorCollector, ParseError};
@@ -37,6 +36,12 @@ pub(super) struct AlignmentContext {
 /// that could not build a model at all
 /// ([`talkbank_parser::ParseProduct::Unbuildable`]) is a hard `Err`.
 pub(super) fn load_alignment_context(input: &PathBuf) -> Result<AlignmentContext, String> {
+    let stored = talkbank_transform::paths::StoredTranscript::resolve(input).map_err(|error| {
+        format!(
+            "Cannot resolve transcript name {}: {error}",
+            input.display()
+        )
+    })?;
     // Read file
     let content =
         fs::read_to_string(input).map_err(|e| format!("Error reading file {:?}: {}", input, e))?;
@@ -58,13 +63,9 @@ pub(super) fn load_alignment_context(input: &PathBuf) -> Result<AlignmentContext
     // Compute alignments for all utterances and report validation issues,
     // appended after the parse diagnostics collected above.
     let errors = ErrorCollector::new();
-    // `TranscriptName::for_path`, not `input.to_str()`. This used to pass the
-    // WHOLE PATH where E531 expects the transcript's stem, so `@Media: foo`
-    // was compared against `/corpus/eng/foo.cha` and could never match: every
-    // media-linked transcript shown through this command reported a spurious
-    // filename mismatch. The type is what surfaced it; an `Option<&str>`
-    // accepted both strings equally.
-    chat_file.validate_with_alignment(&errors, TranscriptName::for_path(input));
+    // The stored basename, not an argument spelling or a whole path, supplies
+    // the media-name comparison. Resolution failure was refused at ingress.
+    chat_file.validate_with_alignment(&errors, stored.name());
     validation_errors.extend(errors.into_vec());
 
     Ok(AlignmentContext {

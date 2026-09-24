@@ -34,7 +34,7 @@
 //! (`tree-sitter-talkbank`), and this crate (`talkbank-cache`) deliberately
 //! depends only on `talkbank-model`, not on the parser, so a grammar-level
 //! fingerprint cannot be computed here without inverting that layering
-//! (banned; see `talkbank-cache`'s own `CLAUDE.md`/crate docs on the
+//! (banned; see `talkbank-cache`'s own `AGENTS.md`/crate docs on the
 //! dependency direction). A grammar change alters what parses, which alters
 //! what validates, so a cached verdict from before a grammar change is not a
 //! valid answer after one.

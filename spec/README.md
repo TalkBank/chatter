@@ -1,6 +1,6 @@
 # spec, CHAT Specification
 
-**Last modified:** 2026-08-21 07:05 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 ## Overview
 
@@ -76,9 +76,9 @@ See `docs/CURATION_WORKFLOW.md` for the mine -> curate -> generate workflow for 
 
 ## See Also
 
-- `tools/CLAUDE.md`: Core generator crate details
+- `tools/AGENTS.md`: Core generator crate details
 - `runtime-tools/`: Runtime-aware spec tooling
-- `CLAUDE.md` (spec directory), AI assistant guidance
-- `../crates/talkbank-parser-tests/CLAUDE.md`: Parser test crate
+- `AGENTS.md` (spec directory), AI assistant guidance
+- `../crates/talkbank-parser-tests/AGENTS.md`: Parser test crate
 
 ---

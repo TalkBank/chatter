@@ -15,37 +15,35 @@
 //! This test verifies that the TreeSitterParser can roundtrip all reference corpus
 //! files: parse → serialize → re-parse → compare with SemanticEq.
 //!
-//! This is a prerequisite for integrating the direct parser into `chatter validate`.
+//! The complete committed corpus is required; missing evidence is a failure.
 //!
 //! ## Usage
 //!
 //! ```bash
 //! # Run the roundtrip test
-//! cargo test --release -p talkbank-parser-tests --test direct_parser_roundtrip_corpus
+//! cargo test -p talkbank-parser-tests --test integration direct_parser_roundtrip_corpus
 //!
 //! # Show detailed output for failures
-//! cargo test --release -p talkbank-parser-tests --test direct_parser_roundtrip_corpus -- --nocapture
+//! cargo test -p talkbank-parser-tests --test integration direct_parser_roundtrip_corpus -- --nocapture
 //! ```
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use talkbank_model::model::{SemanticEq, WriteChat};
 use talkbank_parser::TreeSitterParser;
-
-/// Files containing constructs the direct parser does not support.
-const DIRECT_PARSER_SKIP: &[&str] = &[];
+use talkbank_parser_tests::chat_corpus::{ChatCorpus, ChatFixture};
 
 /// Parse a file with TreeSitterParser and roundtrip it.
 ///
 /// Returns Ok(()) if the file roundtrips successfully, or an error message.
-fn roundtrip_file(path: &Path, parser: &TreeSitterParser) -> Result<(), String> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| format!("IO error reading {}: {}", path.display(), e))?;
+fn roundtrip_file(fixture: &ChatFixture, parser: &TreeSitterParser) -> Result<(), String> {
+    let path = fixture.path();
+    let content = fixture.source();
 
     // Parse with TreeSitterParser. `strict_parse` reproduces the
     // pre-`ParseProduct` fail-on-any-diagnostic contract: the reference
     // corpus is expected to be clean.
     let chat_file =
-        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&content))
+        talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(content))
             .map_err(|e| format!("TreeSitterParser failed to parse {}: {}", path.display(), e))?;
 
     // Serialize back to CHAT
@@ -76,21 +74,8 @@ fn roundtrip_file(path: &Path, parser: &TreeSitterParser) -> Result<(), String> 
 /// Verifies TreeSitterParser round-trip stability on the reference corpus.
 #[test]
 fn direct_parser_roundtrip_reference_corpus() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let corpus_dir = manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .expect("missing expected grandparent of manifest dir")
-        .join("corpus/reference");
-
-    assert!(
-        corpus_dir.exists(),
-        "Reference corpus not found at {}",
-        corpus_dir.display()
-    );
-
-    let files = talkbank_parser_tests::construct_coverage::cha_files_under(&corpus_dir)
-        .expect("reference corpus holds .cha files");
+    let corpus = ChatCorpus::reference().expect("complete reference corpus");
+    let files = corpus.fixtures();
 
     let parser = TreeSitterParser::new().expect("Failed to create TreeSitterParser");
 
@@ -102,20 +87,11 @@ fn direct_parser_roundtrip_reference_corpus() {
             println!("Progress: {}/{}", i + 1, files.len());
         }
 
-        // Skip files with known direct parser limitations
-        if let Some(stem) = file.file_stem().and_then(|s| s.to_str())
-            && DIRECT_PARSER_SKIP.contains(&stem)
-        {
-            println!("SKIP (unsupported): {}", file.display());
-            passed += 1;
-            continue;
-        }
-
         match roundtrip_file(file, &parser) {
             Ok(()) => passed += 1,
             Err(msg) => {
                 eprintln!("✗ {}", msg);
-                failures.push((file.clone(), msg));
+                failures.push((file.path().to_owned(), msg));
             }
         }
     }

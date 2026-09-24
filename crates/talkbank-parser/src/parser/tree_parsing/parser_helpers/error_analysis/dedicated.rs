@@ -194,13 +194,45 @@ pub(crate) fn leading_postfix_annotation(content: &str) -> Option<&str> {
 /// Callers with only a fragment must pass `starts_at_item_boundary`
 /// accordingly (see [`at_item_boundary`]); tokens after the first are
 /// whitespace-delimited by construction and always eligible.
-pub(crate) fn mor_item_with_empty_pos(text: &str, starts_at_item_boundary: bool) -> Option<&str> {
-    text.split_whitespace()
-        .enumerate()
-        .find(|(index, token)| {
-            (starts_at_item_boundary || *index > 0) && token.starts_with('|') && token.len() > 1
-        })
-        .map(|(_, token)| token)
+pub(crate) fn mor_item_with_empty_pos(
+    text: &str,
+    starts_at_item_boundary: bool,
+) -> Option<EmptyPosItem<'_>> {
+    let mut offset = 0;
+    let mut first = true;
+    for part in text.split_inclusive(char::is_whitespace) {
+        let token = part.trim_end_matches(char::is_whitespace);
+        if !token.is_empty() {
+            if (starts_at_item_boundary || !first) && token.starts_with('|') && token.len() > 1 {
+                return Some(EmptyPosItem {
+                    text: token,
+                    offset,
+                });
+            }
+            first = false;
+        }
+        offset += part.len();
+    }
+    None
+}
+
+/// An empty-POS token with the occurrence that established its classification.
+/// Private fields prevent callers from replacing it with an earlier identical
+/// split tail when constructing a diagnostic span.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct EmptyPosItem<'text> {
+    text: &'text str,
+    offset: usize,
+}
+
+impl<'text> EmptyPosItem<'text> {
+    pub(crate) fn text(&self) -> &'text str {
+        self.text
+    }
+
+    pub(crate) fn range(&self) -> std::ops::Range<usize> {
+        self.offset..self.offset + self.text.len()
+    }
 }
 
 /// Whether byte offset `start` sits at an ITEM boundary on its line:
@@ -272,9 +304,12 @@ mod tests {
 
     #[test]
     fn recognizes_empty_pos_items() {
-        assert_eq!(mor_item_with_empty_pos("|we v|go .", true), Some("|we"));
         assert_eq!(
-            mor_item_with_empty_pos("pro|we v|go |home .", true),
+            mor_item_with_empty_pos("|we v|go .", true).map(|item| item.text()),
+            Some("|we")
+        );
+        assert_eq!(
+            mor_item_with_empty_pos("pro|we v|go |home .", true).map(|item| item.text()),
             Some("|home")
         );
         assert_eq!(mor_item_with_empty_pos("pro|we v|go .", true), None);
@@ -286,7 +321,20 @@ mod tests {
         assert_eq!(mor_item_with_empty_pos("|cat .", false), None);
         // ...but a genuine empty-POS item LATER in the same fragment
         // still classifies.
-        assert_eq!(mor_item_with_empty_pos("|cat |we .", false), Some("|we"));
+        assert_eq!(
+            mor_item_with_empty_pos("|cat |we .", false).map(|item| item.text()),
+            Some("|we")
+        );
+    }
+
+    #[test]
+    fn empty_pos_finding_retains_the_eligible_occurrence() {
+        for (text, expected) in [("|cat |cat .", 5..9), ("|猫\u{2003}|猫 .", 7..11)] {
+            let item = mor_item_with_empty_pos(text, false).expect("later complete item");
+            assert_eq!(item.range(), expected);
+            assert_eq!(&text[item.range()], item.text());
+            assert_ne!(text.find(item.text()), Some(item.range().start));
+        }
     }
 
     #[test]

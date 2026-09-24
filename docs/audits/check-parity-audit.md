@@ -7,7 +7,7 @@ This is a curated mapping inventory, not a runtime parity report. A mapping does
 - Emitted CHECK codes in the committed reference: 143
 - CHECK codes with curated mappings: 87
 - CHECK codes without curated mappings: 56
-- Compiled Chatter error codes (from the spec registry): 223
+- Compiled Chatter error codes (from the spec registry): 226
 
 ## Evidence and reproduction
 
@@ -61,7 +61,7 @@ Runtime expectations and documented divergences live in `crates/talkbank-parser-
 | 45 | There were more @Bg than @Eg tiers found. | `E526` | curated mapping |
 | 46 | This @Eg does not have matching @Bg. | `E527` | curated mapping |
 | 47 | Numbers are not allowed inside words. | `E220` | curated mapping |
-| 48 | Illegal character(s) found. / Illegal character(s) '%s' found. | `E202`, `E207`, `E212`, `E243`, `E252`, `E330`, `E364`, `E375` | curated mapping |
+| 48 | Illegal character(s) found. / Illegal character(s) '%s' found. | `E202`, `E207`, `E212`, `E243`, `E252`, `E330`, `E364`, `E375`, `E769` | curated mapping |
 | 50 | Redundant utterance delimiter. | `E305` | curated mapping |
 | 51 | expected [ ]; < > should be followed by [ ] | `E347`, `E348` | curated mapping |
 | 52 | This item must be preceded by text. / Item '%s' must be preceded by text. | `E370` | curated mapping |
@@ -289,5 +289,7 @@ These are unmapped codes, not automatically enhancements. Status is read from th
 | `E766` | `LinkerNotUtteranceInitial` | Active |
 | `E767` | `MediaWhitespaceBeforeComma` | Active |
 | `E768` | `MediaFilenameNotRepresentable` | Active |
+| `E770` | `TimingBulletBeforeContent` | Active |
 | `E999` | `UnknownError` | Planned |
 | `W108` | `SpeakerNotFoundInParticipants` | Active |
+| `W109` | `MediaFilenameNonCanonicalUnicode` | Active |

@@ -10,6 +10,8 @@ const {
   totalFilesOf,
   relativeDisplayName,
   shouldShowAllFilesValid,
+  fileOutcome,
+  finishedRunSummary,
 } = require("../../.test-dist/src/hooks/validationState.js");
 
 // A valid `ValidationStats` literal (9 fields, `src/protocol/validation.ts`).
@@ -29,6 +31,46 @@ function stats(overrides = {}) {
     ...overrides,
   };
 }
+
+test("terminal failures without diagnostics remain visible problems", () => {
+  for (const status of [
+    { type: "readError", message: "permission denied" },
+    { type: "parseError", message: "parser unavailable" },
+    { type: "roundtripFailed", reason: "model changed", cacheHit: false },
+    { type: "invalid", errorCount: 2, cacheHit: true },
+  ]) {
+    const file = { path: "/sample.cha", name: "sample.cha", diagnostics: [], source: "", status };
+    const outcome = fileOutcome(file);
+    assert.equal(outcome.kind, "problem");
+    assert.notEqual(outcome.message, "No errors");
+    if (status.message || status.reason) {
+      assert.ok(outcome.message.includes(status.message || status.reason));
+    }
+  }
+});
+
+test("only completed valid files without diagnostics have a valid outcome", () => {
+  const file = { path: "/sample.cha", name: "sample.cha", diagnostics: [], source: "", status: null };
+  assert.equal(fileOutcome(file).kind, "pending");
+  file.status = { type: "valid", cacheHit: true };
+  assert.equal(fileOutcome(file).kind, "valid");
+  file.diagnostics = [diagnostic("W109", "normalize name")];
+  assert.equal(fileOutcome(file).kind, "problem", "warnings stay visible");
+});
+
+test("finished summaries cannot certify failed, cancelled or empty populations", () => {
+  for (const overrides of [
+    { validFiles: 1, parseErrors: 1 },
+    { validFiles: 1, invalidFiles: 1 },
+    { roundtripFailed: 1 },
+    { cancelled: true },
+    { totalFiles: 0, validFiles: 0 },
+  ]) {
+    assert.equal(shouldShowAllFilesValid({ kind: "finished", stats: stats(overrides) }, 0), false);
+    assert.ok(!finishedRunSummary({ kind: "finished", stats: stats(overrides) }, 0).includes("files valid"));
+  }
+  assert.equal(finishedRunSummary({ kind: "finished", stats: stats() }, 0), "All 2 files valid");
+});
 
 function diagnostic(code, message, start = 1) {
   return {

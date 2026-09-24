@@ -13,6 +13,13 @@ type UpdatesTransport = Pick<
   | "onMenuCheckForUpdates"
 >;
 
+type ActiveCheck = {
+  phase: "checking";
+  feedback: "silent" | "manual";
+  result: Promise<UpdateOutcome>;
+};
+type CheckState = { phase: "idle" } | ActiveCheck;
+
 /**
  * Build the auto-update capability.
  *
@@ -26,6 +33,7 @@ type UpdatesTransport = Pick<
 export function createUpdatesCapability(
   transport: UpdatesTransport,
 ): UpdatesCapability {
+  let state: CheckState = { phase: "idle" };
   // Shared check -> prompt -> install flow. Returns the outcome; any thrown
   // error propagates to the caller, which decides how to surface it.
   async function checkAndMaybeInstall(): Promise<UpdateOutcome> {
@@ -45,33 +53,58 @@ export function createUpdatesCapability(
     return "installing";
   }
 
-  return {
-    async checkOnLaunch(): Promise<UpdateOutcome> {
-      try {
-        return await checkAndMaybeInstall();
-      } catch {
-        return "error";
+  async function perform(check: ActiveCheck): Promise<UpdateOutcome> {
+    try {
+      const outcome = await checkAndMaybeInstall();
+      if (check.feedback === "manual" && outcome === "no-update") {
+        await transport.showMessage(
+          "Chatter is up to date",
+          "You are running the latest version.",
+        );
       }
+      return outcome;
+    } catch (error) {
+      if (check.feedback === "manual") {
+        const reason = error instanceof Error ? error.message : String(error);
+        try {
+          await transport.showMessage(
+            "Update check failed",
+            `Could not check for updates: ${reason}`,
+          );
+        } catch {
+          // A failed native dialog cannot turn this best-effort command into
+          // an unhandled rejection in the menu's fire-and-forget callback.
+        }
+      }
+      return "error";
+    }
+  }
+
+  function request(feedback: ActiveCheck["feedback"]): Promise<UpdateOutcome> {
+    if (state.phase === "checking") {
+      if (feedback === "manual") state.feedback = "manual";
+      return state.result;
+    }
+    // Install the capability before starting any transport work. Launch,
+    // periodic and manual triggers share its prompt/install and completion.
+    const check: ActiveCheck = {
+      phase: "checking",
+      feedback,
+      result: Promise.resolve().then(() => perform(check)).finally(() => {
+        state = { phase: "idle" };
+      }),
+    };
+    state = check;
+    return check.result;
+  }
+
+  return {
+    checkOnLaunch(): Promise<UpdateOutcome> {
+      return request("silent");
     },
 
-    async checkNow(): Promise<UpdateOutcome> {
-      try {
-        const outcome = await checkAndMaybeInstall();
-        if (outcome === "no-update") {
-          await transport.showMessage(
-            "Chatter is up to date",
-            "You are running the latest version.",
-          );
-        }
-        return outcome;
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        await transport.showMessage(
-          "Update check failed",
-          `Could not check for updates: ${reason}`,
-        );
-        return "error";
-      }
+    checkNow(): Promise<UpdateOutcome> {
+      return request("manual");
     },
 
     async onCheckRequested(handler: () => void): Promise<() => void> {

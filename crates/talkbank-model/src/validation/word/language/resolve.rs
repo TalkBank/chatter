@@ -42,6 +42,22 @@ pub enum LanguageResolution {
 }
 
 impl LanguageResolution {
+    /// Consume an explicit word-language resolution into its checked outcome.
+    ///
+    /// All candidate codes travel through the same rule owner, regardless of
+    /// whether the marker means one, mixed, or ambiguous languages. Resolution
+    /// and diagnostics are produced together; no candidate is silently dropped.
+    fn into_word_outcome(self, span: Span) -> LanguageResolutionOutcome {
+        let mut diagnostics = Vec::new();
+        for code in self.languages() {
+            report_word_code_issues(code, span, &mut diagnostics);
+        }
+        LanguageResolutionOutcome {
+            resolution: self,
+            diagnostics,
+        }
+    }
+
     /// Return the resolved language set used by downstream validators.
     ///
     /// For `Single`, this is a one-element slice. For `Multiple`/`Ambiguous`,
@@ -289,22 +305,18 @@ pub(crate) fn resolve_marker_at(
             // `[- CODE]` precode, which IS required to be declared (E755).
             // The code must still be a REAL language (part 2 of the ruling):
             // registry validation is what catches typo'd codes.
-            report_word_code_issues(code, span, &mut diagnostics);
-            LanguageResolution::Single(code.clone())
+            return LanguageResolution::Single(code.clone()).into_word_outcome(span);
         }
         WordLanguageMarker::Multiple(codes) => {
             // Multiple languages mixed together (code-mixing)
             // Content must be valid in ALL component languages, and every
             // component must be a real ISO 639-3 code (ruling part 2).
-            for code in codes {
-                report_word_code_issues(code, span, &mut diagnostics);
-            }
-            LanguageResolution::Multiple(codes.clone())
+            return LanguageResolution::Multiple(codes.clone()).into_word_outcome(span);
         }
         WordLanguageMarker::Ambiguous(codes) => {
             // Ambiguous between languages
             // Content must be valid in ALL possibilities
-            LanguageResolution::Ambiguous(codes.clone())
+            return LanguageResolution::Ambiguous(codes.clone()).into_word_outcome(span);
         }
     };
 

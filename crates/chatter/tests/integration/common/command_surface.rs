@@ -150,10 +150,7 @@ pub const SURFACE_GROUPS: &[SurfaceGroup] = &[
 /// command.
 pub const UNPUBLISHED_TOP_LEVEL: &[(&str, &str)] = &[
     ("adjudicate", "experimental: merge-conflict adjudication"),
-    ("batch", "experimental: batch orchestration"),
     ("debug", "maintainer diagnostics, not a user-facing surface"),
-    ("merge", "experimental: transcript reconciliation"),
-    ("pipeline", "experimental: multi-stage pipeline driver"),
     ("rediarize", "experimental: speaker re-diarization"),
     ("sanity-scan", "experimental: corpus-wide sanity sweep"),
     ("speaker-id", "experimental: speaker identification"),

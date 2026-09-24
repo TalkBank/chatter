@@ -4,10 +4,11 @@
 //! written for themselves.
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{AsRawNode, ChildSlot, NamedKind, NoChild, SlotView};
+use crate::generated_traversal::{
+    AsRawNode, KindSlot, NamedKind, NoChild, SourceBound, SourceBoundKind, SourceField,
+    SourceSlotView,
+};
 use crate::model::{Header, WarningText};
-use crate::parser::typed_cst::decode_present_child;
-use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 /// Build `Header::Unknown` from malformed header input: the header's own text
@@ -35,7 +36,7 @@ pub(crate) fn unknown_header_from_node(
 /// A header node under parse, carried once: the node every recovery
 /// diagnostic and every `Header::Unknown` points at, the kind the generator
 /// named it, and the document text. Built from the typed node, so the node
-/// and its kind are one value and cannot disagree; until 2026-09-09 every
+/// kind and source are one admitted value and cannot disagree. Until 2026-09-09 every
 /// verb took them as three separate arguments beside the errors sink, which
 /// put two of the verbs past clippy's argument limit and let a caller pair a
 /// node with another header's kind.
@@ -46,12 +47,14 @@ pub(crate) struct HeaderSite<'tree, 'src> {
 }
 
 impl<'tree, 'src> HeaderSite<'tree, 'src> {
-    /// The site of `typed`, the header node the generator classified.
-    pub(crate) fn of<T: AsRawNode<'tree> + NamedKind>(typed: &T, input: &'src str) -> Self {
+    /// Retain a producer-bound header's own node, kind and source together.
+    pub(crate) fn bound<T: SourceBoundKind<'tree> + NamedKind>(
+        typed: SourceBound<'tree, 'src, T>,
+    ) -> Self {
         Self {
             actual: typed.raw_node(),
             kind: T::KIND,
-            input,
+            input: typed.source(),
         }
     }
 
@@ -102,58 +105,43 @@ pub(crate) struct ContentSlot<'a> {
     pub suggested_fix: Option<&'a str>,
 }
 
-/// Read a header's content child from its typed, positional slot: the decoded
-/// text of a `Present` slot, or the refusal carrying `words` for every other
-/// state, whose diagnostic has been reported.
-///
-/// The `NodeSlot` match is exhaustive; there is deliberately no `_` catch-all
-/// that could silently drop a recovery slot. A non-`Present` slot (absent,
-/// MISSING, ERROR or displaced) reports one "missing content" diagnostic at
-/// the HEADER NODE span, as the pre-migration `find_child_by_kind` route did
-/// for all four states; a later change may make it position-precise.
-/// The site's kind is the header node type's own `KIND`, so the diagnostic's
-/// context and the content kind it names are both the generator's literals.
-///
-/// Shared by the simple family, the special family (`@Number`, `@Recording
-/// Quality`, `@Transcription`, `@Birth of`, `@Birthplace of`, `@L1 of`) and
-/// `@Media`'s three payload slots, which each read through this one verb.
-pub(crate) fn read_simple_content<'tree, 'w, T: AsRawNode<'tree> + NamedKind>(
+impl<'w> ContentSlot<'w> {
+    /// Report a missing/recovered payload using the family's existing policy.
+    fn refuse(
+        &'w self,
+        site: &HeaderSite<'_, '_>,
+        child_kind: &str,
+        errors: &impl ErrorSink,
+    ) -> Refused<'w> {
+        let node = site.actual();
+        errors.report(ParseError::new(
+            ErrorCode::TreeParsingError,
+            Severity::Error,
+            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            ErrorContext::new(site.input(), node.byte_range(), site.kind()),
+            format!("Missing expected {child_kind} node in {}", site.kind()),
+        ));
+        Refused(self)
+    }
+}
+
+/// Read an associated payload without accepting independently selected text.
+/// Range admission remains fallible, and every non-present slot retains the
+/// family's recovery policy. Source association does not certify valid syntax.
+pub(crate) fn read_source_content<'tree, 'source, 'w, T: SourceBoundKind<'tree> + NamedKind>(
     site: &HeaderSite<'tree, '_>,
-    content_slot: &ChildSlot<'tree, T>,
+    content_slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<String, Refused<'w>> {
-    let header_actual = site.actual();
-    let header_kind = site.kind();
-    let input = site.input();
-    let fallback = || Refused(words);
+) -> Result<&'source str, Refused<'w>> {
     match content_slot.view() {
-        SlotView::Present(content) => {
-            // Decode through the shared `decode_present_child` helper, which reads
-            // from the RAW node's `utf8_text` (NOT the wrapper's `.text()`
-            // accessor, which swallows UTF-8 errors via `unwrap_or("")`). The
-            // family-specific diagnostic (context = `header_kind`, the "text for
-            // {kind}" wording) is supplied here.
-            match decode_present_child(content.raw_node(), input, errors, header_kind, |err| {
-                format!("Failed to extract UTF-8 text for {header_kind}: {err}")
-            }) {
-                ParseOutcome::Parsed(text) => Ok(text),
-                ParseOutcome::Rejected => Err(fallback()),
-            }
+        SourceSlotView::Present(content) => {
+            crate::parser::typed_cst::read_source_field(content, errors)
+                .map(|bound| bound.text())
+                .ok_or(Refused(words))
         }
-        SlotView::Missing(_) | SlotView::Absent(NoChild) | SlotView::Error(_) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(header_actual.start_byte(), header_actual.end_byte()),
-                ErrorContext::new(
-                    input,
-                    header_actual.start_byte()..header_actual.end_byte(),
-                    header_kind,
-                ),
-                format!("Missing expected {} node in {header_kind}", T::KIND),
-            ));
-            Err(fallback())
+        SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) | SourceSlotView::Error(_) => {
+            Err(words.refuse(site, T::KIND, errors))
         }
     }
 }

@@ -5,7 +5,6 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Comment_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Date_Header>
 
-use super::finder::find_header_node_in_tree;
 use super::fragment::HeaderFragment;
 use crate::api::fragment::WrappedFragment;
 use crate::error::{
@@ -62,67 +61,35 @@ impl TreeSitterParser {
         let post_begin_wrapped =
             WrappedFragment::new(&[POST_BEGIN_PREFIX], input, POST_BEGIN_SUFFIX, 0)?;
 
-        let try_parse = |fragment: &WrappedFragment<'_>,
-                         header_index: usize|
-         -> ParseResult<Header> {
-            let wrapped = fragment.source();
-            let tree = self
-                .parser
-                .borrow_mut()
-                .parse(wrapped, None)
-                .ok_or_else(|| {
+        let try_parse =
+            |fragment: &WrappedFragment<'_>, header_index: usize| -> ParseResult<Header> {
+                let parsed = fragment.parse(self).map_err(|_| {
                     let mut errors = ParseErrors::new();
                     errors.push(
-                        ParseError::new(
-                            ErrorCode::TierValidationError,
-                            Severity::Error,
-                            SourceLocation::from_offsets(0, input.len()),
-                            ErrorContext::new(input, 0..input.len(), "header"),
-                            "Tier validation error: tree-sitter could not parse this header line",
-                        )
-                        .with_suggestion("Check that the header line follows CHAT format (e.g., @Header:<TAB>value)"),
-                    );
-                    errors
-                })?;
-
-            let ts_root = tree.root_node();
-            // Navigate source_file → full_document for multi-root grammar
-            let root = if ts_root.kind() == "source_file" {
-                ts_root
-                    .child(0)
-                    .filter(|c| c.kind() == "full_document")
-                    .unwrap_or(ts_root)
-            } else {
-                ts_root
-            };
-            let header_node = find_header_node_in_tree(root, header_index).map_err(|failure| {
-                ParseErrors::from(vec![
                     ParseError::new(
                         ErrorCode::TierValidationError,
                         Severity::Error,
                         SourceLocation::from_offsets(0, input.len()),
                         ErrorContext::new(input, 0..input.len(), "header"),
-                        failure.to_string(),
+                        "Tier validation error: tree-sitter could not parse this header line",
                     )
                     .with_suggestion(
-                        "Check that all header lines are well-formed and appear before utterances",
+                        "Check that the header line follows CHAT format (e.g., @Header:<TAB>value)",
                     ),
-                ])
-            })?;
+                );
+                    errors
+                })?;
 
-            HeaderFragment::admit(header_node, fragment)?.lower()
+                HeaderFragment::admit(&parsed, header_index)?.lower()
+            };
+
+        let pre_err = match try_parse(&pre_begin_wrapped, 1) {
+            Ok(header) => return Ok(header),
+            Err(error) => error,
         };
-
-        let pre_begin_attempt = try_parse(&pre_begin_wrapped, 1);
-        if pre_begin_attempt.is_ok() {
-            return pre_begin_attempt;
-        }
-
-        let post_begin_attempt = try_parse(&post_begin_wrapped, 5);
-        match (pre_begin_attempt, post_begin_attempt) {
-            (Ok(header), _) => Ok(header),
-            (Err(_), Ok(header)) => Ok(header),
-            (Err(pre_err), Err(post_err)) => {
+        match try_parse(&post_begin_wrapped, 5) {
+            Ok(header) => Ok(header),
+            Err(post_err) => {
                 if post_err.len() <= pre_err.len() {
                     Err(post_err)
                 } else {

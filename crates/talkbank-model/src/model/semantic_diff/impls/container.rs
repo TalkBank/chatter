@@ -60,22 +60,22 @@ impl<T: SemanticDiff> SemanticDiff for Vec<T> {
     ) {
         // First, diff shared elements to find actual type/value differences
         let shared = self.len().min(other.len());
-        for idx in 0..shared {
+        for (idx, (left, right)) in self.iter().zip(other.iter()).enumerate() {
             if report.is_truncated() {
                 return;
             }
             path.push_index(idx);
-            self[idx].semantic_diff_into(&other[idx], path, report, ctx);
+            left.semantic_diff_into(right, path, report, ctx);
             path.pop();
         }
 
-        // If we found a diff in shared elements, don't also report length difference
+        // Stop only after an actual additional difference exhausted the report.
         if report.is_truncated() {
             return;
         }
 
-        // Only report length difference if all shared elements matched
-        // (one vec is a prefix of the other)
+        // Report the unmatched tail even if earlier values differed, provided
+        // the report still has room to inspect another difference.
         if self.len() != other.len() {
             // Report what's extra/missing at the divergence point
             let diverge_idx = shared;
@@ -120,21 +120,21 @@ where
     ) {
         // First, diff shared elements to find actual type/value differences
         let shared = self.len().min(other.len());
-        for idx in 0..shared {
+        for (idx, (left, right)) in self.iter().zip(other.iter()).enumerate() {
             if report.is_truncated() {
                 return;
             }
             path.push_index(idx);
-            self[idx].semantic_diff_into(&other[idx], path, report, ctx);
+            left.semantic_diff_into(right, path, report, ctx);
             path.pop();
         }
 
-        // If we found a diff in shared elements, don't also report length difference
+        // Stop only after an actual additional difference exhausted the report.
         if report.is_truncated() {
             return;
         }
 
-        // Only report length difference if all shared elements matched
+        // Report the unmatched tail while traversal is not truncated.
         if self.len() != other.len() {
             let diverge_idx = shared;
             path.push_index(diverge_idx);
@@ -275,24 +275,14 @@ impl<K: SemanticDiff, V: SemanticDiff> SemanticDiff for IndexMap<K, V> {
             );
         }
 
-        let shared = self.len().min(other.len());
-        for idx in 0..shared {
+        // The iterator supplies two existing borrowed entries per step; there
+        // is no index lookup that can spuriously stop a complete comparison.
+        for (idx, ((left_key, left_value), (right_key, right_value))) in
+            self.iter().zip(other.iter()).enumerate()
+        {
             if report.is_truncated() {
                 return;
             }
-            let (left_key, left_value) = match self.get_index(idx) {
-                Some(entry) => entry,
-                None => {
-                    return;
-                }
-            };
-            let (right_key, right_value) = match other.get_index(idx) {
-                Some(entry) => entry,
-                None => {
-                    return;
-                }
-            };
-
             path.push_index(idx);
             path.push_field("key");
             left_key.semantic_diff_into(right_key, path, report, ctx);

@@ -15,7 +15,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use talkbank_model::model::TranscriptName;
 use talkbank_model::model::{ChatFile, WriteChat};
 use talkbank_transform::paths::is_chat_transcript_path;
 use tracing::{Level, debug, info, span, warn};
@@ -40,6 +39,16 @@ pub fn chat_to_json(
 ) {
     let _span = span!(Level::INFO, "chat_to_json", input = %input.display()).entered();
     info!("Converting CHAT to JSON");
+    let stored = match talkbank_transform::paths::StoredTranscript::resolve(input) {
+        Ok(stored) => stored,
+        Err(error) => {
+            eprintln!(
+                "Cannot resolve transcript name {}: {error}",
+                input.display()
+            );
+            std::process::exit(1);
+        }
+    };
 
     // Read CHAT file
     let content = {
@@ -74,7 +83,7 @@ pub fn chat_to_json(
             &content,
             options,
             pretty,
-            TranscriptName::for_path(input),
+            stored.name(),
             talkbank_transform::JsonSchemaPolicy::from_skip_flag(skip_schema_validation),
         );
         match result {
@@ -239,6 +248,7 @@ pub fn chat_to_json_directory(
 
     if worker_count == 1 {
         // Serial mode
+        let mut names = talkbank_transform::paths::StoredNameResolver::default();
         for (i, cha_path) in cha_files.iter().enumerate() {
             if i > 0 && i % 1000 == 0 {
                 eprintln!(
@@ -260,6 +270,7 @@ pub fn chat_to_json_directory(
                 &converted,
                 &skipped,
                 &failed,
+                &mut names,
             );
         }
     } else {
@@ -279,6 +290,7 @@ pub fn chat_to_json_directory(
                     let converted = unsafe { &*(converted as *const AtomicUsize) };
                     let skipped = unsafe { &*(skipped as *const AtomicUsize) };
                     let failed = unsafe { &*(failed as *const AtomicUsize) };
+                    let mut names = talkbank_transform::paths::StoredNameResolver::default();
                     while let Ok(cha_path) = rx.recv() {
                         convert_one_file(
                             &cha_path,
@@ -292,6 +304,7 @@ pub fn chat_to_json_directory(
                             converted,
                             skipped,
                             failed,
+                            &mut names,
                         );
                     }
                 })
@@ -362,6 +375,7 @@ fn convert_one_file(
     converted: &AtomicUsize,
     skipped: &AtomicUsize,
     failed: &AtomicUsize,
+    names: &mut talkbank_transform::paths::StoredNameResolver,
 ) {
     // Compute relative path and output path
     let rel = cha_path.strip_prefix(input_dir).unwrap_or(cha_path);
@@ -377,6 +391,17 @@ fn convert_one_file(
         return;
     }
 
+    let stored = match names.resolve(cha_path) {
+        Ok(stored) => stored,
+        Err(error) => {
+            eprintln!(
+                "Cannot resolve transcript name {}: {error}",
+                cha_path.display()
+            );
+            failed.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+    };
     // Read source
     let content = match fs::read_to_string(cha_path) {
         Ok(c) => c,
@@ -401,7 +426,7 @@ fn convert_one_file(
         &content,
         options,
         pretty,
-        TranscriptName::for_path(cha_path),
+        stored.name(),
         talkbank_transform::JsonSchemaPolicy::from_skip_flag(skip_schema_validation),
     );
 

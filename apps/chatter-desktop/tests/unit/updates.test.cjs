@@ -126,3 +126,34 @@ test("checkNow reports the failure to the user when the check throws", async () 
   assert.equal(outcome, "error");
   assert.equal(transport.messages.length, 1, "a failure dialog must show");
 });
+
+test("overlapping launch and manual checks share one prompt and installation", async () => {
+  const transport = fakeTransport({
+    update: { version: "0.26.0", currentVersion: "0.25.0" },
+    accept: true,
+  });
+  const updates = createUpdatesCapability(transport);
+  const results = await Promise.all([
+    updates.checkOnLaunch(), updates.checkNow(), updates.checkNow(),
+  ]);
+  assert.deepEqual(results, ["installing", "installing", "installing"]);
+  assert.deepEqual(transport.events, ["check", "ask", "install"]);
+});
+
+test("a manual request joining a background check gets one status dialog", async () => {
+  const transport = fakeTransport({ update: null });
+  const updates = createUpdatesCapability(transport);
+  await Promise.all([updates.checkOnLaunch(), updates.checkNow(), updates.checkNow()]);
+  assert.deepEqual(transport.events, ["check", "message"]);
+  await updates.checkNow();
+  assert.deepEqual(transport.events, ["check", "message", "check", "message"],
+    "completion admits a subsequent explicit check");
+});
+
+test("a failed error dialog does not reject the manual update command", async () => {
+  const transport = fakeTransport({ throwOnCheck: true });
+  transport.showMessage = async () => { throw new Error("dialog unavailable"); };
+  const updates = createUpdatesCapability(transport);
+  assert.equal(await updates.checkNow(), "error");
+  assert.equal(await updates.checkNow(), "error", "failure releases the in-flight operation");
+});

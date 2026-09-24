@@ -135,6 +135,12 @@ pub fn build_text_diff(text_a: &str, text_b: &str) -> String {
 
     let max_len = lines_a.len().max(lines_b.len());
     for i in 0..max_len {
+        // Presence is a fact, not the printable text of a magic sentinel.
+        let line_a = lines_a.get(i).copied();
+        let line_b = lines_b.get(i).copied();
+        if line_a == line_b {
+            continue;
+        }
         if diffs.len() >= max_diffs {
             diffs.push(format!(
                 "  ... and more (total lines: pass1={}, pass2={})",
@@ -143,23 +149,27 @@ pub fn build_text_diff(text_a: &str, text_b: &str) -> String {
             ));
             break;
         }
-        let line_a = lines_a.get(i).copied().unwrap_or("<missing>");
-        let line_b = lines_b.get(i).copied().unwrap_or("<missing>");
-        if line_a != line_b {
-            diffs.push(format!(
-                "  line {}:
+        diffs.push(format!(
+            "  line {}:
     pass1: {}
     pass2: {}",
-                i + 1,
-                line_a,
-                line_b
-            ));
-        }
+            i + 1,
+            render_line(line_a),
+            render_line(line_b)
+        ));
     }
 
     if diffs.is_empty() {
         "no text differences found (possible trailing newline difference)".to_string()
     } else {
         diffs.join("\n")
+    }
+}
+
+/// Quoted present text cannot be mistaken for the absent-line indicator.
+fn render_line(line: Option<&str>) -> String {
+    match line {
+        Some(text) => format!("{text:?}"),
+        None => "<missing>".to_owned(),
     }
 }

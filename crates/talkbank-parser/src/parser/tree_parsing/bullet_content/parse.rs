@@ -1,160 +1,227 @@
-//! Converts `text_with_bullets` CST nodes into structured `BulletContent`.
-//!
-//! # Related CHAT Manual Sections
-//!
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
-
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::node_types::*;
-use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
+//! Lowers generated bullet-text choices in source order, retaining recovery.
+use crate::error::ErrorSink;
+use crate::generated_traversal::{
+    AsRawNode, BulletNode, ChoiceSlot, ContinuationNode, InlinePicNode, KindSlot, NoChild,
+    Positioned, SourceBound, SourceBoundKind, SourceField, SourceSlotView, SpaceNode,
+    TextSegmentNode, TextWithBulletsAndPicsChild0Choice,
+    TextWithBulletsAndPicsChild0ChoiceSourceView, TextWithBulletsAndPicsChild1Choice,
+    TextWithBulletsAndPicsChild1ChoiceSourceView, TextWithBulletsChild0Choice,
+    TextWithBulletsChild0ChoiceSourceView, TextWithBulletsChild1Choice,
+    TextWithBulletsChild1ChoiceSourceView,
+};
+use crate::parser::tree_parsing::helpers::unexpected_node_error;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::{read_source_field, report_source_binding_error};
 use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{BulletContent, BulletContentSegment};
 use tree_sitter::Node;
 
-use super::inline_bullet::parse_inline_bullet;
-use super::inline_pic::parse_inline_pic;
+use super::{BulletTextNode, inline_bullet::parse_inline_bullet, inline_pic::parse_inline_pic};
 
-/// Converts a bullet-capable text node into `BulletContent`.
+/// Parse only one of the grammar's two bullet-text carriers.
 ///
-/// **Grammar Rules:**
-/// ```text
-/// text_with_bullets: $ => repeat1(choice(
-///   $.text_segment,
-///   $.inline_bullet,
-///   $.continuation
-/// )),
-///
-/// text_with_bullets_and_pics: $ => repeat1(choice(
-///   $.text_segment,
-///   $.inline_bullet,
-///   $.inline_pic,
-///   $.continuation
-/// ))
-/// ```
-///
-/// **Expected Sequential Order:**
-/// - `repeat1(choice(...))` means 1+ segments in any order
-/// - Each child is one of: text_segment, inline_bullet, inline_pic, continuation
-///
-/// **Returns:** BulletContent (errors streamed via ErrorSink)
-///
-/// **Error Recovery:**
-/// - Invalid bullet timestamps → Report E515, skip bullet, continue
-/// - Invalid picture filename → Report E999, skip picture, continue
-/// - Unexpected node types → Report E999, skip node, continue
-/// - Missing content → Return empty BulletContent with error
-pub fn parse_bullet_content(node: Node, source: &str, errors: &impl ErrorSink) -> BulletContent {
-    let mut segments = SmallVec::<[BulletContentSegment; 4]>::new();
-
-    // Verify node type
-    let node_kind = node.kind();
-    if node_kind != TEXT_WITH_BULLETS && node_kind != TEXT_WITH_BULLETS_AND_PICS {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node_kind),
-            format!(
-                "Expected text_with_bullets or text_with_bullets_and_pics, got: {}",
-                node_kind
-            ),
-        ));
-        return BulletContent::empty();
+/// The generated choices own text/bullet/picture dispatch and each nested
+/// group's trailing spaces. Recovery slots and displaced sinks remain visible;
+/// a typed carrier does not certify that its children are free of recovery.
+pub fn parse_bullet_content(
+    typed: BulletTextNode<'_, '_>,
+    errors: &impl ErrorSink,
+) -> BulletContent {
+    let mut sink = SegmentSink {
+        errors,
+        segments: SmallVec::new(),
+    };
+    match typed {
+        BulletTextNode::Text(node) => {
+            let children = node.extract();
+            sink.choice(children.field_child_0().slot(), push_text_first);
+            for item in children.field_child_1().slot().iter() {
+                sink.choice(item.slot(), push_text_repeat);
+            }
+            sink.displaced(children.field_unexpected(), "text_with_bullets");
+        }
+        BulletTextNode::Pictures(node) => {
+            let children = node.extract();
+            sink.choice(children.field_child_0().slot(), push_pictures_first);
+            for item in children.field_child_1().slot().iter() {
+                sink.choice(item.slot(), push_pictures_repeat);
+            }
+            sink.displaced(children.field_unexpected(), "text_with_bullets_and_pics");
+        }
     }
+    BulletContent::new(sink.segments.into_vec())
+}
 
-    let child_count = node.child_count();
-    let mut idx = 0;
+/// Owns the source-order segment accumulation; no intermediate flattened AST.
+struct SegmentSink<'errors, E> {
+    errors: &'errors E,
+    segments: SmallVec<[BulletContentSegment; 4]>,
+}
 
-    while idx < child_count {
-        let child = match node.child(idx) {
-            Some(c) => c,
-            None => {
-                errors.report(ParseError::new(
-                    ErrorCode::TreeParsingError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-                    format!(
-                        "Failed to access child at position {} in bullet_content",
-                        idx
-                    ),
-                ));
-                idx += 1;
-                continue;
-            }
-        };
-        let child_kind = child.kind();
-
-        match child_kind {
-            TEXT_SEGMENT => {
-                // Extract plain text and canonicalize its spacing: spaces in a
-                // free-text tier are delimiters, not content, so runs of spaces
-                // collapse to one and leading/trailing spaces are dropped
-                // (mirroring the main tier, which stores no spaces at all). The
-                // separator owns any leading space (E758) and the bullet owns
-                // its trailing space, so the delimiters between segments are
-                // re-inserted by the serializer.
-                let text = extract_utf8_text(child, source, errors, "text_segment", "");
-                let text = normalize_free_text_spacing(text);
-                if !text.is_empty() {
-                    segments.push(BulletContentSegment::text(text));
-                }
-                idx += 1;
-            }
-
-            SPACE => {
-                // A bullet/pic owns its trailing spaces (grammar:
-                // `seq($.bullet, repeat($.space))`). Those spaces are canonical
-                // delimiters, not content: skip them here; the serializer
-                // re-inserts a single space between segments.
-                idx += 1;
-            }
-
-            BULLET => {
-                // Parse structured bullet: seq(bullet_start, start_time, '_', end_time, bullet_end)
-                if let ParseOutcome::Parsed((start_ms, end_ms)) =
-                    parse_inline_bullet(child, source, errors)
-                {
-                    segments.push(BulletContentSegment::bullet(start_ms, end_ms));
-                }
-                idx += 1;
-            }
-
-            INLINE_PIC => {
-                // Parse inline pic: seq(bullet_end, pic_marker, '"', pic_filename, '"', bullet_end)
-                if let ParseOutcome::Parsed(filename) = parse_inline_pic(child, source, errors) {
-                    segments.push(BulletContentSegment::picture(filename));
-                }
-                idx += 1;
-            }
-
-            CONTINUATION => {
-                // Preserve continuation markers for roundtrip fidelity
-                segments.push(BulletContentSegment::continuation());
-                idx += 1;
-            }
-
-            _ => {
-                // Unexpected node type - report error and skip
-                errors.report(ParseError::new(
-                    ErrorCode::TreeParsingError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                    ErrorContext::new(source, child.start_byte()..child.end_byte(), child_kind),
-                    format!(
-                        "Unexpected node type '{}' at position {} in bullet content",
-                        child_kind, idx
-                    ),
-                ));
-                idx += 1;
-            }
+impl<E: ErrorSink> SegmentSink<'_, E> {
+    fn text<'tree>(&mut self, typed: SourceBound<'tree, '_, TextSegmentNode<'tree>>) {
+        let text = normalize_free_text_spacing(typed.text());
+        if !text.is_empty() {
+            self.segments.push(BulletContentSegment::text(text));
         }
     }
 
-    BulletContent::new(segments.into_vec())
+    fn bullet<'tree>(&mut self, typed: SourceBound<'tree, '_, BulletNode<'tree>>) {
+        if let ParseOutcome::Parsed((start, end)) = parse_inline_bullet(typed, self.errors) {
+            self.segments.push(BulletContentSegment::bullet(start, end));
+        }
+    }
+
+    fn picture<'tree>(&mut self, typed: SourceBound<'tree, '_, InlinePicNode<'tree>>) {
+        if let ParseOutcome::Parsed(filename) = parse_inline_pic(typed, self.errors) {
+            self.segments.push(BulletContentSegment::picture(filename));
+        }
+    }
+
+    fn unexpected<'tree>(&self, node: SourceField<'_, 'tree, '_, Node<'tree>>) {
+        self.errors.report(unexpected_node_error(
+            node.raw_node(),
+            node.source(),
+            "bullet_content",
+        ));
+    }
+
+    fn displaced<'tree>(&self, nodes: SourceField<'_, 'tree, '_, Vec<Node<'tree>>>, parent: &str) {
+        for node in nodes.iter() {
+            let raw = node.raw_node();
+            surface_displaced(
+                std::slice::from_ref(&raw),
+                parent,
+                node.source(),
+                self.errors,
+            );
+        }
+    }
+
+    /// Missing leaves retain their expected kind. Preserve the old lowering of
+    /// these placeholders; the whole-tree backstop still diagnoses recovery.
+    fn placeholder<'tree>(&mut self, field: SourceField<'_, 'tree, '_, Node<'tree>>) {
+        let node = match field.read_raw() {
+            Ok(node) => node,
+            Err(error) => {
+                report_source_binding_error(field.raw_node(), field.source(), error, self.errors);
+                return;
+            }
+        };
+        if let Some(text) = node.typed::<TextSegmentNode>() {
+            self.text(text);
+        } else if let Some(bullet) = node.typed::<BulletNode>() {
+            self.bullet(bullet);
+        } else if let Some(picture) = node.typed::<InlinePicNode>() {
+            self.picture(picture);
+        } else if node.typed::<ContinuationNode>().is_some() {
+            self.segments.push(BulletContentSegment::continuation());
+        } else if node.typed::<SpaceNode>().is_none() {
+            self.unexpected(field);
+        }
+    }
+
+    fn choice<'value, 'tree: 'value, 'source, T: 'value>(
+        &mut self,
+        slot: SourceField<'value, 'tree, 'source, ChoiceSlot<'tree, T>>,
+        push: impl FnOnce(SourceField<'value, 'tree, 'source, T>, &mut Self),
+    ) {
+        match slot.view() {
+            SourceSlotView::Present(choice) => push(choice, self),
+            SourceSlotView::Missing(node) => self.placeholder(node),
+            SourceSlotView::Error(node) | SourceSlotView::Unexpected(node) => self.unexpected(node),
+            SourceSlotView::Absent(NoChild) => {}
+        }
+    }
+
+    fn leaf<'tree, 'source, T: SourceBoundKind<'tree>>(
+        &mut self,
+        slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
+        push: impl FnOnce(&mut Self, SourceBound<'tree, 'source, T>),
+    ) {
+        match slot.view() {
+            SourceSlotView::Present(node) | SourceSlotView::Missing(node) => {
+                if let Some(node) = read_source_field(node, self.errors) {
+                    push(self, node);
+                }
+            }
+            SourceSlotView::Error(node) => self.unexpected(node),
+            SourceSlotView::Absent(NoChild) => {}
+        }
+    }
+
+    fn spaces<'tree>(
+        &self,
+        spaces: SourceField<
+            '_,
+            'tree,
+            '_,
+            Vec<Positioned<'tree, KindSlot<'tree, SpaceNode<'tree>>>>,
+        >,
+        unexpected: SourceField<'_, 'tree, '_, Vec<Node<'tree>>>,
+    ) {
+        for space in spaces.iter() {
+            match space.slot().view() {
+                SourceSlotView::Present(_)
+                | SourceSlotView::Missing(_)
+                | SourceSlotView::Absent(NoChild) => {}
+                SourceSlotView::Error(node) => self.unexpected(node),
+            }
+        }
+        self.displaced(unexpected, "bullet_content");
+    }
 }
+
+// The generator gives first/repeat positions distinct carrier types. Keep
+// their exhaustive alternatives identical without erasing either into raw nodes.
+macro_rules! text_choices {
+    ($function:ident, $choice:ident, $view:ident $(, $picture:ident)?) => {
+        fn $function<'tree, E: ErrorSink>(choice: SourceField<'_, 'tree, '_, $choice<'tree>>, sink: &mut SegmentSink<'_, E>) {
+            match choice.view() {
+                $view::TextSegment(text) => {
+                    if let Some(text) = read_source_field(text, sink.errors) {
+                        sink.text(text);
+                    }
+                }
+                $view::Bullet(group) => {
+                    sink.leaf(group.field_child_0().slot(), SegmentSink::bullet);
+                    sink.spaces(group.field_child_1().slot(), group.field_unexpected());
+                }
+                $view::Continuation(_) => sink.segments.push(BulletContentSegment::continuation()),
+                $(
+                    $view::$picture(group) => {
+                        sink.leaf(group.field_child_0().slot(), SegmentSink::picture);
+                        sink.spaces(group.field_child_1().slot(), group.field_unexpected());
+                    }
+                )?
+            }
+        }
+    };
+}
+
+text_choices!(
+    push_text_first,
+    TextWithBulletsChild0Choice,
+    TextWithBulletsChild0ChoiceSourceView
+);
+text_choices!(
+    push_text_repeat,
+    TextWithBulletsChild1Choice,
+    TextWithBulletsChild1ChoiceSourceView
+);
+text_choices!(
+    push_pictures_first,
+    TextWithBulletsAndPicsChild0Choice,
+    TextWithBulletsAndPicsChild0ChoiceSourceView,
+    InlinePic
+);
+text_choices!(
+    push_pictures_repeat,
+    TextWithBulletsAndPicsChild1Choice,
+    TextWithBulletsAndPicsChild1ChoiceSourceView,
+    InlinePic
+);
 
 /// Collapse runs of ASCII spaces to a single space and trim leading/trailing
 /// spaces from one free-text run.

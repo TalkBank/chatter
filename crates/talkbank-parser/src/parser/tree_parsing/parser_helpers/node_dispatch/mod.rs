@@ -19,4 +19,4 @@ mod separator;
 
 pub(crate) use ca::{parse_ca_delimiter_node, parse_ca_element_node};
 pub(crate) use pause::parse_pause_node;
-pub(crate) use separator::parse_separator_like;
+pub(crate) use separator::parse_separator_node;

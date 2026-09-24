@@ -20,6 +20,7 @@
 //! 3. Speaker text, tier body, headers extract correctly
 
 use std::collections::BTreeMap;
+use talkbank_parser_tests::chat_corpus::ChatCorpus;
 use talkbank_parser_tests::classify;
 
 use talkbank_parser_tests::generated_traversal::*;
@@ -59,14 +60,6 @@ fn parse_chat(source: &str) -> tree_sitter::Tree {
     let lang: tree_sitter::Language = tree_sitter_talkbank::LANGUAGE.into();
     parser.set_language(&lang).expect("set language");
     parser.parse(source, None).expect("parse")
-}
-
-fn corpus_dir() -> Option<std::path::PathBuf> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()?
-        .parent()?
-        .join("corpus/reference");
-    dir.exists().then_some(dir)
 }
 
 // ---------------------------------------------------------------------------
@@ -221,10 +214,7 @@ fn test_full_document_extraction() {
 
 #[test]
 fn test_corpus_wide_extraction() {
-    let Some(dir) = corpus_dir() else {
-        eprintln!("Skipping: corpus/reference not found");
-        return;
-    };
+    let corpus = ChatCorpus::reference().expect("complete reference corpus");
 
     let mut parser = tree_sitter::Parser::new();
     let lang: tree_sitter::Language = tree_sitter_talkbank::LANGUAGE.into();
@@ -233,13 +223,9 @@ fn test_corpus_wide_extraction() {
     let mut kind_counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut files_parsed = 0;
 
-    for entry in walkdir::WalkDir::new(&dir)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "cha"))
-    {
-        let source = std::fs::read_to_string(entry.path()).expect("read file");
-        let tree = parser.parse(&source, None).expect("parse");
+    for fixture in corpus.fixtures() {
+        let source = fixture.source();
+        let tree = parser.parse(source, None).expect("parse");
 
         // Walk every node and call the matching extraction function.
         // The key validation: this doesn't panic on any real CST node.
@@ -393,10 +379,7 @@ fn test_corpus_wide_extraction() {
 
 #[test]
 fn test_speaker_parity_with_existing_parser() {
-    let Some(dir) = corpus_dir() else {
-        eprintln!("Skipping: corpus/reference not found");
-        return;
-    };
+    let corpus = ChatCorpus::reference().expect("complete reference corpus");
 
     let mut parser = tree_sitter::Parser::new();
     let lang: tree_sitter::Language = tree_sitter_talkbank::LANGUAGE.into();
@@ -408,22 +391,13 @@ fn test_speaker_parity_with_existing_parser() {
     let mut matching_speakers = 0;
     let mut files = 0;
 
-    for entry in walkdir::WalkDir::new(&dir)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "cha"))
-    {
-        let source = std::fs::read_to_string(entry.path()).expect("read file");
-        let tree = parser.parse(&source, None).expect("parse");
+    for fixture in corpus.fixtures() {
+        let source = fixture.source();
+        let tree = parser.parse(source, None).expect("parse");
 
-        // Parse with the Rust parser. A healthy region can still be
-        // compared even when the file also carries diagnostics elsewhere;
-        // only a genuinely unbuildable file is skipped.
-        let talkbank_parser::ParseProduct::Built { file: existing, .. } =
-            chat_parser.parse_chat_file(&source)
-        else {
-            continue; // Skip files with no model at all.
-        };
+        let existing =
+            talkbank_parser_tests::test_error::strict_parse(chat_parser.parse_chat_file(source))
+                .unwrap_or_else(|error| panic!("{}: {error}", fixture.path().display()));
 
         // Collect speakers from generated traversal
         let mut gen_speakers = Vec::new();
@@ -431,7 +405,7 @@ fn test_speaker_parity_with_existing_parser() {
             if node.kind() == "main_tier" {
                 let c = extract_main_tier(classify::<MainTierNode>(node));
                 if let NodeSlot::Present(spk) = c.speaker.slot() {
-                    gen_speakers.push(node_text(spk.raw_node(), &source).to_string());
+                    gen_speakers.push(node_text(spk.raw_node(), source).to_string());
                 }
             }
         });
@@ -945,19 +919,7 @@ fn try_extract(node: tree_sitter::Node) -> bool {
 
 #[test]
 fn test_all_113_extraction_functions_no_panics() {
-    let dir = {
-        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(|p| p.parent())
-            .map(|p| p.join("corpus/reference"));
-        match p {
-            Some(d) if d.exists() => d,
-            _ => {
-                eprintln!("Skipping: corpus/reference not found");
-                return;
-            }
-        }
-    };
+    let corpus = ChatCorpus::reference().expect("complete reference corpus");
 
     let mut parser = tree_sitter::Parser::new();
     let lang: tree_sitter::Language = tree_sitter_talkbank::LANGUAGE.into();
@@ -968,13 +930,9 @@ fn test_all_113_extraction_functions_no_panics() {
     let mut kind_counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut files = 0;
 
-    for entry in walkdir::WalkDir::new(&dir)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "cha"))
-    {
-        let source = std::fs::read_to_string(entry.path()).expect("read file");
-        let tree = parser.parse(&source, None).expect("parse");
+    for fixture in corpus.fixtures() {
+        let source = fixture.source();
+        let tree = parser.parse(source, None).expect("parse");
 
         walk_all(tree.root_node(), &mut |node| {
             total_nodes += 1;

@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother, FAT Father
+@ID:	eng|corpus|CHI|||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|FAT|||||Father|||
+*CHI:	⌈2hello⌉2 .
+*MOT:	⌊2hi⌋2 .
+*FAT:	⌊2yes⌋2 .
+@End

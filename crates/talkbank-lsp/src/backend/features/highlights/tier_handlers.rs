@@ -309,7 +309,7 @@ pub(super) fn highlights_from_sin_tier(
 /// Highlights from gra tier, trace through `%mor` chunks to the host
 /// `%mor` item and then through the main↔mor alignment to the host word.
 ///
-/// Three index spaces are in play (see `crates/talkbank-lsp/CLAUDE.md`):
+/// Three index spaces are in play (see `crates/talkbank-lsp/AGENTS.md`):
 ///
 /// 1. `gra_pair.mor_chunk_index` is a **chunk** index (0-indexed into the
 ///    expansion produced by [`MorTier::chunks`]).

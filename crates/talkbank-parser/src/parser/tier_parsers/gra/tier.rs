@@ -9,8 +9,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, GraContentsNode, GraDependentTierNode, GraRelationNode, NoChild,
-    SlotView, WhitespacesNode, extract_gra_contents, extract_gra_dependent_tier,
+    AsRawNode, GraContentsNode, GraDependentTierNode, GraRelationNode, KindSlot, NoChild, SlotView,
+    WhitespacesNode, extract_gra_contents, extract_gra_dependent_tier,
 };
 use crate::parser::node_span::span_of;
 use talkbank_model::ParseOutcome;
@@ -64,7 +64,7 @@ pub fn parse_gra_tier(
     match children
         .child_2
         .slot()
-        .typed_or_placeholder()
+        .known_or_placeholder()
         .present_or_placeholder()
     {
         Some(contents) => {
@@ -157,7 +157,7 @@ fn parse_gra_relations(
 /// CHAT lexer never emits two adjacent `index|head|relation` triples without
 /// intervening whitespace on well-formed input.
 fn push_gra_separator<'tree>(
-    slot: &ChildSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &KindSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
 ) {
@@ -200,7 +200,7 @@ fn push_gra_separator<'tree>(
 /// "was anything dropped" is derived from the same walk that does the dropping
 /// rather than recounted afterwards.
 fn push_gra_relation<'tree>(
-    slot: &ChildSlot<'tree, GraRelationNode<'tree>>,
+    slot: &KindSlot<'tree, GraRelationNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     relations: &mut Vec<GrammaticalRelation>,

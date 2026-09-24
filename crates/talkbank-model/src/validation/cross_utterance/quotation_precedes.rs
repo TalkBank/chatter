@@ -8,39 +8,25 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#SelfCompletion_Linker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
-use super::FileUtterances;
+use super::UtterancePosition;
 use super::helpers::has_quoted_linker;
 use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
 /// Validates `+".` quotation-precedes terminators against prior `+"` linkers.
 ///
-/// The rule requires at least one preceding same-speaker utterance marked as
-/// quoted speech, otherwise the terminator is considered structurally orphaned.
-pub(super) fn check_quotation_precedes(
-    utterances: &FileUtterances<'_>,
-    idx: usize,
-) -> Vec<ParseError> {
+/// The nearest preceding same-speaker utterance must be marked as quoted
+/// speech; an older quote cannot cross intervening ordinary same-speaker speech.
+pub(super) fn check_quotation_precedes(position: &UtterancePosition<'_, '_>) -> Vec<ParseError> {
     let mut errors = Vec::new();
-    let Some(utterance) = utterances.get(idx) else {
-        return Vec::new();
-    };
+    let utterance = position.current();
     let speaker = utterance.main.speaker.as_str();
 
-    // Find previous utterance(s) by same speaker
-    let mut found_quoted = false;
-    for prev_utt in utterances.preceding(idx) {
-        if prev_utt.main.speaker.as_str() == speaker {
-            if has_quoted_linker(prev_utt) {
-                found_quoted = true;
-                break;
-            } else {
-                // Found same-speaker utterance without +" - stop search
-                break;
-            }
-        }
-    }
-
-    if !found_quoted {
+    // The file-issued position traverses nearest first. Selection yields one
+    // optional turn, so an ordinary intervening turn cannot be skipped later.
+    let preceding = position
+        .preceding()
+        .find(|previous| previous.main.speaker.as_str() == speaker);
+    if !preceding.is_some_and(has_quoted_linker) {
         errors.push(
             ParseError::new(
                 ErrorCode::InvalidContentAnnotationNesting,

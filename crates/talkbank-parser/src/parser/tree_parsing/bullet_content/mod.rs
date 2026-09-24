@@ -10,8 +10,10 @@
 
 mod inline_bullet;
 mod inline_pic;
+mod node;
 mod parse;
 #[cfg(test)]
 mod tests;
 
+pub use node::BulletTextNode;
 pub use parse::parse_bullet_content;

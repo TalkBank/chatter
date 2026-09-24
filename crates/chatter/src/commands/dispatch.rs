@@ -77,12 +77,9 @@ impl Commands {
             | Self::FromJson { .. }
             | Self::Clean { .. }
             | Self::NewFile { .. }
-            | Self::Merge { .. }
             | Self::SpeakerId { .. }
             | Self::Rediarize { .. }
             | Self::Adjudicate { .. }
-            | Self::Pipeline { .. }
-            | Self::Batch { .. }
             | Self::SanityScan { .. }
             | Self::Schema { .. }
             | Self::Fix { .. }
@@ -191,17 +188,6 @@ struct UtilityCommandService;
 impl CommandFamilyService for UtilityCommandService {
     fn dispatch(&self, command: Commands, _context: &CommandContext) {
         match command {
-            Commands::Merge {
-                file1,
-                file2,
-                retain,
-                output,
-            } => crate::commands::transcript_merge::run_merge(
-                &file1,
-                &file2,
-                &retain,
-                output.as_ref(),
-            ),
             Commands::SpeakerId {
                 input,
                 mapping,
@@ -253,77 +239,6 @@ impl CommandFamilyService for UtilityCommandService {
                 summary_json.as_deref(),
                 contested_at,
             ),
-            Commands::Batch {
-                donor_dir,
-                reference_dir,
-                anchor,
-                inserted_role,
-                retain,
-                confidence_threshold,
-                write_pending,
-                override_file,
-                write_override,
-                sanity_scan,
-                sanity_scan_threshold,
-                skip_existing,
-                judgment,
-                output,
-            } => crate::commands::batch::run_batch(crate::commands::batch::BatchArgs {
-                donor_dir: &donor_dir,
-                reference_dir: &reference_dir,
-                anchor: &anchor,
-                inserted_role: &inserted_role,
-                retain: &retain,
-                confidence_threshold,
-                write_pending_path: write_pending.as_deref(),
-                override_file_path: override_file.as_deref(),
-                write_override_path: write_override.as_deref(),
-                sanity_scan: sanity_scan.then_some({
-                    talkbank_transform::sanity_scan::SanityScanThreshold(sanity_scan_threshold)
-                }),
-                skip_existing,
-                output_dir: &output,
-                judgment: judgment.judgment,
-                llm_endpoint: judgment.llm_endpoint.as_deref(),
-                llm_model: judgment.llm_model.as_deref(),
-                llm_api_key: judgment.llm_api_key.as_deref(),
-                llm_timeout_secs: judgment.llm_timeout_secs,
-                llm_max_retries: judgment.llm_max_retries,
-                llm_cache_path: judgment.llm_cache.as_deref(),
-                session_context: judgment.session_context.as_deref(),
-            }),
-            Commands::Pipeline {
-                donor,
-                reference,
-                anchor,
-                inserted_role,
-                retain,
-                confidence_threshold,
-                write_pending,
-                override_file,
-                write_override,
-                judgment,
-                output,
-            } => crate::commands::pipeline::run_pipeline(crate::commands::pipeline::PipelineArgs {
-                donor: &donor,
-                reference: &reference,
-                anchor: &anchor,
-                inserted_role: &inserted_role,
-                retain: &retain,
-                confidence_threshold,
-                write_pending_path: write_pending.as_deref(),
-                override_file_path: override_file.as_deref(),
-                write_override_path: write_override.as_deref(),
-                output: &output,
-                judgment: judgment.judgment,
-                llm_endpoint: judgment.llm_endpoint.as_deref(),
-                llm_model: judgment.llm_model.as_deref(),
-                llm_api_key: judgment.llm_api_key.as_deref(),
-                llm_timeout_secs: judgment.llm_timeout_secs,
-                llm_max_retries: judgment.llm_max_retries,
-                llm_cache_path: judgment.llm_cache.as_deref(),
-                session_context: judgment.session_context.as_deref(),
-            }),
             Commands::Adjudicate {
                 pending,
                 override_file,

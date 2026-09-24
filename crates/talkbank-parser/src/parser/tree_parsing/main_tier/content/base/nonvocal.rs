@@ -7,15 +7,13 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, NonvocalChoice, NonvocalNode, extract_nonvocal,
-    extract_nonvocal_begin, extract_nonvocal_end, extract_nonvocal_simple,
+    AsRawNode, NonvocalChoice, NonvocalNode, extract_nonvocal, extract_nonvocal_begin,
+    extract_nonvocal_end, extract_nonvocal_simple,
 };
 use crate::model::{NonvocalBegin, NonvocalEnd, NonvocalLabel, NonvocalSimple, UtteranceContent};
 use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, surface_displaced};
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
-use super::super::report_tree_shape;
 use super::{delimiter, marker_label, span_of};
 
 /// Parse one `nonvocal` node: a begin marker (`&{n=label`), an end marker
@@ -29,19 +27,10 @@ use super::{delimiter, marker_label, span_of};
 /// their shape, and a marker whose shape is not intact is not built. Until 2026-09-09 this asserted child counts and kinds
 /// by position and matched `kind()` strings.
 pub(crate) fn parse_nonvocal(
-    node: Node,
+    typed: NonvocalNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let Some(typed) = NonvocalNode::from_node(node) else {
-        report_tree_shape(
-            node,
-            format!("Expected a nonvocal node, found '{}'", node.kind()),
-            source,
-            errors,
-        );
-        return ParseOutcome::rejected();
-    };
     let children = extract_nonvocal(typed);
     surface_displaced(&children.unexpected, "nonvocal", source, errors);
     let SlotState::Present(choice) =

@@ -6,9 +6,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::generated_traversal::{AsRawNode, OverlapPointNode};
 use crate::model::{OverlapIndex, OverlapPoint, OverlapPointKind, UtteranceContent};
+use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 /// Converts one overlap-point token node into `UtteranceContent`.
 ///
@@ -27,11 +28,11 @@ use tree_sitter::Node;
 /// - Index (2-9) is embedded in the token text, not a separate child node
 /// - Parser extracts marker kind and optional index from token text
 pub(crate) fn parse_overlap_point(
-    node: Node,
+    typed: OverlapPointNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    match parse_overlap_point_token(node, source, errors) {
+    match parse_overlap_point_token(typed, source, errors) {
         ParseOutcome::Parsed(point) => ParseOutcome::parsed(UtteranceContent::OverlapPoint(point)),
         ParseOutcome::Rejected => ParseOutcome::rejected(),
     }
@@ -43,23 +44,15 @@ pub(crate) fn parse_overlap_point(
 /// the marker table with a `TopOverlapBegin` fallback for a character the
 /// grammar cannot produce.
 pub(crate) fn parse_overlap_point_token(
-    node: Node,
+    typed: OverlapPointNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<OverlapPoint> {
+    let node = typed.raw_node();
     // Extract text from atomic token
-    let text = match node.utf8_text(source.as_bytes()) {
-        Ok(t) => t,
-        Err(e) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-                format!("Failed to extract overlap point text: {}", e),
-            ));
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(text) = extract_utf8_text(node, source, errors, "overlap_point")
+    else {
+        return ParseOutcome::rejected();
     };
 
     let mut chars = text.chars();

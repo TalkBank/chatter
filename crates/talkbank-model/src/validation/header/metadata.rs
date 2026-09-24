@@ -10,6 +10,8 @@
 
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
 
+use crate::model::header::{DateDigitError, DateDigits, InvalidTimeDuration, InvalidTimeStart};
+
 /// Validate a `DD-MMM-YYYY` date value against CLAN `depfile.cut`'s
 /// `@d<dd-lll-yyyy>` template. Used by both `@Date` (E518) and
 /// `@Birth of` (E545), the two headers share the same date format
@@ -60,35 +62,43 @@ pub(super) fn check_date_format(
 
     let (day_str, month_str, year_str) = (parts[0], parts[1], parts[2]);
 
-    if day_str.len() != 2 {
-        errors.report(
-            make_err(
-                day_str,
-                format!(
-                    "Invalid @Date day '{}': must be exactly two digits",
-                    day_str
-                ),
-            )
-            .with_suggestion("Use two-digit day (e.g., 01, 02, 15)"),
-        );
-    } else if let Ok(day) = day_str.parse::<u8>() {
-        if !(1..=31).contains(&day) {
+    match DateDigits::<2>::parse(day_str) {
+        Err(DateDigitError::Width) => {
             errors.report(
                 make_err(
                     day_str,
-                    format!("Invalid @Date day '{}': must be between 01 and 31", day_str),
+                    format!(
+                        "Invalid @Date day '{}': must be exactly two digits",
+                        day_str
+                    ),
                 )
-                .with_suggestion("Use a valid day between 01 and 31"),
+                .with_suggestion("Use two-digit day (e.g., 01, 02, 15)"),
             );
         }
-    } else {
-        errors.report(
-            make_err(
-                day_str,
-                format!("Invalid @Date day '{}': not a number", day_str),
-            )
-            .with_suggestion("Day must be a number (01-31)"),
-        );
+        Ok(digits) => {
+            let day = digits.day();
+            if !(1..=31).contains(&day) {
+                errors.report(
+                    make_err(
+                        day_str,
+                        format!("Invalid @Date day '{}': must be between 01 and 31", day_str),
+                    )
+                    .with_suggestion("Use a valid day between 01 and 31"),
+                );
+            }
+        }
+        Err(DateDigitError::NonDigit) => {
+            errors.report(
+                make_err(
+                    day_str,
+                    format!(
+                        "Invalid @Date day '{}': must contain only ASCII digits",
+                        day_str
+                    ),
+                )
+                .with_suggestion("Day must contain two ASCII digits (01-31), without a sign"),
+            );
+        }
     }
 
     if !VALID_MONTHS.contains(&month_str) {
@@ -116,50 +126,52 @@ pub(super) fn check_date_format(
         );
     }
 
-    if year_str.len() != 4 {
-        errors.report(
-            make_err(
-                year_str,
-                format!(
-                    "Invalid @Date year '{}': must be exactly four digits",
-                    year_str
-                ),
-            )
-            .with_suggestion("Use four-digit year (e.g., 2024)"),
-        );
-    } else if year_str.parse::<u16>().is_err() {
-        errors.report(
-            make_err(
-                year_str,
-                format!("Invalid @Date year '{}': not a number", year_str),
-            )
-            .with_suggestion("Year must be a four-digit number"),
-        );
+    match DateDigits::<4>::parse(year_str) {
+        Err(DateDigitError::Width) => {
+            errors.report(
+                make_err(
+                    year_str,
+                    format!(
+                        "Invalid @Date year '{}': must be exactly four digits",
+                        year_str
+                    ),
+                )
+                .with_suggestion("Use four-digit year (e.g., 2024)"),
+            );
+        }
+        Err(DateDigitError::NonDigit) => {
+            errors.report(
+                make_err(
+                    year_str,
+                    format!(
+                        "Invalid @Date year '{}': must contain only ASCII digits",
+                        year_str
+                    ),
+                )
+                .with_suggestion("Year must contain four ASCII digits, without a sign"),
+            );
+        }
+        Ok(_) => {}
     }
 }
 
 // ── Time format validators (E540, E541) ───────────────────────────────
 //
-// The validator functions below are the emission surface; the shape
-// decisions live on the typed `TimeDurationValue` /
-// `TimeStartValue::violates_depfile_pattern()` methods. The
-// dispatcher in `validate.rs` gates these calls on either
-// `has_validation_issue()` (Unsupported variant, raw string failed
-// to structurally parse) or `violates_depfile_pattern()` (parsed,
-// but the raw string doesn't match one of CLAN depfile.cut's legal
-// shapes), so by the time we get here we know the value is invalid.
-// The function just renders the diagnostic.
+// These functions render diagnostics from model-issued refusal capabilities.
+// Duration and start assessments own unsupported values, shape, clock range
+// and the optional-empty policy; rendering cannot repeat or bypass admission.
 
 /// E540: Emit an error for an invalid `@Time Duration` value.
 ///
-/// The dispatcher has already determined that the raw string fails
-/// either the model-layer parse or the depfile-pattern check, so
-/// this function unconditionally reports E540 with a depfile-rooted
-/// remediation suggestion.
-pub(super) fn check_time_duration_format(duration: &str, span: Span, errors: &impl ErrorSink) {
-    if duration.is_empty() {
-        return;
-    }
+/// The model's refusal proves the duration is nonempty and fails its shape
+/// or clock assessment. Rendering cannot accept unassessed text or repeat the
+/// optional-empty policy.
+pub(super) fn check_time_duration_format(
+    invalid: InvalidTimeDuration<'_>,
+    span: Span,
+    errors: &impl ErrorSink,
+) {
+    let duration = invalid.into_text();
     let mut err = ParseError::new(
         ErrorCode::InvalidTimeDuration,
         Severity::Error,
@@ -179,24 +191,25 @@ pub(super) fn check_time_duration_format(duration: &str, span: Span, errors: &im
 
 /// E541: Emit an error for an invalid `@Time Start` value.
 ///
-/// Mirrors `check_time_duration_format`: the dispatcher already
-/// decided this value is invalid, so this function just renders
-/// the E541 diagnostic with depfile-rooted guidance.
-pub(super) fn check_time_start_format(start: &str, span: Span, errors: &impl ErrorSink) {
-    if start.is_empty() {
-        return;
-    }
+/// Consumes model-issued refusal evidence: callers cannot report E541 from
+/// arbitrary unassessed text. The original spelling survives the assessment.
+pub(super) fn check_time_start_format(
+    invalid: InvalidTimeStart<'_>,
+    span: Span,
+    errors: &impl ErrorSink,
+) {
+    let start = invalid.into_text();
     let mut err = ParseError::new(
         ErrorCode::InvalidTimeStart,
         Severity::Error,
         SourceLocation::at_offset(span.start as usize),
         ErrorContext::new(start, 0..start.len(), "time_start"),
         format!(
-            "Invalid @Time Start format: '{}'. Legal forms per CLAN depfile.cut: HH:MM:SS or MM:SS",
+            "Invalid @Time Start: '{}'. Use HH:MM:SS or MM:SS with legal clock values (hours 00-23, minutes/seconds 00-59)",
             start
         ),
     )
-    .with_suggestion("Use HH:MM:SS or MM:SS, no millisecond suffix, no range.");
+    .with_suggestion("Use HH:MM:SS or MM:SS with hours 00-23 and minutes/seconds 00-59, no millisecond suffix, no range.");
     err.location.span = span;
     errors.report(err);
 }

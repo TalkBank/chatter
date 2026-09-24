@@ -2,25 +2,32 @@
 
 ## Overview
 
-The reference corpus at `corpus/reference/` is the 100%-pass quality
-gate for all parser/grammar changes. Both parsers, the canonical
-tree-sitter parser (`talkbank-parser`) and the alternate re2c parser
-(`talkbank-parser-re2c`, used as a specification oracle and
-performance parser), must agree on every file. Every file is
-self-describing with `@Comment:` headers explaining what it
-demonstrates.
+The reference corpus at `corpus/reference/` is the finite, reusable input
+suite for parsing, validation, roundtrip and transformation contracts.
+The canonical backend is tree-sitter (`talkbank-parser`). The alternate
+re2c backend is experimental and incomplete; it is not a specification
+oracle, and passing the canonical suite does not establish backend equivalence.
+
+Reference files supply representative valid constructs and combinations.
+Canonical specifications in `spec/constructs/` and `spec/errors/` supply
+independently justified expectations, legal boundary controls and deliberate
+invalid variants. Fixture counts and passing tests alone do not prove complete
+CHAT representativeness or 100% execution coverage.
 
 ## Provenance and licensing
 
-Every file in `corpus/reference/` is **constructed test data**: hand-built
-or synthesized to exercise a specific CHAT construct, not an excerpt of any
-real corpus. Each file labels itself with an `@Comment: Constructs:` line
-describing what it covers. The `@ID` corpus field is the neutral placeholder
-`corpus` (or `sample`); these fixtures do not redistribute any named
-CHILDES/TalkBank corpus, and carry no real participant data. Dependent
-tiers (`%mor`/`%gra`) are produced by the morphotag pipeline. The corpus is
-therefore license-clear for redistribution under this repository's
-MIT OR Apache-2.0 terms.
+Distinguish authored controls from examples derived from corpus material.
+Retain the source relationship, transformations and applicable redistribution
+permission for each derived example. A neutral `@ID` corpus field, renamed
+file or explanatory comment does not establish authorship, anonymization or
+licensing. Do not infer that every existing file was synthesized or that all
+dependent tiers were produced by one pipeline.
+
+New fixtures should explain their purpose and constructs in `@Comment:`
+headers. Keep public examples minimal and sanitized; do not embed private
+source paths or identifying provenance in this public tree. Resolve source
+and licensing evidence before adding derived material. The repository's
+MIT OR Apache-2.0 license is not evidence of permission for external input.
 
 ## Structure
 
@@ -38,32 +45,37 @@ group of files demonstrates:
 - `edge-cases/`: boundary and corner-case constructs
 - `word-features/`: feature-focused word-level fixtures
 
-The live file counts and node-coverage status are recomputed on every
-`make verify` / `make coverage` run; check those for current numbers.
+Do not maintain a second static fixture count here. The test harness discovers
+the current population. `just spec-status` reports specification claims and
+CHECK adjudication counts, not execution or corpus-representativeness coverage.
 
 ## Validation
 
 ```bash
-make verify                    # All pre-merge gates
-make coverage                  # Node coverage check
-cargo run --release -p chatter -- validate corpus/reference/ --roundtrip --force
+cargo test -p talkbank-parser-tests --test integration reference_corpus_parses::
+cargo test -p talkbank-parser-tests --test integration roundtrip_reference_corpus::
+just spec-status
 ```
 
 ## Key Policies
 
-- Every file in `corpus/reference/` MUST pass parser equivalence
-  between tree-sitter and re2c, and roundtrip validation.
-- If a grammar/parser change breaks even one file, revert
-  immediately.
-- Every file has `@Comment:` headers explaining its purpose and
-  constructs.
-- Language files have fresh `%mor`/`%gra` from the morphotag pipeline.
-- Never hand-edit generated artifacts.
+- Investigate failures against the specification and retained evidence;
+  neither current parser output nor a reference file is automatically right.
+- Preserve recovery diagnostics. Parsing a recovered AST is not proof of
+  validity, and normalizing away a fault is not a successful roundtrip.
+- Keep expectations separate from observations. A generated mutation is a
+  candidate until its intended rule and expected behavior are reviewed.
+- Prefer bounded examples that exercise related real-use combinations over
+  repeated whole-production-corpus differential runs.
+- Change generated specification fixtures through their owning specs and
+  `just spec-gen`; never hand-edit the generated artifacts.
 
 ## See Also
 
-- The repo-root CLAUDE.md
+- The repo-root AGENTS.md
 - `crates/talkbank-parser-tests/`: the equivalence-test harness
+- [Spec workflow](../book/src/contributing/spec-workflow.md)
+- [Testing](../book/src/contributing/testing.md)
 
 ---
-Last Updated: 2026-06-14
+**Last modified:** 2026-09-24 00:21 EDT

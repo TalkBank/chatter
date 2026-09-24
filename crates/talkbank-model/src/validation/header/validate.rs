@@ -23,7 +23,6 @@ use super::checkers::{
 };
 use super::metadata::{check_time_duration_format, check_time_start_format};
 use super::unknown::check_unknown_header;
-use crate::model::ValidationTagged;
 
 /// Validate a parsed `Header` and emit diagnostics through `errors`.
 ///
@@ -39,16 +38,12 @@ pub(crate) fn check_header(
         Header::ID(id_header) => {
             check_id_header(id_header, span, errors);
             // E542: Unsupported sex value
-            if let Some(ref sex) = id_header.sex
-                && sex.has_validation_issue()
-            {
-                check_unsupported_sex(sex, span, errors);
+            if let Some(crate::model::Sex::Unsupported(value)) = &id_header.sex {
+                report_unsupported_sex(value, span, errors);
             }
             // E546: Unsupported SES value
-            if let Some(ref ses) = id_header.ses
-                && ses.has_validation_issue()
-            {
-                check_unsupported_ses(ses, span, errors);
+            if let Some(crate::model::SesValue::Unsupported(value)) = &id_header.ses {
+                report_unsupported_ses(value, span, errors);
             }
         }
         Header::Participants { entries } => {
@@ -116,17 +111,15 @@ pub(crate) fn check_header(
         Header::Transcription { transcription } => {
             check_unsupported_transcription(transcription, span, errors);
         }
-        Header::TimeDuration { duration }
-            if duration.has_validation_issue()
-                || duration.violates_depfile_pattern()
-                || duration.has_out_of_range_component() =>
-        {
-            check_time_duration_format(duration.as_str(), span, errors);
+        Header::TimeDuration { duration } => {
+            if let Some(invalid) = duration.invalidity() {
+                check_time_duration_format(invalid, span, errors);
+            }
         }
-        Header::TimeStart { start }
-            if start.has_validation_issue() || start.violates_depfile_pattern() =>
-        {
-            check_time_start_format(start.as_str(), span, errors);
+        Header::TimeStart { start } => {
+            if let Some(invalid) = start.invalidity() {
+                check_time_start_format(invalid, span, errors);
+            }
         }
         Header::Types(_) => {
             // No validation, @Types fields have no fixed vocabulary.
@@ -273,35 +266,31 @@ fn check_unsupported_transcription(
 }
 
 /// E546: Flag unsupported SES value in `@ID`.
-fn check_unsupported_ses(ses: &crate::model::SesValue, span: Span, errors: &impl ErrorSink) {
-    if let crate::model::SesValue::Unsupported(value) = ses {
-        let mut err = crate::ParseError::new(
-            crate::ErrorCode::UnsupportedSesValue,
-            crate::Severity::Error,
-            crate::SourceLocation::at_offset(span.start as usize),
-            crate::ErrorContext::new(value, 0..value.len(), "id_ses"),
-            format!("Unsupported @ID SES value: '{}'", value),
-        )
-        .with_suggestion(
-            "Supported values: UC, MC, WC, LI, White, Black, Asian, Latino, Native, Multiple, Unknown (or combined e.g. 'White UC')",
-        );
-        err.location.span = span;
-        errors.report(err);
-    }
+fn report_unsupported_ses(value: &str, span: Span, errors: &impl ErrorSink) {
+    let mut err = crate::ParseError::new(
+        crate::ErrorCode::UnsupportedSesValue,
+        crate::Severity::Error,
+        crate::SourceLocation::at_offset(span.start as usize),
+        crate::ErrorContext::new(value, 0..value.len(), "id_ses"),
+        format!("Unsupported @ID SES value: '{}'", value),
+    )
+    .with_suggestion(
+        "Supported values: UC, MC, WC, LI, White, Black, Asian, Latino, Native, Multiple, Unknown (or combined e.g. 'White UC')",
+    );
+    err.location.span = span;
+    errors.report(err);
 }
 
 /// E542: Flag unsupported sex value in `@ID`.
-fn check_unsupported_sex(sex: &crate::model::Sex, span: Span, errors: &impl ErrorSink) {
-    if let crate::model::Sex::Unsupported(value) = sex {
-        let mut err = crate::ParseError::new(
-            crate::ErrorCode::UnsupportedSex,
-            crate::Severity::Error,
-            crate::SourceLocation::at_offset(span.start as usize),
-            crate::ErrorContext::new(value, 0..value.len(), "id_sex"),
-            format!("Unsupported @ID sex value: '{}'", value),
-        )
-        .with_suggestion("Supported values: male, female");
-        err.location.span = span;
-        errors.report(err);
-    }
+fn report_unsupported_sex(value: &str, span: Span, errors: &impl ErrorSink) {
+    let mut err = crate::ParseError::new(
+        crate::ErrorCode::UnsupportedSex,
+        crate::Severity::Error,
+        crate::SourceLocation::at_offset(span.start as usize),
+        crate::ErrorContext::new(value, 0..value.len(), "id_sex"),
+        format!("Unsupported @ID sex value: '{}'", value),
+    )
+    .with_suggestion("Supported values: male, female");
+    err.location.span = span;
+    errors.report(err);
 }

@@ -75,6 +75,41 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
         );
     }
 
+    // A repetition annotation is typed syntax, not a slash Word. Free-text
+    // comments do not enter word validation; embedded slashes are a separate
+    // policy and are not rejected by this standalone-token rule.
+    if cleaned == "/" {
+        errors.report(
+            ParseError::new(
+                ErrorCode::IllegalCharactersInWord,
+                Severity::Error,
+                SourceLocation::new(word.span),
+                ErrorContext::new(cleaned, word.span, cleaned),
+                "Standalone slash is not a spoken word",
+            )
+            .with_suggestion(
+                "Use [/] for repetition; a bare slash does not encode a CHAT annotation.",
+            ),
+        );
+    }
+
+    // Unicode punctuation is not the CHAT trailing-off terminator `+...`.
+    // Keep the parsed Word and its source span intact: validation is not repair.
+    if cleaned.contains('\u{2026}') {
+        errors.report(
+            ParseError::new(
+                ErrorCode::IllegalCharactersInWord,
+                Severity::Error,
+                SourceLocation::new(word.span),
+                ErrorContext::new(cleaned, word.span, cleaned),
+                "Word contains Unicode ellipsis (U+2026)",
+            )
+            .with_suggestion(
+                "Use the CHAT terminator +... for trailing off, not a Unicode ellipsis in word text.",
+            ),
+        );
+    }
+
     // Check for other control characters (excluding those that are part of CHAT syntax)
     for (idx, ch) in cleaned.char_indices() {
         if ch.is_control() && ch != '\u{0015}' {
@@ -99,7 +134,7 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
     // `is_nonstandard_unicode_word_char`.
     for (idx, ch) in cleaned.char_indices() {
         let cp = ch as u32;
-        if is_nonstandard_unicode_word_char(cp) {
+        if is_nonstandard_unicode_word_char(ch) {
             errors.report(
                 ParseError::new(
                     ErrorCode::IllegalCharactersInWord,
@@ -118,15 +153,16 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
     }
 }
 
-/// Whether `cp` is a non-standard high-BMP word code point that CLAN CHECK
-/// rejects (error 86, `isIllegalASCII` in OSX-CLAN `check.cpp:2880`). CLAN flags
-/// the 3-byte UTF-8 block U+E000..=U+FFFF as non-standard EXCEPT two ranges it
-/// whitelists for internal use: U+F170..=U+F264 (CLAN-internal markup) and the
-/// fullwidth ASCII forms U+FF01..=U+FF5E. (U+00B7, the allowed middle dot, sits
-/// below this block.) CHAT requires standard Unicode, so private-use and
-/// compatibility-area code points are invalid in word text; this mirrors CLAN's
-/// range exactly for CHECK parity.
-fn is_nonstandard_unicode_word_char(cp: u32) -> bool {
+/// Whether a Unicode scalar falls in the CHECK-compatible rejected BMP block.
+/// Accepting `char` excludes surrogate and out-of-range integers by construction.
+///
+/// CHECK 86's `isIllegalASCII` exempts U+F170..=U+F264 (internal markup) and
+/// U+FF01..=U+FF5E (fullwidth ASCII). These are policy ranges, not Unicode's
+/// definition of standard characters. Its 21-Sep-2026 byte predicate also
+/// rejects U+10000; this scalar-based policy deliberately does not copy that
+/// supplementary-plane overreach. See spec E243_unicode_boundaries.md.
+fn is_nonstandard_unicode_word_char(character: char) -> bool {
+    let cp = character as u32;
     // The 3-byte high-BMP block CLAN treats as non-standard.
     const NONSTANDARD_BLOCK: RangeInclusive<u32> = 0xE000..=0xFFFF;
     // CLAN-internal markup, whitelisted inside the block.
@@ -187,25 +223,62 @@ pub(crate) fn check_shortening_balance(word: &Word, errors: &impl ErrorSink) {
     }
 }
 
+/// Progress through lexical compound parts, not raw character positions.
+/// A join resets spoken-material evidence; prosodic markers cannot fill a part.
+enum CompoundPartState {
+    InitialEmpty,
+    InitialSpoken,
+    JoinedEmpty,
+    JoinedSpoken,
+}
+
+impl CompoundPartState {
+    fn with_spoken(self) -> Self {
+        match self {
+            Self::InitialEmpty | Self::InitialSpoken => Self::InitialSpoken,
+            Self::JoinedEmpty | Self::JoinedSpoken => Self::JoinedSpoken,
+        }
+    }
+}
+
 /// Validate `+` compound marker placement within a token.
 ///
 /// Compound markers must separate non-empty lexical segments, so leading,
 /// trailing, or doubled markers are all rejected.
 pub(crate) fn check_compound_markers(word: &Word, errors: &impl ErrorSink) {
-    if matches!(word.content().first(), Some(WordContent::CompoundMarker(_))) {
-        errors.report(
-            ParseError::new(
-                ErrorCode::InvalidCompoundMarkerPosition,
-                Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
-                "Compound marker '+' cannot start a word",
-            )
-            .with_suggestion("Remove the leading '+' or attach it to the previous word"),
-        );
+    let mut state = CompoundPartState::InitialEmpty;
+    for item in word.content().iter() {
+        if matches!(item, WordContent::CompoundMarker(_)) {
+            match state {
+                CompoundPartState::InitialEmpty => errors.report(
+                    ParseError::new(
+                        ErrorCode::InvalidCompoundMarkerPosition,
+                        Severity::Error,
+                        SourceLocation::new(word.span),
+                        ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
+                        "Compound marker '+' has no preceding spoken part",
+                    )
+                    .with_suggestion("Add spoken material before '+' or remove the marker"),
+                ),
+                CompoundPartState::JoinedEmpty => errors.report(
+                    ParseError::new(
+                        ErrorCode::EmptyCompoundPart,
+                        Severity::Error,
+                        SourceLocation::new(word.span),
+                        ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
+                        "Compound markers '+' enclose an empty spoken part",
+                    )
+                    .with_suggestion("Remove one '+' or add content between compound markers"),
+                ),
+                CompoundPartState::InitialSpoken | CompoundPartState::JoinedSpoken => {}
+            }
+            state = CompoundPartState::JoinedEmpty;
+        } else if is_spoken_material(item) {
+            state = state.with_spoken();
+        }
     }
 
-    if matches!(word.content().last(), Some(WordContent::CompoundMarker(_))) {
+    if matches!(state, CompoundPartState::JoinedEmpty) {
         errors.report(
             ParseError::new(
                 ErrorCode::EmptyCompoundPart,
@@ -215,27 +288,6 @@ pub(crate) fn check_compound_markers(word: &Word, errors: &impl ErrorSink) {
                 "Compound marker '+' cannot have an empty trailing part",
             )
             .with_suggestion("Add content after '+' or remove the trailing marker"),
-        );
-    }
-
-    if word.content().windows(2).any(|window| {
-        matches!(
-            window,
-            [
-                WordContent::CompoundMarker(_),
-                WordContent::CompoundMarker(_)
-            ]
-        )
-    }) {
-        errors.report(
-            ParseError::new(
-                ErrorCode::EmptyCompoundPart,
-                Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
-                "Compound marker '+' cannot have empty parts (++)",
-            )
-            .with_suggestion("Remove one '+' or add content between compound markers"),
         );
     }
 }
@@ -269,20 +321,6 @@ pub(crate) fn illegal_untranscribed_marker(word: &Word) -> Option<UntranscribedS
         // were not uttered, and the letters are still a spelling.
         WordMaterial::Orthography => MarkerSpelling::of(word.cleaned_text()).misspelled(),
     }
-}
-
-/// Return whether a stress marker is primary (`ˈ`).
-///
-/// Small helper to keep pattern checks readable in prosodic validation.
-fn is_primary_stress(marker_type: WordStressMarkerType) -> bool {
-    matches!(marker_type, WordStressMarkerType::Primary)
-}
-
-/// Return whether a stress marker is secondary (`ˌ`).
-///
-/// Small helper to keep pattern checks readable in prosodic validation.
-fn is_secondary_stress(marker_type: WordStressMarkerType) -> bool {
-    matches!(marker_type, WordStressMarkerType::Secondary)
 }
 
 /// Word content measured for prosodic placement checks.
@@ -343,10 +381,9 @@ impl<'a> ProsodicWord<'a> {
                 }
             }
             if let WordContent::StressMarker(marker) = item {
-                if is_primary_stress(marker.marker_type) {
-                    primary_stress_count += 1;
-                } else if is_secondary_stress(marker.marker_type) {
-                    secondary_stress_count += 1;
+                match marker.marker_type {
+                    WordStressMarkerType::Primary => primary_stress_count += 1,
+                    WordStressMarkerType::Secondary => secondary_stress_count += 1,
                 }
             }
         }

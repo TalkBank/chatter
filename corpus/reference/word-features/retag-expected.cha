@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	swe, fin
+@Participants:	CHI Target_Child
+@ID:	swe|corpus|CHI|||||Target_Child|||
+@Comment:	Constructs: language retagging across declarations, utterance scopes, nested words and replacements; ordinary words are preserved.
+*CHI:	[- fin] sun messun asunut@s:fin .
+*CHI:	<ankka@s:fin on> [!] .
+*CHI:	och foo@s:fin [: bar@s:fin] .
+@End

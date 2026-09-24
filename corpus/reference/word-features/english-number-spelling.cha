@@ -1,0 +1,41 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Authored generation controls, not a production transcription or inferred pronunciation.
+@Comment:	Written controls for E220_english_number_forms in matching order.
+@Comment:	Constructs: English ordinals, hundreds, thousands, decade shorthand and century decades.
+*CHI:	first .
+*CHI:	twelfth .
+*CHI:	twentieth .
+*CHI:	twenty-first .
+*CHI:	one hundredth .
+*CHI:	one hundred and first .
+*CHI:	one hundred and twentieth .
+*CHI:	one hundred and twenty-first .
+*CHI:	one thousandth .
+*CHI:	two thousandth .
+*CHI:	tens .
+*CHI:	twenties .
+*CHI:	eighties .
+*CHI:	nineteen hundreds .
+*CHI:	nineteen fifties .
+*CHI:	two thousands .
+*CHI:	twenty tens .
+*CHI:	one .
+*CHI:	forty-two .
+*CHI:	one hundred one .
+*CHI:	one thousand two hundred thirty-four .
+*CHI:	two thousand .
+*CHI:	ten thousand one .
+*CHI:	twenty thousand .
+*CHI:	one million .
+*CHI:	two million .
+*CHI:	one million one .
+*CHI:	two billion .
+*CHI:	three trillion .
+*CHI:	four quadrillion .
+*CHI:	five quintillion .
+*CHI:	eighteen quintillion four hundred forty-six quadrillion seven hundred forty-four trillion seventy-three billion seven hundred nine million five hundred fifty-one thousand six hundred fifteen .
+@End

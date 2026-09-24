@@ -5,31 +5,26 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#QuotationFollows_Linker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#QuotedNewLine_Terminator>
 
-use super::FileUtterances;
+use super::UtterancePosition;
 use super::helpers::has_quoted_linker;
 use crate::model::Terminator;
 use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 
-/// Validate Pattern A quotation-follows sequencing for one utterance index.
+/// Validate Pattern A quotation-follows sequencing at a file-bound position.
 ///
 /// Pattern: *SPK: attribution +"/. \n *SPK: +" quote.
 ///
 /// After a `+"/.` terminator, the next utterance by the same speaker must
 /// start with `+"`. The checker also rejects mixed sequences that combine
 /// quotation-follows and quotation-precedes terminators in one chain.
-pub(super) fn check_quotation_follows(
-    utterances: &FileUtterances<'_>,
-    idx: usize,
-) -> Vec<ParseError> {
+pub(super) fn check_quotation_follows(position: &UtterancePosition<'_, '_>) -> Vec<ParseError> {
     let mut errors = Vec::new();
-    let Some(utterance) = utterances.get(idx) else {
-        return Vec::new();
-    };
+    let utterance = position.current();
     let speaker = utterance.main.speaker.as_str();
 
     // Find next utterance by same speaker
-    let next_same_speaker = utterances
-        .following(idx)
+    let next_same_speaker = position
+        .following()
         .find(|u| u.main.speaker.as_str() == speaker);
 
     if let Some(next_utt) = next_same_speaker {
@@ -58,7 +53,7 @@ pub(super) fn check_quotation_follows(
         } else {
             // Check for mixed patterns: ALL +" utterances after +"/. should not end with +".
             // Continue checking subsequent same-speaker +" utterances
-            for check_utt in utterances.following(idx) {
+            for check_utt in position.following() {
                 if check_utt.main.speaker.as_str() != speaker {
                     continue; // Skip different speakers
                 }

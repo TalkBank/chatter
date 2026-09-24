@@ -18,12 +18,35 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use super::{ErrorSink, ParseError, Span};
+use super::{ErrorSink, ParseError, SourceLocation, Span};
+
+/// The fragment's coordinate window. Bounds are derived from the borrowed
+/// source, never supplied separately or narrowed from the origin to `u32`.
+struct FragmentCoordinates<'a> {
+    origin: usize,
+    source: &'a str,
+}
+
+impl FragmentCoordinates<'_> {
+    fn project(&self, span: Span) -> Span {
+        let project = |offset: u32| {
+            (offset as usize)
+                .saturating_sub(self.origin)
+                .min(self.source.len())
+        };
+        Span::from_usize(project(span.start), project(span.end))
+    }
+}
 
 /// Error sink that rewrites wrapped-document offsets back to fragment offsets.
 ///
 /// Used when parsing content that has been wrapped in a larger document.
-/// All error locations are adjusted by subtracting the wrapper offset.
+/// Primary and secondary document spans are translated and clipped to the
+/// fragment. Cached line/column coordinates are cleared. Context snippets keep
+/// their own source text and relative spans, independent of text length.
+/// Apply this to raw diagnostics, before display enhancement makes labels
+/// snippet-relative. The caller supplies the fragment's actual wrapper origin;
+/// this adapter does not certify membership in a separate wrapper string.
 ///
 /// # Example
 ///
@@ -40,10 +63,7 @@ use super::{ErrorSink, ParseError, Span};
 pub struct OffsetAdjustingErrorSink<'a, S: ErrorSink> {
     /// The underlying error sink
     inner: &'a S,
-    /// Byte offset to subtract from all error locations
-    offset: usize,
-    /// The original input string (for error context)
-    original_input: &'a str,
+    coordinates: FragmentCoordinates<'a>,
 }
 
 impl<'a, S: ErrorSink> OffsetAdjustingErrorSink<'a, S> {
@@ -53,53 +73,25 @@ impl<'a, S: ErrorSink> OffsetAdjustingErrorSink<'a, S> {
     ///
     /// * `inner` - The underlying error sink that will receive adjusted errors
     /// * `offset` - Byte offset where the original input starts in the wrapped document
-    /// * `original_input` - The original input string (for context adjustment)
+    /// * `original_input` - The fragment source defining the output span bounds
     pub fn new(inner: &'a S, offset: usize, original_input: &'a str) -> Self {
         Self {
             inner,
-            offset,
-            original_input,
+            coordinates: FragmentCoordinates {
+                origin: offset,
+                source: original_input,
+            },
         }
     }
 
     /// Rebase one diagnostic from wrapper coordinates to original-fragment coordinates.
     ///
-    /// Spans are subtractive-shifted by `self.offset` and then clamped to
-    /// `original_input` bounds.
+    /// Document spans share one projection. Context spans index independently
+    /// owned source text and must not be shifted or replaced by a size heuristic.
     fn adjust_error(&self, mut error: ParseError) -> ParseError {
-        // Adjust location span
-        if error.location.span.start >= self.offset as u32 {
-            error.location.span.start -= self.offset as u32;
-        } else {
-            error.location.span.start = 0;
-        }
-
-        if error.location.span.end >= self.offset as u32 {
-            error.location.span.end -= self.offset as u32;
-        } else {
-            error.location.span.end = 0;
-        }
-
-        // Clamp to original input bounds
-        let max_offset = self.original_input.len() as u32;
-        if error.location.span.start > max_offset {
-            error.location.span.start = max_offset;
-        }
-        if error.location.span.end > max_offset {
-            error.location.span.end = max_offset;
-        }
-
-        // Adjust context text only when it appears to come from the wrapper.
-        if let Some(ctx) = &mut error.context
-            && ctx.source_text.len() > self.original_input.len() * 2
-        {
-            ctx.source_text = self.original_input.to_string();
-
-            // Adjust context span to be relative to original input
-            let ctx_start = ctx.span.start.saturating_sub(self.offset as u32);
-            let ctx_end = ctx.span.end.saturating_sub(self.offset as u32);
-
-            ctx.span = Span::new(ctx_start.min(max_offset), ctx_end.min(max_offset));
+        error.location = SourceLocation::new(self.coordinates.project(error.location.span));
+        for label in &mut error.labels {
+            label.span = self.coordinates.project(label.span);
         }
 
         error
@@ -145,7 +137,7 @@ mod tests {
         let error = ParseError::new(
             ErrorCode::InternalError,
             Severity::Error,
-            SourceLocation::from_offsets(110, 119),
+            SourceLocation::from_offsets_with_position(110, 119, 7, 2),
             ErrorContext::new("wrapped content", 110..119, "test"),
             "Test error",
         );
@@ -156,6 +148,26 @@ mod tests {
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].location.span.start, 9);
         assert_eq!(errors[0].location.span.end, 18); // Clamped to input length
+        assert_eq!(errors[0].location.line, None);
+        assert_eq!(errors[0].location.column, None);
+    }
+
+    /// Origins outside the span coordinate domain must not wrap through a cast.
+    #[test]
+    fn large_origin_does_not_alias_zero() {
+        let Some(origin) = (u32::MAX as usize).checked_add(1) else {
+            return;
+        };
+        let inner = ErrorCollector::new();
+        let sink = OffsetAdjustingErrorSink::new(&inner, origin, "fragment");
+        sink.report(ParseError::new(
+            ErrorCode::InternalError,
+            Severity::Error,
+            SourceLocation::from_offsets(1, 3),
+            ErrorContext::new("fragment", 1..3, "ra"),
+            "coordinate boundary",
+        ));
+        assert_eq!(inner.into_vec()[0].location.span, Span::new(0, 0));
     }
 
     /// Tests offset at boundary.

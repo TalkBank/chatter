@@ -63,6 +63,7 @@
 use crate::ParseError;
 
 use crate::ChatFile;
+use crate::validation::{AlignmentValidation, ValidationPolicy};
 
 /// Minimum structural validity required before a higher-level pipeline should
 /// spend additional work on a parsed CHAT file.
@@ -154,6 +155,26 @@ impl ParseValidateOptions {
     pub fn should_validate(&self) -> bool {
         self.validate || self.alignment
     }
+
+    /// Admit the requested validation phase before handing it to an executor.
+    /// `None` means parse-only; strict linkers select rules but do not enable
+    /// validation on their own. Alignment always implies validation.
+    pub fn validation_policy(&self) -> Option<ValidationPolicy> {
+        if !self.should_validate() {
+            return None;
+        }
+        let rules = if self.strict_linkers {
+            crate::RuleSelection::new().with_strict_linkers()
+        } else {
+            crate::RuleSelection::new()
+        };
+        let alignment = if self.alignment {
+            AlignmentValidation::IncludeTierAlignment
+        } else {
+            AlignmentValidation::Structure
+        };
+        Some(ValidationPolicy::new(rules, alignment))
+    }
 }
 
 /// Validate a parsed ChatFile according to options.
@@ -178,19 +199,22 @@ pub fn validate_chat_file_with_options(
     use crate::ErrorCollector;
     use crate::model::TranscriptName;
 
-    if !options.should_validate() {
+    let Some(policy) = options.validation_policy() else {
         return Ok(());
-    }
+    };
 
     let errors = ErrorCollector::new();
     // This helper takes a parsed file and options, never a path, so the
     // transcript is genuinely anonymous here and E531 does not apply. Callers
     // that read from disk name the transcript themselves.
     let name = TranscriptName::Anonymous;
-    if options.alignment {
-        chat_file.validate_with_alignment(&errors, name);
-    } else {
-        chat_file.validate(&errors, name);
+    match policy.alignment() {
+        AlignmentValidation::IncludeTierAlignment => {
+            chat_file.validate_with_alignment_and_rules(policy.rules(), &errors, name);
+        }
+        AlignmentValidation::Structure => {
+            chat_file.validate_with_rules(policy.rules(), &errors, name);
+        }
     }
 
     let error_vec = errors.into_vec();

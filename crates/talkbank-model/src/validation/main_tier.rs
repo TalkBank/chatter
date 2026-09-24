@@ -14,12 +14,15 @@
 // a content enum means a future variant compiles clean and answers wrong.
 // Added per file as each is cleaned; `audit_content_catch_alls` lists the rest.
 #![deny(clippy::wildcard_enum_match_arm)]
+mod bullet_scope;
 mod word_recursion;
 
+pub(crate) use bullet_scope::check_leading_bullets;
 pub(crate) use word_recursion::validate_words_at_every_depth;
 
 use crate::model::{
-    AnnotatedContentAnnotations, ContentStructure, Descend, GroupRef, MainTier, UtteranceContent,
+    AnnotatedContentAnnotations, BracketedContent, ContentStructure, Descend, GroupRef, MainTier,
+    UtteranceContent,
 };
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
@@ -146,8 +149,8 @@ fn report_nested_quotations(
     errors: &impl ErrorSink,
 ) {
     structure.walk(&mut |item| match item {
-        ContentStructure::Group(GroupRef::Quotation(_)) => {
-            if encloses_a_quotation(item) {
+        ContentStructure::Group(group @ GroupRef::Quotation(_)) => {
+            if encloses_a_quotation(group.content()) {
                 errors.report(
                     ParseError::new(
                         ErrorCode::NestedQuotation,
@@ -190,10 +193,7 @@ fn report_nested_quotations(
 /// means the predicate descends wherever the rest of the crate descends, and
 /// `GroupRef` is what lets it still tell a QUOTATION from any other container,
 /// which a bare `&BracketedContent` could not.
-fn encloses_a_quotation(container: ContentStructure<'_>) -> bool {
-    let Some(content) = container.enclosed() else {
-        return false;
-    };
+fn encloses_a_quotation(content: &BracketedContent) -> bool {
     let mut found = false;
     for item in content.content.iter() {
         item.structure().walk(&mut |item| match item {

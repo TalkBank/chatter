@@ -415,6 +415,9 @@ fn compound_marker_messages_name_the_fault() -> Result<(), TestError> {
         .ok_or_else(|| {
             TestError::Failure("the independent backend reported no E232 for \"+word\"".into())
         })?;
-    assert_eq!(leading.message, "Compound marker '+' cannot start a word");
+    assert_eq!(
+        leading.message,
+        "Compound marker '+' has no preceding spoken part"
+    );
     Ok(())
 }

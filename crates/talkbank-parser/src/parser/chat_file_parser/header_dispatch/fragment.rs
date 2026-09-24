@@ -1,31 +1,62 @@
 //! Admission and lowering of one complete wrapped header fragment.
 
-use super::super::header_parser::parse_header_node;
-use crate::api::fragment::{FragmentCoverageError, WrappedFragment};
+use super::super::header_parser::{parse_header_node, parse_pre_begin_header};
+use super::finder::{HeaderLookupError, SelectedHeader, find_header_node_in_tree, first_child};
+use crate::api::fragment::{FragmentCoverageError, ParsedFragment, WrappedFragment};
 use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
     Severity, SourceLocation,
 };
-use crate::generated_traversal::{FromNodeKind, PidHeaderNode};
+use crate::generated_traversal::{AsRawNode, FromNodeKind, FullDocumentChild1Choice};
 use crate::model::Header;
 use crate::node_types::*;
-use crate::parser::tree_parsing::header::parse_pid_header;
 use crate::parser::tree_parsing::parser_helpers::unknown_header_from_node;
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 /// Lowering owns the node and the source whose complete input it represents.
 /// No caller can lower a header merely because it starts inside the input.
 pub(super) struct HeaderFragment<'tree, 'source, 'input> {
-    node: Node<'tree>,
+    header: SelectedHeader<'tree, 'source>,
     fragment: &'source WrappedFragment<'input>,
 }
 
 impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
     pub(super) fn admit(
-        node: Node<'tree>,
-        fragment: &'source WrappedFragment<'input>,
+        parsed: &'tree ParsedFragment<'source, 'input>,
+        header_index: usize,
     ) -> ParseResult<Self> {
+        let fragment = parsed.fragment();
+        let header = (|| -> Result<_, HeaderLookupError> {
+            let root = parsed.parsed_source().root()?;
+            let root = if root.raw_node().kind() == SOURCE_FILE {
+                first_child(root)?
+                    .filter(|child| child.raw_node().kind() == FULL_DOCUMENT)
+                    .unwrap_or(root)
+            } else {
+                root
+            };
+            find_header_node_in_tree(root, header_index)
+        })()
+        .map_err(|error| {
+            let input = fragment.input();
+            let code = match &error {
+                HeaderLookupError::NotFound { .. } => ErrorCode::TierValidationError,
+                HeaderLookupError::Binding(_) => ErrorCode::TreeParsingError,
+            };
+            ParseErrors::from(vec![
+                ParseError::new(
+                    code,
+                    Severity::Error,
+                    SourceLocation::from_offsets(0, input.len()),
+                    ErrorContext::new(input, 0..input.len(), "header"),
+                    error.to_string(),
+                )
+                .with_suggestion(
+                    "Check that all header lines are well-formed and appear before utterances",
+                ),
+            ])
+        })?;
+        let node = header.source().raw_node();
         fragment.require_complete_input(node.byte_range()).map_err(|failure| {
             let input = fragment.input();
             let error = match failure {
@@ -48,56 +79,29 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
             };
             ParseErrors::from(vec![error])
         })?;
-        Ok(Self { node, fragment })
+        Ok(Self { header, fragment })
     }
 
     pub(super) fn lower(self) -> ParseResult<Header> {
-        let Self {
-            node: header_node,
-            fragment,
-        } = self;
-        let wrapped = fragment.source();
+        let Self { header, fragment } = self;
+        let source = header.source();
+        let header_node = source.raw_node();
+        let wrapped = source.source();
         // Dispatch to appropriate header parser
         // The source owner projects diagnostics into the caller's input.
         let inner_sink = ErrorCollector::new();
         let error_sink = fragment.error_sink(&inner_sink);
-        let header = if header_node.is_error() {
-            error_sink.report(ParseError::new(
-                ErrorCode::MalformedWordContent,
-                Severity::Error,
-                SourceLocation::from_offsets(header_node.start_byte(), header_node.end_byte()),
-                ErrorContext::new(
-                    wrapped,
-                    header_node.start_byte()..header_node.end_byte(),
-                    "",
-                ),
-                format!(
-                    "Malformed header at byte {}..{}",
-                    header_node.start_byte(),
-                    header_node.end_byte()
-                ),
-            ));
-            unknown_header_from_node(header_node, wrapped, "Malformed header content", None)
+        // SelectedHeader admits only generated named header kinds, never a
+        // generic ERROR. MISSING placeholders still require normal lowering
+        // and recovery diagnostics; kind admission does not certify validity.
+        let header = if let Some(choice) = FullDocumentChild1Choice::from_node(header_node) {
+            parse_pre_begin_header(&choice, wrapped, &error_sink)
         } else {
             match header_node.kind() {
-                // The four kinds the `header` supertype does NOT name, so
-                // the generated classifier cannot route them: `@UTF8`,
-                // `@Begin` and `@End` are the document's own anchors, and
-                // `pid_header` is a `pre_begin_header` subtype.
+                // Document anchors are outside both header supertype choices.
                 UTF8_HEADER => Header::Utf8,
                 BEGIN_HEADER => Header::Begin,
                 END_HEADER => Header::End,
-                PID_HEADER => match PidHeaderNode::from_node(header_node) {
-                    Some(typed) => parse_pid_header(typed, wrapped, &error_sink),
-                    // The kind was just matched; the refusal arm says what it
-                    // would mean rather than unwrapping.
-                    None => unknown_header_from_node(
-                        header_node,
-                        wrapped,
-                        "pid_header node refused by its typed constructor",
-                        None,
-                    ),
-                },
                 // EVERYTHING ELSE goes to the one exhaustive dispatcher.
                 //
                 // This used to be nineteen more hand-written arms plus an
@@ -114,7 +118,7 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
                 // `dispatch_header_choice` has no `_` arm, so a future
                 // `header` subtype fails to compile until it is handled
                 // rather than silently reaching a catch-all here.
-                unknown => match parse_header_node(header_node, wrapped, &error_sink) {
+                unknown => match parse_header_node(source, &error_sink) {
                     ParseOutcome::Parsed(header) => header,
                     // Not a `header` subtype at all: the same diagnostic and
                     // the same fallback value the catch-all produced.

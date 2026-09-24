@@ -12,7 +12,8 @@ pub use rejected_tier::RejectedMorTier;
 mod word;
 pub use word::{
     CaDelimiterKind, CaElementKind, OverlapKind, ParsedAnnotation, ParsedLangSuffix,
-    ScopedAnnotationParsed, StressKind, WordBodyItem, WordCategory, WordWithAnnotations,
+    ScopedAnnotationParsed, ScopedOverlapIndex, StressKind, WordBodyItem, WordCategory,
+    WordWithAnnotations,
 };
 
 /// A parsed main tier: *SPEAKER:\t tier_body
@@ -443,6 +444,8 @@ pub struct Group<'a> {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Quotation<'a> {
     pub contents: Vec<ContentItem<'a>>,
+    /// Markers attached to the quotation, retained by the ordered chain fold.
+    pub annotations: Vec<ParsedAnnotation<'a>>,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -725,6 +728,7 @@ mod children_tests {
                 "Quotation",
                 ContentItem::Quotation(Quotation {
                     contents: vec![marker()],
+                    annotations: vec![],
                 }),
             ),
             ("PhoGroup", ContentItem::PhoGroup(vec![marker()])),

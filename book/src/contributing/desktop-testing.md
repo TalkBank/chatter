@@ -1,7 +1,7 @@
 # Desktop App Testing
 
 **Status:** Current
-**Last updated:** 2026-07-07 21:20 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 This document covers the testing strategy for the Chatter desktop app
 (`apps/chatter-desktop/`). Testing is split into three tiers by speed and scope.
@@ -28,10 +28,83 @@ This document covers the testing strategy for the Chatter desktop app
 └─────────────────────────────────────────────────────────┘
 ```
 
-Most bugs will be caught by Tier 2. The Rust integration tests exercise the
-exact same code path as the Tauri commands; they call
-`validate_target_streaming()` and the frontend event bridge directly, then
-verify the JSON shape, field names, event ordering, and stats consistency.
+Tier 2 exercises the shared validation runner and event bridge, not the entire
+native app. Command-context tests must enter `tauri::async_runtime::block_on`:
+a plain-thread call cannot detect nested-runtime failures at the Tauri boundary.
+Use isolated cache directories, never the real user cache. Passing these tests
+does not establish that native menus, dialogs, drag/drop, signing or installation
+work; those require their respective runtime or release checks.
+
+## Release-facing behavioral contracts
+
+The desktop links the same validation engine as the CLI. Keep CHAT semantics in
+the shared Rust implementation; use canonical specs/reference files for desktop
+boundary tests rather than inventing a second fixture oracle.
+
+### File outcomes and completion
+
+`validationState.ts::fileOutcome` projects a streamed `FileEntry` into a
+discriminated union: pending, valid, or problem with an explanation. Both the
+file tree and the detail panel use it. In particular, `readError`, `parseError`,
+`roundtripFailed` and cached invalid statuses must remain visible when there is
+no diagnostic array. Do not infer success from an empty array.
+
+`shouldShowAllFilesValid` additionally requires a nonempty, non-cancelled,
+finished population whose totals certify all files as valid, with no read/parse
+or roundtrip failures. `finishedRunSummary` is shared by the window title,
+notification and status bar. Regression tests exercise failure statuses without
+diagnostics, warning visibility, cancellation, empty populations and success.
+When adding a new wire status, update the exhaustive projection, not a second
+component-local classification.
+
+### Update lifecycle
+
+`updates.ts` owns an idle/checking state. A checking state carries the single
+in-flight result and feedback mode. Launch, six-hour background and manual menu
+requests join that operation; a manual join promotes it to visible feedback.
+There can be only one prompt/install sequence for overlapping requests. Completion
+or failure returns the capability to idle so a later retry can start.
+
+The update seam tests cover accepted/declined installs, no update, network
+failure, overlapping requests, a manual join, retry, and native error-dialog
+failure. The latter must not reject a fire-and-forget menu callback. These tests
+use transport doubles: they do not verify a real signature, actual installation,
+or relaunch. Installer and updater artifacts require separate release evidence.
+
+### Stored Unicode identity
+
+The runtime bridge test copies the canonical W109 media specimen into an owned
+temporary directory, then validates it through stored NFD, NFC alias (where the
+filesystem supports it), and directory targets from inside Tauri's runtime.
+It requires the same both-side W109, no E531 mismatch, and nonempty HTML/plain
+renderings. Production identity comes from the shared stored-name resolver;
+the desktop must not independently normalize paths or downgrade failed name
+resolution to anonymous validation.
+
+### Export admission and failure preservation
+
+The async command tests exercise text export with each file status, including
+failures without diagnostic cards and pending results. Text export deserializes
+typed file records and the same status enum used by the event bridge; it no
+longer navigates arbitrary JSON with question-mark fallbacks. Required paths
+and rendered diagnostic text must be present. An unknown status or malformed
+record refuses before filesystem writing, preserving an existing report.
+
+Status and diagnostics are separate facts: a roundtrip failure can coexist with
+diagnostic text, and neither may suppress the other. Tests preserve rendered
+text verbatim. JSON export retains its existing wire representation. Neither
+per-file export is a whole-run coverage certificate; cancellation/session metadata
+is not presently included, as documented in the user guide.
+
+### Before calling a desktop candidate ready
+
+Run the focused frontend seam tests, compile the production frontend, and run
+the Rust bridge tests on the final sources. Inspect the actual app on supported
+platforms: open a canonical valid file, a diagnostic fixture and a failing target;
+verify cancellation/revalidation, copy/export, menus and update feedback. Do not
+call the app ready solely because TypeScript compiled or the headless bridge
+passed. Use the coordinated release process for signed installers and updater
+manifests, with versions tied to the exact release commit.
 
 ## Tier 1 & 2: Unit and integration tests
 

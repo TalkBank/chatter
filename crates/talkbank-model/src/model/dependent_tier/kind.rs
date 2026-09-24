@@ -25,10 +25,9 @@ impl DependentTier {
     /// `%eng:` or `%xfoo:` with an empty or whitespace-only payload. That is
     /// what E756 judges, and the rule was never `%x`-specific.
     ///
-    /// `false` covers two cases on purpose, because E756 has nothing to say
-    /// about either: the tier HAS content, or its type cannot represent
-    /// emptiness at all. Every tier whose grammar body is free text is in the
-    /// first group; the second is exactly the structured tiers, which parse
+    /// `false` covers contentful tiers, structured tiers whose emptiness is
+    /// diagnosed earlier, and unsupported labels where E605 suppresses E756.
+    /// Recognized free-text tiers can report emptiness; structured tiers parse
     /// their payload into typed items, so a tier with no payload fails earlier
     /// and more specifically than "you declared nothing".
     ///

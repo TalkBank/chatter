@@ -47,6 +47,28 @@ use crate::model::Utterance;
 /// language pass, to build something read-only and discarded immediately.
 pub(crate) struct FileUtterances<'a>(Vec<&'a Utterance>);
 
+/// A real utterance and its complete neighbourhood, issued only by its file.
+/// Consumers cannot pair an index from one file with another file's sequence.
+pub(super) struct UtterancePosition<'s, 'f> {
+    current: &'f Utterance,
+    before: &'s [&'f Utterance],
+    after: &'s [&'f Utterance],
+}
+
+impl<'f> UtterancePosition<'_, 'f> {
+    pub(super) fn current(&self) -> &'f Utterance {
+        self.current
+    }
+
+    pub(super) fn preceding(&self) -> impl Iterator<Item = &'f Utterance> + '_ {
+        self.before.iter().rev().copied()
+    }
+
+    pub(super) fn following(&self) -> impl Iterator<Item = &'f Utterance> + '_ {
+        self.after.iter().copied()
+    }
+}
+
 impl<'a> FileUtterances<'a> {
     /// Every utterance of `file`, in document order.
     ///
@@ -58,35 +80,21 @@ impl<'a> FileUtterances<'a> {
         Self(file.utterances().collect())
     }
 
-    /// The utterance at `index`, or `None` past the end.
-    ///
-    /// `Option` rather than panicking indexing, because the callers compute
-    /// neighbours (`idx - 1`, `idx + 1`) and a bounds question is a real
-    /// answer at the first and last utterance rather than a bug.
-    pub(crate) fn get(&self, index: usize) -> Option<&'a Utterance> {
-        self.0.get(index).copied()
-    }
-
     /// Every utterance, in document order.
     pub(crate) fn iter(&self) -> impl Iterator<Item = &'a Utterance> + '_ {
         self.0.iter().copied()
     }
 
-    /// The utterances AFTER `index`, in document order.
-    ///
-    /// Named rather than exposing slicing: `utterances[idx + 1..]` reads as an
-    /// arithmetic detail, and an off-by-one there silently includes the
-    /// utterance being checked in its own neighbourhood.
-    pub(crate) fn following(&self, index: usize) -> impl Iterator<Item = &'a Utterance> + '_ {
-        self.0.iter().skip(index + 1).copied()
-    }
-
-    /// The utterances BEFORE `index`, NEAREST FIRST.
-    ///
-    /// The order every "precedes" rule wants, so the reversal lives here once
-    /// instead of at each call site as `[..idx].iter().rev()`.
-    pub(crate) fn preceding(&self, index: usize) -> impl Iterator<Item = &'a Utterance> + '_ {
-        self.0.iter().take(index).rev().copied()
+    /// Positions are bound to this complete sequence, never supplied by callers.
+    pub(super) fn positions(&self) -> impl Iterator<Item = UtterancePosition<'_, 'a>> + '_ {
+        self.0
+            .iter()
+            .enumerate()
+            .map(|(index, &current)| UtterancePosition {
+                current,
+                before: &self.0[..index],
+                after: &self.0[index + 1..],
+            })
     }
 
     /// Consecutive pairs, for rules about an utterance and the one after it.

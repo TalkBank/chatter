@@ -192,7 +192,11 @@ fn push_piece(
     match piece {
         Piece::Segment(node) => {
             let raw = node.raw_node();
-            let text = extract_utf8_text(raw, source, errors, "word_segment", "");
+            let talkbank_model::ParseOutcome::Parsed(text) =
+                extract_utf8_text(raw, source, errors, "word_segment")
+            else {
+                return;
+            };
             match WordText::new(text) {
                 Ok(text) => items.push(WordContent::Text(text)),
                 Err(EmptyText) => {
@@ -228,7 +232,11 @@ fn push_piece(
                 errors,
             ) {
                 let raw = segment.raw_node();
-                let text = extract_utf8_text(raw, source, errors, "shortening_content", "");
+                let talkbank_model::ParseOutcome::Parsed(text) =
+                    extract_utf8_text(raw, source, errors, "shortening_content")
+                else {
+                    return;
+                };
                 match WordShortening::new(text) {
                     Ok(shortening) => items.push(WordContent::Shortening(shortening)),
                     Err(EmptyText) => report_tree_shape(
@@ -242,7 +250,11 @@ fn push_piece(
         }
         Piece::Stress(node) => {
             let raw = node.raw_node();
-            let text = extract_utf8_text(raw, source, errors, "stress_marker", "");
+            let talkbank_model::ParseOutcome::Parsed(text) =
+                extract_utf8_text(raw, source, errors, "stress_marker")
+            else {
+                return;
+            };
             let marker_type = match text.chars().next() {
                 Some('\u{02C8}') => WordStressMarkerType::Primary,
                 Some('\u{02CC}') => WordStressMarkerType::Secondary,
@@ -266,7 +278,11 @@ fn push_piece(
         }
         Piece::Lengthening(node) => {
             let raw = node.raw_node();
-            let text = extract_utf8_text(raw, source, errors, "lengthening", "");
+            let talkbank_model::ParseOutcome::Parsed(text) =
+                extract_utf8_text(raw, source, errors, "lengthening")
+            else {
+                return;
+            };
             // The grammar's lengthening token consists only of colons. A
             // failed extraction already reports its error; do not turn its
             // empty fallback into an invented one-colon marker.
@@ -279,34 +295,26 @@ fn push_piece(
         Piece::Overlap(node) => {
             // An overlap marker inside a word (`butt⌈er⌉`): the same token as
             // a standalone one, decoded by the same function.
-            if let ParseOutcome::Parsed(point) =
-                parse_overlap_point_token(node.raw_node(), source, errors)
-            {
+            if let ParseOutcome::Parsed(point) = parse_overlap_point_token(node, source, errors) {
                 items.push(WordContent::OverlapPoint(point));
             }
         }
         Piece::CaElement(node) => {
-            if let ParseOutcome::Parsed(element) =
-                parse_ca_element_node(node.raw_node(), source, errors)
-            {
+            if let ParseOutcome::Parsed(element) = parse_ca_element_node(node, source, errors) {
                 items.push(WordContent::CAElement(element));
             }
         }
         Piece::CaDelimiter(node) => {
-            if let ParseOutcome::Parsed(delimiter) =
-                parse_ca_delimiter_node(node.raw_node(), source, errors)
-            {
+            if let ParseOutcome::Parsed(delimiter) = parse_ca_delimiter_node(node, source, errors) {
                 items.push(WordContent::CADelimiter(delimiter));
             }
         }
-        Piece::UnderlineBegin(node) => {
-            items.push(WordContent::UnderlineBegin(WordUnderlineBegin {
-                span: span_of(node.raw_node()),
-            }))
-        }
-        Piece::UnderlineEnd(node) => items.push(WordContent::UnderlineEnd(WordUnderlineEnd {
-            span: span_of(node.raw_node()),
-        })),
+        Piece::UnderlineBegin(node) => items.push(WordContent::UnderlineBegin(
+            WordUnderlineBegin::from_span(span_of(node.raw_node())),
+        )),
+        Piece::UnderlineEnd(node) => items.push(WordContent::UnderlineEnd(
+            WordUnderlineEnd::from_span(span_of(node.raw_node())),
+        )),
         Piece::SyllablePause(node) => items.push(WordContent::SyllablePause(
             WordSyllablePause::new().with_span(span_of(node.raw_node())),
         )),

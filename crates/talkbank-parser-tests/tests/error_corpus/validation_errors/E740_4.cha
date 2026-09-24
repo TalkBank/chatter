@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	cat (..) dog .
+%mod:	(.) kæt dɔg
+%pho:	kæt (..) dɔg
+%xphoaln:	(.)↔∅ k↔k,æ↔æ,t↔t ∅↔(..) d↔d,ɔ↔ɔ,g↔g
+@End

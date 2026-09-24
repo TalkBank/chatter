@@ -18,7 +18,7 @@
 //! Run it after every typed-visitor regeneration:
 //!
 //! ```bash
-//! cargo run -p talkbank-parser-tests --example gen_conformance_inventory
+//! just conformance-gen
 //! ```
 //!
 //! By default it rewrites `inventory.rs` in place. Pass `--stdout` to print the

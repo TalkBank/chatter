@@ -1,7 +1,7 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-09-15 12:06 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 ## Pre-Merge Verification
 
@@ -24,7 +24,7 @@ After changing grammar, spec, or a registry, run `just regen`, then `just test`.
 The regeneration recipe builds derived artifacts in dependency order; currency
 tests detect stale output. Never hand-edit generated artifacts.
 
-See [Spec Workflow](spec-workflow.md) and `spec/CLAUDE.md` for the current
+See [Spec Workflow](spec-workflow.md) and `spec/AGENTS.md` for the current
 source-of-truth guidance.
 
 ## Release Process

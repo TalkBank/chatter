@@ -17,17 +17,14 @@
 //!   to `parse_bullet_content`. A missing content child reports no diagnostic
 //!   of its own and builds `Header::Unknown`, as it always did.
 //! - `@Options`: the `options_contents` content child (`child_2`), then an inner
-//!   `option_name` walk. Only the OUTER content access is typed; the inner
-//!   `option_name` iteration stays a `node.kind()` walk. The generated
-//!   `extract_options_contents` models the REPEAT (`child_1: Vec<..>` for the
-//!   subsequent flags); migrating the inner walk onto it is deferred, see
-//!   `option_flags`.
+//!   `option_name` slots, including the generated repeat for subsequent flags.
+//!   Missing option names remain recovery, not empty unsupported flags.
 //!
-//! Until 2026-09-08 the six slot-reading headers each matched the slot outcome
-//! themselves, and a whole-workspace coverage run showed every one of those
-//! recovery arms unreached: the grammar always supplies the content child, and
-//! tree-sitter parks a malformed header line in a file-level ERROR node rather
-//! than inside the header. The arms live once now, in `dispatch/simple.rs`.
+//! The three single-value option headers and three participant/value headers
+//! retain producer-bound source identity through their payload projections.
+//! Comment retains association through body admission, then uses the existing
+//! bullet-text leaf adapter. Options remains transitional. Malformed-slot recovery stays;
+//! finite coverage observations do not prove those states impossible.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Options_Header>
@@ -36,11 +33,11 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, ChildSlot, CommentHeaderNode,
-    L1OfHeaderNode, NamedKind, NumberHeaderNode, OptionsHeaderNode, RecordingQualityHeaderNode,
-    TranscriptionHeaderNode, extract_birth_of_header, extract_birthplace_of_header,
-    extract_comment_header, extract_l1_of_header, extract_number_header, extract_options_header,
-    extract_recording_quality_header, extract_transcription_header,
+    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, CommentHeaderNode, KindSlot,
+    L1OfHeaderNode, NamedKind, NoChild, NumberHeaderNode, OptionNameNode, OptionsContentsNode,
+    OptionsHeaderNode, RecordingQualityHeaderNode, SourceBound, SourceBoundKind, SourceField,
+    SourceSlotView, SpeakerNode, TranscriptionHeaderNode, extract_options_contents,
+    extract_options_header,
 };
 use crate::model::{self, ChatOptionFlag, Header};
 use crate::node_types::*;
@@ -49,193 +46,223 @@ use crate::parser::tree_parsing::parser_helpers::{
     HeaderSite, Refused, present, surface_displaced,
 };
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 use super::simple::simple_header;
-use crate::parser::tree_parsing::parser_helpers::{ContentSlot, read_simple_content};
+use crate::parser::tree_parsing::parser_helpers::{ContentSlot, read_source_content};
 
 /// `@Comment` -> `Header::Comment`. All bullet content is accepted.
-pub(super) fn comment(
-    typed: CommentHeaderNode<'_>,
-    input: &str,
+pub(super) fn comment<'tree>(
+    typed: SourceBound<'tree, '_, CommentHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let site = HeaderSite::of(&typed, input);
+    let site = HeaderSite::bound(typed);
     // The bullet content child at the typed slot `child_2`. A missing content
     // child reported no diagnostic before the typed traversal either (it fell
     // through to `Header::Unknown` silently), so the non-Present path is
     // likewise silent.
-    let children = extract_comment_header(typed);
-    let outcome = match present(children.child_2.slot()) {
-        Some(content) => ParseOutcome::parsed(Header::Comment {
-            content: parse_bullet_content(content.raw_node(), input, errors),
-        }),
-        None => ParseOutcome::parsed(site.unknown("Missing comment content", None)),
+    let children = typed.extract();
+    let header = match children.field_child_2().slot().view() {
+        SourceSlotView::Present(content) => {
+            match crate::parser::typed_cst::read_source_field(content, errors) {
+                Some(content) => Header::Comment {
+                    // Bullet-text lowering is still a transitional leaf adapter;
+                    // its node and source come from this single admitted body.
+                    content: parse_bullet_content(content.into(), errors),
+                },
+                None => site.unknown("Unreadable comment content", None),
+            }
+        }
+        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
+            site.unknown("Missing comment content", None)
+        }
     };
-    surface_displaced(&children.unexpected, COMMENT_HEADER, input, errors);
-    outcome
+    surface_displaced(
+        &children.children().unexpected,
+        COMMENT_HEADER,
+        typed.source(),
+        errors,
+    );
+    ParseOutcome::parsed(header)
 }
 
 /// `@Number` -> `Header::Number`. All values accepted; validator flags unsupported.
-pub(super) fn number(
-    typed: NumberHeaderNode<'_>,
-    input: &str,
+pub(super) fn number<'tree>(
+    typed: SourceBound<'tree, '_, NumberHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let site = HeaderSite::of(&typed, input);
-    let children = extract_number_header(typed);
+    let site = HeaderSite::bound(typed);
+    let children = typed.extract();
     simple_header(
         &site,
-        children.child_2.slot(),
-        &children.unexpected,
+        children.field_child_2().slot(),
+        &children.children().unexpected,
         &ContentSlot {
             missing: "Missing @Number option",
             suggested_fix: Some("Use @Number:\t1|2|3|4|5|more|audience"),
         },
         errors,
         |option_text| Header::Number {
-            number: talkbank_model::model::Number::from_text(&option_text),
+            number: talkbank_model::model::Number::from_text(option_text),
         },
     )
 }
 
 /// `@Recording Quality` -> `Header::RecordingQuality`. All values accepted;
 /// validator flags unsupported.
-pub(super) fn recording_quality(
-    typed: RecordingQualityHeaderNode<'_>,
-    input: &str,
+pub(super) fn recording_quality<'tree>(
+    typed: SourceBound<'tree, '_, RecordingQualityHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let site = HeaderSite::of(&typed, input);
-    let children = extract_recording_quality_header(typed);
+    let site = HeaderSite::bound(typed);
+    let children = typed.extract();
     simple_header(
         &site,
-        children.child_2.slot(),
-        &children.unexpected,
+        children.field_child_2().slot(),
+        &children.children().unexpected,
         &ContentSlot {
             missing: "Missing @Recording Quality option",
             suggested_fix: Some("Use @Recording Quality:\t1|2|3|4|5"),
         },
         errors,
         |option_text| Header::RecordingQuality {
-            quality: talkbank_model::model::RecordingQuality::from_text(&option_text),
+            quality: talkbank_model::model::RecordingQuality::from_text(option_text),
         },
     )
 }
 
 /// `@Transcription` -> `Header::Transcription`. All values accepted; validator
 /// flags unsupported.
-pub(super) fn transcription(
-    typed: TranscriptionHeaderNode<'_>,
-    input: &str,
+pub(super) fn transcription<'tree>(
+    typed: SourceBound<'tree, '_, TranscriptionHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let site = HeaderSite::of(&typed, input);
-    let children = extract_transcription_header(typed);
+    let site = HeaderSite::bound(typed);
+    let children = typed.extract();
     simple_header(
         &site,
-        children.child_2.slot(),
-        &children.unexpected,
+        children.field_child_2().slot(),
+        &children.children().unexpected,
         &ContentSlot {
             missing: "Missing @Transcription option",
             suggested_fix: Some("Use a valid @Transcription option value"),
         },
         errors,
         |option_text| Header::Transcription {
-            transcription: talkbank_model::model::Transcription::from_text(&option_text),
+            transcription: talkbank_model::model::Transcription::from_text(option_text),
         },
     )
 }
 
-/// The two content slots of a `@X of` header, read in order: the speaker
-/// first, then the value, and a speaker that fails yields its recovery
-/// without the value slot being read, so the diagnostics arrive in the order
-/// the family always gave them.
-fn two_slots<'tree, 'w, S: AsRawNode<'tree> + NamedKind, V: AsRawNode<'tree> + NamedKind>(
+/// Both source fields were admitted, but value semantics remain unvalidated.
+/// Participant identity and header payload cannot be interchanged as strings.
+struct ParticipantValue<'source> {
+    participant: model::SpeakerCode,
+    value: &'source str,
+}
+
+/// Read speaker first; refusal returns without reading the value, preserving
+/// diagnostic order. Only the generated speaker kind can supply participant text.
+fn two_slots<'tree, 'source, 'w, V: SourceBoundKind<'tree> + NamedKind>(
     site: &HeaderSite<'tree, '_>,
-    speaker: &ChildSlot<'tree, S>,
+    speaker: SourceField<'_, 'tree, 'source, KindSlot<'tree, SpeakerNode<'tree>>>,
     speaker_words: &'w ContentSlot<'w>,
-    value: &ChildSlot<'tree, V>,
+    value: SourceField<'_, 'tree, 'source, KindSlot<'tree, V>>,
     value_words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<(String, String), Refused<'w>> {
-    let speaker = read_simple_content(site, speaker, speaker_words, errors)?;
-    let value = read_simple_content(site, value, value_words, errors)?;
-    Ok((speaker, value))
+) -> Result<ParticipantValue<'source>, Refused<'w>> {
+    let speaker = read_source_content(site, speaker, speaker_words, errors)?;
+    let value = read_source_content(site, value, value_words, errors)?;
+    Ok(ParticipantValue {
+        participant: model::SpeakerCode::new(speaker),
+        value,
+    })
 }
 
 /// `@Birth of` -> `Header::Birth`.
-pub(super) fn birth_of(
-    typed: BirthOfHeaderNode<'_>,
-    input: &str,
+pub(super) fn birth_of<'tree>(
+    typed: SourceBound<'tree, '_, BirthOfHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let site = HeaderSite::of(&typed, input);
-    let children = extract_birth_of_header(typed);
+    let site = HeaderSite::bound(typed);
+    let children = typed.extract();
     let header = match two_slots(
         &site,
-        children.child_2.slot(),
+        children.field_child_2().slot(),
         &ContentSlot {
             missing: "Missing participant code in @Birth of header",
             suggested_fix: None,
         },
-        children.child_4.slot(),
+        children.field_child_4().slot(),
         &ContentSlot {
             missing: "Missing date value in @Birth of header",
             suggested_fix: None,
         },
         errors,
     ) {
-        Ok((participant, date)) => Header::Birth {
-            participant: model::SpeakerCode::new(participant),
+        Ok(ParticipantValue {
+            participant,
+            value: date,
+        }) => Header::Birth {
+            participant,
             date: model::ChatDate::new(date),
         },
         Err(refused) => refused.into_header(&site),
     };
-    surface_displaced(&children.unexpected, BIRTH_OF_HEADER, input, errors);
+    surface_displaced(
+        &children.children().unexpected,
+        BIRTH_OF_HEADER,
+        typed.source(),
+        errors,
+    );
     ParseOutcome::parsed(header)
 }
 
 /// `@Birthplace of` -> `Header::Birthplace`.
-pub(super) fn birthplace_of(
-    typed: BirthplaceOfHeaderNode<'_>,
-    input: &str,
+pub(super) fn birthplace_of<'tree>(
+    typed: SourceBound<'tree, '_, BirthplaceOfHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let site = HeaderSite::of(&typed, input);
-    let children = extract_birthplace_of_header(typed);
+    let site = HeaderSite::bound(typed);
+    let children = typed.extract();
     let header = match two_slots(
         &site,
-        children.child_2.slot(),
+        children.field_child_2().slot(),
         &ContentSlot {
             missing: "Missing participant code in @Birthplace of header",
             suggested_fix: None,
         },
-        children.child_4.slot(),
+        children.field_child_4().slot(),
         &ContentSlot {
             missing: "Missing place value in @Birthplace of header",
             suggested_fix: None,
         },
         errors,
     ) {
-        Ok((participant, place)) => Header::Birthplace {
-            participant: model::SpeakerCode::new(participant),
+        Ok(ParticipantValue {
+            participant,
+            value: place,
+        }) => Header::Birthplace {
+            participant,
             place: model::BirthplaceDescription::new(place),
         },
         Err(refused) => refused.into_header(&site),
     };
-    surface_displaced(&children.unexpected, BIRTHPLACE_OF_HEADER, input, errors);
+    surface_displaced(
+        &children.children().unexpected,
+        BIRTHPLACE_OF_HEADER,
+        typed.source(),
+        errors,
+    );
     ParseOutcome::parsed(header)
 }
 
 /// `@L1 of` -> `Header::L1Of`.
-pub(super) fn l1_of(
-    typed: L1OfHeaderNode<'_>,
-    input: &str,
+pub(super) fn l1_of<'tree>(
+    typed: SourceBound<'tree, '_, L1OfHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    let site = HeaderSite::of(&typed, input);
-    let children = extract_l1_of_header(typed);
+    let site = HeaderSite::bound(typed);
+    let children = typed.extract();
     let participant_words = ContentSlot {
         missing: "Missing participant code in @L1 of header",
         suggested_fix: None,
@@ -246,14 +273,22 @@ pub(super) fn l1_of(
     };
     let slots = two_slots(
         &site,
-        children.child_2.slot(),
+        children.field_child_2().slot(),
         &participant_words,
-        children.child_4.slot(),
+        children.field_child_4().slot(),
         &language_words,
         errors,
     );
-    surface_displaced(&children.unexpected, L1_OF_HEADER, input, errors);
-    let (participant, language) = match slots {
+    surface_displaced(
+        &children.children().unexpected,
+        L1_OF_HEADER,
+        typed.source(),
+        errors,
+    );
+    let ParticipantValue {
+        participant,
+        value: language,
+    } = match slots {
         Ok(slots) => slots,
         Err(refused) => return ParseOutcome::parsed(refused.into_header(&site)),
     };
@@ -269,7 +304,7 @@ pub(super) fn l1_of(
         }
     };
     ParseOutcome::parsed(Header::L1Of {
-        participant: model::SpeakerCode::new(participant),
+        participant,
         language,
     })
 }
@@ -287,7 +322,7 @@ pub(super) fn options(
     // @Options list downstream.
     let children = extract_options_header(typed);
     let flags = match present(children.child_2.slot()) {
-        Some(contents) => option_flags(contents.raw_node(), input),
+        Some(contents) => option_flags(*contents, input, errors),
         None => Vec::new(),
     };
     surface_displaced(&children.unexpected, OPTIONS_HEADER, input, errors);
@@ -296,31 +331,34 @@ pub(super) fn options(
     })
 }
 
-/// Iterate the `option_name` children of an `options_contents` node into typed
-/// `ChatOptionFlag` values.
+/// Admit only present option-name slots, in generated grammar order.
 ///
-/// The inner iteration stays a `node.kind()` walk (not the generated typed
-/// repeat slot): this raw walk already enumerates EVERY `option_name` child in
-/// document order, so migrating it onto the typed `Vec` shape is a pure
-/// refactor still owed. All values are accepted; unsupported ones are flagged
-/// by the validator. An empty `option_name` (from grammar recovery for
-/// `@Options:\t`) is skipped, leaving an empty flag list that validation
-/// reports as E533.
-fn option_flags(options_contents: Node, input: &str) -> Vec<ChatOptionFlag> {
+/// An option-name wrapper may be present around a zero-width missing leaf.
+/// Keep the empty-text recovery check until the generated producer admits
+/// only nonempty descendants. Recovery slots stay owned by the whole-tree backstop, while
+/// each generated carrier's displaced nodes are surfaced here.
+fn option_flags(
+    options_contents: OptionsContentsNode<'_>,
+    input: &str,
+    errors: &impl ErrorSink,
+) -> Vec<ChatOptionFlag> {
+    let children = extract_options_contents(options_contents);
     let mut flags = Vec::new();
-    let mut cursor = options_contents.walk();
-    for child in options_contents.children(&mut cursor) {
-        if child.kind() == OPTION_NAME
-            && let Ok(text) = child.utf8_text(input.as_bytes())
+    let mut admit = |slot: &KindSlot<'_, OptionNameNode<'_>>| {
+        if let Some(name) = present(slot)
+            && let Ok(text) = name.raw_node().utf8_text(input.as_bytes())
+            && !text.is_empty()
         {
-            if text.is_empty() {
-                // Empty option_name comes from grammar recovery for "@Options:\t".
-                // Represent as empty options list and let validation report E533.
-                continue;
-            }
-            // All values are accepted; unsupported ones are flagged by the validator.
             flags.push(ChatOptionFlag::from_text(text));
         }
+    };
+    admit(children.child_0.slot());
+    for element in children.child_1.slot() {
+        if let Some(sequence) = present(element.slot()) {
+            admit(sequence.child_2.slot());
+            surface_displaced(&sequence.unexpected, OPTIONS_CONTENTS, input, errors);
+        }
     }
+    surface_displaced(&children.unexpected, OPTIONS_CONTENTS, input, errors);
     flags
 }

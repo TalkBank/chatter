@@ -148,15 +148,18 @@ pub fn parse_error_marker_token(token_text: &str) -> Option<ContentAnnotation> {
 // ---------------------------------------------------------------------------
 
 /// Extract optional overlap index (1-9) from inside the brackets.
-fn extract_overlap_index(inner: &str) -> Option<OverlapMarkerIndex> {
-    let trimmed = inner.trim();
-    if trimmed.len() == 1 {
-        let ch = trimmed.as_bytes()[0];
-        if ch.is_ascii_digit() && ch != b'0' {
-            return Some(OverlapMarkerIndex::new(ch - b'0'));
-        }
+fn extract_overlap_index(inner: &str) -> Result<Option<OverlapMarkerIndex>, ()> {
+    // Match the grammar's optional ASCII space on either side of the digit.
+    // Invalid content must not become a valid unindexed overlap.
+    let inner = inner.strip_prefix(' ').unwrap_or(inner);
+    let inner = inner.strip_suffix(' ').unwrap_or(inner);
+    match inner.as_bytes() {
+        [] => Ok(None),
+        [digit @ b'1'..=b'9'] => OverlapMarkerIndex::new(digit - b'0')
+            .map(Some)
+            .map_err(|_| ()),
+        _ => Err(()),
     }
-    None
 }
 
 /// Parse an atomic `indexed_overlap_precedes` token `[<]` or `[<N]`.
@@ -165,7 +168,7 @@ fn extract_overlap_index(inner: &str) -> Option<OverlapMarkerIndex> {
 /// Returns `None` if the format doesn't match.
 pub fn parse_overlap_precedes_token(token_text: &str) -> Option<ContentAnnotation> {
     let inner = token_text.strip_prefix("[<")?.strip_suffix(']')?;
-    let index = extract_overlap_index(inner);
+    let index = extract_overlap_index(inner).ok()?;
     Some(ContentAnnotation::OverlapBegin(ScopedOverlapBegin {
         index,
     }))
@@ -177,7 +180,7 @@ pub fn parse_overlap_precedes_token(token_text: &str) -> Option<ContentAnnotatio
 /// Returns `None` if the format doesn't match.
 pub fn parse_overlap_follows_token(token_text: &str) -> Option<ContentAnnotation> {
     let inner = token_text.strip_prefix("[>")?.strip_suffix(']')?;
-    let index = extract_overlap_index(inner);
+    let index = extract_overlap_index(inner).ok()?;
     Some(ContentAnnotation::OverlapEnd(ScopedOverlapEnd { index }))
 }
 
@@ -309,6 +312,19 @@ mod tests {
         // [< ], space but no index
         let ann = parse_overlap_precedes_token("[< ]").unwrap();
         assert!(matches!(ann, ContentAnnotation::OverlapBegin(o) if o.index.is_none()));
+    }
+
+    /// Malformed external tokens must not turn into valid unindexed overlaps.
+    #[test]
+    fn overlap_invalid_indices_are_not_absence() {
+        for inner in ["0", "10", "255", "x", "01", "\t1", "  1", "1  ", "   "] {
+            assert!(parse_overlap_precedes_token(&format!("[<{inner}]")).is_none());
+            assert!(parse_overlap_follows_token(&format!("[>{inner}]")).is_none());
+        }
+        for inner in ["", " ", "  ", "1", "9", " 1", "9 ", " 9 "] {
+            assert!(parse_overlap_precedes_token(&format!("[<{inner}]")).is_some());
+            assert!(parse_overlap_follows_token(&format!("[>{inner}]")).is_some());
+        }
     }
 
     /// Tests age format full.

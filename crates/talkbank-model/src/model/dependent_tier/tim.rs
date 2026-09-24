@@ -47,7 +47,6 @@ pub enum TimTier {
         content: NonEmptyString,
         /// Source span for error reporting.
         #[semantic_eq(skip)]
-        #[span_shift(skip)]
         span: crate::Span,
     },
     /// Non-time content (free text like "afternoon session").
@@ -57,7 +56,6 @@ pub enum TimTier {
         content: NonEmptyString,
         /// Source span for error reporting.
         #[semantic_eq(skip)]
-        #[span_shift(skip)]
         span: crate::Span,
     },
     /// A `%tim:` line with nothing after the separator.
@@ -80,7 +78,6 @@ pub enum TimTier {
     Empty {
         /// Source span for error reporting.
         #[semantic_eq(skip)]
-        #[span_shift(skip)]
         span: crate::Span,
     },
 }

@@ -41,6 +41,7 @@
 
 mod common;
 
+use chatter_desktop_lib::protocol::commands::ExportFormat;
 use common::workspace_root;
 
 /// The commands the application actually registers, read from the source of
@@ -206,4 +207,78 @@ fn export_results_writes_inside_a_runtime() {
         "export_results reported success and wrote no file"
     );
     let _ = std::fs::remove_file(&out);
+}
+
+#[test]
+fn text_export_retains_failures_without_diagnostic_cards() {
+    let directory = tempfile::tempdir().expect("export test directory");
+    let path = directory.path().join("failures.txt");
+    let results = serde_json::json!([
+        {"path":"read.cha", "errors":[], "status":{"type":"readError", "message":"permission denied"}},
+        {"path":"parse.cha", "errors":[], "status":{"type":"parseError", "message":"parser failed"}},
+        {"path":"roundtrip.cha", "errors":[], "status":{"type":"roundtripFailed", "cacheHit":false, "reason":"model changed"}},
+        {"path":"invalid.cha", "errors":[], "status":{"type":"invalid", "cacheHit":true, "errorCount":2}},
+        {"path":"valid.cha", "errors":[], "status":{"type":"valid", "cacheHit":true}},
+        {"path":"pending.cha", "errors":[], "status":null}
+    ]);
+    tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(
+        results.to_string(),
+        ExportFormat::Text,
+        path.to_string_lossy().into_owned(),
+    ))
+    .expect("text export");
+    let text = std::fs::read_to_string(path).expect("exported results");
+    for expected in [
+        "read.cha",
+        "permission denied",
+        "parse.cha",
+        "parser failed",
+        "roundtrip.cha",
+        "model changed",
+        "invalid.cha",
+        "2",
+        "valid.cha",
+        "Valid",
+        "pending.cha",
+        "Validation pending",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?} in {text:?}");
+    }
+}
+
+#[test]
+fn text_export_preserves_rendering_and_refuses_malformed_input_before_writing() {
+    let directory = tempfile::tempdir().expect("export test directory");
+    let path = directory.path().join("results.txt");
+    let rendered = "W109: normalize name\n  │ media snippet\n  ╰─ advice\n";
+    let results = serde_json::json!([{
+        "path":"sample.cha", "errors":[{"renderedText":rendered}],
+        "status":{"type":"roundtripFailed", "cacheHit":false, "reason":"model changed"}
+    }]);
+    let export = |results: String| {
+        tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(
+            results,
+            ExportFormat::Text,
+            path.to_string_lossy().into_owned(),
+        ))
+    };
+    export(results.to_string()).expect("export rendered diagnostic and status");
+    let original = std::fs::read_to_string(&path).expect("text export");
+    assert!(
+        original.contains(rendered),
+        "rendered text must survive verbatim"
+    );
+    assert!(original.contains("Roundtrip failed: model changed"));
+    for malformed in [
+        serde_json::json!([{"errors":[], "status":null}]),
+        serde_json::json!([{"path":"bad.cha", "errors":[{}], "status":null}]),
+        serde_json::json!([{"path":"bad.cha", "errors":[], "status":{"type":"unknown"}}]),
+    ] {
+        assert!(export(malformed.to_string()).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("existing export"),
+            original,
+            "malformed input must not overwrite a prior export"
+        );
+    }
 }

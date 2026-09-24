@@ -1,13 +1,15 @@
 # Sanitize (`chatter debug sanitize`)
 
 **Status:** Current
-**Last updated:** 2026-09-09 08:49 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 `chatter debug sanitize` strips contributor lexical content from a CHAT
 file while preserving structure (timing bullets, `%wor` per-word bullets,
 speaker codes, dependent-tier scaffolding, structural counts, POS tags,
-language markers). Output is structurally identical to the input but
-contains no participant words, names, or free-text annotations.
+language markers). It replaces supported lexical fields, but is **not a
+complete de-identification guarantee**. Preserved identifiers, dates, gem labels,
+display metadata and unknown recovery headers can retain identifying text. Review output under the
+applicable data-sharing rules before disclosing it.
 
 The command exists so engineering tooling, including LLM-assisted
 debugging, can operate on protected-corpus files (`aphasia/`,
@@ -16,9 +18,10 @@ etc.) without exposing contributor speech to commercial LLM services.
 
 ## When to use it
 
-Run `chatter debug sanitize` on the source file *before* loading it into
-any tool (LLM-backed debugger, scratch directory, screen-shareable
-session) where you don't want participant content visible.
+Run `chatter debug sanitize` as one preparation step before manual privacy
+review. Do not send its output to another tool or person merely because the
+command succeeded; unsupported fields and intentionally preserved metadata can
+still identify participants.
 
 When you need to ask a contributor for help debugging a specific
 file, frame the request as "run the sanitizer locally and send me
@@ -45,7 +48,8 @@ should outlive a single command. macOS clears `/tmp` on reboot.
 - `%wor` per-word bullets (`•start_end•` after each word); the words
   beside them become the main tier's placeholders, below.
 - Speaker codes (`*PAR`, `*INV`, `*CHI`, …).
-- Utterance count, word count per utterance, dependent-tier count.
+- Utterance count and main-tier word structure; phonological tiers listed below
+  are deliberately dropped, so dependent-tier count is not preserved.
 - Structural markers: compound `+`, clitic `~`, CA elements, overlap
   points, lengthening, stress markers, syllable pause, underline
   begin/end, proper-noun `@n` markers.
@@ -69,12 +73,19 @@ should outlive a single command. macOS clears `/tmp` on reboot.
 | `%wor` words | judged as timing recovery judges the tier, before the main tier is rewritten (count match, then word-by-word corroboration): a corroborating tier has each word become its paired main-tier word's display text, now that word's placeholder (`wN`, the same `N`; `w1w1` for a compound), so it still corroborates the main tier; a drifted or uncorroborated tier takes fresh placeholders rather than a manufactured agreement. Bullets preserved |
 | `%pho` / `%mod` / `%modsyl` / `%phosyl` / `%phoaln` / `%sin` | tier dropped |
 | Free-text dependent tiers (`%com` `%add` `%exp` `%sit` `%spa` `%int` `%gpx` `%act` `%cod` `%eng` `%gls` `%ort` `%flo` `%def` `%coh` `%fac` `%par` `%alt` `%err`) | `[redacted]` |
-| `@Comment`, `@Transcriber`, `@Birthplace`, `@Activities`, `@Situation`, `@RoomLayout`, `@Location`, `@TapeLocation`, `@Warning`, `@Bck` | `[redacted]` (when content was free text) |
+| `@Comment`, `@Transcriber`, `@Birthplace`, `@Activities`, `@Situation`, `@RoomLayout`, `@Location`, `@TapeLocation`, `@Warning`, `@Bck` | `[redacted]`; header identity and any speaker reference are retained |
 | `@Participants` participant-name field | dropped (`Participant_<SPEAKER_CODE>` is implied by speaker code + role) |
 | `@ID` `custom_field` and `education` | cleared |
-| `Event` event_type (`&=imitates:Mary` → `&=[redacted]`) | `[redacted]` |
-| `Freecode` text (`[^ aside]`) | `[redacted]` |
-| `OtherSpokenEvent` text | `[redacted]` |
+| `Event` event_type (`&=imitates:Mary` → `&=redacted`) | `redacted` |
+| `Freecode` text (`[^ aside]` → `[^ redacted]`) | `redacted` |
+| `OtherSpokenEvent` text | `redacted` |
+
+Inline replacements use a delimiter-free token. The brackets in the free-text
+marker `[redacted]` would introduce invalid nested CHAT syntax in these fields.
+Header handling matches the complete typed header enum without a preservation
+catch-all, so a new variant requires an explicit policy decision. The canonical
+reference corpus witnesses all nine free-text payload types alongside comments,
+and checks that header kind, speaker references and preserved metadata survive.
 
 ## Determinism + Idempotence
 

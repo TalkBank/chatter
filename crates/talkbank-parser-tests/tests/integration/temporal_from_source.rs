@@ -124,7 +124,7 @@ const ROWS: &[Row] = &[
     },
     Row {
         media: true,
-        why: "untranscribed-only `www` turns are ignored by E704, as CHECK ignores them",
+        why: "untranscribed-only `www` turns still occupy time and constrain E704, matching CHECK",
         turns: &[
             Turn {
                 speaker: "INV",
@@ -137,7 +137,7 @@ const ROWS: &[Row] = &[
                 bullet: Some((562_690, 729_500)),
             },
         ],
-        codes: &[],
+        codes: &["E704"],
     },
     Row {
         media: false,

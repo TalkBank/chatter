@@ -1,7 +1,7 @@
 # Alignment
 
 **Status:** Current
-**Last modified:** 2026-09-09 08:49 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 Alignment in the toolchain operates at two structural layers, plus a
 separate overlap-marker pass. Tier alignment is structural (counting and
@@ -160,12 +160,16 @@ A second class of alignment that operates **between dependent tiers**:
 | `%phoaln` | `%pho` | E728 |
 
 Derived-view alignments: `%modsyl` is a syllabified reannotation of
-`%mod`, `%phosyl` of `%pho`, `%phoaln` aligns both. Word counts must
-match between source and target. Computed in `compute_alignments()`
-after the main-tier alignments. `build_tier_to_tier_alignment()`
-constructs index pairs and emits `build_count_mismatch_error()` when
-counts disagree. `%phoaln` checks against both `%mod` and `%pho`,
-potentially emitting E727 and E728 simultaneously.
+`%mod`, `%phosyl` of `%pho`; those counts match directly. `%phoaln`
+advances the two source tiers independently: a one-sided pause consumes a
+slot only on the tier bearing it. Utterance-owned `PhoalnWordBinding` values
+carry the alignment word and its bound source items. Both effective counts
+and reconstruction checks consume those bindings; neither consumer indexes
+the source tiers by raw alignment-word position. Missing source items remain
+distinct from slots intentionally absent for an opposite-side pause.
+`compute_alignments()` runs after main-tier alignment and may report E727
+and E728 simultaneously. Ordinary non-pause insertions/deletions still consume
+both word slots.
 
 **Known data issue:** Phon XML source data has orthography↔IPA word
 count discrepancies in ~4% of files (518 / 12,340). Expected in child
@@ -191,10 +195,19 @@ have their own gates (`can_align_modsyl_to_mod`,
 `extract_words()` (in `crates/talkbank-transform/src/extract.rs`) uses
 the content walker to pull words from the AST in domain-specific order,
 over a `PositionalDomain` (`%wor` words are the projection's).
-Returns `Vec<ExtractedWord>` with `text`, `word_index`, `is_separator`,
-`special_form`. Tag-marker separators (`,` `„` `‡`) are included as
-words in Mor domain because they have `%mor` items (`cm|cm`,
-`end|end`, `beg|beg`).
+Returns `Vec<ExtractedUtterance>`; each entry carries its speaker, utterance
+index, and ordered `words`. Each `ExtractedWord` carries cleaned `text`,
+`raw_text`, `utterance_word_index`, and `form_type`. Its governing language
+mark is private: use `language_kind()` or `resolve_language()` so resolution
+retains the position captured from the source during traversal. Tag-marker
+separators (`,` `„` `‡`) are included as words in Mor because they have
+`%mor` items (`cm|cm`, `end|end`, `beg|beg`).
+
+Canonical replacement/retrace references verify the extracted sequences in
+all three domains. Mor uses replacement words and omits retraced material;
+Pho/Sin use the eligible spoken originals, including retraced words. Ordinary
+explanatory annotations do not create extra extracted words. Extraction is
+read-only and must preserve the original CHAT serialization.
 
 ## Overlap Marker Iteration
 

@@ -98,19 +98,14 @@ fn wrap(body: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// `@G:\t` (separator present, no label text): NodeSlot::Missing branch
+// `@G:\t` (colon form without label): recovery retains the bare lazy marker
 // ---------------------------------------------------------------------------
 
-/// `@G:\t` with nothing after the tab: tree-sitter produces a `g_header` node
-/// but the required `free_text` child is `NodeSlot::Missing`. `gem::g()` maps
-/// Missing to `None`, which yields `Header::LazyGem { label: None }`. The
-/// missing-node backstop emits E342.
-///
-/// This is the `NodeSlot::Missing` path in `gem::g()` that was uncovered before
-/// this test was added (no reference fixture exercised it, since bare `@G` without
-/// a valid label is invalid CHAT).
+/// Bare `@G` is legal. The colon form additionally requires a TAB and label;
+/// with no label, recovery retains the bare marker and reports the colon as
+/// E316, matching the authored E530#5 specification.
 #[test]
-fn g_separator_no_label_decodes_to_lazy_gem_none_with_e342() {
+fn g_separator_no_label_decodes_to_lazy_gem_none_with_e316() {
     let input = wrap("@G:\t\n");
     let (headers, diags) = gem_headers_and_diags(&input);
     assert_eq!(
@@ -121,12 +116,9 @@ fn g_separator_no_label_decodes_to_lazy_gem_none_with_e342() {
     assert_eq!(
         diags.len(),
         1,
-        "exactly one diagnostic expected (E342 for missing free_text): {diags:?}"
+        "exactly one diagnostic expected (E316 for the orphan colon): {diags:?}"
     );
-    assert_eq!(
-        diags[0].0, "E342",
-        "missing required element must be E342: {diags:?}"
-    );
+    assert_eq!(diags[0].0, "E316", "orphan colon must be E316: {diags:?}");
 }
 
 // ---------------------------------------------------------------------------

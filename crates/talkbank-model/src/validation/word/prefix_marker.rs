@@ -91,26 +91,31 @@ impl PrefixMarkerPosition {
         Some(Self::Internal)
     }
 
-    /// Whether this position is legal in a language that uses the marker.
-    ///
-    /// Named as a question about the position alone; whether the word's
-    /// language uses the marker at all is the other rule's business.
-    fn is_legal_position(self) -> bool {
+    /// Admit only a position that the positional rule can diagnose.
+    /// Language eligibility is a separate rule for the remaining positions.
+    fn illegal(self) -> Option<IllegalPrefixMarkerPosition> {
         match self {
-            Self::Standalone | Self::Initial => false,
-            Self::Final | Self::Internal => true,
+            Self::Standalone => Some(IllegalPrefixMarkerPosition::Standalone),
+            Self::Initial => Some(IllegalPrefixMarkerPosition::Initial),
+            Self::Final | Self::Internal => None,
         }
     }
+}
 
+/// A positional violation, admitted before constructing its diagnostic.
+/// Legal positions cannot supply a made-up "illegal" description.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IllegalPrefixMarkerPosition {
+    Standalone,
+    Initial,
+}
+
+impl IllegalPrefixMarkerPosition {
     /// How the diagnostic describes an illegal position.
     fn describe_illegal(self) -> &'static str {
         match self {
             Self::Standalone => "stands alone as a word",
             Self::Initial => "opens the word",
-            // Legal positions never reach the diagnostic; naming them here
-            // rather than falling through a catch-all keeps the match
-            // exhaustive and the omission deliberate.
-            Self::Final | Self::Internal => "is legally positioned",
         }
     }
 }
@@ -125,9 +130,9 @@ pub(crate) fn check_prefix_marker_position(word: &Word, errors: &impl ErrorSink)
     let Some(position) = PrefixMarkerPosition::of(cleaned) else {
         return;
     };
-    if position.is_legal_position() {
+    let Some(position) = position.illegal() else {
         return;
-    }
+    };
 
     errors.report(
         ParseError::new(
@@ -174,17 +179,13 @@ pub(crate) fn check_prefix_marker_language(
     };
     // An illegally-positioned marker is `E762`'s to report; adding this
     // diagnostic on top would name a consequence rather than the defect.
-    if !position.is_legal_position() {
+    if position.illegal().is_some() {
         return;
     }
 
-    let allowed = resolution
-        .languages()
-        .iter()
-        .any(|lang| mixed_language_allows_prefix_marker(lang.as_str()));
-    if allowed {
+    let Some(refusal) = PrefixLanguageRefusal::admit(resolution) else {
         return;
-    }
+    };
 
     errors.report(
         ParseError::new(
@@ -195,7 +196,7 @@ pub(crate) fn check_prefix_marker_language(
             format!(
                 "\"{cleaned}\" is not a legal word in language(s) \"{}\": the \
                  prefix marker is not used in that language",
-                resolution.as_display_string()
+                refusal.describe()
             ),
         )
         .with_suggestion(
@@ -203,6 +204,32 @@ pub(crate) fn check_prefix_marker_language(
              or mark the word's own language with @s: if it is a code switch.",
         ),
     );
+}
+
+/// Evidence for a language-specific diagnostic, not merely an empty candidate
+/// set. Unknown language cannot produce this value; a permissive candidate also
+/// prevents admission. Refusal absence does not certify the whole word or file.
+struct PrefixLanguageRefusal<'a>(&'a LanguageResolution);
+
+impl<'a> PrefixLanguageRefusal<'a> {
+    fn admit(resolution: &'a LanguageResolution) -> Option<Self> {
+        let candidates = resolution.languages();
+        // Unresolved, or an empty externally constructed candidate collection,
+        // supplies no language in which to assert a violation.
+        candidates.first()?;
+        if candidates
+            .iter()
+            .any(|lang| mixed_language_allows_prefix_marker(lang.as_str()))
+        {
+            None
+        } else {
+            Some(Self(resolution))
+        }
+    }
+
+    fn describe(&self) -> String {
+        self.0.as_display_string()
+    }
 }
 
 #[cfg(test)]
@@ -276,9 +303,15 @@ mod tests {
     /// Exactly the two never-legal positions are rejected on position alone.
     #[test]
     fn only_standalone_and_initial_are_illegal_positions() {
-        assert!(!PrefixMarkerPosition::Standalone.is_legal_position());
-        assert!(!PrefixMarkerPosition::Initial.is_legal_position());
-        assert!(PrefixMarkerPosition::Final.is_legal_position());
-        assert!(PrefixMarkerPosition::Internal.is_legal_position());
+        assert_eq!(
+            PrefixMarkerPosition::Standalone.illegal(),
+            Some(IllegalPrefixMarkerPosition::Standalone)
+        );
+        assert_eq!(
+            PrefixMarkerPosition::Initial.illegal(),
+            Some(IllegalPrefixMarkerPosition::Initial)
+        );
+        assert_eq!(PrefixMarkerPosition::Final.illegal(), None);
+        assert_eq!(PrefixMarkerPosition::Internal.illegal(), None);
     }
 }

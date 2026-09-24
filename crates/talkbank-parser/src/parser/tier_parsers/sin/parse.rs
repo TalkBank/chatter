@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, NoChild, SinDependentTierNode, SinGroupNode, SinGroupsNode, SlotView,
+    AsRawNode, KindSlot, NoChild, SinDependentTierNode, SinGroupNode, SinGroupsNode, SlotView,
     extract_sin_dependent_tier, extract_sin_groups,
 };
 use crate::parser::node_span::span_of;
@@ -60,7 +60,7 @@ pub fn parse_sin_tier(
     match children
         .child_2
         .slot()
-        .typed_or_placeholder()
+        .known_or_placeholder()
         .present_or_placeholder()
     {
         Some(groups) => {
@@ -132,7 +132,7 @@ fn parse_sin_groups(
 /// (`parse_sin_tier` is only entered when the tier node has no tree-sitter error);
 /// they are handled explicitly for exhaustiveness.
 fn push_sin_group<'tree>(
-    slot: &ChildSlot<'tree, SinGroupNode<'tree>>,
+    slot: &KindSlot<'tree, SinGroupNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<SinItem>,

@@ -10,7 +10,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Model_Phonology>
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, NoChild, NodeSlot, PhoGroupChoice, PhoGroupNode, PhoGroupedContentNode,
+    AsRawNode, KindSlot, NoChild, NodeSlot, PhoGroupChoice, PhoGroupNode, PhoGroupedContentNode,
     PhoWordsNode, SlotView, WhitespacesNode, extract_pho_group, extract_pho_grouped_content,
 };
 use talkbank_model::ErrorSink;
@@ -53,9 +53,9 @@ use crate::parser::tree_parsing::parser_helpers::{
 ///   the whole group as text via `fallback_group_as_text`.
 /// - outer `Absent`: the old "no first child" branch, which returned nothing.
 ///
-/// Every arm except the two `Present` cases is unreachable from the boundary
-/// (`extract_pho_group_items` is only reached for a `Present` `pho_group` inside
-/// an error-free tier); they are handled explicitly for exhaustiveness.
+/// Document dispatch admits error-free tiers, but the extractor's slot types
+/// still expose recovery and absence. Those states remain handled; absence is
+/// not ruled out by the caller's tree-sitter error check alone.
 ///
 /// Returns a vector of PhoItems (usually just one).
 pub(super) fn extract_pho_group_items(
@@ -63,13 +63,16 @@ pub(super) fn extract_pho_group_items(
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<PhoItem> {
-    let node = typed.raw_node();
     let children = extract_pho_group(typed);
     surface_displaced(&children.unexpected, "pho_group", source, errors);
     match children.content.slot() {
         NodeSlot::Present(PhoGroupChoice::PhoWords(pho_words)) => {
             // Extract text from pho_words (handles pho_word + '+' + pho_word structure).
-            let text = extract_utf8_text(pho_words.raw_node(), source, errors, "pho_words", "");
+            let talkbank_model::ParseOutcome::Parsed(text) =
+                extract_utf8_text(pho_words.raw_node(), source, errors, "pho_words")
+            else {
+                return Vec::new();
+            };
             if !text.is_empty() {
                 vec![PhoItem::Word(PhoWord::new(text))]
             } else {
@@ -89,12 +92,12 @@ pub(super) fn extract_pho_group_items(
                 }
                 SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
                     // Fallback: preserve entire group as text.
-                    fallback_group_as_text(node, source, errors)
+                    fallback_group_as_text(typed, source, errors)
                 }
             }
         }
         NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
-            fallback_group_as_text(node, source, errors)
+            fallback_group_as_text(typed, source, errors)
         }
         NodeSlot::Absent(NoChild) => vec![],
     }
@@ -152,13 +155,13 @@ pub(super) fn extract_pho_grouped_content_words<'a>(
 /// modeled child. It carries no content, so `Present` is a no-op; the recovery
 /// arms reuse the SAME diagnostic vocabulary the sibling content slots use
 /// (`check_not_missing` / `unexpected_node_error`). Like every other slot in
-/// this cluster, these arms are unreachable in production: the pho/mod parsers
-/// run only when the containing tier node has no tree-sitter error, and the
+/// this cluster, these arms are retained even though document dispatch admits
+/// only tiers with no tree-sitter error. The
 /// CHAT lexer never emits two adjacent pho words/groups without intervening
 /// whitespace on well-formed input. `context` is the enclosing rule name, so
 /// the diagnostic matches the sibling content-slot diagnostics.
 pub(super) fn push_pho_separator<'tree>(
-    slot: &ChildSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &KindSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,
@@ -186,18 +189,21 @@ pub(super) fn push_pho_separator<'tree>(
 /// - `Error`: the old `_` arm reported `unexpected_node_error`; reproduced here.
 /// - `Absent`: no child at this position; nothing is reported or pushed.
 ///
-/// The `Missing` / `Error` arms are unreachable from the boundary
-/// (this runs only for a `Present` `pho_grouped_content` inside an error-free
-/// tier); they are handled explicitly for exhaustiveness.
+/// Document dispatch rejects error-bearing tiers, but that condition is not
+/// carried by this slot API. Missing and Error retain their recovery policy.
 fn push_pho_word<'a>(
-    slot: &ChildSlot<'a, PhoWordsNode<'a>>,
+    slot: &KindSlot<'a, PhoWordsNode<'a>>,
     source: &'a str,
     errors: &impl ErrorSink,
     words: &mut Vec<&'a str>,
 ) {
     match slot.view() {
         SlotView::Present(pho_words) => {
-            let text = extract_utf8_text(pho_words.raw_node(), source, errors, "pho_words", "");
+            let talkbank_model::ParseOutcome::Parsed(text) =
+                extract_utf8_text(pho_words.raw_node(), source, errors, "pho_words")
+            else {
+                return;
+            };
             if !text.is_empty() {
                 words.push(text);
             }

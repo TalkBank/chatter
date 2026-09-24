@@ -1,7 +1,12 @@
 # Merge Pipeline, Domain Types
 
+> Historical design: references below to the `chatter merge` CLI describe the
+> former command. `merge`, `pipeline`, and `batch` have been removed.
+> The structural library remains.
+> See the [removal notice](../chatter/user-guide/merge.md).
+
 **Status:** Draft
-**Last modified:** 2026-09-10 00:30 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 This page specifies the typed Rust vocabulary shared by `chatter merge`,
 `chatter speaker-id`, the override-file reader/writer, and the
@@ -17,7 +22,7 @@ per-speaker role map), the affected section says so explicitly
 instead of silently rewriting history.
 
 The design follows the cross-cutting rules in this repo's root
-`CLAUDE.md`:
+`AGENTS.md`:
 newtypes over primitives at every stable boundary; no boolean
 blindness; no tuple-packed seams; typed errors via `thiserror`;
 deterministic `BTreeMap`/`BTreeSet` over hash maps for
@@ -757,7 +762,7 @@ anticipated.
 ## Type design rules followed
 
 A spot-check against the cross-cutting design rules in this repo's
-root `CLAUDE.md`, restated against the shipped code:
+root `AGENTS.md`, restated against the shipped code:
 
 - **Newtypes over primitives.** Every numeric domain value
   (`JaccardScore`, `FiniteConfidenceMargin`, `ConfidenceThreshold`) is
@@ -823,7 +828,7 @@ The workspace already pins `chrono = "0.4"` at the root
 workspace version verbatim via `chrono = { workspace = true }`. No
 new datetime dep.
 
-The "succession-aware" rule from the workspace-root `CLAUDE.md`
+The "succession-aware" rule from the workspace-root `AGENTS.md`
 contributor guide (outside the book) and the analogous
 `feedback_no_terraform_only_opentofu` discipline from operator
 memory says: do not fragment the ecosystem by introducing a
@@ -882,7 +887,7 @@ Confirmed. `BTreeMap` gives:
 - Deterministic serialization order (alphabetical by `SpeakerCode`).
 - Cheap membership tests during apply.
 
-The CLAUDE.md "no tuple-packed seams" rule targets raw tuples *as
+The AGENTS.md "no tuple-packed seams" rule targets raw tuples *as
 struct fields or function arguments*. A `BTreeMap`'s internal
 key-value pairing is not a domain seam exposed to the API; it's
 the representation. Approved.
@@ -904,7 +909,7 @@ This is the conservative default. Reasons:
 
 - We have no upgrade history yet; building a migration framework
   for a problem that doesn't exist is premature abstraction
-  (`CLAUDE.md` "Always Fix Root Causes" + the
+  (`AGENTS.md` "Always Fix Root Causes" + the
   general "no premature abstraction" instinct).
 - The override file is fundamentally a record of operator
   decisions. If the schema breaks, operators re-adjudicate; the

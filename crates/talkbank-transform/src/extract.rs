@@ -138,7 +138,7 @@ pub fn collect_utterance_content(
         Some(domain.into()),
         &mut |leaf, scope| match leaf {
             WordItem::Word(word) => {
-                collect_alignable_word(word, &[], domain, scope, out);
+                collect_alignable_word(word, domain, scope, out);
             }
             WordItem::ReplacedWord(replaced) => {
                 collect_replaced_word(replaced, domain, scope, out);
@@ -210,15 +210,12 @@ fn push_word(out: &mut Vec<ExtractedWord>, word: &Word, scope: LanguageScope<'_>
 
 fn collect_alignable_word(
     word: &Word,
-    annotations: &[talkbank_model::model::ContentAnnotation],
     domain: PositionalDomain,
     scope: LanguageScope<'_>,
     out: &mut Vec<ExtractedWord>,
 ) {
-    if domain == PositionalDomain::Mor && annotations_have_alignment_ignore(annotations) {
-        return;
-    }
-
+    // The scoped walk owns annotated-word exclusion before yielding this leaf.
+    // Replacement annotations travel on ReplacedWord and are checked separately.
     if !counts_for_tier(word, domain.into()) {
         return;
     }

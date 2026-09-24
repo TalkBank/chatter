@@ -33,11 +33,7 @@ pub fn main_tier_to_model(
 
     let mut main_tier = MainTier::new(speaker, content_items, terminator);
 
-    // Extract a terminal bullet that the greedy contents parser left in content.
-    main_tier.content.extract_terminal_bullet();
-
-    // Grammar-routed bullet from tier_body.media_bullet takes priority
-    // over the extracted one (it's correctly classified by the chumsky parser).
+    // Install the grammar-owned terminal slot before considering a content tail.
     if let Some(bullet_tok) = &mt.tier_body.media_bullet
         && let Token::MediaBullet {
             start_time,
@@ -47,6 +43,7 @@ pub fn main_tier_to_model(
     {
         main_tier = main_tier.with_bullet(bullet_from_times(start_time, end_time));
     }
+    main_tier.content.extract_terminal_bullet();
 
     // Linkers
     if !mt.tier_body.linkers.is_empty() {

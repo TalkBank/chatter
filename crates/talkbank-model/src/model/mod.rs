@@ -237,10 +237,10 @@ pub use content::{
 // omitted when the non-empty invariant landed, which left the only route to a
 // legal `Annotated` running through a module path nothing else here uses.
 pub use annotation::{
-    Annotated, AnnotatedContentAnnotations, CodeSwitchSpan, ContentAnnotation, NoScopedAnnotations,
-    OverlapMarkerIndex, ReplacedWord, Replacement, ScopedAlternative, ScopedError,
-    ScopedExplanation, ScopedOverlapBegin, ScopedOverlapEnd, ScopedParalinguistic,
-    ScopedPercentComment, ScopedUnknown,
+    Annotated, AnnotatedContentAnnotations, CodeSwitchSpan, ContentAnnotation,
+    InvalidOverlapMarkerIndex, NoScopedAnnotations, OverlapMarkerIndex, ReplacedWord, Replacement,
+    ScopedAlternative, ScopedError, ScopedExplanation, ScopedOverlapBegin, ScopedOverlapEnd,
+    ScopedParalinguistic, ScopedPercentComment, ScopedUnknown,
 };
 
 // Re-export dependent tier types

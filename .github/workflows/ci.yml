@@ -273,7 +273,7 @@ jobs:
           tool: just
       # Every tracked shell script must pass shellcheck at its default
       # (strictest) severity. ubuntu-latest ships shellcheck; the runner finds
-      # every *.sh plus shebang scripts via git ls-files. See CLAUDE.md.
+      # every *.sh plus shebang scripts via git ls-files. See AGENTS.md.
       - name: shellcheck all shell scripts
         run: just shellcheck
   grammar:
@@ -322,7 +322,7 @@ jobs:
           npm install -g "tree-sitter-cli@${version}"
           tree-sitter --version
 
-      # DANGER RULE 3 (CLAUDE.md), now actually enforced. `src/parser.c` is
+      # DANGER RULE 3 (AGENTS.md), now actually enforced. `src/parser.c` is
       # GENERATED from `grammar.js`, and a stale parser.c is invisible to every
       # other gate we have: the Rust build compiles whatever parser.c is on
       # disk, so the entire Rust suite happily tests the OLD grammar and passes.

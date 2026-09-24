@@ -12,8 +12,6 @@
 
 pub mod contents;
 mod convert;
-pub mod errors;
 pub(crate) mod terminator;
 
 pub use convert::convert_main_tier_node;
-pub use errors::collect_main_tier_errors;

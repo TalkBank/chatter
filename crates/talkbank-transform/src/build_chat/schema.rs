@@ -3,7 +3,7 @@
 //! This is the general, text-based input to [`build_chat`](super::build_chat):
 //! participants, optional media, and utterances given as pre-formatted CHAT
 //! main-tier text. Any CHAT generator (the MICASE/SBCSAE converters, external
-//! tools) fills this in and gets back a validated `ChatFile`.
+//! tools) fills this in and gets back a mutable `ChatFile` requiring validation.
 //!
 //! Raw `String` fields are parsed into typed model values at the build
 //! boundary (language codes in `parser::BuildChatContext`, speaker codes and
@@ -20,14 +20,15 @@ use talkbank_model::model::{
 /// Description of a transcript to assemble into CHAT.
 #[derive(Debug, Clone)]
 pub struct TranscriptDescription {
-    /// ISO 639-3 language codes (e.g. `["eng"]`). Empty defaults to `["eng"]`.
+    /// ISO 639-3 language codes (e.g. `["eng"]`). Empty input is refused.
     pub langs: Vec<String>,
     /// Participant entries. At least one is required.
     pub participants: Vec<ParticipantDesc>,
     /// Optional media filename (e.g. `"recording.mp3"`). The extension is
     /// stripped for the `@Media` header.
     pub media_name: Option<String>,
-    /// Optional media type (`"audio"` or `"video"`). Defaults to `"audio"`.
+    /// Optional media type (`"audio"`, `"video"`, or `"missing"`).
+    /// Absence defaults to `"audio"`; an unsupported declared type is refused.
     pub media_type: Option<String>,
     /// Optional `@PID` (persistent TalkBank handle). Emitted between `@UTF8`
     /// and `@Begin`. This is assigned at publish, not derivable from source:
@@ -74,7 +75,7 @@ pub struct ParticipantDesc {
     pub name: Option<String>,
     /// Participant role (e.g. `"Target_Child"`, `"Investigator"`).
     pub role: String,
-    /// Corpus name for `@ID`. An empty string falls back to a placeholder.
+    /// Corpus name for `@ID`. An empty string is refused.
     pub corpus: String,
     /// `@ID` field 4 (age). `None` leaves the field empty.
     pub age: Option<AgeValue>,
@@ -176,8 +177,9 @@ pub struct UtteranceDesc {
     /// utterance.
     pub text: String,
     /// Optional utterance-level start time in ms (emits an inline bullet).
+    /// Must be supplied together with `end_ms` and nonempty main-tier text.
     pub start_ms: Option<u64>,
-    /// Optional utterance-level end time in ms.
+    /// Optional utterance-level end time in ms; requires `start_ms` too.
     pub end_ms: Option<u64>,
     /// Optional per-utterance language (ISO 639-3). When set and different
     /// from the primary language, a `[- lang]` precode is prepended.

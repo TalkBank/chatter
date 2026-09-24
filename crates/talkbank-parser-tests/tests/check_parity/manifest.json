@@ -165,9 +165,9 @@
    "fixture": "CHECK_016_extended_chars_speaker_code.cha",
    "status": "parity",
    "expected_chatter_codes": [
-    "E522"
+    "E307"
    ],
-   "note": "A speaker CODE containing non-printable-ASCII in @Participants (cnt==0 field scan, chars outside 33..126; check.cpp 2084-2086). Emits via the check_trans_err MACRO (check.cpp 74-79), invisible to the literal check_err(N,) counter, so 16 was WRONGLY in the dead list until 2026-07-24 (third such false-dead after 122 and 152). Empirically grounded: real CLAN emits (16) on this fixture. chatter rejects with the dedicated E522 (speaker contains non-ASCII) plus header-parse cascade; at least as strict."
+   "note": "A speaker CODE containing non-printable-ASCII in @Participants (cnt==0 field scan, chars outside 33..126; check.cpp 2084-2086). Emits via the check_trans_err MACRO (check.cpp 74-79), invisible to the literal check_err(N,) counter. Empirically grounded: real CLAN emits (16) on this fixture. Non-ASCII speaker IDs are invalid by the 2026-09-23 maintainer ruling. Chatter now reports syntax code E307 through the shared speaker assessment, not the unrelated E522 participant-join code; header recovery can emit additional diagnostics."
   },
   {
    "check_code": 17,
@@ -453,7 +453,7 @@
    "expected_chatter_codes": [
     "E220"
    ],
-   "note": "A digit inside a word (he11o). CLAN 47 (numbers not allowed inside words); chatter E220."
+   "note": "A digit inside a word (he11o). CLAN 47 (numbers not allowed inside words); chatter E220. This fixture agrees, not every scoped-language case: E220 examples 7/8 retain a paired enclosing-language substitution. CHECK 21-Sep-2026 rejects both with 47, while Chatter accepts the zho-span control under its established governing-language policy and rejects the eng-span mutation. Direct mixed/ambiguous word markers in E220 examples 3-6 agree with CHECK."
   },
   {
    "check_code": 48,
@@ -463,7 +463,7 @@
    "expected_chatter_codes": [
     "E243"
    ],
-   "note": "A standalone illegal character on a main tier; '|' between words hits one of the 22 check_err(48,...) sites in the word scanner. chatter accepts '*CHI:\\thello | there .' (exit 0). CLAN also emits (11) on the fixture. 48 has 22 call sites; this grounds only the bare-pipe shape; other illegal chars ('#' inside a word, '}' etc.) also produce (48). CLOSED 2026-07-16 for the grounded bare-pipe shape: E243 (IllegalCharactersInWord) gains '|' as a reserved tier-delimiter character. Other CHECK-48 shapes remain open per-shape. Wild-data impact: zero kept files."
+   "note": "A standalone illegal character on a main tier; '|' between words reaches CHECK 48. The original bare-pipe acceptance gap was closed 2026-07-16 by E243. CLAN also emits 11 on that fixture. The separately grounded semicolon shape is covered by E769 specs: current HTML CHAT disallows main-tier semicolons, and CHECK 21-Sep-2026 rejects top-level, nested, and retraced cases with 48. Other CHECK-48 shapes remain adjudicated per-shape; this row is not a blanket claim for every call site."
   },
   {
    "check_code": 49,
@@ -727,7 +727,7 @@
    "expected_chatter_codes": [
     "E375"
    ],
-   "note": "A bracketed code as the first item of a tier with nothing before it (also bullets not preceded by text; multiple sites: check.cpp 4045, 4781, 4861; CA sites 3030/3033 are #ifndef UNX). Fixture '[x 2] hey .'; chatter rejects it via E375 (scoped-annotation parse failure). CLAN additionally emits (11). (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.)"
+   "note": "A bracketed code as the first item of a tier with nothing before it (also bullets not preceded by text; multiple sites: check.cpp 4045, 4781, 4861; CA sites 3030/3033 are #ifndef UNX). Fixture '[x 2] hey .'; chatter rejects it via E375 (scoped-annotation parse failure). CLAN additionally emits (11). (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.) Additional leading-bullet grounding is owned by spec/errors/E770.md: simple, retraced-group, linker-prefixed and repeated leading bullets report E770; explicit-zero, event, pause and preceding-group-material controls do not. CHECK 21-Sep-2026 corroborates these shapes. Parse-recovered main tiers retain their parse diagnostic rather than an E770 absence claim. This row's bracket fixture alone does not prove every CHECK 73 site: the separate empty inter-bullet scope and legacy multi-option policy remain unresolved."
   },
   {
    "check_code": 74,
@@ -853,7 +853,7 @@
    "expected_chatter_codes": [
     "E243"
    ],
-   "note": "A Unicode Private Use Area character (U+E000) inside a word. CLAN 86 via isIllegalASCII (check.cpp:2880): 3-byte UTF-8 codepoints U+E000..U+FFFF except U+F170..U+F264 (CLAN-internal) and U+FF01..U+FF5E (fullwidth ASCII); U+00B7 allowed. chatter rejects it via E243 IllegalCharactersInWord (check_word_characters extends its illegal-char scan to the private-use ranges)."
+   "note": "Shape-scoped parity: U+E000 inside a word produces CHECK 86 and E243. The rejected BMP policy exempts U+F170..U+F264 and U+FF01..U+FF5E; U+00B7 is allowed. This is not universal Unicode parity: the 21-Sep-2026 CHECK byte predicate also rejects U+10000, whereas Chatter deliberately preserves its scalar-based BMP boundary. E243_unicode_boundaries.md records accepted controls, both exemption endpoints, rejected neighbors and the supplementary-plane divergence."
   },
   {
    "check_code": 87,
@@ -1156,7 +1156,7 @@
    "expected_chatter_codes": [
     "E230"
    ],
-   "note": "A pairwise CA marker (faster U+2206, slower, creaky, whisper, left-arrow-circle U+21AB, etc.) occurring an odd number of times on a main tier. Dedicated chatter code: E230 'Unbalanced CA delimiter (Faster): missing closing delimiter'. CLAN tracks 15 pair-wise marker types; fixture uses faster U+2206."
+   "note": "A pairwise CA marker (faster U+2206, slower, creaky, whisper, left-arrow-circle U+21AB, etc.) occurring an odd number of times on a main tier. Dedicated chatter code: E230 'Unbalanced CA delimiter (Faster): missing closing delimiter'. CLAN tracks 15 pair-wise marker types; fixture uses faster U+2206. This fixture's parity does not imply identical replacement-scope behavior: E230 examples 2/3 retain Chatter's once-per-authored-marker pairing. CHECK 21-Sep-2026 scans replacement text twice in check_ParseWords (whole bracket token, then target-word re-entry), cancelling a single target marker and inverting the paired/unpaired verdicts. See E230's source-path analysis."
   },
   {
    "check_code": 118,
@@ -1431,7 +1431,7 @@
    "expected_chatter_codes": [
     "E546"
    ],
-   "note": "@ID SES field is an undeclared value ('XYZ'). CLAN 144 (illegal SES / not declared in depfile); chatter E546 UnsupportedSesValue."
+   "note": "@ID SES field is an undeclared value ('XYZ'). CLAN 144 (illegal SES / not declared in depfile); chatter E546 UnsupportedSesValue. The parity claim covers unknown tokens, not identical separator policy. CHECK's check_ses skips commas/whitespace and validates each remaining token against either vocabulary (check_matchplate/check_SES_item); it has no pair-completeness check. E546_vocabulary records acceptance of ',MC', 'White,' and comma-only input by CHECK 21-Sep-2026, versus Chatter's existing stricter complete-pair policy."
   },
   {
    "check_code": 145,

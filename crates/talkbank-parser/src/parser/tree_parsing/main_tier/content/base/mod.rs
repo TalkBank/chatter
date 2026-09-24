@@ -15,8 +15,8 @@ pub(crate) use overlap_point::{parse_overlap_point, parse_overlap_point_token};
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, BaseContentItemChoice, BaseContentItemNode, ChildSlot, LongFeatureLabelNode,
-    NoChild, NodeSlot, RecoveryNode, extract_base_content_item,
+    AsRawNode, BaseContentItemChoice, BaseContentItemNode, KindSlot, LongFeatureLabelNode, NoChild,
+    NodeSlot, RecoveryNode, extract_base_content_item,
 };
 use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
@@ -61,19 +61,17 @@ pub(crate) fn parse_base_content(
     let content = match children.content.slot() {
         NodeSlot::Present(choice) => match choice {
             BaseContentItemChoice::WordWithOptionalAnnotations(node) => {
-                parse_word_content(node.raw_node(), source, errors)
+                parse_word_content(*node, source, errors)
             }
             BaseContentItemChoice::PauseToken(node) => {
-                parse_pause_node(node.raw_node(), source, errors).map(UtteranceContent::Pause)
+                parse_pause_node(*node, source, errors).map(UtteranceContent::Pause)
             }
             BaseContentItemChoice::NonwordWithOptionalAnnotations(node) => {
-                parse_nonword_content(node.raw_node(), source, errors)
+                parse_nonword_content(*node, source, errors)
             }
-            BaseContentItemChoice::Freecode(node) => {
-                parse_freecode(node.raw_node(), source, errors)
-            }
+            BaseContentItemChoice::Freecode(node) => parse_freecode(*node, source, errors),
             BaseContentItemChoice::Bullet(node) => {
-                internal_bullet::parse_internal_bullet(node.raw_node(), source, errors)
+                internal_bullet::parse_internal_bullet(*node, source, errors)
             }
             BaseContentItemChoice::UnderlineBegin(node) => {
                 // Underline begin marker (U+0002 U+0001)
@@ -88,13 +86,13 @@ pub(crate) fn parse_base_content(
                 ))
             }
             BaseContentItemChoice::LongFeature(node) => {
-                long_feature::parse_long_feature(node.raw_node(), source, errors)
+                long_feature::parse_long_feature(*node, source, errors)
             }
             BaseContentItemChoice::Nonvocal(node) => {
-                nonvocal::parse_nonvocal(node.raw_node(), source, errors)
+                nonvocal::parse_nonvocal(*node, source, errors)
             }
             BaseContentItemChoice::OtherSpokenEvent(node) => {
-                other_spoken::parse_other_spoken_event(node.raw_node(), source, errors)
+                other_spoken::parse_other_spoken_event(*node, source, errors)
             }
         },
         NodeSlot::Missing(missing) => {
@@ -153,7 +151,7 @@ pub(super) fn delimiter<'tree, T, M, U: RecoveryNode<'tree>, A>(
 /// after its recovery state has been reported at `within`; `context` names
 /// the position for the decode diagnostic.
 pub(super) fn marker_label(
-    slot: &ChildSlot<'_, LongFeatureLabelNode<'_>>,
+    slot: &KindSlot<'_, LongFeatureLabelNode<'_>>,
     within: &str,
     context: &str,
     source: &str,
@@ -161,7 +159,10 @@ pub(super) fn marker_label(
 ) -> Option<String> {
     match expect_present(slot, within, source, errors) {
         SlotState::Present(node) => {
-            Some(extract_utf8_text(node.raw_node(), source, errors, context, "").to_string())
+            match extract_utf8_text(node.raw_node(), source, errors, context) {
+                ParseOutcome::Parsed(text) => Some(text.to_owned()),
+                ParseOutcome::Rejected => None,
+            }
         }
         SlotState::Absent | SlotState::Recovered => None,
     }

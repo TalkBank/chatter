@@ -216,7 +216,10 @@ impl PauseTimedDuration {
         if let Some((minutes_str, rest)) = text.split_once(':') {
             let minutes: u32 = minutes_str.parse().ok()?;
             let (secs, millis) = Self::parse_seconds_frac(rest)?;
-            return Some((minutes * 60 + secs, millis));
+            // Numeric projection is optional; an admitted CHAT spelling must
+            // never panic or wrap while entering the Parsed state.
+            let total_seconds = minutes.checked_mul(60)?.checked_add(secs)?;
+            return Some((total_seconds, millis));
         }
 
         Self::parse_seconds_frac(text)

@@ -38,6 +38,7 @@ talkbank-parser-re2c = { workspace = true }
 thiserror = { workspace = true } #unified
 toml = { workspace = true }
 tracing = { workspace = true }
+unicode-normalization = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

@@ -5,15 +5,15 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Model_Phonology>
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, ModDependentTierNode, NoChild, PhoDependentTierNode, PhoGroupNode,
+    AsRawNode, KindSlot, ModDependentTierNode, NoChild, PhoDependentTierNode, PhoGroupNode,
     PhoGroupsNode, SlotView, extract_mod_dependent_tier, extract_pho_dependent_tier,
     extract_pho_groups,
 };
 use crate::parser::node_span::span_of;
+use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::model::dependent_tier::PhoGroupWords;
 use talkbank_model::model::{PhoItem, PhoTier, PhoTierType, PhoWord};
-use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use tree_sitter::Node;
+use talkbank_model::{ErrorSink, ParseOutcome};
 
 use super::groups::{extract_pho_group_items, push_pho_separator};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
@@ -100,28 +100,29 @@ enum PhoBodyTier<'tree> {
 ///   both a real body and a MISSING body were found (the old `Some(pho_groups)`
 ///   branch) and drive group iteration. A MISSING/empty `pho_groups` yields zero
 ///   items with no diagnostic, identical to the old loop iterating an empty node.
-///   Both are reached through `NodeSlot::node_or_placeholder`, which answers for
+///   Both are reached through `known_or_placeholder().present_or_placeholder()`, which answers for
 ///   exactly the two states where the position identifies itself. (This
 ///   paragraph used to explain why the two had to be written as separate arms.
 ///   That was true of the backend at the time and is no longer: the generator
 ///   now owns the question.)
-/// - `Absent` / `Error` / `Unexpected`: no child of kind `pho_groups` was found
+/// - `Absent` / `Error`: no child of kind `pho_groups` was found
 ///   (the old `None` branch): an ERROR node or an unexpected-kind node does not
 ///   match `pho_groups`, and an absent child is not there at all. Return the EMPTY
-///   tier SILENTLY (no diagnostic). This silent-partial is PRESERVED behavior; it
-///   is unreachable from the boundary (`parse_pho_tier_inner` is only invoked when
-///   the tier node has no tree-sitter error) but is reproduced for exhaustiveness.
+///   tier SILENTLY (no diagnostic). This silent-partial is preserved behavior.
+///   The document dispatcher rejects tiers with tree-sitter errors before calling
+///   this decoder, but that check is not a proof that extraction cannot yield
+///   an absent body. Preserve the recovery states exposed by the producer.
 fn parse_pho_tier_inner(tier: PhoBodyTier<'_>, source: &str, errors: &impl ErrorSink) -> PhoTier {
     // ONE match. Both carriers expose the body at `child_2` and their own
     // top-level `unexpected` sink, and `child_2.slot`'s type is the same
-    // `ChildSlot<PhoGroupsNode>` for `%pho` and `%mod`, so the only thing that
+    // `KindSlot<PhoGroupsNode>` for `%pho` and `%mod`, so the only thing that
     // varies is which `extract_*` reads it and which model tag it carries. Those
     // were three separate matches on the same two-variant enum, which is three
     // chances for the arms to disagree about what `Pho` means.
     let (tier_type, node, body_slot): (
         PhoTierType,
         tree_sitter::Node<'_>,
-        ChildSlot<PhoGroupsNode>,
+        KindSlot<PhoGroupsNode>,
     ) = match tier {
         PhoBodyTier::Pho(n) => {
             let raw = n.raw_node();
@@ -142,7 +143,7 @@ fn parse_pho_tier_inner(tier: PhoBodyTier<'_>, source: &str, errors: &impl Error
     // the empty tier, so naming the four separately was four arms saying one
     // thing. `present_or_placeholder` discards WHICH state occurred, which is
     // sound only because nothing here branches on it.
-    match body_slot.typed_or_placeholder().present_or_placeholder() {
+    match body_slot.known_or_placeholder().present_or_placeholder() {
         Some(groups) => {
             let items = parse_pho_groups(groups, source, errors);
             PhoTier::new(tier_type, items).with_span(span)
@@ -208,11 +209,11 @@ fn parse_pho_groups(
 /// - `Absent`: no child at this position; the old loop simply did not iterate
 ///   here, so nothing is reported and nothing is pushed.
 ///
-/// The `Missing` / `Error` / `Unexpected` arms are unreachable from the boundary
-/// (`parse_pho_tier_inner` is only entered when the tier node has no tree-sitter
-/// error); they are handled explicitly for exhaustiveness.
+/// The document dispatcher rejects error-bearing tiers before conversion.
+/// The slot API still exposes recovery here, so those states are retained;
+/// finite non-observation does not establish producer impossibility.
 fn push_pho_group<'tree>(
-    slot: &ChildSlot<'tree, PhoGroupNode<'tree>>,
+    slot: &KindSlot<'tree, PhoGroupNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<PhoItem>,
@@ -231,27 +232,23 @@ fn push_pho_group<'tree>(
     }
 }
 
-/// Build a fallback `PhoWord` item from raw group text when detailed parsing fails.
+/// Preserve a generated phonology group's checked text when detailed parsing fails.
 pub(crate) fn fallback_group_as_text(
-    node: Node,
+    node: PhoGroupNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<PhoItem> {
-    match node.utf8_text(source.as_bytes()) {
-        Ok(text) if !text.is_empty() => {
-            vec![PhoItem::Word(PhoWord::new(text))]
-        }
-        Ok(_) => vec![],
-        Err(err) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), "pho_group"),
-                format!("Invalid UTF-8 in %pho group fallback text: {}", err),
-            ));
-            vec![]
-        }
+    let ParseOutcome::Parsed(text) =
+        decode_present_child(&node, source, errors, "pho_group", |err| {
+            format!("Invalid UTF-8 in %pho group fallback text: {err}")
+        })
+    else {
+        return Vec::new();
+    };
+    if text.is_empty() {
+        Vec::new()
+    } else {
+        vec![PhoItem::Word(PhoWord::new(text))]
     }
 }
 
@@ -262,5 +259,52 @@ pub(crate) fn build_group_from_words(words: Vec<&str>) -> Vec<PhoItem> {
         vec![PhoItem::Group(PhoGroupWords::new(pho_words))]
     } else {
         vec![]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use crate::generated_traversal::FromNodeKind;
+    use talkbank_model::{ErrorCode, ErrorCollector};
+
+    /// Direct boundary coverage, not a claim that these valid fixtures route
+    /// into fallback through the production slot extractor.
+    #[test]
+    fn typed_phonology_fallback_preserves_real_text_and_rejects_bad_ranges() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../corpus/reference/tiers/pho-groupings.cha"
+        ));
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let mut pending = vec![parsed.root_node()];
+        let mut witnessed = 0;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            let Some(group) = PhoGroupNode::from_node(node) else {
+                continue;
+            };
+            let errors = ErrorCollector::new();
+            assert_eq!(
+                fallback_group_as_text(group, source, &errors),
+                vec![PhoItem::Word(PhoWord::new(&source[node.byte_range()]))]
+            );
+            assert!(errors.into_vec().is_empty());
+            let split_utf8 = format!("{}é", "x".repeat(node.end_byte() - 1));
+            for incompatible in ["", split_utf8.as_str()] {
+                let errors = ErrorCollector::new();
+                assert!(fallback_group_as_text(group, incompatible, &errors).is_empty());
+                let diagnostics = errors.into_vec();
+                assert_eq!(diagnostics.len(), 1);
+                assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
+            }
+            witnessed += 1;
+        }
+        assert!(witnessed > 0);
     }
 }

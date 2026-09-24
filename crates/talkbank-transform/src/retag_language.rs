@@ -63,6 +63,8 @@ pub enum RetagRefusal {
 /// `to` is deduplicated in `@Languages`: retagging a code the file ALREADY
 /// declares (the `sun` -> `fin` case, where `fin` is declared alongside it)
 /// removes the entry rather than producing a duplicate.
+/// Equal source and target codes are an unchanged success, including when
+/// unsupported span notation is present: no rewrite is required.
 ///
 /// # Errors
 ///
@@ -73,6 +75,9 @@ pub fn retag_language(
     from: &LanguageCode,
     to: &LanguageCode,
 ) -> Result<RetagStats, RetagRefusal> {
+    if from == to {
+        return Ok(RetagStats::default());
+    }
     if names_code_in_span(chat_file, from) {
         return Err(RetagRefusal::NamesCodeInSpan);
     }

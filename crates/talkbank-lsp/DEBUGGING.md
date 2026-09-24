@@ -111,11 +111,11 @@ cargo clippy -p talkbank-lsp --all-targets -- -D warnings
 
 ## See Also
 
-- [CLAUDE.md](CLAUDE.md): LSP coding conventions and reliability rules
+- [AGENTS.md](AGENTS.md): LSP coding conventions and reliability rules
 - [ARCHITECTURE.md](ARCHITECTURE.md): Module structure
 - [src/backend/diagnostics/validation_orchestrator.rs](src/backend/diagnostics/validation_orchestrator.rs): Core orchestration logic
 - [src/backend/incremental.rs](src/backend/incremental.rs): Splice detection, utterance collection
 - [src/backend/validation_cache.rs](src/backend/validation_cache.rs): Cache structure and splice helpers
 
 ---
-Last Updated: 2026-02-24
+**Last modified:** 2026-09-24 00:21 EDT

@@ -9,12 +9,10 @@
 //! nothing after it. That is the input stated twice, and the coverage it
 //! produced was fabrication-backed: the check ran and no CHAT text was read.
 //!
-//! Four of the five codes are demonstrated by spec examples already. E242 is
-//! the exception that matters: the spec's E242 examples exercise a curly-quote
-//! scan in the PARSER, while `check_quotation_balance` reads POSTCODES (`"/`
-//! and `"/.`), so the three deleted quotation tests were that rule's only
-//! coverage. They are postcode rows now, with the messages they asserted. The
-//! other variants moved in their original shapes, each with its exactly-once
+//! E242's postcode checks were subsequently adjudicated as incorrect: opaque
+//! postcode text cannot become quotation syntax. Canonical E242 specs now
+//! protect that distinction. Other variants moved in their original shapes,
+//! each with its exactly-once
 //! count: an end then a balanced pair, two opens and one close, a nested end
 //! inside a retrace group, two delimiter types interleaved. All are rows in
 //! `talkbank-parser-tests/tests/integration/utterance_balance_from_source.rs`,

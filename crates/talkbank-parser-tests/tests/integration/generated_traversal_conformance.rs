@@ -35,24 +35,20 @@
 //! committed copy has drifted.
 
 use std::collections::BTreeMap;
+use talkbank_parser::generated_traversal::{
+    AsRawNode, ContentItemChoice, ContentItemNode, FromNodeKind, NodeSlot, extract_content_item,
+};
 
-use talkbank_parser_tests::conformance::{Observation, dispatch, is_violation, walk_all};
-
-fn corpus_dir() -> Option<std::path::PathBuf> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()?
-        .parent()?
-        .join("corpus/reference");
-    dir.exists().then_some(dir)
-}
+use talkbank_parser_tests::chat_corpus::ChatCorpus;
+use talkbank_parser_tests::conformance::{Observation, Position, dispatch, is_violation, walk_all};
 
 // ===========================================================================
-// DOCUMENTED ALLOWLIST of the (rule, slot) positions that currently
+// DOCUMENTED ALLOWLIST of the carrier-qualified positions that currently
 // MISCLASSIFY a real child on the VALID reference corpus. Each entry is a
-// known generator gap with its reason. Keyed by (rule, slot) rather than by
+// known generator gap with its reason. Keyed by generated carrier and field rather than by
 // individual offending kind so that adding a new grammar subtype does not
 // spuriously fail (the whole choice POSITION is the gap), while a NEW gap at
-// any other (rule, slot) still fails the test.
+// any other position still fails the test.
 //
 // EMPTY as of the Task B5 port to the NEW backend. The OLD-backend harness
 // carried exactly one entry (`("mor_contents", "child_0")`, the 0d-D
@@ -65,19 +61,16 @@ fn corpus_dir() -> Option<std::path::PathBuf> {
 // (construct/confirm against the real grammar and the CHAT manual), never a
 // reason to silently re-populate this list.
 // ===========================================================================
-const ALLOWLIST: &[(&str, &str)] = &[];
+const ALLOWLIST: &[Position] = &[];
 
-/// Whether a `(rule, slot)` misclassification is a documented known gap.
-fn is_allowed(rule: &str, slot: &str) -> bool {
-    ALLOWLIST.iter().any(|(r, s)| *r == rule && *s == slot)
+/// Whether this carrier-qualified position is a documented known gap.
+fn is_allowed(position: Position) -> bool {
+    ALLOWLIST.contains(&position)
 }
 
 #[test]
 fn generated_traversal_conformance_no_misclassification_on_valid_corpus() {
-    let Some(dir) = corpus_dir() else {
-        eprintln!("Skipping: corpus/reference not found");
-        return;
-    };
+    let corpus = ChatCorpus::reference().expect("complete reference corpus");
     let mut parser = tree_sitter::Parser::new();
     let lang: tree_sitter::Language = tree_sitter_talkbank::LANGUAGE.into();
     parser.set_language(&lang).expect("set language");
@@ -85,15 +78,37 @@ fn generated_traversal_conformance_no_misclassification_on_valid_corpus() {
     // signature -> (occurrence count, one example file)
     let mut found: BTreeMap<Observation, (usize, String)> = BTreeMap::new();
     let mut files = 0usize;
-    for entry in walkdir::WalkDir::new(&dir)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "cha"))
-    {
-        let source = std::fs::read_to_string(entry.path()).expect("read file");
-        let tree = parser.parse(&source, None).expect("parse");
-        let file = entry.path().display().to_string();
+    let mut classified_items = 0usize;
+    let mut nested_linkers = 0usize;
+    for fixture in corpus.fixtures() {
+        let tree = parser.parse(fixture.source(), None).expect("parse");
+        let file = fixture.path().display().to_string();
         walk_all(tree.root_node(), &mut |node| {
+            // Exercise the compiled nested classifier, not just its generated
+            // text. Real linker nodes also occur outside content positions.
+            if let Some(classified) = ContentItemChoice::from_node(node) {
+                assert_eq!(
+                    classified.raw_node(),
+                    node,
+                    "classifier changed the node: {file}"
+                );
+                if matches!(classified, ContentItemChoice::CaNoBreakLinker(_)) {
+                    nested_linkers += 1;
+                }
+            }
+            if let Some(item) = ContentItemNode::from_node(node) {
+                let children = extract_content_item(item);
+                if let NodeSlot::Present(expected) = children.content.slot() {
+                    let classified = ContentItemChoice::from_node(expected.raw_node())
+                        .expect("the producer's content alternative is kind-classifiable");
+                    assert_eq!(
+                        std::mem::discriminant(&classified),
+                        std::mem::discriminant(expected),
+                        "classifier selected a different content alternative: {file}"
+                    );
+                    classified_items += 1;
+                }
+            }
             let mut raw = Vec::new();
             dispatch(node, &mut raw);
             for v in raw.into_iter().filter(is_violation) {
@@ -105,6 +120,14 @@ fn generated_traversal_conformance_no_misclassification_on_valid_corpus() {
     }
 
     assert!(files >= 74, "expected >=74 reference files, got {files}");
+    assert!(
+        classified_items > 0,
+        "corpus must exercise content classification"
+    );
+    assert!(
+        nested_linkers > 0,
+        "corpus must exercise nested linker classification"
+    );
 
     // Print the COMPLETE distinct violation set (the controller diagnostic).
     eprintln!(
@@ -112,36 +135,34 @@ fn generated_traversal_conformance_no_misclassification_on_valid_corpus() {
         found.len()
     );
     for (sig, (count, example)) in &found {
-        let allowed = is_allowed(sig.rule_kind, sig.slot);
+        let allowed = is_allowed(sig.position);
         eprintln!(
             "  [{}] rule={} slot={} container={:?} observed={:?} actual={} (x{count}) e.g. {example}",
             if allowed { "ALLOW" } else { "NEW" },
             sig.rule_kind,
-            sig.slot,
+            sig.position,
             sig.container,
             sig.observed,
             sig.actual_child_kind,
         );
     }
 
-    // New-violation guard (REQUIRED): any (rule, slot) not on the allowlist is
+    // New-violation guard (REQUIRED): any position not on the allowlist is
     // a failure: a newly mis-classifying rule, or a known-gap rule that began
     // mis-slotting at a NEW position.
-    let new_violations: Vec<&Observation> = found
-        .keys()
-        .filter(|s| !is_allowed(s.rule_kind, s.slot))
-        .collect();
+    let new_violations: Vec<&Observation> =
+        found.keys().filter(|s| !is_allowed(s.position)).collect();
     assert!(
         new_violations.is_empty(),
         "NEW generator-conformance violations (not on ALLOWLIST): {new_violations:#?}",
     );
 
-    // Stale-allowlist guard (shrink-only): a listed (rule, slot) that no longer
+    // Stale-allowlist guard (shrink-only): a listed position that no longer
     // violates must be removed from ALLOWLIST, so the allowlist only shrinks as
     // generator gaps are closed.
-    let stale: Vec<&(&str, &str)> = ALLOWLIST
+    let stale: Vec<&Position> = ALLOWLIST
         .iter()
-        .filter(|(r, sl)| !found.keys().any(|s| s.rule_kind == *r && s.slot == *sl))
+        .filter(|position| !found.keys().any(|s| s.position == **position))
         .collect();
     assert!(
         stale.is_empty(),

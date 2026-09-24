@@ -12,4 +12,6 @@
 *CHI:	hey there what is hao3@s:zho ?
 *CHI:	hey there what is hao3@s:eng+zho+fra ?
 *MOT:	hey@s:spa there what is hao3@s:eng&zho&fra ?
+@Comment:	Authored single-word ambiguity control for language metadata queries.
+*MOT:	ma@s:eng&zho .
 @End

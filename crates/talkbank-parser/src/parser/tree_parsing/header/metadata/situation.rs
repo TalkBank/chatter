@@ -60,19 +60,13 @@ pub fn parse_situation_header(
         );
     };
 
-    // Decode through the shared `decode_present_child` helper, which reads from the
-    // RAW node's `utf8_text` (NOT the wrapper's `.text()` accessor, which swallows
-    // UTF-8 errors via `unwrap_or("")`), reproducing the pre-migration
-    // `find_child_by_kind` Ok/Err handling. The `@Situation`-specific diagnostic
-    // (context = `"situation_text"`) is supplied here, so it stays byte-identical;
-    // on rejection we return the same `Header::Unknown`.
-    let ParseOutcome::Parsed(text) = decode_present_child(
-        free_text.raw_node(),
-        source,
-        errors,
-        "situation_text",
-        |err| format!("Failed to extract @Situation text as UTF-8: {}", err),
-    ) else {
+    // Keep the typed child through checked text admission; refusal retains the
+    // @Situation-specific diagnostic and Header::Unknown recovery.
+    let ParseOutcome::Parsed(text) =
+        decode_present_child(free_text, source, errors, "situation_text", |err| {
+            format!("Failed to extract @Situation text as UTF-8: {}", err)
+        })
+    else {
         surface_displaced(&children.unexpected, "situation_header", source, errors);
         return super::super::unknown_header(
             node,

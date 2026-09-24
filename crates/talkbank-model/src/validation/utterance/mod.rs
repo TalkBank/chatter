@@ -16,8 +16,8 @@ mod comma;
 mod gra_relation_vocabulary;
 mod overlap;
 mod phon_xtier;
-mod quotation;
 mod repetition_segment;
+mod separator;
 mod spacing;
 mod tiers;
 mod underline;
@@ -37,8 +37,8 @@ pub(crate) use comma::{
 pub(crate) use gra_relation_vocabulary::check_gra_relation_vocabulary;
 pub(crate) use overlap::check_overlap_markers;
 pub(crate) use phon_xtier::check_phon_xtiers;
-pub(crate) use quotation::check_quotation_balance;
 pub(crate) use repetition_segment::check_repetition_segment_has_stem;
+pub(crate) use separator::check_semicolon_separators;
 pub(crate) use spacing::{
     check_code_glued_to_following_content, check_pause_glued_to_word,
     check_prefixed_form_glued_to_preceding_word, check_separator_glued_to_following_content,

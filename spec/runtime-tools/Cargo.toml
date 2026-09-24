@@ -52,3 +52,8 @@ test = false
 name = "validate_error_specs"
 path = "src/bin/validate_error_specs.rs"
 test = false
+
+[[bin]]
+name = "mutation_candidates"
+path = "src/bin/mutation_candidates.rs"
+test = false

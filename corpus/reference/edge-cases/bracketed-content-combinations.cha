@@ -1,0 +1,28 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@Options:	CA
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Media:	bracketed-content-combinations, video
+@Comment:	Authored group-context combinations of reference events-in-groups,
+	groups-phonological, groups-sign, quotation-groups-smart, long-features,
+	pauses-and-events, media-bullets, and errors-and-replacements constructs;
+	not a new production attestation.
+*CHI:	<&=laughs [=! softly]> [<] .
+*MOT:	<0 [=! points] &=head:yes> [>] .
+*CHI:	<“hello” [=! softly]> [<] .
+*MOT:	“hello” [=! softly] .
+*CHI:	“plant” [//] plant .
+*MOT:	<“plant” [=! softly] [//] plant> [>] .
+*CHI:	<“plant” [//] [=! softly] plant> [<] .
+*MOT:	<‹A› B 〔bar baz〕> [>] .
+*CHI:	<hello [^ comment] &*MOT:yeah> [<] .
+*MOT:	<&{l=X deal with &}l=X pressure> [>] .
+*CHI:	<&{n=THUMP &=nonvocal &}n=THUMP &{n=BANG}> [<] .
+*MOT:	<⌈hello⌉ , (.) bye> [>] .
+*CHI:	<hello there> [<] .
+*MOT:	<hello 1000_1200 there> [>] .
+*CHI:	<rocking+house [: rocking+horse] [*] hello> [<] .
+@End

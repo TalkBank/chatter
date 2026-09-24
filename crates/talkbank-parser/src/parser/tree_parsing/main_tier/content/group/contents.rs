@@ -8,7 +8,7 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    ChildSlot, ContentsChildren, ContentsNode, FromNodeKind, NoChild, SlotView, extract_contents,
+    ContentsChildren, ContentsNode, FromNodeKind, KindSlot, NoChild, SlotView, extract_contents,
 };
 use crate::model::{BracketedItem, UtteranceContent};
 use tree_sitter::Node;
@@ -27,7 +27,7 @@ use crate::parser::tree_parsing::main_tier::structure::contents::{ContentsRegion
 /// contents at all; both yield nothing, and the caller rejects an empty
 /// construct.
 pub(crate) fn contents_of<'tree>(
-    slot: &ChildSlot<'tree, ContentsNode<'tree>>,
+    slot: &KindSlot<'tree, ContentsNode<'tree>>,
     on_bad: impl FnOnce(Node<'tree>),
 ) -> Option<ContentsChildren<'tree>> {
     match slot.view() {

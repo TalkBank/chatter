@@ -204,8 +204,12 @@ pub(super) fn parse_dependent_tiers<'a>(
                 }
             }
             DependentBodyKind::Text => {
-                // Generic text tier, always succeeds
-                let content: Vec<Token<'a>> = tier_tokens.to_vec();
+                let content = dependent_tiers::AdmittedTextTierTokens::admit(
+                    lexed,
+                    content_start..content_end,
+                    errors,
+                )
+                .into_tokens();
                 push(DependentTierParsed::Text { prefix, content });
             }
         }

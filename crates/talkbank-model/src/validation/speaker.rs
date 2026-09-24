@@ -27,7 +27,7 @@ enum SpeakerCodeSyntax {
 enum InvalidSpeakerCode {
     /// Only the length invariant failed.
     TooLong { character_count: usize },
-    /// Only the delimiter/whitespace invariant failed.
+    /// Only the ASCII/delimiter/whitespace invariant failed.
     ReservedCharacter { character: char },
     /// Both independent invariants failed and both diagnostics are owed.
     TooLongWithReservedCharacter {
@@ -64,7 +64,7 @@ fn assess_speaker_code(speaker: &str) -> SpeakerCodeSyntax {
 /// `span` is the location in the original file. Diagnostic context uses a
 /// code-local span because its `source_text` is only `speaker`, not the full
 /// file.
-pub(crate) fn check_speaker_id(speaker: &str, span: Span, errors: &impl ErrorSink) {
+pub fn check_speaker_id(speaker: &str, span: Span, errors: &impl ErrorSink) {
     let SpeakerCodeSyntax::Invalid(invalid) = assess_speaker_code(speaker) else {
         return;
     };
@@ -90,7 +90,7 @@ pub(crate) fn check_speaker_id(speaker: &str, span: Span, errors: &impl ErrorSin
             SourceLocation::new(span),
             ErrorContext::new(speaker, local_span, speaker),
             format!(
-                "Speaker ID '{}' contains invalid character '{}'. Speaker IDs cannot contain colon (:) or whitespace",
+                "Speaker ID '{}' contains invalid character '{}'. Speaker IDs must be ASCII and cannot contain colon (:) or whitespace",
                 speaker, invalid_char
             ),
         ));
@@ -114,11 +114,14 @@ pub(crate) fn check_speaker_id(speaker: &str, span: Span, errors: &impl ErrorSin
 /// Invalid characters:
 /// - Colon (:) - reserved as speaker ID delimiter
 /// - Whitespace (space, tab, newline, etc.)
+/// - Any non-ASCII character
 ///
-/// All other characters are accepted: lowercase, uppercase, digits, punctuation, Unicode, etc.
-/// This lenient approach supports international corpora and various naming conventions.
+/// Other ASCII characters retain their existing validation policy, including
+/// lowercase and corpus-specific punctuation. Grammar admission is separate.
 /// Returning the first offending character allows callers to produce targeted
 /// diagnostics without re-scanning the whole identifier.
 pub(crate) fn has_invalid_speaker_chars(speaker: &str) -> Option<char> {
-    speaker.chars().find(|c| *c == ':' || c.is_whitespace())
+    speaker
+        .chars()
+        .find(|c| !c.is_ascii() || *c == ':' || c.is_whitespace())
 }

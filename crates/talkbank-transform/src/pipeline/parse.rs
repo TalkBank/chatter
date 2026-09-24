@@ -14,7 +14,7 @@
 use talkbank_model::ChatFile;
 use talkbank_model::ParseOutcome;
 use talkbank_model::ParseValidateOptions;
-use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
+use talkbank_model::validation::ValidationPolicy;
 use talkbank_model::{
     ErrorCode, ErrorCollector, ErrorSink, NullErrorSink, ParseError, ParseErrors, Severity,
 };
@@ -22,19 +22,6 @@ use talkbank_parser::TreeSitterParser;
 
 use super::error::PipelineError;
 use talkbank_model::model::TranscriptName;
-
-/// The rule set a `ParseValidateOptions` asks for.
-///
-/// One owner for the mapping, so the two pipeline entry points below cannot
-/// drift into running different rules for the same options.
-fn rule_selection(strict_linkers: bool) -> talkbank_model::RuleSelection {
-    let rules = talkbank_model::RuleSelection::new();
-    if strict_linkers {
-        rules.with_strict_linkers()
-    } else {
-        rules
-    }
-}
 
 /// Parse CHAT content and optionally validate.
 ///
@@ -106,8 +93,8 @@ pub fn parse_and_validate_named(
     options: ParseValidateOptions,
     name: TranscriptName<'_>,
 ) -> Result<ChatFile, PipelineError> {
-    if options.validate || options.alignment {
-        return required_validation(parser, content, options, name, &NullErrorSink);
+    if let Some(policy) = options.validation_policy() {
+        return required_validation(parser, content, policy, name, &NullErrorSink);
     }
     let parse_errors = ErrorCollector::new();
 
@@ -199,15 +186,10 @@ pub fn parse_and_validate_streaming_for_path(
     options: ParseValidateOptions,
     errors: &impl ErrorSink,
 ) -> Result<ChatFile, PipelineError> {
+    let stored = crate::paths::StoredTranscript::resolve(path)?;
     let parser =
         TreeSitterParser::new().map_err(|e| PipelineError::ParserCreation(format!("{e}")))?;
-    parse_and_validate_streaming_named(
-        &parser,
-        content,
-        options,
-        errors,
-        TranscriptName::for_path(path),
-    )
+    parse_and_validate_streaming_named(&parser, content, options, errors, stored.name())
 }
 
 /// Streaming variant for a transcript whose name is known.
@@ -221,8 +203,8 @@ pub fn parse_and_validate_streaming_named(
     errors: &impl ErrorSink,
     name: TranscriptName<'_>,
 ) -> Result<ChatFile, PipelineError> {
-    if options.validate || options.alignment {
-        return required_validation(parser, content, options, name, errors);
+    if let Some(policy) = options.validation_policy() {
+        return required_validation(parser, content, policy, name, errors);
     }
     let chat_file_outcome = parser.parse_chat_file_fragment(content, 0, errors);
 
@@ -246,35 +228,24 @@ pub fn parse_and_validate_streaming_named(
 fn required_validation(
     parser: &TreeSitterParser,
     content: &str,
-    options: ParseValidateOptions,
+    policy: ValidationPolicy,
     name: TranscriptName<'_>,
     errors: &impl ErrorSink,
 ) -> Result<ChatFile, PipelineError> {
-    let alignment = if options.alignment {
-        AlignmentValidation::IncludeTierAlignment
-    } else {
-        AlignmentValidation::Structure
-    };
-    super::validated::parse_validated_with_parser(
-        parser,
-        content,
-        ValidationPolicy::new(rule_selection(options.strict_linkers), alignment),
-        name,
-        errors,
-    )
-    .map(|accepted| accepted.into_unchecked())
-    .map_err(|error| match error {
-        super::validated::ValidatedParseError::Parse(product) => {
-            PipelineError::Parse(ParseErrors::from(product.diagnostics().to_vec()))
-        }
-        super::validated::ValidatedParseError::Validation(failure) => {
-            if failure.has_incomplete_parse() {
-                PipelineError::IncompleteValidation(Box::new(failure))
-            } else {
-                PipelineError::Validation(failure.diagnostics().to_vec())
+    super::validated::parse_validated_with_parser(parser, content, policy, name, errors)
+        .map(|accepted| accepted.into_unchecked())
+        .map_err(|error| match error {
+            super::validated::ValidatedParseError::Parse(product) => {
+                PipelineError::Parse(ParseErrors::from(product.diagnostics().to_vec()))
             }
-        }
-    })
+            super::validated::ValidatedParseError::Validation(failure) => {
+                if failure.has_incomplete_parse() {
+                    PipelineError::IncompleteValidation(Box::new(failure))
+                } else {
+                    PipelineError::Validation(failure.diagnostics().to_vec())
+                }
+            }
+        })
 }
 
 #[cfg(test)]

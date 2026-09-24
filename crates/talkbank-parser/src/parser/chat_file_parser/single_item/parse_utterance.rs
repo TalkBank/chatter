@@ -17,43 +17,58 @@ use crate::generated_traversal::{
 use crate::model::Line;
 use crate::model::Utterance;
 
+/// The probe's decision retains the exact input it classified. A complete
+/// document already owns its admitted envelope; only fragments need scaffolding.
+enum UtteranceInput<'input> {
+    Complete(WrappedFragment<'input>),
+    NeedsWrapper {
+        input: &'input str,
+        newline: &'static str,
+    },
+}
+
+impl<'input> UtteranceInput<'input> {
+    fn admit(parser: &TreeSitterParser, input: &'input str) -> ParseResult<Self> {
+        let newline = if input.ends_with('\n') { "" } else { "\n" };
+        // Admission checks the complete probe capacity before allocation. A
+        // failed parse propagates; it must not be mistaken for fragment shape.
+        let probe = WrappedFragment::new(&[], input, newline, 0)?;
+        let complete = {
+            let parsed = probe.parse(parser)?;
+            SourceFileNode::from_node(parsed.parsed_source().root_node()).is_some_and(|root| {
+                matches!(
+                    extract_source_file(root).content.slot(),
+                    NodeSlot::Present(SourceFileChoice::FullDocument(_))
+                )
+            })
+        };
+        Ok(if complete {
+            Self::Complete(probe)
+        } else {
+            Self::NeedsWrapper { input, newline }
+        })
+    }
+
+    fn into_wrapped(self) -> ParseResult<WrappedFragment<'input>> {
+        match self {
+            Self::Complete(probe) => Ok(probe),
+            Self::NeedsWrapper { input, newline } => WrappedFragment::new(
+                &[MINIMAL_CHAT_PREFIX],
+                input,
+                &format!("{newline}{MINIMAL_CHAT_SUFFIX}"),
+                0,
+            ),
+        }
+    }
+}
+
 /// Parse one utterance fragment into `Utterance`.
 ///
 /// This path intentionally reuses whole-file recovery so fragment parsing stays
 /// aligned with normal utterance construction, including preceding headers and
 /// attached dependent tiers.
 pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseResult<Utterance> {
-    let input_with_newline = if input.as_bytes().last().is_some_and(|b| *b == b'\n') {
-        input.to_string()
-    } else {
-        format!("{}\n", input)
-    };
-
-    let is_full_chat = parser
-        .parser
-        .borrow_mut()
-        .parse(&input_with_newline, None)
-        .is_some_and(|tree| {
-            SourceFileNode::from_node(tree.root_node()).is_some_and(|root| {
-                matches!(
-                    extract_source_file(root).content.slot(),
-                    NodeSlot::Present(SourceFileChoice::FullDocument(_))
-                )
-            })
-        });
-
-    let newline = if input.ends_with('\n') { "" } else { "\n" };
-    let suffix = if is_full_chat {
-        newline.to_owned()
-    } else {
-        format!("{newline}{MINIMAL_CHAT_SUFFIX}")
-    };
-    let prefixes: &[&str] = if is_full_chat {
-        &[]
-    } else {
-        &[MINIMAL_CHAT_PREFIX]
-    };
-    let fragment = WrappedFragment::new(prefixes, input, &suffix, 0)?;
+    let fragment = UtteranceInput::admit(parser, input)?.into_wrapped()?;
     let errors_sink = ErrorCollector::new();
     let file =
         parser.parse_chat_file_streaming(fragment.source(), &fragment.error_sink(&errors_sink));
@@ -82,4 +97,33 @@ pub(super) fn parse_utterance(parser: &TreeSitterParser, input: &str) -> ParseRe
         })?;
 
     Ok(fragment.rebase(utterance))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn complete_notrans_document_is_not_a_single_utterance() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../corpus/reference/core/headers-media-notrans.cha"
+        ));
+        let parser = TreeSitterParser::new().expect("grammar");
+        for input in [source, source.trim_end_matches('\n')] {
+            let admitted = UtteranceInput::admit(&parser, input).expect("admitted document");
+            assert!(matches!(admitted, UtteranceInput::Complete(_)));
+            let wrapped = admitted.into_wrapped().expect("complete envelope");
+            assert_eq!(wrapped.source(), source);
+            let errors = parse_utterance(&parser, input)
+                .expect_err("no utterance")
+                .into_error_vec();
+            assert_eq!(errors.len(), 1);
+            assert_eq!(errors[0].code, ErrorCode::MissingMainTier);
+            assert_eq!(
+                errors[0].location.span,
+                crate::error::Span::from_usize(0, input.len())
+            );
+        }
+    }
 }

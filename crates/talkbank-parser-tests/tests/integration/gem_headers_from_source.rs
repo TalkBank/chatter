@@ -1,16 +1,16 @@
 //! What a gem header lowers to, well-formed and not, through the parsed
 //! verdict.
 //!
-//! `@G` requires a `free_text` label; `@Bg` and `@Eg` carry an optional
-//! `seq(header_sep, free_text)`. A label is the text of the `free_text`
+//! All gem kinds carry an optional `seq(header_sep, free_text)`.
+//! A label is the text of the `free_text`
 //! pieces joined, a continuation line contributing one space. Until
 //! 2026-09-09 a header whose typed read found no label fell back to slicing
 //! the header's raw text after its first colon; these rows pin that the
 //! typed position is the only read: a header with nothing after its tab
-//! has no label and its recovery is named by the whole-tree pass (E342 for
-//! the MISSING required label of `@G`; E316 where `@Bg`/`@Eg` lost their
-//! optional group); a bare `@G:` with no tab is E303 and no gem header at
-//! all. The codes are measured through `chatter validate`, and the lone
+//! has no label and its recovery is named by the whole-tree pass (E316 for
+//! a malformed separator/label group). A colon-bearing `@G:` is not the
+//! legal bare `@G`; its recovered model retains the lazy-gem kind while the
+//! diagnostic rejects the malformed suffix. The lone
 //! `@Bg`/`@Eg` rows also carry their unmatched-gem verdicts (E526/E527).
 
 use talkbank_model::model::{GemLabel, Header, Line};
@@ -64,8 +64,8 @@ fn a_gem_label_is_read_only_from_its_free_text_position() -> Result<(), TestErro
                 label: label("label more"),
             }),
         ),
-        ("@G:\t", &["E342"], Some(Header::LazyGem { label: None })),
-        ("@G:", &["E303"], None),
+        ("@G:\t", &["E316"], Some(Header::LazyGem { label: None })),
+        ("@G:", &["E316"], Some(Header::LazyGem { label: None })),
         (
             "@Bg:\t",
             &["E316", "E526"],

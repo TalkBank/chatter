@@ -11,7 +11,8 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::node_types::{CONTENT_ITEM, LINKER_QUICK_UPTAKE, TAB, WHITESPACES};
-use crate::parser::tree_parsing::parser_helpers::{find_child_by_kind, surface_displaced};
+use crate::parser::tree_parsing::helpers::ReadableRecovery;
+use crate::parser::tree_parsing::parser_helpers::find_child_by_kind;
 use talkbank_model::chars::{LEFT_SINGLE_QUOTE, RIGHT_SINGLE_QUOTE};
 use tree_sitter::Node;
 
@@ -47,9 +48,9 @@ use tree_sitter::Node;
 /// it failing to compile, and there is one place to read to learn what any
 /// region does. What it cannot buy: it cannot stop a caller naming the WRONG
 /// region, which is why each variant says exactly which node it lives under.
-/// The stronger form would derive the region from the typed carrier the caller
-/// already holds, so possession IS the proof; that is recorded as follow-up
-/// rather than done here.
+/// Displaced body sinks no longer accept this independent region choice:
+/// their reporter derives both the sink and its context from a sealed typed
+/// carrier. Raw slot-level recovery still chooses the region explicitly.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum MainTierRegion {
     /// A direct child of `main_tier` that is not inside `tier_body`: the region
@@ -78,37 +79,6 @@ pub(crate) fn classify_main_tier_recovery(
     match region {
         MainTierRegion::OutsideBody => classify_outside_body_recovery(error_node, source),
         MainTierRegion::Body => analyze_word_error(error_node, source),
-    }
-}
-
-/// Surface a main-tier carrier's Unexpected sink, classifying recovery nodes by
-/// `region` rather than generically.
-///
-/// One owner for all nine main-tier sinks. Before this, exactly one of them
-/// branched on `is_error()` and the other eight handed everything to the
-/// region-blind free function, which mapped every ERROR to E316 regardless of
-/// where it was found. That is the affordance inversion this module exists to
-/// remove: the region-blind call was the short one, so it stayed the default,
-/// and the region-aware handling was a hand-written special case at the single
-/// site whose failure someone had happened to notice.
-///
-/// Non-ERROR unexpected children still go to [`surface_displaced`], at
-/// `context` (the calling carrier's own grammar rule name): they are not
-/// recovery nodes and no region-specific classification applies to them, only
-/// the ordinary well-formed-displaced-node report.
-pub(crate) fn surface_main_tier_sink(
-    unexpected: &[Node],
-    region: MainTierRegion,
-    context: &str,
-    source: &str,
-    errors: &impl ErrorSink,
-) {
-    for node in unexpected {
-        if node.is_error() {
-            errors.report(classify_main_tier_recovery(*node, source, region));
-        } else {
-            surface_displaced(std::slice::from_ref(node), context, source, errors);
-        }
     }
 }
 
@@ -151,19 +121,78 @@ fn classify_outside_body_recovery(error_node: Node, source: &str) -> ParseError 
 /// exists. Leaving it reachable would have left the cheaper path the old one,
 /// and the guarantee would hold only where someone remembered to opt in.
 fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
-    let error_text = match error_node.utf8_text(source.as_bytes()) {
-        Ok(text) => text,
-        Err(_) => {
-            return ParseError::new(
-                ErrorCode::InvalidControlCharacter,
-                Severity::Error,
-                SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-                ErrorContext::new(source, error_node.start_byte()..error_node.end_byte(), ""),
-                "Could not decode content as valid UTF-8".to_string(),
-            )
-            .with_suggestion("Re-enter using Unicode standard characters");
+    match ReadableRecovery::admit(error_node, source) {
+        Some(recovery) => analyze_readable_word_error(recovery),
+        None => ParseError::new(
+            ErrorCode::InvalidControlCharacter,
+            Severity::Error,
+            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
+            ErrorContext::new(source, error_node.start_byte()..error_node.end_byte(), ""),
+            "Content node range is not a UTF-8 slice of the supplied source".to_string(),
+        )
+        .with_suggestion("Re-enter using Unicode standard characters"),
+    }
+}
+
+/// A recognized recovery shape is not proof of a missing separator. Admission
+/// retains the readable range and derives the fault from that same source.
+enum BracketRecovery<'a, 'tree, 'source> {
+    MissingSeparator(&'a ReadableRecovery<'tree, 'source>),
+    InvalidFormOrPosition(&'a ReadableRecovery<'tree, 'source>),
+}
+
+impl<'a, 'tree, 'source> BracketRecovery<'a, 'tree, 'source> {
+    fn admit(recovery: &'a ReadableRecovery<'tree, 'source>) -> Option<Self> {
+        let text = recovery.text();
+        let annotation = text.trim_start();
+        if !(annotation.starts_with("[/]")
+            || annotation.starts_with("[//]")
+            || annotation.starts_with("[///]")
+            || annotation.starts_with("[*]")
+            || annotation.starts_with("[=")
+            || annotation.starts_with("[+")
+            || annotation.starts_with("[%"))
+        {
+            return None;
         }
-    };
+        let preceding = recovery
+            .source()
+            .get(..recovery.node().start_byte())
+            .and_then(|prefix| prefix.chars().next_back());
+        Some(
+            if annotation.len() == text.len()
+                && preceding.is_some_and(|character| !character.is_whitespace())
+            {
+                Self::MissingSeparator(recovery)
+            } else {
+                Self::InvalidFormOrPosition(recovery)
+            },
+        )
+    }
+
+    fn into_diagnostic(self) -> ParseError {
+        match self {
+            Self::MissingSeparator(recovery) => recovery
+                .fragment_diagnostic(
+                    ErrorCode::ContentAnnotationParseError,
+                    "Space required before bracket annotation",
+                )
+                .with_suggestion("Add a space before '[', e.g., 'word [/]' not 'word[/]'"),
+            Self::InvalidFormOrPosition(recovery) => recovery
+                .fragment_diagnostic(
+                    ErrorCode::ContentAnnotationParseError,
+                    "Bracket annotation is not valid in this position or form",
+                )
+                .with_suggestion("Check the annotation's syntax and the content it applies to"),
+        }
+    }
+}
+
+fn analyze_readable_word_error(recovery: ReadableRecovery<'_, '_>) -> ParseError {
+    let previous_byte = recovery.preceding_byte();
+    let error_node = recovery.node();
+    let source = recovery.source();
+    let error_text = recovery.text();
 
     if let crate::parser::tree_parsing::parser_helpers::error_analysis::dedicated::QuotationDelimiterScan::Unbalanced(finding) =
         crate::parser::tree_parsing::parser_helpers::error_analysis::dedicated::scan_quotation_delimiters(error_node)
@@ -171,18 +200,13 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         return finding.into_diagnostic(source);
     }
 
-    if error_node.start_byte() > 0
-        && source.as_bytes()[error_node.start_byte() - 1] == b':'
-        && !error_text.is_empty()
-    {
-        return ParseError::new(
-            ErrorCode::LengtheningNotAfterSpokenMaterial,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "Lengthening marker appears before spoken material".to_string(),
-        )
-        .with_suggestion("Place ':' after spoken material (e.g., bana:nas)");
+    if previous_byte == Some(b':') && !error_text.is_empty() {
+        return recovery
+            .fragment_diagnostic(
+                ErrorCode::LengtheningNotAfterSpokenMaterial,
+                "Lengthening marker appears before spoken material".to_string(),
+            )
+            .with_suggestion("Place ':' after spoken material (e.g., bana:nas)");
     }
 
     // E311: Unclosed replacement bracket (PRIORITY 1)
@@ -201,58 +225,39 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
 
     // E350: Quadruple nested brackets (PRIORITY 2)
     if error_text.contains("[[[[") || error_text.contains("]]]]") {
-        return ParseError::new(
+        return recovery.fragment_diagnostic(
             ErrorCode::ContentAnnotationParseError,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
             "Quadruple nested brackets [[[[]]]] are invalid".to_string(),
         )
         .with_suggestion("CHAT supports up to triple nested brackets [[[]]]. Use proper nesting for groups and annotations.");
     }
 
     // E207: Incomplete word-level annotation
-    if matches!(error_text.chars().next(), Some('&')) && error_text.len() == 1 {
-        return ParseError::new(
-            ErrorCode::UnknownAnnotation,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new("&", 0..1, "&"),
-            "Incomplete word-level annotation - '&' must be followed by annotation name"
-                .to_string(),
-        )
-        // Modern CHAT (per the canonical CHAT changelog `changes.txt`)
-        // requires one of four marker prefixes after `&`. Bare `&XYZ` was
-        // retired; suggesting it here would tell the user to type the exact
-        // pattern E207 rejects.
-        .with_suggestion(
-            "Add a marker prefix: '&-uh' (filler), '&+um' (fragment), \
+    if error_text == "&" {
+        return recovery
+            .fragment_diagnostic(
+                ErrorCode::UnknownAnnotation,
+                "Incomplete word-level annotation - '&' must be followed by annotation name"
+                    .to_string(),
+            )
+            // Modern CHAT (per the canonical CHAT changelog `changes.txt`)
+            // requires one of four marker prefixes after `&`. Bare `&XYZ` was
+            // retired; suggesting it here would tell the user to type the exact
+            // pattern E207 rejects.
+            .with_suggestion(
+                "Add a marker prefix: '&-uh' (filler), '&+um' (fragment), \
              '&~mhm' (nonword), or '&=laugh' (event)",
-        );
+            );
     }
 
     // E207: Unknown scoped annotation marker (PRIORITY 4)
     // Detect [@, which is not a valid scoped annotation
-    if error_text.contains("[@")
-        || (matches!(error_text.chars().next(), Some('@')) && error_node.start_byte() > 0)
-    {
-        // Check if this looks like an annotation context (preceded by '[')
-        let prev_byte = if error_node.start_byte() > 0 {
-            source.as_bytes().get(error_node.start_byte() - 1).copied()
-        } else {
-            None
-        };
-
-        if prev_byte == Some(b'[') || error_text.contains("[@") {
-            return ParseError::new(
-                ErrorCode::UnknownAnnotation,
-                Severity::Error,
-                SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-                ErrorContext::new(error_text, 0..error_text.len(), error_text),
-                "Unknown scoped annotation marker".to_string(),
-            )
-            .with_suggestion("Valid annotations: [= explanation], [* error], [+ addition], [//] retracing, [<]/[>] overlap");
-        }
+    if error_text.contains("[@") || (error_text.starts_with('@') && previous_byte == Some(b'[')) {
+        return recovery.fragment_diagnostic(
+            ErrorCode::UnknownAnnotation,
+            "Unknown scoped annotation marker".to_string(),
+        )
+        .with_suggestion("Valid annotations: [= explanation], [* error], [+ addition], [//] retracing, [<]/[>] overlap");
     }
 
     // NOTE (2026-06-25): the former "empty replacement [:]" branch was removed here.
@@ -263,7 +268,7 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
     // No content-level ERROR node ever carries `[:]` text (a bare `[:]` or `<group> [:]`
     // becomes a FILE-level ERROR with no `[:]` branch), so this scan was DEAD. Classifying
     // the raw text of an ERROR node to guess the diagnostic is the banned anti-pattern
-    // (root CLAUDE.md "CST Traversal Rules"); empty-replacement detection lives on the
+    // (root AGENTS.md "CST Traversal Rules"); empty-replacement detection lives on the
     // structural replacement path. Regression: tests/e208_empty_replacement_regression.rs.
 
     // E202: Missing form type after @ (PRIORITY 5)
@@ -281,34 +286,10 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         .with_suggestion("Add a form type after @ (e.g., @b for babbling, @s:eng for L2 English, @n for neologism)");
     }
 
-    // E202: Misplaced question mark or exclamation
-    if (error_text == "?" || error_text == "!") && error_node.start_byte() > 0 {
-        return ParseError::new(
-            ErrorCode::MissingFormType,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            format!(
-                "Misplaced '{}' - terminators must appear at end of utterance only",
-                error_text
-            ),
-        )
-        .with_suggestion("Move terminator to end of utterance or use [!] for emphasis");
-    }
-
-    // E208: Unrecognized freecode or annotation
-    if matches!(error_text.chars().next(), Some('‡')) {
-        return ParseError::new(
-            ErrorCode::EmptyReplacement,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            format!("Unrecognized freecode '{}'", error_text),
-        )
-        .with_suggestion(
-            "Check freecode format. Freecodes should follow standard patterns like ‡code",
-        );
-    }
+    // A stray terminator does not establish a missing form suffix, and a
+    // vocative marker does not establish an empty Replacement. Those semantic
+    // diagnostics require their own admitted construct. Such recovery text
+    // remains invalid through the classifications below or the E316 fallback.
 
     // E312 / E313: a bracket or parenthesis opened and never closed, the
     // shared pattern the generic analyzer also reads. After the shapes a
@@ -317,36 +298,34 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
     // would otherwise call a lone `[` or an unclosed `[x 3` a parse failure
     // of an annotation that was never finished.
     if let Some(unclosed) =
-        crate::parser::tree_parsing::helpers::UnclosedDelimiter::in_error_text(error_text)
+        crate::parser::tree_parsing::helpers::UnclosedDelimiter::in_recovery(&recovery)
     {
-        return unclosed.into_diagnostic(error_node, error_text, "main tier content");
+        return unclosed.into_diagnostic("main tier content");
     }
 
     // Repetition count [x N] or broken bracket annotation fragment.
     // Tree-sitter splits ERROR nodes, so we often get just " [" as the fragment
     // when the real issue is an unrecognized [x N] or [/] etc.
     if error_text.contains("[x ") || error_text.contains("[x\t") {
-        return ParseError::new(
-            ErrorCode::ContentAnnotationParseError,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "Could not parse repetition count annotation".to_string(),
-        )
-        .with_suggestion("Repetition format: word [x N] or <group> [x N] where N is a number");
+        return recovery
+            .fragment_diagnostic(
+                ErrorCode::ContentAnnotationParseError,
+                "Legacy repetition count annotations are unsupported".to_string(),
+            )
+            .with_suggestion(
+                "Write each spoken repetition explicitly using [/], for example: word [/] word",
+            );
     }
     if error_text.trim() == "[" {
-        return ParseError::new(
-            ErrorCode::ContentAnnotationParseError,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "Could not parse bracket annotation".to_string(),
-        )
-        .with_suggestion(
-            "Valid bracket annotations: [/] [//] [///] [x N] [: replacement] [* error] \
+        return recovery
+            .fragment_diagnostic(
+                ErrorCode::ContentAnnotationParseError,
+                "Could not parse bracket annotation".to_string(),
+            )
+            .with_suggestion(
+                "Valid bracket annotations: [/] [//] [///] [: replacement] [* error] \
              [= explanation] [+ postcode] [% comment] [<] [>]",
-        );
+            );
     }
 
     // NOTE (2026-06-25): the former "invalid form marker" branch was removed here.
@@ -356,7 +335,7 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
     // `form_marker` node's own text and checks the base against the valid marker set
     // via `FormType::parse`. Reading a parsed node's own content for validation is
     // typed-model work; classifying the raw text of an ERROR node to guess the
-    // diagnostic is the banned anti-pattern (root CLAUDE.md "CST Traversal Rules").
+    // diagnostic is the banned anti-pattern (root AGENTS.md "CST Traversal Rules").
     // This diagnostic was re-homed onto structure + the typed parser dispatch.
 
     // Curly single quotes (U+2018/U+2019) are illegal word characters (E256).
@@ -382,22 +361,7 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
             "Unexpected ']', possibly part of a malformed bracket annotation".to_string(),
         )
         .with_suggestion(
-            "Check bracket annotation format: [/] [//] [///] [x N] [: replacement] [* error]",
-        );
-    }
-
-    // CA continuation += is not a valid CHAT construct
-    if error_text.trim_start().starts_with("+=") {
-        return ParseError::new(
-            ErrorCode::MissingTerminator,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "'+=' is not a valid CHAT construct".to_string(),
-        )
-        .with_suggestion(
-            "For linkers use +< (lazy overlap) or +^ (quick uptake). \
-             For terminators use . ! ? or CA delimiters (↗ ↘ ↛ ∙ „)",
+            "Check bracket annotation format: [/] [//] [///] [: replacement] [* error]",
         );
     }
 
@@ -408,7 +372,7 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
     // by the typed-model validator `check_prosodic_markers` (talkbank-model:
     // validation/word/structure.rs), which reads the parsed `WordContent::SyllablePause`
     // position, never the raw ERROR text. Classifying the text of an ERROR node to
-    // guess the diagnostic is the banned anti-pattern (see the root CLAUDE.md
+    // guess the diagnostic is the banned anti-pattern (see the root AGENTS.md
     // "CST Traversal Rules"); this diagnostic was re-homed onto structure + typed model.
 
     // E759: the fragment IS a postfix annotation (retrace / overlap /
@@ -431,78 +395,22 @@ fn analyze_word_error(error_node: Node, source: &str) -> ParseError {
         }
     }
 
-    // Missing space before bracket annotation, "[/]" attached to word
-    if error_text.trim_start().starts_with("[/]")
-        || error_text.trim_start().starts_with("[//]")
-        || error_text.trim_start().starts_with("[///]")
-        || error_text.trim_start().starts_with("[*]")
-        || error_text.trim_start().starts_with("[=")
-        || error_text.trim_start().starts_with("[+")
-        || error_text.trim_start().starts_with("[%")
-    {
-        return ParseError::new(
-            ErrorCode::ContentAnnotationParseError,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "Space required before bracket annotation".to_string(),
-        )
-        .with_suggestion("Add a space before '[', e.g., 'word [/]' not 'word[/]'");
+    if let Some(annotation) = BracketRecovery::admit(&recovery) {
+        return annotation.into_diagnostic();
     }
 
-    // Redundant terminator, "." after the real terminator
-    if error_text.trim() == "." || error_text.trim() == "!" || error_text.trim() == "?" {
-        return ParseError::new(
-            ErrorCode::MissingTerminator,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(error_text, 0..error_text.len(), error_text),
-            "Redundant utterance delimiter".to_string(),
-        )
-        .with_suggestion("Remove the extra terminator, only one is allowed per utterance");
-    }
-
-    // Text after utterance delimiter, content appearing after . ! ? etc.
-    // Detect: error text is plain word(s) and preceded by a terminator
-    if !error_text.is_empty()
-        && error_text
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == ' ' || c == '\t')
-        && error_node.start_byte() > 0
-    {
-        let prev = source.as_bytes().get(error_node.start_byte() - 1).copied();
-        if matches!(prev, Some(b' ' | b'\t')) {
-            // Check if there's a terminator before us
-            let before = &source[..error_node.start_byte()];
-            if before.trim_end().ends_with('.')
-                || before.trim_end().ends_with('!')
-                || before.trim_end().ends_with('?')
-            {
-                return ParseError::new(
-                    ErrorCode::MissingTerminator,
-                    Severity::Error,
-                    SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-                    ErrorContext::new(error_text, 0..error_text.len(), error_text),
-                    "Text after utterance delimiter is not allowed".to_string(),
-                )
-                .with_suggestion(
-                    "The utterance delimiter (. ! ?) must be the last item before any bullet",
-                );
-            }
-        }
-    }
-
+    // Invalid, redundant, or followed-by-text delimiters do not establish a
+    // missing terminator. That rule belongs to validation of the typed main
+    // tier. Recovery remains an error here without fabricating that state.
     // E316: Unparsable content (LOWEST PRIORITY fallback)
     // Use error_text with span 0..len to avoid span/source mismatch that causes OutOfBounds
     // This is safe because error_text is extracted from the ERROR node itself
-    ParseError::new(
-        ErrorCode::UnparsableContent,
-        Severity::Error,
-        SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-        ErrorContext::new(error_text, 0..error_text.len(), error_text),
-        format!("Unparsable content on main tier: '{}'", error_text),
-    )
-    .with_suggestion("Check CHAT format manual for valid syntax at this position")
+    recovery
+        .fragment_diagnostic(
+            ErrorCode::UnparsableContent,
+            format!("Unparsable content on main tier: '{}'", error_text),
+        )
+        .with_suggestion("Check CHAT format manual for valid syntax at this position")
 }
 
 /// Builds the E256 diagnostic for an illegal curly single quotation mark
@@ -560,10 +468,10 @@ pub(crate) fn illegal_curly_quote_error(node: Node, source: &str) -> ParseError 
 /// naming it "linker must be utterance-initial" would be the
 /// message-does-not-match-input defect this rule exists to remove. The
 /// glued shape keeps E233, matching the word-level
-/// `check_compound_markers` rule in talkbank-model (message and
-/// suggestion kept in sync with it by hand, the same cross-layer pattern
-/// as E256's duplicated strings; the re2c front end still lexes the run
-/// as one word, so its E233 comes from that model rule directly).
+/// `check_compound_markers` rule in talkbank-model. This parser diagnostic
+/// names the adjacent `++` spelling; model validation additionally recognizes
+/// empty spoken parts containing only nonlexical markers. The re2c front end
+/// still lexes the run as one word, so its E233 comes from the model rule.
 /// Adjacency is judged at the enclosing `content_item` wrapper against
 /// its non-whitespace siblings, the same span-adjacency mechanism as the
 /// E764/E765 family.
@@ -671,6 +579,45 @@ fn find_unclosed_replacement_offset(error_text: &str) -> Option<(usize, usize)> 
 #[cfg(test)]
 mod tests {
     use super::{find_missing_form_type_offset, find_unclosed_replacement_offset};
+
+    #[test]
+    fn real_recovery_text_refuses_incompatible_sources_before_classification() {
+        use super::{ErrorCode, MainTierRegion, ReadableRecovery, classify_main_tier_recovery};
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E312_2.cha"
+        ));
+        let parser = crate::TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let foreign = "é".repeat(source.len());
+        let mut pending = vec![parsed.root_node()];
+        let mut witnessed = false;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            if !node.is_error() || source.get(node.byte_range()) != Some("[") {
+                continue;
+            }
+            let readable = ReadableRecovery::admit(node, source).expect("real source range");
+            assert_eq!(readable.text(), "[");
+            assert_eq!(
+                classify_main_tier_recovery(node, source, MainTierRegion::Body).code,
+                ErrorCode::UnclosedBracket
+            );
+            for incompatible in ["", foreign.as_str()] {
+                assert!(ReadableRecovery::admit(node, incompatible).is_none());
+                let error = classify_main_tier_recovery(node, incompatible, MainTierRegion::Body);
+                assert_eq!(error.code, ErrorCode::InvalidControlCharacter);
+            }
+            witnessed = true;
+        }
+        assert!(
+            witnessed,
+            "retained spec must supply a real one-byte recovery node"
+        );
+    }
 
     /// Verifies missing form-type offset detection for lone and trailing `@`.
     #[test]

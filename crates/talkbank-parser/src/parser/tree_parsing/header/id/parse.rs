@@ -61,7 +61,7 @@
 //! separators carry no payload and are ignored.
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, IdHeaderNode, extract_id_contents, extract_id_header,
+    AsRawNode, IdHeaderNode, KindSlot, extract_id_contents, extract_id_header,
 };
 use tree_sitter::Node;
 
@@ -78,7 +78,11 @@ use talkbank_model::model::{Header, Sex};
 /// the node's text is returned; on invalid UTF-8 a tree-structure diagnostic is
 /// reported and the outcome is rejected. The CHAT source is already valid UTF-8,
 /// so the error arm is defensive only.
-fn decode_field_text(node: Node, source: &str, errors: &impl ErrorSink) -> ParseOutcome<String> {
+fn decode_field_text<'tree, T: AsRawNode<'tree>>(
+    node: &T,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<String> {
     decode_present_child(node, source, errors, "id_contents", |err| {
         format!("Failed to extract UTF-8 text: {}", err)
     })
@@ -96,8 +100,8 @@ fn decode_field_text(node: Node, source: &str, errors: &impl ErrorSink) -> Parse
 /// accepted it. Surfacing those malformed-only cases as an explicit diagnostic is
 /// the sanctioned 2g-style improvement: it cannot reach a VALID input (a
 /// well-formed `id_header` always yields `Present` required fields).
-fn required_field<'tree, T: AsRawNode<'tree>>(
-    slot: &ChildSlot<'tree, T>,
+fn required_field<'tree, T: AsRawNode<'tree> + Copy>(
+    slot: &KindSlot<'tree, T>,
     id_contents: Node,
     source: &str,
     errors: &impl ErrorSink,
@@ -118,7 +122,7 @@ fn required_field<'tree, T: AsRawNode<'tree>>(
         ));
         return ParseOutcome::rejected();
     };
-    decode_field_text(node.raw_node(), source, errors)
+    decode_field_text(node, source, errors)
 }
 
 /// Read an OPTIONAL `@ID` text field (corpus / age / group / ses / education /
@@ -136,13 +140,13 @@ fn required_field<'tree, T: AsRawNode<'tree>>(
 /// wrapped a `Missing` node and read its zero-length text as `""`). An absent
 /// optional NEVER errors, exactly as before. Matched EXHAUSTIVELY, with no `_`
 /// catch-all that could silently drop a recovery node.
-fn optional_field<'tree, T: AsRawNode<'tree>>(
-    slot: &Option<ChildSlot<'tree, T>>,
+fn optional_field<'tree, T: AsRawNode<'tree> + Copy>(
+    slot: &Option<KindSlot<'tree, T>>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Option<String>> {
     match slot.as_ref().and_then(present) {
-        Some(node) => decode_field_text(node.raw_node(), source, errors).map(Some),
+        Some(node) => decode_field_text(node, source, errors).map(Some),
         None => ParseOutcome::parsed(None),
     }
 }

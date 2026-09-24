@@ -6,10 +6,37 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::generated_traversal::{
+    FromNodeKind, HeaderSepNode, NodeSlot, RecoveryNode, extract_header_sep,
+};
 use crate::node_types::{GRA_DEPENDENT_TIER, MOR_DEPENDENT_TIER, NEWLINE, PHO_DEPENDENT_TIER};
 use tree_sitter::Node;
 
 use super::error_analysis::analyze_dependent_tier_error_with_context;
+
+/// Admit a header separator's generated MISSING-tab slot before diagnosing it.
+/// Other missing tokens remain the generic recovery backstop's responsibility.
+fn missing_header_tab_error(node: Node, source: &str) -> Option<ParseError> {
+    let separator = HeaderSepNode::from_node(node.parent()?)?;
+    let children = extract_header_sep(separator);
+    let NodeSlot::Missing(tab) = children.child_1.slot() else {
+        return None;
+    };
+    if tab.node() != node {
+        return None;
+    }
+    let missing = tab.node();
+    Some(
+        ParseError::new(
+            ErrorCode::SyntaxError,
+            Severity::Error,
+            SourceLocation::from_offsets(missing.start_byte(), missing.end_byte()),
+            ErrorContext::new(source, missing.byte_range(), "header separator"),
+            "Header colon must be followed by a TAB; tree-sitter inserted the missing separator",
+        )
+        .with_suggestion("Insert a TAB immediately after the header colon"),
+    )
+}
 
 /// Recursively walks a subtree and tracks tier context for better diagnostics.
 pub(crate) fn check_for_errors_recursive_with_context(
@@ -71,7 +98,8 @@ pub(crate) fn check_for_errors_recursive_with_context(
 /// node did not conform to the grammar, so each such node is a
 /// `Severity::Error`. An `ERROR` becomes a dedicated code when its structure
 /// proves one, otherwise [`ErrorCode::UnparsableContent`] (E316); a `MISSING`
-/// node becomes [`ErrorCode::MissingRequiredElement`] (E342).
+/// header-separator TAB becomes E303; other content `MISSING` nodes become
+/// [`ErrorCode::MissingRequiredElement`] (E342).
 ///
 /// This is the whole-tree BACKSTOP for the streaming lowering, which only
 /// inspects recovery nodes in the specific regions its per-region handlers
@@ -163,10 +191,9 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
                 super::error_analysis::dedicated::at_item_boundary(source, start),
             )
         {
-            let (item_start, item_end) = match text.find(item) {
-                Some(offset) => (start + offset, start + offset + item.len()),
-                None => (start, end),
-            };
+            let range = item.range();
+            let (item_start, item_end) = (start + range.start, start + range.end);
+            let item = item.text();
             out.push(
                 ParseError::new(
                     ErrorCode::MorItemEmptyPos,
@@ -225,6 +252,11 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
         // newline-less file. Only content recovery nodes (ERROR, and MISSING
         // content tokens like `retrace_complete`) are invalidity here.
         if node.kind() == NEWLINE {
+            return;
+        }
+
+        if let Some(error) = missing_header_tab_error(node, source) {
+            out.push(error);
             return;
         }
 

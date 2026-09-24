@@ -7,15 +7,13 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, LongFeatureChoice, LongFeatureNode, extract_long_feature,
+    AsRawNode, LongFeatureChoice, LongFeatureNode, extract_long_feature,
     extract_long_feature_begin, extract_long_feature_end,
 };
 use crate::model::{LongFeatureBegin, LongFeatureEnd, LongFeatureLabel, UtteranceContent};
 use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, surface_displaced};
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
-use super::super::report_tree_shape;
 use super::{delimiter, marker_label, span_of};
 
 /// Parse one `long_feature` node: a begin marker (`&{l=label`) or an end
@@ -28,19 +26,10 @@ use super::{delimiter, marker_label, span_of};
 /// asserted child counts and kinds by position and matched `kind()`
 /// strings.
 pub(crate) fn parse_long_feature(
-    node: Node,
+    typed: LongFeatureNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let Some(typed) = LongFeatureNode::from_node(node) else {
-        report_tree_shape(
-            node,
-            format!("Expected a long_feature node, found '{}'", node.kind()),
-            source,
-            errors,
-        );
-        return ParseOutcome::rejected();
-    };
     let children = extract_long_feature(typed);
     surface_displaced(&children.unexpected, "long_feature", source, errors);
     let SlotState::Present(choice) =

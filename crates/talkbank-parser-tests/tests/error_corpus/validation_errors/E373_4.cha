@@ -1,0 +1,9 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	MOT Mother, CHI Target_Child
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*MOT:	hello [<] there .
+*CHI:	hi [>] .
+@End

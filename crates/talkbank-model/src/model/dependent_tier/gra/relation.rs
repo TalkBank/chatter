@@ -168,9 +168,10 @@ impl GrammaticalRelation {
     /// Return the dependent's position as a [`SemanticWordIndex1`].
     ///
     /// Returns an error if `index == 0`, which is not a valid dependent
-    /// position (0 is reserved for the ROOT marker on `head`). Callers
-    /// should only hit the error path when the parser accepted a
-    /// malformed `%gra` triple such as `0|0|ROOT`.
+    /// position (0 is reserved for the ROOT marker on `head`). Public model
+    /// construction or deserialization can supply zero; the tree-sitter parser
+    /// rejects it before constructing a relation. This conversion retains the
+    /// check for callers without that parser-origin guarantee.
     pub fn index_as_semantic(&self) -> Result<SemanticWordIndex1, SemanticWordIndexError> {
         SemanticWordIndex1::new(self.index)
     }

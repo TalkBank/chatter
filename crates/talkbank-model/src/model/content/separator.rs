@@ -26,7 +26,7 @@ use talkbank_derive::{SemanticEq, SpanShift};
 /// **Pauses and Breaks:**
 /// ```text
 /// *CHI: I want, um, cookies .        # Comma - short pause within TCU
-/// *MOT: I think; maybe not .         # Semicolon - longer pause
+/// *MOT: I think; maybe not .         # Legacy semicolon - retained, but invalid
 /// *CHI: that's co:ol .               # Colon - elongation/emphasis
 /// ```
 ///
@@ -73,7 +73,7 @@ pub enum Separator {
         span: Span,
     },
 
-    /// Semicolon separator (;) - longer pause, list continuation
+    /// Legacy semicolon separator (;), rejected on main tiers by E769.
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Semicolon>
     #[serde(rename = "semicolon")]
     Semicolon {

@@ -3,6 +3,7 @@
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	hello . 1000_2000
-*CHI:	world . 1500_2500
+@Media:	E731_1, audio
+*CHI:	hello . 1000_2000
+*CHI:	world . 1500_2500
 @End

@@ -5,20 +5,20 @@
 //! selected document loses errors outside it. Keep both scopes in one owner.
 
 use crate::generated_traversal::{
-    FromNodeKind, FullDocumentChildren, FullDocumentNode, extract_full_document,
-    extract_full_document_from_error_recovery,
+    AsRawNode, FullDocumentChildren, FullDocumentNode, ParsedSource, SourceBindingError,
+    SourceBound, SourceChildren, SourceSlice,
 };
 use crate::node_types::SOURCE_FILE;
-use tree_sitter::{Node, Tree};
+use tree_sitter::Node;
 
 /// The document position and its complete syntax-error scope, classified once.
 ///
 /// Private fields prevent combining a document with an unrelated syntax root.
 /// Construct through [`Self::classify`]; use [`Self::node`] for document-local
-/// traversal and [`Self::into_children`] for lowering.
+/// traversal and the consuming part visitor for lowering.
 #[derive(Debug)]
 pub struct DocumentRoot<'tree> {
-    syntax_root: Node<'tree>,
+    parsed: &'tree ParsedSource<'tree>,
     document: DocumentShape<'tree>,
 }
 
@@ -29,16 +29,23 @@ pub struct DocumentRoot<'tree> {
 #[derive(Debug)]
 enum DocumentShape<'tree> {
     Complete {
-        node: Node<'tree>,
-        document: FullDocumentNode<'tree>,
+        document: SourceBound<'tree, 'tree, FullDocumentNode<'tree>>,
     },
     Recovered {
-        node: Node<'tree>,
-        children: FullDocumentChildren<'tree>,
+        children: SourceChildren<'tree, 'tree, FullDocumentChildren<'tree>>,
     },
     NotADocument {
-        node: Node<'tree>,
+        node: SourceSlice<'tree, 'tree>,
     },
+}
+
+/// A source-ordered part of the classified root. Recovery nodes are siblings
+/// of the selected document from the same immutable producer, not arbitrary
+/// nodes supplied alongside a separately selected document.
+#[allow(clippy::large_enum_variant)] // Borrowed generated carrier; keep root iteration allocation-free.
+pub(crate) enum DocumentPart<'tree> {
+    Document(SourceChildren<'tree, 'tree, FullDocumentChildren<'tree>>),
+    Recovery(SourceSlice<'tree, 'tree>),
 }
 
 impl<'tree> DocumentRoot<'tree> {
@@ -48,39 +55,41 @@ impl<'tree> DocumentRoot<'tree> {
     /// document takes precedence over a recovery sibling; otherwise preserve
     /// the existing recovery classification at the document position. Every
     /// path retains the original syntax root for whole-input diagnostics.
-    #[must_use]
-    pub fn classify(tree: &'tree Tree) -> Self {
-        let syntax_root = tree.root_node();
-        if syntax_root.kind() == SOURCE_FILE {
-            let mut cursor = syntax_root.walk();
+    pub fn classify(parsed: &'tree ParsedSource<'tree>) -> Result<Self, SourceBindingError> {
+        let syntax_root = parsed.root()?;
+        if syntax_root.raw_node().kind() == SOURCE_FILE {
+            let mut cursor = syntax_root.raw_node().walk();
             for child in syntax_root.children(&mut cursor) {
-                if let Some(document) = FullDocumentNode::from_node(child) {
-                    return Self {
-                        syntax_root,
-                        document: DocumentShape::Complete {
-                            node: child,
-                            document,
-                        },
-                    };
+                if let Some(document) = child?.typed::<FullDocumentNode>() {
+                    return Ok(Self {
+                        parsed,
+                        document: DocumentShape::Complete { document },
+                    });
                 }
             }
         }
-        let node = match syntax_root.child(0) {
-            Some(child) if syntax_root.kind() == SOURCE_FILE => child,
-            Some(_) | None => syntax_root,
+        let node = if syntax_root.raw_node().kind() == SOURCE_FILE {
+            let mut cursor = syntax_root.raw_node().walk();
+            syntax_root
+                .children(&mut cursor)
+                .next()
+                .transpose()?
+                .unwrap_or(syntax_root)
+        } else {
+            syntax_root
         };
-        Self {
-            syntax_root,
+        Ok(Self {
+            parsed,
             document: Self::of_node(node),
-        }
+        })
     }
 
-    fn of_node(node: Node<'tree>) -> DocumentShape<'tree> {
-        if let Some(document) = FullDocumentNode::from_node(node) {
-            return DocumentShape::Complete { node, document };
+    fn of_node(node: SourceSlice<'tree, 'tree>) -> DocumentShape<'tree> {
+        if let Some(document) = node.typed::<FullDocumentNode>() {
+            return DocumentShape::Complete { document };
         }
-        match extract_full_document_from_error_recovery(node) {
-            Some(children) => DocumentShape::Recovered { node, children },
+        match node.extract_full_document_from_error_recovery() {
+            Some(children) => DocumentShape::Recovered { children },
             None => DocumentShape::NotADocument { node },
         }
     }
@@ -91,15 +100,20 @@ impl<'tree> DocumentRoot<'tree> {
     #[must_use]
     pub fn node(&self) -> Node<'tree> {
         match &self.document {
-            DocumentShape::Complete { node, .. }
-            | DocumentShape::Recovered { node, .. }
-            | DocumentShape::NotADocument { node } => *node,
+            DocumentShape::Complete { document } => document.raw_node(),
+            DocumentShape::Recovered { children } => children.parent().raw_node(),
+            DocumentShape::NotADocument { node } => node.raw_node(),
         }
     }
 
     /// The original tree root, including recovery outside the document.
     pub(crate) fn syntax_root(&self) -> Node<'tree> {
-        self.syntax_root
+        self.parsed.root_node()
+    }
+
+    /// The producer-owned input and tree for this document classification.
+    pub(crate) fn parsed_source(&self) -> &'tree ParsedSource<'tree> {
+        self.parsed
     }
 
     /// Whether the document position required structural recovery.
@@ -108,14 +122,45 @@ impl<'tree> DocumentRoot<'tree> {
         matches!(self.document, DocumentShape::Recovered { .. })
     }
 
-    /// The admitted document children to lower, or no document-shaped content.
-    #[must_use]
-    pub fn into_children(self) -> Option<FullDocumentChildren<'tree>> {
-        match self.document {
-            DocumentShape::Complete { document, .. } => Some(extract_full_document(document)),
-            DocumentShape::Recovered { children, .. } => Some(children),
-            DocumentShape::NotADocument { .. } => None,
+    /// Consume the classification without discarding outer recovery. The
+    /// whole-tree backstop remains responsible for other missing/nested nodes.
+    pub(crate) fn for_each_part(
+        self,
+        mut visit: impl FnMut(DocumentPart<'tree>),
+    ) -> Result<(), SourceBindingError> {
+        let selected = self.node();
+        let syntax_root = self.parsed.root()?;
+        let mut document = Some(match self.document {
+            DocumentShape::Complete { document } => document.extract(),
+            DocumentShape::Recovered { children, .. } => {
+                // A reconstructed ERROR wrapper does not establish a complete
+                // document boundary. Its siblings remain whole-input recovery;
+                // e.g. a lone End after a malformed Begin is not a duplicate.
+                visit(DocumentPart::Document(children));
+                return Ok(());
+            }
+            // Without admitted document structure, no sibling is an outer
+            // document region. The whole-input backstop retains that failure.
+            DocumentShape::NotADocument { .. } => return Ok(()),
+        });
+        if selected == syntax_root.raw_node() {
+            if let Some(children) = document {
+                visit(DocumentPart::Document(children));
+            }
+            return Ok(());
         }
+        let mut cursor = syntax_root.raw_node().walk();
+        for child in syntax_root.children(&mut cursor) {
+            let child = child?;
+            if child.raw_node() == selected {
+                if let Some(children) = document.take() {
+                    visit(DocumentPart::Document(children));
+                }
+            } else if child.raw_node().is_error() {
+                visit(DocumentPart::Recovery(child));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -135,13 +180,19 @@ mod tests {
                 format!("{DOCUMENT}oops"),
                 DOCUMENT.len(),
                 DOCUMENT.len() + 4,
+                ErrorCode::UnparsableContent,
             ),
-            (format!("@End\n{DOCUMENT}"), 0, 5),
+            (
+                format!("@End\n{DOCUMENT}"),
+                0,
+                5,
+                ErrorCode::DuplicateHeader,
+            ),
         ];
         let parser = TreeSitterParser::new().expect("grammar loads");
-        for (input, start, end) in cases {
-            let tree = parser.parse_tree_incremental(&input, None).expect("tree");
-            let root = DocumentRoot::classify(&tree);
+        for (input, start, end, expected_code) in cases {
+            let tree = parser.parse_source_incremental(&input, None).expect("tree");
+            let root = DocumentRoot::classify(&tree).expect("canonical document ranges");
             assert_eq!(root.node().kind(), "full_document");
             assert_eq!(root.syntax_root().byte_range(), 0..input.len());
             let errors = ErrorCollector::new();
@@ -149,7 +200,7 @@ mod tests {
             assert_eq!(file.utterances().count(), 1, "{input:?}");
             let errors = errors.to_vec();
             assert_eq!(errors.len(), 1, "{errors:?}");
-            assert_eq!(errors[0].code, ErrorCode::UnparsableContent);
+            assert_eq!(errors[0].code, expected_code);
             assert_eq!(
                 errors[0].location.span,
                 Span::new(

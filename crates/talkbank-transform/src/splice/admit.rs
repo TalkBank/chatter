@@ -14,9 +14,9 @@
 //! utterance at line 106 and an unrelated parse error at line 502, and the
 //! whole file was refused for want of exactly this gate.
 
-use talkbank_model::model::{ChatFile, ParseHealthState};
+use talkbank_model::model::{ChatFile, ParseHealthState, Utterance};
 
-use super::engine::{EditProvenance, RecoverySafety, SpliceEdit};
+use super::engine::{EditProvenance, EditTarget, RecoverySafety, SpliceEdit};
 
 /// Why one edit was not applied.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,7 +31,8 @@ pub enum SkipReason {
     /// check that merely excludes `Tainted`, so it gets its own reason
     /// rather than folding into either of the other two.
     UnknownHealth,
-    /// The span lies outside every utterance (header region, or stray).
+    /// The target is not enclosed by one utterance: it starts outside speech,
+    /// has no nonempty replacement extent, or crosses an utterance boundary.
     OutsideAnyUtterance,
 }
 
@@ -53,6 +54,53 @@ pub struct Admission {
     pub skipped: Vec<Skipped>,
 }
 
+/// The edit's insertion point, or both endpoints of its nonempty replacement,
+/// belong to the same parsed utterance. Byte/UTF-8 bounds remain the engine's
+/// responsibility; this does not bind a mutable model to external source text.
+struct UtteranceScopedEdit<'a> {
+    utterance: &'a Utterance,
+    edit: SpliceEdit,
+}
+
+impl<'a> UtteranceScopedEdit<'a> {
+    fn bind(file: &'a ChatFile, edit: SpliceEdit) -> Result<Self, Skipped> {
+        let utterance = file
+            .utterance_containing(edit.target().start_offset())
+            .filter(|utterance| match edit.target() {
+                EditTarget::InsertAt(_) => true,
+                EditTarget::Replace(span) => {
+                    span.start < span.end
+                        && file
+                            .utterance_containing(span.end - 1)
+                            .is_some_and(|last| std::ptr::eq(*utterance, last))
+                }
+            });
+        match utterance {
+            Some(utterance) => Ok(Self { utterance, edit }),
+            None => Err(Skipped {
+                provenance: edit.provenance().clone(),
+                reason: SkipReason::OutsideAnyUtterance,
+            }),
+        }
+    }
+
+    fn admit(self) -> Result<SpliceEdit, Skipped> {
+        let reason = match self.utterance.parse_health {
+            ParseHealthState::Clean => return Ok(self.edit),
+            ParseHealthState::Unknown => SkipReason::UnknownHealth,
+            ParseHealthState::Tainted(_) => match self.edit.recovery_safety() {
+                RecoverySafety::RequiresClean => SkipReason::TaintedUtterance,
+                RecoverySafety::RepairsTaintingSyntax => return Ok(self.edit),
+                RecoverySafety::VerifiedHeaderToken => return Ok(self.edit),
+            },
+        };
+        Err(Skipped {
+            provenance: self.edit.provenance().clone(),
+            reason,
+        })
+    }
+}
+
 /// Admit edits whose enclosing utterance parsed clean, plus catalog-owned
 /// edits typed as repairing their own recovery-tainted syntax.
 ///
@@ -68,28 +116,13 @@ pub fn admit_edits(file: &ChatFile, edits: Vec<SpliceEdit>) -> Admission {
     let mut admission = Admission::default();
 
     for edit in edits {
-        let offset = edit.target().start_offset();
-        let Some(utterance) = file.utterance_containing(offset) else {
-            admission.skipped.push(Skipped {
-                provenance: edit.provenance().clone(),
-                reason: SkipReason::OutsideAnyUtterance,
-            });
+        if matches!(edit.recovery_safety(), RecoverySafety::VerifiedHeaderToken) {
+            admission.admitted.push(edit);
             continue;
-        };
-
-        match utterance.parse_health {
-            ParseHealthState::Clean => admission.admitted.push(edit),
-            ParseHealthState::Unknown => admission.skipped.push(Skipped {
-                provenance: edit.provenance().clone(),
-                reason: SkipReason::UnknownHealth,
-            }),
-            ParseHealthState::Tainted(_) => match edit.recovery_safety() {
-                RecoverySafety::RequiresClean => admission.skipped.push(Skipped {
-                    provenance: edit.provenance().clone(),
-                    reason: SkipReason::TaintedUtterance,
-                }),
-                RecoverySafety::RepairsTaintingSyntax => admission.admitted.push(edit),
-            },
+        }
+        match UtteranceScopedEdit::bind(file, edit).and_then(UtteranceScopedEdit::admit) {
+            Ok(edit) => admission.admitted.push(edit),
+            Err(skipped) => admission.skipped.push(skipped),
         }
     }
 

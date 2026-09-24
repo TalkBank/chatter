@@ -18,7 +18,7 @@
 //! in THREE places: `analyze_word_error` (content/errors.rs), the utterance
 //! ERROR branch in `utterance_parser.rs`, and `analyze_utterance_error`
 //! (error_analysis/utterance.rs). That ERROR-text classification is the banned
-//! anti-pattern (root CLAUDE.md "CST Traversal Rules").
+//! anti-pattern (root AGENTS.md "CST Traversal Rules").
 //!
 //! Reality (verified by tree-sitter CST observation, 2026-06-25): `word [:]`
 //! does NOT become an ERROR node at all. It PARSES into a structured

@@ -81,7 +81,7 @@ impl ControlCharacter<'_> {
             SourceLocation::from_offsets(self.offset, end),
             ErrorContext::new(self.source, self.offset..end, ""),
             format!(
-                "Control character U+{:04X} is not allowed in CHAT (only TAB, line endings and the bullet delimiter U+0015 are)",
+                "Control character U+{:04X} is not a permitted CHAT delimiter or underline marker",
                 self.ch as u32
             ),
         )

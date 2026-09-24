@@ -8,6 +8,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { FileEntry, ParseError } from "../types";
+import { fileOutcome } from "../hooks/validationState";
 
 type SeverityFilter = "all" | "Error" | "Warning";
 
@@ -79,14 +80,9 @@ export default function ErrorPanel({
   }
 
   if (file.diagnostics.length === 0) {
-    const statusLabel =
-      file.status?.type === "valid"
-        ? "Valid"
-        : file.status?.type === "parseError"
-          ? `Parse error: ${file.status.message}`
-          : file.status?.type === "readError"
-            ? `Read error: ${file.status.message}`
-            : "No errors";
+    const outcome = fileOutcome(file);
+    const statusLabel = outcome.kind === "problem" ? outcome.message
+      : outcome.kind === "valid" ? "Valid" : "Validation pending";
 
     return (
       <div className="error-panel">
@@ -98,7 +94,9 @@ export default function ErrorPanel({
             {file.name}
           </span>
         </h2>
-        <div className="error-panel-empty" style={{ color: "var(--color-valid)" }}>
+        <div className="error-panel-empty" style={{ color: outcome.kind === "valid"
+          ? "var(--color-valid)" : outcome.kind === "problem"
+            ? "var(--color-error)" : "var(--color-text-secondary)" }}>
           {statusLabel}
         </div>
       </div>

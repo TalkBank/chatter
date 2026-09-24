@@ -1,0 +1,16 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Media:	sample, audio
+@Comment:	Constructed timing example with speech strictly before and after a paired gem.
+@Comment:	Constructs: bg_header, eg_header, bullet, speaker
+*MOT:	ready . 0_50
+@Bg:	play
+*CHI:	here . 100_200
+*CHI:	look . 220_300
+@Eg:	play
+*MOT:	done . 350_400
+@End

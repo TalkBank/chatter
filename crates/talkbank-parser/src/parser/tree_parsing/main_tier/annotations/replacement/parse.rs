@@ -6,12 +6,11 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, FromNodeKind, NoChild, ReplacementNode, SeqSlot, SlotView,
-    StandaloneWordNode, extract_replacement,
+    AsRawNode, KindSlot, NoChild, ReplacementNode, SeqSlot, SlotView, StandaloneWordNode,
+    extract_replacement,
 };
 use crate::model::{Replacement, Word};
 use crate::parser::ChildCapacity;
-use crate::parser::tree_parsing::main_tier::content::report_tree_shape;
 use crate::parser::tree_parsing::main_tier::word::convert_word_node;
 use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
 use talkbank_model::ParseOutcome;
@@ -33,19 +32,11 @@ use tree_sitter::Node;
 /// delimiter is the whole-tree pass's, as the old walk left it. A
 /// replacement with no word is rejected.
 pub(crate) fn parse_replacement(
-    node: Node,
+    typed: ReplacementNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Replacement> {
-    let Some(typed) = ReplacementNode::from_node(node) else {
-        report_tree_shape(
-            node,
-            format!("Expected a replacement node, found '{}'", node.kind()),
-            source,
-            errors,
-        );
-        return ParseOutcome::rejected();
-    };
+    let node = typed.raw_node();
     let children = extract_replacement(typed);
     expect_delimiter(children.child_0.slot(), |bad| {
         report(
@@ -115,7 +106,7 @@ fn sequence<'a, 'tree, T>(slot: &'a SeqSlot<'tree, T>) -> Option<&'a T> {
 /// recovery shapes the old walk named, and they keep their words; `position`
 /// counts words in the run, as the old message did.
 fn push_word(
-    slot: &ChildSlot<'_, StandaloneWordNode<'_>>,
+    slot: &KindSlot<'_, StandaloneWordNode<'_>>,
     position: usize,
     words: &mut Vec<Word>,
     source: &str,
@@ -128,7 +119,7 @@ fn push_word(
                 report(raw, source, errors, "Replacement text empty".to_string());
                 return;
             }
-            if let ParseOutcome::Parsed(word) = convert_word_node(raw, source, errors) {
+            if let ParseOutcome::Parsed(word) = convert_word_node(*word, source, errors) {
                 words.push(word);
             }
         }

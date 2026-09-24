@@ -1,6 +1,6 @@
 # Architecture and validity reference
 
-**Last modified:** 2026-09-10 00:45 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 Read the sections relevant to your task. [AGENTS.md](../../AGENTS.md)
 is the canonical policy entry point and resolves workflow conflicts here.
@@ -74,7 +74,7 @@ model, transform, cli, lsp).
 Two Cargo workspaces: the root, and `spec/` (`spec/tools`,
 `spec/runtime-tools`). Parser-backend selection and the oracle workflow:
 `book/src/architecture/parser-backends.md`,
-`crates/talkbank-parser-re2c/CLAUDE.md`.
+`crates/talkbank-parser-re2c/AGENTS.md`.
 
 **"Parity" names two unrelated programmes; always say which.** **CHECK
 adjudication** asks, per CLAN CHECK code, whether the rejected construct
@@ -101,17 +101,17 @@ a user's cache without an explicit request.
 
 Backend init failures surface as diagnostics, not panics; handlers degrade
 gracefully; diagnostics align with parse-health semantics.
-`crates/talkbank-lsp/CLAUDE.md`.
+`crates/talkbank-lsp/AGENTS.md`.
 
-## Sub-project CLAUDE.md files
+## Sub-project AGENTS.md files
 
 | File | Scope |
 |------|-------|
-| `grammar/CLAUDE.md` | Grammar design, verification sequence, strict+catch-all |
-| `spec/CLAUDE.md` + `spec/tools/CLAUDE.md` | Spec structure, generators, regeneration |
-| `crates/talkbank-lsp/CLAUDE.md` | LSP: model-owned alignment; index spaces; reliability |
-| `crates/talkbank-parser-re2c/CLAUDE.md` | Re2c parser and oracle workflow |
-| `apps/chatter-desktop/CLAUDE.md` | Desktop app; TUI parity mandate |
+| `grammar/AGENTS.md` | Grammar design, verification sequence, strict+catch-all |
+| `spec/AGENTS.md` + `spec/tools/AGENTS.md` | Spec structure, generators, regeneration |
+| `crates/talkbank-lsp/AGENTS.md` | LSP: model-owned alignment; index spaces; reliability |
+| `crates/talkbank-parser-re2c/AGENTS.md` | Re2c parser and oracle workflow |
+| `apps/chatter-desktop/AGENTS.md` | Desktop app; TUI parity mandate |
 
 ## Relationship to batchalign
 

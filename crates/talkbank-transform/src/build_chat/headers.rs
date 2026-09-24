@@ -1,18 +1,17 @@
 use std::path::Path;
 
 use talkbank_model::model::{
-    BulletContent, Header, IDHeader, LanguageCode, LanguageCodes, Line, MediaFilename, MediaHeader,
-    MediaType, ParticipantEntries, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
+    BulletContent, Header, IDHeader, LanguageCodes, Line, MediaFilename, MediaHeader, MediaType,
+    ParticipantEntries, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
 };
 
+use super::parser::BuildChatContext;
 use super::{BuildChatError, TranscriptDescription};
 
-pub(super) fn build_header_lines(
-    desc: &TranscriptDescription,
-    langs: &[LanguageCode],
-) -> Result<Vec<Line>, BuildChatError> {
+pub(super) fn build_header_lines(context: &BuildChatContext<'_>) -> Vec<Line> {
+    let desc = context.description();
     let participant_entries = build_participant_entries(desc);
-    let id_headers = build_id_headers(desc, langs);
+    let id_headers = build_id_headers(context);
     let mut lines: Vec<Line> = vec![Line::header(Header::Utf8)];
 
     // `@PID` (persistent handle) sits between `@UTF8` and `@Begin` (published
@@ -25,7 +24,7 @@ pub(super) fn build_header_lines(
     lines.extend([
         Line::header(Header::Begin),
         Line::header(Header::Languages {
-            codes: LanguageCodes::new(langs.to_vec()),
+            codes: LanguageCodes::new(context.langs().cloned().collect()),
         }),
         Line::header(Header::Participants {
             entries: ParticipantEntries::new(participant_entries),
@@ -56,8 +55,8 @@ pub(super) fn build_header_lines(
         }
     }
 
-    if let Some(media_header) = build_media_header(desc)? {
-        lines.push(Line::header(Header::Media(media_header)));
+    if let Some(media_header) = context.media_header() {
+        lines.push(Line::header(Header::Media(media_header.clone())));
     }
 
     // Changeable headers follow `@Media`, in published MICASE order:
@@ -85,7 +84,7 @@ pub(super) fn build_header_lines(
         }));
     }
 
-    Ok(lines)
+    lines
 }
 
 fn build_participant_entries(desc: &TranscriptDescription) -> Vec<ParticipantEntry> {
@@ -99,12 +98,9 @@ fn build_participant_entries(desc: &TranscriptDescription) -> Vec<ParticipantEnt
         .collect()
 }
 
-fn build_id_headers(desc: &TranscriptDescription, langs: &[LanguageCode]) -> Vec<IDHeader> {
-    // BuildChatContext guarantees a non-empty, already-validated list;
-    // @ID headers carry the primary (first) language.
-    let Some(lang_code) = langs.first() else {
-        return Vec::new();
-    };
+fn build_id_headers(context: &BuildChatContext<'_>) -> Vec<IDHeader> {
+    let desc = context.description();
+    let lang_code = context.primary_lang();
 
     desc.participants
         .iter()
@@ -151,18 +147,21 @@ fn build_id_headers(desc: &TranscriptDescription, langs: &[LanguageCode]) -> Vec
 /// every string: the comma is its delimiter. Rejecting here is the whole
 /// point, since the alternative is a transcript whose own header reads back
 /// as a different filename than the one supplied.
-fn build_media_header(desc: &TranscriptDescription) -> Result<Option<MediaHeader>, BuildChatError> {
+pub(super) fn admit_media_header(
+    desc: &TranscriptDescription,
+) -> Result<Option<MediaHeader>, BuildChatError> {
     let Some(media_name) = desc.media_name.as_ref() else {
         return Ok(None);
     };
     let normalized_media_name = normalize_media_name(media_name);
-    let media_type = match desc.media_type.as_deref() {
-        Some("video") => MediaType::Video,
-        Some("audio") | None => MediaType::Audio,
-        other => {
-            tracing::warn!(media_type = ?other, "unrecognized media_type, defaulting to audio");
-            MediaType::Audio
+    let media_type = match desc.media_type.as_deref().map(MediaType::from_text) {
+        None => MediaType::Audio,
+        Some(MediaType::Unsupported(value)) => {
+            return Err(BuildChatError::Build(format!(
+                "unsupported @Media type {value:?}"
+            )));
         }
+        Some(kind @ (MediaType::Audio | MediaType::Video | MediaType::Missing)) => kind,
     };
 
     let filename = MediaFilename::parse(&normalized_media_name)?;

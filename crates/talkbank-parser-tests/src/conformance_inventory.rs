@@ -100,7 +100,7 @@ const PRELUDE: &str = r#"//! MECHANICAL conformance inventory -- DO NOT HAND-EDI
 //! name).
 //!
 //! Regenerate with the committed generator after a grammar/visitor regen:
-//! `cargo run -p talkbank-parser-tests --example gen_conformance_inventory`.
+//! `just conformance-gen`.
 //! The staleness guard `conformance_inventory_is_current` re-derives this file
 //! from the current typed traversal + node-types.json and fails if the
 //! committed copy has drifted, so a forgotten regen breaks the suite instead of
@@ -113,7 +113,7 @@ const PRELUDE: &str = r#"//! MECHANICAL conformance inventory -- DO NOT HAND-EDI
 use crate::classify;
 use crate::generated_traversal::*;
 
-use super::{Inspect, InspectField, Observation};
+use super::{Inspect, InspectField, Observation, Position};
 
 /// Generate a no-op `Inspect` for a leaf node wrapper: its own node kind is
 /// separately visited by `walk_all` and dispatched below, so there is nothing
@@ -152,7 +152,11 @@ macro_rules! impl_inspect_struct {
     ($name:ident { $($field:ident),* $(,)? }) => {
         impl<'tree> Inspect for $name<'tree> {
             fn inspect(&self, rule: &'static str, out: &mut Vec<Observation>) {
-                $( self.$field.inspect_field(rule, stringify!($field), out); )*
+                $( self.$field.inspect_field(
+                    rule,
+                    Position::new(stringify!($name), stringify!($field)),
+                    out,
+                ); )*
             }
         }
     };
@@ -174,6 +178,49 @@ struct ChoiceImpl {
 struct StructImpl {
     name: String,
     fields: Vec<String>,
+}
+
+impl StructImpl {
+    /// Admit the generator's concrete positional-carrier shape, not a name
+    /// suffix shared with generic runtime wrappers. Minted carrier names may
+    /// also have collision suffixes after `Children`.
+    fn from_carrier(item: &syn::ItemStruct) -> Option<Self> {
+        let mut params = item.generics.params.iter();
+        let (Some(syn::GenericParam::Lifetime(lifetime)), None) = (params.next(), params.next())
+        else {
+            return None;
+        };
+        if lifetime.lifetime.ident != "tree" {
+            return None;
+        }
+        let Fields::Named(named) = &item.fields else {
+            return None;
+        };
+        if !named
+            .named
+            .iter()
+            .all(|field| matches!(field.vis, syn::Visibility::Public(_)))
+        {
+            return None;
+        }
+        let names: Vec<_> = named
+            .named
+            .iter()
+            .filter_map(|field| field.ident.as_ref().map(ToString::to_string))
+            .collect();
+        if !names.iter().any(|name| name == "trailing_extras")
+            || !names.iter().any(|name| name == "unexpected")
+        {
+            return None;
+        }
+        Some(Self {
+            name: item.ident.to_string(),
+            fields: names
+                .into_iter()
+                .filter(|name| name != "trailing_extras" && name != "unexpected")
+                .collect(),
+        })
+    }
 }
 
 /// How an `extract_<snake>` free function takes its node argument, which fixes
@@ -247,14 +294,10 @@ pub fn generate_inventory_source(
                         leaves.push(name);
                     }
                     // Synthetic children carrier: `pub struct XxxChildren<'tree> { .. }`
-                    Fields::Named(named) if name.ends_with("Children") => {
-                        let fields = named
-                            .named
-                            .iter()
-                            .filter_map(|field| field.ident.as_ref().map(ToString::to_string))
-                            .filter(|f| f != "trailing_extras" && f != "unexpected")
-                            .collect();
-                        structs.push(StructImpl { name, fields });
+                    Fields::Named(_) => {
+                        if let Some(carrier) = StructImpl::from_carrier(item_struct) {
+                            structs.push(carrier);
+                        }
                     }
                     _ => {}
                 }

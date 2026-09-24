@@ -33,36 +33,30 @@
 //! type-distinct value with its own arm, and nothing here reads
 //! `node.kind()`.
 //!
-//! Not every arm can fire. Every position here is a single fixed kind, so
-//! the generator classifies it Present, Missing, Error or Absent and never
-//! `Unexpected` (that state comes only from a choice position); and a whole
-//! repeat item is Present, Error or Absent, never Missing. The `Unexpected`
-//! patterns and the item-level `Missing` arms are written out because the
-//! enum has those states and this crate bans `_` on it, not because an
-//! input reaches them; the reachable recovery arms are the ones the
-//! before/after probe exercised: a MISSING `speaker` (`@Participants:\t`)
-//! and an ERROR item in the list (a doubled comma, `E506.md#3`).
+//! Fixed-kind slots retain Present, Missing, Error and Absent; their
+//! Unexpected payload is uninhabited. Whole sequence-repeat items also
+//! have an uninhabited Missing payload. Other recovery states remain even
+//! when finite fixtures have not witnessed them. The retained corpus does
+//! witness a MISSING speaker and a doubled-comma ERROR repeat item.
 //!
 //! Until 2026-09-08 this file hand-walked both repeats with an index
-//! (`child.kind() == COMMA`, `idx += 1`), which needed three copies of an
-//! "expected X at position N" reporter of which one was ever reached, a
-//! "speaker code cannot be empty" arm the `speaker` token regex makes
-//! impossible, and UTF-8 decode failures on a `&str` source. A
-//! whole-workspace coverage run showed those arms as most of the file; rule
-//! 6 of the repository's CLAUDE.md bans the walk that needed them.
+//! (`child.kind() == COMMA`, `idx += 1`) with duplicated structural diagnostics.
+//! Source-bound extraction now also keeps tree/source identity through every
+//! participant group and leaf. Canonical range admission remains fallible at
+//! the shared read boundary; participant lowering cannot accept a separately
+//! supplied string. No recovery state is removed because a finite corpus has
+//! not reached it.
 
 use crate::generated_traversal::{
-    AsRawNode, NoChild, ParticipantNode, ParticipantsHeaderNode, SlotView, extract_participant,
-    extract_participants_contents, extract_participants_header,
+    AsRawNode, KindSlot, NoChild, ParticipantNode, ParticipantsHeaderNode, SourceBound,
+    SourceField, SourceSlotView,
 };
 use crate::node_types::{PARTICIPANT, PARTICIPANTS_CONTENTS, PARTICIPANTS_HEADER};
 use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::parser::tree_parsing::parser_helpers::{
-    check_not_missing, expect_structure, present, surface_displaced,
-};
-use crate::parser::typed_cst::decode_present_child;
+use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
+use crate::parser::typed_cst::read_source_field;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{
     Header, ParticipantEntry, ParticipantName, ParticipantRole, SpeakerCode,
@@ -74,12 +68,12 @@ use talkbank_model::model::{
 /// (a missing code, a missing role) is reported and dropped, so the header
 /// still names the speakers it can, and the cross-header checks (E522,
 /// E523) work from those.
-pub fn parse_participants_header(
-    typed: ParticipantsHeaderNode<'_>,
-    source: &str,
+pub fn parse_participants_header<'tree>(
+    typed: SourceBound<'tree, '_, ParticipantsHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Header {
     let node = typed.raw_node();
+    let source = typed.source();
 
     // The list parsing below only descends into `participants_contents`; the
     // shared header scan reports any structural ERROR/MISSING node
@@ -87,8 +81,12 @@ pub fn parse_participants_header(
     // so it is never silently swallowed.
     super::report_header_structural_errors(node, PARTICIPANTS_HEADER, source, errors);
 
-    let header_children = extract_participants_header(typed);
-    let Some(contents_node) = present(header_children.child_2.slot()) else {
+    let header_children = typed.extract();
+    let contents_node = match header_children.field_child_2().slot().view() {
+        SourceSlotView::Present(node) => read_source_field(node, errors),
+        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
+    };
+    let Some(contents_node) = contents_node else {
         errors.report(ParseError::new(
             ErrorCode::EmptyParticipantsHeader,
             Severity::Error,
@@ -101,7 +99,7 @@ pub fn parse_participants_header(
             "Missing participants_contents in @Participants header",
         ));
         surface_displaced(
-            &header_children.unexpected,
+            &header_children.children().unexpected,
             PARTICIPANTS_HEADER,
             source,
             errors,
@@ -115,46 +113,24 @@ pub fn parse_participants_header(
         );
     };
     surface_displaced(
-        &header_children.unexpected,
+        &header_children.children().unexpected,
         PARTICIPANTS_HEADER,
         source,
         errors,
     );
 
-    let contents = extract_participants_contents(*contents_node);
-    let rest = contents.child_1.slot();
+    let contents = contents_node.extract();
+    let rest = contents.field_child_1().slot().iter();
     let mut entries = Vec::with_capacity(rest.len() + 1);
 
-    // The first participant is required by the grammar, so its only
-    // non-Present states are recovery states.
-    match contents.child_0.slot().view() {
-        SlotView::Present(participant) => {
-            push_entry(&mut entries, *participant, source, errors);
-        }
-        SlotView::Missing(missing) => {
-            check_not_missing(missing, source, errors, PARTICIPANTS_CONTENTS);
-        }
-        SlotView::Error(bad) => {
-            report_list_shape(bad, "a participant entry", source, errors);
-        }
-        // A `participants_contents` node with no first child at all: the
-        // header declares nobody. `@Participants:\t` does not reach here
-        // (tree-sitter fills that with a MISSING `speaker` inside a present
-        // participant); the arm states what an empty list would mean.
-        SlotView::Absent(NoChild) => {
-            errors.report(ParseError::new(
-                ErrorCode::EmptyParticipantsHeader,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(
-                    source,
-                    node.start_byte()..node.end_byte(),
-                    PARTICIPANTS_CONTENTS,
-                ),
-                "@Participants header declares no participant",
-            ));
-        }
-    }
+    entries.extend(
+        parse_participant_slot(
+            contents.field_child_0().slot(),
+            ParticipantPosition::First(typed.node()),
+            errors,
+        )
+        .into_option(),
+    );
 
     // Every further participant arrives as a `(comma, whitespaces,
     // participant)` group. The comma and the whitespace are structure: a
@@ -163,80 +139,179 @@ pub fn parse_participants_header(
     // losing its shape.
     for item in rest {
         match item.slot().view() {
-            SlotView::Present(group) => {
-                expect_structure(
-                    group.child_0.slot(),
+            SourceSlotView::Present(group) => {
+                expect_source_structure(
+                    group.field_child_0().slot(),
                     PARTICIPANTS_CONTENTS,
-                    source,
                     errors,
                     |bad| {
-                        report_list_shape(bad, "',' between participants", source, errors);
+                        ParticipantFault::Comma(bad).report(source, errors);
                     },
                 );
-                expect_structure(
-                    group.child_1.slot(),
+                expect_source_structure(
+                    group.field_child_1().slot(),
                     PARTICIPANTS_CONTENTS,
-                    source,
                     errors,
                     |bad| {
-                        report_list_shape(bad, "whitespace after ','", source, errors);
+                        ParticipantFault::Whitespace(bad).report(source, errors);
                     },
                 );
-                match group.child_2.slot().view() {
-                    SlotView::Present(participant) => {
-                        push_entry(&mut entries, *participant, source, errors);
-                    }
-                    SlotView::Absent(NoChild) => {}
-                    SlotView::Missing(missing) => {
-                        check_not_missing(missing, source, errors, PARTICIPANTS_CONTENTS);
-                    }
-                    SlotView::Error(bad) => {
-                        report_list_shape(bad, "a participant entry after ','", source, errors);
-                    }
-                }
-                surface_displaced(&group.unexpected, PARTICIPANTS_CONTENTS, source, errors);
+                entries.extend(
+                    parse_participant_slot(
+                        group.field_child_2().slot(),
+                        ParticipantPosition::Subsequent,
+                        errors,
+                    )
+                    .into_option(),
+                );
+                surface_source_displaced(group.field_unexpected(), PARTICIPANTS_CONTENTS, errors);
             }
             // A doubled comma (`CHI Target_Child,, MOT Mother`) lands here:
             // the ERROR node holding the stray comma fills a whole repeat
             // item. Spec: `E506.md#3`.
-            SlotView::Error(bad) => {
-                report_list_shape(bad, "',' between participants", source, errors);
+            SourceSlotView::Error(bad) => {
+                ParticipantFault::Comma(bad.raw_node()).report(bad.source(), errors);
             }
-            SlotView::Absent(NoChild) => {}
+            SourceSlotView::Absent(NoChild) => {}
         }
     }
-    surface_displaced(&contents.unexpected, PARTICIPANTS_CONTENTS, source, errors);
+    surface_displaced(
+        &contents.children().unexpected,
+        PARTICIPANTS_CONTENTS,
+        source,
+        errors,
+    );
 
     Header::Participants {
         entries: entries.into(),
     }
 }
 
-/// E506 at a node that sits where the participant list expected something
-/// else: the list has lost its shape there, whatever the node holds.
-fn report_list_shape(bad: Node, expected: &str, source: &str, errors: &impl ErrorSink) {
-    errors.report(ParseError::new(
-        ErrorCode::EmptyParticipantsHeader,
-        Severity::Error,
-        SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-        ErrorContext::new(
-            source,
-            bad.start_byte()..bad.end_byte(),
-            PARTICIPANTS_CONTENTS,
-        ),
-        format!("Expected {expected} in @Participants, got: {}", bad.kind()),
-    ));
+/// Structural positions need no text read, but retain their recovery policy
+/// and derive diagnostic source identity from the generated field itself.
+fn expect_source_structure<'tree, T: AsRawNode<'tree> + Copy>(
+    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, T>>,
+    context: &str,
+    errors: &impl ErrorSink,
+    on_bad: impl FnOnce(Node<'tree>),
+) {
+    match slot.view() {
+        SourceSlotView::Present(_) | SourceSlotView::Absent(_) => {}
+        SourceSlotView::Missing(missing) => {
+            check_not_missing(missing.raw_node(), missing.source(), errors, context);
+        }
+        SourceSlotView::Error(bad) => on_bad(bad.raw_node()),
+    }
 }
 
-/// Parse one participant node and keep its entry when it parses.
-fn push_entry(
-    entries: &mut Vec<ParticipantEntry>,
-    participant: ParticipantNode<'_>,
-    source: &str,
+fn surface_source_displaced<'tree>(
+    nodes: SourceField<'_, 'tree, '_, Vec<Node<'tree>>>,
+    context: &str,
     errors: &impl ErrorSink,
 ) {
-    if let ParseOutcome::Parsed(entry) = parse_participant_entry(participant, source, errors) {
-        entries.push(entry);
+    for node in nodes.iter() {
+        surface_displaced(
+            std::slice::from_ref(&node.raw_node()),
+            context,
+            node.source(),
+            errors,
+        );
+    }
+}
+
+/// A recovery node with the grammatical role that determines its diagnostic.
+/// List and entry faults share location construction, not their error policy.
+enum ParticipantFault<'tree> {
+    Comma(Node<'tree>),
+    Whitespace(Node<'tree>),
+    Entry {
+        node: Node<'tree>,
+        position: ParticipantPosition<'tree>,
+    },
+    EntryShape(Node<'tree>),
+}
+
+impl ParticipantFault<'_> {
+    fn report(self, source: &str, errors: &impl ErrorSink) {
+        let (node, expected) = match self {
+            Self::Comma(node) => (node, Some("',' between participants")),
+            Self::Whitespace(node) => (node, Some("whitespace after ','")),
+            Self::Entry { node, position } => (
+                node,
+                Some(match position {
+                    ParticipantPosition::First(_) => "a participant entry",
+                    ParticipantPosition::Subsequent => "a participant entry after ','",
+                }),
+            ),
+            Self::EntryShape(node) => (node, None),
+        };
+        let (code, context, message) = match expected {
+            Some(expected) => (
+                ErrorCode::EmptyParticipantsHeader,
+                PARTICIPANTS_CONTENTS,
+                format!("Expected {expected} in @Participants, got: {}", node.kind()),
+            ),
+            None => (
+                ErrorCode::UnparsableContent,
+                PARTICIPANT,
+                format!("Unparsable content in participant entry: {}", node.kind()),
+            ),
+        };
+        errors.report(ParseError::new(
+            code,
+            Severity::Error,
+            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+            ErrorContext::new(source, node.byte_range(), context),
+            message,
+        ));
+    }
+}
+
+/// Only the first position needs the enclosing header for an absence report.
+/// The repeated position cannot accidentally report that the header is empty.
+enum ParticipantPosition<'tree> {
+    First(ParticipantsHeaderNode<'tree>),
+    Subsequent,
+}
+
+/// Shared admission for required and repeated participant slots. Recovery
+/// stays outside entry conversion, and positional policy remains explicit.
+fn parse_participant_slot<'tree>(
+    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, ParticipantNode<'tree>>>,
+    position: ParticipantPosition<'_>,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<ParticipantEntry> {
+    let source = slot.source();
+    match slot.view() {
+        SourceSlotView::Present(participant) => match read_source_field(participant, errors) {
+            Some(participant) => parse_participant_entry(participant, errors),
+            None => ParseOutcome::rejected(),
+        },
+        SourceSlotView::Missing(missing) => {
+            check_not_missing(missing.raw_node(), source, errors, PARTICIPANTS_CONTENTS);
+            ParseOutcome::rejected()
+        }
+        SourceSlotView::Error(bad) => {
+            ParticipantFault::Entry {
+                node: bad.raw_node(),
+                position,
+            }
+            .report(source, errors);
+            ParseOutcome::rejected()
+        }
+        SourceSlotView::Absent(NoChild) => {
+            if let ParticipantPosition::First(header) = position {
+                let node = header.raw_node();
+                errors.report(ParseError::new(
+                    ErrorCode::EmptyParticipantsHeader,
+                    Severity::Error,
+                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                    ErrorContext::new(source, node.byte_range(), PARTICIPANTS_CONTENTS),
+                    "@Participants header declares no participant",
+                ));
+            }
+            ParseOutcome::rejected()
+        }
     }
 }
 
@@ -248,33 +323,30 @@ fn push_entry(
 /// (E342 from the recovery report; the entry is dropped) and no word at all
 /// after the code (E513, `@Participants:\tCHI`). E512 has no route here: the
 /// first word of an entry is always its code, which `E512.md` records.
-fn parse_participant_entry(
-    typed: ParticipantNode<'_>,
-    source: &str,
+fn parse_participant_entry<'tree>(
+    typed: SourceBound<'tree, '_, ParticipantNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<ParticipantEntry> {
     let node = typed.raw_node();
-    let children = extract_participant(typed);
-    let unexpected = &children.unexpected;
+    let source = typed.source();
+    let children = typed.extract();
+    let unexpected = &children.children().unexpected;
 
-    let speaker_code = match children.code.slot().view() {
-        SlotView::Present(speaker) => {
-            let ParseOutcome::Parsed(text) =
-                decode_present_child(speaker.raw_node(), source, errors, PARTICIPANT, |err| {
-                    format!("Failed to extract participant speaker code as UTF-8: {err}")
-                })
-            else {
+    let speaker_code = match children.field_code().slot().view() {
+        SourceSlotView::Present(speaker) => {
+            let Some(speaker) = read_source_field(speaker, errors) else {
                 surface_displaced(unexpected, PARTICIPANT, source, errors);
                 return ParseOutcome::rejected();
             };
-            text
+            speaker.text()
         }
-        SlotView::Missing(missing) => {
-            check_not_missing(missing, source, errors, PARTICIPANT);
+        SourceSlotView::Missing(missing) => {
+            check_not_missing(missing.raw_node(), source, errors, PARTICIPANT);
             surface_displaced(unexpected, PARTICIPANT, source, errors);
             return ParseOutcome::rejected();
         }
-        SlotView::Error(bad) => {
+        SourceSlotView::Error(bad) => {
+            let bad = bad.raw_node();
             errors.report(ParseError::new(
                 ErrorCode::EmptyParticipantCode,
                 Severity::Error,
@@ -288,7 +360,7 @@ fn parse_participant_entry(
             surface_displaced(unexpected, PARTICIPANT, source, errors);
             return ParseOutcome::rejected();
         }
-        SlotView::Absent(NoChild) => {
+        SourceSlotView::Absent(NoChild) => {
             errors.report(ParseError::new(
                 ErrorCode::EmptyParticipantCode,
                 Severity::Error,
@@ -303,51 +375,41 @@ fn parse_participant_entry(
 
     // Name words and the role, each preceded by whitespace the grammar
     // requires; the whitespace is structure and needs nothing when Present.
-    let mut words: Vec<String> = Vec::with_capacity(children.child_1.slot().len());
-    for item in children.child_1.slot() {
+    let mut words: Vec<String> = Vec::with_capacity(children.field_child_1().slot().iter().len());
+    for item in children.field_child_1().slot().iter() {
         match item.slot().view() {
-            SlotView::Present(group) => {
-                expect_structure(group.child_0.slot(), PARTICIPANT, source, errors, |bad| {
-                    report_entry_shape(bad, source, errors);
+            SourceSlotView::Present(group) => {
+                expect_source_structure(group.field_child_0().slot(), PARTICIPANT, errors, |bad| {
+                    ParticipantFault::EntryShape(bad).report(source, errors);
                 });
-                match group.child_1.slot().view() {
-                    SlotView::Present(word) => {
-                        if let ParseOutcome::Parsed(text) = decode_present_child(
-                            word.raw_node(),
-                            source,
-                            errors,
-                            PARTICIPANT,
-                            |err| {
-                                format!(
-                                    "Failed to extract participant name or role as UTF-8: {err}"
-                                )
-                            },
-                        ) {
-                            words.push(text);
+                match group.field_child_1().slot().view() {
+                    SourceSlotView::Present(word) => {
+                        if let Some(word) = read_source_field(word, errors) {
+                            words.push(word.text().to_owned());
                         }
                     }
-                    SlotView::Absent(NoChild) => {}
-                    SlotView::Missing(missing) => {
-                        check_not_missing(missing, source, errors, PARTICIPANT);
+                    SourceSlotView::Absent(NoChild) => {}
+                    SourceSlotView::Missing(missing) => {
+                        check_not_missing(missing.raw_node(), source, errors, PARTICIPANT);
                     }
-                    SlotView::Error(bad) => {
-                        report_entry_shape(bad, source, errors);
+                    SourceSlotView::Error(bad) => {
+                        ParticipantFault::EntryShape(bad.raw_node()).report(source, errors);
                     }
                 }
-                surface_displaced(&group.unexpected, PARTICIPANT, source, errors);
+                surface_source_displaced(group.field_unexpected(), PARTICIPANT, errors);
             }
-            SlotView::Absent(NoChild) => {}
-            SlotView::Error(bad) => {
-                report_entry_shape(bad, source, errors);
+            SourceSlotView::Absent(NoChild) => {}
+            SourceSlotView::Error(bad) => {
+                ParticipantFault::EntryShape(bad.raw_node()).report(source, errors);
             }
         }
     }
     // Trailing whitespace before the comma or newline is tolerated by the
     // grammar and carries nothing, but a node that is not whitespace there
     // is still the entry losing its shape.
-    if let Some(trailing) = children.child_2.slot() {
-        expect_structure(trailing, PARTICIPANT, source, errors, |bad| {
-            report_entry_shape(bad, source, errors);
+    if let Some(trailing) = children.field_child_2().slot().optional() {
+        expect_source_structure(trailing, PARTICIPANT, errors, |bad| {
+            ParticipantFault::EntryShape(bad).report(source, errors);
         });
     }
     surface_displaced(unexpected, PARTICIPANT, source, errors);
@@ -373,16 +435,4 @@ fn parse_participant_entry(
         name,
         role: ParticipantRole::new(role),
     })
-}
-
-/// E316 at a node that sits where a participant entry expected whitespace or
-/// a word: the entry has lost its shape there.
-fn report_entry_shape(bad: Node, source: &str, errors: &impl ErrorSink) {
-    errors.report(ParseError::new(
-        ErrorCode::UnparsableContent,
-        Severity::Error,
-        SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-        ErrorContext::new(source, bad.start_byte()..bad.end_byte(), PARTICIPANT),
-        format!("Unparsable content in participant entry: {}", bad.kind()),
-    ));
 }

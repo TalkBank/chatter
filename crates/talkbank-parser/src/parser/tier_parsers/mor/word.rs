@@ -8,8 +8,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    AsRawNode, MorFeatureNode, MorWordNode, NoChild, SlotView, extract_mor_feature,
-    extract_mor_word,
+    AsRawNode, KindSlotValue, MorFeatureNode, MorFeatureValueNode, MorWordNode, NoChild,
+    extract_mor_feature, extract_mor_word,
 };
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::dependent_tier::{MorFeature, MorWord, PosCategory};
@@ -21,6 +21,7 @@ use crate::parser::tree_parsing::parser_helpers::{
     SlotState, expect_delimiter, expect_present, expect_structure, extract_utf8_text,
     surface_displaced,
 };
+use crate::parser::typed_cst::admit_node_text;
 
 /// Converts a `mor_word` CST node into `MorWord`.
 ///
@@ -37,13 +38,10 @@ use crate::parser::tree_parsing::parser_helpers::{
 /// Driven by the generated typed visitor: `extract_mor_word` yields the POS,
 /// pipe, lemma and feature-repeat positions as typed slots, and every
 /// recovery state is reported through the shared [`expect_present`] and
-/// [`expect_structure`] verbs. None of those states is reachable here: a
-/// `mor_word` is parsed only inside a `%mor` tier whose node carries no
-/// tree-sitter error (`dependent_tier_dispatch/parsed.rs`), so a malformed
-/// word never arrives as a MISSING or ERROR slot; the file-level analyzer
-/// reports the tier instead (E702 for a malformed `%mor` line, E316 when
-/// the only fault is a MISSING node). The arms exist because the slot type
-/// has the states, and they live in the verbs rather than here.
+/// [`expect_structure`] verbs. Tier admission routes parser errors to file-level
+/// analysis, but does not narrow the reconstructed slot types. Recovery remains
+/// explicit in these shared verbs; absence of a finite-corpus witness is not a
+/// proof that a slot state is impossible.
 pub fn parse_mor_word(
     typed: MorWordNode<'_>,
     source: &str,
@@ -119,13 +117,15 @@ fn non_empty_text<'a>(
     source: &'a str,
     errors: &impl ErrorSink,
 ) -> Option<&'a str> {
-    let text = extract_utf8_text(node, source, errors, "mor_word", "");
+    let talkbank_model::ParseOutcome::Parsed(text) =
+        extract_utf8_text(node, source, errors, "mor_word")
+    else {
+        return None;
+    };
     if text.is_empty() {
-        // A zero-width node is empty; a wider node that decoded to nothing
-        // was a decode failure, which `extract_utf8_text` has reported.
-        if node.start_byte() == node.end_byte() {
-            errors.report(missing_part(node, empty_message, source));
-        }
+        // A successful empty slice is genuinely zero-width; failed reads
+        // returned above and cannot masquerade as empty text.
+        errors.report(missing_part(node, empty_message, source));
         return None;
     }
     Some(text)
@@ -174,21 +174,16 @@ fn parse_mor_feature(
         errors.report(unexpected_node_error(bad, source, "mor_feature"));
     });
 
-    match children.child_1.slot().view() {
-        SlotView::Present(value_node) => {
-            if let Some(feature) = decode_feature_value(value_node.raw_node(), source, errors) {
+    match children.child_1.slot().known_or_placeholder() {
+        KindSlotValue::Present(value_node) | KindSlotValue::Placeholder(value_node) => {
+            if let Some(feature) = decode_feature_value(value_node, source, errors) {
                 return ParseOutcome::parsed(Some(feature));
             }
         }
-        SlotView::Missing(raw) => {
-            if let Some(feature) = decode_feature_value(raw, source, errors) {
-                return ParseOutcome::parsed(Some(feature));
-            }
-        }
-        SlotView::Error(raw) => {
+        KindSlotValue::Error(raw) => {
             errors.report(unexpected_node_error(raw, source, "mor_feature"));
         }
-        SlotView::Absent(NoChild) => {}
+        KindSlotValue::Absent(NoChild) => {}
     }
 
     ParseOutcome::parsed(None)
@@ -197,8 +192,13 @@ fn parse_mor_feature(
 /// Shared decode for a `mor_feature_value` node, applied identically whether
 /// the node arrived via a `Present` or a `Missing` slot (see
 /// [`parse_mor_feature`]'s doc comment for why both must share this logic).
-fn decode_feature_value(node: Node, source: &str, errors: &impl ErrorSink) -> Option<MorFeature> {
-    match node.utf8_text(source.as_bytes()) {
+fn decode_feature_value(
+    typed: MorFeatureValueNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Option<MorFeature> {
+    let node = typed.raw_node();
+    match admit_node_text(node, source) {
         Ok(text) if !text.is_empty() => Some(MorFeature::new(text)),
         Ok(_) => {
             errors.report(unexpected_node_error(
@@ -216,5 +216,64 @@ fn decode_feature_value(node: Node, source: &str, errors: &impl ErrorSink) -> Op
             ));
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use crate::generated_traversal::FromNodeKind;
+    use talkbank_model::{ErrorCollector, Span};
+
+    #[test]
+    fn real_feature_values_require_readable_source() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../corpus/reference/tiers/mor-gra.cha"
+        ));
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let foreign = "é".repeat(source.len());
+        let mut pending = vec![parsed.root_node()];
+        let mut checked = 0;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            let Some(feature) = MorFeatureValueNode::from_node(node) else {
+                continue;
+            };
+            if source.get(node.byte_range()) != Some("Fin") {
+                continue;
+            }
+            checked += 1;
+            let errors = ErrorCollector::new();
+            assert_eq!(
+                decode_feature_value(feature, source, &errors),
+                Some(MorFeature::new("Fin"))
+            );
+            assert!(errors.to_vec().is_empty());
+            // An odd-width real token cuts a code point in this foreign source.
+            // These are boundary witnesses, not grammar-produced invalid values.
+            for incompatible in ["", foreign.as_str()] {
+                let errors = ErrorCollector::new();
+                assert!(decode_feature_value(feature, incompatible, &errors).is_none());
+                let diagnostics = errors.into_vec();
+                assert_eq!(diagnostics.len(), 1);
+                assert_eq!(diagnostics[0].code, ErrorCode::UnexpectedNodeInContext);
+                assert_eq!(
+                    diagnostics[0].location.span,
+                    Span::from_usize(node.start_byte(), node.end_byte())
+                );
+                assert!(
+                    diagnostics[0]
+                        .message
+                        .contains("mor_feature_value utf8 error")
+                );
+            }
+        }
+        assert!(checked > 0, "fixture must supply finite-verb features");
     }
 }

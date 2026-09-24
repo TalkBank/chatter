@@ -1,7 +1,7 @@
 # Headers
 
 **Status:** Reference
-**Last updated:** 2026-05-11 20:30 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 Headers are lines beginning with `@` that provide metadata about the transcript. They appear between `@Begin` and the first utterance (though some headers like `@Comment` can appear anywhere).
 
@@ -33,6 +33,13 @@ is optional, so each entry is either `CODE Role` or `CODE Name Role`.
 In the first line, `Target_Child`, `Mother`, and `Father` are roles,
 not names. In the second line, `Alex` and `Mary` are optional names
 sitting between the speaker code and the role.
+
+Role labels use their canonical, case-sensitive spelling in both
+`@Participants` and the role field of `@ID`. For example, `Mother` is a role;
+`Mom` is not an alias, and `Target_child` is not `Target_Child`. E532 can offer
+a likely correction, but validation and serialization preserve the original
+spelling rather than silently rewriting it. Suggestions are heuristic advice,
+not additional entries in the accepted vocabulary.
 
 Speaker codes are short identifiers; the validator accepts up to
 seven characters from `A-Z`, `0-9`, `_`, `-`, and `'`. The convention
@@ -71,6 +78,10 @@ Declares the language(s) used in the transcript.
 ### @Date
 
 Recording date in DD-MON-YYYY format.
+
+The day and year require exactly two and four ASCII digits respectively;
+numeric signs are not allowed. `@Birth of CODE` uses the same format checks.
+E518/E545 report malformed components without rewriting the source value.
 
 ```chat
 @Date:	15-JAN-2024
@@ -115,6 +126,22 @@ Links the transcript to an audio or video file.
 ```chat
 @Media:	session01, audio
 ```
+
+When the transcript name is known, Chatter checks it against the media name
+(ignoring ASCII case). Different Unicode spellings of the same name, such as
+composed and decomposed accents, produce W109 normalization advice rather than
+E531 filename mismatch. The warning identifies whether the media name, the
+transcript name, or both need normalization; validation does not rename files
+or rewrite the header. Identical decomposed spellings warn about both sides.
+Disk-based commands use the name stored in the directory, not the spelling
+typed at the command line. An unreadable or unusable stored name is reported,
+not silently treated as an anonymous transcript.
+
+To normalize only the `@Media` name, run
+`chatter fix --code W109 --apply <file>`. This changes only the filename token
+and never renames the transcript. A remaining file-name warning requires a
+separate rename using a tool that preserves NFC (not Finder). Remote media URLs
+are opaque and exempt from both the comparison and this repair.
 
 ### @Transcriber / @Coder
 

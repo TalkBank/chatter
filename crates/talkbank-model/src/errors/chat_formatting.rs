@@ -125,13 +125,31 @@ impl<'a> ChatTextProcessor<'a> {
 /// offsets to display UTF-8 byte offsets.
 pub struct PlainDisplayResult {
     /// Formatted text with tabs expanded, bullets rendered, markers removed
-    pub text: String,
+    text: String,
     /// Sorted list of `(original_byte_offset, display_byte_offset)` breakpoints.
     /// Use [`Self::map_offset`] to look up a display position.
     offset_map: Vec<(usize, usize)>,
 }
 
 impl PlainDisplayResult {
+    /// Keep raw display text and its identity offset map under the same owner.
+    pub(crate) fn unformatted(text: &str) -> Self {
+        Self {
+            text: text.to_owned(),
+            offset_map: vec![(0, 0)],
+        }
+    }
+
+    /// Display text whose byte coordinates are owned by this mapping.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// Consume the mapping when transferring its display text to a diagnostic.
+    pub fn into_text(self) -> String {
+        self.text
+    }
+
     /// Map one original byte offset to the corresponding display byte offset.
     ///
     /// Uses binary search on the breakpoint table built during processing.
@@ -150,11 +168,25 @@ impl PlainDisplayResult {
         }
     }
 
-    /// Map an original (start, end) span to display coordinates, ensuring minimum span width of 1.
+    /// Map a span to valid UTF-8 boundaries within the owned display text.
+    /// A collapsed span highlights the next complete character when available;
+    /// empty text and end-of-text locations remain zero-width insertion points.
     pub fn map_span(&self, start: usize, end: usize) -> (usize, usize) {
-        let ds = self.map_offset(start);
-        let de = self.map_offset(end);
-        (ds, de.max(ds + 1))
+        let ds = self
+            .text
+            .floor_char_boundary(self.map_offset(start).min(self.text.len()));
+        let de = self
+            .text
+            .ceil_char_boundary(self.map_offset(end).min(self.text.len()));
+        let de = if de <= ds {
+            self.text[ds..]
+                .chars()
+                .next()
+                .map_or(ds, |ch| ds + ch.len_utf8())
+        } else {
+            de
+        };
+        (ds, de)
     }
 }
 

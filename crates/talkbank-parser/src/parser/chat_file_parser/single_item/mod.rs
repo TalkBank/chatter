@@ -28,8 +28,8 @@ impl TreeSitterParser {
     /// Parse a single utterance (main tier plus any attached dependent tiers).
     ///
     /// The input may be either a bare utterance line (e.g., `*CHI:\thello .`) or a
-    /// complete CHAT document. When the input does not look like a full file (no
-    /// `@UTF8` header detected), it is wrapped in a minimal synthetic CHAT document
+    /// complete CHAT document. When the checked parse producer does not classify
+    /// the input as a full document, it is wrapped in a minimal synthetic CHAT document
     /// before parsing.
     ///
     /// This makes the method explicitly synthetic on fragment input.

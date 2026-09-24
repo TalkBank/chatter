@@ -12,24 +12,23 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
     TeeErrorSink,
 };
+use crate::generated_traversal::{AsRawNode, SourceSlice};
 use crate::model::{ChatDate, Header, Line, WarningText};
 use crate::parser::TreeSitterParser;
 use crate::parser::chat_file_parser::utterance_parser::classify_percent_error_text;
 use crate::parser::document_root::DocumentRoot;
 use crate::parser::tree_parsing::parser_helpers::collect_recovery_nodes;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info, trace};
 
 use super::document_lowering::DocumentLowering;
 
 /// Recover specific top-level `ERROR` nodes that still encode a valid header shape.
 pub(super) fn recover_top_level_error_node(
-    error_node: tree_sitter::Node,
-    input: &str,
+    bound: SourceSlice<'_, '_>,
     lines: &mut Vec<Line>,
 ) -> bool {
-    let Ok(text) = error_node.utf8_text(input.as_bytes()) else {
-        return false;
-    };
+    let error_node = bound.raw_node();
+    let text = bound.text();
 
     let bytes = text.as_bytes();
     if bytes.starts_with(b"@Date:")
@@ -48,7 +47,7 @@ pub(super) fn recover_top_level_error_node(
         return true;
     }
 
-    if recover_unknown_header_line(error_node, text, lines) {
+    if recover_unknown_header_line(bound, lines) {
         return true;
     }
 
@@ -56,11 +55,9 @@ pub(super) fn recover_top_level_error_node(
 }
 
 /// Convert an unknown `@Header:` line embedded in an `ERROR` node into `Header::Unknown`.
-fn recover_unknown_header_line(
-    error_node: tree_sitter::Node,
-    text: &str,
-    lines: &mut Vec<Line>,
-) -> bool {
+fn recover_unknown_header_line(bound: SourceSlice<'_, '_>, lines: &mut Vec<Line>) -> bool {
+    let error_node = bound.raw_node();
+    let text = bound.text();
     let first_line = match text.lines().next() {
         Some(line) => line.trim_end(),
         None => return false,
@@ -147,14 +144,13 @@ fn is_known_header_label(label: &str) -> bool {
 
 /// Report malformed/orphaned top-level dependent tiers and taint the prior utterance if present.
 pub(super) fn report_top_level_dependent_tier_error(
-    error_node: tree_sitter::Node,
-    input: &str,
+    bound: SourceSlice<'_, '_>,
     lines: &mut [Line],
     errors: &impl ErrorSink,
 ) -> bool {
-    let Ok(text) = error_node.utf8_text(input.as_bytes()) else {
-        return false;
-    };
+    let error_node = bound.raw_node();
+    let input = bound.source();
+    let text = bound.text();
 
     if !text.starts_with('%') {
         return false;
@@ -278,33 +274,32 @@ pub(super) fn parse_lines_with_old_tree(
 ) -> (Vec<Line>, Option<tree_sitter::Tree>) {
     debug!("Parsing CHAT file ({} bytes)", input.len());
 
-    // A whole file starts at offset zero, so only its length can push it past
-    // the coordinate space. Refused BEFORE the parse: afterwards there is no
-    // way to tell a short answer from a complete one.
-    if let Err(too_large) = talkbank_model::FragmentRangeError::check(0, input.len()) {
-        errors.report(too_large.into_diagnostic());
-        return (Vec::new(), None);
-    }
-
-    let tree = match parser.parser.borrow_mut().parse(input, old_tree) {
-        Some(t) => t,
-        None => {
-            warn!("Tree-sitter parse failed for CHAT file");
-            errors.report(ParseError::new(
-                ErrorCode::ParseFailed,
-                Severity::Error,
-                SourceLocation::from_offsets(0, input.len()),
-                ErrorContext::new(input, 0..input.len(), input),
-                "Tree-sitter parse failed for chat file",
-            ));
+    // The shared producer checks coordinate capacity and binds the exact
+    // input. A separately supplied tree/source pair cannot enter lowering.
+    let tree = match parser.parse_source_incremental(input, old_tree) {
+        Ok(tree) => tree,
+        Err(failure) => {
+            for error in failure.into_error_vec() {
+                errors.report(error);
+            }
             return (Vec::new(), None);
         }
     };
-    let tree_to_return = tree.clone();
 
     trace!("Tree-sitter parse completed");
     // One owner of "where is the document, and what did it turn out to be".
-    let root = DocumentRoot::classify(&tree);
+    let root = match DocumentRoot::classify(&tree) {
+        Ok(root) => root,
+        Err(error) => {
+            crate::parser::typed_cst::report_source_binding_error(
+                tree.root_node(),
+                tree.source(),
+                error,
+                errors,
+            );
+            return (Vec::new(), None);
+        }
+    };
     let root_node = root.node();
     let syntax_root = root.syntax_root();
 
@@ -351,12 +346,6 @@ pub(super) fn parse_lines_with_old_tree(
     // analyze path, and each present `line` is dispatched to the unchanged inner
     // hand-walk. `DocumentLowering` borrows the Tee'd sink so its emissions are
     // recorded for the backstop's span-dedup below.
-    let mut lowering = DocumentLowering::new(
-        parser,
-        input,
-        errors,
-        crate::parser::ChildCapacity::for_node(root_node),
-    );
     // A recovered document lowers exactly like a complete one: the ERROR
     // standing in for a `full_document` carries the same children, so a missing
     // `@End` still recovers every line and the absent trailer surfaces as an
@@ -364,10 +353,7 @@ pub(super) fn parse_lines_with_old_tree(
     // nothing document-shaped in it at all; the recovery backstop below still
     // runs over the node, and the "no valid lines recovered" path still reports
     // it.
-    if let Some(children) = root.into_children() {
-        lowering.lower_document(children);
-    }
-    let lines = lowering.into_lines();
+    let lines = DocumentLowering::lower(parser, root, errors);
 
     // When the root IS an ERROR node and the loop couldn't recover any valid
     // lines, the file is completely unparsable.  Report this so the strict caller
@@ -426,5 +412,5 @@ pub(super) fn parse_lines_with_old_tree(
 
     info!("Parsed {} lines", lines.len());
 
-    (lines, Some(tree_to_return))
+    (lines, Some(tree.into_tree()))
 }

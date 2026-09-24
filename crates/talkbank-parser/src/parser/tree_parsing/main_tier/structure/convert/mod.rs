@@ -18,13 +18,12 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, MainTierChildren, MainTierNode, NoChild, NodeSlot, SlotValue,
+    AsRawNode, FromNodeKind, KindSlotValue, MainTierChildren, MainTierNode, NoChild, NodeSlot,
     SlotView, TierBodyNode, extract_main_tier, extract_tier_body,
 };
 use crate::model::{
     Bullet, LanguageCode, Linker, MainTier, Postcode, Terminator, TierSeparator, UtteranceContent,
 };
-use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 use super::super::content::{MainTierRegion, classify_main_tier_recovery};
@@ -34,6 +33,20 @@ mod body;
 mod ending;
 mod linkers;
 mod prefix;
+
+/// Evidence that conversion already emitted its rejection diagnostic.
+/// Only the reporting transition constructs this value; a failed conversion
+/// cannot return a diagnostic-free rejection to its consumers.
+pub struct ReportedMainTierError {
+    _private: (),
+}
+
+impl ReportedMainTierError {
+    fn report(error: ParseError, errors: &impl ErrorSink) -> Self {
+        errors.report(error);
+        Self { _private: () }
+    }
+}
 
 /// Report the terminator genuinely missing, when the tier has no body anywhere.
 ///
@@ -130,8 +143,8 @@ impl<'tree> TierBodyLocation<'tree> {
         // the user's file rather than about our recovery. A stray ERROR shifts
         // every later position, so REQUIRED positions can report `Absent` while
         // their content sits, correctly typed, in the sink.
-        if let SlotValue::Present(body) | SlotValue::Placeholder(body) =
-            main.child_5.slot().typed_or_placeholder()
+        if let KindSlotValue::Present(body) | KindSlotValue::Placeholder(body) =
+            main.child_5.slot().known_or_placeholder()
         {
             return Self {
                 body: Some(body),
@@ -211,12 +224,6 @@ impl<'tree> MainTierRecovery<'tree> {
     }
 }
 
-/// Positional label for the `tier_body` slot, used by the unreachable
-/// no-`tier_body` recovery arm's `StructuralOrderError` diagnostic. Mirrors the
-/// child cursor the positional walk reaches after the five prefix positions
-/// (star=0, speaker=1, colon=2, tab=3, sep_trailing_space=4, tier_body=5).
-const TIER_BODY_POSITION: usize = 5;
-
 /// Convert a `main_tier` CST node into the typed `MainTier` domain model.
 ///
 /// Mirrors the specification in the CHAT manual’s Main Tier chapter by parsing the speaker prefix, body,
@@ -226,12 +233,14 @@ const TIER_BODY_POSITION: usize = 5;
 ///
 /// Shared by the production utterance path and the single-main-tier parser API,
 /// so migrating this one function drives both off the generated visitor.
+/// Rejection carries evidence of an already-emitted speaker diagnostic; body
+/// recovery still runs before returning it. Success does not imply validity.
 pub fn convert_main_tier_node(
     typed: MainTierNode<'_>,
     source: &str,
     original_input: &str,
     errors: &impl ErrorSink,
-) -> ParseOutcome<MainTier> {
+) -> Result<MainTier, ReportedMainTierError> {
     let node = typed.raw_node();
     // Speaker prefix slots (`star`, `speaker`, `colon`, `tab`), the optional
     // `sep_trailing_space` (E758 provenance), and the `tier_body` slot, read
@@ -270,7 +279,7 @@ pub fn convert_main_tier_node(
     // The `tier_body` slot's own ERROR is classified by its arm below with the
     // richer Body region, so take it out of this walk's reach FIRST rather than
     // comparing spans against it afterwards.
-    if let SlotValue::Error(in_slot) = main.child_5.slot().typed_or_placeholder() {
+    if let KindSlotValue::Error(in_slot) = main.child_5.slot().known_or_placeholder() {
         recovery.take(in_slot);
     }
     for child in recovery.take_rest() {
@@ -308,22 +317,17 @@ pub fn convert_main_tier_node(
     // that, an utterance opening with an annotation (`*CHI:\t[: closed] .`) was
     // told its terminator was missing while the terminator sat in the tree, in
     // the very `tier_body` the arm had thrown away.
-    match main.child_5.slot().typed_or_placeholder() {
+    match main.child_5.slot().known_or_placeholder() {
         // Nothing to report: the body is where the grammar puts it. A MISSING
         // placeholder is childless, so it walks to an empty body, same as
         // `Present`.
-        SlotValue::Present(_) | SlotValue::Placeholder(_) => {}
-        SlotValue::Error(error_node) => errors.report(classify_main_tier_recovery(
+        KindSlotValue::Present(_) | KindSlotValue::Placeholder(_) => {}
+        KindSlotValue::Error(error_node) => errors.report(classify_main_tier_recovery(
             error_node,
             source,
             MainTierRegion::Body,
         )),
-        // A MISSING placeholder of a kind `tier_body` does not name is treated
-        // as an unexpected child: there is no `tier_body` to walk either way.
-        SlotValue::UnclassifiedPlaceholder(other) => {
-            report_unexpected_child(other, source, errors, "tier_body", TIER_BODY_POSITION);
-        }
-        SlotValue::Absent(NoChild) => {}
+        KindSlotValue::Absent(NoChild) => {}
     }
 
     let tier = match located.body {
@@ -370,13 +374,7 @@ pub fn convert_main_tier_node(
     // No fabricated speaker fallback: if speaker could not be parsed, skip
     // main-tier construction. (All diagnostics above are still emitted first,
     // preserving the prior emit-then-reject ordering.)
-    let ParsedSpeakerPrefix {
-        code: speaker,
-        span: speaker_span,
-    } = match prefix.speaker {
-        Some(speaker) => speaker,
-        None => return ParseOutcome::rejected(),
-    };
+    let (speaker, speaker_span) = prefix.speaker?.into_parts();
 
     let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
 
@@ -399,9 +397,6 @@ pub fn convert_main_tier_node(
         .with_postcodes(tier.postcodes)
         .with_separator(separator);
 
-    // Extract a terminal bullet that the greedy contents rule left in content.
-    main_tier.content.extract_terminal_bullet();
-
     if let Some(span) = content_span {
         main_tier = main_tier.with_content_span(span);
     }
@@ -414,26 +409,18 @@ pub fn convert_main_tier_node(
         main_tier = main_tier.with_language_code_span(lang_span);
     }
 
-    // Bullet: grammar-routed bullet from utterance_end takes priority.
+    // Install the grammar-owned terminal slot before considering a content tail.
     if let Some(b) = tier.bullet {
         main_tier = main_tier.with_bullet(b);
     }
+    main_tier.content.extract_terminal_bullet();
 
-    ParseOutcome::parsed(main_tier)
+    Ok(main_tier)
 }
 
 /// Parsed prefix slice (`*`, speaker, `:`, tab).
 pub(super) struct PrefixData {
-    speaker: Option<ParsedSpeakerPrefix>,
-}
-
-/// A speaker code that was parsed together with its real source span.
-///
-/// The two facts share one construction path so a caller cannot receive a
-/// speaker with the dummy span that previously initialized `PrefixData`.
-pub(super) struct ParsedSpeakerPrefix {
-    code: String,
-    span: Span,
+    speaker: Result<prefix::ParsedSpeakerPrefix, ReportedMainTierError>,
 }
 
 /// Parsed `tier_body` payload: linkers, optional language code, content, and the
@@ -539,14 +526,17 @@ pub(super) fn report_missing_child(
     errors: &impl ErrorSink,
     code: ErrorCode,
     message: &str,
-) {
-    errors.report(ParseError::new(
-        code,
-        Severity::Error,
-        SourceLocation::from_offsets(carrier.start, carrier.end),
-        ErrorContext::new(original_input, carrier, ""),
-        message,
-    ));
+) -> ReportedMainTierError {
+    ReportedMainTierError::report(
+        ParseError::new(
+            code,
+            Severity::Error,
+            SourceLocation::from_offsets(carrier.start, carrier.end),
+            ErrorContext::new(original_input, carrier, ""),
+            message,
+        ),
+        errors,
+    )
 }
 
 /// Report an unexpected node kind at a positional slot in `main_tier`.
@@ -556,17 +546,20 @@ pub(super) fn report_unexpected_child(
     errors: &impl ErrorSink,
     expected: &str,
     position: usize,
-) {
-    errors.report(ParseError::new(
-        ErrorCode::StructuralOrderError,
-        Severity::Error,
-        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-        ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-        format!(
-            "Expected '{}' at position {} of main_tier, found '{}'",
-            expected,
-            position,
-            child.kind()
+) -> ReportedMainTierError {
+    ReportedMainTierError::report(
+        ParseError::new(
+            ErrorCode::StructuralOrderError,
+            Severity::Error,
+            SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
+            ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
+            format!(
+                "Expected '{}' at position {} of main_tier, found '{}'",
+                expected,
+                position,
+                child.kind()
+            ),
         ),
-    ));
+        errors,
+    )
 }

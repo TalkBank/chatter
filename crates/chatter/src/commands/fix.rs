@@ -87,8 +87,17 @@ pub fn run_fix(
     let mut files_with_changes = 0usize;
     let mut summaries: Vec<FileFixSummary> = Vec::new();
 
+    let mut names = talkbank_transform::paths::StoredNameResolver::default();
     for path in files {
-        let source = match std::fs::read_to_string(&path) {
+        let stored = match names.resolve(&path) {
+            Ok(stored) => stored,
+            Err(err) => {
+                eprintln!("ERROR: cannot resolve {}: {err}", path.display());
+                continue;
+            }
+        };
+        let path = stored.path();
+        let source = match std::fs::read_to_string(path) {
             Ok(source) => source,
             Err(err) => {
                 eprintln!("ERROR: cannot read {}: {err}", path.display());
@@ -96,7 +105,14 @@ pub fn run_fix(
             }
         };
 
-        let outcome = fix_one_file(&parser, &source, &requested_codes, skip_alignment, write);
+        let outcome = fix_one_file(
+            &parser,
+            &source,
+            &requested_codes,
+            skip_alignment,
+            write,
+            stored.name(),
+        );
         if outcome.report_lines.is_empty() {
             continue;
         }
@@ -114,7 +130,7 @@ pub fn run_fix(
         files_with_changes += 1;
 
         let write_outcome = if write {
-            match std::fs::write(&path, &spliced) {
+            match std::fs::write(path, &spliced) {
                 Ok(()) => WriteOutcome::Written,
                 Err(err) => {
                     eprintln!("ERROR: cannot write {}: {err}", path.display());
@@ -289,14 +305,15 @@ fn fix_one_file(
     requested_codes: &CodeSelection,
     skip_alignment: bool,
     write: bool,
+    name: TranscriptName<'_>,
 ) -> FileFixOutcome {
     let sink = ErrorCollector::new();
     let mut chat_file = parser.parse_chat_file_streaming(source, &sink);
 
     if skip_alignment {
-        chat_file.validate(&sink, TranscriptName::Anonymous);
+        chat_file.validate(&sink, name);
     } else {
-        chat_file.validate_with_alignment(&sink, TranscriptName::Anonymous);
+        chat_file.validate_with_alignment(&sink, name);
     }
     let diagnostics = sink.into_vec();
 
@@ -369,6 +386,7 @@ fn fix_one_file(
                 &admission.admitted,
                 &codes_before,
                 skip_alignment,
+                name,
             ) {
                 for label in &admitted_labels {
                     report_lines.push(format!(
@@ -480,13 +498,14 @@ fn verify_fix_result(
     admitted: &[SpliceEdit],
     codes_before: &HashMap<ErrorCode, usize>,
     skip_alignment: bool,
+    name: TranscriptName<'_>,
 ) -> Result<(), FixVerificationError> {
     let sink = ErrorCollector::new();
     let mut reparsed = parser.parse_chat_file_streaming(spliced, &sink);
     if skip_alignment {
-        reparsed.validate(&sink, TranscriptName::Anonymous);
+        reparsed.validate(&sink, name);
     } else {
-        reparsed.validate_with_alignment(&sink, TranscriptName::Anonymous);
+        reparsed.validate_with_alignment(&sink, name);
     }
     let diagnostics_after = sink.into_vec();
 
@@ -503,6 +522,19 @@ fn verify_fix_result(
     }
 
     for (code, fix_site) in mapped_fix_sites(source, admitted)? {
+        // The content repair cannot rename the on-disk transcript. A remaining
+        // W109 is expected only if its @Media token no longer offers a repair.
+        if code == ErrorCode::MediaFilenameNonCanonicalUnicode
+            && reparsed
+                .headers()
+                .find_map(|header| match header {
+                    talkbank_model::model::Header::Media(media) => Some(media),
+                    _ => None,
+                })
+                .is_some_and(|media| !media.filename.needs_unicode_normalization())
+        {
+            continue;
+        }
         let still_fires = diagnostics_after
             .iter()
             .any(|d| d.code == code && d.location.span.overlaps(fix_site));
@@ -640,7 +672,7 @@ fn describe_skip_reason(reason: &SkipReason) -> &'static str {
     match reason {
         SkipReason::TaintedUtterance => "the enclosing utterance needed parser recovery",
         SkipReason::UnknownHealth => "the enclosing utterance carries no parse provenance",
-        SkipReason::OutsideAnyUtterance => "the fix site lies outside every utterance",
+        SkipReason::OutsideAnyUtterance => "the full fix target is not enclosed by one utterance",
     }
 }
 
@@ -703,7 +735,15 @@ mod tests {
             EditProvenance::Transform(TransformName::new("test")),
         )];
 
-        let result = verify_fix_result(&parser, source, spliced, &admitted, &codes_before, false);
+        let result = verify_fix_result(
+            &parser,
+            source,
+            spliced,
+            &admitted,
+            &codes_before,
+            false,
+            TranscriptName::Anonymous,
+        );
         match result {
             Err(FixVerificationError::CodeCountIncreased {
                 code,
@@ -742,7 +782,15 @@ mod tests {
                         @ID:\teng|test|CHI|||||Child|||\n*CHI:\t, xx .\n@End\n";
         let admitted: Vec<SpliceEdit> = Vec::new();
 
-        let result = verify_fix_result(&parser, source, spliced, &admitted, &codes_before, false);
+        let result = verify_fix_result(
+            &parser,
+            source,
+            spliced,
+            &admitted,
+            &codes_before,
+            false,
+            TranscriptName::Anonymous,
+        );
         match result {
             Err(FixVerificationError::CodeCountIncreased {
                 code,

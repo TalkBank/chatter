@@ -46,12 +46,12 @@ pub fn word_to_content_item<'a>(word: WordWithAnnotations<'a>) -> ContentItem<'a
 
 /// What a marker fold has built so far.
 ///
-/// One accumulator for all three seeds a marker run can start from (a word, an
-/// event, a bracketed group), rather than folding over `ContentItem`, whose
+/// One accumulator for the seeds a marker run can start from (a word, an
+/// event, a bracketed group or quotation), rather than folding over `ContentItem`, whose
 /// other variants a marker run can never reach. That keeps `annotated_with`
 /// total with no catch-all.
 ///
-/// Shared by all three fold sites in this crate. They were three separate
+/// Shared by the fold sites in this crate. They were separate
 /// algorithms: the word path folded, the event path partitioned markers out
 /// and so lost the annotation/marker interleaving, and the group path still
 /// split at the FIRST marker and dropped the rest, which is the exact bug the
@@ -63,6 +63,8 @@ pub(crate) enum Chain<'a> {
     Event(Token<'a>, Vec<ParsedAnnotation<'a>>),
     /// A bracketed group, with its annotations.
     Group(Vec<ContentItem<'a>>, Vec<ParsedAnnotation<'a>>),
+    /// A quotation, with its annotations.
+    Quotation(Quotation<'a>),
     /// At least one retrace marker has wrapped the chain.
     Wrapped(Retrace<'a>),
 }
@@ -92,6 +94,10 @@ impl<'a> Chain<'a> {
             Chain::Group(contents, mut annotations) => {
                 annotations.push(annotation);
                 Chain::Group(contents, annotations)
+            }
+            Chain::Quotation(mut quotation) => {
+                quotation.annotations.push(annotation);
+                Chain::Quotation(quotation)
             }
             Chain::Wrapped(mut retrace) => {
                 retrace.annotations.push(annotation);
@@ -158,6 +164,7 @@ impl<'a> Chain<'a> {
                 contents,
                 annotations,
             }),
+            Chain::Quotation(quotation) => ContentItem::Quotation(quotation),
             Chain::Wrapped(retrace) => ContentItem::Retrace(retrace),
         }
     }
@@ -205,10 +212,14 @@ pub fn token_to_parsed_annotation<'a>(tok: Token<'a>) -> Option<ParsedAnnotation
             ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Error(s))
         }
         Token::OverlapPrecedes(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::OverlapPrecedes(s))
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::OverlapPrecedes(
+                crate::ast::ScopedOverlapIndex::from_lexer(s)?,
+            ))
         }
         Token::OverlapFollows(s) => {
-            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::OverlapFollows(s))
+            ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::OverlapFollows(
+                crate::ast::ScopedOverlapIndex::from_lexer(s)?,
+            ))
         }
         Token::ExplanationAnnotation(s) => {
             ParsedAnnotation::Scoped(crate::ast::ScopedAnnotationParsed::Explanation(s))

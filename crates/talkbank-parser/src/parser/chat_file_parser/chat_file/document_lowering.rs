@@ -4,7 +4,7 @@
 //! walk over `full_document` -> lines. Historically the entry point hand-walked
 //! `root_node.children()` with `match child.kind()` string dispatch (see the
 //! pre-migration `parse_lines_with_old_tree`). That hand-walk is banned by the
-//! "CST Traversal Rules" in the repo `CLAUDE.md`: it silently dropped recovery
+//! "CST Traversal Rules" in the repo `AGENTS.md`: it silently dropped recovery
 //! nodes, which is the root cause of the recurring missing-node bugs that the
 //! generated typed CST traversal was created to end.
 //!
@@ -56,9 +56,9 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, BeginHeaderNode, ChildSlot, EndHeaderNode, FromNodeKind, FullDocumentChild1Choice,
-    FullDocumentChildren, LineChoice, LineNode, MainTierNode, NoChild, NodeSlot, SlotView,
-    Utf8HeaderNode, extract_line,
+    AsRawNode, BeginHeaderNode, EndHeaderNode, FromNodeKind, FullDocumentChild1Choice,
+    FullDocumentChildren, KindSlot, LineChoiceSourceView, LineNode, MainTierNode, NoChild,
+    SlotView, SourceBound, SourceChildren, SourceField, SourceSlotView, Utf8HeaderNode,
 };
 use crate::model::{Header, Line, Utterance};
 use crate::node_types::{BLANK_LINE, UNSUPPORTED_LINE};
@@ -76,12 +76,34 @@ use talkbank_model::ParseOutcome;
 
 use super::helpers::{recover_top_level_error_node, report_top_level_dependent_tier_error};
 
+/// Admit recovery against its immutable parse owner before dispatch. Both
+/// document and line-slot routes use this diagnostic boundary.
+fn bind_recovery<'tree, 'source>(
+    parsed: &'tree crate::generated_traversal::ParsedSource<'source>,
+    node: tree_sitter::Node<'tree>,
+    errors: &impl ErrorSink,
+) -> Option<crate::generated_traversal::SourceSlice<'tree, 'source>> {
+    match parsed.bind(node) {
+        Ok(bound) => Some(bound),
+        Err(error) => {
+            errors.report(ParseError::new(
+                ErrorCode::TreeParsingError,
+                Severity::Error,
+                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                ErrorContext::new(parsed.source(), node.byte_range(), ""),
+                error.to_string(),
+            ));
+            None
+        }
+    }
+}
+
 /// Parser-state for the document/line entry point.
 ///
 /// Carries the source text (needed by the line/error helpers that read node text
 /// by byte offset) and the error sink that recovery diagnostics stream to. The
 /// accumulated [`Line`] values are owned here during the walk and handed back via
-/// [`Self::into_lines`].
+/// [`Self::lower`].
 ///
 /// Generic over `S: ErrorSink` so it composes with the entry point's
 /// `TeeErrorSink` (which records diagnostics for the backstop's span-dedup)
@@ -89,8 +111,8 @@ use super::helpers::{recover_top_level_error_node, report_top_level_dependent_ti
 pub(super) struct DocumentLowering<'a, S: ErrorSink> {
     /// Reused only when a proven terminal fragment lost its enclosing CST node.
     parser: &'a TreeSitterParser,
-    /// Full source text of the CHAT file being parsed.
-    source: &'a str,
+    /// Tree and source association supplied by the parse producer.
+    parsed: &'a crate::generated_traversal::ParsedSource<'a>,
     /// Diagnostic sink that recovery diagnostics are reported to.
     errors: &'a S,
     /// File-order `Line` values accumulated during the walk.
@@ -98,26 +120,37 @@ pub(super) struct DocumentLowering<'a, S: ErrorSink> {
 }
 
 impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
-    /// Construct a `DocumentLowering` over `source`, reporting to `errors`, with
-    /// `capacity` reserved for the line accumulator (the `full_document` child
-    /// count is a good upper bound).
-    pub(super) fn new(
+    /// Consume the producer-bound root. Source text and child capacity are
+    /// derived here; callers cannot supply either independently of its tree.
+    pub(super) fn lower(
         parser: &'a TreeSitterParser,
-        source: &'a str,
+        root: crate::parser::document_root::DocumentRoot<'a>,
         errors: &'a S,
-        capacity: ChildCapacity,
-    ) -> Self {
-        Self {
+    ) -> Vec<Line> {
+        let capacity = ChildCapacity::for_node(root.node());
+        let mut lowering = Self {
             parser,
-            source,
+            parsed: root.parsed_source(),
             errors,
             lines: capacity.into_vec(),
+        };
+        let root_node = root.node();
+        if let Err(error) = root.for_each_part(|part| match part {
+            crate::parser::document_root::DocumentPart::Document(children) => {
+                lowering.lower_document(children);
+            }
+            crate::parser::document_root::DocumentPart::Recovery(node) => {
+                lowering.handle_bound_top_level_error(node);
+            }
+        }) {
+            crate::parser::typed_cst::report_source_binding_error(
+                root_node,
+                lowering.parsed.source(),
+                error,
+                errors,
+            );
         }
-    }
-
-    /// Consume the lowering and return the accumulated file-order lines.
-    pub(super) fn into_lines(self) -> Vec<Line> {
-        self.lines
+        lowering.lines
     }
 
     /// Drive the free function [`extract_full_document`] on the `full_document`
@@ -138,7 +171,8 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// carries no meaning here, because a document reconstructed from the ERROR
     /// standing in for one has the same type and the same content as a complete
     /// one. There were briefly two public entry points differing only in name.
-    pub(super) fn lower_document(&mut self, children: FullDocumentChildren<'_>) {
+    fn lower_document(&mut self, associated: SourceChildren<'_, '_, FullDocumentChildren<'_>>) {
+        let children = associated.children();
         // Every field of the NEW `FullDocumentChildren` carrier is a
         // `Positioned<..>`: the position's `leading_extras` (whitespace/comments,
         // no-op for CHAT) plus its `slot`. A required member's `slot` is a
@@ -162,7 +196,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         // or an ERROR absorbed among the lines (the recovery-aware repeat keeps
         // consuming the trailing valid lines, so a mid-document ERROR does not
         // strand the tail into `unexpected`).
-        for element in children.child_3.slot() {
+        for element in associated.field_child_3().slot().iter() {
             self.lower_line_slot(element.slot());
         }
 
@@ -174,18 +208,20 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         // construction; arbitrary unexpected content still receives diagnostics.
         let mut unexpected = children.unexpected.iter().copied();
         while let Some(node) = unexpected.next() {
-            if let Some(terminal) = TerminalMainTier::admit(node, unexpected.clone(), self.source) {
+            if let Some(terminal) =
+                TerminalMainTier::admit(node, unexpected.clone(), self.parsed.source())
+            {
                 if let ParseOutcome::Parsed(main) = terminal.lower(self.parser, self.errors) {
                     self.lines.push(Line::utterance(Utterance::new(main)));
                 }
                 // Admission consumed the complete remaining EOF sequence.
                 break;
             }
-            if node.end_byte() == self.source.len()
+            if node.end_byte() == self.parsed.source().len()
                 && let Some(main) = MainTierNode::from_node(node)
             {
                 if let ParseOutcome::Parsed(utterance) =
-                    parse_recovered_main_tier(main, self.source, self.errors)
+                    parse_recovered_main_tier(main, self.parsed.source(), self.errors)
                 {
                     self.lines.push(Line::utterance(utterance));
                 }
@@ -209,7 +245,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// and the validation layer plus the whole-tree backstop cover that case;
     /// emitting one here would be a new diagnostic (regression). An `Error` here
     /// is still surfaced because the backstop walks the whole tree.
-    fn lower_utf8_anchor(&mut self, slot: &Option<ChildSlot<'_, Utf8HeaderNode<'_>>>) {
+    fn lower_utf8_anchor(&mut self, slot: &Option<KindSlot<'_, Utf8HeaderNode<'_>>>) {
         let Some(slot) = slot else {
             // Preserve the complete document without inventing an encoding
             // declaration. The shared header validator owns the E503 refusal.
@@ -226,7 +262,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
 
     /// Lower the `@Begin` anchor slot (`child_2`). See [`Self::lower_utf8_anchor`]
     /// for the recovery rationale; this mirrors the `BEGIN_HEADER` arm.
-    fn lower_begin_anchor(&mut self, slot: &ChildSlot<'_, BeginHeaderNode<'_>>) {
+    fn lower_begin_anchor(&mut self, slot: &KindSlot<'_, BeginHeaderNode<'_>>) {
         match slot.view() {
             SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::Begin),
             SlotView::Missing(_) | SlotView::Absent(NoChild) => {
@@ -238,7 +274,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
 
     /// Lower the `@End` anchor slot (`child_4`). See [`Self::lower_utf8_anchor`]
     /// for the recovery rationale; this mirrors the `END_HEADER` arm.
-    fn lower_end_anchor(&mut self, slot: &ChildSlot<'_, EndHeaderNode<'_>>) {
+    fn lower_end_anchor(&mut self, slot: &KindSlot<'_, EndHeaderNode<'_>>) {
         match slot.view() {
             SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::End),
             SlotView::Missing(_) | SlotView::Absent(NoChild) => {
@@ -253,7 +289,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// `Present` dispatches to `handle_pre_begin_header` exactly as the hand-walk
     /// did for a concrete pre-begin header. `Error` routes through the shared
     /// top-level error path. `Missing` is a layout omission (backstop covers it).
-    fn lower_pre_begin_header_slot(&mut self, slot: &ChildSlot<'_, FullDocumentChild1Choice<'_>>) {
+    fn lower_pre_begin_header_slot(&mut self, slot: &KindSlot<'_, FullDocumentChild1Choice<'_>>) {
         match slot.view() {
             // The repeat is typed as the four-way `FullDocumentChild1Choice`
             // (color-words / font / pid / window header); the handler matches
@@ -263,7 +299,13 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                     choice.raw_node().start_byte() as u32,
                     choice.raw_node().end_byte() as u32,
                 );
-                handle_pre_begin_header(choice, span, self.source, self.errors, &mut self.lines);
+                handle_pre_begin_header(
+                    choice,
+                    span,
+                    self.parsed.source(),
+                    self.errors,
+                    &mut self.lines,
+                );
             }
             SlotView::Error(error_node) => self.handle_top_level_error(error_node),
             SlotView::Missing(_) | SlotView::Absent(NoChild) => {
@@ -277,11 +319,28 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// `Present` dispatches the `line` node to `dispatch_line`, which now drives
     /// the typed `extract_line` visitor (Task 2a). `Error` routes through the
     /// shared top-level error path. `Missing` is a layout omission.
-    fn lower_line_slot(&mut self, slot: &ChildSlot<'_, LineNode<'_>>) {
+    fn lower_line_slot<'tree>(
+        &mut self,
+        slot: SourceField<'_, 'tree, '_, KindSlot<'tree, LineNode<'tree>>>,
+    ) {
         match slot.view() {
-            SlotView::Present(line_node) => self.dispatch_line(*line_node),
-            SlotView::Error(error_node) => self.handle_top_level_error(error_node),
-            SlotView::Missing(_) | SlotView::Absent(NoChild) => {
+            SourceSlotView::Present(line_node) => {
+                if let Some(line) =
+                    crate::parser::typed_cst::read_source_field(line_node, self.errors)
+                {
+                    self.dispatch_line(line);
+                }
+            }
+            SourceSlotView::Error(error_node) => match error_node.read_raw() {
+                Ok(bound) => self.handle_bound_top_level_error(bound),
+                Err(error) => crate::parser::typed_cst::report_source_binding_error(
+                    error_node.raw_node(),
+                    error_node.source(),
+                    error,
+                    self.errors,
+                ),
+            },
+            SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) => {
                 // Layout omission; backstop reports content MISSING nodes.
             }
         }
@@ -297,22 +356,26 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// The whole-tree backstop uses the same structural classifier and dedups
     /// overlapping reported spans (WATCH-ITEM: no double-emission).
     fn handle_top_level_error(&mut self, error_node: tree_sitter::Node<'_>) {
-        if report_top_level_dependent_tier_error(
-            error_node,
-            self.source,
-            &mut self.lines,
-            self.errors,
-        ) {
+        let Some(bound) = bind_recovery(self.parsed, error_node, self.errors) else {
             return;
-        }
-        if recover_top_level_error_node(error_node, self.source, &mut self.lines) {
-            return;
-        }
-        analyze_error_node(error_node, self.source, self.errors);
+        };
+        self.handle_bound_top_level_error(bound);
     }
 
-    /// Dispatch a present `line` node through the NEW backend's free
-    /// [`extract_line`] function.
+    fn handle_bound_top_level_error(
+        &mut self,
+        bound: crate::generated_traversal::SourceSlice<'_, '_>,
+    ) {
+        if report_top_level_dependent_tier_error(bound, &mut self.lines, self.errors) {
+            return;
+        }
+        if recover_top_level_error_node(bound, &mut self.lines) {
+            return;
+        }
+        analyze_error_node(bound, self.errors);
+    }
+
+    /// Dispatch a present source-bound line through generated extraction.
     ///
     /// The `line` grammar rule is a choice with one meaningful child (a header,
     /// an utterance, a blank line, or an unsupported line). `extract_line` places
@@ -345,84 +408,12 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     ///
     /// After the content match, the carrier's `unexpected` sink is surfaced (see
     /// [`Self::surface_displaced`]).
-    fn dispatch_line(&mut self, line: LineNode<'_>) {
-        let children = extract_line(line);
-        match children.content.slot() {
-            NodeSlot::Present(LineChoice::ActivitiesHeader(header_choice)) => {
-                // The `line` header case is the NESTED supertype choice
-                // `LineChoice::ActivitiesHeader(LineActivitiesHeaderChoice)` (34
-                // concrete header subtypes), NOT a `LineChoice::Header(node)` as
-                // the OLD API had. The concrete header raw node handed to the
-                // unchanged `parse_header_node` is reached through the generated
-                // `AsRawNode::raw_node` on the nested choice (header internals
-                // stay on the current parse function until the headers cluster
-                // migrates).
-                let node = header_choice.raw_node();
-                if let ParseOutcome::Parsed(header) =
-                    parse_header_node(node, self.source, self.errors)
-                {
-                    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-                    let separator = header_separator(node);
-                    self.lines
-                        .push(Line::header_with_separator(header, span, separator));
-                }
-            }
-            NodeSlot::Present(LineChoice::Utterance(utterance)) => {
-                if let ParseOutcome::Parsed(utt) =
-                    parse_utterance_node(*utterance, self.source, self.errors)
-                {
-                    self.lines.push(Line::utterance(utt));
-                }
-            }
-            NodeSlot::Present(LineChoice::UnsupportedLine(unsupported)) => {
-                let node = unsupported.raw_node();
-                // Catch-all junk line: report and skip (CLAN-style unsupported line).
-                // A line whose bytes are not UTF-8 is reported as that fact,
-                // not classified over a text the parser invented; either way
-                // the arm falls through to the carrier's sink like every other.
-                match node.utf8_text(self.source.as_bytes()) {
-                    Ok(text) => self.report_unsupported_line(node, text),
-                    Err(error) => self.errors.report(ParseError::new(
-                        ErrorCode::TreeParsingError,
-                        Severity::Error,
-                        SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                        ErrorContext::new(
-                            self.source,
-                            node.start_byte()..node.end_byte(),
-                            UNSUPPORTED_LINE,
-                        ),
-                        format!("UTF-8 decoding error in unsupported line: {error}"),
-                    )),
-                }
-            }
-            NodeSlot::Present(LineChoice::BlankLine(blank)) => {
-                let node = blank.raw_node();
-                // The grammar represents a blank line as a `blank_line` node
-                // (CLAN CHECK 91: blank lines are not allowed). Under error
-                // recovery, though, the node can cover just the trailing
-                // newline of a NON-blank malformed line (a speaker-less
-                // `*:` tier, IISRP-residue finding 3), and "blank lines are
-                // not allowed" on a visibly non-blank line sends the reader
-                // hunting for a line that does not exist. A genuine blank
-                // line's newline sits at a line boundary: the node starts
-                // the file or is preceded by another newline. One-byte
-                // boundary probe, the same class of check as the
-                // span-adjacency rules; the malformed line already carries
-                // its own diagnostics.
-                let start = node.start_byte();
-                let at_line_boundary = start == 0
-                    || matches!(self.source.as_bytes().get(start - 1), Some(b'\r' | b'\n'));
-                if at_line_boundary {
-                    self.errors.report(ParseError::new(
-                        ErrorCode::BlankLineNotAllowed,
-                        Severity::Error,
-                        SourceLocation::from_offsets(start, node.end_byte()),
-                        ErrorContext::new(self.source, start..node.end_byte(), BLANK_LINE),
-                        "Blank lines are not allowed".to_string(),
-                    ));
-                }
-            }
-            NodeSlot::Error(error_node) => {
+    fn dispatch_line<'tree>(&mut self, line: SourceBound<'tree, '_, LineNode<'tree>>) {
+        let associated = line.extract();
+        let children = associated.children();
+        match associated.field_content().slot().view() {
+            SourceSlotView::Present(choice) => self.dispatch_present_line(choice),
+            SourceSlotView::Error(error_node) => {
                 // ONE owner for ERROR analysis, the same one `handle_top_level_error`
                 // uses. This called `analyze_line_error`, a second analyser that
                 // existed only for this arm and inspected `line_node`'s siblings
@@ -441,25 +432,38 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 // expected either.
                 //
                 // So this arm keeps a diagnostic and loses a duplicate.
-                analyze_error_node(*error_node, self.source, self.errors);
+                match error_node.read_raw() {
+                    Ok(bound) => analyze_error_node(bound, self.errors),
+                    Err(error) => crate::parser::typed_cst::report_source_binding_error(
+                        error_node.raw_node(),
+                        error_node.source(),
+                        error,
+                        self.errors,
+                    ),
+                }
             }
-            NodeSlot::Missing(_) => {
+            SourceSlotView::Missing(_) => {
                 // Tree-sitter inserted a MISSING placeholder; no diagnostic.
                 // Matches the old `is_missing() -> continue`.
             }
-            NodeSlot::Absent(NoChild) => {
+            SourceSlotView::Absent(NoChild) => {
                 // No child at all (empty line node); no diagnostic.
                 // Matches the old loop producing nothing when there is no child.
             }
-            NodeSlot::Unexpected(node) => {
+            SourceSlotView::Unexpected(field) => {
                 // A child kind not listed in the `LineChoice` match table. This
                 // indicates a grammar/parser mismatch; report at the node span.
+                let node = field.raw_node();
                 let kind = node.kind();
                 self.errors.report(ParseError::new(
                     ErrorCode::UnexpectedLineType,
                     Severity::Error,
                     SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(self.source, node.start_byte()..node.end_byte(), kind),
+                    ErrorContext::new(
+                        self.parsed.source(),
+                        node.start_byte()..node.end_byte(),
+                        kind,
+                    ),
                     format!("Unknown node type '{}' in line", kind),
                 ));
             }
@@ -469,6 +473,89 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         // chosen `LineChoice` content did not consume). Same backstop-equivalent
         // mapping as the document carrier; empty in practice for CHAT lines.
         self.surface_displaced(&children.unexpected, "line");
+    }
+    /// Lower the present choice separately so range refusal cannot skip the line's sink.
+    fn dispatch_present_line<'tree>(
+        &mut self,
+        choice: SourceField<'_, 'tree, '_, crate::generated_traversal::LineChoice<'tree>>,
+    ) {
+        match choice.view() {
+            LineChoiceSourceView::ActivitiesHeader(header_choice) => {
+                // The nested header choice retains source identity from the
+                // document carrier. Admit its range without searching the root.
+                let node = header_choice.raw_node();
+                let bound = match header_choice.read_raw() {
+                    Ok(bound) => bound,
+                    Err(error) => {
+                        crate::parser::typed_cst::report_source_binding_error(
+                            node,
+                            header_choice.source(),
+                            error,
+                            self.errors,
+                        );
+                        return;
+                    }
+                };
+                if let ParseOutcome::Parsed(header) = parse_header_node(bound, self.errors) {
+                    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
+                    let separator = header_separator(node);
+                    self.lines
+                        .push(Line::header_with_separator(header, span, separator));
+                }
+            }
+            LineChoiceSourceView::Utterance(utterance) => {
+                let Some(utterance) =
+                    crate::parser::typed_cst::read_source_field(utterance, self.errors)
+                else {
+                    return;
+                };
+                if let ParseOutcome::Parsed(utt) = parse_utterance_node(utterance, self.errors) {
+                    self.lines.push(Line::utterance(utt));
+                }
+            }
+            LineChoiceSourceView::UnsupportedLine(unsupported) => {
+                let node = unsupported.raw_node();
+                // Catch-all junk line: report and skip (CLAN-style unsupported line).
+                // A line whose bytes are not UTF-8 is reported as that fact,
+                // not classified over a text the parser invented; either way
+                // the arm falls through to the carrier's sink like every other.
+                if let Some(bound) =
+                    crate::parser::typed_cst::read_source_field(unsupported, self.errors)
+                {
+                    self.report_unsupported_line(node, bound.text());
+                }
+            }
+            LineChoiceSourceView::BlankLine(blank) => {
+                let node = blank.raw_node();
+                // The grammar represents a blank line as a `blank_line` node
+                // (CLAN CHECK 91: blank lines are not allowed). Under error
+                // recovery, though, the node can cover just the trailing
+                // newline of a NON-blank malformed line (a speaker-less
+                // `*:` tier, IISRP-residue finding 3), and "blank lines are
+                // not allowed" on a visibly non-blank line sends the reader
+                // hunting for a line that does not exist. A genuine blank
+                // line's newline sits at a line boundary: the node starts
+                // the file or is preceded by another newline. One-byte
+                // boundary probe, the same class of check as the
+                // span-adjacency rules; the malformed line already carries
+                // its own diagnostics.
+                let start = node.start_byte();
+                let at_line_boundary = start == 0
+                    || matches!(
+                        self.parsed.source().as_bytes().get(start - 1),
+                        Some(b'\r' | b'\n')
+                    );
+                if at_line_boundary {
+                    self.errors.report(ParseError::new(
+                        ErrorCode::BlankLineNotAllowed,
+                        Severity::Error,
+                        SourceLocation::from_offsets(start, node.end_byte()),
+                        ErrorContext::new(self.parsed.source(), start..node.end_byte(), BLANK_LINE),
+                        "Blank lines are not allowed".to_string(),
+                    ));
+                }
+            }
+        }
     }
     /// E326 for an `unsupported_line` whose text could be read: the
     /// classification the arm in [`Self::dispatch_line`] used to carry inline.
@@ -487,7 +574,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 Severity::Error,
                 SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
                 ErrorContext::new(
-                    self.source,
+                    self.parsed.source(),
                     node.start_byte()..node.end_byte(),
                     UNSUPPORTED_LINE,
                 ),
@@ -535,14 +622,61 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         for node in unexpected {
             if node.is_error() || node.is_missing() || node.has_error() {
                 let mut candidates = Vec::new();
-                collect_recovery_nodes(*node, self.source, &mut candidates);
+                collect_recovery_nodes(*node, self.parsed.source(), &mut candidates);
                 for candidate in candidates {
                     self.errors.report(candidate);
                 }
             } else {
                 self.errors
-                    .report(unexpected_node_error(*node, self.source, context));
+                    .report(unexpected_node_error(*node, self.parsed.source(), context));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod binding_tests {
+    use super::*;
+    use crate::error::ErrorCollector;
+
+    /// Foreign-tree refusal is an API boundary witness, not a claim that the
+    /// document traversal produces foreign recovery nodes in normal parsing.
+    #[test]
+    fn recovery_binding_requires_the_producing_tree_even_for_identical_text() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E312_2.cha"
+        ));
+        let parser = TreeSitterParser::new().expect("grammar");
+        let owner = parser
+            .parse_source_incremental(source, None)
+            .expect("owner");
+        let foreign = parser
+            .parse_source_incremental(source, None)
+            .expect("foreign");
+        let mut pending = vec![foreign.root_node()];
+        let mut witnessed = 0;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            if !node.is_error() {
+                continue;
+            }
+            let errors = ErrorCollector::new();
+            let bound = bind_recovery(&foreign, node, &errors).expect("producing tree");
+            assert_eq!(bound.text(), &source[node.byte_range()]);
+            assert!(errors.into_vec().is_empty());
+            let errors = ErrorCollector::new();
+            assert!(bind_recovery(&owner, node, &errors).is_none());
+            let diagnostics = errors.into_vec();
+            assert_eq!(diagnostics.len(), 1);
+            assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
+            assert_eq!(
+                diagnostics[0].location.span,
+                crate::error::Span::from_usize(node.start_byte(), node.end_byte())
+            );
+            witnessed += 1;
+        }
+        assert!(witnessed > 0, "retained fixture must supply an ERROR node");
     }
 }

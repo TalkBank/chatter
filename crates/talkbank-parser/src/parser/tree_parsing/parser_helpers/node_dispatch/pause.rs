@@ -7,9 +7,10 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
+use crate::generated_traversal::{AsRawNode, PauseTokenNode};
 use crate::model::{Pause, PauseDuration, PauseTimedDuration};
+use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 /// Parse a pause node to Pause enum using token text dispatch.
 ///
@@ -17,24 +18,15 @@ use tree_sitter::Node;
 /// `(.)`, `(..)`, `(...)`, or timed patterns like `(3.5)` / `(3:2.5)`.
 /// We dispatch on the token text to determine the pause type.
 pub(crate) fn parse_pause_node(
-    node: Node,
+    typed: PauseTokenNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Pause> {
+    let node = typed.raw_node();
     let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
 
-    let text = match node.utf8_text(source.as_bytes()) {
-        Ok(t) => t,
-        Err(err) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-                format!("UTF-8 decoding error in pause_token: {err}"),
-            ));
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(text) = extract_utf8_text(node, source, errors, "pause_token") else {
+        return ParseOutcome::rejected();
     };
 
     match text {

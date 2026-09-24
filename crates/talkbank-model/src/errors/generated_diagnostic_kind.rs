@@ -238,7 +238,10 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::LinkerNotUtteranceInitial => DiagnosticKind::Invalidity, // E766
         ErrorCode::MediaWhitespaceBeforeComma => DiagnosticKind::Invalidity, // E767
         ErrorCode::MediaFilenameNotRepresentable => DiagnosticKind::Invalidity, // E768
+        ErrorCode::SemicolonOnMainTier => DiagnosticKind::Invalidity, // E769
+        ErrorCode::TimingBulletBeforeContent => DiagnosticKind::Invalidity, // E770
         ErrorCode::UnknownError => DiagnosticKind::Invalidity,      // E999
         ErrorCode::SpeakerNotFoundInParticipants => DiagnosticKind::Invalidity, // W108
+        ErrorCode::MediaFilenameNonCanonicalUnicode => DiagnosticKind::Style, // W109
     }
 }

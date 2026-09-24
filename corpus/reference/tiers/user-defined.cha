@@ -18,4 +18,11 @@
 %xs1:	swallow 3093_4877
 %xs2:	multiple swallow 46639_50559
 %xdb:	average_dB="-29.52" peak_dB="-18.64"
+@Comment:	Authored label-length controls around the legacy reader boundary;
+	not additional production attestations.
+*CHI:	more annotation .
+%xabcdef:	short boundary control
+%xabcdefg:	boundary control
+%xabcdefgh:	long boundary control
+%xcommunicativefunction:	request
 @End

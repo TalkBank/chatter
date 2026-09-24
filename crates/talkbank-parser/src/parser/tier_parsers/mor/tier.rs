@@ -9,7 +9,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, MorContentNode, MorContentsChild0Choice,
+    AsRawNode, KindSlot, MorContentNode, MorContentsChild0Choice,
     MorContentsChild0MorContentChild2Child1Choice, MorContentsNode, MorDependentTierNode,
     WhitespacesNode, extract_mor_contents, extract_mor_dependent_tier,
 };
@@ -287,7 +287,7 @@ fn report_missing_terminator(mor_contents_node: Node, source: &str, errors: &imp
 ///   `unexpected_node_error`; reproduced identically.
 /// - `Absent`: no child at this position; nothing reported, nothing pushed.
 fn push_mor_content_item<'tree>(
-    slot: &ChildSlot<'tree, MorContentNode<'tree>>,
+    slot: &KindSlot<'tree, MorContentNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     items: &mut Vec<Mor>,
@@ -308,7 +308,7 @@ fn push_mor_content_item<'tree>(
 /// Absent need nothing, and a reported recovery marks the whole tier failed,
 /// as it does for an item or a terminator.
 fn require_structure<'tree>(
-    slot: &ChildSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &KindSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     had_item_failure: &mut bool,
@@ -327,7 +327,7 @@ fn require_structure<'tree>(
 /// SAME uniform `check_not_missing`-first gate to the terminator child as to
 /// every other child in `mor_contents`.
 fn decode_mor_terminator<'tree>(
-    slot: &ChildSlot<'tree, MorContentsChild0MorContentChild2Child1Choice<'tree>>,
+    slot: &KindSlot<'tree, MorContentsChild0MorContentChild2Child1Choice<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     had_item_failure: &mut bool,

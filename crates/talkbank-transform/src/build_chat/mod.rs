@@ -1,9 +1,9 @@
-//! Build a validated CHAT file from a structured transcript description.
+//! Build a mutable CHAT file from a structured transcript description.
 //!
 //! Given participants, optional media, and utterances as pre-formatted CHAT
 //! main-tier text (a [`TranscriptDescription`]), assemble a [`ChatFile`] AST:
 //! synthesize the header block, parse each utterance through the tree-sitter
-//! parser (so the result is real, validated model structure, never hand-built
+//! parser (so the result is real, parsed model structure, never hand-built
 //! scaffolding), and close with `@End`.
 //!
 //! This is the general CHAT-generation entry point for any converter (the
@@ -67,32 +67,9 @@ pub enum BuildChatError {
 /// Returns [`BuildChatError`] if the description has no participants or an
 /// utterance/header value cannot be parsed into the model.
 pub fn build_chat(desc: &TranscriptDescription) -> Result<ChatFile, BuildChatError> {
-    if desc.participants.is_empty() {
-        return Err(BuildChatError::NoParticipants);
-    }
-    // The two facts a file-assembler cannot know, refused here beside the one
-    // that was already refused. Both used to be invented: `langs` became
-    // `["eng"]` and an empty corpus became the literal `corpus_name`, and both
-    // reached the published `@Languages` and `@ID` headers looking stated.
-    if desc.langs.is_empty() {
-        return Err(BuildChatError::NoLanguages);
-    }
-    if let Some(participant) = desc
-        .participants
-        .iter()
-        .find(|participant| participant.corpus.is_empty())
-    {
-        return Err(BuildChatError::EmptyCorpus {
-            speaker: participant.id.clone(),
-        });
-    }
-
-    let context = BuildChatContext::new(desc).map_err(BuildChatError::Build)?;
-    let mut lines = build_header_lines(desc, context.langs())?;
-    lines.extend(
-        build_utterance_lines(&desc.utterances, context.parser(), context.primary_lang())
-            .map_err(BuildChatError::Build)?,
-    );
+    let context = BuildChatContext::new(desc)?;
+    let mut lines = build_header_lines(&context);
+    lines.extend(build_utterance_lines(&context).map_err(BuildChatError::Build)?);
     lines.push(Line::header(Header::End));
 
     // `with_participants`, NOT `new`. `ChatFile::new` leaves the participant

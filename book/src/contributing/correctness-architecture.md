@@ -1,7 +1,7 @@
 # Correctness Architecture
 
 **Status:** Current
-**Last modified:** 2026-09-09 08:49 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 This is the target design of chatter's correctness machinery, written for the
 maintainer who inherits it. It is not a patch list and not a description of the
@@ -359,7 +359,7 @@ There is a seventh class, and it is transitional by design:
 
 | Class | Rule |
 |---|---|
-| **WILD-CORPUS ORACLE** | The `#[ignore]`d differential over the production corpus (`$TALKBANK_DATA`) is an evidence-producing PASS, not a gate. It is run deliberately; its output must land as committed spec examples and sanitized fixtures; then the ignored tests are deleted with it. Evidence produced and discarded is why the model crate still fabricates its own inputs. |
+| **PRODUCTION ATTESTATION** | Retained production evidence supplies candidates for independently specified rules and minimal sanitized fixtures. Ordinary correctness tests consume the committed finite corpus without `$TALKBANK_DATA`. Production differential runs are not a release or CI requirement; completing the spec/reference coverage removes the need for that heavyweight process. An occurrence in production does not establish validity. |
 
 **The rule that makes this a design and not a taxonomy: a test that is not in
 one of these classes is deleted.** Not deprecated, not annotated, deleted. If
@@ -449,6 +449,46 @@ by the spec. Adding that identifier is what lets the two meet.
 
 ## The completeness criterion
 
+### Coverage target and finite evidence
+
+The target is 100% line, region and branch coverage of handwritten parser,
+model, validation and transform code. Tree-sitter has first priority; re2c
+remains supported. Generated code is reported separately. Uncovered executable
+behavior remains work: do not exclude it or fabricate an impossible model to
+raise the percentage. A path removed through a type invariant needs evidence
+that the invariant holds at its producer and that no consumer bypass remains.
+
+Coverage does not establish semantic completeness. Pair independently authored
+spec expectations with legal boundaries, invalid witnesses, reference-corpus
+combinations, and adjudicated CHECK behavior. Preserve constructor and wire
+boundary tests where those APIs admit inputs that CHAT parsing cannot produce.
+
+Reference-corpus traversal, roundtrip and backend comparison tests admit their
+inputs through `talkbank_parser_tests::chat_corpus::ChatCorpus`. Its constructor
+requires a nonempty recursive file inventory and reads every source before
+returning. Missing directories, walk errors and unreadable sources fail the
+measurement; the type does not certify CHAT validity. Directory enumeration
+must never silently shrink the measured population.
+
+Generated validation fixtures also preserve the example's authored transcript
+name in a required `transcript_name` manifest field. Their storage names (such
+as `W109_1.cha`) must not become validation context. Anonymous examples remain
+anonymous; named examples retain their exact Unicode spelling. Both the spec
+runner and the generated-corpus runner therefore exercise filename-sensitive
+rules with the same input identity. Older manifests require regeneration.
+
+For a manifest-only generator change, regenerate its owning artifact without
+rebuilding unrelated generated outputs:
+
+```bash
+cargo run --manifest-path spec/Cargo.toml --bin spec_gen -- \
+  --artifact-root crates/talkbank-parser-tests/tests/error_corpus/validation_errors
+```
+
+`--artifact-root` selects an existing artifact owner and rejects unknown roots
+before writing. It does not regenerate dependencies; use full generation when
+the changed inputs affect other artifacts too.
+
 ### Stated mechanically
 
 > **For every branch in hand-written, non-generated code, the attribution
@@ -464,9 +504,44 @@ statement a human made, with a reason, that a later measurement can contradict.
 ### The instrument
 
 ```bash
-# Branch coverage needs nightly; the pinned toolchain gives regions only.
-cargo +nightly llvm-cov --branch -p <crate> --lib --json --output-path <out>.json
+# Include integration fixtures and report production dependencies, not just
+# the fixture crate. Branch coverage requires nightly.
+cargo +nightly llvm-cov --branch --workspace --exclude chatter-desktop --tests \
+  --json --output-path <out>.json -- --skip gates:: \
+  --skip conformance_inventory_current:: --skip generated_traversal_current::
 ```
+
+This measures the functional suite, excluding gate modules and generated-source
+currency checks. The desktop runtime and the separate spec workspace are not
+measured by this command. Record these limits with the report; a failed run is
+not a complete baseline. The export also includes inline test code, so a source
+directory's raw percentage is not automatically production-only coverage.
+
+The region worklist's JSON field is `uncovered_region_starts`; the former
+`uncovered_branches` name overstated what it measured. The separate
+`--branches-json <path>` output records independent uncovered true/false
+outcomes from LLVM's branch records. Both inventories union source positions
+across instantiations. They are not LLVM's summary percentages: LLVM merges
+region summary counts by taking the maximum per instantiation group, so
+complementary instantiations can cover more distinct positions than its
+summary reports. See LLVM's
+[RegionCoverageInfo::merge](https://github.com/llvm/llvm-project/blob/main/llvm/tools/llvm-cov/CoverageSummaryInfo.h).
+The tool reconstructs that summary separately to check its arithmetic.
+Unexplained disagreements remain explicit exclusions and cause a nonzero exit;
+excluding every residual row must never produce a completeness claim. Reports
+retain the caller's `--produced-by` command beside their rows.
+
+For conservative inline-test attribution, the parser-test example
+`coverage_source_ranges` reads a JSON array of repository-relative Rust paths
+on stdin and emits source-hashed test ranges. It parses explicit `#[test]`
+functions and `#[cfg(test)]` inline modules/functions/impls with `syn`, not
+regular expressions or mangled-name guesses. Pass its output to the worklist
+with `--test-ranges`. Stale source hashes are rejected. Other cfg expressions
+and macro-generated code remain **production or unclassified**; this does not
+claim to reproduce rustc's expansion or establish parse-backed evidence.
+The inventories honor the export's `files` selection: LLVM can retain function
+records for test files absent from its file report, and those must not silently
+re-enter the reported scope.
 
 Region coverage is a good proxy for match-arm coverage, because each arm body is
 its own region. It is a bad proxy for two shapes that are everywhere in a

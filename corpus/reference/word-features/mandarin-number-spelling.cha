@@ -1,0 +1,19 @@
+@UTF8
+@Begin
+@Languages:	zho
+@Participants:	CHI Target_Child
+@ID:	zho|corpus|CHI|||||Target_Child|||
+@Comment:	Authored number-spelling controls, not a production transcription.
+@Comment:	Written controls for the numeral inputs in E220_bare_numerals, in matching order.
+@Comment:	Constructs: Mandarin digit words, tens, internal zeros, four-digit groups, skipped groups.
+*CHI:	一 .
+*CHI:	十 .
+*CHI:	十二 .
+*CHI:	二十一 .
+*CHI:	一百零一 .
+*CHI:	一千零一 .
+*CHI:	一万 .
+*CHI:	一万零一 .
+*CHI:	一亿零一 .
+*CHI:	一亿零一万零一 .
+@End

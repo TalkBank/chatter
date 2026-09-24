@@ -234,7 +234,7 @@ mod tests {
     use super::*;
 
     /// Pins the exact spec-derived classification: every code is
-    /// `Invalidity` EXCEPT the three named here. A change to this test is a
+    /// `Invalidity` EXCEPT the codes named here. A change to this test is a
     /// deliberate reclassification (edit the code's spec file's `Kind`
     /// bullet, regenerate, then update this list to match) and must never
     /// be a silent drive-by edit made only to turn the test green.
@@ -250,6 +250,10 @@ mod tests {
                 ErrorCode::PrefixedFormGluedToPrecedingWord,
                 DiagnosticKind::Style,
             ), // E764
+            (
+                ErrorCode::MediaFilenameNonCanonicalUnicode,
+                DiagnosticKind::Style,
+            ), // W109: canonical-equivalent names are a style notice, not E531.
         ];
 
         for code in ErrorCode::iter() {

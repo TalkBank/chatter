@@ -1,0 +1,8 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	0 foo 0 [=! nods] 〔bar baz〕 .
+%sin:	a b c d
+@End

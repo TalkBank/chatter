@@ -1,7 +1,7 @@
 # Summary
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 [Introduction](introduction.md)
 [Install](install/index.md)
@@ -24,8 +24,8 @@
 - [Sanitize (Protected Corpora)](chatter/user-guide/sanitize.md)
 - [Speaker-ID (Label ASR Speakers)](chatter/user-guide/speaker-id.md)
 - [Rediarize (Repair Speaker Attribution)](chatter/user-guide/rediarize.md)
-- [Merge (Transcript Combination)](chatter/user-guide/merge.md)
-- [Merge Workflow (pipeline, batch, adjudicate, sanity-scan)](chatter/user-guide/merge-workflow.md)
+- [Removed: merge, pipeline, batch](chatter/user-guide/merge.md)
+- [Review Tools (adjudicate, sanity-scan)](chatter/user-guide/merge-workflow.md)
 
 # CHAT Format
 

@@ -13,6 +13,14 @@ pub enum ChineseScript {
     Traditional,
 }
 
+/// The sole owner of the boundary before the next nonzero digit group.
+#[derive(Clone, Copy)]
+enum GroupPrefix {
+    First,
+    Adjacent,
+    AfterSkippedGroup,
+}
+
 /// Convert a non-negative integer to Chinese characters.
 ///
 /// # Arguments
@@ -57,28 +65,21 @@ pub fn num2chinese(num: u64, script: ChineseScript) -> String {
 
     let total_groups = groups.len();
     let mut parts: Vec<String> = Vec::new();
-    let mut prev_group_was_zero = false;
+    let mut prefix = GroupPrefix::First;
 
     for (gi, group) in groups.iter().enumerate() {
         let group_val: u64 = group.iter().fold(0u64, |acc, &d| acc * 10 + d as u64);
         let unit_idx = total_groups - 1 - gi; // index into c_unit2 (0 = no unit)
 
         if group_val == 0 {
-            if !parts.is_empty() {
-                prev_group_was_zero = true;
-            }
+            prefix = GroupPrefix::AfterSkippedGroup;
             continue;
         }
 
-        // Add a leading zero if the previous group was zero (or this group
-        // has leading zeros and there are preceding groups)
-        if prev_group_was_zero {
-            parts.push("零".to_string());
-            prev_group_was_zero = false;
-        }
-
-        // Convert the 4-digit group
-        let group_str = convert_group(group, c_basic, c_unit1, !parts.is_empty());
+        // The digit emitter combines skipped groups and leading zero digits
+        // into one pending zero; the outer loop must not emit another copy.
+        let group_str = convert_group(group, c_basic, c_unit1, prefix);
+        prefix = GroupPrefix::Adjacent;
 
         parts.push(group_str);
 
@@ -93,12 +94,12 @@ pub fn num2chinese(num: u64, script: ChineseScript) -> String {
 
 /// Convert a group of up to 4 digits to Chinese characters.
 ///
-/// `has_preceding` is true when there are higher-order groups before this one,
-/// meaning leading zeros in this group should emit a "零" placeholder.
-fn convert_group(digits: &[u8], c_basic: &[char], c_unit1: &[&str], has_preceding: bool) -> String {
+/// Prefix state and internal zero runs share this one zero-emission path.
+fn convert_group(digits: &[u8], c_basic: &[char], c_unit1: &[&str], prefix: GroupPrefix) -> String {
     let mut parts: Vec<String> = Vec::new();
     let len = digits.len();
-    let mut has_zero_run = false;
+    let has_preceding = !matches!(prefix, GroupPrefix::First);
+    let mut has_zero_run = matches!(prefix, GroupPrefix::AfterSkippedGroup);
 
     for (i, &d) in digits.iter().enumerate() {
         let pos_from_right = len - 1 - i; // 0=ones, 1=tens, 2=hundreds, 3=thousands

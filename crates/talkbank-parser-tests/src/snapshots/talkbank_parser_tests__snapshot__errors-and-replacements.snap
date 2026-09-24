@@ -659,6 +659,98 @@ expression: snapshot
     },
     {
       "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Authored exclusion control: Mor omits the replacement; spoken domains retain child.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "this",
+              "content": [
+                {
+                  "content": "this",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "this",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "is",
+              "content": [
+                {
+                  "content": "is",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "is",
+              "type": "word"
+            },
+            {
+              "replacement": {
+                "words": [
+                  {
+                    "cleaned_text": "children",
+                    "content": [
+                      {
+                        "content": "children",
+                        "type": "text"
+                      }
+                    ],
+                    "raw_text": "children"
+                  }
+                ]
+              },
+              "scoped_annotations": [
+                {
+                  "type": "exclude"
+                }
+              ],
+              "type": "replaced_word",
+              "word": {
+                "cleaned_text": "child",
+                "content": [
+                  {
+                    "content": "child",
+                    "type": "text"
+                  }
+                ],
+                "raw_text": "child"
+              }
+            },
+            {
+              "cleaned_text": "speaking",
+              "content": [
+                {
+                  "content": "speaking",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "speaking",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "header": {
         "type": "end"
       },
       "line_type": "header"

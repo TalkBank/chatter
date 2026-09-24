@@ -424,7 +424,7 @@ mod tests {
     //
     // This is the architectural problem, not a formatting problem:
     // fixing the message without widening the signature is impossible.
-    // Per CLAUDE.md ("types are the first layer of documentation; no
+    // Per AGENTS.md ("types are the first layer of documentation; no
     // tuple-packed / stringly / count-packed domain seams"), the
     // correct fix is to change the signature to accept `&[ParseError]`.
     //

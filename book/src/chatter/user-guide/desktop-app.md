@@ -1,7 +1,7 @@
 # Chatter Desktop
 
 **Status:** Current
-**Last modified:** 2026-08-03 09:06 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 Chatter Desktop is a native graphical validation app for CHAT files, released
 alongside the `chatter` CLI. Prefer the `chatter` CLI for scripted or batch
@@ -33,11 +33,55 @@ This page documents the desktop surface:
 Chatter Desktop keeps itself current. When you launch it, it quietly checks
 for a newer release; if one is available it asks whether to update, and on
 your confirmation it downloads, installs, and restarts into the new version.
-If the check cannot reach the network it simply does nothing and the app keeps
-working on the version you have. You never have to track releases or
-re-download by hand.
+The app also checks every six hours while running. Use **Check for Updates…**
+in the application menu to check immediately; a manual check reports when you
+are current or when the check fails. Overlapping checks share one operation,
+so repeated menu clicks do not start duplicate prompts or installations.
+
+If a background check cannot reach the network, the app keeps working on the
+installed version. A failed check is not evidence that the installed version
+is current. Retry the menu command later or download an installer from the
+release page. Export any results you want to retain before accepting an update:
+installation relaunches the app, and the current results are not a saved session.
+**About Chatter** shows the installed version and links to the project.
 
 ## Getting Started
+
+### Install the released application
+
+Open the [Chatter release page](https://github.com/TalkBank/chatter/releases/latest)
+and choose the desktop installer for your platform, rather than a CLI archive:
+
+| Platform | Desktop download | Installation |
+| --- | --- | --- |
+| macOS, Apple silicon | `Chatter-macos-apple-silicon.dmg` | Open the disk image and copy Chatter to Applications. |
+| macOS, Intel | `Chatter-macos-intel.dmg` | Open the disk image and copy Chatter to Applications. |
+| Windows | `Chatter-windows-setup.exe` | Run the installer. |
+| Linux | `Chatter-linux-x86_64.deb` or `.AppImage` | Use the Debian package manager, or make the AppImage executable and launch it. |
+
+The macOS application and disk image are signed and notarized by the release
+pipeline. Windows installers currently lack Authenticode signing and may show
+a SmartScreen warning. Verify that you downloaded the intended project release;
+do not disable operating-system security globally to install it. Updater
+signatures are separate from operating-system signing.
+
+No Rust toolchain, Node.js, terminal, or separate CLI installation is needed to
+use a released desktop app. CLAN is optional and needed only for **Open in CLAN**.
+
+### A first validation session
+
+1. Choose one `.cha` file or a folder. Folder validation includes subfolders.
+2. Leave **Tree-sitter** selected. Keep optional roundtrip and strict-linker
+   checks off unless you need them for this session.
+3. Wait for completion; a blank problem list during discovery or processing
+   does not certify the files.
+4. Select a file with a diagnostic or processing failure, read its message,
+   and use **Copy**, **Reveal**, or **Open in CLAN** as appropriate.
+5. Edit the original transcript in your editor, save it, and **Re-validate**.
+   Export results if you need a record before starting another target.
+
+Validation does not edit or rename your transcripts. The desktop app is not a
+CHAT editor or an automatic repair interface.
 
 ### Build from source
 
@@ -48,7 +92,12 @@ cargo tauri dev       # launches the app with hot reload
 cargo tauri build     # produces a distributable app bundle
 ```
 
-Requires: Rust (stable, edition 2024), Node.js, and npm.
+Use the repository's pinned Rust toolchain and the Node version used by its
+desktop workflow. Linux also needs Tauri's native system dependencies. A
+distributable updater-enabled build needs signing configuration; the two build
+commands above are not a substitute for the coordinated release pipeline.
+See [Desktop App Testing](../../contributing/desktop-testing.md) and
+[CI and Release](../../contributing/ci-and-release.md).
 
 ## Using the App
 
@@ -88,8 +137,9 @@ The main window has three areas:
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- **File tree** (left), collapsible directory tree showing **only files with
-  errors** (valid files are hidden to reduce clutter). A header shows "N files
+- **File tree** (left), collapsible directory tree showing files with diagnostics
+  (including warnings) or read, parse and roundtrip failures. Valid files without
+  diagnostics are hidden to reduce clutter. A header shows "N files
   with errors / M total". Files are sorted alphabetically.
 
 - **Error panel** (right), for the selected file, shows each error with its
@@ -128,11 +178,46 @@ config:
 |---------|---------------------|---------|
 | Roundtrip check | `--roundtrip` | Off |
 | Parser | `--parser tree-sitter\|re2c` | Tree-sitter |
-| Strict cross-utterance linkers | (enables E351-E355) | Off |
+| Strict cross-utterance linkers | `--strict-linkers` | Off |
 | Parallel jobs | `--jobs N` | All CPUs |
 
 Settings are disabled while a validation run is in progress and apply to the
 next run (including Re-validate).
+
+**Re2c is experimental and incomplete.** It is not a second validity authority;
+use Tree-sitter for ordinary work and report disagreements with a minimal CHAT
+example. Strict-linker checks enforce additional quotation/completion conventions
+that are not enabled for ordinary validation. Roundtrip checking compares the
+parsed model with its serialized and reparsed form; it is not an audio check or
+a guarantee that every byte keeps its original formatting.
+
+The app shares the CLI's validation cache and rule-aware engine. Changed files
+are revalidated; a cached validation result is not itself proof that an optional
+roundtrip check ran. Selected settings apply to the next run, not the run already
+in progress. Settings currently reset to their defaults when the app restarts.
+
+### Failures, warnings and incomplete results
+
+Read and parse failures may have no CHAT error card because the validator could
+not obtain a usable transcript. They still appear in the file tree, and the
+detail panel shows the reason. A roundtrip failure is likewise a failed check,
+not “No errors.” Report unexpected roundtrip failures rather than editing the
+data merely to silence an internal mismatch.
+
+“All files valid” requires a completed, non-cancelled, nonempty run with every
+file accounted for as valid and no visible diagnostics or roundtrip failures.
+Cancelling, losing files during a run, or failing to read a file cannot earn
+that summary. An empty folder means **No CHAT files found**, not a successful
+validation population. The title, notification and status bar share the same
+completion summary.
+
+Warning-only files remain visible even though a warning is not a hard error.
+For example, W109 identifies a nonstandard Unicode spelling in the `@Media`
+name, the stored transcript filename, or both. Typing a different Unicode form
+of the same filesystem path must not change that diagnosis. The optional CLI
+repair `chatter fix --code W109 --apply <file>` normalizes only the media-name
+token; it never renames the file. A file-only warning can remain afterward.
+See [Headers](../../chat-format/headers.md) for normalization details.
 
 ### Dark mode
 
@@ -169,6 +254,21 @@ messages.
 system (macOS and Windows only). It adjusts line numbers to account for headers
 that CLAN hides (`@UTF8`, `@PID`, `@Font`, `@ColorWords`, `@Window`).
 
+### Exporting results
+
+After a run ends, **Export** opens a save dialog. JSON preserves per-file
+diagnostics and status; plain text includes each file's status and its rendered
+diagnostics. Read, parse and roundtrip failure reasons are included even when
+there is no CHAT diagnostic card. Copying one card exports only that diagnostic,
+not the outcome of the whole file or folder.
+
+A cancelled run contains only the results obtained before cancellation. An
+export is a record of those results, not proof that every requested file was
+checked. Retain the run's completion/cancellation context with the report;
+the current per-file export does not include a full session manifest with
+settings, application version and run coverage. Revalidate to obtain a complete
+population before making a whole-folder validity claim.
+
 ### Keyboard shortcuts
 
 | Shortcut | Action |
@@ -186,7 +286,9 @@ The window title updates to reflect the current state:
 - **Starting:** "Chatter, Starting…"
 - **Discovering:** "Chatter, Discovering files…"
 - **Running:** "Chatter, Validating (45/120)"
-- **Finished:** "Chatter, 14 errors in 3 files" or "Chatter, All 74 files valid"
+- **Finished:** a diagnostic/failure summary or "Chatter, All 74 files valid"
+- **Cancelled:** "Chatter, Cancelled; results are partial"
+- **Empty:** "Chatter, No CHAT files found"
 - **Incomplete:** "Chatter, Incomplete (2 files not checked)"
 - **Stopped:** "Chatter, Run stopped unexpectedly"
 
@@ -225,22 +327,38 @@ won't appear again.
 
 ## CLI Bundling
 
-The desktop app can bundle the `chatter` CLI binary so power users who download
-the GUI can also run the CLI from their terminal (like VS Code ships the `code`
-command).
+Install the CLI separately from the same release when you need scripted
+validation or repairs. The current desktop bundle configuration does not ship a
+CLI resource or an **Install CLI Command** menu item. A backend installation
+command is not evidence that a released bundle contains a CLI. Bundling remains
+future work, not a prerequisite for using desktop validation.
 
-An **Install CLI Command** menu item (when available) symlinks the bundled
-binary to `/usr/local/bin/chatter` (macOS/Linux) or copies it to a PATH
-directory (Windows).
+## Troubleshooting and reporting a problem
 
-To build with the bundled CLI:
+| Symptom | What to check |
+| --- | --- |
+| Stuck on Starting | Quote the startup message; this is before file discovery. |
+| Discovering takes time | Large or network folders can be slow. Try one local file to isolate the issue. |
+| Read error | Confirm the file still exists and the app can read it; check volume availability and permissions. |
+| No CHAT files found | Select the intended folder and check that transcripts have `.cha` extensions. |
+| Open in CLAN unavailable | Confirm a supported CLAN installation; validation itself does not need CLAN. |
+| Update failed | Keep using the installed app, retry later, or use the official installer. |
+| Roundtrip failed | Retain the transcript and reported reason; this can indicate a parser/serializer defect. |
 
-```bash
-cargo build --release -p chatter
-mkdir -p apps/chatter-desktop/src-tauri/resources
-cp target/release/chatter apps/chatter-desktop/src-tauri/resources/
-cargo tauri build
-```
+Include the installed version from **About Chatter**, operating system, selected
+parser/settings, whether the target was one file or a folder, and copied
+diagnostics. Share a minimal sanitized example when possible. Review exported
+results before sharing: they can contain file paths and transcript snippets.
+Do not put private participant data in a public issue.
+
+### Current limitations
+
+- One validation target per run; no in-app editing or automatic fix command.
+- No persistent validation-result session; export results before closing or updating.
+- Re2c remains experimental; Tree-sitter is the default.
+- Desktop navigation is primarily mouse-driven; it is not the terminal UI's key map.
+- CLAN integration is platform-dependent. Native end-to-end automation is available
+  on Linux/Windows; macOS requires a real-app smoke review as well as seam tests.
 
 ## Architecture
 

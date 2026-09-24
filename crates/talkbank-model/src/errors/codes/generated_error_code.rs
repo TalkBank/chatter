@@ -444,7 +444,7 @@ pub enum ErrorCode {
     /// Invalid date format.
     #[code("E518")]
     InvalidDateFormat,
-    /// Invalid ISO 639 language code.
+    /// Invalid ISO 639 language code, or an `@ID` language not declared in `@Languages`.
     #[code("E519")]
     InvalidLanguageCode,
     /// Speaker code not defined in `@Participants`.
@@ -541,9 +541,9 @@ pub enum ErrorCode {
     /// CHECK error 126.
     #[code("E548")]
     IdHeaderOutOfOrder,
-    /// The same speaker code is declared more than once in the `@Participants`
-    /// header. Each participant must be declared exactly once. Corresponds to
-    /// CLAN CHECK error 13.
+    /// The same speaker code is repeated in `@Participants` or has more than
+    /// one `@ID` header. Each participant and speaker ID must be declared once.
+    /// Corresponds to CLAN CHECK error 13.
     #[code("E549")]
     DuplicateSpeakerDeclaration,
     /// The `@Participants` header ends with a trailing comma (a stray comma
@@ -1019,6 +1019,20 @@ pub enum ErrorCode {
     /// comma; the reachable path is a `ChatFile` deserialized from JSON.
     #[code("E768")]
     MediaFilenameNotRepresentable,
+    /// A semicolon separator appears on a main tier.
+    ///
+    /// Modern CHAT disallows semicolons on main tiers; use separate utterances
+    /// or an appropriate CHAT/CA marker. The typed separator is retained for
+    /// precise diagnostics and lossless handling of legacy input.
+    #[code("E769")]
+    SemicolonOnMainTier,
+    /// A main-tier timing bullet occurs before any utterance material.
+    ///
+    /// A timing bullet scopes preceding material; words (including explicit zero),
+    /// events, actions and pauses can establish that scope. Linkers, precodes and
+    /// structural markers cannot. Parsed timing evidence is retained unchanged.
+    #[code("E770")]
+    TimingBulletBeforeContent,
     /// Unknown or unrecognized error code (fallback).
     #[code("E999")]
     #[status(planned)]
@@ -1026,4 +1040,16 @@ pub enum ErrorCode {
     /// Speaker code not found in `@Participants` (non-fatal).
     #[code("W108")]
     SpeakerNotFoundInParticipants,
+    /// `@Media` filename and the file being parsed name the same media
+    /// (Unicode-canonically, NFC-equal), but one or both spellings are not
+    /// themselves in NFC form (e.g. a decomposed accented letter: base letter
+    /// plus combining mark, instead of the precomposed codepoint). Both
+    /// spellings render identically and are not a real filename mismatch
+    /// (see [`MediaFilenameMismatch`]), but TalkBank filenames and `@Media`
+    /// names are canonically UTF-8 NFC, so the non-conforming spelling should
+    /// be canonicalized.
+    ///
+    /// [`MediaFilenameMismatch`]: Self::MediaFilenameMismatch
+    #[code("W109")]
+    MediaFilenameNonCanonicalUnicode,
 }

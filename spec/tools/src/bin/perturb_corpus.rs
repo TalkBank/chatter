@@ -1,7 +1,9 @@
-//! Generate error-triggering CHAT files by perturbing valid corpus files
+//! Generate unreviewed CHAT mutation candidates.
 //!
-//! Takes valid `.cha` files and introduces controlled mutations to trigger
-//! specific error codes. Each perturbation targets exactly one error code.
+//! Input validity and diagnostic expectations are NOT established here.
+//! Textual mutations may introduce multiple defects or no defect at all.
+//! Review seeds and mutations against canonical specs before promoting a
+//! candidate into an authored spec claim; parser output is not an oracle.
 //!
 //! Usage:
 //!   cargo run --bin perturb_corpus -- \
@@ -29,7 +31,7 @@ use walkdir::WalkDir;
 
 #[derive(ClapParser)]
 #[command(name = "perturb_corpus")]
-#[command(about = "Generate error CHAT files by perturbing valid files or mining real errors")]
+#[command(about = "Generate unreviewed CHAT mutation candidates or inspect syntax errors")]
 struct Args {
     /// Input .cha file or directory of .cha files to perturb
     #[arg(long)]
@@ -68,76 +70,52 @@ struct Args {
 struct Perturbation {
     name: &'static str,
     description: &'static str,
-    error_code: &'static str,
-    layer: &'static str,
 }
 
 const PERTURBATIONS: &[Perturbation] = &[
     Perturbation {
         name: "delete-participants",
         description: "Delete @Participants header",
-        error_code: "E501",
-        layer: "parser",
     },
     Perturbation {
         name: "delete-languages",
         description: "Delete @Languages header",
-        error_code: "E503",
-        layer: "parser",
     },
     Perturbation {
         name: "delete-id",
         description: "Delete all @ID headers",
-        error_code: "E504",
-        layer: "validation",
     },
     Perturbation {
         name: "undeclared-speaker",
         description: "Change speaker code to undeclared XXX",
-        error_code: "E308",
-        layer: "validation",
     },
     Perturbation {
         name: "delete-terminator",
         description: "Remove terminator from first utterance",
-        error_code: "E305",
-        layer: "parser",
     },
     Perturbation {
         name: "extra-mor-word",
         description: "Add extra word to first %mor tier",
-        error_code: "E706",
-        layer: "validation",
     },
     Perturbation {
         name: "fewer-mor-words",
         description: "Remove a word from first %mor tier",
-        error_code: "E705",
-        layer: "validation",
     },
     Perturbation {
         name: "delete-begin",
         description: "Delete @Begin header",
-        error_code: "E502",
-        layer: "parser",
     },
     Perturbation {
         name: "delete-end",
         description: "Delete @End header",
-        error_code: "E510",
-        layer: "parser",
     },
     Perturbation {
         name: "duplicate-participants",
         description: "Duplicate the @Participants header",
-        error_code: "E511",
-        layer: "validation",
     },
     Perturbation {
         name: "mor-terminator-mismatch",
         description: "Change %mor terminator to differ from main tier",
-        error_code: "E716",
-        layer: "validation",
     },
 ];
 
@@ -147,10 +125,7 @@ fn main() -> anyhow::Result<()> {
     if args.list {
         println!("Available perturbations:\n");
         for p in PERTURBATIONS {
-            println!(
-                "  {:<30} {} [{}] ({})",
-                p.name, p.description, p.error_code, p.layer
-            );
+            println!("  {:<30} {} (unreviewed)", p.name, p.description);
         }
         return Ok(());
     }
@@ -181,7 +156,7 @@ fn main() -> anyhow::Result<()> {
             anyhow::bail!("No .cha files found in {:?}", input);
         }
 
-        let mut results = Vec::new();
+        let mut candidates = Vec::new();
         for file in &files {
             let source = std::fs::read_to_string(file)?;
             let stem = file
@@ -194,23 +169,29 @@ fn main() -> anyhow::Result<()> {
                 if let Some(mutated) = apply_perturbation(&source, p) {
                     let out_name = format!("{}_{}.cha", stem, p.name.replace('-', "_"));
                     let out_path = args.output_dir.join(&out_name);
-                    std::fs::write(&out_path, &mutated)?;
-                    results.push(PerturbResult {
-                        source: file.to_string_lossy().to_string(),
-                        output: out_path.to_string_lossy().to_string(),
-                        perturbation: p.name.to_string(),
-                        expected_error: p.error_code.to_string(),
+                    candidates.push(PreparedCandidate {
+                        source: file.clone(),
+                        output: out_path,
+                        perturbation: p.name,
+                        text: mutated,
                     });
                 }
             }
         }
 
+        // Admit the entire destination set before the first candidate write.
+        // Execution still uses create_new so a concurrent creator cannot be
+        // overwritten after this preflight.
+        let results = CandidateWritePlan::admit(candidates, |path| path.try_exists())?.write()?;
         if args.json {
             println!("{}", serde_json::to_string_pretty(&results)?);
         } else {
-            println!("Generated {} perturbed files:\n", results.len());
+            println!(
+                "Generated {} unreviewed candidates (not golden tests):\n",
+                results.len()
+            );
             for r in &results {
-                println!("  [{}] {} → {}", r.expected_error, r.perturbation, r.output);
+                println!("  [unreviewed] {} → {}", r.perturbation, r.output);
             }
         }
     } else {
@@ -220,12 +201,64 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+struct PreparedCandidate {
+    source: PathBuf,
+    output: PathBuf,
+    perturbation: &'static str,
+    text: String,
+}
+
+/// Only an admitted, collision-free destination set can execute writes.
+/// This is output admission, not CHAT validity or golden-test approval.
+struct CandidateWritePlan(Vec<PreparedCandidate>);
+
+impl CandidateWritePlan {
+    fn admit(
+        candidates: Vec<PreparedCandidate>,
+        mut exists: impl FnMut(&Path) -> std::io::Result<bool>,
+    ) -> anyhow::Result<Self> {
+        let mut destinations = std::collections::BTreeSet::new();
+        for candidate in &candidates {
+            if !destinations.insert(&candidate.output) {
+                anyhow::bail!("Candidate output collision: {}", candidate.output.display());
+            }
+            if exists(&candidate.output)? {
+                anyhow::bail!(
+                    "Refusing to overwrite candidate output: {}",
+                    candidate.output.display()
+                );
+            }
+        }
+        Ok(Self(candidates))
+    }
+
+    fn write(self) -> anyhow::Result<Vec<UnreviewedCandidate>> {
+        use std::io::Write;
+        let mut results = Vec::with_capacity(self.0.len());
+        for candidate in self.0 {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&candidate.output)?;
+            file.write_all(candidate.text.as_bytes())?;
+            results.push(UnreviewedCandidate {
+                source: candidate.source.to_string_lossy().to_string(),
+                output: candidate.output.to_string_lossy().to_string(),
+                perturbation: candidate.perturbation.to_owned(),
+            });
+        }
+        Ok(results)
+    }
+}
+
+/// This phase deliberately has no diagnostic claim field. Promotion belongs
+/// to the reviewed spec vocabulary, not to a string table in the mutator.
 #[derive(Debug, Serialize)]
-struct PerturbResult {
+#[serde(tag = "assessment", rename = "unreviewed")]
+struct UnreviewedCandidate {
     source: String,
     output: String,
     perturbation: String,
-    expected_error: String,
 }
 
 fn collect_cha_files(path: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
@@ -592,5 +625,95 @@ fn collect_error_types(node: tree_sitter::Node, source: &str, errors: &mut Vec<S
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_error_types(child, source, errors);
+    }
+}
+
+#[cfg(test)]
+mod candidate_contract {
+    use super::{CandidateWritePlan, PreparedCandidate, UnreviewedCandidate};
+
+    fn candidate(source: &str, output: &str) -> PreparedCandidate {
+        PreparedCandidate {
+            source: source.into(),
+            output: output.into(),
+            perturbation: "delete-end",
+            text: "unreviewed candidate".into(),
+        }
+    }
+
+    #[test]
+    fn output_admission_refuses_collisions_existing_paths_and_failed_probes() {
+        let collision = CandidateWritePlan::admit(
+            vec![
+                candidate("first/seed.cha", "seed_delete_end.cha"),
+                candidate("second/seed.cha", "seed_delete_end.cha"),
+            ],
+            |_| Ok(false),
+        );
+        assert!(collision.is_err());
+        assert!(
+            CandidateWritePlan::admit(vec![candidate("seed.cha", "existing.cha")], |_| Ok(true))
+                .is_err()
+        );
+        assert!(
+            CandidateWritePlan::admit(vec![candidate("seed.cha", "unknown.cha")], |_| Err(
+                std::io::Error::other("probe refused")
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn output_admission_preserves_distinct_candidates_without_writing() {
+        let plan = CandidateWritePlan::admit(
+            vec![
+                candidate("first.cha", "first_delete_end.cha"),
+                candidate("second.cha", "second_delete_end.cha"),
+            ],
+            |_| Ok(false),
+        )
+        .expect("distinct absent destinations");
+        assert_eq!(plan.0.len(), 2);
+        assert_eq!(plan.0[0].source.to_str(), Some("first.cha"));
+        assert_eq!(plan.0[1].source.to_str(), Some("second.cha"));
+    }
+
+    #[test]
+    fn execution_refuses_a_file_created_after_admission() -> anyhow::Result<()> {
+        use std::io::Write;
+        // One owned file in the existing system temporary directory; no new
+        // directory and no canonical source can be touched by this test.
+        let mut existing = tempfile::NamedTempFile::new()?;
+        existing.write_all(b"preserve existing output")?;
+        let planned = PreparedCandidate {
+            source: "seed.cha".into(),
+            output: existing.path().to_owned(),
+            perturbation: "delete-end",
+            text: "must not overwrite".into(),
+        };
+        // Model the destination appearing between admission and execution.
+        let plan = CandidateWritePlan::admit(vec![planned], |_| Ok(false))?;
+        assert!(plan.write().is_err());
+        assert_eq!(std::fs::read(existing.path())?, b"preserve existing output");
+        Ok(())
+    }
+
+    #[test]
+    fn serialized_candidate_is_not_a_diagnostic_claim() -> Result<(), serde_json::Error> {
+        let candidate = UnreviewedCandidate {
+            source: "seed.cha".into(),
+            output: "seed_delete_end.cha".into(),
+            perturbation: "delete-end".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(candidate)?,
+            serde_json::json!({
+                "assessment": "unreviewed",
+                "source": "seed.cha",
+                "output": "seed_delete_end.cha",
+                "perturbation": "delete-end",
+            })
+        );
+        Ok(())
     }
 }

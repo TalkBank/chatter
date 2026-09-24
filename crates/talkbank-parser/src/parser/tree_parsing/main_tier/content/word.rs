@@ -11,13 +11,12 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, NoChild, SlotView, WordWithOptionalAnnotationsNode,
+    AsRawNode, NoChild, SlotView, WordWithOptionalAnnotationsNode,
     extract_word_with_optional_annotations,
 };
 use crate::model::{ReplacedWord, UtteranceContent};
 use talkbank_model::ParseOutcome;
 use talkbank_model::Span;
-use tree_sitter::Node;
 
 use super::super::annotations::{parse_replacement, parse_scoped_annotations};
 use super::super::word::convert_word_node;
@@ -45,22 +44,11 @@ use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, sur
 /// is reported (E342) where the old walk fed it to the sub-parser
 /// unguarded.
 pub(crate) fn parse_word_content(
-    node: Node,
+    typed: WordWithOptionalAnnotationsNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let Some(typed) = WordWithOptionalAnnotationsNode::from_node(node) else {
-        report_tree_shape(
-            node,
-            format!(
-                "Expected a word_with_optional_annotations node, found '{}'",
-                node.kind()
-            ),
-            source,
-            errors,
-        );
-        return ParseOutcome::rejected();
-    };
+    let node = typed.raw_node();
     let children = extract_word_with_optional_annotations(typed);
 
     let word = match expect_present(
@@ -69,7 +57,7 @@ pub(crate) fn parse_word_content(
         source,
         errors,
     ) {
-        SlotState::Present(word) => convert_word_node(word.raw_node(), source, errors),
+        SlotState::Present(word) => convert_word_node(*word, source, errors),
         // The word position is required; `Absent` means a well-formed node of
         // another kind stood where the word should be, which no recovery
         // node marks and the whole-tree pass cannot see, so the shape fault
@@ -95,9 +83,7 @@ pub(crate) fn parse_word_content(
                 source,
                 errors,
             ) {
-                SlotState::Present(replacement) => {
-                    parse_replacement(replacement.raw_node(), source, errors)
-                }
+                SlotState::Present(replacement) => parse_replacement(*replacement, source, errors),
                 SlotState::Absent | SlotState::Recovered => ParseOutcome::rejected(),
             },
             // An ERROR where the group should be is classified in context, as
@@ -124,7 +110,7 @@ pub(crate) fn parse_word_content(
         Some(slot) => {
             match expect_present(slot, "word_with_optional_annotations", source, errors) {
                 SlotState::Present(annotations) => {
-                    parse_scoped_annotations(annotations.raw_node(), source, errors)
+                    parse_scoped_annotations(*annotations, source, errors)
                 }
                 SlotState::Absent | SlotState::Recovered => Vec::new(),
             }
@@ -146,7 +132,7 @@ pub(crate) fn parse_word_content(
     let whole = Span::new(w.span.start, node.end_byte() as u32);
     let core = match replacement {
         ParseOutcome::Parsed(repl) => {
-            UtteranceContent::ReplacedWord(Box::new(ReplacedWord::new(w, repl)))
+            UtteranceContent::ReplacedWord(Box::new(ReplacedWord::new(w, repl).with_span(whole)))
         }
         ParseOutcome::Rejected => UtteranceContent::Word(Box::new(w)),
     };

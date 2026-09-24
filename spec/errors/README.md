@@ -249,8 +249,8 @@ When adding a new validation rule:
 ## See Also
 
 - [../docs/ERROR_SPEC_FORMAT.md](../docs/ERROR_SPEC_FORMAT.md) - Detailed format specification
-- [talkbank-model validation CLAUDE.md](../../crates/talkbank-model/src/validation/CLAUDE.md) - Validator implementation patterns
-- [Root CLAUDE.md](../../CLAUDE.md) - TDD and testing requirements
+- [talkbank-model validation AGENTS.md](../../crates/talkbank-model/src/validation/AGENTS.md) - Validator implementation patterns
+- [Root AGENTS.md](../../AGENTS.md) - TDD and testing requirements
 
 ---
 

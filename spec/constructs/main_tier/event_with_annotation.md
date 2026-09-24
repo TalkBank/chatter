@@ -1,11 +1,10 @@
 # event_with_annotation
 
 Event with scoped annotations. Events (`&=action`) can carry content
-annotations like `[*]`, `[=! text]`, `[>]`, but retrace markers (`[/]`,
-`[//]`) are silently dropped (retraces are not applicable to events).
-
-grammar.js: events are wrapped in `nonword_with_optional_annotations`.
-TreeSitterParser drops retraces via `parsed.content` (ignoring `.retrace`).
+annotations like `[*]`, `[=! text]`, `[>]`. Ordered marker chains retain
+retrace markers (`[/]`, `[//]`) and their position relative to annotations
+rather than silently dropping them. Parsing preserves that structure;
+validation judges whether the resulting retrace has the required context.
 
 Found in: aphasia-data, childes-eng-na (3,472+ files).
 Discovered by re2c parser parity testing (2026-03-30).

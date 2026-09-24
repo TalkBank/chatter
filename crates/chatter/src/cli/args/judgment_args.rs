@@ -1,12 +1,4 @@
-//! Shared judgment-engine arguments for the `speaker-id`, `pipeline`,
-//! and `batch` subcommands.
-//!
-//! The three subcommands expose an identical judgment surface (engine
-//! selection, LLM connection, optional session-context input). Defining
-//! it once and flattening it (`#[command(flatten)]`) into each variant
-//! keeps the three CLI surfaces identical by construction and keeps
-//! `core.rs` (the `Commands` enum spanning every subcommand) under the
-//! file-size limit.
+//! Judgment-engine arguments for speaker identity assessment.
 
 use std::path::PathBuf;
 
@@ -14,11 +6,7 @@ use clap::Args;
 
 use super::cli_types::JudgmentMode;
 
-/// Judgment-engine configuration shared by `speaker-id`, `pipeline`,
-/// and `batch`: which engine powers the speaker judgment, the LLM
-/// connection used by the holistic engine, and the optional
-/// session-context JSON input. `batch` threads each of these through to
-/// every per-session `chatter pipeline` subprocess.
+/// Engine, provider connection, and optional context for `speaker-id`.
 #[derive(Args)]
 pub struct JudgmentArgs {
     /// How the judgment is powered (deterministic or holistic LLM).

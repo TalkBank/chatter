@@ -1,54 +1,93 @@
-use talkbank_model::LanguageCode;
+use talkbank_model::{ErrorCollector, FragmentSemanticContext, LanguageCode, ParseOutcome};
 use talkbank_parser::TreeSitterParser;
 
-use super::TranscriptDescription;
+use super::{BuildChatError, TranscriptDescription};
 
-/// Shared parser and language defaults for one `build_chat` invocation.
-pub(super) struct BuildChatContext {
+/// Admitted nonempty language declaration and semantic context for one build.
+pub(super) struct BuildChatContext<'a> {
+    description: &'a TranscriptDescription,
     parser: TreeSitterParser,
-    langs: Vec<LanguageCode>,
     primary_lang: LanguageCode,
+    additional_langs: Vec<LanguageCode>,
+    semantics: FragmentSemanticContext,
+    media_header: Option<talkbank_model::model::MediaHeader>,
 }
 
-impl BuildChatContext {
-    /// Create the parser and normalize transcript-level language defaults once.
-    pub(super) fn new(desc: &TranscriptDescription) -> Result<Self, String> {
-        let parser =
-            TreeSitterParser::new().map_err(|e| format!("Failed to create parser: {e}"))?;
-        // No default here. An empty `langs` used to become `["eng"]`, so a
-        // caller that forgot to state a language got one invented for it, in
-        // `@Languages` and in every `@ID`, indistinguishable from a stated one.
-        // `build_chat` refuses the empty case with a typed error before this
-        // runs, which is why this can take the list as given.
-        let raw_langs = desc.langs.clone();
-        // Parse language codes ONCE at this boundary (chatter 0.3.0 made
-        // LanguageCode construction fallible); everything downstream
-        // operates on typed codes.
-        let langs = raw_langs
-            .iter()
-            .map(|l| {
-                LanguageCode::new(l)
-                    .map_err(|e| format!("invalid @Languages language code {l:?}: {e}"))
+impl<'a> BuildChatContext<'a> {
+    /// Parse the stated languages and capture options once at the boundary.
+    pub(super) fn new(desc: &'a TranscriptDescription) -> Result<Self, BuildChatError> {
+        if desc.participants.is_empty() {
+            return Err(BuildChatError::NoParticipants);
+        }
+        let (primary, additional) = desc
+            .langs
+            .split_first()
+            .ok_or(BuildChatError::NoLanguages)?;
+        let parser = TreeSitterParser::new()
+            .map_err(|e| BuildChatError::Build(format!("Failed to create parser: {e}")))?;
+        let parse = |language: &String| {
+            LanguageCode::new(language).map_err(|e| {
+                BuildChatError::Build(format!(
+                    "invalid @Languages language code {language:?}: {e}"
+                ))
             })
-            .collect::<Result<Vec<_>, String>>()?;
-        let primary_lang = langs
-            .first()
-            .cloned()
-            .ok_or_else(|| "at least one language code is required".to_string())?;
+        };
+        let primary_lang = parse(primary)?;
+        let additional_langs = additional
+            .iter()
+            .map(parse)
+            .collect::<Result<Vec<_>, _>>()?;
+        if let Some(participant) = desc
+            .participants
+            .iter()
+            .find(|participant| participant.corpus.is_empty())
+        {
+            return Err(BuildChatError::EmptyCorpus {
+                speaker: participant.id.clone(),
+            });
+        }
 
         Ok(Self {
+            media_header: super::headers::admit_media_header(desc)?,
+            description: desc,
             parser,
-            langs,
             primary_lang,
+            additional_langs,
+            semantics: FragmentSemanticContext::new().with_option_flags(
+                desc.options
+                    .iter()
+                    .flat_map(|options| options.iter().cloned())
+                    .collect(),
+            ),
         })
     }
 
-    pub(super) fn parser(&self) -> &TreeSitterParser {
-        &self.parser
+    pub(super) fn description(&self) -> &'a TranscriptDescription {
+        self.description
     }
 
-    pub(super) fn langs(&self) -> &[LanguageCode] {
-        &self.langs
+    /// Media values admitted once from this description, never reparsed at output.
+    pub(super) fn media_header(&self) -> Option<&talkbank_model::model::MediaHeader> {
+        self.media_header.as_ref()
+    }
+
+    /// Parse only through this description's declared semantic context.
+    pub(super) fn parse_utterance(
+        &self,
+        input: &str,
+    ) -> Result<talkbank_model::model::Utterance, String> {
+        let errors = ErrorCollector::new();
+        match self
+            .parser
+            .parse_utterance_fragment_with_context(input, 0, &self.semantics, &errors)
+        {
+            ParseOutcome::Parsed(utterance) if !errors.has_errors() => Ok(utterance),
+            _ => Err(format!("failed to parse utterance: {:?}", errors.to_vec())),
+        }
+    }
+
+    pub(super) fn langs(&self) -> impl Iterator<Item = &LanguageCode> {
+        std::iter::once(&self.primary_lang).chain(&self.additional_langs)
     }
 
     pub(super) fn primary_lang(&self) -> &LanguageCode {

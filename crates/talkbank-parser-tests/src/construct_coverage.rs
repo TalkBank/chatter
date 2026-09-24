@@ -224,7 +224,6 @@ fn cha_files_in(tree: &ReadTree, dir: &str) -> Result<Vec<RelPath>, String> {
 /// it goes stale silently. Regenerating it from the corpus-differential runner,
 /// with its sample size and date recorded beside it, is the recorded follow-up.
 const UNCOVERED_PAIRS: &[(&str, &str)] = &[
-    ("base_content_item", "bullet"),
     ("mor_contents", "trailing_off"),
     ("mor_contents", "interruption"),
     ("mor_contents", "self_interruption"),
@@ -232,7 +231,6 @@ const UNCOVERED_PAIRS: &[(&str, &str)] = &[
     ("text_with_bullets", "continuation"),
     ("mor_contents", "trailing_off_question"),
     ("mor_contents", "interrupted_question"),
-    ("standalone_word", "pos_tag"),
     ("id_ses", "ethnicity_value"),
     ("mor_contents", "self_interrupted_question"),
     ("wor_tier_body", "quoted_new_line"),

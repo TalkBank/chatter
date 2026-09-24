@@ -2,7 +2,7 @@
 //!
 //! The validation cache (`~/.cache/talkbank-chat/` on Linux,
 //! `~/Library/Caches/talkbank-chat/` on macOS, `%LocalAppData%\talkbank-chat\`
-//! on Windows; see the workspace CLAUDE.md "Cache Policy") stores per-file
+//! on Windows; see the workspace AGENTS.md "Cache Policy") stores per-file
 //! validation outcomes keyed by path and content hash. It currently holds results for
 //! 95,000+ files, so clearing it is expensive; these commands give operators
 //! fine-grained control (prefix-scoped clearing, dry-run mode) to avoid unnecessary

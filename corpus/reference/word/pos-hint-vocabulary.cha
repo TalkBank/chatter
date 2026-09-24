@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	SPK Speaker
+@ID:	eng|corpus|SPK|||||Speaker|||
+@Comment:	Authored POS-hint vocabulary for the conservative CLAN-to-UD API
+	contract, not a production attestation or automatic linguistic analysis.
+*SPK:	dog$n run$v big$adj quickly$adv she$pro:per the$det:art in$prep after$post and$conj because$comp not$part can$mod is$aux all$qn two$num .
+*SPK:	hello$co oh$int wow$intj symbol$sym comma$punct comma$cm end$end begin$beg Alice$n:prop running$n:gerund unknown$zzzunknown .
+@End

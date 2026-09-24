@@ -8,7 +8,7 @@
 //! CLI uses (`talkbank_transform::validation_runner::{validate_directory_streaming,
 //! validate_files_streaming}`), with a real on-disk cache. Desktop must not
 //! reimplement cache lookups, stats accounting, or per-file rule dispatch;
-//! see `apps/chatter-desktop/CLAUDE.md` ("No desktop-local domain logic").
+//! see `apps/chatter-desktop/AGENTS.md` ("No desktop-local domain logic").
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

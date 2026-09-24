@@ -6,8 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#CA_Overlaps>
 
 use crate::model::{
-    BracketedContent, BracketedItem, CADelimiterType, Utterance, UtteranceContent, Word,
-    WordContent,
+    CADelimiterType, ContentStructure, Descend, Utterance, UtteranceContent, Word, WordContent,
 };
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
 use std::collections::HashMap;
@@ -123,128 +122,28 @@ fn assign_delimiter_roles(
     out
 }
 
-/// Recursively collect CA delimiters from one utterance-content node.
+/// Collect delimiters using the canonical structural traversal.
 ///
-/// Grouped and quoted structures are traversed depth-first so role assignment
-/// sees delimiters in transcript order.
+/// The typed word view yields the produced form before replacement targets.
+/// Group/retrace descent belongs to the structure producer, so consumers do
+/// not reclassify containers or conditionally rediscover their content.
 fn collect_ca_delimiters_from_content(
     item: &UtteranceContent,
     delimiters: &mut Vec<CADelimiterOccurrence>,
 ) {
-    match item {
-        UtteranceContent::Word(word) => collect_ca_delimiters_from_word(word, delimiters),
-        UtteranceContent::AnnotatedWord(word) => {
-            collect_ca_delimiters_from_word(&word.inner, delimiters);
-        }
-        UtteranceContent::ReplacedWord(replaced) => {
-            collect_ca_delimiters_from_word(&replaced.word, delimiters);
-            for word in &replaced.replacement.words {
-                collect_ca_delimiters_from_word(word, delimiters);
+    item.structure().walk(&mut |structure| {
+        match structure {
+            ContentStructure::Word(words) => {
+                for word in words.words() {
+                    collect_ca_delimiters_from_word(word, delimiters);
+                }
             }
+            ContentStructure::Group(_)
+            | ContentStructure::Retrace(_)
+            | ContentStructure::Leaf(_) => {}
         }
-        // Containers: ONE arm. Every one of these recursed unconditionally
-        // into its enclosed content, which is what `ContentStructure::enclosed`
-        // is for; its own docstring names the walkers under `validation/` and
-        // `alignment/` as the callers that had not adopted it. The annotations
-        // sit on the wrapper and are not part of the enclosed content, which is
-        // what each of the separate arms already did.
-        UtteranceContent::Group(_)
-        | UtteranceContent::AnnotatedGroup(_)
-        | UtteranceContent::PhoGroup(_)
-        | UtteranceContent::SinGroup(_)
-        | UtteranceContent::Quotation(_)
-        | UtteranceContent::AnnotatedQuotation(_)
-        | UtteranceContent::Retrace(_)
-        | UtteranceContent::AnnotatedRetrace(_) => {
-            if let Some(content) = item.structure().enclosed() {
-                collect_ca_delimiters_from_bracketed(content, delimiters);
-            }
-        }
-        UtteranceContent::AnnotatedEvent(_)
-        | UtteranceContent::Event(_)
-        | UtteranceContent::Pause(_)
-        | UtteranceContent::Action(_)
-        | UtteranceContent::AnnotatedAction(_)
-        | UtteranceContent::Freecode(_)
-        | UtteranceContent::Separator(_)
-        | UtteranceContent::OverlapPoint(_)
-        | UtteranceContent::InternalBullet(_)
-        | UtteranceContent::LongFeatureBegin(_)
-        | UtteranceContent::LongFeatureEnd(_)
-        | UtteranceContent::UnderlineBegin(_)
-        | UtteranceContent::UnderlineEnd(_)
-        | UtteranceContent::NonvocalBegin(_)
-        | UtteranceContent::NonvocalEnd(_)
-        | UtteranceContent::NonvocalSimple(_)
-        | UtteranceContent::OtherSpokenEvent(_) => {}
-    }
-}
-
-/// Recursively collect CA delimiters from bracketed/grouped content.
-fn collect_ca_delimiters_from_bracketed(
-    content: &BracketedContent,
-    delimiters: &mut Vec<CADelimiterOccurrence>,
-) {
-    for item in &content.content {
-        collect_ca_delimiters_from_bracketed_item(item, delimiters);
-    }
-}
-
-/// Collect CA delimiters from one bracketed-item variant.
-///
-/// This mirrors top-level traversal rules so nested structures contribute
-/// consistently to utterance-level delimiter balance.
-fn collect_ca_delimiters_from_bracketed_item(
-    item: &BracketedItem,
-    delimiters: &mut Vec<CADelimiterOccurrence>,
-) {
-    match item {
-        BracketedItem::Word(word) => collect_ca_delimiters_from_word(word, delimiters),
-        BracketedItem::AnnotatedWord(word) => {
-            collect_ca_delimiters_from_word(&word.inner, delimiters);
-        }
-        BracketedItem::ReplacedWord(replaced) => {
-            collect_ca_delimiters_from_word(&replaced.word, delimiters);
-            for word in &replaced.replacement.words {
-                collect_ca_delimiters_from_word(word, delimiters);
-            }
-        }
-        // Containers: ONE arm. Every one of these recursed unconditionally
-        // into its enclosed content, which is what `ContentStructure::enclosed`
-        // is for; its own docstring names the walkers under `validation/` and
-        // `alignment/` as the callers that had not adopted it. The annotations
-        // sit on the wrapper and are not part of the enclosed content, which is
-        // what each of the separate arms already did.
-        BracketedItem::Group(_)
-        | BracketedItem::AnnotatedGroup(_)
-        | BracketedItem::PhoGroup(_)
-        | BracketedItem::SinGroup(_)
-        | BracketedItem::Quotation(_)
-        | BracketedItem::AnnotatedQuotation(_)
-        | BracketedItem::Retrace(_)
-        | BracketedItem::AnnotatedRetrace(_) => {
-            if let Some(content) = item.structure().enclosed() {
-                collect_ca_delimiters_from_bracketed(content, delimiters);
-            }
-        }
-        BracketedItem::Event(_)
-        | BracketedItem::AnnotatedEvent(_)
-        | BracketedItem::Pause(_)
-        | BracketedItem::Action(_)
-        | BracketedItem::AnnotatedAction(_)
-        | BracketedItem::Separator(_)
-        | BracketedItem::OverlapPoint(_)
-        | BracketedItem::InternalBullet(_)
-        | BracketedItem::Freecode(_)
-        | BracketedItem::LongFeatureBegin(_)
-        | BracketedItem::LongFeatureEnd(_)
-        | BracketedItem::UnderlineBegin(_)
-        | BracketedItem::UnderlineEnd(_)
-        | BracketedItem::NonvocalBegin(_)
-        | BracketedItem::NonvocalEnd(_)
-        | BracketedItem::NonvocalSimple(_)
-        | BracketedItem::OtherSpokenEvent(_) => {}
-    }
+        Descend::Into
+    });
 }
 
 /// Extracts all CA delimiter markers present in a single word token.

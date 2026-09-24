@@ -1,0 +1,14 @@
+================================================================================
+e316_16 - Unparsable content
+================================================================================
+@UTF8
+@Begins
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello world .
+@End
+
+--------------------------------------------------------------------------------
+
+(source_file (ERROR (utf8_header (newline)) (unsupported_header_prefix) (newline) (languages_prefix) (header_sep (colon) (tab)) (languages_contents (language_code)) (newline) (participants_prefix) (header_sep (colon) (tab)) (participants_contents (participant code: (speaker) (whitespaces) (participant_word))) (newline) (id_prefix) (header_sep (colon) (tab)) (id_contents (id_languages (languages_contents (language_code))) (pipe) (id_corpus) (pipe) (id_speaker) (pipe) (pipe) (pipe) (pipe) (pipe) (id_role) (pipe) (pipe) (pipe)) (newline)) (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces)) ending: (utterance_end (period) (newline)))) (ERROR (newline)))

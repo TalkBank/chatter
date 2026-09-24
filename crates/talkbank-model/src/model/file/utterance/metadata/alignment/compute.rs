@@ -1,33 +1,8 @@
 use super::count_based::build_tier_to_tier_alignment;
 use super::diagnostics::{known_span, skipped_alignment_warning, unknown_alignment_warning};
-use crate::alignment::indices::{MainWordIndex, PhoItemIndex};
-use crate::model::dependent_tier::{WordAlignment, is_pause_marker};
 use crate::model::{AlignmentSet, AlignmentUnits, ParseHealthState, ParseHealthTier};
 use crate::validation::ValidationContext;
 use crate::{ErrorCode, ParseError, Span, Utterance};
-
-/// Whether one `%xphoaln` alignment word consumes a word slot on `%mod`,
-/// `%pho`, or both.
-///
-/// Per Greg Hedlund's "Phon `%x` Dependent Tiers" spec (§2 rule 5): a pause
-/// word present on only one of `%mod`/`%pho` forms its own `%xphoaln`
-/// alignment word (its other side entirely `∅`) and consumes no word slot on
-/// the tier lacking it. This is deliberately narrow: a normal word whose own
-/// content happens to contain a `∅` pair (an epenthesis or deletion inside an
-/// otherwise-real word, e.g. `b↔b,ɛ↔ɛ,s↔s,t↔∅`) still has more than one pair
-/// and still consumes a slot on both tiers. Only a single-pair word whose
-/// sole non-null side is itself a recognized pause marker gets the
-/// exception.
-fn phoaln_word_slots(word: &WordAlignment) -> (bool, bool) {
-    if let [pair] = word.pairs.as_slice() {
-        match (&pair.source, &pair.target) {
-            (Some(source), None) if is_pause_marker(source.as_str()) => return (true, false),
-            (None, Some(target)) if is_pause_marker(target.as_str()) => return (false, true),
-            _ => {}
-        }
-    }
-    (true, true)
-}
 
 /// One side of a tier alignment relationship (label, span, tier identity).
 struct TierSide<'a> {
@@ -312,9 +287,13 @@ impl Utterance {
                 // slot only on the tier bearing the pause, so the raw
                 // %xphoaln word count is not the number that must equal
                 // %mod's or %pho's count.
-                let slots: Vec<(bool, bool)> = phoaln.words.iter().map(phoaln_word_slots).collect();
-                let expected_mod = slots.iter().filter(|(m, _)| *m).count();
-                let expected_pho = slots.iter().filter(|(_, p)| *p).count();
+                let mut expected_mod = 0;
+                let mut expected_pho = 0;
+                for binding in self.phoaln_word_bindings() {
+                    expected_mod += usize::from(binding.consumes_model());
+                    expected_pho += usize::from(binding.consumes_actual());
+                    alignment = alignment.with_pair(binding.into_alignment_pair());
+                }
 
                 if let Some(mc) = mod_count
                     && expected_mod != mc
@@ -343,30 +322,6 @@ impl Utterance {
                             ErrorCode::PhoalnPhoCountMismatch,
                         ),
                     );
-                }
-
-                // Track %mod/%pho indices independently so a one-sided pause
-                // word does not desynchronize the positional mapping for
-                // every word after it.
-                let mut mod_idx = 0usize;
-                let mut pho_idx = 0usize;
-                for (consumes_mod, consumes_pho) in slots {
-                    let mod_index = if consumes_mod {
-                        let i = mod_idx;
-                        mod_idx += 1;
-                        mod_count.filter(|&c| i < c).map(MainWordIndex::new)
-                    } else {
-                        None
-                    };
-                    let pho_index = if consumes_pho {
-                        let i = pho_idx;
-                        pho_idx += 1;
-                        pho_count.filter(|&c| i < c).map(PhoItemIndex::new)
-                    } else {
-                        None
-                    };
-                    alignment = alignment
-                        .with_pair(crate::alignment::AlignmentPair::new(mod_index, pho_index));
                 }
 
                 metadata.phoaln = Some(alignment);

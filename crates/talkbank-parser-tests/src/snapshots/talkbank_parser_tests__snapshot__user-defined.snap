@@ -234,6 +234,92 @@ expression: snapshot
     },
     {
       "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Authored label-length controls around the legacy reader boundary;",
+              "type": "text"
+            },
+            {
+              "type": "continuation"
+            },
+            {
+              "text": "not additional production attestations.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "dependent_tiers": [
+        {
+          "data": {
+            "content": "short boundary control",
+            "label": "xabcdef"
+          },
+          "type": "UserDefined"
+        },
+        {
+          "data": {
+            "content": "boundary control",
+            "label": "xabcdefg"
+          },
+          "type": "UserDefined"
+        },
+        {
+          "data": {
+            "content": "long boundary control",
+            "label": "xabcdefgh"
+          },
+          "type": "UserDefined"
+        },
+        {
+          "data": {
+            "content": "request",
+            "label": "xcommunicativefunction"
+          },
+          "type": "UserDefined"
+        }
+      ],
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "more",
+              "content": [
+                {
+                  "content": "more",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "more",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "annotation",
+              "content": [
+                {
+                  "content": "annotation",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "annotation",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "header": {
         "type": "end"
       },
       "line_type": "header"

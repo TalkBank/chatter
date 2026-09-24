@@ -22,7 +22,6 @@
 
 pub mod adjudicate;
 pub mod alignment;
-pub mod batch;
 pub mod cache;
 pub mod clean;
 pub mod debug;
@@ -31,15 +30,12 @@ mod error_codes;
 pub mod fix;
 pub mod json;
 pub mod list_checks;
-pub mod merge_preflight;
 pub mod new_file;
 pub mod normalize;
-pub mod pipeline;
 pub mod rediarize;
 pub mod sanity_scan;
 pub mod schema;
 pub mod speaker_id;
-pub mod transcript_merge;
 pub mod update;
 pub mod validate;
 pub mod validate_parallel;

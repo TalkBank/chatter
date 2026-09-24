@@ -14,3 +14,4 @@ mod pre_begin;
 
 pub use dispatch::parse_header_node;
 pub use pre_begin::handle_pre_begin_header;
+pub(crate) use pre_begin::parse_pre_begin_header;

@@ -18,11 +18,9 @@
 //! required `newline` (`child_3`). Every slot is matched EXHAUSTIVELY over
 //! [`NodeSlot`], so a recovery node is handled explicitly rather than silently
 //! dropped, and there is NO `node.kind()` string dispatch and NO positional
-//! `node.child(idx)` tier-structure hand-walk. The single `child(0)` in the
-//! `WorWordItem` arm is not dispatch: it is the fixed 1:1 unwrap of the
-//! `wor_word_item` alias wrapper (`wor_word_item: $ => $.standalone_word`, which has
-//! no generated `extract_*`) that hands the inner `standalone_word` to the existing
-//! `convert_word_node` subsystem, exactly as the removed code did.
+//! `node.child(idx)` tier-structure hand-walk. `extract_wor_word_item` retains
+//! the nested standalone-word type through conversion and exposes recovery
+//! slots and displaced children explicitly.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -31,9 +29,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, ChoiceSlot, LangcodeNode, NoChild, NodeSlot, SlotView, WhitespacesNode,
-    WorDependentTierNode, WorTierBodyChild1Child0Choice, WorTierBodyNode,
-    extract_wor_dependent_tier, extract_wor_tier_body,
+    AsRawNode, BulletNode, ChoiceSlot, KindSlot, LangcodeNode, NoChild, NodeSlot, SlotView,
+    WhitespacesNode, WorDependentTierNode, WorTierBodyChild1Child0Choice, WorTierBodyNode,
+    extract_wor_dependent_tier, extract_wor_tier_body, extract_wor_word_item,
 };
 use crate::parser::node_span::span_of;
 use talkbank_model::ErrorSink;
@@ -44,7 +42,9 @@ use tree_sitter::Node;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::main_tier::structure::terminator::terminator_from_new_choice;
 use crate::parser::tree_parsing::main_tier::word::convert_word_node;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::{
+    SlotState, check_not_missing, expect_present, surface_displaced,
+};
 use talkbank_model::ParseOutcome;
 
 /// Converts `%wor` into a `WorTier`.
@@ -89,7 +89,7 @@ pub fn parse_wor_tier(
     match children
         .child_2
         .slot()
-        .typed_or_placeholder()
+        .known_or_placeholder()
         .present_or_placeholder()
     {
         Some(body) => parse_wor_tier_body(body, source, errors).with_span(span),
@@ -111,7 +111,7 @@ fn parse_wor_tier_body(
     surface_displaced(&children.unexpected, "wor_tier_body", source, errors);
 
     // `language_code` (optional): reproduce the old LANGCODE arm. Unlike the OLD
-    // backend's flat `Option<ChildSlot<LangcodeNode>>`, the NEW backend groups the
+    // backend's flat `Option<KindSlot<LangcodeNode>>`, the NEW backend groups the
     // whole grammar-optional `(langcode, whitespaces)` pair into one NESTED
     // carrier (`WorTierBodyLanguageCodeChildren`), because that pair together is
     // what is optional, not `langcode` alone (the B2 nested-group precedent).
@@ -194,7 +194,7 @@ fn parse_wor_tier_body(
 /// the enclosing rule name, so the diagnostic matches the sibling item-slot
 /// diagnostics.
 fn push_wor_separator<'tree>(
-    slot: &ChildSlot<'tree, WhitespacesNode<'tree>>,
+    slot: &KindSlot<'tree, WhitespacesNode<'tree>>,
     source: &str,
     errors: &impl ErrorSink,
     context: &str,
@@ -248,16 +248,22 @@ fn push_wor_item(
     match slot {
         NodeSlot::Present(item) => match item {
             WorTierBodyChild1Child0Choice::WorWordItem(word_item) => {
-                // wor_word_item is a standalone_word; unwrap it to the word node.
-                if let Some(word_node) = word_item.raw_node().child(0)
-                    && let ParseOutcome::Parsed(word) = convert_word_node(word_node, source, errors)
+                let word_children = extract_wor_word_item(*word_item);
+                surface_displaced(&word_children.unexpected, "wor_word_item", source, errors);
+                if let SlotState::Present(word_node) = expect_present(
+                    word_children.content.slot(),
+                    "wor_word_item",
+                    source,
+                    errors,
+                ) && let ParseOutcome::Parsed(word) =
+                    convert_word_node(*word_node, source, errors)
                 {
                     items.push(WorItem::Word(Box::new(word)));
                 }
             }
             WorTierBodyChild1Child0Choice::Bullet(bullet_node) => {
                 // Pair this bullet with the preceding word (if any).
-                if let Some(bullet) = parse_inline_bullet(bullet_node.raw_node(), source, errors)
+                if let Some(bullet) = parse_inline_bullet(*bullet_node, source, errors)
                     && let Some(WorItem::Word(word)) = items.last_mut()
                 {
                     word.inline_bullet = Some(bullet);
@@ -319,8 +325,12 @@ fn extract_langcode(
 
 /// Parse a `bullet` node into a `Bullet`.
 ///
-/// After grammar coarsening, `bullet` is a single token.
-fn parse_inline_bullet(node: Node, source: &str, errors: &impl ErrorSink) -> Option<Bullet> {
+/// The generated wrapper retains the structured timestamp fields.
+fn parse_inline_bullet(
+    node: BulletNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> Option<Bullet> {
     // `.ok()?` rather than reporting: this caller's own `None` is already
     // handled by the `%wor` alignment path, and reporting here would double
     // the diagnostic. The rejection is discarded DELIBERATELY, which the

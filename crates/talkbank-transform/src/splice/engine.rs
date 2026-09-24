@@ -108,9 +108,25 @@ pub(crate) enum RecoverySafety {
     /// The catalog edit removes the syntax defect that caused recovery; the
     /// caller must still reparse and verify the result after splicing.
     RepairsTaintingSyntax,
+    /// The catalog admitted a specific token from a recovery-free typed header.
+    VerifiedHeaderToken,
 }
 
 impl SpliceEdit {
+    /// Minted only after the catalog has bound the header token to its source.
+    pub(crate) fn new_header_token(
+        target: EditTarget,
+        replacement: Replacement,
+        diagnostic: ErrorCode,
+    ) -> Self {
+        Self {
+            target,
+            replacement,
+            provenance: EditProvenance::Diagnostic(diagnostic),
+            recovery_safety: RecoverySafety::VerifiedHeaderToken,
+        }
+    }
+
     /// Build an edit. Validation happens in [`apply_edits`], against the
     /// source the target actually indexes into.
     pub fn new(target: EditTarget, replacement: Replacement, provenance: EditProvenance) -> Self {

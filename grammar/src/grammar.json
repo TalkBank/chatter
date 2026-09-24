@@ -1451,12 +1451,25 @@
           "name": "g_prefix"
         },
         {
-          "type": "SYMBOL",
-          "name": "header_sep"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "free_text"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "header_sep"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "free_text"
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -5191,8 +5204,20 @@
       ]
     },
     "pho_word": {
-      "type": "PATTERN",
-      "value": "[a-zA-Z0-9\\u0061-\\u007a\\u00b9\\u00b2\\u00b3\\u00e6-\\u2038\\u203b-\\ua71f\\u0250-\\u02af\\u1d00-\\u1dbf\\u2016\\u203f\\u207f\\u2197-\\u2198\\u2c71\\u2e28-\\u2e29CGVSX\\(\\.\\)\\^\\u0335*]+"
+      "type": "TOKEN",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "PATTERN",
+            "value": "\\(\\d+(?::\\d+)?\\.\\d*\\)"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[a-zA-Z0-9\\u0061-\\u007a\\u00b9\\u00b2\\u00b3\\u00e6-\\u2038\\u203b-\\ua71f\\u0250-\\u02af\\u1d00-\\u1dbf\\u2016\\u203f\\u207f\\u2197-\\u2198\\u2c71\\u2e28-\\u2e29CGVSX\\(\\.\\)\\^\\u0335*]+"
+          }
+        ]
+      }
     },
     "sin_groups": {
       "type": "SEQ",

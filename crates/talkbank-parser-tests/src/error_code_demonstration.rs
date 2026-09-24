@@ -100,7 +100,7 @@ const SNAPSHOT: &str = "spec/observations/example-diagnostics.json";
 /// of a false statement into a tracked one, and the ratchet's shrink-only rule
 /// still governs what happens next: each of the four names what would remove
 /// it.
-const UNDEMONSTRATED: &[&str] = &["E208", "E232", "E302", "E309", "E319", "E321", "E324"];
+const UNDEMONSTRATED: &[&str] = &["E208", "E302", "E309", "E319", "E321", "E324"];
 
 /// Codes the registry calls `not_implemented` whose variant production code
 /// still NAMES.
@@ -148,7 +148,7 @@ const UNDEMONSTRATED: &[&str] = &["E208", "E232", "E302", "E309", "E319", "E321"
 ///   only for a `main_tier` node with an absent or zero-width speaker or
 ///   colon, which the grammar cannot produce: damaged prefixes become a
 ///   document-level ERROR and E301 or E316 wins first.
-/// - `E325`, `E364`, `E365`, `E508`: emit sites exist and every route to them
+/// - `E364`, `E365`, `E508`: emit sites exist and every route to them
 ///   is blocked by an earlier diagnostic. Each was traced to the dominating
 ///   code that week.
 /// - `E310`: reachable, but not through `chatter validate`. It needs a
@@ -161,7 +161,7 @@ const UNDEMONSTRATED: &[&str] = &["E208", "E232", "E302", "E309", "E319", "E321"
 ///   it is reachable from a LIBRARY caller and not from a file. Same shape as
 ///   E324, and the same fragment stage in the snapshot would reach both.
 const UNIMPLEMENTED_BUT_NAMED: &[&str] = &[
-    "E003", "E304", "E310", "E322", "E323", "E325", "E364", "E365", "E508", "E729", "E731", "E999",
+    "E003", "E304", "E310", "E322", "E323", "E364", "E365", "E508", "E729", "E731", "E999",
 ];
 
 /// Every implemented error code is demonstrated, or excused by a status the

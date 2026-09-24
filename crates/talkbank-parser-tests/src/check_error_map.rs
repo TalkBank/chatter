@@ -80,6 +80,7 @@ pub fn check_error_number(code: &ErrorCode) -> u16 {
         // chatter code can cover several CLAN numbers, and the behavioral
         // manifest, not this name-level map, is authoritative on what fires.
         ErrorCode::IllegalCharactersInWord => 48, // Illegal characters
+        ErrorCode::SemicolonOnMainTier => 48,     // Modern CHAT forbids main-tier semicolons
         ErrorCode::InvalidWordFormat => 48,       // Illegal word format
         ErrorCode::MalformedWordContent => 48,    // Malformed word
         ErrorCode::MissingFormType => 48,         // Missing special form marker

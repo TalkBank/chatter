@@ -4,7 +4,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Types_Header>
 
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, NoChild, SlotView, TypesHeaderNode, extract_types_header,
+    AsRawNode, KindSlot, NoChild, SlotView, TypesHeaderNode, extract_types_header,
 };
 use tree_sitter::Node;
 
@@ -113,14 +113,14 @@ pub fn parse_types_header(
 /// Read one mandatory `@Types` field from its typed positional slot, reproducing
 /// the pre-migration `find_child_text` text + diagnostic handling EXACTLY.
 ///
-/// `slot` is the field's `child_N` slot (e.g. `ChildSlot<TypesDesignNode>`);
+/// `slot` is the field's `child_N` slot (e.g. `KindSlot<TypesDesignNode>`);
 /// `node` is the `@Types` header node (used for the missing-field diagnostic
 /// span); `label` is the field name (`types_design` / `types_activity` /
 /// `types_group`) used to build the preserved diagnostic messages and context.
 /// The slot match is EXHAUSTIVE over every `NodeSlot` variant; there is
 /// deliberately no `_` catch-all that could silently drop a recovery slot.
-fn read_types_field<'tree, T: AsRawNode<'tree>>(
-    slot: &ChildSlot<'tree, T>,
+fn read_types_field<'tree, T: AsRawNode<'tree> + Copy>(
+    slot: &KindSlot<'tree, T>,
     node: Node,
     source: &str,
     errors: &impl ErrorSink,
@@ -128,13 +128,8 @@ fn read_types_field<'tree, T: AsRawNode<'tree>>(
 ) -> ParseOutcome<String> {
     match slot.view() {
         SlotView::Present(field) => {
-            // Decode through the shared `decode_present_child` helper, which reads
-            // from the RAW node's `utf8_text` (NOT the wrapper's `.text()`
-            // accessor, which swallows UTF-8 errors via `unwrap_or("")`),
-            // reproducing the pre-migration `find_child_text` Ok/Err handling. The
-            // per-field diagnostic (context = `label`, the "text from {label}"
-            // wording) is supplied here, so it stays byte-identical.
-            decode_present_child(field.raw_node(), source, errors, label, |e| {
+            // Checked text admission retains the typed field and its diagnostic.
+            decode_present_child(field, source, errors, label, |e| {
                 format!("Failed to extract UTF-8 text from {}: {}", label, e)
             })
         }

@@ -8,6 +8,12 @@ repository.workspace = true
 description = "Shared parser test harness and fixtures"
 publish = false
 
+[features]
+default = ["conformance"]
+# Inventory generation must compile before its generated consumer is current.
+# Normal tests retain that consumer; only the generator opts out of defaults.
+conformance = []
+
 [dependencies]
 clap = { workspace = true }
 # The spec format's vocabulary, owned in the OTHER cargo workspace. A path
@@ -25,7 +31,9 @@ shellexpand = { workspace = true }
 # conformance inventory (see `conformance_inventory`). This crate is
 # `publish = false` test infrastructure, so a normal (non-dev) dep is fine and
 # lets the guard test call the generator's core function directly.
-syn = { workspace = true }
+syn = { workspace = true, features = ["visit"] }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+sha2 = { workspace = true }
 talkbank-model = { workspace = true }
 talkbank-parser = { workspace = true }
 thiserror = { workspace = true }
@@ -35,6 +43,9 @@ tree-sitter-talkbank = { workspace = true }
 walkdir = { workspace = true } #unified
 
 [dev-dependencies]
+talkbank-cache = { workspace = true }
+talkbank-model = { workspace = true, features = ["async"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
 insta = { workspace = true, features = ["json"] }
 # The independent backend, DIRECTLY: one word-validation message (E232) is
 # reachable from CHAT text only through it, and a transitive dependency
@@ -42,7 +53,6 @@ insta = { workspace = true, features = ["json"] }
 talkbank-parser-re2c = { workspace = true }
 proptest = { workspace = true }
 rstest = { workspace = true }
-sha2 = "0.11"
 talkbank-transform = { workspace = true }
 # A real directory on disk, for the one tree question that cannot be asked of
 # the overlay: `files_under` calls `is_dir`, so "absent" and "empty" differ

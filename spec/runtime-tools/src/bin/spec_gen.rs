@@ -37,6 +37,11 @@ struct Args {
     /// Repository root. Defaults to the chatter checkout this crate is in.
     #[arg(long)]
     repo_root: Option<PathBuf>,
+
+    /// Regenerate only the artifact owning this repository-relative root.
+    /// Omit to regenerate all artifacts in dependency order.
+    #[arg(long)]
+    artifact_root: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -45,10 +50,19 @@ fn main() -> Result<()> {
     // that newtype exists, and an `unwrap_or_else` here used to flatten both
     // branches back to a bare path to make their types agree.
     let root = RepoRoot::resolve(args.repo_root)?;
+    let artifacts: Vec<_> = match args.artifact_root.as_deref() {
+        Some(selected) => {
+            let artifact = all()
+                .find(|artifact| artifact.root == selected)
+                .ok_or_else(|| anyhow::anyhow!("no artifact owns root {selected:?}"))?;
+            vec![artifact]
+        }
+        None => all().collect(),
+    };
 
     if args.check {
         let mut stale = 0usize;
-        for artifact in all() {
+        for artifact in &artifacts {
             let differences = artifact.check(root.as_path())?;
             if differences.is_empty() {
                 println!("current  {}", artifact.what);
@@ -71,11 +85,11 @@ fn main() -> Result<()> {
         if stale > 0 {
             bail!("{stale} artifact(s) are stale. Run `just spec-gen` and commit the result.");
         }
-        println!("\nEvery generated artifact is current.");
+        println!("\nEvery selected generated artifact is current.");
         return Ok(());
     }
 
-    for artifact in all() {
+    for artifact in artifacts {
         let written = artifact.write(root.as_path())?;
         println!("wrote {written:4} file(s)  {}", artifact.what);
     }

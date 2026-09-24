@@ -24,14 +24,7 @@ use std::process::Command;
 
 /// The experimental merge surface. `merge-preflight` is an internal module,
 /// not a CLI command, so it is intentionally absent.
-const MERGE_COMMANDS: &[&str] = &[
-    "merge",
-    "speaker-id",
-    "adjudicate",
-    "pipeline",
-    "batch",
-    "sanity-scan",
-];
+const MERGE_COMMANDS: &[&str] = &["speaker-id", "adjudicate", "sanity-scan"];
 
 /// Each merge command's own `--help` must flag it as experimental.
 #[test]

@@ -31,15 +31,11 @@
 //! `Utterance` and the test's are different types. This crate is the cheaper
 //! home: it exists for parse-backed tests and already depends on every parser.
 //!
-//! # Two rules share E242, and only one of them is the validator's
+//! # Postcodes are not quotation syntax
 //!
-//! `check_quotation_balance` reads the utterance's POSTCODES, matching `"/`
-//! and `"/.` exactly; curly quotes in the text are a different producer
-//! entirely, a scan in the parser's error analysis, and the spec examples for
-//! E242 exercise that one. The first draft of this table replaced the
-//! postcode tests with curly-quote rows and so deleted the validator rule's
-//! only coverage while the code kept passing. The postcode rows below are
-//! that coverage, restored with the messages the originals asserted.
+//! The old E242 rows preserved an incorrect rule: interpreting opaque postcode
+//! text as quotation markers. Canonical E242 examples now cover their acceptance;
+//! actual curly-quote and cross-utterance quotation checks remain separate.
 //!
 //! # What each row asserts
 //!
@@ -82,48 +78,9 @@ struct Row {
 const FIXTURE_FAULTS: &[&str] = &["E316", "E342", "E325", "E525", "E502", "E503", "E504"];
 
 /// Every code this table is about, so `Violates` can assert exclusivity.
-const FAMILY: &[&str] = &["E230", "E242", "E356", "E357", "E373"];
+const FAMILY: &[&str] = &["E230", "E356", "E357", "E373"];
 
 const ROWS: &[Row] = &[
-    // ── Quotation balance (E242), the VALIDATOR's rule: postcodes ────
-    Row {
-        what: "a quotation-begin postcode never closed",
-        utterance: "hello . [+ \"/]",
-        expect: Expect::Violates(&[Fired {
-            code: "E242",
-            message: "unclosed quotation begin",
-        }]),
-    },
-    Row {
-        what: "a quotation-end postcode with no begin",
-        utterance: "hello . [+ \"/.]",
-        expect: Expect::Violates(&[Fired {
-            code: "E242",
-            message: "without corresponding begin",
-        }]),
-    },
-    Row {
-        what: "a balanced quotation postcode pair",
-        utterance: "hello . [+ \"/] [+ \"/.]",
-        expect: Expect::Legal("E242"),
-    },
-    Row {
-        // The predecessor's control carried a NON-quotation postcode, so it
-        // also pinned that the rule ignores postcodes that are not markers.
-        what: "a postcode that is not a quotation marker",
-        utterance: "hello . [+ bch]",
-        expect: Expect::Legal("E242"),
-    },
-    Row {
-        // Near miss, from the predecessor: `"/.` followed by more text is not
-        // the close marker and must not be counted as one.
-        what: "a begin whose would-be close is a near miss",
-        utterance: "hello . [+ \"/] [+ \"/. x]",
-        expect: Expect::Violates(&[Fired {
-            code: "E242",
-            message: "unclosed quotation begin",
-        }]),
-    },
     // ── CA delimiter balance (E230) ──────────────────────────────────
     Row {
         what: "a CA delimiter with no partner",

@@ -15,9 +15,8 @@
 use super::content::report_tree_shape;
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, FromNodeKind, NodeSlot, RecoveryNode, StandaloneWordChild0Choice,
-    StandaloneWordChild2Choice, StandaloneWordNode, WordBodyChoice, WordBodyNode,
-    extract_standalone_word, extract_word_body,
+    AsRawNode, NodeSlot, RecoveryNode, StandaloneWordChild0Choice, StandaloneWordChild2Choice,
+    StandaloneWordNode, WordBodyChoice, WordBodyNode, extract_standalone_word, extract_word_body,
 };
 use crate::model::Word;
 use crate::parser::tree_parsing::parser_helpers::{
@@ -45,11 +44,14 @@ use pieces::push_slot;
 /// [`build_word_contents`]. Until 2026-09-09 this walked the children by
 /// `node.kind()` string, with a silent arm for anything else.
 ///
-/// Callers hand over the raw node (the content converter, the replacement
-/// parser, the `%wor` tier and the fragment API all hold one), so the typing
-/// happens here; a node that is not a `standalone_word` is refused with a
-/// diagnostic rather than walked.
-pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> ParseOutcome<Word> {
+/// Content, replacement, %wor and fragment callers retain the generated word
+/// wrapper. Missing placeholders still reject; a typed kind is not validity.
+pub fn convert_word_node(
+    typed: StandaloneWordNode<'_>,
+    source: &str,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<Word> {
+    let node = typed.raw_node();
     if node.is_missing() {
         errors.report(ParseError::new(
             ErrorCode::MalformedWordContent,
@@ -63,17 +65,12 @@ pub fn convert_word_node(node: Node, source: &str, errors: &impl ErrorSink) -> P
         ));
         return ParseOutcome::rejected();
     }
-    let Some(typed) = StandaloneWordNode::from_node(node) else {
-        report_tree_shape(
-            node,
-            format!("Expected a standalone_word node, found '{}'", node.kind()),
-            source,
-            errors,
-        );
+
+    let talkbank_model::ParseOutcome::Parsed(raw_text) =
+        extract_utf8_text(node, source, errors, "standalone_word")
+    else {
         return ParseOutcome::rejected();
     };
-
-    let raw_text = extract_utf8_text(node, source, errors, "standalone_word", "");
     let span = talkbank_model::Span::from_usize(node.start_byte(), node.end_byte());
 
     let children = extract_standalone_word(typed);
@@ -327,7 +324,11 @@ where
 /// spellings by grammar; any other text is a shape fault, reported rather
 /// than read as "no category".
 fn word_category(node: Node, source: &str, errors: &impl ErrorSink) -> Option<WordCategory> {
-    let text = extract_utf8_text(node, source, errors, "word_prefix", "");
+    let talkbank_model::ParseOutcome::Parsed(text) =
+        extract_utf8_text(node, source, errors, "word_prefix")
+    else {
+        return None;
+    };
     match text {
         "&-" => Some(WordCategory::Filler),
         "&~" => Some(WordCategory::Nonword),
@@ -401,7 +402,11 @@ fn form_marker(node: Node, source: &str, errors: &impl ErrorSink) -> Option<Form
 /// grammar cannot produce this node without one, so the branch is
 /// unreachable and says so rather than inventing a value.
 fn repeated_form_marker(node: Node, source: &str, errors: &impl ErrorSink) -> Option<FormType> {
-    let text = extract_utf8_text(node, source, errors, "repeated_form_marker", "");
+    let talkbank_model::ParseOutcome::Parsed(text) =
+        extract_utf8_text(node, source, errors, "repeated_form_marker")
+    else {
+        return None;
+    };
     let Some(payload) = text.strip_prefix('@') else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,

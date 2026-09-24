@@ -218,7 +218,7 @@ export function applyValidationEvent(
  * `errorFileCount` only reflects files that have streamed a result *so far*,
  * so it reads as zero for the entire window between "discovery done" and
  * "last file actually validated" whenever no error has arrived yet. See
- * apps/chatter-desktop/CLAUDE.md's parity notes for the desktop-vs-CLI
+ * apps/chatter-desktop/AGENTS.md's parity notes for the desktop-vs-CLI
  * divergence this guards against. An `aborted` run is deliberately excluded:
  * it produced no results, so "all valid" would be a claim about nothing. So is
  * `finishedIncomplete`: "all valid" is a claim about every discovered file, and
@@ -226,7 +226,46 @@ export function applyValidationEvent(
  * is a false clean bill of health rather than a verdict.
  */
 export function shouldShowAllFilesValid(run: RunPhase, errorFileCount: number): boolean {
-  return run.kind === "finished" && errorFileCount === 0;
+  return run.kind === "finished" && errorFileCount === 0
+    && !run.stats.cancelled && run.stats.totalFiles > 0
+    && run.stats.validFiles === run.stats.totalFiles
+    && run.stats.invalidFiles === 0 && run.stats.parseErrors === 0
+    && run.stats.roundtripFailed === 0;
+}
+
+/** One projection for tree visibility and detail rendering, including failures
+ * that have no CHAT diagnostic (for example, a file that could not be read). */
+export type FileOutcome =
+  | { kind: "pending" }
+  | { kind: "valid" }
+  | { kind: "problem"; message: string };
+
+export function fileOutcome(file: FileEntry): FileOutcome {
+  if (file.diagnostics.length > 0) {
+    return { kind: "problem", message: `${file.diagnostics.length} diagnostics` };
+  }
+  const status = file.status;
+  if (status === null) return { kind: "pending" };
+  switch (status.type) {
+    case "valid": return { kind: "valid" };
+    case "invalid": return { kind: "problem", message: `Validation failed (${status.errorCount} diagnostics)` };
+    case "readError": return { kind: "problem", message: `Read error: ${status.message}` };
+    case "parseError": return { kind: "problem", message: `Parse error: ${status.message}` };
+    case "roundtripFailed": return { kind: "problem", message: `Roundtrip failed: ${status.reason}` };
+  }
+  return assertNever(status);
+}
+
+/** Finished is not necessarily successful: cancellation and non-diagnostic
+ * failures must agree across the title, notification and status bar. */
+export function finishedRunSummary(
+  run: Extract<RunPhase, { kind: "finished" }>, diagnostics: number,
+): string {
+  const stats = run.stats;
+  if (stats.cancelled) return "Cancelled; results are partial";
+  if (stats.totalFiles === 0) return "No CHAT files found";
+  if (shouldShowAllFilesValid(run, diagnostics)) return `All ${stats.totalFiles} files valid`;
+  return `${diagnostics} diagnostics; ${stats.invalidFiles} invalid files, ${stats.parseErrors} read/parse failures, ${stats.roundtripFailed} roundtrip failures`;
 }
 
 export function relativeDisplayName(fullPath: string, targetPath: string): string {

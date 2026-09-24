@@ -3,8 +3,8 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::generated_traversal::{AsRawNode, ChildSlot, NamedKind, NoChild, SlotView};
-use crate::parser::tree_parsing::bullet_content::parse_bullet_content;
+use crate::generated_traversal::{AsRawNode, KindSlot, NamedKind, NoChild};
+use crate::parser::tree_parsing::bullet_content::{BulletTextNode, parse_bullet_content};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::model::BulletContent;
@@ -77,70 +77,44 @@ fn tier_label(kind: &str) -> &str {
     }
 }
 
-/// Parse the text/bullet payload of a text-like dependent tier from the tier's
-/// already-extracted body slot (`child_2` of `extract_<tier>_dependent_tier`)
-/// and surface the carrier's `unexpected` sink.
+/// Parse an extracted text-tier body without erasing its generated kind.
 ///
-/// This is the shared body parser for `%com` / `%exp` / `%add` / `%spa` / `%sit`
-/// / `%int` / `%gpx`; each caller extracts its own tier via the generated typed
-/// visitor and hands the body slot AND the carrier's `unexpected` sink here, so
-/// the concrete body wrapper type (`TextWithBulletsNode`, or
-/// `TextWithBulletsAndPicsNode` for `%com`) is abstracted behind [`AsRawNode`],
-/// and every caller surfaces its `unexpected` sink uniformly (R2), matching how
-/// the sibling carriers `act.rs` / `cod.rs` / gra / pho / sin already surface
-/// theirs.
+/// Only the two bullet-text carriers implement conversion to `BulletTextNode`.
+/// Present nodes and kind-admitted MISSING placeholders retain that identity;
+/// an unclassified placeholder or ERROR reports the tier fault and no-content
+/// diagnostic. Absent required content reports no-content alone. The enclosing
+/// optional-body transition handles author-written empty tiers separately.
 ///
-/// `unexpected` is surfaced FIRST via [`surface_displaced`] (a no-op when
-/// empty, which is every case on valid input: the tier's own body slot below
-/// is the only position that carries content for these grammar rules).
-///
-/// The `child_2` slot is matched EXHAUSTIVELY over [`NodeSlot`] (no `_`
-/// catch-all, no `.ok()`), reproducing the removed hand-walk loop byte for byte:
-///
-/// - `Present` / `Missing`: the removed loop matched the body by kind
-///   (`text_with_bullets` / `text_with_bullets_and_pics`), and a tree-sitter
-///   MISSING node carries that expected kind, so BOTH a real body and a MISSING
-///   body were handed to [`parse_bullet_content`]. The raw body node is parsed in
-///   both arms, and they stay SEPARATE here on purpose. `node_or_placeholder`
-///   would merge them, but the arms below bind the offending node to place a
-///   diagnostic, and `Error`/`Unexpected` and `Absent` want different ones, so
-///   collapsing the top would force the slot to be re-matched underneath with an
-///   unreachable case. Two honest arms beat one arm plus an impossible branch.
-///   (This paragraph used to give a different reason, that the backend made
-///   sharing impossible. That was true when written and is not now.) (This paragraph used to add that an empty `%com:` body was the
-///   only reachable malformed case here, landing as `Present` with a MISSING
-///   inner `continuation` and recovering to a single `Continuation` segment. The
-///   E756 widening abolished that: `%com`'s grammar body is `optional(...)`, so
-///   an empty one never reaches this function at all.)
-/// - `Error` / `Unexpected`: the removed loop's `_` arm reported
-///   [`unexpected_node_error`] for a non-structural, non-text child, then fell
-///   through to the end-of-loop "no content" rejection because no text body was
-///   found. Both are reproduced, at the same code and span (largely unreachable
-///   in practice; the whole-tree recovery backstop covers these).
-/// - `Absent`: the removed loop simply never matched a text node and reported the
-///   "no content" rejection.
-fn parse_text_tier_content<'tree, Tier, Body>(
+/// Surface displaced children before lowering, preserving the recovery backstop.
+fn parse_text_tier_content<'tree, 'source, Tier, Body>(
     tier_node: Node<'tree>,
-    body: &ChildSlot<'tree, Body>,
+    body: crate::generated_traversal::SourceField<'_, 'tree, 'source, KindSlot<'tree, Body>>,
     unexpected: &[Node<'tree>],
-    source: &str,
     errors: &impl ErrorSink,
 ) -> BulletContent
 where
     Tier: TextTierBody,
-    Body: AsRawNode<'tree>,
+    Body: crate::generated_traversal::SourceBoundKind<'tree>,
+    crate::generated_traversal::SourceBound<'tree, 'source, Body>:
+        Into<BulletTextNode<'tree, 'source>>,
 {
+    let source = body.source();
     surface_displaced(unexpected, Tier::KIND, source, errors);
 
+    use crate::generated_traversal::SourceSlotView;
     match body.view() {
-        SlotView::Present(text) => parse_bullet_content(text.raw_node(), source, errors),
-        SlotView::Missing(node) => parse_bullet_content(node, source, errors),
-        SlotView::Error(node) => {
-            errors.report(unexpected_node_error(node, source, Tier::KIND));
+        SourceSlotView::Present(text) | SourceSlotView::Missing(text) => {
+            match crate::parser::typed_cst::read_source_field(text, errors) {
+                Some(text) => parse_bullet_content(text.into(), errors),
+                None => BulletContent::empty(),
+            }
+        }
+        SourceSlotView::Error(node) => {
+            errors.report(unexpected_node_error(node.raw_node(), source, Tier::KIND));
             report_missing_text_content::<Tier>(tier_node, source, errors);
             BulletContent::empty()
         }
-        SlotView::Absent(NoChild) => {
+        SourceSlotView::Absent(NoChild) => {
             report_missing_text_content::<Tier>(tier_node, source, errors);
             BulletContent::empty()
         }
@@ -166,25 +140,30 @@ where
 ///
 /// `Some(slot)` delegates to [`parse_text_tier_content`] unchanged, so a body
 /// that is present but malformed keeps its existing diagnostics.
-pub(crate) fn parse_optional_text_tier_content<'tree, Tier, Body>(
-    tier: Tier,
-    body: &Option<ChildSlot<'tree, Body>>,
+pub(crate) fn parse_optional_text_tier_content<'tree, 'source, Tier, Body>(
+    tier: crate::generated_traversal::SourceBound<'tree, 'source, Tier>,
+    body: crate::generated_traversal::SourceField<
+        '_,
+        'tree,
+        'source,
+        Option<KindSlot<'tree, Body>>,
+    >,
     unexpected: &[Node<'tree>],
-    source: &str,
     errors: &impl ErrorSink,
 ) -> BulletContent
 where
-    Tier: TextTierBody + AsRawNode<'tree>,
-    Body: AsRawNode<'tree>,
+    Tier: TextTierBody + crate::generated_traversal::SourceBoundKind<'tree>,
+    Body: crate::generated_traversal::SourceBoundKind<'tree>,
+    crate::generated_traversal::SourceBound<'tree, 'source, Body>:
+        Into<BulletTextNode<'tree, 'source>>,
 {
     // The tier node comes from the tier VALUE, so the span reported and the
     // policy applied are the same tier by construction. They were a `Node` and
     // three loose arguments that a caller paired by hand.
     let tier_node = tier.raw_node();
-    match body {
-        Some(slot) => {
-            parse_text_tier_content::<Tier, Body>(tier_node, slot, unexpected, source, errors)
-        }
+    let source = tier.source();
+    match body.optional() {
+        Some(slot) => parse_text_tier_content::<Tier, Body>(tier_node, slot, unexpected, errors),
         None => {
             surface_displaced(unexpected, Tier::KIND, source, errors);
             BulletContent::empty()

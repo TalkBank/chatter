@@ -122,11 +122,14 @@ pub mod bug_annotations;
 /// Evidence-aware curated CHECK mapping report.
 pub mod check_mapping_audit;
 
+pub mod chat_corpus;
 pub mod check_error_map;
+#[cfg(feature = "conformance")]
 pub mod conformance;
 pub mod conformance_inventory;
 pub mod construct_coverage;
 pub mod content_catch_alls;
+pub mod coverage_source;
 pub mod error_code_demonstration;
 pub mod error_code_specs;
 pub mod error_corpus_gen;

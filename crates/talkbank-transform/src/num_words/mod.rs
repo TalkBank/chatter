@@ -13,6 +13,7 @@
 //! routes tokens to a Python `num2words` IPC path) is deliberately NOT part of
 //! this general utility; it stays in the ASR post-processor.
 
+mod english_cardinal;
 mod num2chinese;
 mod num2text;
 mod ordinal_year_eng;

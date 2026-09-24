@@ -18,9 +18,10 @@ use tree_sitter::Node;
 
 use super::super::super::annotations::parse_scoped_annotations;
 use super::super::marker_chain::fold_marker_chain;
+use super::super::recovery::surface_main_tier_sink;
 use super::super::report_tree_shape;
 use super::contents::{contents_of, parse_group_contents};
-use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::expect_delimiter;
 
 /// Which group delimiter the offending whitespace touches; drives the
 /// E750 message wording only.
@@ -135,9 +136,7 @@ pub(crate) fn parse_group_content(
     // has no annotations in it and is the backstop's to report; an ERROR or
     // displaced node there is the group losing its shape.
     let markers = match children.annotations.slot().view() {
-        SlotView::Present(annotations) => {
-            parse_scoped_annotations(annotations.raw_node(), source, errors)
-        }
+        SlotView::Present(annotations) => parse_scoped_annotations(*annotations, source, errors),
         SlotView::Missing(_) | SlotView::Absent(NoChild) => Vec::new(),
         SlotView::Error(bad) => {
             report_tree_shape(
@@ -152,12 +151,10 @@ pub(crate) fn parse_group_content(
             Vec::new()
         }
     };
-    surface_displaced(
-        &children.unexpected,
-        "group_with_annotations",
-        source,
-        errors,
-    );
+    // Group contents belong to the main-tier body even when recovery places
+    // their ERROR beside the contents slot. The sealed carrier retains that
+    // ownership instead of sending the same word fault to a generic reporter.
+    surface_main_tier_sink(&children, source, errors);
 
     if group_items.is_empty() {
         return ParseOutcome::rejected();

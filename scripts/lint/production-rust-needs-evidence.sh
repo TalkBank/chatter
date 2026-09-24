@@ -62,7 +62,7 @@ MSG_FILE="$2"
 
 # Generated Rust is not authored production Rust: regenerating it is the output
 # of a change elsewhere, and `just regen` rewrites all of it at once. The names
-# come from the DO-NOT-EDIT set listed in CLAUDE.md's danger rules.
+# come from the DO-NOT-EDIT set listed in AGENTS.md's danger rules.
 is_generated_path() {
     local path=$1
     local base=${path##*/}

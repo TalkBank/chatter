@@ -16,12 +16,12 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, NoChild, SlotView, UnsupportedDependentTierNode, XDependentTierNode,
-    extract_unsupported_dependent_tier, extract_x_dependent_tier,
+    AsRawNode, KindSlot, NoChild, SourceBound, SourceSlotView, UnsupportedDependentTierNode,
+    XDependentTierNode, extract_unsupported_dependent_tier,
 };
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::model::{NonEmptyString, Utterance};
-use crate::node_types::{TEXT_WITH_BULLETS, UNSUPPORTED_TIER_PREFIX, X_TIER_PREFIX};
+use crate::node_types::{UNSUPPORTED_TIER_PREFIX, X_TIER_PREFIX};
 
 use crate::parser::tree_parsing::parser_helpers::{
     SlotState, after_marker, analyze_dependent_tier_error, expect_present, surface_displaced,
@@ -76,8 +76,8 @@ const UNSUPPORTED_PREFIX: PrefixKind = PrefixKind {
 /// model's tier requires one), so the line lowers to nothing here rather
 /// than to a tier the parser named. Should the state ever be reached, the
 /// change is a label-less tier variant in the model, not a default here.
-fn tier_name<'tree, T: AsRawNode<'tree>>(
-    slot: &ChildSlot<'tree, T>,
+fn tier_name<'tree, T: AsRawNode<'tree> + Copy>(
+    slot: &KindSlot<'tree, T>,
     kind: &PrefixKind,
     tier_node: Node,
     input: &str,
@@ -129,16 +129,17 @@ fn tier_name<'tree, T: AsRawNode<'tree>>(
 /// TEXT_WITH_BULLETS)` `match child.kind()` scans. The prefix is read as
 /// the state its position is in ([`tier_name`]): a tier is built only from
 /// a prefix that is there.
-pub(super) fn apply_x_tier(
+pub(super) fn apply_x_tier<'tree>(
     utterance: &mut Utterance,
-    node: XDependentTierNode<'_>,
-    input: &str,
+    node: SourceBound<'tree, '_, XDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) {
     // Grammar: x_dependent_tier = x_tier_prefix, tier_sep, text_with_bullets, newline
     // x_tier_prefix is a single token matching /%x[a-zA-Z][a-zA-Z0-9]*/
     let tier_node = node.raw_node();
-    let children = extract_x_dependent_tier(node);
+    let input = node.source();
+    let associated = node.extract();
+    let children = associated.children();
     let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
     surface_displaced(&children.unexpected, "x_dependent_tier", input, errors);
 
@@ -170,7 +171,7 @@ pub(super) fn apply_x_tier(
     // not validity: the parser says what the file contains, and
     // `DependentTier::empty_content_span` hands it to E756 exactly as it does
     // for every other tier kind.
-    let body_slot = match children.child_2.slot().as_ref() {
+    let body_slot = match associated.field_child_2().slot().optional() {
         Some(slot) => slot,
         None => {
             let span =
@@ -193,36 +194,24 @@ pub(super) fn apply_x_tier(
     // walk used to report the recovery node; it is gone since 2026-09-08. A
     // node of another kind there (none is generated today) is reported by
     // its kind.
-    let body_node = match body_slot.view() {
-        SlotView::Present(n) => n.raw_node(),
-        SlotView::Missing(n) => n,
-        SlotView::Error(n) => {
-            errors.report(analyze_dependent_tier_error(n, input));
+    let body = match body_slot.view() {
+        SourceSlotView::Present(n) | SourceSlotView::Missing(n) => {
+            let Some(bound) = crate::parser::typed_cst::read_source_field(n, errors) else {
+                return;
+            };
+            bound
+        }
+        SourceSlotView::Error(n) => {
+            errors.report(analyze_dependent_tier_error(n.raw_node(), n.source()));
             report_missing_x_content(tier_node, tier_label, input, errors);
             return;
         }
-        SlotView::Absent(NoChild) => {
+        SourceSlotView::Absent(NoChild) => {
             report_missing_x_content(tier_node, tier_label, input, errors);
             return;
         }
     };
-    let content_text = match body_node.utf8_text(input.as_bytes()) {
-        Ok(text) => text,
-        Err(_) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(body_node.start_byte(), body_node.end_byte()),
-                ErrorContext::new(
-                    input,
-                    body_node.start_byte()..body_node.end_byte(),
-                    TEXT_WITH_BULLETS,
-                ),
-                "User-defined tier content is not valid UTF-8",
-            ));
-            return;
-        }
-    };
+    let content_text = body.text();
 
     // Content must be non-empty
     let content = match NonEmptyString::new(content_text) {
@@ -269,7 +258,7 @@ fn report_missing_x_content(
 }
 
 /// Handle unsupported dependent tiers (%custom, %foo, etc.) caught by the grammar catch-all.
-/// These are stored as UserDefined tiers so the file can still be parsed.
+/// These are stored as Unsupported tiers so the file can still be parsed.
 ///
 /// The PREFIX is driven by the generated typed visitor:
 /// `extract_unsupported_dependent_tier`'s `child_0` (`unsupported_tier_prefix`, a

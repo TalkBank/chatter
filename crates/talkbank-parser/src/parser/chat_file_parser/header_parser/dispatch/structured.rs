@@ -4,8 +4,8 @@
 //! variant. They all share the same pre-migration wrapper (a local
 //! `ErrorCollector`, call the dedicated `tree_parsing/header/` sub-parser,
 //! forward its diagnostics to `errors`, then `ParseOutcome::parsed(header)`),
-//! factored into `call_sub`; each entry is a one-line call with its sub-parser.
-//! The sub-parser bodies in `tree_parsing/header/` are unchanged.
+//! factored into `call_sub` for the transitional node/source APIs. Participant
+//! and media lowering instead consume source-bound nodes with the same error policy.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Languages_Header>
@@ -15,7 +15,7 @@
 use crate::error::{ErrorCollector, ErrorSink};
 use crate::generated_traversal::{
     IdHeaderNode, LanguagesHeaderNode, MediaHeaderNode, ParticipantsHeaderNode,
-    SituationHeaderNode, TypesHeaderNode,
+    SituationHeaderNode, SourceBound, TypesHeaderNode,
 };
 use crate::model::Header;
 use talkbank_model::ParseOutcome;
@@ -54,12 +54,14 @@ pub(super) fn languages(
 }
 
 /// `@Participants` -> `parse_participants_header`.
-pub(super) fn participants(
-    header_actual: ParticipantsHeaderNode<'_>,
-    input: &str,
+pub(super) fn participants<'tree>(
+    header_actual: SourceBound<'tree, '_, ParticipantsHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    call_sub(header_actual, input, errors, parse_participants_header)
+    let header_errors = ErrorCollector::new();
+    let header = parse_participants_header(header_actual, &header_errors);
+    errors.report_all(header_errors.into_vec());
+    ParseOutcome::parsed(header)
 }
 
 /// `@ID` -> `parse_id_header`.
@@ -72,12 +74,14 @@ pub(super) fn id(
 }
 
 /// `@Media` -> `parse_media_header`.
-pub(super) fn media(
-    header_actual: MediaHeaderNode<'_>,
-    input: &str,
+pub(super) fn media<'tree>(
+    header_actual: SourceBound<'tree, '_, MediaHeaderNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
-    call_sub(header_actual, input, errors, parse_media_header)
+    let header_errors = ErrorCollector::new();
+    let header = parse_media_header(header_actual, &header_errors);
+    errors.report_all(header_errors.into_vec());
+    ParseOutcome::parsed(header)
 }
 
 /// `@Situation` -> `parse_situation_header`.

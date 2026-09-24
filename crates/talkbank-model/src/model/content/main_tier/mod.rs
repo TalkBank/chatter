@@ -318,6 +318,8 @@ impl crate::validation::Validate for MainTier {
         let tier_content = &self.content;
         let content_items = &tier_content.content;
 
+        crate::validation::main_tier::check_leading_bullets(self, context, errors);
+
         // E305: missing terminator, main tier utterances must end with a
         // terminator unless CA mode is active. Skipped on a parse-recovered
         // tier: the terminator may sit inside the unparsed region, so its

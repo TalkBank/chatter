@@ -7,6 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
+use crate::parser::tree_parsing::helpers::ReadableRecovery;
 use tree_sitter::Node;
 
 /// Classifies one dependent-tier error node with optional tier context.
@@ -17,19 +18,33 @@ pub(crate) fn analyze_dependent_tier_error_with_context(
 ) -> ParseError {
     let start = error_node.start_byte();
     let end = error_node.end_byte();
-    let error_text = match error_node.utf8_text(source.as_bytes()) {
-        Ok(text) => text,
-        Err(_) => {
+    let recovery = match ReadableRecovery::admit(error_node, source) {
+        Some(recovery) => recovery,
+        None => {
             return ParseError::new(
                 ErrorCode::InvalidControlCharacter,
                 Severity::Error,
                 SourceLocation::from_offsets(start, end),
                 ErrorContext::new(source, start..end, ""),
-                "Could not decode dependent tier content as valid UTF-8",
+                "Dependent tier node range is not a UTF-8 slice of the supplied source",
             )
             .with_suggestion("Re-enter using Unicode standard characters");
         }
     };
+    analyze_readable_dependent_error(recovery, tier_type)
+}
+
+/// Text and coordinates come from the same checked admission. The classifier
+/// cannot receive independent text or an out-of-range source span.
+pub(crate) fn analyze_readable_dependent_error(
+    recovery: ReadableRecovery<'_, '_>,
+    tier_type: Option<&str>,
+) -> ParseError {
+    let node = recovery.node();
+    let start = node.start_byte();
+    let end = node.end_byte();
+    let source = recovery.source();
+    let error_text = recovery.text();
 
     // There is no `%gra:` branch here. One fired on that substring anywhere
     // in the ERROR's text until 2026-09-08 and called it E710, "non-numeric
@@ -56,12 +71,9 @@ pub(crate) fn analyze_dependent_tier_error_with_context(
             super::dedicated::at_item_boundary(source, start),
         )
     {
-        // Narrow the span to the item; `find` re-locates the same
-        // first occurrence `split_whitespace` matched.
-        let (item_start, item_end) = match error_text.find(item) {
-            Some(offset) => (start + offset, start + offset + item.len()),
-            None => (start, end),
-        };
+        let range = item.range();
+        let (item_start, item_end) = (start + range.start, start + range.end);
+        let item = item.text();
         return ParseError::new(
             ErrorCode::MorItemEmptyPos,
             Severity::Error,
@@ -84,7 +96,7 @@ pub(crate) fn analyze_dependent_tier_error_with_context(
     // told a pipe was missing. A diagnostic whose message does not match the
     // input is this project's own stated tell for a chatter defect, so it now
     // reports what it knows and suggests what it cannot know.
-    if tier_type == Some("mor") && !error_text.is_empty() && end > start {
+    if tier_type == Some("mor") && !error_text.is_empty() {
         return ParseError::new(
             ErrorCode::InvalidMorphologyFormat,
             Severity::Error,
@@ -95,19 +107,10 @@ pub(crate) fn analyze_dependent_tier_error_with_context(
         .with_suggestion("MOR items are pos|stem (e.g., v|hello, n|world), with optional prefix, suffix and translation");
     }
 
-    // Double comma in dependent tier
-    if error_text.contains(",,") {
-        return ParseError::new(
-            ErrorCode::ConsecutiveCommas,
-            Severity::Error,
-            SourceLocation::from_offsets(start, end),
-            ErrorContext::new(source, start..end, error_text),
-            "Double comma found in dependent tier",
-        )
-        .with_suggestion("Use single comma or replace ,, with special character");
-    }
-
-    // Generic dependent tier error
+    // Recovery text does not establish typed main-tier separator items.
+    // E258 belongs to check_consecutive_commas over the main-tier model;
+    // dependent-tier punctuation must not bypass that semantic admission.
+    // Unrecognized dependent content remains invalid through this fallback.
     ParseError::new(
         ErrorCode::UnparsableContent,
         Severity::Error,
@@ -127,4 +130,51 @@ pub(crate) fn analyze_dependent_tier_error_with_context(
 /// Backward-compatible wrapper without explicit tier context.
 pub(crate) fn analyze_dependent_tier_error(error_node: Node, source: &str) -> ParseError {
     analyze_dependent_tier_error_with_context(error_node, source, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::TreeSitterParser;
+
+    #[test]
+    fn real_morphology_recovery_requires_a_readable_source_range() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E760_1.cha"
+        ));
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let mut pending = vec![parsed.root_node()];
+        let mut witnessed = 0;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            if !node.is_error() || node.start_byte() == node.end_byte() {
+                continue;
+            }
+            let original = analyze_dependent_tier_error_with_context(node, source, Some("mor"));
+            if original.code != ErrorCode::MorItemEmptyPos {
+                continue;
+            }
+            witnessed += 1;
+            // Make the range end inside a multibyte character, independently
+            // of the actual token's length and offset. This is boundary input,
+            // not a synthetic CHAT fixture or a fabricated CST node.
+            let split_utf8 = format!("{}é", "x".repeat(node.end_byte() - 1));
+            for incompatible in ["", split_utf8.as_str()] {
+                assert!(ReadableRecovery::admit(node, incompatible).is_none());
+                assert_eq!(
+                    analyze_dependent_tier_error_with_context(node, incompatible, Some("mor")).code,
+                    ErrorCode::InvalidControlCharacter,
+                );
+            }
+        }
+        assert!(
+            witnessed > 0,
+            "retained E760 fixture must supply real morphology recovery"
+        );
+    }
 }

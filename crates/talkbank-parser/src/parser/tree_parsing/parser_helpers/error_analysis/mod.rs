@@ -12,5 +12,6 @@ mod file;
 
 pub(crate) use dependent_tier::{
     analyze_dependent_tier_error, analyze_dependent_tier_error_with_context,
+    analyze_readable_dependent_error,
 };
 pub(crate) use file::analyze_error_node;

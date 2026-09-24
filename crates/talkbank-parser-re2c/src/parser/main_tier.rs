@@ -62,6 +62,46 @@ fn trailing_annotations<'tokens, 'a: 'tokens>()
         .collect::<Vec<_>>()
 }
 
+/// A marker admitted by `base_annotations`, not a word replacement or a
+/// tier-level code. Keep rejected tokens in the stream for normal recovery.
+enum BaseAnnotation<'a> {
+    Scoped(ScopedAnnotationParsed<'a>),
+    Retrace(RetraceKindParsed),
+}
+
+impl<'a> BaseAnnotation<'a> {
+    fn admit(annotation: ParsedAnnotation<'a>) -> Option<Self> {
+        match annotation {
+            ParsedAnnotation::Scoped(ScopedAnnotationParsed::Unknown(_))
+            | ParsedAnnotation::Replacement(_)
+            | ParsedAnnotation::Langcode(_)
+            | ParsedAnnotation::Postcode(_) => None,
+            ParsedAnnotation::Scoped(scoped) => Some(Self::Scoped(scoped)),
+            ParsedAnnotation::Retrace(kind) => Some(Self::Retrace(kind)),
+        }
+    }
+
+    fn into_parsed(self) -> ParsedAnnotation<'a> {
+        match self {
+            Self::Scoped(scoped) => ParsedAnnotation::Scoped(scoped),
+            Self::Retrace(kind) => ParsedAnnotation::Retrace(kind),
+        }
+    }
+}
+
+/// The grammar requires whitespace before each base annotation.
+fn trailing_base_annotations<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<BaseAnnotation<'a>>> + Clone {
+    select! { Token::Whitespace(_) => (), Token::Continuation(_) => () }
+        .repeated()
+        .at_least(1)
+        .ignore_then(annotation().try_map(|annotation, _span| {
+            BaseAnnotation::admit(annotation).ok_or_else(Default::default)
+        }))
+        .repeated()
+        .collect()
+}
+
 // ═══════════════════════════════════════════════════════════
 // Simple content items
 // ═══════════════════════════════════════════════════════════
@@ -460,11 +500,20 @@ pub fn contents_parser<'tokens, 'a: 'tokens>()
                 }
             });
 
-        // Quotation: " contents "
+        // grammar.js: quotation_with_optional_annotations. The same ordered
+        // chain owns scoped annotations and retraces for every seed kind.
         let quotation = select! { Token::LeftDoubleQuote(_) => () }
             .ignore_then(contents.clone())
             .then_ignore(select! { Token::RightDoubleQuote(_) => () })
-            .map(|contents| ContentItem::Quotation(Quotation { contents }));
+            .then(trailing_base_annotations())
+            .map(|(contents, annotations)| {
+                Chain::Quotation(Quotation {
+                    contents,
+                    annotations: Vec::new(),
+                })
+                .fold(annotations.into_iter().map(BaseAnnotation::into_parsed))
+                .into_content_item()
+            });
 
         // PhoGroup: ‹ contents ›
         let pho_group = select! { Token::PhoGroupBegin(_) => () }
@@ -605,5 +654,30 @@ fn overlap_item<'a>(kind: OverlapKind, raw: &'a str) -> ContentItem<'a> {
     ContentItem::OverlapPoint {
         kind,
         index: raw.chars().nth(1).and_then(|c| c.to_digit(10)),
+    }
+}
+
+#[cfg(test)]
+mod base_annotation_boundary_tests {
+    use super::*;
+
+    /// Grammar admission is a boundary policy, not an invariant of all tokens.
+    #[test]
+    fn quotation_markers_exclude_word_and_tier_codes() {
+        for annotation in [
+            ParsedAnnotation::Replacement("replacement"),
+            ParsedAnnotation::Langcode("eng"),
+            ParsedAnnotation::Postcode("code"),
+            ParsedAnnotation::Scoped(ScopedAnnotationParsed::Unknown("unknown")),
+        ] {
+            assert!(BaseAnnotation::admit(annotation).is_none());
+        }
+        for annotation in [
+            ParsedAnnotation::Scoped(ScopedAnnotationParsed::Paralinguistic("softly")),
+            ParsedAnnotation::Retrace(RetraceKindParsed::Complete),
+        ] {
+            let admitted = BaseAnnotation::admit(annotation.clone());
+            assert_eq!(admitted.map(BaseAnnotation::into_parsed), Some(annotation));
+        }
     }
 }

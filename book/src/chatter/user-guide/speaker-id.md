@@ -1,7 +1,7 @@
 # Speaker-ID (`chatter speaker-id`)
 
 **Status:** Draft
-**Last modified:** 2026-08-30 16:02 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 `chatter speaker-id` assigns CHAT-conformant speaker codes and role
 tags to a CHAT file whose speakers carry anonymous or placeholder
@@ -35,14 +35,14 @@ flowchart LR
     Ref["reference.cha<br/>target speakers only"] -.->|reference signal| SpkId
     AsrAnon --> SpkId
     SpkId["chatter speaker-id<br/>(this page)"] --> AsrLabeled["asr-labeled.cha<br/>CHI, INV, MOT, ..."]
-    AsrLabeled --> Merge["chatter merge"]
+    AsrLabeled --> Merge["Structural assembly (library)"]
     Ref --> Merge
     Merge --> Aligned["batchalign3 align"]
 ```
 
 The speaker-id stage is the single point in the pipeline where
 "which anonymous speaker corresponds to which CHAT role" is
-decided. Downstream stages (`chatter merge`, `batchalign3 align`,
+decided. Downstream stages (structural assembly, `batchalign3 align`,
 `batchalign3 morphotag`) all trust that the labels they receive
 are correct.
 
@@ -65,7 +65,7 @@ tokens**, see "Algorithm" below for the full specification. The
 ASR speaker whose bag-of-words best matches the reference anchor's
 bag-of-words is taken as the same speaker, and is marked for
 **drop** in the output (because the reference file authoritatively
-covers them, the downstream `chatter merge` stage will pull
+covers them, a downstream structural assembly stage will pull
 their utterances from the reference, not from this file). The
 remaining speakers are renamed to the role specified by
 `--inserted-role`.
@@ -412,8 +412,8 @@ Highlights from the reference:
   has been mis-transcribed by ASR, this command does not fix that
 , re-run ASR with a better engine.
 - Not a merge. This command operates on a single CHAT file. To
-  combine the relabeled file with the reference, use
-  [`chatter merge`](./merge.md).
+  combine it with a reference, applications must resolve event correspondence
+  before using structural assembly. The [`merge` CLI was removed](./merge.md).
 - Not interactive. `chatter speaker-id` is batch-only: it succeeds,
   refuses, or fails. The interactive review that resolves a
   low-confidence refusal into an override-file entry is a separate

@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother, FAT Father, INV Investigator, OBS Participant, ADU Adult, SIS Sister, BRO Brother
+@ID:	eng|corpus|CHI||||White,UC|Target_Child|||
+@ID:	eng|corpus|MOT||||Black,MC|Mother|||
+@ID:	eng|corpus|FAT||||Asian,WC|Father|||
+@ID:	eng|corpus|INV||||Latino,LI|Investigator|||
+@ID:	eng|corpus|OBS||||Pacific|Participant|||
+@ID:	eng|corpus|ADU||||Native|Adult|||
+@ID:	eng|corpus|SIS||||Multiple|Sister|||
+@ID:	eng|corpus|BRO||||Unknown|Brother|||
+*CHI:	hello .
+@End

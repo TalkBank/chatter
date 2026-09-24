@@ -124,6 +124,17 @@ fn test_pid_simple() -> Result<(), talkbank_parser_tests::test_error::TestError>
 
 #[test]
 /// Tests expected behavior.
+fn test_pre_begin_editor_headers() -> Result<(), talkbank_parser_tests::test_error::TestError> {
+    let parser = TreeSitterParser::new()?;
+    // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic
+    // contract: a construct example is expected to parse completely cleanly.
+    let _parsed = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file("@UTF8\n@Color words:\t*CHI 1 32768 0 656 *MOT 1 656 33423 1311\n@Window:\t247_181_683_700_-1_-1_348_0_348_0\n@Font:\tWin:Courier New:14:25\n@Begin\n@End"))?;
+
+    Ok(())
+}
+
+#[test]
+/// Tests expected behavior.
 fn test_situation_simple() -> Result<(), talkbank_parser_tests::test_error::TestError> {
     let parser = TreeSitterParser::new()?;
     // `strict_parse` reproduces the pre-`ParseProduct` fail-on-any-diagnostic

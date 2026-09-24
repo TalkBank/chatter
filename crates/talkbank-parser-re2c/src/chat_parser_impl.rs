@@ -358,7 +358,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_act_tier(&parsed)))
     }
 
@@ -373,7 +374,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_cod_tier(&parsed)))
     }
 
@@ -388,7 +390,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_com_tier(&parsed)))
     }
 
@@ -403,7 +406,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_exp_tier(&parsed)))
     }
 
@@ -418,7 +422,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_add_tier(&parsed)))
     }
 
@@ -433,7 +438,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_gpx_tier(&parsed)))
     }
 
@@ -448,7 +454,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_int_tier(&parsed)))
     }
 
@@ -463,7 +470,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_spa_tier(&parsed)))
     }
 
@@ -478,7 +486,8 @@ impl ChatParser for Re2cParser {
         else {
             return ParseOutcome::rejected();
         };
-        let parsed = crate::parser::parse_text_tier(input);
+        let diagnostics = fragment_source.error_sink(errors);
+        let parsed = crate::parser::parse_text_tier_with_errors(input, &diagnostics);
         ParseOutcome::parsed(fragment_source.rebase(crate::convert::to_sit_tier(&parsed)))
     }
 

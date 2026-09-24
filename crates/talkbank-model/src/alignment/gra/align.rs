@@ -4,7 +4,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
-use crate::model::{GraTier, MorChunk, MorChunkKind, MorTier};
+use crate::model::{GraTier, MorChunk, MorTier};
 use crate::{ErrorCode, ErrorLabel, ParseError, Severity};
 
 use super::super::format::format_positional_mismatch;
@@ -159,27 +159,14 @@ fn extract_mor_chunk_items(mor: &MorTier) -> Vec<TierPosition> {
             },
             MorChunk::PostClitic(_, clitic) => TierPosition {
                 text: to_string(clitic),
-                description: Some(describe_chunk(MorChunkKind::PostClitic).to_owned()),
+                description: Some("post-clitic".to_owned()),
             },
             MorChunk::Terminator(term) => TierPosition {
                 text: term.to_string(),
-                description: Some(describe_chunk(MorChunkKind::Terminator).to_owned()),
+                description: Some("terminator".to_owned()),
             },
         })
         .collect()
-}
-
-/// Human-readable label for a `%mor` chunk kind, used in mismatch diagnostics.
-///
-/// Kept as a free function rather than a method on [`MorChunkKind`] because
-/// the labels are specific to this diagnostic surface; other consumers
-/// (hover cards, CLI renderers) may choose different wording.
-fn describe_chunk(kind: MorChunkKind) -> &'static str {
-    match kind {
-        MorChunkKind::Main => "",
-        MorChunkKind::PostClitic => "post-clitic",
-        MorChunkKind::Terminator => "terminator",
-    }
 }
 
 /// Extract %gra relations as TierPositions for diagnostic display.

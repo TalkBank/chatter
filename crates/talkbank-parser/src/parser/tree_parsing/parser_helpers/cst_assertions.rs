@@ -1,8 +1,7 @@
-//! CST Structure Assertions
+//! Checked CST recovery and transitional text boundaries.
 //!
-//! These functions verify that tree-sitter CST nodes match expected grammar structure.
-//! When the grammar changes, these assertions will loudly fail instead of silently
-//! producing incorrect parses.
+//! Generated slots describe grammar structure. These helpers report recovery
+//! states and reject failed reads without manufacturing successful values.
 //!
 //! # Related CHAT Manual Sections
 //!
@@ -15,153 +14,9 @@ use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
-/// Assert that a node has exactly the expected number of children
-///
-/// **Purpose:** Catch grammar changes that add/remove children
-///
-/// # Example
-/// ```ignore
-/// // Grammar: seq('%', 'mor', ':', '\t', mor_contents, '\n')
-/// // Expected: 6 children (positions 0-5)
-/// assert_child_count_exact(node, 6, source, errors, "mor_dependent_tier");
-/// ```
-pub fn assert_child_count_exact(
-    node: Node,
-    expected: u32,
-    source: &str,
-    errors: &impl ErrorSink,
-    context: &str,
-) -> bool {
-    let actual = node.child_count();
-    if actual != expected {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!(
-                "CST structure mismatch in {}: expected {} children, found {}. Grammar may have changed!",
-                context, expected, actual
-            ),
-        ).with_suggestion(format!(
-            "Check tree-sitter grammar for '{}' - structure has changed", node.kind()
-        )));
-        return false;
-    }
-    true
-}
-/// Assert that child at position has expected kind
-///
-/// **Purpose:** Catch when grammar changes reorder children or change types
-///
-/// # Example
-/// ```ignore
-/// // Grammar: seq('%', 'mor', ':', '\t', mor_contents, '\n')
-/// // Position 4 should be mor_contents
-/// assert_child_kind(node, 4, "mor_contents", source, errors, "mor_dependent_tier");
-/// ```
-pub fn assert_child_kind(
-    node: Node,
-    position: u32,
-    expected_kind: &str,
-    source: &str,
-    errors: &impl ErrorSink,
-    context: &str,
-) -> bool {
-    if let Some(child) = node.child(position) {
-        let actual_kind = child.kind();
-        if actual_kind != expected_kind {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), actual_kind),
-                format!(
-                    "CST structure mismatch in {} at position {}: expected '{}', found '{}'. Grammar may have changed!",
-                    context, position, expected_kind, actual_kind
-                ),
-            ).with_suggestion(format!(
-                "Check tree-sitter grammar for '{}' - child at position {} has changed", node.kind(), position
-            )));
-            return false;
-        }
-        true
-    } else {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!(
-                "CST structure mismatch in {}: no child at position {}. Grammar may have changed!",
-                context, position
-            ),
-        ).with_suggestion(format!(
-            "Check tree-sitter grammar for '{}' - expected {} children", node.kind(), position + 1
-        )));
-        false
-    }
-}
-
-/// Get child at position or report detailed error
-///
-/// **Purpose:** Safe child access that reports exactly what went wrong
-///
-/// Returns `None` if child doesn't exist, kind doesn't match, or node is MISSING (error already reported)
-///
-/// **CRITICAL**: This function checks for MISSING nodes (tree-sitter error recovery placeholders)
-/// and reports them as errors. MISSING nodes have the expected `kind()` but zero-length span.
-pub fn expect_child<'a>(
-    node: Node<'a>,
-    position: u32,
-    expected_kind: &str,
-    source: &str,
-    errors: &impl ErrorSink,
-    context: &str,
-) -> ParseOutcome<Node<'a>> {
-    if let Some(child) = node.child(position) {
-        // CRITICAL: Check for MISSING nodes first - these have the expected kind but are placeholders
-        if child.is_missing() {
-            errors.report(ParseError::new(
-                ErrorCode::MissingRequiredElement,
-                Severity::Error,
-                SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-                ErrorContext::new(source, child.start_byte()..child.end_byte(), child.kind()),
-                format!(
-                    "Tree-sitter error recovery: MISSING '{}' node inserted at {} position {}",
-                    expected_kind, context, position
-                ),
-            ).with_suggestion(
-                "This CHAT construct appears to be invalid or malformed. Check the CHAT format specification for correct syntax."
-            ).with_help_url("https://talkbank.org/0info/manuals/CHAT.html"));
-            return ParseOutcome::rejected();
-        }
-
-        if assert_child_kind(node, position, expected_kind, source, errors, context) {
-            ParseOutcome::parsed(child)
-        } else {
-            ParseOutcome::rejected()
-        }
-    } else {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-            format!(
-                "CST structure mismatch in {}: no child at position {}. Grammar may have changed!",
-                context, position
-            ),
-        ).with_suggestion(format!(
-            "Check tree-sitter grammar for '{}' - expected at least {} children", node.kind(), position + 1
-        )));
-        ParseOutcome::rejected()
-    }
-}
-
 /// Check if a node is a MISSING placeholder and report error if so
 ///
-/// **Purpose:** Inline check for MISSING nodes when not using expect_child helpers
+/// **Purpose:** Report MISSING nodes at raw-node boundaries not yet using typed slots.
 ///
 /// Returns `true` if node is valid (not MISSING), `false` if MISSING (error already reported)
 pub fn check_not_missing(node: Node, source: &str, errors: &impl ErrorSink, context: &str) -> bool {
@@ -185,45 +40,33 @@ pub fn check_not_missing(node: Node, source: &str, errors: &impl ErrorSink, cont
     }
 }
 
-/// Extract UTF-8 text from a node with proper error reporting
+/// Read a node range or report rejection; failure cannot manufacture text.
 ///
-/// **Purpose:** Replace silent fallback extraction with proper error handling
-///
-/// # Arguments
-/// * `node` - The CST node to extract text from
-/// * `source` - The source text
-/// * `errors` - Error sink for reporting UTF-8 failures
-/// * `context` - Context string for error messages
-/// * `fallback` - Fallback text if UTF-8 extraction fails
-///
-/// # Example
-/// ```ignore
-/// let text = extract_utf8_text(node, source, errors, "word_text", "");
-/// // If UTF-8 fails, error is reported and fallback is returned
-/// ```
+/// This transitional raw-node boundary checks bounds and UTF-8 boundaries.
+/// It does not certify source provenance: migrated consumers use the generated
+/// producer-bound SourceSlice instead of passing an independent string.
 pub fn extract_utf8_text<'a>(
     node: Node,
     source: &'a str,
     errors: &impl ErrorSink,
     context: &str,
-    fallback: &'a str,
-) -> &'a str {
-    match node.utf8_text(source.as_bytes()) {
-        Ok(text) => text,
-        Err(e) => {
+) -> ParseOutcome<&'a str> {
+    match source.get(node.byte_range()) {
+        Some(text) => ParseOutcome::parsed(text),
+        None => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
                 SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
                 ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
                 format!(
-                    "UTF-8 decoding error in {}: {}",
-                    context, e
+                    "Node range in {} is not a UTF-8 slice of the supplied source",
+                    context
                 ),
             ).with_suggestion(
-                "The source file may contain invalid UTF-8 sequences. Ensure the file is properly encoded as UTF-8."
+                "Use the source that produced this tree; node ranges must be valid UTF-8 boundaries in that source."
             ));
-            fallback
+            ParseOutcome::rejected()
         }
     }
 }
@@ -374,4 +217,35 @@ pub(crate) fn find_child_by_kind<'a>(node: Node<'a>, kind: &str) -> Option<Node<
     let mut cursor = node.walk();
     node.children(&mut cursor)
         .find(|child| child.kind() == kind)
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod text_boundary_tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use talkbank_model::ErrorCollector;
+
+    // Raw-node compatibility boundary: a mismatched source must neither panic
+    // on indexing nor manufacture an empty successful text value.
+    #[test]
+    fn text_read_rejects_out_of_source_ranges() {
+        let source = include_str!(
+            "../../../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E502_1.cha"
+        );
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let errors = ErrorCollector::new();
+        assert_eq!(
+            extract_utf8_text(parsed.root_node(), source, &errors, "root").into_option(),
+            Some(source),
+        );
+        assert!(errors.to_vec().is_empty());
+        assert!(extract_utf8_text(parsed.root_node(), "", &errors, "root").is_none());
+        let diagnostics = errors.into_vec();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
+    }
 }

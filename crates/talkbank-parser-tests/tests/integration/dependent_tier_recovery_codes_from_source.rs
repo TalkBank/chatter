@@ -20,7 +20,7 @@
 //! and so was junk after a well-formed `%gra` relation. E710 has one honest
 //! producer, the typed relation parser (E710.md); an ERROR inside any tier
 //! is the generic E316 unless a rule about its TEXT applies (E258 for a
-//! double comma, E760 for a `%mor` item with an empty part of speech). Every
+//! main-tier double comma, E760 for a `%mor` item with an empty part of speech). Every
 //! row names every code the file reports.
 
 use talkbank_parser_tests::from_source::{Rules, diagnostics_of};
@@ -42,8 +42,8 @@ const ROWS: &[(&str, &[&str])] = &[
     ("%xfoo:\t\u{15}with %gra: text", &["E316", "E330"]),
     // Junk after a well-formed relation is E316 at the junk, not E710.
     ("%gra:\t1|0|ROOT %gra: x", &["E316", "E604"]),
-    // A double comma is its own rule on any tier, and stays.
-    ("%eng:\t\u{15}one,,two", &["E258", "E330"]),
+    // E258 governs main-tier separator structure, not opaque dependent text.
+    ("%eng:\t\u{15}one,,two", &["E316", "E330"]),
     // The substring `%mor:` inside an `%eng` body, beside a token that would
     // be a `%mor` item with an empty part of speech, is still E316: E760 is
     // about `%mor` tiers, and this is not one.

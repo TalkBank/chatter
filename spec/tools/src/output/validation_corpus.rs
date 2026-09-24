@@ -22,7 +22,7 @@ use crate::spec::metadata::SpecErrorCode;
 use crate::spec::metadata::Status;
 use talkbank_spec_vocabulary::paths::RepoRelativePath;
 use talkbank_spec_vocabulary::validation_manifest::{
-    FixtureName, ValidationFixtureEntry, ValidationManifest,
+    FixtureName, FixtureTranscriptName, ValidationFixtureEntry, ValidationManifest,
 };
 
 /// One fixture to write: the CHAT input plus the manifest entry (which carries
@@ -176,6 +176,10 @@ fn plan_fixtures(specs: &[ErrorSpec], repo_root: &std::path::Path) -> Vec<Planne
                 input: example.input.clone(),
                 entry: ValidationFixtureEntry {
                     fixture: FixtureName::new(fixture_name(spec, index)),
+                    transcript_name: match example.source_stem() {
+                        Some(stem) => FixtureTranscriptName::Named(stem.to_owned()),
+                        None => FixtureTranscriptName::Anonymous,
+                    },
                     code: spec.error.code.clone(),
                     claim: example.claim.clone(),
                     rules: example.rules,
@@ -282,6 +286,7 @@ mod tests {
              [[example]]\n\
              level = 'utterance'\n\
              claim = { subsumed_by = 'E316' }\n\
+             source = 'original/Schlüssel.cha'\n\
              chat = \"@UTF8\\n@Begin\\none\\n@End\"\n\n\
              [[example]]\n\
              level = 'utterance'\n\
@@ -297,6 +302,15 @@ mod tests {
         let planned = plan_fixtures(&specs, dir.path());
 
         assert_eq!(planned.len(), 2, "one fixture per example");
+        assert_eq!(
+            planned[0].entry.transcript_name,
+            FixtureTranscriptName::Named("Schlu\u{0308}ssel".into()),
+            "storage names must not replace the example's declared identity"
+        );
+        assert_eq!(
+            planned[1].entry.transcript_name,
+            FixtureTranscriptName::Anonymous
+        );
         use talkbank_spec_vocabulary::frontmatter::Claim;
         let targets: Vec<&str> = planned
             .iter()

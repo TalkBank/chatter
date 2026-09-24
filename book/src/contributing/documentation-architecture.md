@@ -1,7 +1,7 @@
 # Documentation Architecture
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 ## Principle: Centralized Book + Subsystem Satellites
 
@@ -38,7 +38,7 @@ flowchart TD
 | Spec authoring guides | `spec/docs/` | Error spec format, curation workflow |
 | Generated error docs | `docs/errors/` | Registry artifact, written by `just spec-gen` and gated by `just spec-check`; source of truth stays in `spec/errors/` |
 | Historical/archived docs | project archive | Old audits, superseded proposals |
-| AI assistant context | `CLAUDE.md` files (per repo/subdir) | Not documentation for humans |
+| AI assistant context | `AGENTS.md` files (per repo/subdir) | Not documentation for humans |
 
 ## Rules
 

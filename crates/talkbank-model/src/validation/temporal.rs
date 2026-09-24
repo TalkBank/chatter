@@ -72,7 +72,6 @@ struct BulletInfo<'a> {
     utterance_idx: usize,
     speaker: &'a str,
     bullet: &'a Bullet,
-    has_timeable_content: bool,
 }
 
 /// Collects utterance bullets used by temporal validators.
@@ -91,12 +90,10 @@ fn collect_bullets(file: &ChatFile) -> Vec<BulletInfo<'_>> {
         let bullet = utt.media_bullet();
 
         if let Some(bullet) = bullet {
-            let has_timeable_content = has_transcribed_content(&utt.main.content.content);
             bullets.push(BulletInfo {
                 utterance_idx: idx,
                 speaker: utt.main.speaker.as_ref(),
                 bullet,
-                has_timeable_content,
             });
         }
     }
@@ -107,19 +104,10 @@ fn collect_bullets(file: &ChatFile) -> Vec<BulletInfo<'_>> {
 /// Returns whether utterance content includes at least one transcribed word,
 /// at any depth.
 ///
-/// False only for turns whose every word is untranscribed (`xxx`, `yyy`,
-/// `www`) or that hold no words at all. CLAN CHECK skips such turns for
-/// speaker self-overlap (E704), because a `www` scaffolding span carries a
-/// broad bullet without representing timeable lexical content.
-///
-/// # Why this is not two hand-written matches any more
-///
-/// It was, and both were wrong. The utterance half ended in `_ => false`, so
-/// `Retrace` and `AnnotatedRetrace` counted as untranscribed and an utterance
-/// whose only real words sat inside a retrace was dropped from E704 entirely.
-/// The bracketed half recursed into NOTHING, so a word one level down inside a
-/// group was invisible to it. Retraced speech was said out loud and occupies
-/// real time; that is the whole subject of a timing check.
+/// Untranscribed placeholders (`xxx`, `yyy`, `www`) and words with empty
+/// cleaned text do not supply lexical transcription. This is not a timing
+/// eligibility predicate: untranscribed speech still occupies time, and every
+/// collected bullet participates in same-speaker temporal validation.
 ///
 /// Classifying through [`ContentStructure`] means this predicate cannot hold a
 /// different opinion about which variants are containers than the traversals
@@ -193,19 +181,11 @@ fn validate_global_timeline(bullets: &[BulletInfo], errors: &impl ErrorSink) {
 ///
 /// Rule: Same speaker cannot overlap with themselves beyond 500ms tolerance
 /// current.start_ms >= (previous.end_ms - 500)
-/// The check ignores non-timeable utterances to match CLAN CHECK behavior.
+/// Every collected bullet constrains timing, including untranscribed speech.
 fn validate_speaker_timelines(bullets: &[BulletInfo], errors: &impl ErrorSink) {
     let mut speaker_last_end: HashMap<&str, (usize, u64)> = HashMap::new();
 
     for bullet_info in bullets {
-        // Match CHECK behavior: skip untranscribed-only/non-timeable tiers (e.g., "www").
-        // These turns can carry broad segment bullets but do not represent timeable lexical
-        // content for speaker-self overlap checks, so including them creates false E704 reports
-        // compared with CLAN CHECK (e.g., long INV "www" scaffolding spans in some corpora).
-        if !bullet_info.has_timeable_content {
-            continue;
-        }
-
         if let Some((prev_idx, prev_end_ms)) = speaker_last_end.get(bullet_info.speaker) {
             // Calculate overlap (0 if no overlap)
             let overlap = prev_end_ms.saturating_sub(bullet_info.bullet.timing.start_ms);
@@ -264,10 +244,10 @@ mod tests {
         WordCategory,
     };
 
-    // Note: Full integration tests should go in talkbank-model/tests/
+    // Canonical timing integration contracts live in talkbank-parser-tests.
 
     #[test]
-    fn fillers_count_as_timeable_content_for_utterance_bullets() {
+    fn fillers_count_as_transcribed_content() {
         let content = vec![UtteranceContent::Word(Box::new(
             Word::new_unchecked("&-you_know", "you_know").with_category(WordCategory::Filler),
         ))];
@@ -276,7 +256,7 @@ mod tests {
     }
 
     #[test]
-    fn untranscribed_only_content_is_not_timeable_for_utterance_bullets() {
+    fn untranscribed_only_content_has_no_lexical_transcription() {
         let content = vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
             "xxx", "xxx",
         )))];
@@ -284,21 +264,10 @@ mod tests {
         assert!(!has_transcribed_content(&content));
     }
 
-    /// Retraced speech was SAID, so it is timeable.
-    ///
-    /// A `_ => false` catch-all sent `Retrace` and `AnnotatedRetrace` to "not
-    /// transcribed", so an utterance whose only real words sat inside a retrace
-    /// was dropped from the E704 speaker-self-overlap check entirely.
-    ///
-    /// Demonstrated at the CLI before this test was written: two `*CHI:` lines
-    /// with bullets overlapping by 1000 ms, well past the 500 ms tolerance,
-    /// reported E704 when the first line read `the dog barked .` and reported
-    /// NOTHING when it read `<the dog> [//] xxx .`. The permanent guard lives
-    /// here rather than in a `.cha` fixture because this file already owns the
-    /// unit tests for this predicate, and because any bulleted fixture also
-    /// trips an incidental media code that would muddy a spec example.
+    /// Retraced lexical words remain transcribed content. This classification
+    /// is independent of the timing obligation shared by all timed speech.
     #[test]
-    fn retraced_words_are_timeable_content() {
+    fn retraced_words_are_transcribed_content() {
         let retraced = Retrace {
             content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
                 "dog",
@@ -311,7 +280,7 @@ mod tests {
         let content = vec![
             UtteranceContent::Retrace(Box::new(retraced)),
             // Everything OUTSIDE the retrace is untranscribed, so the retrace
-            // is the only thing that can make this utterance timeable.
+            // is the only thing that supplies lexical transcription.
             UtteranceContent::Word(Box::new(Word::simple("xxx"))),
         ];
 
@@ -321,7 +290,7 @@ mod tests {
     /// The bracketed half recursed into nothing at all, so a word one level
     /// down inside a group was invisible to it.
     #[test]
-    fn words_nested_inside_a_bracketed_group_are_timeable_content() {
+    fn words_nested_inside_a_bracketed_group_are_transcribed_content() {
         let inner = Group {
             content: BracketedContent::new(vec![BracketedItem::Word(Box::new(Word::simple(
                 "dog",

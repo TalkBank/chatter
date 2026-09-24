@@ -3,4 +3,5 @@
 mod compute;
 mod count_based;
 mod diagnostics;
+mod phoaln;
 mod units;

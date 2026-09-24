@@ -184,7 +184,7 @@ fn count_main_units(utterance: &talkbank_model::model::Utterance) -> usize {
 /// its own source/target index newtypes (e.g. `MainWordIndex`/`MorItemIndex`
 /// for `MorAlignment`). The sidecar wire format is plain `usize`, so we take
 /// a trait-object view via `IndexPair` that unwraps to raw positions at this
-/// JSON boundary. See `talkbank-lsp/CLAUDE.md` for the three index spaces.
+/// JSON boundary. See `talkbank-lsp/AGENTS.md` for the three index spaces.
 fn collect_alignment_pairs<P>(pairs: &[P]) -> Vec<AlignmentPairView>
 where
     P: talkbank_model::alignment::IndexPair,

@@ -8,7 +8,7 @@ import ProgressBar from "./components/ProgressBar";
 import ValidationSettingsPanel from "./components/ValidationSettingsPanel";
 import { useTheme } from "./hooks/useTheme";
 import { useValidation } from "./hooks/useValidation";
-import { isRunPending, isRunRecoverable } from "./hooks/validationState";
+import { finishedRunSummary, isRunPending, isRunRecoverable } from "./hooks/validationState";
 import { DEFAULT_VALIDATION_SETTINGS, type ValidationSettings } from "./protocol/desktopProtocol";
 import type { ParseError } from "./protocol/validation";
 import {
@@ -138,11 +138,7 @@ export default function App() {
       case "finished": {
         // `run.stats` is present by construction here; the old shape needed a
         // null check that could silently fall through to a bare title.
-        const { invalidFiles, totalFiles } = run.stats;
-        document.title =
-          invalidFiles === 0
-            ? `Chatter \u00b7 All ${totalFiles} files valid`
-            : `Chatter \u00b7 ${state.totalErrors} errors in ${invalidFiles} files`;
+        document.title = `Chatter \u00b7 ${finishedRunSummary(run, state.totalErrors)}`;
         break;
       }
     }
@@ -154,11 +150,7 @@ export default function App() {
     if (run.kind !== "finished") return;
     if (document.hasFocus()) return;
 
-    const { invalidFiles } = run.stats;
-    const body =
-      invalidFiles === 0
-        ? `All ${run.stats.totalFiles} files valid`
-        : `${state.totalErrors} errors in ${invalidFiles} files`;
+    const body = finishedRunSummary(run, state.totalErrors);
 
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification("Validation complete", { body });

@@ -2764,7 +2764,7 @@
         },
         {
           "const": "E519",
-          "description": "Invalid ISO 639 language code.",
+          "description": "Invalid ISO 639 language code, or an `@ID` language not declared in `@Languages`.",
           "type": "string"
         },
         {
@@ -2904,7 +2904,7 @@
         },
         {
           "const": "E549",
-          "description": "The same speaker code is declared more than once in the `@Participants`\nheader. Each participant must be declared exactly once. Corresponds to\nCLAN CHECK error 13.",
+          "description": "The same speaker code is repeated in `@Participants` or has more than\none `@ID` header. Each participant and speaker ID must be declared once.\nCorresponds to CLAN CHECK error 13.",
           "type": "string"
         },
         {
@@ -3278,6 +3278,16 @@
           "type": "string"
         },
         {
+          "const": "E769",
+          "description": "A semicolon separator appears on a main tier.\n\nModern CHAT disallows semicolons on main tiers; use separate utterances\nor an appropriate CHAT/CA marker. The typed separator is retained for\nprecise diagnostics and lossless handling of legacy input.",
+          "type": "string"
+        },
+        {
+          "const": "E770",
+          "description": "A main-tier timing bullet occurs before any utterance material.\n\nA timing bullet scopes preceding material; words (including explicit zero),\nevents, actions and pauses can establish that scope. Linkers, precodes and\nstructural markers cannot. Parsed timing evidence is retained unchanged.",
+          "type": "string"
+        },
+        {
           "const": "E999",
           "description": "Unknown or unrecognized error code (fallback).",
           "type": "string"
@@ -3285,6 +3295,11 @@
         {
           "const": "W108",
           "description": "Speaker code not found in `@Participants` (non-fatal).",
+          "type": "string"
+        },
+        {
+          "const": "W109",
+          "description": "`@Media` filename and the file being parsed name the same media\n(Unicode-canonically, NFC-equal), but one or both spellings are not\nthemselves in NFC form (e.g. a decomposed accented letter: base letter\nplus combining mark, instead of the precomposed codepoint). Both\nspellings render identically and are not a real filename mismatch\n(see [`MediaFilenameMismatch`]), but TalkBank filenames and `@Media`\nnames are canonically UTF-8 NFC, so the non-conforming spelling should\nbe canonicalized.\n\n[`MediaFilenameMismatch`]: Self::MediaFilenameMismatch",
           "type": "string"
         }
       ]
@@ -3299,7 +3314,7 @@
           "type": "integer"
         },
         "expected": {
-          "description": "What was expected at this position (multiple possibilities).\nSmallVec avoids heap allocation for the common case of 0-2 items.",
+          "description": "What was expected at this position (multiple possibilities).\nSmallVec avoids heap allocation for the common case of 0-2 items.\nAn omitted wire field is the serializer's representation of no listed\nexpectations, not evidence for an invented expected token.",
           "items": {
             "type": "string"
           },
@@ -3333,7 +3348,6 @@
         "source_text",
         "start",
         "end",
-        "expected",
         "found"
       ],
       "type": "object"
@@ -4570,7 +4584,7 @@
       "type": "array"
     },
     "LanguageMetadata": {
-      "description": "Language metadata for an entire utterance.\n\nTracks the resolved language for each WORD of the main tier, at any depth,\nincluding inside quotations, phonological groups, sign groups and retraces.\n\nThis structure stores:\n- **tier language**: utterance baseline (`[- code]` or `@Languages` primary)\n- **word languages**: resolved per-word language/provenance entries\n\nThe vector is in in-order traversal order. It is NOT an alignment index:\nthe tier domains disagree about what they count (Mor excludes retraces,\nPho counts them), so correlating with `%mor`/`%gra` positions requires the\nalignment layer's own index types, not this order.\n\n# Structure\n\n```text\nLanguageMetadata\n  ├─ tier_language: Option<LanguageCode>  (e.g., \"eng\")\n  └─ word_languages: Vec<WordLanguageInfo>\n       ├─ [0]: word_index=0, language=\"eng\", source=Default\n       ├─ [1]: word_index=1, language=\"spa\", source=WordShortcut\n       └─ ...\n```\n\n# CHAT Format Examples\n\n**Example 1: Single language utterance**\n\n```text\n@Languages: eng\n*CHI: I want cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`: All words have language=\"eng\", source=Default\n- `is_code_switching()`: false\n\n**Example 2: Code-switching utterance**\n\n```text\n@Languages: eng, spa\n*CHI: I want @s galletas @s please .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`:\n  - \"I\" → eng (Default)\n  - \"want\" → eng (Default)\n  - \"galletas\" → spa (WordShortcut)\n  - \"please\" → eng (WordShortcut)\n- `is_code_switching()`: true (uses both \"eng\" and \"spa\")\n\n**Example 3: Tier-scoped language change**\n\n```text\n@Languages: eng, fra\n*CHI: [- fra] je veux cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"fra\") (from `[- fra]` marker)\n- `word_languages`: All words have language=\"fra\", source=TierScoped\n- `is_code_switching()`: false\n\n# Use Cases\n\n**Code-switching detection:**\n```rust,ignore\nif language_metadata.is_code_switching() {\n    let counts = language_metadata.count_by_language();\n    println!(\"Utterance uses {} languages\", counts.len());\n}\n```\n\n**Per-word language lookup:**\n```rust,ignore\nif let Some(info) = language_metadata.word_languages.as_slice().get(2) {\n    println!(\"Word 2 is in language: {:?}\", info.language);\n}\n```\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)",
+      "description": "Language metadata for an entire utterance.\n\nTracks the resolved language for each WORD of the main tier, at any depth,\nincluding inside quotations, phonological groups, sign groups and retraces.\n\nThis structure stores:\n- **tier language**: utterance baseline (`[- code]` or `@Languages` primary)\n- **word languages**: resolved per-word language/provenance entries\n\nThe vector is in in-order traversal order. It is NOT an alignment index:\nthe tier domains disagree about what they count (Mor excludes retraces,\nPho counts them), so correlating with `%mor`/`%gra` positions requires the\nalignment layer's own index types, not this order.\n\n# Structure\n\n```text\nLanguageMetadata\n  ├─ tier_language: Option<LanguageCode>  (e.g., \"eng\")\n  └─ word_languages: WordLanguageInfos\n       ├─ [0]: languages=Single(\"eng\"), source=Default\n       ├─ [1]: languages=Single(\"spa\"), source=WordShortcut\n       └─ ...\n```\n\n# CHAT Format Examples\n\n**Example 1: Single language utterance**\n\n```text\n@Languages: eng\n*CHI: I want cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`: All words have language=\"eng\", source=Default\n- `is_code_switching()`: false\n\n**Example 2: Code-switching utterance**\n\n```text\n@Languages: eng, spa\n*CHI: I want galletas@s please .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"eng\")\n- `word_languages`:\n  - \"I\" → eng (Default)\n  - \"want\" → eng (Default)\n  - \"galletas\" → spa (WordShortcut)\n  - \"please\" → eng (Default)\n- `is_code_switching()`: true (uses both \"eng\" and \"spa\")\n\n**Example 3: Tier-scoped language change**\n\n```text\n@Languages: eng, fra\n*CHI: [- fra] je veux cookie .\n```\n\nLanguage metadata:\n- `tier_language`: Some(\"fra\") (from `[- fra]` marker)\n- `word_languages`: All words have language=\"fra\", source=TierScoped\n- `is_code_switching()`: false\n\n# Use Cases\n\n**Code-switching detection:**\n```rust\n# use talkbank_model::LanguageMetadata;\n# fn report_switching(language_metadata: &LanguageMetadata) {\nif language_metadata.is_code_switching() {\n    let counts = language_metadata.count_by_language();\n    println!(\"Utterance uses {} languages\", counts.len());\n}\n# }\n```\n\n**Per-word language lookup:**\n```rust\n# use talkbank_model::LanguageMetadata;\n# fn report_third_word(language_metadata: &LanguageMetadata) {\nif let Some(info) = language_metadata.word_languages.as_slice().get(2) {\n    println!(\"Word 2 language assignment: {:?}\", info.languages);\n}\n# }\n```\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Dependent Tiers](https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers)",
       "properties": {
         "tier_language": {
           "anyOf": [
@@ -5094,8 +5108,8 @@
     "OverlapMarkerIndex": {
       "description": "Numeric index (1-9) for distinguishing multiple overlaps in a single utterance.\n\nReferences:\n- <https://talkbank.org/0info/manuals/CHAT.html#OverlapPrecedes_Scope>\n- <https://talkbank.org/0info/manuals/CHAT.html#OverlapFollows_Scope>",
       "format": "uint8",
-      "maximum": 255,
-      "minimum": 0,
+      "maximum": 9,
+      "minimum": 1,
       "type": "integer"
     },
     "OverlapPoint": {
@@ -5490,7 +5504,7 @@
       "type": "string"
     },
     "PhoalnTier": {
-      "description": "Phone alignment tier (`%phoaln`).\n\nProvides a segmental alignment between the target (model) and actual\n(phone) IPA transcriptions, organized word-by-word.\n\n# Format\n\n`source↔target` pairs are comma-separated within a word, and words\nare space-separated:\n```text\n%phoaln:    a↔a,p↔p b↔b,ɛ↔ɛ,t↔t̪\n```\n\nThe null symbol `∅` marks insertions (source=∅) or deletions (target=∅).\n\n# Alignment\n\nWord N in %phoaln aligns positionally with word N in both %mod and %pho.",
+      "description": "Phone alignment tier (`%phoaln`).\n\nProvides a segmental alignment between the target (model) and actual\n(phone) IPA transcriptions, organized word-by-word.\n\n# Format\n\n`source↔target` pairs are comma-separated within a word, and words\nare space-separated:\n```text\n%phoaln:    a↔a,p↔p b↔b,ɛ↔ɛ,t↔t̪\n```\n\nThe null symbol `∅` marks insertions (source=∅) or deletions (target=∅).\n\n# Alignment\n\nEach side advances independently: a one-sided pause consumes a position\nonly on the tier bearing that pause. Ordinary lexical words consume both.",
       "properties": {
         "words": {
           "description": "Per-word alignment data.",
@@ -5778,7 +5792,7 @@
       "type": "object"
     },
     "Separator": {
-      "description": "Separator token variants.\n\nThis enum intentionally keeps CA-specific markers adjacent to standard\npunctuation separators so parser and renderer logic can share one token type.\n\n# CHAT Format Examples\n\n**Pauses and Breaks:**\n```text\n*CHI: I want, um, cookies .        # Comma - short pause within TCU\n*MOT: I think; maybe not .         # Semicolon - longer pause\n*CHI: that's co:ol .               # Colon - elongation/emphasis\n```\n\n**CA Intonation Markers:**\n```text\n*CHI: really ⇗                     # Rising to high intonation\n*MOT: maybe ↗                      # Rising to mid intonation\n*CHI: I know →                     # Level/continuing intonation\n*MOT: okay ↘                       # Falling to mid intonation\n*CHI: done ⇘                       # Falling to low intonation\n```\n\n**Special CA Markers:**\n```text\n*CHI: you know„                    # TAG marker (question tag)\n*MOT: John‡ come here .            # VOCATIVE marker (addressing)\n*CHI: I think [^c]                 # CA continuation (ongoing turn)\n*MOT: so∞                          # Unmarked ending (no clear terminal intonation)\n*CHI: yeah≡                        # Uptake/latching (no gap between turns)\n*MOT: keep going ≈                 # No-break TCU separator\n*CHI: mic issue ≋                  # Technical-break TCU separator\n```\n\n# References\n\n- [Separators](https://talkbank.org/0info/manuals/CHAT.html#Separators)\n- [CA Intonation](https://talkbank.org/0info/manuals/CHAT.html#CA_Intonation)\n- [Comma](https://talkbank.org/0info/manuals/CHAT.html#Comma)\n- [Colon](https://talkbank.org/0info/manuals/CHAT.html#Colon)\n- [Satellite Marker](https://talkbank.org/0info/manuals/CHAT.html#Satellite_Marker)",
+      "description": "Separator token variants.\n\nThis enum intentionally keeps CA-specific markers adjacent to standard\npunctuation separators so parser and renderer logic can share one token type.\n\n# CHAT Format Examples\n\n**Pauses and Breaks:**\n```text\n*CHI: I want, um, cookies .        # Comma - short pause within TCU\n*MOT: I think; maybe not .         # Legacy semicolon - retained, but invalid\n*CHI: that's co:ol .               # Colon - elongation/emphasis\n```\n\n**CA Intonation Markers:**\n```text\n*CHI: really ⇗                     # Rising to high intonation\n*MOT: maybe ↗                      # Rising to mid intonation\n*CHI: I know →                     # Level/continuing intonation\n*MOT: okay ↘                       # Falling to mid intonation\n*CHI: done ⇘                       # Falling to low intonation\n```\n\n**Special CA Markers:**\n```text\n*CHI: you know„                    # TAG marker (question tag)\n*MOT: John‡ come here .            # VOCATIVE marker (addressing)\n*CHI: I think [^c]                 # CA continuation (ongoing turn)\n*MOT: so∞                          # Unmarked ending (no clear terminal intonation)\n*CHI: yeah≡                        # Uptake/latching (no gap between turns)\n*MOT: keep going ≈                 # No-break TCU separator\n*CHI: mic issue ≋                  # Technical-break TCU separator\n```\n\n# References\n\n- [Separators](https://talkbank.org/0info/manuals/CHAT.html#Separators)\n- [CA Intonation](https://talkbank.org/0info/manuals/CHAT.html#CA_Intonation)\n- [Comma](https://talkbank.org/0info/manuals/CHAT.html#Comma)\n- [Colon](https://talkbank.org/0info/manuals/CHAT.html#Colon)\n- [Satellite Marker](https://talkbank.org/0info/manuals/CHAT.html#Satellite_Marker)",
       "oneOf": [
         {
           "description": "Comma separator (,) - short pause within TCU\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Comma>",
@@ -5794,7 +5808,7 @@
           "type": "object"
         },
         {
-          "description": "Semicolon separator (;) - longer pause, list continuation\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Semicolon>",
+          "description": "Legacy semicolon separator (;), rejected on main tiers by E769.\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Semicolon>",
           "properties": {
             "kind": {
               "const": "semicolon",
@@ -6252,7 +6266,7 @@
       "type": "string"
     },
     "Terminator": {
-      "description": "End-of-utterance token variant.\n\n# Standard Terminators\n\n- `.` - Period (declarative)\n- `?` - Question mark (interrogative)\n- `!` - Exclamation (imperative/exclamatory)\n\n# Interruption Terminators\n\n- `+...` - Trailing off (incomplete thought)\n- `+/.` - Interruption by another speaker\n- `+//.` - Self-interruption\n- `+/?` - Interrupted question\n- `+//?` - Self-interrupted question\n- `+/??` - Broken off question\n\n# CHAT Format Examples\n\n```text\n*CHI: I want that .         Standard declarative\n*MOT: what do you want ?    Question\n*CHI: look at this !        Exclamation\n*CHI: I was going to +...   Trailing off\n*MOT: did you +/. yes I did Interrupted by CHI\n*CHI: um the +//. the dog   Self-interruption\n```\n\n# References\n\n- [Terminators](https://talkbank.org/0info/manuals/CHAT.html#Terminators)\n- [Interruption Terminator](https://talkbank.org/0info/manuals/CHAT.html#Interruption_Terminator)\n- [CA Intonation](https://talkbank.org/0info/manuals/CHAT.html#CA_Intonation)",
+      "description": "End-of-utterance token variant.\n\n# Standard Terminators\n\n- `.` - Period (declarative)\n- `?` - Question mark (interrogative)\n- `!` - Exclamation (imperative/exclamatory)\n\n# Interruption Terminators\n\n- `+...` - Trailing off (incomplete thought)\n- `+/.` - Interruption by another speaker\n- `+//.` - Self-interruption\n- `+/?` - Interrupted question\n- `+//?` - Self-interrupted question\n- `+!?` - Broken off question\n\n# CHAT Format Examples\n\n```text\n*CHI: I want that .         Standard declarative\n*MOT: what do you want ?    Question\n*CHI: look at this !        Exclamation\n*CHI: I was going to +...   Trailing off\n*MOT: did you +/.          Interrupted by CHI\n*CHI: yes I did .          Next speaker's utterance\n*CHI: um the +//.          Self-interruption\n*CHI: the dog .            Next utterance\n```\n\n# References\n\n- [Terminators](https://talkbank.org/0info/manuals/CHAT.html#Terminators)\n- [Interruption Terminator](https://talkbank.org/0info/manuals/CHAT.html#Interruption_Terminator)\n- [CA Intonation](https://talkbank.org/0info/manuals/CHAT.html#CA_Intonation)",
       "oneOf": [
         {
           "description": "Period `.` - declarative statement\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Period_Terminator>",
@@ -6551,8 +6565,15 @@
       "type": "object"
     },
     "UnderlineMarker": {
-      "description": "Marker for underline begin/end control characters.\n\nCarries a source span for error reporting but serializes as `null` (adjacently tagged)\nor `{}` → nothing extra (internally tagged) to preserve backward-compatible JSON.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>",
-      "type": "object"
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object"
+        }
+      ],
+      "description": "Marker for underline begin/end control characters.\n\nCarries a source span for error reporting but serializes as `null` (adjacently tagged)\nor `{}` → nothing extra (internally tagged) to preserve backward-compatible JSON.\n\nReference: <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>"
     },
     "UntranscribedStatus": {
       "description": "Classification for untranscribed-word marker tokens.\n\nEach variant maps directly to one canonical CHAT marker (`xxx`, `yyy`, `www`).\n\n# CHAT Format Examples\n\n```text\nxxx               Unintelligible speech\nyyy               Requires phonetic transcription\nwww               Deliberately untranscribed\n```\n\n# Usage Context\n\nThese markers appear as the word text itself when speech cannot be\ntranscribed using standard orthography:\n\n```text\n*CHI: I want xxx .           Child says something unintelligible\n*MOT: did you say yyy ?      Requires phonetic analysis\n*CHI: www and then we left   Deliberately not transcribed\n```\n\n# References\n\n- [Untranscribed Material](https://talkbank.org/0info/manuals/CHAT.html#Untranscribed_Material)",
@@ -7689,7 +7710,7 @@
       "type": "array"
     },
     "WordLanguageInfo": {
-      "description": "Language metadata for a single word.\n\nStores the resolved language(s) and source for one word of the main tier.\n\nPosition is the record's position in\n[`LanguageMetadata::word_languages`](super::LanguageMetadata::word_languages),\nwhich serializes as a JSON array, so a consumer reads it with `enumerate()`.\nThere is deliberately no stored index. One existed, documented as \"the same\nindexing used for tier alignment\", and that could not be true: Mor excludes\nretraces and Pho counts them, so no single integer indexes both. Nothing\nenforced it and nothing read it, so when the walk skipped containers every\nfollowing record carried a position for a different word and no test, type\nor reader could see it.\n\nThis structure is used for:\n- **Code-switching analysis**: Identify which words are in which language(s)\n- **Code-mixing detection**: Identify words with @s:eng+fra style markers\n- **Ambiguity tracking**: Identify words with @s:eng&spa style markers\n- **Validation**: Ensure language markers are used correctly\n- **Data extraction**: Associate morphological annotations with language context\n\n# Fields\n\n- `languages`: Resolved language(s): Single, Multiple (code-mixed), or Ambiguous\n- `source`: How the language was determined (see [`LanguageSource`])\n\n# CHAT Format Examples\n\n**Example 1: Code-switching with shortcuts**\n\n```text\n@Languages: eng, spa\n*CHI: I want @s galletas @s please .\n```\n\nLanguage metadata:\n- Word 0 \"I\": languages=Single(\"eng\"), source=Default\n- Word 1 \"want\": languages=Single(\"eng\"), source=Default\n- Word 2 \"galletas\": languages=Single(\"spa\"), source=WordShortcut\n- Word 3 \"please\": languages=Single(\"eng\"), source=WordShortcut\n- Word 4 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 2: Code-mixed word**\n\n```text\n@Languages: eng, spa\n*CHI: hello habla@s:eng+spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"habla\": languages=Multiple([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n**Example 3: Ambiguous word**\n\n```text\n@Languages: eng, spa\n*CHI: hello word@s:eng&spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"word\": languages=Ambiguous([\"eng\", \"spa\"]), source=WordExplicit\n- Word 2 \".\": languages=Single(\"eng\"), source=Default\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Second-Language Marker (single)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Single)\n- [Second-Language Marker (multiple)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Multiple)\n- [Second-Language Marker (ambiguous)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous)",
+      "description": "Language metadata for a single word.\n\nStores the resolved language(s) and source for one word of the main tier.\n\nPosition is the record's position in\n[`LanguageMetadata::word_languages`](super::LanguageMetadata::word_languages),\nwhich serializes as a JSON array, so a consumer reads it with `enumerate()`.\nThere is deliberately no stored index. One existed, documented as \"the same\nindexing used for tier alignment\", and that could not be true: Mor excludes\nretraces and Pho counts them, so no single integer indexes both. Nothing\nenforced it and nothing read it, so when the walk skipped containers every\nfollowing record carried a position for a different word and no test, type\nor reader could see it.\n\nThis structure is used for:\n- **Code-switching analysis**: Identify which words are in which language(s)\n- **Code-mixing detection**: Identify words with @s:eng+fra style markers\n- **Ambiguity tracking**: Identify words with @s:eng&spa style markers\n- **Validation**: Ensure language markers are used correctly\n- **Data extraction**: Associate morphological annotations with language context\n\n# Fields\n\n- `languages`: Resolved language(s): Single, Multiple (code-mixed), or Ambiguous\n- `source`: How the language was determined (see [`LanguageSource`])\n\n# CHAT Format Examples\n\n**Example 1: Code-switching with shortcuts**\n\n```text\n@Languages: eng, spa\n*CHI: I want galletas@s please .\n```\n\nLanguage metadata:\n- Word 0 \"I\": languages=Single(\"eng\"), source=Default\n- Word 1 \"want\": languages=Single(\"eng\"), source=Default\n- Word 2 \"galletas\": languages=Single(\"spa\"), source=WordShortcut\n- Word 3 \"please\": languages=Single(\"eng\"), source=Default\n\nThe terminator is not a word and receives no metadata entry.\n\n**Example 2: Code-mixed word**\n\n```text\n@Languages: eng, spa\n*CHI: hello habla@s:eng+spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"habla\": languages=Multiple([\"eng\", \"spa\"]), source=WordExplicit\n\n**Example 3: Ambiguous word**\n\n```text\n@Languages: eng, spa\n*CHI: hello word@s:eng&spa .\n```\n\nLanguage metadata:\n- Word 0 \"hello\": languages=Single(\"eng\"), source=Default\n- Word 1 \"word\": languages=Ambiguous([\"eng\", \"spa\"]), source=WordExplicit\n\n# References\n\n- [Language Codes](https://talkbank.org/0info/manuals/CHAT.html#Language_Codes)\n- [Language Switching](https://talkbank.org/0info/manuals/CHAT.html#Language_Switching)\n- [Second-Language Marker (single)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Single)\n- [Second-Language Marker (multiple)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Multiple)\n- [Second-Language Marker (ambiguous)](https://talkbank.org/0info/manuals/CHAT.html#SecondLanguage_Marker_Ambiguous)",
       "properties": {
         "languages": {
           "$ref": "#/$defs/WordLanguages",

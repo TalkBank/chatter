@@ -2,9 +2,8 @@
 
 use smol_str::SmolStr;
 use talkbank_model::alignment::helpers::{ContentItemMut, walk_content_mut};
-use talkbank_model::{ChatFile, EventType, Line, WriteChat};
+use talkbank_model::{ChatFile, Event, EventType, Freecode, Line, OtherSpokenEvent, WriteChat};
 
-use super::REDACTED_TEXT;
 use super::dependent_tier::{keep_dependent_tier, sanitize_dependent_tier};
 use super::error::RedactError;
 use super::header::sanitize_header;
@@ -90,15 +89,9 @@ fn sanitize_content_item(item: ContentItemMut<'_>, state: &mut PlaceholderState)
                 sanitize_word(word, state);
             }
         }
-        ContentItemMut::Event(event) => {
-            event.event_type = EventType::new(REDACTED_TEXT);
-        }
-        ContentItemMut::Freecode(fc) => {
-            fc.text = SmolStr::new(REDACTED_TEXT);
-        }
-        ContentItemMut::OtherSpokenEvent(ose) => {
-            ose.text = SmolStr::new(REDACTED_TEXT);
-        }
+        ContentItemMut::Event(event) => InlineRedaction::Event(event).apply(),
+        ContentItemMut::Freecode(fc) => InlineRedaction::Freecode(fc).apply(),
+        ContentItemMut::OtherSpokenEvent(ose) => InlineRedaction::OtherSpokenEvent(ose).apply(),
         ContentItemMut::Separator(_)
         | ContentItemMut::Pause(_)
         | ContentItemMut::Action(_)
@@ -111,5 +104,25 @@ fn sanitize_content_item(item: ContentItemMut<'_>, state: &mut PlaceholderState)
         | ContentItemMut::NonvocalBegin(_)
         | ContentItemMut::NonvocalEnd(_)
         | ContentItemMut::NonvocalSimple(_) => {}
+    }
+}
+
+/// An exclusive inline target, distinct from free-text header/tier payloads.
+/// Consuming this target applies a delimiter-free token: square brackets belong
+/// to the enclosing CHAT syntax and cannot be nested into these payloads.
+enum InlineRedaction<'a> {
+    Event(&'a mut Event),
+    Freecode(&'a mut Freecode),
+    OtherSpokenEvent(&'a mut OtherSpokenEvent),
+}
+
+impl InlineRedaction<'_> {
+    fn apply(self) {
+        const TOKEN: &str = "redacted";
+        match self {
+            Self::Event(event) => event.event_type = EventType::new(TOKEN),
+            Self::Freecode(code) => code.text = SmolStr::new(TOKEN),
+            Self::OtherSpokenEvent(event) => event.text = SmolStr::new(TOKEN),
+        }
     }
 }

@@ -3,6 +3,30 @@
 use super::RetraceKindParsed;
 use serde::Serialize;
 
+/// Lexer payload admitted once, retaining both source text and its valid index.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ScopedOverlapIndex<'a> {
+    source: &'a str,
+    index: Option<talkbank_model::model::OverlapMarkerIndex>,
+}
+
+impl<'a> ScopedOverlapIndex<'a> {
+    pub(crate) fn from_lexer(source: &'a str) -> Option<Self> {
+        let index = match source.as_bytes() {
+            [] => None,
+            [digit @ b'1'..=b'9'] => {
+                Some(talkbank_model::model::OverlapMarkerIndex::new(digit - b'0').ok()?)
+            }
+            _ => return None,
+        };
+        Some(Self { source, index })
+    }
+
+    pub(crate) fn index(&self) -> Option<talkbank_model::model::OverlapMarkerIndex> {
+        self.index
+    }
+}
+
 /// grammar.js: standalone_word = seq(optional(prefix|zero), word_body, optional(form_marker),
 ///   optional(word_lang_suffix), optional(pos_tag))
 /// word_with_optional_annotations = seq(standalone_word, repeat(annotation))
@@ -60,9 +84,9 @@ pub enum ScopedAnnotationParsed<'a> {
     /// `[* code]`, error marker. Content is the code (may be empty).
     Error(&'a str),
     /// `[<]` or `[<1]`, overlap precedes. Content is the optional index digit.
-    OverlapPrecedes(&'a str),
+    OverlapPrecedes(ScopedOverlapIndex<'a>),
     /// `[>]` or `[>1]`, overlap follows
-    OverlapFollows(&'a str),
+    OverlapFollows(ScopedOverlapIndex<'a>),
     /// `[= text]`, explanation
     Explanation(&'a str),
     /// `[=! text]`, paralinguistic
@@ -148,8 +172,8 @@ impl<'a> ScopedAnnotationParsed<'a> {
             Self::CodeSwitchShortcut => "[@s]".to_owned(),
             Self::CodeSwitchExplicit(code) => format!("[@s:{code}]"),
             Self::Error(code) => format!("[* {code}]"),
-            Self::OverlapPrecedes(index) => format!("[<{index}]"),
-            Self::OverlapFollows(index) => format!("[>{index}]"),
+            Self::OverlapPrecedes(index) => format!("[<{}]", index.source),
+            Self::OverlapFollows(index) => format!("[>{}]", index.source),
             Self::Explanation(text) => format!("[= {text}]"),
             Self::Paralinguistic(text) => format!("[=! {text}]"),
             Self::Alternative(text) => format!("[=? {text}]"),
@@ -163,12 +187,11 @@ impl<'a> ScopedAnnotationParsed<'a> {
             Self::Unknown(text)
             | Self::CodeSwitchExplicit(text)
             | Self::Error(text)
-            | Self::OverlapPrecedes(text)
-            | Self::OverlapFollows(text)
             | Self::Explanation(text)
             | Self::Paralinguistic(text)
             | Self::Alternative(text)
             | Self::PercentComment(text) => Some(text),
+            Self::OverlapPrecedes(index) | Self::OverlapFollows(index) => Some(index.source),
             Self::Stressing
             | Self::ContrastiveStressing
             | Self::Uncertain

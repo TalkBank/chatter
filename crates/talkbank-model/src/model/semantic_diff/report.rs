@@ -7,6 +7,7 @@
 //! Reference: <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 
 use std::fmt;
+use std::num::NonZeroUsize;
 
 use super::context::SemanticDiffContext;
 use super::path::SemanticPath;
@@ -22,8 +23,26 @@ use crate::Span;
 #[derive(Debug, Clone)]
 pub struct SemanticDiffReport {
     differences: Vec<SemanticDifference>,
-    truncated: bool,
-    max_diffs: usize,
+    budget: ReportBudget,
+}
+
+/// Capacity exhaustion is not truncation until another difference is found.
+/// An available slot count is positive by construction; the requested limit
+/// is conserved as stored entries plus remaining slots, not stored twice.
+#[derive(Debug, Clone, Copy)]
+enum ReportBudget {
+    Available(NonZeroUsize),
+    AtCapacity,
+    Truncated,
+}
+
+impl ReportBudget {
+    fn remaining(slots: usize) -> Self {
+        match NonZeroUsize::new(slots) {
+            Some(slots) => Self::Available(slots),
+            None => Self::AtCapacity,
+        }
+    }
 }
 
 impl SemanticDiffReport {
@@ -34,15 +53,15 @@ impl SemanticDiffReport {
     pub fn new(max_diffs: usize) -> Self {
         Self {
             differences: Vec::new(),
-            truncated: false,
-            max_diffs,
+            budget: ReportBudget::remaining(max_diffs),
         }
     }
 
     /// Returns `true` if no differences were recorded.
     ///
-    /// This is the fastest way for callers to treat the report as a pass/fail
-    /// signal before requesting any formatted output.
+    /// This describes stored entries, not necessarily semantic equality: a
+    /// zero-capacity report can be empty and truncated while differences exist.
+    /// Equality requires both an empty report and `!self.is_truncated()`.
     pub fn is_empty(&self) -> bool {
         self.differences.is_empty()
     }
@@ -52,7 +71,7 @@ impl SemanticDiffReport {
     /// A truncated report is still valid, but consumers should avoid assuming it
     /// enumerates every mismatch.
     pub fn is_truncated(&self) -> bool {
-        self.truncated
+        matches!(self.budget, ReportBudget::Truncated)
     }
 
     /// Returns the collected differences.
@@ -74,10 +93,13 @@ impl SemanticDiffReport {
         right: impl Into<String>,
         span: Option<Span>,
     ) {
-        if self.differences.len() >= self.max_diffs {
-            self.truncated = true;
-            return;
-        }
+        let remaining = match self.budget {
+            ReportBudget::Available(slots) => slots,
+            ReportBudget::AtCapacity | ReportBudget::Truncated => {
+                self.budget = ReportBudget::Truncated;
+                return;
+            }
+        };
 
         self.differences.push(SemanticDifference {
             path: path.to_string(),
@@ -86,6 +108,16 @@ impl SemanticDiffReport {
             right: right.into(),
             span,
         });
+        self.budget = ReportBudget::remaining(remaining.get() - 1);
+    }
+
+    /// Successful pushes conserve this sum. At capacity, all slots are stored
+    /// entries; a refused push changes only the truncation state.
+    fn capacity(&self) -> usize {
+        match self.budget {
+            ReportBudget::Available(remaining) => self.differences.len() + remaining.get(),
+            ReportBudget::AtCapacity | ReportBudget::Truncated => self.differences.len(),
+        }
     }
 
     /// Records a difference using the span from the given [`SemanticDiffContext`].
@@ -113,7 +145,11 @@ impl SemanticDiffReport {
         out.push_str(&format!(
             "Differences: {}{}\n",
             self.differences.len(),
-            if self.truncated { " (truncated)" } else { "" }
+            if self.is_truncated() {
+                " (truncated)"
+            } else {
+                ""
+            }
         ));
 
         if let Some(first) = self.differences.first() {
@@ -135,7 +171,7 @@ impl SemanticDiffReport {
             "
 Differences (first ",
         );
-        out.push_str(&self.max_diffs.to_string());
+        out.push_str(&self.capacity().to_string());
         out.push_str("):\n");
 
         for (idx, diff) in self.differences.iter().enumerate() {

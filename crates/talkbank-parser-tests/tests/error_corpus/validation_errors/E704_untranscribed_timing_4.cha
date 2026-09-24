@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|sample|CHI|||||Target_Child|||
+@Media:	E704_untranscribed_timing_4, audio
+*CHI:	hello . 1000_2000
+*CHI:	again . 1500_9000
+*CHI:	world . 2000_3000
+@End

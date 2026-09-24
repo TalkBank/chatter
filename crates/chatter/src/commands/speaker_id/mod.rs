@@ -27,18 +27,12 @@ mod modes;
 mod support;
 mod writes;
 
-// Items reused by the `chatter pipeline` shim. Keep the
-// `pub(crate)` surface narrow: pipeline needs the reference /
-// override-file mode entry points, the holistic-LLM entry point,
-// the session-ID helper, and the override-entry writer for
-// `--write-override` audit-trail support.
-pub(crate) use modes::{
-    ENV_SESSION_CONTEXT, HolisticModeArgs, ReferenceModeArgs, apply_override_entry,
-    run_holistic_mode, run_override_file_mode, run_reference_mode,
+use modes::{
+    ReferenceModeArgs, run_override_file_mode, run_reference_mode,
     warn_session_context_ignored_if_configured,
 };
-pub(crate) use support::{derive_session_id, exit_with_override_file_error};
-pub(crate) use writes::write_override_entry;
+use support::derive_session_id;
+use writes::write_override_entry;
 
 use modes::run_explicit_mode;
 

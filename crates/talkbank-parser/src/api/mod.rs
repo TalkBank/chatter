@@ -11,8 +11,10 @@
 
 mod chat_parser_impl;
 pub(crate) mod fragment;
+mod incremental;
 mod parser_api;
 mod parser_impl;
+pub use incremental::ParsedRevision;
 pub mod tiers;
 
 // Re-export dependent tier parsing at module level

@@ -1,5 +1,7 @@
 # chatter
 
+**Last modified:** 2026-09-24 00:21 EDT
+
 [![CI](https://github.com/TalkBank/chatter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TalkBank/chatter/actions/workflows/ci.yml)
 [![Cross-platform](https://github.com/TalkBank/chatter/actions/workflows/cross-platform.yml/badge.svg?branch=main)](https://github.com/TalkBank/chatter/actions/workflows/cross-platform.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
@@ -74,7 +76,7 @@ and an LSP-backed editor experience.
 
 | Component | What it is |
 |---|---|
-| [`chatter`](crates/chatter/), the `chatter` binary | The flagship CLI: validate, normalize, convert (JSON), watch, plus transcript merge, speaker-id reconciliation, batch processing, and interactive adjudication |
+| [`chatter`](crates/chatter/), the `chatter` binary | The flagship CLI: validate, normalize, convert (JSON), watch, plus experimental speaker-id reconciliation and interactive adjudication |
 | [`talkbank-lsp`](crates/talkbank-lsp/), the `talkbank-lsp` binary | Language Server Protocol implementation; powers real-time validation, hover, go-to-definition, and cross-tier alignment in any LSP-aware editor |
 | [`apps/chatter-desktop/`](apps/chatter-desktop/) | Desktop validation app (Tauri) for researchers who do not use a terminal; runs the same validation engine as the CLI, with the same cache |
 

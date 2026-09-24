@@ -99,7 +99,7 @@ fn parse_quotation_content(
 /// # It reads the GENERATED typed children, not `node.kind()`
 ///
 /// The first version of this function hand-walked `0..child_count` matching
-/// `child.kind()`, which root `CLAUDE.md` design rule 6 bans and which cost
+/// `child.kind()`, which root `AGENTS.md` design rule 6 bans and which cost
 /// two defects immediately: a bare `QUOTATION` identifier that Rust read as a
 /// BINDING pattern (so every child reached the quotation parser), and no
 /// MISSING check, because a tree-sitter MISSING placeholder carries the
@@ -156,11 +156,9 @@ pub(crate) fn parse_quotation_with_annotations_content(
     // loop assigned into a `Vec` and carried no note saying why that was safe.
     let markers = match children.annotations.slot() {
         Some(slot) => match present(slot) {
-            Some(annotations) => super::super::annotations::parse_scoped_annotations(
-                annotations.raw_node(),
-                source,
-                errors,
-            ),
+            Some(annotations) => {
+                super::super::annotations::parse_scoped_annotations(*annotations, source, errors)
+            }
             // Present-but-unusable (MISSING/ERROR): the quotation still stands,
             // and the recovery state is the extractor's to have surfaced.
             None => Vec::new(),

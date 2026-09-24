@@ -136,10 +136,20 @@ pub fn parse_pho_tier(input: &str) -> PhoTier<'_> {
 
 /// Parse a text tier body (content after `%com:\t`, `%act:\t`, etc.).
 pub fn parse_text_tier(input: &str) -> TextTierParsed<'_> {
+    parse_text_tier_with_errors(input, &talkbank_model::NullErrorSink)
+}
+
+/// Parse text-tier content with inline-bullet diagnostics in source coordinates.
+pub fn parse_text_tier_with_errors<'a>(
+    input: &'a str,
+    errors: &impl ErrorSink,
+) -> TextTierParsed<'a> {
     use chumsky::Parser as _;
-    let tokens = lex_to_tokens(input, crate::lexer::COND_TIER_CONTENT);
+    let lexed = super::LexedSource::new(input, crate::lexer::COND_TIER_CONTENT);
+    let tokens =
+        dependent_tiers::AdmittedTextTierTokens::admit(&lexed, 0..lexed.tokens().len(), errors);
     dependent_tiers::text_tier_parser()
-        .parse(tokens.as_slice())
+        .parse(tokens.tokens())
         .into_result()
         .unwrap_or_else(|_| TextTierParsed {
             segments: Vec::new(),

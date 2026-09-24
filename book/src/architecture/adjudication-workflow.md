@@ -1,5 +1,12 @@
 # Adjudication Workflow
 
+**Last modified:** 2026-09-24 00:21 EDT
+
+> Historical design: references below to the `chatter merge` CLI describe the
+> former command. `merge`, `pipeline`, and `batch` have been removed.
+> The structural library remains.
+> See the [removal notice](../chatter/user-guide/merge.md).
+
 **Status:** Draft
 **Last updated:** 2026-08-27 13:44 EDT
 

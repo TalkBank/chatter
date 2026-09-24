@@ -10,9 +10,9 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, ChildSlot, ColorWordsHeaderNode, FontHeaderNode, FreeTextNode,
-    FullDocumentChild1Choice, NamedKind, NoChild, SlotView, WindowHeaderNode,
-    extract_color_words_header, extract_font_header, extract_window_header,
+    AsRawNode, ColorWordsHeaderNode, FontHeaderNode, FreeTextNode, FullDocumentChild1Choice,
+    KindSlot, NamedKind, NoChild, SlotView, WindowHeaderNode, extract_color_words_header,
+    extract_font_header, extract_window_header,
 };
 use crate::model::{self, Header, Line};
 use tree_sitter::Node;
@@ -37,7 +37,19 @@ pub fn handle_pre_begin_header(
     errors: &impl ErrorSink,
     lines: &mut Vec<Line>,
 ) {
-    let header = match choice {
+    let header = parse_pre_begin_header(choice, input, errors);
+    let separator = header_separator(choice.raw_node());
+    lines.push(Line::header_with_separator(header, span, separator));
+}
+
+/// Decode the generated pre-begin choice for either document or fragment APIs.
+/// Both consumers share this exhaustive dispatch; neither keeps a kind subset.
+pub(crate) fn parse_pre_begin_header(
+    choice: &FullDocumentChild1Choice<'_>,
+    input: &str,
+    errors: &impl ErrorSink,
+) -> Header {
+    match choice {
         FullDocumentChild1Choice::PidHeader(pid) => {
             let header_errors = ErrorCollector::new();
             let header = parse_pid_header(*pid, input, &header_errors);
@@ -98,9 +110,7 @@ pub fn handle_pre_begin_header(
                 },
             )
         }
-    };
-    let separator = header_separator(choice.raw_node());
-    lines.push(Line::header_with_separator(header, span, separator));
+    }
 }
 
 /// What a free-text header says when its text position does not deliver.
@@ -118,7 +128,7 @@ struct FreeText {
 /// or text that does not decode) the header is reported malformed and
 /// lowered as `Header::Unknown`, as the positional `child(2)` read did.
 fn free_text_header(
-    text: &ChildSlot<'_, FreeTextNode<'_>>,
+    text: &KindSlot<'_, FreeTextNode<'_>>,
     header_node: Node,
     words: FreeText,
     input: &str,

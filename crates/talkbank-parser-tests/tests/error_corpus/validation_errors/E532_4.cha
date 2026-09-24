@@ -1,0 +1,12 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother, FAT Father, ADU Adult, TEA Teacher, STU Student
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|FAT|||||Father|||
+@ID:	eng|corpus|ADU|||||Adult|||
+@ID:	eng|corpus|TEA|||||Teacher|||
+@ID:	eng|corpus|STU|||||Student|||
+*CHI:	hello .
+@End

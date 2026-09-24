@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	MOT Mother, CHI Target_Child
+@Options:	CA
+@ID:	eng|corpus|MOT|||||Mother|||
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*MOT:	I want
+*CHI:	++ a cookie .
+@End

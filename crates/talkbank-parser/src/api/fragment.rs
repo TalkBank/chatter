@@ -1,5 +1,7 @@
 //! Own synthetic source and the coordinate translation derived while building it.
 
+use crate::generated_traversal::ParsedSource;
+use crate::parser::TreeSitterParser;
 use talkbank_model::{ErrorSink, FragmentSource, ParseError, ParseErrors, Span, SpanShift};
 
 /// One synthetic document, its borrowed caller input, and its document origin.
@@ -9,6 +11,23 @@ pub(crate) struct WrappedFragment<'input> {
     source: String,
     input: FragmentSource<'input>,
     input_start: usize,
+}
+
+/// A wrapper paired with the tree produced from its own assembled source.
+/// Only `WrappedFragment::parse` constructs this association.
+pub(crate) struct ParsedFragment<'source, 'input> {
+    parsed: ParsedSource<'source>,
+    fragment: &'source WrappedFragment<'input>,
+}
+
+impl<'source, 'input> ParsedFragment<'source, 'input> {
+    pub(crate) fn parsed_source(&self) -> &ParsedSource<'source> {
+        &self.parsed
+    }
+
+    pub(crate) fn fragment(&self) -> &'source WrappedFragment<'input> {
+        self.fragment
+    }
 }
 
 /// Why a selected CST range cannot represent the complete caller input.
@@ -54,6 +73,16 @@ impl<'input> WrappedFragment<'input> {
 
     pub(crate) fn source(&self) -> &str {
         &self.source
+    }
+
+    pub(crate) fn parse<'source>(
+        &'source self,
+        parser: &TreeSitterParser,
+    ) -> Result<ParsedFragment<'source, 'input>, ParseErrors> {
+        Ok(ParsedFragment {
+            parsed: parser.parse_source_incremental(&self.source, None)?,
+            fragment: self,
+        })
     }
 
     pub(crate) fn input(&self) -> &str {

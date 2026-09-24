@@ -77,8 +77,6 @@ const NOT_YET_IN_CORPUS: &[&str] = &[
     // malformed input parses gracefully, but in well-formed CHAT semicolons
     // appear only inside `age_format` tokens (2;06.), never standalone.
     "semicolon",
-    // Needs a reference file with POS tags.
-    "pos_tag",
     // @ID SES subcategory nodes.
     "ethnicity_value",
     "generic_id_ses",

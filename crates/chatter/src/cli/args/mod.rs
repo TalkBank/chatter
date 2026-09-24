@@ -5,7 +5,7 @@
 //! - `core`, the `Commands` enum (all subcommand variants)
 //! - `cli_types`, shared config enums (log format, TUI mode, output format, parser
 //!   backend, judgment mode)
-//! - `judgment_args`, shared judgment-engine arg group (speaker-id / pipeline / batch)
+//! - `judgment_args`, judgment-engine arg group for speaker-id
 //! - `cache_commands`, `chatter cache` subcommands
 //! - `debug_commands`, `chatter debug` subcommands
 

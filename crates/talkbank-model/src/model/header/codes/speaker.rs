@@ -196,15 +196,19 @@ mod tests {
         }
     }
 
-    /// The seven-character limit counts Unicode scalar values, not UTF-8 bytes.
+    /// Non-ASCII is invalid independently of length. Seven scalar values must
+    /// not acquire a second, byte-count-based length error.
     #[test]
-    fn direct_validation_accepts_seven_unicode_characters() {
+    fn direct_validation_rejects_unicode_without_inventing_a_length_error() {
         let code = SpeakerCode::new("ÄBCDEFG");
         let errors = crate::ErrorCollector::new();
 
         code.validate(&ValidationContext::default(), &errors);
 
-        assert!(errors.into_vec().is_empty());
+        let diagnostics = errors.into_vec();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, crate::ErrorCode::InvalidSpeaker);
+        assert!(diagnostics[0].message.contains("ASCII"));
     }
 
     /// Standard speaker codes are interned to shared allocations.

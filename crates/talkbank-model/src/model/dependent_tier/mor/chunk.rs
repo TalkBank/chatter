@@ -17,7 +17,7 @@
 //! Downstream crates (LSP, CLI, CLAN) MUST route any "what's at `%gra`
 //! position N?" question through [`MorTier::chunk_at`] or [`MorTier::chunks`];
 //! reconstructing the walk in a consumer silently drops post-clitics when an
-//! item contains them. See `crates/talkbank-lsp/CLAUDE.md` for the rule.
+//! item contains them. See `crates/talkbank-lsp/AGENTS.md` for the rule.
 //!
 //! CHAT reference anchors:
 //! - [Morphological tier](https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier)

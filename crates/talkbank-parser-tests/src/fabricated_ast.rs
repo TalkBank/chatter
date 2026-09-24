@@ -257,7 +257,7 @@ const CEILING: &[(&str, usize)] = &[
     // `from_checked_literal`, a door this list counts (its definition and
     // the macro's one call are the two sites that arrived); four test
     // literals in `validation/{utterance,word}/tests.rs` went through it.
-    ("talkbank-model", 105),
+    ("talkbank-model", 102),
     // 8 -> 6 the same day: the user-defined and unsupported tier dispatchers
     // read their prefix through `expect_present` and one `tier_name` helper
     // (a MISSING prefix builds no tier, where its empty placeholder text

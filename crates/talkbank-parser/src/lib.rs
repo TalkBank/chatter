@@ -134,6 +134,7 @@ pub use parser::{ParseProduct, ParserInitError, TreeSitterParser};
 /// nameable from this crate's own root).
 pub use talkbank_model::{FragmentSemanticContext, ParseErrors, ParseResult};
 
+pub use api::ParsedRevision;
 /// Convenience re-exports for dependent-tier parsing APIs.
 pub use api::tiers;
 

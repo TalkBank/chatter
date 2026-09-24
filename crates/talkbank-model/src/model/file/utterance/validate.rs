@@ -100,9 +100,6 @@ impl Validate for Utterance {
         );
         self.main.validate(&main_context, errors);
 
-        // E242: Validate quotation balance
-        crate::validation::utterance::check_quotation_balance(self, errors);
-
         // E356, E357: Validate underline markers are balanced
         crate::validation::utterance::check_underline_balance(self, errors);
 
@@ -118,6 +115,7 @@ impl Validate for Utterance {
 
         // E258: Validate no consecutive commas in document order
         crate::validation::utterance::check_consecutive_commas(self, errors);
+        crate::validation::utterance::check_semicolon_separators(self, errors);
 
         // E259: Validate commas are not preceded by non-spoken content
         crate::validation::utterance::check_comma_after_non_spoken(self, errors);

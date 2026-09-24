@@ -2,10 +2,10 @@
 //! while keeping the grammatical-relation tier's indices, heads, and cardinality
 //! consistent.
 //!
-//! Extracted verbatim from `tier.rs`. The two public methods
+//! The two public methods share host admission and one rewrite implementation:
 //! ([`MorTier::splice_coordinated`](super::MorTier::splice_coordinated) and the
 //! multi-item [`MorTier::splice_range_coordinated`](super::MorTier::splice_range_coordinated))
-//! stay inherent methods of [`MorTier`](super::MorTier); the parent re-exports
+//! both stay inherent methods of [`MorTier`](super::MorTier); the parent re-exports
 //! [`CoordinatedMutationError`] so its path is unchanged.
 
 use crate::alignment::indices::SemanticWordIndex1;
@@ -17,6 +17,14 @@ use super::MorTier;
 /// Errors returned by coordinated Mor-Gra mutations.
 #[derive(Debug, thiserror::Error)]
 pub enum CoordinatedMutationError {
+    /// Replacement requires an ordered, nonempty item range.
+    #[error("Replacement range {start}..{end} must be ordered and nonempty")]
+    InvalidItemRange {
+        /// Inclusive start of the requested range.
+        start: usize,
+        /// Exclusive end of the requested range.
+        end: usize,
+    },
     /// Mor and Gra tiers have mismatched chunk counts before or after mutation.
     #[error("Mor and Gra tiers have mismatched chunk counts: mor={mor}, gra={gra}")]
     CountMismatch {
@@ -79,6 +87,71 @@ pub enum CoordinatedMutationError {
     },
 }
 
+/// Exclusive ownership of the exact host pair whose replacement range was
+/// checked. No tier can change between admission and the coordinated edit.
+struct HostReplacement<'a> {
+    mor: &'a mut MorTier,
+    gra: &'a mut GraTier,
+    item_range: std::ops::Range<usize>,
+    chunk_offset: usize,
+    old_chunks: usize,
+    old_head: usize,
+}
+
+impl<'a> HostReplacement<'a> {
+    fn admit(
+        mor: &'a mut MorTier,
+        gra: &'a mut GraTier,
+        item_range: std::ops::Range<usize>,
+    ) -> Result<Self, CoordinatedMutationError> {
+        if item_range.start >= item_range.end {
+            return Err(CoordinatedMutationError::InvalidItemRange {
+                start: item_range.start,
+                end: item_range.end,
+            });
+        }
+        let Some(items) = mor.items.as_slice().get(item_range.clone()) else {
+            return Err(CoordinatedMutationError::ItemIndexOutOfBounds {
+                index: item_range.end,
+                len: mor.items.len(),
+            });
+        };
+        let old_chunks = items.iter().map(Mor::count_chunks).sum();
+        let chunk_offset: usize = mor
+            .items
+            .iter()
+            .take(item_range.start)
+            .map(Mor::count_chunks)
+            .sum();
+        let needed = chunk_offset + old_chunks;
+        let Some(relations) = gra.relations.as_slice().get(chunk_offset..needed) else {
+            return Err(CoordinatedMutationError::GraTierTooShort {
+                gra_len: gra.relations.len(),
+                needed,
+                chunk_offset,
+                old_chunks,
+            });
+        };
+        let Some(first) = relations.first() else {
+            return Err(CoordinatedMutationError::GraTierTooShort {
+                gra_len: gra.relations.len(),
+                needed: chunk_offset + 1,
+                chunk_offset,
+                old_chunks,
+            });
+        };
+        let old_head = first.head;
+        Ok(Self {
+            mor,
+            gra,
+            item_range,
+            chunk_offset,
+            old_chunks,
+            old_head,
+        })
+    }
+}
+
 impl MorTier {
     /// Replace a CONTIGUOUS RANGE of items and adjust the corresponding
     /// `%gra` relations atomically.
@@ -107,6 +180,8 @@ impl MorTier {
     /// Existing relations OUTSIDE the new block are reindexed and
     /// head-shifted by `delta = new_chunks - old_chunks`.
     ///
+    /// The replaced item range must be ordered and nonempty. Refuses
+    /// [`CoordinatedMutationError::InvalidItemRange`] otherwise, without mutation.
     /// Refuses (returns [`CoordinatedMutationError::GraTierTooShort`])
     /// when the host gra tier does not contain at least
     /// `chunk_offset + old_chunks` relations. We do NOT clamp silently,
@@ -120,18 +195,14 @@ impl MorTier {
         new_relations: Vec<GrammaticalRelation>,
         root_anchor_override: Option<usize>,
     ) -> Result<(), CoordinatedMutationError> {
-        if item_range.end > self.items.len() {
-            return Err(CoordinatedMutationError::ItemIndexOutOfBounds {
-                index: item_range.end,
-                len: self.items.len(),
-            });
-        }
-
-        // Old chunk count for the entire range.
-        let old_chunks: usize = self.items.as_slice()[item_range.clone()]
-            .iter()
-            .map(|m| m.count_chunks())
-            .sum();
+        let HostReplacement {
+            mor,
+            gra,
+            item_range,
+            chunk_offset,
+            old_chunks,
+            old_head,
+        } = HostReplacement::admit(self, gra, item_range)?;
         // New chunk count is the sum across all new mors.
         let new_chunks: usize = new_mors.iter().map(|m| m.count_chunks()).sum();
 
@@ -139,25 +210,6 @@ impl MorTier {
             return Err(CoordinatedMutationError::CountMismatch {
                 mor: new_chunks,
                 gra: new_relations.len(),
-            });
-        }
-
-        // Chunk offset of the first chunk in the range, host-1-indexed
-        // would be chunk_offset + 1; here we keep 0-indexed for slice math.
-        let chunk_offset: usize = self.items.as_slice()[..item_range.start]
-            .iter()
-            .map(|m| m.count_chunks())
-            .sum();
-
-        // Refuse to clamp: the host tier MUST cover the chunks we are
-        // about to overwrite. Anything else is an upstream bug.
-        let needed = chunk_offset + old_chunks;
-        if needed > gra.relations.len() {
-            return Err(CoordinatedMutationError::GraTierTooShort {
-                gra_len: gra.relations.len(),
-                needed,
-                chunk_offset,
-                old_chunks,
             });
         }
 
@@ -175,18 +227,13 @@ impl MorTier {
         let delta = (new_chunks as isize) - (old_chunks as isize);
 
         // 1. Update %mor items: replace the entire range with new_mors.
-        self.items.0.splice(item_range, new_mors);
+        mor.items.0.splice(item_range, new_mors);
 
         // 2. Reindex the new relations to host-1-indexed.
         let mut fixed_relations = new_relations;
         for (i, rel) in fixed_relations.iter_mut().enumerate() {
             rel.index = chunk_offset + i + 1;
         }
-
-        // 3. Capture the old head at the splice start before splicing it
-        //    away, used as the default root anchor if no override is
-        //    provided. (Same convention as splice_coordinated.)
-        let old_head_at_start = gra.relations.0[chunk_offset].head;
 
         // 4. Splice the gra range.
         gra.relations
@@ -212,7 +259,7 @@ impl MorTier {
         for (i, rel) in gra.relations.0.iter_mut().enumerate() {
             if i >= chunk_offset && i < chunk_offset + new_chunks {
                 if rel.head == 0 {
-                    rel.head = root_anchor_override.unwrap_or(old_head_at_start);
+                    rel.head = root_anchor_override.unwrap_or(old_head);
                 } else {
                     // Already validated head ≤ new_chunks above, so this
                     // is always a within-block reference.
@@ -260,78 +307,12 @@ impl MorTier {
             });
         }
 
-        let old_chunks = self.items[item_idx].count_chunks();
-        let new_chunks = new_mor.count_chunks();
-
-        if new_relations.len() != new_chunks {
-            return Err(CoordinatedMutationError::CountMismatch {
-                mor: new_chunks,
-                gra: new_relations.len(),
-            });
-        }
-
-        // Calculate the chunk offset for the item being replaced.
-        let mut chunk_offset = 0usize;
-        for i in 0..item_idx {
-            chunk_offset += self.items[i].count_chunks();
-        }
-
-        let delta = (new_chunks as isize) - (old_chunks as isize);
-
-        // 1. Update the %mor item.
-        self.items.0[item_idx] = new_mor;
-
-        // 2. Prepare the new relations with correct indices.
-        let mut fixed_relations = new_relations;
-        for (i, rel) in fixed_relations.iter_mut().enumerate() {
-            rel.index = chunk_offset + i + 1;
-        }
-
-        // 3. Update the %gra relations list.
-        let old_head = gra.relations.0[chunk_offset].head;
-
-        gra.relations
-            .0
-            .splice(chunk_offset..chunk_offset + old_chunks, fixed_relations);
-
-        // 4. Adjust indices and heads for the rest of the tier.
-        if delta != 0 {
-            let affected_start = chunk_offset + new_chunks;
-            for i in affected_start..gra.relations.len() {
-                let rel = &mut gra.relations.0[i];
-                rel.index = (rel.index as isize + delta) as usize;
-            }
-        }
-
-        // 5. Head adjustment for the whole tier.
-        for (i, rel) in gra.relations.0.iter_mut().enumerate() {
-            if i >= chunk_offset && i < chunk_offset + new_chunks {
-                // This is one of the NEW relations.
-                if rel.head == 0 {
-                    // This was the root of the secondary block.
-                    // It now points to the provided override, or falls back to the original head of the atom.
-                    rel.head = root_anchor_override.unwrap_or(old_head);
-                } else {
-                    // Internal reference within the new block.
-                    // Assumes secondary indices were 1-indexed relative to the block.
-                    rel.head += chunk_offset;
-                }
-                if rel.head == 0 {
-                    rel.relation = "ROOT".into();
-                }
-            } else if rel.head > chunk_offset {
-                // Existing relation pointing past the splice point.
-                if rel.head <= chunk_offset + old_chunks {
-                    // Head was pointing into the replaced item.
-                    // Point to the first chunk of the new item.
-                    rel.head = chunk_offset + 1;
-                } else {
-                    // Head was pointing past the replaced item.
-                    rel.head = (rel.head as isize + delta) as usize;
-                }
-            }
-        }
-
-        Ok(())
+        self.splice_range_coordinated(
+            gra,
+            item_idx..item_idx + 1,
+            vec![new_mor],
+            new_relations,
+            root_anchor_override,
+        )
     }
 }

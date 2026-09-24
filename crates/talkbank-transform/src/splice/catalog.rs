@@ -33,7 +33,7 @@
 //! `crates/talkbank-lsp/src/backend/features/code_action_fixes.rs`. Every
 //! ported code was checked against what the CURRENT `ErrorCode` variant and
 //! a real `chatter validate` run actually produce (`chatter validate` is
-//! this repo's authority on CHAT validity; see the root `CLAUDE.md`
+//! this repo's authority on CHAT validity; see the root `AGENTS.md`
 //! "CHAT-validity authority" section). Several of the LSP's ~21 entries
 //! turned out to be stale, most likely surviving an `ErrorCode` renumbering
 //! that the string-keyed LSP match arms never tracked:
@@ -128,9 +128,10 @@
 //! (or, for E501, on a duplicated `@Begin`), so `utterance_containing`
 //! will never find an enclosing utterance for them and `admit_edits` will
 //! always report `SkipReason::OutsideAnyUtterance`. That is a real,
-//! documented limitation of today's admission gate, not a bug in these
-//! catalog entries: a header-scoped admission path is a separate piece of
-//! work this module does not attempt.
+//! documented limitation for those entries. W109 has a separate, narrow
+//! capability: its catalog resolves a filename token from a recovery-free,
+//! source-bound generated media header. Only that token is admitted outside
+//! utterances; no generic header-edit bypass is exposed.
 
 use talkbank_model::model::content::word::MarkerSpelling;
 use talkbank_model::{ErrorCode, ParseError, Span};
@@ -207,6 +208,7 @@ pub fn catalog_fix(error: &ParseError, source: &str) -> Option<CatalogFix> {
         ErrorCode::EmptyLanguagesHeader => e507_empty_languages_header(error, source),
         ErrorCode::GraWithoutMor => e604_gra_without_mor(error, source),
         ErrorCode::SpaceInsideAngleGroup => e750_space_inside_angle_group(error, source),
+        ErrorCode::MediaFilenameNonCanonicalUnicode => w109_media_name(error, source),
 
         // E301: seed source aliased this to E305's terminator fix, but the
         // real diagnostic is "Empty speaker code", unrelated to terminators
@@ -260,6 +262,55 @@ fn line_span_at(source: &str, offset: u32) -> Option<Span> {
         .find('\n')
         .map_or(source.len(), |i| offset + i + 1);
     Some(Span::from_usize(start, end))
+}
+
+/// Normalize only the generated CST's filename token in a clean media header.
+/// URL tokens and already-canonical names never produce edits.
+fn w109_media_name(error: &ParseError, source: &str) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{AsRawNode, MediaHeaderNode, SourceSlotView};
+    use unicode_normalization::UnicodeNormalization;
+    let parser = talkbank_parser::TreeSitterParser::new().ok()?;
+    let parsed = parser.parse_source_incremental(source, None).ok()?;
+    let span = error.location.span;
+    let mut node = parsed
+        .root_node()
+        .descendant_for_byte_range(span.start as usize, span.end as usize)?;
+    loop {
+        if let Some(header) = parsed.bind(node).ok()?.typed::<MediaHeaderNode>() {
+            if header.raw_node().has_error() {
+                return None;
+            }
+            let fields = header.extract();
+            let SourceSlotView::Present(contents) = fields.field_child_2().slot().view() else {
+                return None;
+            };
+            let contents = contents.read().ok()?;
+            let fields = contents.extract();
+            let SourceSlotView::Present(filename) = fields.field_child_0().slot().view() else {
+                return None;
+            };
+            let filename = filename.read().ok()?;
+            let text = filename.text();
+            if talkbank_model::model::MediaFilename::parse(text)
+                .ok()?
+                .is_remote_url()
+            {
+                return None;
+            }
+            let canonical: String = text.nfc().collect();
+            if canonical == text {
+                return None;
+            }
+            let range = filename.raw_node().byte_range();
+            let edit = SpliceEdit::new_header_token(
+                EditTarget::Replace(Span::from_usize(range.start, range.end)),
+                Replacement::new(canonical),
+                error.code,
+            );
+            return Some(single_edit_fix(BatchSafety::Mechanical, edit));
+        }
+        node = node.parent()?;
+    }
 }
 
 /// The byte span of the first line in `source` starting with `prefix`,

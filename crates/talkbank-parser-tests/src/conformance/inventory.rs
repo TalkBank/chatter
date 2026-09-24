@@ -9,7 +9,7 @@
 //! name).
 //!
 //! Regenerate with the committed generator after a grammar/visitor regen:
-//! `cargo run -p talkbank-parser-tests --example gen_conformance_inventory`.
+//! `just conformance-gen`.
 //! The staleness guard `conformance_inventory_is_current` re-derives this file
 //! from the current typed traversal + node-types.json and fails if the
 //! committed copy has drifted, so a forgotten regen breaks the suite instead of
@@ -22,7 +22,7 @@
 use crate::classify;
 use crate::generated_traversal::*;
 
-use super::{Inspect, InspectField, Observation};
+use super::{Inspect, InspectField, Observation, Position};
 
 /// Generate a no-op `Inspect` for a leaf node wrapper: its own node kind is
 /// separately visited by `walk_all` and dispatched below, so there is nothing
@@ -61,7 +61,11 @@ macro_rules! impl_inspect_struct {
     ($name:ident { $($field:ident),* $(,)? }) => {
         impl<'tree> Inspect for $name<'tree> {
             fn inspect(&self, rule: &'static str, out: &mut Vec<Observation>) {
-                $( self.$field.inspect_field(rule, stringify!($field), out); )*
+                $( self.$field.inspect_field(
+                    rule,
+                    Position::new(stringify!($name), stringify!($field)),
+                    out,
+                ); )*
             }
         }
     };
@@ -1337,11 +1341,11 @@ impl_inspect_struct!(FullDocumentChildren {
     child_3,
     child_4
 });
+impl_inspect_struct!(GHeaderChild1Children { child_0, child_1 });
 impl_inspect_struct!(GHeaderChildren {
     child_0,
     child_1,
-    child_2,
-    child_3
+    child_2
 });
 impl_inspect_struct!(GlsDependentTierChildren {
     child_0,

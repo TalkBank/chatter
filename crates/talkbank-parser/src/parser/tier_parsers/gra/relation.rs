@@ -5,10 +5,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Grammatical_Relations>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
+use std::num::NonZeroUsize;
+
 use crate::generated_traversal::{
-    AsRawNode, GraRelationNode, NoChild, SlotView, extract_gra_relation,
+    AsRawNode, GraHeadNode, GraIndexNode, GraRelationNameNode, GraRelationNode, KindSlot,
+    extract_gra_relation,
 };
-use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::tree_parsing::parser_helpers::{present, surface_displaced};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::GrammaticalRelation;
 use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -20,25 +23,8 @@ use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, S
 /// gra_relation: seq(gra_index, '|', gra_head, '|', gra_relation_name)
 /// ```
 ///
-/// Driven by the generated typed visitor: `extract_gra_relation` yields the
-/// `index` / `head` / `relation` fields (and the two `|` pipes) as named typed
-/// `Positioned` slots (`children.index.slot`, etc.), replacing the previous
-/// positional `node.child(0/2/4)` hand-walk. Each field slot is matched
-/// EXHAUSTIVELY over [`NodeSlot`] (no `_` catch-all, no `.ok()`), reproducing
-/// the removed positional walk byte for byte:
-///
-/// - `Present`: decode the field's raw-node bytes exactly as the old
-///   `Some(child)` arm did (via `utf8_text`, so a UTF-8 error is still reported
-///   as `MalformedGrammarRelation` at the field's span), then apply the same
-///   value checks (index must be a positive 1-indexed integer, head must be a
-///   non-negative integer, relation name must be non-empty).
-/// - `Missing` / `Error` / `Absent`: the field is not a usable
-///   node, which corresponds to the old positional `None` branch (no child at
-///   that position); report the same `MalformedGrammarRelation` "Missing
-///   `<field>`" diagnostic at the relation span and reject. These arms are
-///   unreachable in production: `parse_gra_relation` is reached only when the
-///   containing tier node has no tree-sitter error, so every field is `Present`;
-///   they are handled explicitly for exhaustiveness, never fabricating a value.
+/// Generated slots retain recovery states. Field admission rejects recovery or
+/// unreadable ranges before numeric conversion; an admitted index is nonzero.
 pub(super) fn parse_gra_relation(
     typed: GraRelationNode<'_>,
     source: &str,
@@ -49,38 +35,17 @@ pub(super) fn parse_gra_relation(
     let children = extract_gra_relation(typed);
     surface_displaced(&children.unexpected, "gra_relation", source, errors);
 
-    let index_text = match children.index.slot().view() {
-        SlotView::Present(index_node) => {
-            let field = index_node.raw_node();
-            match field.utf8_text(source.as_bytes()) {
-                Ok(text) => text,
-                Err(err) => {
-                    errors.report(ParseError::new(
-                        ErrorCode::MalformedGrammarRelation,
-                        Severity::Error,
-                        SourceLocation::from_offsets(field.start_byte(), field.end_byte()),
-                        ErrorContext::new(source, field.start_byte()..field.end_byte(), ""),
-                        format!("UTF-8 decoding error in grammatical relation index: {err}"),
-                    ));
-                    return ParseOutcome::rejected();
-                }
-            }
-        }
-        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
-            errors.report(ParseError::new(
-                ErrorCode::MalformedGrammarRelation,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, relation_span.clone(), ""),
-                "Missing index in grammatical relation".to_string(),
-            ));
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(index_text) =
+        RelationField::Index(children.index.slot()).read(typed, source, errors)
+    else {
+        return ParseOutcome::rejected();
     };
 
     let index = match index_text.parse::<usize>() {
         Ok(idx) => {
-            if idx == 0 {
+            if let Some(index) = NonZeroUsize::new(idx) {
+                index
+            } else {
                 errors.report(
                     ParseError::new(
                         ErrorCode::InvalidGrammarIndex,
@@ -92,8 +57,6 @@ pub(super) fn parse_gra_relation(
                     .with_suggestion("Index must start at 1 for the first word"),
                 );
                 return ParseOutcome::rejected();
-            } else {
-                idx
             }
         }
         Err(_) => {
@@ -111,33 +74,10 @@ pub(super) fn parse_gra_relation(
         }
     };
 
-    let head_text = match children.head.slot().view() {
-        SlotView::Present(head_node) => {
-            let field = head_node.raw_node();
-            match field.utf8_text(source.as_bytes()) {
-                Ok(text) => text,
-                Err(err) => {
-                    errors.report(ParseError::new(
-                        ErrorCode::MalformedGrammarRelation,
-                        Severity::Error,
-                        SourceLocation::from_offsets(field.start_byte(), field.end_byte()),
-                        ErrorContext::new(source, field.start_byte()..field.end_byte(), ""),
-                        format!("UTF-8 decoding error in grammatical relation head: {err}"),
-                    ));
-                    return ParseOutcome::rejected();
-                }
-            }
-        }
-        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
-            errors.report(ParseError::new(
-                ErrorCode::MalformedGrammarRelation,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, relation_span.clone(), ""),
-                "Missing head in grammatical relation".to_string(),
-            ));
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(head_text) =
+        RelationField::Head(children.head.slot()).read(typed, source, errors)
+    else {
+        return ParseOutcome::rejected();
     };
 
     let head = match head_text.parse::<usize>() {
@@ -160,33 +100,10 @@ pub(super) fn parse_gra_relation(
         }
     };
 
-    let relation_text = match children.relation.slot().view() {
-        SlotView::Present(relation_node) => {
-            let field = relation_node.raw_node();
-            match field.utf8_text(source.as_bytes()) {
-                Ok(text) => text,
-                Err(err) => {
-                    errors.report(ParseError::new(
-                        ErrorCode::MalformedGrammarRelation,
-                        Severity::Error,
-                        SourceLocation::from_offsets(field.start_byte(), field.end_byte()),
-                        ErrorContext::new(source, field.start_byte()..field.end_byte(), ""),
-                        format!("UTF-8 decoding error in grammatical relation label: {err}"),
-                    ));
-                    return ParseOutcome::rejected();
-                }
-            }
-        }
-        SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
-            errors.report(ParseError::new(
-                ErrorCode::MalformedGrammarRelation,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, relation_span.clone(), ""),
-                "Missing relation name in grammatical relation".to_string(),
-            ));
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(relation_text) =
+        RelationField::Label(children.relation.slot()).read(typed, source, errors)
+    else {
+        return ParseOutcome::rejected();
     };
 
     if relation_text.is_empty() {
@@ -200,5 +117,98 @@ pub(super) fn parse_gra_relation(
         return ParseOutcome::rejected();
     }
 
-    ParseOutcome::parsed(GrammaticalRelation::new(index, head, relation_text))
+    ParseOutcome::parsed(GrammaticalRelation::new(index.get(), head, relation_text))
+}
+
+/// Each role carries only its own generated slot type: a head cannot be read
+/// or diagnosed as an index. Recovery never supplies fabricated field text.
+enum RelationField<'slot, 'tree> {
+    Index(&'slot KindSlot<'tree, GraIndexNode<'tree>>),
+    Head(&'slot KindSlot<'tree, GraHeadNode<'tree>>),
+    Label(&'slot KindSlot<'tree, GraRelationNameNode<'tree>>),
+}
+
+impl RelationField<'_, '_> {
+    fn read<'source>(
+        self,
+        relation: GraRelationNode<'_>,
+        source: &'source str,
+        errors: &impl ErrorSink,
+    ) -> ParseOutcome<&'source str> {
+        let (field, name) = match self {
+            Self::Index(slot) => (present(slot).map(AsRawNode::raw_node), "index"),
+            Self::Head(slot) => (present(slot).map(AsRawNode::raw_node), "head"),
+            Self::Label(slot) => (present(slot).map(AsRawNode::raw_node), "relation name"),
+        };
+        let Some(field) = field else {
+            let node = relation.raw_node();
+            errors.report(ParseError::new(
+                ErrorCode::MalformedGrammarRelation,
+                Severity::Error,
+                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                ErrorContext::new(source, node.byte_range(), ""),
+                format!("Missing {name} in grammatical relation"),
+            ));
+            return ParseOutcome::rejected();
+        };
+        match source.get(field.byte_range()) {
+            Some(text) => ParseOutcome::parsed(text),
+            None => {
+                errors.report(ParseError::new(
+                    ErrorCode::MalformedGrammarRelation,
+                    Severity::Error,
+                    SourceLocation::from_offsets(field.start_byte(), field.end_byte()),
+                    ErrorContext::new(source, field.byte_range(), ""),
+                    format!("Grammatical relation {name} range is not a UTF-8 slice of the source"),
+                ));
+                ParseOutcome::rejected()
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use crate::generated_traversal::FromNodeKind;
+    use talkbank_model::ErrorCollector;
+
+    /// Exercise the raw-node compatibility boundary with real CHAT CST nodes,
+    /// not manufactured slots. A bad source must reject rather than panic.
+    #[test]
+    fn relation_fields_reject_out_of_source_ranges() {
+        let source = include_str!("../../../../../../corpus/reference/tiers/mor-gra.cha");
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let mut pending = vec![parsed.root_node()];
+        let mut relations = 0;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            let Some(relation) = GraRelationNode::from_node(node) else {
+                continue;
+            };
+            relations += 1;
+            let errors = ErrorCollector::new();
+            assert!(parse_gra_relation(relation, source, &errors).is_some());
+            assert!(errors.to_vec().is_empty());
+            let children = extract_gra_relation(relation);
+            for field in [
+                RelationField::Index(children.index.slot()),
+                RelationField::Head(children.head.slot()),
+                RelationField::Label(children.relation.slot()),
+            ] {
+                let errors = ErrorCollector::new();
+                assert!(field.read(relation, "", &errors).is_none());
+                let diagnostics = errors.into_vec();
+                assert_eq!(diagnostics.len(), 1);
+                assert_eq!(diagnostics[0].code, ErrorCode::MalformedGrammarRelation);
+            }
+        }
+        assert_eq!(relations, 11);
+    }
 }

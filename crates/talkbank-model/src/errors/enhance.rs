@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::chat_formatting::process_for_plain_display_mapped;
+use crate::chat_formatting::{PlainDisplayResult, process_for_plain_display_mapped};
 use crate::line_map::SourceIndex;
 use crate::{ErrorCode, ParseError};
 use tracing::warn;
@@ -147,31 +147,21 @@ pub fn enhance_errors_with_index(errors: &mut [ParseError], index: &SourceIndex<
         }
 
         // Check if this error requires raw display (errors about control characters)
-        if requires_raw_display(&error.code) {
-            // Don't apply formatting - show raw control characters
-            let ctx = error
-                .context
-                .get_or_insert_with(|| crate::ErrorContext::new("", 0..0, ""));
-            ctx.source_text = context_text.to_string();
-            ctx.span =
-                crate::Span::from_usize(relative_start, relative_end.max(relative_start + 1));
+        let mapped = if requires_raw_display(&error.code) {
+            PlainDisplayResult::unformatted(context_text)
         } else {
-            // Single-pass: build display text and position map, then map all spans
-            let mapped = process_for_plain_display_mapped(context_text);
-
-            let (display_start, display_end) = mapped.map_span(relative_start, relative_end);
-
-            for label in &mut error.labels {
-                let (ls, le) = mapped.map_span(label.span.start as usize, label.span.end as usize);
-                label.span = crate::Span::from_usize(ls, le);
-            }
-
-            let ctx = error
-                .context
-                .get_or_insert_with(|| crate::ErrorContext::new("", 0..0, ""));
-            ctx.source_text = mapped.text;
-            ctx.span = crate::Span::from_usize(display_start, display_end);
+            process_for_plain_display_mapped(context_text)
+        };
+        let (display_start, display_end) = mapped.map_span(relative_start, relative_end);
+        for label in &mut error.labels {
+            let (ls, le) = mapped.map_span(label.span.start as usize, label.span.end as usize);
+            label.span = crate::Span::from_usize(ls, le);
         }
+        let ctx = error
+            .context
+            .get_or_insert_with(|| crate::ErrorContext::new("", 0..0, ""));
+        ctx.source_text = mapped.into_text();
+        ctx.span = crate::Span::from_usize(display_start, display_end);
 
         // Always set line_offset for correct miette display
         // Use the first line number in the context range

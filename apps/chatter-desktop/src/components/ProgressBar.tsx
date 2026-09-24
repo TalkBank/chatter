@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { RunPhase } from "../hooks/useValidation";
-import { isRunRecoverable, totalFilesOf } from "../hooks/validationState";
+import { finishedRunSummary, isRunRecoverable, totalFilesOf } from "../hooks/validationState";
 
 interface Props {
   run: RunPhase;
@@ -101,8 +101,7 @@ export default function ProgressBar({
 
       {run.kind === "finished" && (
         <span>
-          {run.stats.totalFiles} files: {run.stats.validFiles} valid, {run.stats.invalidFiles} invalid
-          {run.stats.cancelled ? " (cancelled)" : ""}
+          {finishedRunSummary(run, totalErrors)}
         </span>
       )}
 

@@ -20,7 +20,9 @@ pub struct ErrorContext {
     pub span: Span,
     /// What was expected at this position (multiple possibilities).
     /// SmallVec avoids heap allocation for the common case of 0-2 items.
-    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    /// An omitted wire field is the serializer's representation of no listed
+    /// expectations, not evidence for an invented expected token.
+    #[serde(default, skip_serializing_if = "SmallVec::is_empty")]
     #[schemars(with = "Vec<String>")]
     pub expected: SmallVec<[String; 2]>,
     /// What was actually found

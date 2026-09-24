@@ -98,9 +98,9 @@ fn measure_analysis_latency() {
     }
 }
 
-// Attribution probe, not an alternative production pipeline. Lowering includes
-// a second, same-source CST parse because the public parser owns that boundary.
-// Every measured result is checked against the actual source-bound analysis.
+// Attribution probe, not an alternative production pipeline. Edit, parse, and
+// lowering travel the revision owner together; they are not independently
+// reconstructed by the benchmark. Every result is checked against analysis.
 #[test]
 #[ignore = "manual phase attribution; no machine-specific CI threshold"]
 fn measure_analysis_phases() {
@@ -119,14 +119,9 @@ fn measure_analysis_phases() {
     for index in 0..21 {
         let text = if index % 2 == 0 { &other } else { &source };
         let start = Instant::now();
-        let mut tree = previous.tree().unwrap();
-        tree.edit(&compute_input_edit(&previous.source, text).unwrap());
-        let tree = parser.parse_tree_incremental(text, Some(&tree)).unwrap();
-        let syntax = start.elapsed();
-
-        let start = Instant::now();
         let sink = ErrorCollector::new();
-        let (mut file, _) = parser.parse_chat_file_streaming_incremental(text, Some(&tree), &sink);
+        let (mut file, _) =
+            parser.parse_chat_file_revision(text.as_str().into(), Some(&previous.revision), &sink);
         let parse_errors = sink.into_vec();
         assert!(
             !parse_errors
@@ -154,7 +149,7 @@ fn measure_analysis_phases() {
         );
         let conversion = start.elapsed();
         if index != 0 {
-            samples.push([syntax, lowering, validation, conversion]);
+            samples.push([lowering, validation, conversion]);
         }
         let actual = DocumentAnalysis::parse(&parser, &uri, text.as_str().into(), Some(&previous));
         assert_eq!(diagnostics, actual.diagnostics());
@@ -162,8 +157,7 @@ fn measure_analysis_phases() {
         previous = actual;
     }
     for (column, name) in [
-        "syntax_and_edit",
-        "lowering_plus_same_source_parse",
+        "edit_parse_and_lowering",
         "validation",
         "diagnostic_conversion",
     ]

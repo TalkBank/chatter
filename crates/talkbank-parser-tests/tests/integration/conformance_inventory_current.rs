@@ -30,8 +30,32 @@
 //! shell out to the example binary.
 
 use talkbank_parser_tests::conformance_inventory::{
-    generate_inventory, inventory_path, node_types_json_path, typed_traversal_path,
+    generate_inventory, generate_inventory_source, inventory_path, node_types_json_path,
+    typed_traversal_path,
 };
+
+#[test]
+fn concrete_carriers_do_not_include_generic_source_wrappers() {
+    let source = r#"
+        pub struct SourceChildren<'tree, 'source, C> {
+            children: C,
+            parent: SourceSlice<'tree, 'source>,
+        }
+        pub struct ExampleChildren_2<'tree> {
+            pub item: KindSlot<'tree, ExampleNode<'tree>>,
+            pub trailing_extras: Vec<Extra<'tree>>,
+            pub unexpected: Vec<tree_sitter::Node<'tree>>,
+        }
+        pub struct LeafSpan<'tree> {
+            pub node: tree_sitter::Node<'tree>,
+            pub range: std::ops::Range<usize>,
+        }
+    "#;
+    let inventory = generate_inventory_source(source, "[]").expect("inventory source");
+    assert!(inventory.contains("impl_inspect_struct!(ExampleChildren_2 { item });"));
+    assert!(!inventory.contains("impl_inspect_struct!(SourceChildren"));
+    assert!(!inventory.contains("impl_inspect_struct!(LeafSpan"));
+}
 
 #[test]
 fn conformance_inventory_is_current() {

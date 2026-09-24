@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-08-12 22:20 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -26,12 +26,9 @@ flowchart TD
     chatter --> debug["debug\n(overlap-audit, linker-audit,\nfind, sanitize, fix-s)"]
     chatter --> update["update\n(self-update, experimental)"]
 
-    chatter --> merge["merge\n(experimental)"]
     chatter --> speakerid["speaker-id\n(experimental)"]
     chatter --> rediarize["rediarize\n(experimental)"]
     chatter --> adjudicate["adjudicate\n(experimental)"]
-    chatter --> pipeline["pipeline\n(experimental)"]
-    chatter --> batch["batch\n(experimental)"]
     chatter --> sanityscan["sanity-scan\n(experimental)"]
 ```
 
@@ -52,12 +49,9 @@ chatter cache clear --prefix PATH
 chatter schema
 chatter debug ...
 chatter update                     # experimental: self-update to the latest release
-chatter merge FILE1 FILE2          # experimental: combine two transcripts
 chatter speaker-id INPUT           # experimental
 chatter rediarize INPUT --turns T  # experimental
 chatter adjudicate ...             # experimental
-chatter pipeline ...               # experimental
-chatter batch ...                  # experimental
 chatter sanity-scan ...            # experimental
 ```
 
@@ -415,9 +409,9 @@ subcommands include:
     afterwards; the main tier alone remains valid CHAT.
   - `--dry-run` reports what would be joined without modifying files.
 
-## Merge and Reconciliation Commands (experimental)
+## Speaker and Review Commands (experimental)
 
-These commands combine, reconcile, and relabel CHAT transcripts of the
+These commands inspect, review, and relabel CHAT transcripts of the
 same recording, in the tradition of CLAN's reliability and comparison
 tools (`rely`, `trnfix`). They are **experimental and in active
 development**: flags and behavior may change, and several modes are not
@@ -425,23 +419,16 @@ yet complete. Work on copies and validate the output.
 
 | Command | What it does |
 |---------|--------------|
-| `merge` | Merge two CHAT transcripts of the same media into one, interleaving by time with explicit per-speaker provenance. Structural only: no ASR, no forced alignment, no content rewriting. |
 | `speaker-id` | Assign CHAT-conformant speaker codes to an anonymously-labeled file, from an explicit mapping or by text similarity against a reference transcript. |
 | `rediarize` | Re-attribute utterance speakers from an external diarizer's timestamped turns (JSON), keeping the words: repairs transcripts whose ASR under-counted or mixed speakers. |
 | `adjudicate` | Resolve pending decisions (currently speaker-id) interactively or from a scripted decision file, writing results to an override file. |
-| `pipeline` | Per-session shortcut: run `speaker-id` in reference mode, then `merge`. |
-| `batch` | Loop `pipeline` over matched donor / reference file pairs across two directories. |
 | `sanity-scan` | Post-merge QA: flag sessions whose automatic decisions look suspicious by an out-of-band heuristic, for operator review via `adjudicate`. |
 
-Full guides: [Merge](merge.md), [Speaker ID](speaker-id.md),
-[Rediarize](rediarize.md), and the
-[Merge Workflow](merge-workflow.md) walkthrough. The holistic-judgment
-mode of `speaker-id` / `pipeline` / `batch` can call an LLM provider
-(`talkbank-llm`) when configured via `--llm-endpoint` / `--llm-model`
-(plus `--llm-timeout-secs`, `--llm-max-retries`, and a persistent
-response cache via `--llm-cache` or `CHATTER_LLM_CACHE`); the
-deterministic modes need no network access. Flag-level detail:
-[Merge, LLM holistic judgment](merge.md#llm-holistic-judgment-pending-only).
+Full guides: [Speaker ID](speaker-id.md), [Rediarize](rediarize.md), and
+[Review Tools](merge-workflow.md). The holistic mode of `speaker-id` can call
+an LLM provider when configured; deterministic modes need no network access.
+The former `merge`, `pipeline`, and `batch` commands have been
+[removed](merge.md); there is no drop-in CLI for fuzzy event matching.
 
 ## Exit Codes
 

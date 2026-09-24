@@ -480,15 +480,8 @@ impl ReplacedWord {
     /// Serializes `word [: replacement]` and trailing scoped annotations.
     pub fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
         self.word.write_chat(w)?;
-        w.write_str(" [: ")?;
-        // Write replacement words
-        for (i, word) in self.replacement.words.iter().enumerate() {
-            if i > 0 {
-                w.write_char(' ')?;
-            }
-            word.write_chat(w)?;
-        }
-        w.write_char(']')?;
+        w.write_char(' ')?;
+        self.replacement.write_chat(w)?;
         for ann in &self.scoped_annotations {
             w.write_char(' ')?;
             ann.write_chat(w)?;

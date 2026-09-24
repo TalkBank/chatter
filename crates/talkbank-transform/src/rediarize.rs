@@ -390,7 +390,11 @@ pub fn rediarize_content(
     contested_at: Option<ContestedThreshold>,
 ) -> Result<(String, RediarizeOutcome), PipelineError> {
     let chat = parse_and_validate(content, options)?;
-    let (rewritten, outcome) = rediarize(&chat, timeline, contested_at);
+    let errors = talkbank_model::ErrorCollector::new();
+    let (rewritten, outcome) = rediarize(&chat, timeline, contested_at, &errors);
+    if errors.has_errors() {
+        return Err(PipelineError::Validation(errors.into_vec()));
+    }
     Ok((to_chat_string(&rewritten), outcome))
 }
 
@@ -404,10 +408,14 @@ pub fn rediarize_content(
 /// [`ContestedThreshold`].
 ///
 /// The input `chat` is not mutated; a new `ChatFile` is built.
+/// Reconciled headers pass through the canonical participant join before the
+/// model is returned. Join diagnostics are reported to `errors`; the mutable
+/// result is not a validity certificate. Callers must decide their error policy.
 pub fn rediarize(
     chat: &ChatFile,
     timeline: &DiarizationTimeline,
     contested_at: Option<ContestedThreshold>,
+    errors: &(impl talkbank_model::ErrorSink + ?Sized),
 ) -> (ChatFile, RediarizeOutcome) {
     let mut outcome = RediarizeOutcome::default();
     let mut used_tracks: HashSet<SpeakerCode> = HashSet::new();
@@ -461,8 +469,19 @@ pub fn rediarize(
         }
     }
 
-    let reconciled = reconcile_headers(rewritten, &used_tracks);
-    (ChatFile::new(reconciled), outcome)
+    let reconciled = match NonEmptyTracks::admit(used_tracks) {
+        Some(tracks) => reconcile_headers(rewritten, &tracks),
+        // A header-only transcript has no attribution evidence. Its declared
+        // participants remain meaningful even though no speech uses them yet.
+        None => rewritten,
+    };
+    let participants =
+        talkbank_model::model::participant::join::build_participants_from_lines(&reconciled)
+            .report_into(errors);
+    (
+        ChatFile::with_participants(reconciled, participants),
+        outcome,
+    )
 }
 
 /// How a bullet's overlapped time divides between diarization tracks.
@@ -747,12 +766,22 @@ impl serde::Serialize for ContestedUtterance {
     }
 }
 
-/// Rebuild `@Participants` and `@ID` headers so exactly `used_tracks` are
-/// declared. Existing entries/rows for a used track are kept verbatim; a
-/// used track with no existing declaration gets one cloned from an
-/// existing sibling (same role) with the code swapped; declarations for
-/// tracks no longer used are dropped.
-fn reconcile_headers(lines: Vec<Line>, used_tracks: &HashSet<SpeakerCode>) -> Vec<Line> {
+/// Attribution evidence required before declarations may be pruned.
+struct NonEmptyTracks(HashSet<SpeakerCode>);
+
+impl NonEmptyTracks {
+    fn admit(tracks: HashSet<SpeakerCode>) -> Option<Self> {
+        if tracks.is_empty() {
+            None
+        } else {
+            Some(Self(tracks))
+        }
+    }
+}
+
+/// Rebuild declarations for the admitted nonempty track population. Existing
+/// used entries survive; new tracks copy a template, and unused tracks drop.
+fn reconcile_headers(lines: Vec<Line>, NonEmptyTracks(used_tracks): &NonEmptyTracks) -> Vec<Line> {
     let template_entry = lines.iter().find_map(|line| match line {
         Line::Header { header, .. } => match header.as_ref() {
             Header::Participants { entries } => entries.iter().next().cloned(),
@@ -914,7 +943,7 @@ mod tests {
         ];
 
         let timeline = DiarizationTimeline::new(turns);
-        let (out, outcome) = rediarize(&chat, &timeline, None);
+        let (out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink);
         let text = crate::serialize::to_chat_string(&out);
 
         // The third utterance moved off PAR1 onto PAR2.
@@ -967,7 +996,7 @@ mod tests {
         ];
 
         let timeline = DiarizationTimeline::new(turns);
-        let (out, _outcome) = rediarize(&chat, &timeline, None);
+        let (out, _outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink);
         let text = crate::serialize::to_chat_string(&out);
         assert!(
             text.contains("*PAR2:\thi yourself ."),
@@ -998,7 +1027,12 @@ mod tests {
 
         let threshold = ContestedThreshold::new(0.25).expect("valid share");
         let timeline = DiarizationTimeline::new(turns);
-        let (_out, outcome) = rediarize(&chat, &timeline, Some(threshold));
+        let (_out, outcome) = rediarize(
+            &chat,
+            &timeline,
+            Some(threshold),
+            &talkbank_model::NullErrorSink,
+        );
 
         assert_eq!(outcome.contested.len(), 1, "one utterance is contested");
         let contested = &outcome.contested[0];
@@ -1030,7 +1064,7 @@ mod tests {
         ];
 
         let timeline = DiarizationTimeline::new(turns);
-        let (_out, outcome) = rediarize(&chat, &timeline, None);
+        let (_out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink);
         assert!(
             outcome.contested.is_empty(),
             "with no threshold supplied, nothing is reported as contested"
@@ -1145,7 +1179,8 @@ mod tests {
         ]}"#;
         let file = parse_turns_json(json)?;
 
-        let (out, _outcome) = rediarize(&chat, file.timeline(), None);
+        let (out, _outcome) =
+            rediarize(&chat, file.timeline(), None, &talkbank_model::NullErrorSink);
         let text = crate::serialize::to_chat_string(&out);
         assert!(
             text.contains("*PAR2:\thi yourself ."),
@@ -1172,7 +1207,7 @@ mod tests {
         let turns = vec![turn("PAR0", 0, 1000)];
 
         let timeline = DiarizationTimeline::new(turns);
-        let (_out, outcome) = rediarize(&chat, &timeline, None);
+        let (_out, outcome) = rediarize(&chat, &timeline, None, &talkbank_model::NullErrorSink);
         assert_eq!(
             outcome.flagged.len(),
             2,

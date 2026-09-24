@@ -34,7 +34,7 @@
 
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Output};
 use talkbank_model::model::TranscriptName;
 
 use serde::Deserialize;
@@ -541,9 +541,16 @@ fn clan_check_grounding() -> Result<(), TestError> {
             .arg(&fixture)
             .output()
             .map_err(|e| TestError::Failure(format!("run CLAN wrapper: {e}")))?;
-        // The pty emits CRLF; strip CR before scanning the (NN) trailers.
-        let text = String::from_utf8_lossy(&output.stdout).replace('\r', "");
-        let emitted = parse_check_numbers(&text);
+        // Both positive and negative obligations require an observed CHECK
+        // run. A wrapper refusal must not satisfy a no-obligation tripwire.
+        let observation = CheckObservation::try_from(output).map_err(|error| {
+            TestError::Failure(format!(
+                "CHECK {} ({fixture_name}): {error}",
+                entry.check_code
+            ))
+        })?;
+        let text = &observation.text;
+        let emitted = &observation.emitted;
         if matches!(entry.status, ParityStatus::NoObligation { .. }) {
             // Tripwire, inverted assertion: unix CLAN must still NOT emit the
             // code on this construct. If a future CLAN bundle revives the rule
@@ -593,6 +600,95 @@ fn clan_check_grounding() -> Result<(), TestError> {
         )));
     }
     Ok(())
+}
+
+/// Admitted output of a successful wrapper invocation that actually ran CHECK.
+///
+/// This is an observation, not proof of a complete second pass: CHECK may
+/// stop after reporting a first-pass error. Numeric diagnostics still witness
+/// that route. Empty output, a wrapper refusal and a bare startup banner do not.
+struct CheckObservation {
+    text: String,
+    emitted: Vec<u16>,
+}
+
+impl TryFrom<Output> for CheckObservation {
+    type Error = TestError;
+
+    fn try_from(output: Output) -> Result<Self, Self::Error> {
+        if !output.status.success() {
+            return Err(TestError::Failure(format!(
+                "CLAN wrapper failed ({}): {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim(),
+            )));
+        }
+        let text = String::from_utf8(output.stdout)
+            .map_err(|error| TestError::Failure(format!("CHECK output is not UTF-8: {error}")))?
+            .replace('\r', "");
+        let started = text.lines().any(|line| {
+            line.starts_with("check (") && line.ends_with(") is conducting analyses on:")
+        });
+        let emitted = parse_check_numbers(&text);
+        let reported = !emitted.is_empty()
+            || text.contains("ALL FILES CHECKED OUT OK!")
+            || text.contains("THERE WERE SOME ERROR(S) FOUND")
+            || text.contains("No errors other than excluded by ");
+        if !started || !reported {
+            return Err(TestError::Failure(
+                "wrapper output does not witness a CHECK result".to_owned(),
+            ));
+        }
+        Ok(Self { text, emitted })
+    }
+}
+
+/// External-output admission is a wire boundary, not a CHAT model constructor.
+#[test]
+fn check_observation_requires_a_result_not_just_successful_transport() {
+    let admit = |stdout: &[u8]| {
+        CheckObservation::try_from(Output {
+            status: Default::default(),
+            stdout: stdout.to_vec(),
+            stderr: Vec::new(),
+        })
+    };
+    let banner = "check (21-Sep-2026) is conducting analyses on:\r\n";
+    for missing in [
+        "",
+        banner,
+        "ALL FILES CHECKED OUT OK!",
+        "wrapper: REFUSED (12)",
+    ] {
+        assert!(admit(missing.as_bytes()).is_err(), "accepted {missing:?}");
+    }
+    assert!(admit(&[0xff]).is_err());
+    for result in [
+        "ALL FILES CHECKED OUT OK!",
+        "THERE WERE SOME ERROR(S) FOUND.",
+        "No errors other than excluded by +e option were found.",
+        "Missing required header.(77)",
+    ] {
+        let observation = admit(format!("{banner}{result}").as_bytes()).unwrap();
+        assert!(!observation.text.contains('\r'));
+        assert_eq!(observation.emitted, parse_check_numbers(result));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn check_observation_rejects_wrapper_failure_even_with_plausible_stdout() {
+    use std::os::unix::process::ExitStatusExt;
+
+    assert!(
+        CheckObservation::try_from(Output {
+            status: std::process::ExitStatus::from_raw(12 << 8),
+            stdout: b"check (21-Sep-2026) is conducting analyses on:\nALL FILES CHECKED OUT OK!"
+                .to_vec(),
+            stderr: b"wrapper refused a stale executable".to_vec(),
+        })
+        .is_err()
+    );
 }
 
 /// Extract the trailing `(NN)` CHECK error numbers from CLAN CHECK output.

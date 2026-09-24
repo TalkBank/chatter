@@ -61,10 +61,16 @@ impl AsRef<std::path::Path> for FixtureName {
 }
 
 /// One generated fixture and what the runner must assert about it.
+///
+/// The storage filename is independent of the transcript identity declared by
+/// the example. Renaming a generated file must not change filename validation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ValidationFixtureEntry {
     /// Fixture filename, relative to the validation_errors corpus dir.
     pub fixture: FixtureName,
+    /// Validation context copied from the authored example, never inferred
+    /// from the generated fixture's storage name. Required on the wire.
+    pub transcript_name: FixtureTranscriptName,
     /// The spec's own code, which the claim is ABOUT.
     ///
     /// With `claim` it replaces the pre-R2 `expected_codes` list, which mixed
@@ -89,6 +95,16 @@ pub struct ValidationFixtureEntry {
     /// Source spec path, for diagnostics. Repo-relative by construction, so a
     /// caller cannot record an absolute one.
     pub source_spec: RepoRelativePath,
+}
+
+/// Whether the authored example supplies a transcript stem for validation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FixtureTranscriptName {
+    /// Filename-dependent checks have no input for this example.
+    Anonymous,
+    /// The source stem exactly as authored, including Unicode normalization.
+    Named(String),
 }
 
 /// Top-level manifest written to the corpus dir as `manifest.json`.
@@ -130,6 +146,7 @@ mod tests {
         let m = ValidationManifest {
             fixtures: vec![ValidationFixtureEntry {
                 fixture: FixtureName::new("E370_retrace.cha"),
+                transcript_name: FixtureTranscriptName::Named("Schlu\u{0308}ssel".into()),
                 code: SpecErrorCode::parse("E370").expect("valid code"),
                 claim: Claim::Violates,
                 rules: RuleProfile::Default,
@@ -164,6 +181,7 @@ mod tests {
     fn an_opt_in_rules_profile_survives_the_wire() {
         let entry = ValidationFixtureEntry {
             fixture: FixtureName::new("E351_0.cha"),
+            transcript_name: FixtureTranscriptName::Anonymous,
             code: SpecErrorCode::parse("E351").expect("valid code"),
             claim: Claim::Violates,
             rules: RuleProfile::StrictLinkers,
@@ -192,6 +210,7 @@ mod tests {
     fn an_absent_rules_key_is_the_default_profile() {
         let json = r#"{
             "fixture": "E370_retrace.cha",
+            "transcript_name": "anonymous",
             "code": "E370",
             "claim": "violates",
             "status": "implemented",
@@ -199,5 +218,19 @@ mod tests {
         }"#;
         let entry: ValidationFixtureEntry = serde_json::from_str(json).expect("deserialize");
         assert_eq!(entry.rules, RuleProfile::Default);
+    }
+
+    #[test]
+    fn missing_transcript_identity_requires_regeneration() {
+        let json = r#"{
+            "fixture": "W109_1.cha",
+            "code": "W109",
+            "claim": "violates",
+            "status": "implemented",
+            "source_spec": "spec/errors/W109.md"
+        }"#;
+        let error = serde_json::from_str::<ValidationFixtureEntry>(json)
+            .expect_err("storage filename must not stand in for transcript identity");
+        assert!(error.to_string().contains("transcript_name"));
     }
 }

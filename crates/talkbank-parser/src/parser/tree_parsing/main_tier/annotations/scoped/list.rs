@@ -7,8 +7,8 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    BaseAnnotationChoice, BaseAnnotationsNode, FromNodeKind, NoChild, NodeSlot, RecoveryNode,
-    SeqSlot, SlotView, extract_base_annotations,
+    AsRawNode, BaseAnnotationChoice, BaseAnnotationsNode, NoChild, NodeSlot, RecoveryNode, SeqSlot,
+    SlotView, extract_base_annotations,
 };
 use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
@@ -51,23 +51,13 @@ use super::single::{ParsedAnnotation, parse_single_annotation};
 /// the decoder matches. Until 2026-09-09 this walked the children by index
 /// and `kind()` string.
 ///
-/// Callers hold the raw `base_annotations` node; a node of another kind is
-/// refused with a diagnostic.
+/// Callers retain the generated `base_annotations` wrapper through dispatch.
 pub(crate) fn parse_scoped_annotations(
-    node: Node,
+    typed: BaseAnnotationsNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
 ) -> Vec<ParsedAnnotation> {
-    let Some(typed) = BaseAnnotationsNode::from_node(node) else {
-        errors.report(ParseError::new(
-            ErrorCode::ContentAnnotationParseError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-            format!("Expected a base_annotations node, found '{}'", node.kind()),
-        ));
-        return Vec::new();
-    };
+    let node = typed.raw_node();
     let children = extract_base_annotations(typed);
     let repeat = children.child_1.slot();
     let mut markers = ChildCapacity::for_pairs_of(node).into_vec();
@@ -167,20 +157,14 @@ fn report_mismatch(
 fn push_annotation<'tree, W, M, U, A, C>(
     unexpected: &[Node],
     whitespace: &NodeSlot<'tree, W, M, U, A>,
-    annotation: &NodeSlot<
-        'tree,
-        C,
-        tree_sitter::Node<'tree>,
-        crate::generated_traversal::Never,
-        NoChild,
-    >,
+    annotation: &crate::generated_traversal::KindSlot<'tree, C>,
     pair_index: usize,
     source: &str,
     errors: &impl ErrorSink,
     markers: &mut Vec<ParsedAnnotation>,
 ) where
     U: RecoveryNode<'tree>,
-    C: Clone + Into<BaseAnnotationChoice<'tree>>,
+    C: Copy + crate::generated_traversal::AsRawNode<'tree> + Into<BaseAnnotationChoice<'tree>>,
 {
     surface_displaced(unexpected, "base_annotations", source, errors);
     expect_delimiter(whitespace, |bad| {
@@ -194,7 +178,7 @@ fn push_annotation<'tree, W, M, U, A, C>(
     });
     match annotation.view() {
         SlotView::Present(choice) => {
-            let choice: BaseAnnotationChoice<'tree> = choice.clone().into();
+            let choice: BaseAnnotationChoice<'tree> = (*choice).into();
             if let ParseOutcome::Parsed(parsed) = parse_single_annotation(&choice, source, errors) {
                 markers.push(parsed);
             }

@@ -1,7 +1,12 @@
 # Merge Pipeline, Crate Architecture
 
+> Historical design: references below to the `chatter merge` CLI describe the
+> former command. `merge`, `pipeline`, and `batch` have been removed.
+> The structural library remains.
+> See the [removal notice](../chatter/user-guide/merge.md).
+
 **Status:** Draft
-**Last modified:** 2026-08-30 15:12 EDT
+**Last modified:** 2026-09-24 00:21 EDT
 
 This page explains where the new merge-pipeline code lives in the
 `chatter` workspace, which crates gain modules, what
@@ -25,7 +30,7 @@ Companion documents:
 ## Boundary decisions
 
 Two boundary decisions govern where every new piece of code lives.
-Both reference rules already documented in this repo's root `CLAUDE.md`
+Both reference rules already documented in this repo's root `AGENTS.md`
 (workspace-root contributor guide, outside the book).
 
 ### Decision 1: talkbank-* crates, not batchalign-* crates
@@ -33,7 +38,7 @@ Both reference rules already documented in this repo's root `CLAUDE.md`
 The merge pipeline is **pure CHAT-AST structural manipulation**,
 no ML, no audio I/O, no network, no model loading, no fleet
 runtime. Per the crate-boundary decision test in the workspace
-CLAUDE.md:
+AGENTS.md:
 
 > If code fundamentally needs ML models, audio processing, network
 > services, or fleet runtime → `batchalign-*` crate. Otherwise →

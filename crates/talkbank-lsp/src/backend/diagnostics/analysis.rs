@@ -3,12 +3,11 @@
 use std::sync::Arc;
 use talkbank_model::model::{ChatFile, FileStem, TranscriptName};
 use talkbank_model::{ErrorCollector, Severity};
-use talkbank_parser::TreeSitterParser;
+use talkbank_parser::{ParsedRevision, TreeSitterParser};
 use tower_lsp::lsp_types::{Diagnostic, Url};
 use tree_sitter::Tree;
 
 use super::conversion::{to_diagnostics_batch, to_diagnostics_batch_with_context};
-use super::text_diff::compute_input_edit;
 
 /// One source revision, with either complete validation or parser diagnostics.
 ///
@@ -16,8 +15,7 @@ use super::text_diff::compute_input_edit;
 /// model, or diagnostics independently, nor use a previous model's byte spans
 /// with edited text. A partial model still serves healthy regions of its source.
 pub(crate) struct DocumentAnalysis {
-    source: Arc<str>,
-    tree: Option<Tree>,
+    revision: ParsedRevision,
     file: Arc<ChatFile>,
     diagnostics: Vec<Diagnostic>,
     status: AnalysisStatus,
@@ -41,15 +39,12 @@ impl DocumentAnalysis {
         source: Arc<str>,
         previous: Option<&Self>,
     ) -> Self {
-        let mut old_tree = previous.and_then(|old| old.tree.clone());
-        if let (Some(old), Some(tree)) = (previous, old_tree.as_mut())
-            && let Some(edit) = compute_input_edit(&old.source, &source)
-        {
-            tree.edit(&edit);
-        }
         let sink = ErrorCollector::new();
-        let (mut file, tree) =
-            parser.parse_chat_file_streaming_incremental(&source, old_tree.as_ref(), &sink);
+        let (mut file, revision) = parser.parse_chat_file_revision(
+            Arc::clone(&source),
+            previous.map(|old| &old.revision),
+            &sink,
+        );
         let parse_errors = sink.into_vec();
         let (status, diagnostics) = if parse_errors
             .iter()
@@ -81,8 +76,7 @@ impl DocumentAnalysis {
             )
         };
         Self {
-            source,
-            tree,
+            revision,
             file: Arc::new(file),
             diagnostics,
             status,
@@ -91,11 +85,11 @@ impl DocumentAnalysis {
 
     /// Admit reuse only for identical source bytes.
     pub(crate) fn for_source(&self, source: &str) -> Option<&Self> {
-        (self.source.as_ref() == source).then_some(self)
+        (self.revision.source() == source).then_some(self)
     }
 
     pub(crate) fn tree(&self) -> Option<Tree> {
-        self.tree.clone()
+        self.revision.tree()
     }
     pub(crate) fn file(&self) -> Arc<ChatFile> {
         Arc::clone(&self.file)

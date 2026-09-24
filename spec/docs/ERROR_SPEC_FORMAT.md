@@ -1,6 +1,6 @@
 # Error Spec Format Reference
 
-**Last updated:** 2026-08-27 18:09 EDT
+**Last updated:** 2026-09-24 00:21 EDT
 
 This document defines the exact format of `spec/errors/*.md` files. These files
 are the **source of truth** for error code test cases. Generators in
@@ -241,8 +241,9 @@ The kinds, which is the part worth writing down:
 - **Reporters** answer a question and write nothing: `just spec-status`,
   `just spec-coverage`, `just spec-node-coverage`, `just spec-validate-examples`.
 - **Corpus tooling** finds or makes CHAT to specify against:
-  `just spec-corpus-candidates`, `just spec-perturb` (the adversarial half, which
-  is how CHECK gaps are found), `just spec-ca-census`.
+  `just spec-corpus-candidates`, `just spec-perturb` (unreviewed mutation
+  candidates, never a diagnostic oracle), `just spec-ca-census`. Mutation
+  promotion follows the seed/claim review in the book's spec workflow.
 - **Golden generators** live in `talkbank-parser-tests` and emit the committed
   `golden_*.txt` corpora, one per tier kind.
 
@@ -264,4 +265,3 @@ hand-declared `status` was the same mirror one layer down, copied into every
 spec file for a code; R1 gave it one owner in `spec/codes/error-codes.toml`,
 which removes the DUPLICATION but not the declaration: it is still authored,
 and still not an observation.
-
