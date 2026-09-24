@@ -516,7 +516,9 @@ fn single_file_validation() {
         .iter()
         .filter_map(|event| {
             if let FrontendEvent::FileComplete { file, .. } = event {
-                Some(file.clone())
+                // File identity follows platform path components, not the
+                // choice of slash spelling in the serialized event.
+                Some(Path::new(file))
             } else {
                 None
             }
@@ -530,7 +532,7 @@ fn single_file_validation() {
     );
     assert_eq!(
         completed_files[0],
-        file.to_string_lossy(),
+        file.as_path(),
         "single-file runs should only complete the selected file"
     );
 }
