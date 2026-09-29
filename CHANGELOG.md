@@ -13,6 +13,10 @@ version and are listed under "Changed" / "Removed".
 
 ### Changed
 
+- Cross-platform verification keeps Windows workspace doctests on Cargo's
+  normal C runtime, avoiding a Tauri static-runtime library-search collision.
+  Desktop release packaging retains its static-runtime configuration.
+
 - Experimental re2c conversion preserves multiword participant names and
   treats lexer continuation tokens as separators in logical gem labels.
   Diagnostic differences remain explicitly assessed, not copied from the

@@ -1,7 +1,7 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** 2026-09-28 22:20 EDT
 
 ## Pre-Merge Verification
 
@@ -85,6 +85,13 @@ announcing.
 | `.github/workflows/clippy-rolling.yml` | New-stable clippy drift detection | Weekly maintenance workflow |
 
 ### Current release stance
+
+Cross-platform workspace verification uses Cargo's normal Windows dynamic C
+runtime through a job-local `TAURI_CONFIG` override. Tauri 2.7's static-runtime
+build shim otherwise shadows `msvcrt.lib` for unrelated workspace doctests.
+Doctests remain enabled. This override does not apply to desktop release
+packaging, which retains Tauri's static-runtime default; passing workspace tests
+does not replace verifying the packaged Windows artifact.
 
 - `release.yml` is about workspace artifact packaging via cargo-dist, not about
   crates.io publication.

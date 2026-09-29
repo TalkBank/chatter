@@ -32,6 +32,11 @@ jobs:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      # Tauri's static-runtime shim shadows msvcrt.lib for unrelated workspace
+      # doctests. Verify with Cargo's normal dynamic runtime; release packaging
+      # retains Tauri's default static runtime in its separate workflow.
+      TAURI_CONFIG: '{"build":{"windows":{"staticVCRuntime":false}}}'
     strategy:
       fail-fast: false
       matrix:
