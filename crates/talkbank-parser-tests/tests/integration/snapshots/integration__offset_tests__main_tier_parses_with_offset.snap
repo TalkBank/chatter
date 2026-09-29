@@ -21,7 +21,6 @@ Some(
                                 end: 211,
                             },
                             word_id: None,
-                            raw_text: "hello",
                             content: WordContents(
                                 [
                                     Text(
@@ -52,7 +51,6 @@ Some(
                                 end: 217,
                             },
                             word_id: None,
-                            raw_text: "world",
                             content: WordContents(
                                 [
                                     Text(

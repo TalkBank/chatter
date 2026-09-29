@@ -1,7 +1,7 @@
 # Errors, CHAT core
 
 **Status:** Current
-**Last modified:** 2026-09-06 04:57 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 The error infrastructure used across all CHAT-core crates
 (`talkbank-model`, `talkbank-parser`, `talkbank-transform`,
@@ -28,6 +28,26 @@ pub struct ParseError {
     pub message: String,
 }
 ```
+
+`ParseError::build(code)` returns a required-field typestate builder. Supply a
+message and a location in either order, then call `finish()` to obtain the
+diagnostic directly. Optional severity, context, suggestion and labels survive
+these transitions. Typestate guarantees field presence, not source validity;
+use the source-aware `SourceLocation` constructors when admitting byte ranges.
+
+```rust
+use talkbank_model::{ErrorCode, ParseError};
+let diagnostic = ParseError::build(ErrorCode::ParseFailed)
+    .message("Input cannot be parsed")
+    .at(0, 1)
+    .finish();
+```
+
+Migration: remove `?`/`unwrap()` after `finish()` and replace `try_finish()` with
+`finish()` after supplying both fields. `ParseErrorBuilderError` no longer
+exists; incomplete builders cannot finish. Streaming pipeline source admission
+reports the producer's original diagnostic once and returns a parse failure;
+it neither invents a source location nor fabricates an empty recovered document.
 
 ### `ErrorCode`
 

@@ -1,9 +1,105 @@
 //! Distinct-payload regeneration contracts using only parsed reference tiers.
 #![allow(clippy::expect_used, clippy::panic)]
 
-use talkbank_model::model::{DependentTier, SemanticEq};
+use talkbank_model::model::{DependentTier, SemanticEq, TranscriptName, WriteChat};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, test_error::strict_parse};
+
+/// Public consumer policy: select the first stored payload, preserve identity
+/// for borrowed access, and distinguish absent tiers from empty payloads.
+#[test]
+fn reference_tier_access_preserves_payload_identity_and_absence() {
+    use std::collections::BTreeMap;
+    use talkbank_model::ErrorCollector;
+
+    let parser = TreeSitterParser::new().expect("parser");
+    let corpus = ChatCorpus::reference().expect("reference corpus");
+    let mut witnesses = BTreeMap::<&str, (usize, usize)>::new();
+    for fixture in corpus.fixtures() {
+        let parsed =
+            strict_parse(parser.parse_chat_file(fixture.source())).expect("reference parses");
+        let admitted = parsed
+            .validate_into(&ErrorCollector::new(), TranscriptName::Anonymous)
+            .expect("tier consumers require a valid reference document");
+        let file = admitted.document();
+        // Parsing/validation and serialization have their own normalization
+        // contract. Here isolate whether tier consumption changes the document.
+        let before = file.to_chat_string();
+        for utterance in file.utterances() {
+            macro_rules! check_access {
+                ($variant:ident, $method:ident $(, $projection:ident)?) => {{
+                    let expected = utterance.dependent_tiers.iter().filter_map(|entry| {
+                        match &entry.tier {
+                            DependentTier::$variant(tier) => Some(tier$(.$projection())?),
+                            _ => None,
+                        }
+                    }).next();
+                    let actual = utterance.$method();
+                    let counts = witnesses.entry(stringify!($method)).or_default();
+                    match (actual, expected) {
+                        (Some(actual), Some(expected)) => {
+                            assert!(std::ptr::eq(actual, expected),
+                                "{}: {} must borrow the first stored payload",
+                                fixture.path().display(), stringify!($method));
+                            counts.0 += 1;
+                        }
+                        (None, None) => counts.1 += 1,
+                        _ => panic!("{}: {} confused presence and absence",
+                            fixture.path().display(), stringify!($method)),
+                    }
+                }};
+            }
+            check_access!(Mor, mor_tier);
+            check_access!(Gra, gra_tier);
+            check_access!(Wor, wor_tier);
+            check_access!(Pho, pho_tier);
+            check_access!(Mod, mod_tier);
+            check_access!(Sin, sin_tier);
+            check_access!(Act, act);
+            check_access!(Cod, cod);
+            check_access!(Com, com);
+            check_access!(Exp, exp);
+            check_access!(Add, add);
+            check_access!(Spa, spa);
+            check_access!(Sit, sit);
+            check_access!(Gpx, gpx);
+            check_access!(Int, int);
+            check_access!(Modsyl, modsyl_tier);
+            check_access!(Phosyl, phosyl_tier);
+            check_access!(Phoaln, phoaln_tier);
+            check_access!(Xphoint, xphoint_tier);
+            check_access!(Ort, ort, as_str);
+            check_access!(Eng, eng, as_str);
+            check_access!(Gls, gls, as_str);
+            check_access!(Alt, alt, as_str);
+            check_access!(Coh, coh, as_str);
+            check_access!(Def, def, as_str);
+            check_access!(Err, err, as_str);
+            check_access!(Fac, fac, as_str);
+            check_access!(Flo, flo, as_str);
+            check_access!(Par, par, as_str);
+            check_access!(Tim, tim, as_str);
+            assert_eq!(utterance.pho().as_ref(), utterance.pho_tier());
+            assert_eq!(utterance.sin().as_ref(), utterance.sin_tier());
+        }
+        assert_eq!(
+            file.to_chat_string(),
+            before,
+            "tier consumption must preserve the reference document"
+        );
+    }
+    assert_eq!(
+        witnesses.len(),
+        30,
+        "every selected accessor needs corpus evidence"
+    );
+    for (method, (present, absent)) in witnesses {
+        assert!(
+            present > 0 && absent > 0,
+            "reference corpus must witness both outcomes of {method}: present={present}, absent={absent}"
+        );
+    }
+}
 
 /// These are the API's declared conservative hints, not linguistic gold labels.
 #[test]

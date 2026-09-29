@@ -185,17 +185,40 @@ impl Drop for TerminalGuard {
 /// - `Sender<()>` - Send to this channel to cancel validation
 ///
 /// # Example
-/// ```ignore
-/// let (events, cancel) = validate_directory_streaming(&dir, &config, cache);
+/// Keep the cancellation sender alive while consuming events. A closed channel
+/// or an incomplete/aborted run must not be presented as successful validation.
+///
+/// ```no_run
+/// use std::{path::Path, sync::Arc};
+/// use talkbank_transform::validation_runner::{
+///     validate_directory_streaming, ValidationCache, ValidationConfig, ValidationEvent,
+/// };
+/// # fn observe<C: ValidationCache + Send + Sync + 'static>(
+/// #     dir: &Path, config: &ValidationConfig, cache: Option<Arc<C>>,
+/// # ) -> Result<(), String> {
+/// let (events, _cancel) = validate_directory_streaming(dir, config, cache);
 ///
 /// for event in events {
 ///     match event {
-///         ValidationEvent::Errors(e) => print_errors(&e),
-///         ValidationEvent::FileComplete(f) => update_progress(&f),
-///         ValidationEvent::Finished(stats) => print_summary(&stats),
-///         _ => {}
+///         ValidationEvent::Discovering
+///         | ValidationEvent::Started { .. }
+///         | ValidationEvent::Errors(_)
+///         | ValidationEvent::FileComplete(_)
+///         | ValidationEvent::RoundtripComplete(_) => println!("{event:?}"),
+///         ValidationEvent::Finished(stats) => {
+///             // Inspect the totals, including cancellation and invalid files;
+///             // completed processing does not mean every file was valid.
+///             println!("{stats:?}");
+///             return Ok(());
+///         }
+///         ValidationEvent::FinishedIncomplete { lost_files, .. } => {
+///             return Err(format!("validation lost {lost_files} files"));
+///         }
+///         ValidationEvent::Aborted(reason) => return Err(format!("{reason:?}")),
 ///     }
 /// }
+/// Err("validation event stream closed without a terminal event".into())
+/// # }
 /// ```
 pub fn validate_directory_streaming<C>(
     directory: &Path,
@@ -325,17 +348,17 @@ where
         return RunOutcome::ReceiverGone; // Receiver dropped
     }
 
-    if total_files == 0 {
+    let Some(total_files) = std::num::NonZeroUsize::new(total_files) else {
         let stats = ValidationStats::new(0);
         event_tx
             .send(ValidationEvent::Finished(stats.snapshot()))
             .ok();
         return RunOutcome::Finished;
-    }
+    };
 
     // Set up work queue
-    let (work_tx, work_rx) = bounded::<std::path::PathBuf>(total_files);
-    let stats = Arc::new(ValidationStats::new(total_files));
+    let (work_tx, work_rx) = bounded::<std::path::PathBuf>(total_files.get());
+    let stats = Arc::new(ValidationStats::new(total_files.get()));
 
     // One shared latch rather than N direct readers of the cancel channel; see
     // `CancelSignal` for the token-stealing bug that made cancellation reach
@@ -410,11 +433,9 @@ where
     let final_stats = stats.snapshot();
 
     // Log cache statistics for debugging
-    let hit_rate = if final_stats.total_files > 0 {
-        (final_stats.cache_hits as f64 / final_stats.total_files as f64) * 100.0
-    } else {
-        0.0
-    };
+    // The empty population returned before workers were created. Retain that
+    // admission proof rather than branching again on its statistics copy.
+    let hit_rate = (final_stats.cache_hits as f64 / total_files.get() as f64) * 100.0;
     tracing::info!(
         cache_hits = final_stats.cache_hits,
         cache_misses = final_stats.cache_misses,

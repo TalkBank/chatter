@@ -1,16 +1,361 @@
 //! Structural merge contracts from canonical source documents, not invented ASTs.
 #![allow(clippy::expect_used, clippy::panic)]
 
+#[path = "merge_timing_corpus.rs"]
+mod timing_contracts;
+
+#[path = "merge_metadata_corpus.rs"]
+mod metadata_contracts;
+
 use talkbank_model::model::{ChatFile, Header, Line, SemanticEq, TranscriptName};
 use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
 use talkbank_model::{NullErrorSink, RuleSelection, UtteranceIdx, WriteChat};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, test_error::strict_parse};
 use talkbank_transform::transcript_merge::{
-    DonorFate, DonorIdx, MergeError, MergeOrigin, ReferenceFate, ReferenceIdx,
+    DonorFate, DonorIdx, DraftOrderReason, MergeError, MergeOrigin, ReferenceFate, ReferenceIdx,
     RelativeOrderConstraint, SourceBoundDonorSelection, default_strip_tiers,
     merge_chat_files_with_donor_selection,
 };
+
+#[test]
+fn timed_reference_refuses_correspondence_that_reverses_disjoint_speech() {
+    let parser = TreeSitterParser::new().expect("parser");
+    let path = talkbank_parser_tests::repo_paths::workspace_root()
+        .join("corpus/reference/content/media-bullets.cha");
+    let source = std::fs::read_to_string(&path).expect("canonical timed speech");
+    let file = strict_parse(parser.parse_chat_file(&source)).expect("reference syntax");
+    let valid = file
+        .validate_with_policy(
+            ValidationPolicy::new(
+                RuleSelection::new(),
+                AlignmentValidation::IncludeTierAlignment,
+            ),
+            &NullErrorSink,
+            TranscriptName::for_path(&path),
+        )
+        .expect("valid reference");
+    let file = valid.document();
+    let before = file.to_chat_string();
+    let turns: Vec<_> = file.utterances().collect();
+    assert_eq!(turns.len(), 2);
+    assert!(
+        turns[0]
+            .main
+            .content
+            .bullet
+            .as_ref()
+            .expect("first timing")
+            .timing
+            .end_ms
+            < turns[1]
+                .main
+                .content
+                .bullet
+                .as_ref()
+                .expect("second timing")
+                .timing
+                .start_ms
+    );
+    let retained = turns[0].main.speaker.clone();
+    let mut reference = file.clone();
+    reference
+        .lines
+        .retain(|line| !matches!(line, Line::Utterance(u) if u.main.speaker != retained));
+    let mut donor = file.clone();
+    donor
+        .lines
+        .retain(|line| !matches!(line, Line::Utterance(u) if u.main.speaker == retained));
+    let reference_index = ReferenceIdx::new(UtteranceIdx::new(0));
+    let donor_index = DonorIdx::new(UtteranceIdx::new(0));
+    let selection =
+        SourceBoundDonorSelection::bind(file, &donor, vec![DonorIdx::new(UtteranceIdx::new(1))])
+            .expect("source-preserving speaker projection")
+            .with_relative_order(
+                &reference,
+                vec![RelativeOrderConstraint::DonorBefore {
+                    donor: donor_index,
+                    reference: reference_index,
+                }],
+            )
+            .expect("coordinate-consistent proposal is not a timing proof");
+    let result = merge_chat_files_with_donor_selection(
+        &reference,
+        &selection,
+        std::slice::from_ref(&retained),
+        &[],
+    );
+    assert!(
+        matches!(result, Err(MergeError::RelativeOrderTimingConflict { reference, donor })
+        if reference == reference_index && donor == donor_index),
+        "correspondence cannot reverse disjoint recorded speech: {result:?}"
+    );
+    let flagged = selection.with_flagged_draft_order(&reference);
+    let result = merge_chat_files_with_donor_selection(&reference, &flagged, &[retained], &[]);
+    assert!(
+        matches!(result, Err(MergeError::RelativeOrderTimingConflict { reference, donor })
+        if reference == reference_index && donor == donor_index),
+        "review-draft permission cannot override contradictory timing: {result:?}"
+    );
+    assert_eq!(
+        file.to_chat_string(),
+        before,
+        "refusal cannot retime the admitted source"
+    );
+}
+
+#[test]
+fn reference_untimed_review_draft_preserves_speech_and_visible_uncertainty() {
+    let path = talkbank_parser_tests::repo_paths::workspace_root()
+        .join("corpus/reference/core/basic-conversation.cha");
+    let parser = TreeSitterParser::new().expect("parser");
+    let text = std::fs::read_to_string(&path).expect("reference");
+    let file = strict_parse(parser.parse_chat_file(&text))
+        .expect("reference parses")
+        .validate_with_policy(
+            ValidationPolicy::new(
+                RuleSelection::new(),
+                AlignmentValidation::IncludeTierAlignment,
+            ),
+            &NullErrorSink,
+            TranscriptName::for_path(&path),
+        )
+        .expect("valid reference");
+    let source = file.document();
+    let retained = talkbank_model::SpeakerCode::new("CHI");
+    let mut reference = source.clone();
+    reference
+        .lines
+        .retain(|line| !matches!(line, Line::Utterance(u) if u.main.speaker != retained));
+    let mut donor = source.clone();
+    donor
+        .lines
+        .retain(|line| !matches!(line, Line::Utterance(u) if u.main.speaker == retained));
+    assert!(source.utterances().all(|u| u.main.content.bullet.is_none()));
+    let selection = SourceBoundDonorSelection::bind(
+        source,
+        &donor,
+        vec![
+            DonorIdx::new(UtteranceIdx::new(1)),
+            DonorIdx::new(UtteranceIdx::new(3)),
+        ],
+    )
+    .expect("original speaker projection");
+    assert!(matches!(
+        merge_chat_files_with_donor_selection(
+            &reference,
+            &selection,
+            std::slice::from_ref(&retained),
+            &[]
+        ),
+        Err(MergeError::AmbiguousUtteranceOrder { .. })
+    ));
+    let selection = selection.with_flagged_draft_order(&reference);
+    assert!(
+        matches!(
+            merge_chat_files_with_donor_selection(
+                &reference.clone(),
+                &selection,
+                std::slice::from_ref(&retained),
+                &[]
+            ),
+            Err(MergeError::InvalidRelativeOrder)
+        ),
+        "permission belongs to the bound source"
+    );
+    let merged = merge_chat_files_with_donor_selection(&reference, &selection, &[retained], &[])
+        .expect("explicitly flagged review draft");
+    assert!(merged.bullet_edits().is_empty());
+    assert_eq!(merged.draft_order_reviews().len(), 2);
+    for (i, review) in merged.draft_order_reviews().iter().enumerate() {
+        assert_eq!(review.before_output_utterance.utterances_before(), i);
+        assert!(
+            matches!(review.reason, DraftOrderReason::Utterances { reference, donor }
+            if reference == MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(i)))
+            && donor == MergeOrigin::Inserted(DonorIdx::new(UtteranceIdx::new(0))))
+        );
+    }
+    assert_eq!(
+        merged.origins(),
+        &[
+            MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(0))),
+            MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(1))),
+            MergeOrigin::Inserted(DonorIdx::new(UtteranceIdx::new(0))),
+            MergeOrigin::Inserted(DonorIdx::new(UtteranceIdx::new(1))),
+        ]
+    );
+    for (u, origin) in merged.utterances_with_origin() {
+        let original = match origin {
+            MergeOrigin::Retained(i) => reference.utterances().nth(i.utterance().raw()),
+            MergeOrigin::Inserted(i) => donor.utterances().nth(i.utterance().raw()),
+        }
+        .expect("source coordinate");
+        assert!(
+            u.semantic_eq(original),
+            "drafting cannot edit speech or invent timing"
+        );
+    }
+    let reported = merged.report(|_, _| panic!("complementary projections lose no speech"));
+    for line in &reported.file().lines {
+        if let Line::Header { header, .. } = line {
+            assert!(
+                reference.lines.iter().chain(&donor.lines).any(|original| {
+                    matches!(original, Line::Header { header: source, .. }
+                    if source.to_chat_string() == header.to_chat_string())
+                }),
+                "no invented review header"
+            );
+        }
+    }
+}
+
+#[test]
+fn missing_id_spec_refuses_merge_with_original_join_diagnostic() {
+    use talkbank_transform::transcript_merge::merge_chat_files_by_source_order;
+    let parser = TreeSitterParser::new().expect("parser");
+    let path = talkbank_parser_tests::repo_paths::workspace_root()
+        .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E522_2.cha");
+    let source = std::fs::read_to_string(path).expect("authored missing-ID spec");
+    let errors = talkbank_model::ErrorCollector::new();
+    let file = parser.parse_chat_file_streaming(&source, &errors);
+    let original_diagnostics = errors.into_vec();
+    assert_eq!(original_diagnostics.len(), 1);
+    assert_eq!(
+        original_diagnostics[0].code,
+        talkbank_model::ErrorCode::SpeakerNotDefined
+    );
+    let before = file.to_chat_string();
+    let retained = file.unique_utterance_speakers();
+    let result = merge_chat_files_by_source_order(&file, &file, &retained, &[]);
+    let Err(MergeError::InvalidParticipantJoin { diagnostics }) = result else {
+        panic!("missing identity metadata must refuse before issuing a merge: {result:?}");
+    };
+    assert_eq!(
+        diagnostics, original_diagnostics,
+        "rejoining source headers must retain the exact diagnostic and location"
+    );
+    assert_eq!(
+        file.to_chat_string(),
+        before,
+        "refusal cannot invent an ID or drop speech"
+    );
+    assert_eq!(file.utterances().count(), 2);
+}
+
+#[test]
+fn backward_timing_spec_refuses_merge_without_sorting_source_turns() {
+    use talkbank_transform::transcript_merge::{
+        merge_chat_files, merge_chat_files_by_source_order,
+    };
+    let parser = TreeSitterParser::new().expect("parser");
+    let path = talkbank_parser_tests::repo_paths::workspace_root()
+        .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E362_2.cha");
+    let source = std::fs::read_to_string(path).expect("authored backwards-timing spec");
+    // This input is syntactically parsed, not validation-admitted. Both model
+    // entry points must refuse its ordering defect before issuing a merge.
+    let file = strict_parse(parser.parse_chat_file(&source)).expect("spec syntax");
+    let starts: Vec<_> = file
+        .utterances()
+        .map(|u| {
+            u.main
+                .content
+                .bullet
+                .as_ref()
+                .expect("spec timing")
+                .timing
+                .start_ms
+        })
+        .collect();
+    assert_eq!(starts, [10000, 8000, 15000]);
+    let retained = file.unique_utterance_speakers();
+    let before = file.to_chat_string();
+    type MergeOperation = fn(
+        &ChatFile,
+        &ChatFile,
+        &[talkbank_model::SpeakerCode],
+        &[String],
+    )
+        -> Result<talkbank_transform::transcript_merge::Merged, MergeError>;
+    for operation in [
+        merge_chat_files as MergeOperation,
+        merge_chat_files_by_source_order,
+    ] {
+        let result = operation(&file, &file, &retained, &[]);
+        assert!(
+            matches!(result, Err(MergeError::SourceTimelineReversal {
+            previous: MergeOrigin::Retained(previous), current: MergeOrigin::Retained(current),
+        }) if previous == ReferenceIdx::new(UtteranceIdx::new(0))
+            && current == ReferenceIdx::new(UtteranceIdx::new(1))),
+            "reversal must identify its original neighboring turns: {result:?}"
+        );
+        assert_eq!(
+            file.to_chat_string(),
+            before,
+            "refusal must not sort or retime source"
+        );
+    }
+}
+
+#[test]
+fn canonical_mixed_timing_refuses_to_invent_retained_turn_positions() {
+    use talkbank_transform::transcript_merge::merge_chat_files;
+    let parser = TreeSitterParser::new().expect("parser");
+    let path = talkbank_parser_tests::repo_paths::workspace_root()
+        .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E732_1.cha");
+    let source = std::fs::read_to_string(&path).expect("authored mixed-timing spec");
+    let file = strict_parse(parser.parse_chat_file(&source)).expect("spec syntax");
+    let valid = file
+        .validate_with_policy(
+            ValidationPolicy::new(
+                RuleSelection::new(),
+                AlignmentValidation::IncludeTierAlignment,
+            ),
+            &NullErrorSink,
+            TranscriptName::for_path(&path),
+        )
+        .expect("E732 default-mode control is legal CHAT");
+    let file = valid.document();
+    let times: Vec<_> = file
+        .utterances()
+        .map(|u| u.main.content.bullet.as_ref().map(|b| b.timing.start_ms))
+        .collect();
+    assert_eq!(times, [Some(1000), None]);
+    let retained = file.unique_utterance_speakers();
+    let before = file.to_chat_string();
+    let result = merge_chat_files(file, file, &retained, &[]);
+    assert!(
+        matches!(result,
+        Err(MergeError::UnpositionedUtterance { origin: MergeOrigin::Retained(index) })
+            if index == ReferenceIdx::new(UtteranceIdx::new(1))),
+        "timed merge must refuse original untimed turn 1: {result:?}"
+    );
+    assert_eq!(
+        file.to_chat_string(),
+        before,
+        "refusal cannot change source timing"
+    );
+    let ordered = talkbank_transform::transcript_merge::merge_chat_files_by_source_order(
+        file,
+        file,
+        &retained,
+        &[],
+    )
+    .expect("one retained source already supplies the order of its own turns");
+    assert_eq!(
+        ordered.origins(),
+        [
+            MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(0))),
+            MergeOrigin::Retained(ReferenceIdx::new(UtteranceIdx::new(1))),
+        ]
+    );
+    for ((actual, _), original) in ordered.utterances_with_origin().zip(file.utterances()) {
+        assert!(
+            actual.semantic_eq(original),
+            "source order cannot invent a time bullet"
+        );
+    }
+    assert!(ordered.bullet_edits().is_empty());
+}
 
 #[test]
 fn reference_donor_selection_binds_identity_and_refuses_invalid_coordinates() {
@@ -97,6 +442,8 @@ fn reference_retain_all_merge_preserves_speech_and_total_provenance() {
     let mut admitted = 0;
     let mut ambiguous_speakers = 0;
     let mut stripped_tiers = 0;
+    let mut repeated_drops = 0;
+    let mut overlap_drop_refusals = 0;
     for fixture in corpus.fixtures() {
         let file =
             strict_parse(parser.parse_chat_file(fixture.source())).expect("reference parses");
@@ -214,6 +561,17 @@ fn reference_retain_all_merge_preserves_speech_and_total_provenance() {
         empty_donor_selection_preserves_participant_refusal(file);
         if retained.len() > 1 {
             reconstruct_speaker_partition(file, &parser);
+            if fixture.path().ends_with("core/basic-conversation.cha")
+                || fixture.path().ends_with("languages/eng-conversation.cha")
+                || fixture.path().ends_with("ca/overlaps.cha")
+            {
+                repeated_drops += selected_reference_speech_reports_every_drop(
+                    file,
+                    &parser,
+                    fixture.path().ends_with("ca/overlaps.cha"),
+                );
+                overlap_drop_refusals += usize::from(fixture.path().ends_with("ca/overlaps.cha"));
+            }
         }
         admitted += 1;
     }
@@ -229,9 +587,128 @@ fn reference_retain_all_merge_preserves_speech_and_total_provenance() {
         stripped_tiers > 0,
         "reference corpus must witness actual donor-tier removal"
     );
+    assert_eq!(
+        repeated_drops, 2,
+        "both conversation controls must report repeated speaker loss"
+    );
+    assert_eq!(
+        overlap_drop_refusals, 1,
+        "CA control must refuse unmatched overlap"
+    );
     eprintln!(
         "validated retain-all merge witnesses: {admitted}; ambiguous speaker refusals: {ambiguous_speakers}"
     );
+}
+
+/// Exercise the mandatory reporting transition with an empty donor projection.
+/// All speech, metadata and expected counts come from the admitted reference.
+fn selected_reference_speech_reports_every_drop(
+    source: &ChatFile,
+    parser: &TreeSitterParser,
+    leaves_unmatched_overlap: bool,
+) -> usize {
+    use talkbank_transform::transcript_merge::merge_chat_files_by_source_order;
+
+    let retained = &source
+        .utterances()
+        .next()
+        .expect("nonempty source")
+        .main
+        .speaker;
+    let mut donor = source.clone();
+    donor.lines.retain(|line| match line {
+        Line::Utterance(_) => false,
+        Line::Header { header, .. } => match header.as_ref() {
+            Header::ID(id) => &id.speaker == retained,
+            _ => true,
+        },
+    });
+    for line in &mut donor.lines {
+        if let Line::Header { header, .. } = line
+            && let Header::Participants { entries } = header.as_mut()
+        {
+            *entries = talkbank_model::model::ParticipantEntries::new(
+                entries
+                    .iter()
+                    .filter(|entry| &entry.speaker_code == retained)
+                    .cloned()
+                    .collect(),
+            );
+        }
+    }
+    let expected_drops: Vec<_> = source
+        .utterances()
+        .enumerate()
+        .filter(|(_, utterance)| &utterance.main.speaker != retained)
+        .map(|(index, _)| ReferenceIdx::new(UtteranceIdx::new(index)))
+        .collect();
+    let expected_counts: Vec<_> = source
+        .unique_utterance_speakers()
+        .into_iter()
+        .filter(|speaker| speaker != retained)
+        .map(|speaker| {
+            let count = source
+                .utterances()
+                .filter(|u| u.main.speaker == speaker)
+                .count();
+            (speaker, count)
+        })
+        .collect();
+    let result =
+        merge_chat_files_by_source_order(source, &donor, std::slice::from_ref(retained), &[]);
+    if leaves_unmatched_overlap {
+        assert!(
+            matches!(result, Err(MergeError::InvalidOutput(failure))
+            if !failure.has_internal_failure() && failure.diagnostics().iter()
+                .any(|error| error.code == talkbank_model::ErrorCode::UnbalancedOverlap)),
+            "dropping the other half of an overlap cannot produce an admitted merge"
+        );
+        return 0;
+    }
+    let merged = result.expect("explicit reference selection with no competing donor speech");
+    assert_eq!(
+        merged.dropped_not_retained().collect::<Vec<_>>(),
+        expected_drops
+    );
+    assert_eq!(merged.dropped_speakers(), expected_counts);
+    for (index, utterance) in source.utterances().enumerate() {
+        let expected = if &utterance.main.speaker == retained {
+            ReferenceFate::Retained
+        } else {
+            ReferenceFate::DroppedNotRetained {
+                speaker: utterance.main.speaker.clone(),
+            }
+        };
+        assert_eq!(
+            merged.reference_fate(ReferenceIdx::new(UtteranceIdx::new(index))),
+            Some(&expected)
+        );
+    }
+    let mut reports = Vec::new();
+    let reported = merged.report(|speaker, count| reports.push((speaker.clone(), count)));
+    assert_eq!(
+        reports, expected_counts,
+        "report transition delivers each loss exactly once"
+    );
+    let expected_speech: Vec<_> = source
+        .utterances()
+        .filter(|u| &u.main.speaker == retained)
+        .collect();
+    let output = reported.into_file();
+    assert_eq!(output.utterances().count(), expected_speech.len());
+    for (actual, expected) in output.utterances().zip(expected_speech) {
+        assert!(
+            actual.semantic_eq(expected),
+            "selected speech and tiers stay unchanged"
+        );
+    }
+    let reparsed = strict_parse(parser.parse_chat_file(&output.to_chat_string()))
+        .expect("reported selection output parses");
+    assert!(output.semantic_eq(&reparsed));
+    expected_counts
+        .iter()
+        .filter(|(_, count)| *count > 1)
+        .count()
 }
 
 /// Both projections descend from one source, so original adjacency is evidence

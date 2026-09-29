@@ -43,7 +43,14 @@ pub(crate) fn parse_other_spoken_event(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let children = extract_other_spoken_event(event);
+    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+        extract_other_spoken_event(event),
+        event.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
     surface_displaced(&children.unexpected, "other_spoken_event", source, errors);
     if !children.unexpected.is_empty() {
         return ParseOutcome::rejected();

@@ -82,7 +82,8 @@ pub trait TierAlignmentResult: Default {
 
     /// Returns `true` when no diagnostics were emitted.
     ///
-    /// A `true` value implies every row in `pairs()` is a complete 1:1 match.
+    /// This inspects diagnostics only. Public accumulation does not establish
+    /// that the rows came from an alignment producer or are complete.
     fn is_error_free(&self) -> bool {
         self.errors().is_empty()
     }
@@ -101,15 +102,13 @@ pub trait TierAlignmentResult: Default {
 ///
 /// # Example
 ///
-/// ```ignore
-/// impl AlignableTier for PhoTier {
-///     const DOMAIN: PositionalDomain = PositionalDomain::Pho;
-///     fn tier_name(&self) -> &str { "%pho tier" }
-///     fn target_count(&self) -> usize { self.len() }
-///     // ...
-/// }
+/// ```
+/// use talkbank_model::MainTier;
+/// use talkbank_model::alignment::traits::{AlignableTier, positional_align};
+/// # fn inspect<T: AlignableTier>(main: &MainTier, tier: &T) {
 ///
-/// let (pairs, errors) = positional_align(&main, &pho);
+/// let (pairs, errors) = positional_align(main, tier);
+/// # }
 /// ```
 pub trait AlignableTier {
     /// Typed source (main-tier side) index carried by alignment pairs.
@@ -242,9 +241,13 @@ pub fn positional_align<T: AlignableTier>(main: &MainTier, tier: &T) -> Position
 ///
 /// Provides method syntax for the operations in [`helpers::count`](super::helpers):
 ///
-/// ```ignore
+/// ```
+/// use talkbank_model::UtteranceContent;
+/// use talkbank_model::alignment::{PositionalDomain, traits::TierCountable};
+/// # fn inspect(content: &[UtteranceContent]) {
 /// let count = content.count_alignable(PositionalDomain::Mor);
 /// let items = content.extract_alignable(PositionalDomain::Pho);
+/// # }
 /// ```
 pub trait TierCountable {
     /// Count alignable items for the given domain.

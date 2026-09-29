@@ -23,7 +23,8 @@ impl Utterance {
     ///
     /// Runtime-derived metadata fields start in their uncomputed/empty state.
     /// Callers can then append dependent tiers in explicit serialization order
-    /// via the `with_*`/`add_dependent_tier` helpers.
+    /// via the `with_*`/`add_dependent_tier` helpers. Ordinary assembly does not
+    /// establish parser provenance, even when components retain source spans.
     pub fn new(main: MainTier) -> Self {
         Self {
             preceding_headers: SmallVec::new(),
@@ -31,10 +32,40 @@ impl Utterance {
             dependent_tiers: SmallVec::new(),
             alignments: None,
             alignment_diagnostics: Vec::new(),
-            parse_health: ParseHealthState::Clean,
+            parse_health: ParseHealthState::Unknown,
             utterance_language: UtteranceLanguage::Uncomputed,
             language_metadata: UtteranceLanguageMetadata::Uncomputed,
         }
+    }
+
+    /// Read the recorded provenance without permitting external replacement.
+    pub fn parse_health(&self) -> ParseHealthState {
+        self.parse_health
+    }
+
+    /// Enable checks on an owned construction candidate. Only the model's
+    /// consuming validation boundary may use this; failures withdraw it before
+    /// returning the payload. Never overwrite recorded parser recovery.
+    pub(crate) fn prepare_construction_validation(&mut self) {
+        if self.parse_health.is_unknown() {
+            self.forget_parse_provenance();
+            self.parse_health = ParseHealthState::Constructed;
+        }
+    }
+
+    /// Withdraw construction evidence before returning a mutable payload.
+    pub(crate) fn forget_construction_admission(&mut self) {
+        if matches!(self.parse_health, ParseHealthState::Constructed) {
+            self.forget_parse_provenance();
+        }
+    }
+
+    /// Withdraw provenance and its derived alignment results after reconstruction.
+    /// This can remove trust but cannot establish clean parser provenance.
+    pub fn forget_parse_provenance(&mut self) {
+        self.parse_health = ParseHealthState::Unknown;
+        self.alignments = None;
+        self.alignment_diagnostics.clear();
     }
 
     /// Marks one tier as parse-tainted for downstream alignment gating.
@@ -56,7 +87,10 @@ impl Utterance {
     /// Appends one dependent tier in serialization order.
     ///
     /// Ordering is significant for roundtrip fidelity and duplicate-tier diagnostics.
+    /// A new payload withdraws prior parse provenance and alignment metadata;
+    /// a parser must finish admission after collecting all tiers and recovery.
     pub fn add_dependent_tier(mut self, tier: DependentTier) -> Self {
+        self.forget_parse_provenance();
         self.dependent_tiers.push(tier.into());
         self
     }

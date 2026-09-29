@@ -9,7 +9,6 @@ Ok(
             end: 6,
         },
         word_id: None,
-        raw_text: "&~gaga",
         content: WordContents(
             [
                 Text(

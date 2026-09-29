@@ -12,6 +12,9 @@ use talkbank_transform::transcript_merge::{
     merge_chat_files_with_donor_selection,
 };
 
+#[path = "gem_pair_order_corpus.rs"]
+mod pair_order_contracts;
+
 #[test]
 fn reference_timed_gem_reconstructs_exterior_speech_without_retiming() {
     let parser = TreeSitterParser::new().expect("parser");
@@ -89,6 +92,119 @@ fn reference_timed_gem_reconstructs_exterior_speech_without_retiming() {
         "missing named extent is not evidence"
     );
 
+    let boundaries: Vec<_> = reference
+        .lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| match line {
+            Line::Header { header, .. }
+                if matches!(
+                    header.as_ref(),
+                    Header::BeginGem { .. } | Header::EndGem { .. }
+                ) =>
+            {
+                Some(index)
+            }
+            _ => None,
+        })
+        .collect();
+    let [opening, closing] = boundaries.as_slice() else {
+        panic!("reference control has exactly one paired gem");
+    };
+    let mut reversed = reference.clone();
+    let mut reversed_lines = reference.lines.to_vec();
+    reversed_lines.swap(*opening, *closing);
+    reversed.lines = reversed_lines.into();
+    let mut empty = reference.clone();
+    empty.lines = reference
+        .lines
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index <= *opening || *index >= *closing)
+        .map(|(_, line)| line.clone())
+        .collect::<Vec<_>>()
+        .into();
+    for refused in [&reversed, &empty] {
+        let before = refused.to_chat_string();
+        assert!(
+            matches!(
+                bind().with_timed_gem_exterior(refused, label),
+                Err(MergeError::InvalidGemExterior)
+            ),
+            "reversed or speechless sections cannot issue a timed extent"
+        );
+        assert_eq!(
+            refused.to_chat_string(),
+            before,
+            "refusal must not repair the input"
+        );
+    }
+
+    let gem_start = reference
+        .utterances()
+        .next()
+        .expect("gem start")
+        .main
+        .content
+        .bullet
+        .as_ref()
+        .expect("timed gem")
+        .timing
+        .start_ms;
+    let gem_end = reference
+        .utterances()
+        .last()
+        .expect("gem end")
+        .main
+        .content
+        .bullet
+        .as_ref()
+        .expect("timed gem")
+        .timing
+        .end_ms;
+    for before_gem in [true, false] {
+        let mut touching = donor.clone();
+        let index = if before_gem {
+            0
+        } else {
+            donor.utterances().count() - 1
+        };
+        let row = (&mut touching.lines)
+            .into_iter()
+            .filter_map(|line| match line {
+                Line::Utterance(row) => Some(row),
+                Line::Header { .. } => None,
+            })
+            .nth(index)
+            .expect("exterior donor row");
+        let original = row.main.content.bullet.as_ref().expect("timed donor");
+        // Deliberate input-boundary mutation, not an authorized output retiming.
+        // The new interval has no claimed source span.
+        row.main.content.bullet = Some(if before_gem {
+            talkbank_model::model::Bullet::new(original.timing.start_ms, gem_start)
+        } else {
+            talkbank_model::model::Bullet::new(gem_end, original.timing.end_ms)
+        });
+        let wire = touching.to_chat_string();
+        let selected = SourceBoundDonorSelection::bind(&touching, &touching, parents())
+            .expect("mutated donor bound to its own coordinates")
+            .with_timed_gem_exterior(&reference, label)
+            .expect("unchanged timed gem");
+        assert!(
+            matches!(
+                merge_chat_files_with_donor_selection(
+                    &reference,
+                    &selected,
+                    std::slice::from_ref(&retained),
+                    &[],
+                ),
+                Err(MergeError::AmbiguousSectionPlacement { .. })
+            ),
+            "endpoint equality is not strictly exterior placement"
+        );
+        assert_eq!(touching.to_chat_string(), wire);
+    }
+
     let merged = merge_chat_files_with_donor_selection(
         &reference,
         &selection,
@@ -149,8 +265,116 @@ fn reference_timed_gem_reconstructs_exterior_speech_without_retiming() {
         "the original speech/gem order is reconstructed, not just utterance order"
     );
     let wire = reported.file().to_chat_string();
-    let reparsed = strict_parse(parser.parse_chat_file(&wire)).expect("merged wire parses");
-    assert!(reported.file().semantic_eq(&reparsed));
+    let reconstructed: talkbank_model::model::ChatFile =
+        serde_json::from_str(&serde_json::to_string(reported.file()).expect("merged JSON"))
+            .expect("reconstruct merged JSON");
+    assert!(reported.file().semantic_eq(&reconstructed));
+    assert_eq!(reconstructed.to_chat_string(), wire);
+}
+
+/// Source timing brackets prove placement; speaker partitions do not authorize
+/// guessing which side of a section owns a turn in an unbounded gap.
+#[test]
+fn reference_timed_gem_interleaving_preserves_sections_or_refuses_ambiguity() {
+    use talkbank_model::model::TranscriptName;
+    use talkbank_model::{ErrorCollector, SpeakerCode};
+
+    let parser = TreeSitterParser::new().expect("parser");
+    let source_text = std::fs::read_to_string(
+        workspace_root().join("corpus/reference/edge-cases/timed-gem-interleaving.cha"),
+    )
+    .expect("authored timed section reference");
+    let mut source = strict_parse(parser.parse_chat_file(&source_text)).expect("reference parses");
+    let errors = ErrorCollector::new();
+    source.validate_with_alignment(&errors, TranscriptName::Anonymous);
+    assert!(
+        errors.is_empty(),
+        "reference validates: {:?}",
+        errors.to_vec()
+    );
+
+    for retained in [SpeakerCode::new("CHI"), SpeakerCode::new("MOT")] {
+        let mut reference = source.clone();
+        reference.lines.retain(|line| match line {
+            Line::Utterance(u) => u.main.speaker == retained,
+            Line::Header { .. } => true,
+        });
+        let mut donor = source.clone();
+        donor.lines.retain(|line| match line {
+            Line::Utterance(u) => u.main.speaker != retained,
+            Line::Header { header, .. } => !matches!(
+                header.as_ref(),
+                Header::BeginGem { .. } | Header::EndGem { .. } | Header::LazyGem { .. }
+            ),
+        });
+        // This projection intentionally supplies speech only. It is bound to
+        // its own coordinates, not claimed to preserve the removed sections.
+        let parents = (0..donor.utterances().count())
+            .map(|i| DonorIdx::new(UtteranceIdx::new(i)))
+            .collect();
+        let selection = SourceBoundDonorSelection::bind(&donor, &donor, parents)
+            .expect("unchanged selected donor");
+        let source_order = merge_chat_files_with_donor_selection(
+            &reference,
+            &selection,
+            std::slice::from_ref(&retained),
+            &[],
+        );
+        assert!(
+            matches!(
+                source_order,
+                Err(MergeError::AmbiguousSectionPlacement { .. })
+            ),
+            "source-order bounds cannot infer section placement within an anchor gap"
+        );
+        let merged = talkbank_transform::transcript_merge::merge_chat_files(
+            &reference,
+            &donor,
+            std::slice::from_ref(&retained),
+            &[],
+        );
+        if retained.as_str() == "MOT" {
+            assert!(
+                matches!(merged, Err(MergeError::AmbiguousSectionPlacement { .. })),
+                "the 10ms donor turn cannot be placed around a section bounded by 5ms and 55ms"
+            );
+            continue;
+        }
+        let forward = merged.expect("both section boundaries have ordering witnesses");
+        let reverse = talkbank_transform::transcript_merge::merge_chat_files(
+            &donor,
+            &reference,
+            &[SpeakerCode::new("MOT")],
+            &[],
+        )
+        .expect("section-bearing donor uses the same timing proof");
+        fn structural(file: &talkbank_model::model::ChatFile) -> impl Iterator<Item = &Line> {
+            file.lines.iter().filter(|line| match line {
+                Line::Utterance(_) => true,
+                Line::Header { header, .. } => matches!(
+                    header.as_ref(),
+                    Header::BeginGem { .. } | Header::EndGem { .. } | Header::LazyGem { .. }
+                ),
+            })
+        }
+        for merged in [forward, reverse] {
+            assert!(merged.bullet_edits().is_empty());
+            assert!(merged.draft_order_reviews().is_empty());
+            let reported = merged.report(|_, _| panic!("complementary projections omit no speech"));
+            let mut actual = structural(reported.file());
+            let mut expected = structural(&source);
+            loop {
+                match (actual.next(), expected.next()) {
+                    (Some(actual), Some(expected)) => assert!(
+                        actual.semantic_eq(expected),
+                        "speech, dependent tiers, exact timing and section order all survive"
+                    ),
+                    (None, None) => break,
+                    _ => panic!("structural event count changed"),
+                }
+            }
+        }
+    }
 }
 
 #[test]

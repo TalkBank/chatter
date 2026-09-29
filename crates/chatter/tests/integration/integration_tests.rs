@@ -1153,29 +1153,14 @@ fn strict_linkers_on_rejects_orphan_self_completion() -> Result<(), TestError> {
 /// spec example can express this input.
 const REPLACEMENT_AT_EOF_WITHOUT_NEWLINE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello [: ] .";
 
-/// E302 fires, and it is the trailing newline that decides.
+/// Empty replacements remain invalid with or without the final newline.
 ///
-/// SURVIVES a type change, and says which category: this reaches the OUTSIDE
-/// world, a subprocess over real file bytes, and the fact it pins is about
-/// bytes a `&str` in a test would not preserve through the fixture pipeline.
-///
-/// # Why this test exists at all
-///
-/// E302 was registered `not_implemented` until 2026-09-08, and that was false:
-/// with no final newline the main tier is left flattened at EOF, the whole-file
-/// path routes it through the fragment entry point, and its admitted recovery walk
-/// reports the MISSING `word_segment` that `[: ]` induces. The status could
-/// not be corrected by writing a spec example, because the corpus generator
-/// normalises exactly the byte this input depends on, so
-/// `UNDEMONSTRATED` in `error_code_demonstration.rs` names this test as what
-/// stands in for one.
-///
-/// The negative half is not decoration. It is the only thing that shows the
-/// missing newline is load-bearing rather than incidental: add it and the same
-/// line reports E376 instead, so a future change that made the parser tolerant
-/// of a missing final newline would silently take E302's only route away.
+/// This is a file-byte boundary the fixture generator normalizes away. The
+/// source-bound whole-file traversal now retains the replacement's structural
+/// diagnostic in both cases; do not reintroduce the old fragment reparse merely
+/// to preserve its E302 diagnostic identity.
 #[test]
-fn e302_needs_a_file_that_does_not_end_in_a_newline() -> Result<(), TestError> {
+fn empty_replacement_at_eof_is_rejected_with_or_without_newline() -> Result<(), TestError> {
     let dir = tempdir()?;
 
     let at_eof = dir.path().join("no_final_newline.cha");
@@ -1185,7 +1170,7 @@ fn e302_needs_a_file_that_does_not_end_in_a_newline() -> Result<(), TestError> {
         .arg(&at_eof)
         .assert()
         .failure()
-        .stderr(predicate::str::contains("E302"));
+        .stderr(predicate::str::contains("E376"));
 
     let with_newline = dir.path().join("with_final_newline.cha");
     fs::write(
@@ -1197,7 +1182,7 @@ fn e302_needs_a_file_that_does_not_end_in_a_newline() -> Result<(), TestError> {
         .arg(&with_newline)
         .assert()
         .failure()
-        .stderr(predicate::str::contains("E302").not());
+        .stderr(predicate::str::contains("E376"));
 
     Ok(())
 }

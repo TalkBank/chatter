@@ -1,6 +1,6 @@
 # Adjudication Workflow
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 > Historical design: references below to the `chatter merge` CLI describe the
 > former command. `merge`, `pipeline`, and `batch` have been removed.
@@ -40,6 +40,23 @@ Companion documents:
   adjudication code lives.
 
 ## Why batch-then-review, and not real-time
+
+The finite reference workflow checks the sanity-scan handoff using unchanged
+basic-conversation, regular-group and phonological-group CHAT. The ordinary
+dialogue and regular groups do not trigger the default threshold; the nested
+phonological example has five anchor words and three inserted-speaker words
+and does trigger an advisory suggestion. A higher threshold suppresses it.
+This is a counting and workflow contract, **not evidence of an identity swap**.
+The test persists the pending suggestion, explicitly accepts it through the
+operator interface, admits the recorded mapping, and reparses its CHAT replay.
+It verifies retained content and the requested speaker change. Incomplete roles
+and unsupported mapping shapes yield no suggestion. No scan result silently
+changes the original override or replaces operator review.
+The same reference controls explicitly remove each speaker through the mapping
+wire API and CHAT replay. Retained turns and dependent tiers remain semantically
+unchanged, but the scan must refuse to infer a swap when either observed speaker
+population is absent. Parseable transformed CHAT alone does not establish that
+the heuristic has enough evidence.
 
 Every adjudication point in the pipeline is **per-session local**:
 the operator's decision affects *this session's* output and no
@@ -292,14 +309,16 @@ choice = { kind = "accept-suggested", note = "verified by listening" }
 [[decisions]]
 session_id = "session-103-t1-parent"
 kind = "parent-role-lookup"
-choice = { kind = "override", adult_roles = { PAR0 = { code = "FAT", tag = "Father" } }, note = "per contributor data sheet" }
+choice = { kind = "choose-role", adult_roles = { PAR0 = { code = "FAT", tag = "Father" } }, note = "per contributor data sheet" }
 ```
 
-The adjudication tool reads the scripted file, matches decisions
-to pending entries by `session_id` + `kind`, applies each as
-though the operator had typed it. If a scripted decision has no
-matching pending entry, or a pending entry has no scripted
-decision, the run aborts with a clear error.
+The current library reads decisions in file order and requires each consumed
+decision's `session_id` to match the next pending entry. The pending entry's
+typed kind determines which decision shapes are admissible; the scripted
+entry's `kind` is descriptive metadata, not an additional matching key.
+A missing decision, mismatched next session, or incompatible decision shape
+refuses without consuming that pending request. Do not assume that unconsumed
+trailing scripted decisions are rejected.
 
 ## The prompter abstraction (testability)
 
@@ -617,10 +636,40 @@ fallback shell-script form for the v0 pipeline.
 
 ## Test coverage
 
-Every behavior of `chatter adjudicate` is tested via the
-scripted-prompter abstraction. See the
-[Test Plan](./merge-test-plan.md) (TBD section L4) for the
-test inventory. Coverage spans:
+The library's current failure contract is covered by a canonical-reference
+workflow: exhausted input, an out-of-order session, or an incompatible decision
+retains the failing request and all later requests field-for-field in their wire
+representation and in their original order. Accepted overrides remain in the
+in-memory document, and a retry resolves only the remaining requests. A private
+queue owner borrows the pending destination for the run; its only advancement
+operation first obtains and successfully applies a decision. Dropping the owner
+restores the uncommitted suffix on either success or error.
+
+Before an override can be committed, a private prepared-decision state admits it
+through the existing `to_mapping_spec` conversion. A rename without its required
+adult role yields `InvalidDecisionMapping`, retaining the pending suffix. This
+proves conversion readiness, not complete CHAT validity, role vocabulary, or
+collision freedom. Raw public override records still require conversion at
+their consumers. The CLI reports this refusal with exit status 2 before writing
+either file.
+
+This is an in-memory contract, not a transactional filesystem guarantee. The
+CLI currently persists the override and pending files only after a successful
+run. The corpus supplies real parsed speaker identities; scripted role choices
+are authored test inputs, not inferred facts about those recordings.
+
+The canonical sanity-scan reference also exercises the real TOML boundary:
+pending suggestions survive file write/read field-for-field, both readers
+refuse an unsupported schema version rather than silently defaulting, and an
+explicit scripted TOML acceptance is required before mapping replay. This
+checks individual file operations, not atomicity across the pending and override
+files or crash recovery.
+
+The list below is the design's target inventory, not a claim that all listed
+behaviors are implemented or tested. Current tests exercise supported accept,
+override, and role-choice paths plus the in-memory failure/resume contract above.
+Defer and block decisions remain planned. See the
+[Test Plan](./merge-test-plan.md) for the broader intended inventory:
 
 - Each adjudication kind's happy path (operator accepts
   suggested, decision written to override file)

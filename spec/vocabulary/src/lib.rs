@@ -31,6 +31,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
+pub mod check_assessment;
 pub mod frontmatter;
 pub mod observations;
 pub mod paths;

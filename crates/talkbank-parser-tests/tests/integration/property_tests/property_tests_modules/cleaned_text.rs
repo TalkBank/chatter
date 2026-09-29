@@ -61,21 +61,7 @@ proptest! {
         }
     }
 
-    // TODO(parser-tests): Refactor annotation testing after parse_word() API stabilizes
-    // Status: Blocked - parse_word() API changed; test needs to use parse_annotated_word()
-    // Context: parse_word() returns bare Word; annotations are parsed at utterance level
-    // Fix: Either remove this test or create parse_annotated_word() in ChatParser trait
-    /// Verifies cleaned text excludes bracketed annotation syntax.
-    #[test]
-    #[ignore = "Needs refactoring - parse_word() now returns bare Word without annotations"]
-    fn cleaned_text_no_brackets(text in "[a-z]+") {
-        let input = format!("{} [: annotation]", text);
-        for parser in parser_suite_for_proptest().unwrap() {
-            if let Ok(word) = parser.parse_word(&input) {
-                // Property: cleaned text should not contain annotations
-                prop_assert!(!word.cleaned_text().contains('['));
-                prop_assert!(!word.cleaned_text().contains(']'));
-            }
-        }
-    }
+    // Replacement annotations belong to utterance structure, not the bare-word
+    // parser. The canonical reference-word fragment workflow checks their
+    // lexical projections with mandatory authored replacement witnesses.
 }

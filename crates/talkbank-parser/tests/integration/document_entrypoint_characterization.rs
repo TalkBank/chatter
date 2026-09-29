@@ -167,8 +167,8 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
 fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
     let (tags, diags) = parse_lines_and_diags(STRAY_TOP_LEVEL_DATE);
 
-    // The entry point recovers the `@Date:` ERROR node into a `Header::Date`
-    // line in file order, so the model still carries every header line.
+    // An ERROR's text does not establish a Date header. Keep its diagnostic,
+    // but do not fabricate a typed header by scanning its prefix.
     assert_eq!(
         tags,
         vec![
@@ -177,10 +177,9 @@ fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
             "Header(Languages)",
             "Header(Participants)",
             "Header(ID)",
-            "Header(Date)",
             "Header(End)",
         ],
-        "stray @Date: must be recovered into a Date header line in file order"
+        "unstructured @Date: must not manufacture a Date header"
     );
 
     // EXACTLY one diagnostic: E316 unparsable content for the @Date: ERROR
@@ -211,7 +210,7 @@ fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
         "E316 must be at the exact @Date: ERROR node span (87..93)"
     );
     assert_eq!(
-        e316.3, "Unparsable content: tree-sitter could not parse '@Date:'",
+        e316.3, "Unparsable content at file level: '@Date:'",
         "E316 message must match the backstop's exact wording"
     );
 }
@@ -256,13 +255,9 @@ fn trailing_garbage_after_end_emits_single_backstop_e316() {
 }
 
 #[test]
-fn double_end_routes_captured_direct_child_error_to_e501() {
-    // Complement to the backstop-only case: here the first `@End` becomes an
-    // ERROR that IS a direct `full_document` child in the line-repeat region, so
-    // the migration's `child_3` loop captures it as `NodeSlot::Error` and routes
-    // it through `handle_top_level_error` -> `analyze_error_node`, yielding E501.
-    // Pinned from the same OLD-vs-NEW comparison (byte-identical): E501 at the
-    // first-@End span (43..48).
+fn double_end_reports_captured_structural_recovery_once() {
+    // The first @End is an ERROR, not a typed end-header field. Report that
+    // actual CST span without reclassifying its text into an E501 rule.
     let (tags, diags) = parse_lines_and_diags(DOUBLE_END);
 
     assert_eq!(
@@ -285,7 +280,7 @@ fn double_end_routes_captured_direct_child_error_to_e501() {
     let (code, start, end, _msg) = &diags[0];
     assert_eq!(
         (code.as_str(), *start, *end),
-        ("E501", 43, 48),
-        "the captured direct-child ERROR must route to E501 at the first @End span (43..48)"
+        ("E316", 43, 48),
+        "the captured direct-child ERROR keeps its actual span (43..48)"
     );
 }

@@ -490,6 +490,9 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Expor
                     Some(FrontendFileStatus::ParseError { message }) => {
                         format!("Parse error: {message}")
                     }
+                    Some(FrontendFileStatus::InternalFailure { message }) => {
+                        format!("Internal failure: {message}")
+                    }
                     Some(FrontendFileStatus::RoundtripFailed { reason, .. }) => {
                         format!("Roundtrip failed: {reason}")
                     }

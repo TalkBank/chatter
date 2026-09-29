@@ -546,16 +546,19 @@ fn malformed_tier_prefixes_report_the_complete_source_line() {
             .map(|error| error.location.span)
             .collect();
         match example.claim {
-            Claim::Violates => assert_eq!(spans, vec![Span::from_usize(start, start + line.len())]),
+            // The canonical parser now rejects these through E316. re2c owns
+            // a lexer-level malformed-header token and retains E602 honestly.
+            Claim::Violates | Claim::SubsumedBy(_) => {
+                assert_eq!(spans, vec![Span::from_usize(start, start + line.len())]);
+            }
             Claim::Legal => assert!(spans.is_empty()),
-            _ => panic!("E602 boundary claim needs an explicit test disposition"),
         }
     }
 }
 
-/// Preserve the canonical recovery locations, as well as rejecting the syntax.
+/// Report the grammar-owned opening token, without imitating CST recovery.
 #[test]
-fn glued_replacement_diagnostics_match_the_canonical_bracket_locations() {
+fn glued_replacement_reports_its_own_opening_token() {
     use talkbank_model::{ChatParser, ErrorCode, Span};
     use talkbank_spec_vocabulary::frontmatter::Claim;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -568,7 +571,6 @@ fn glued_replacement_diagnostics_match_the_canonical_bracket_locations() {
         .iter()
         .find(|spec| spec.filename == "E375.md")
         .unwrap();
-    let canonical = TreeSitterParser::new().unwrap();
     let re2c = talkbank_parser_re2c::Re2cParser::new();
     fn diagnostics(parser: &impl ChatParser, source: &str) -> Vec<(String, Span)> {
         let errors = ErrorCollector::new();
@@ -599,15 +601,15 @@ fn glued_replacement_diagnostics_match_the_canonical_bracket_locations() {
     );
     for example in examples {
         let source = example.chat.as_str();
-        let expected = diagnostics(&canonical, source);
-        assert_eq!(
-            expected.len(),
-            if matches!(example.claim, Claim::Violates) {
-                2
-            } else {
-                0
-            }
-        );
+        let expected = if matches!(example.claim, Claim::Legal) {
+            Vec::new()
+        } else {
+            let start = source.find("[: foo]").expect("authored replacement opener");
+            vec![(
+                ErrorCode::ContentAnnotationParseError.to_string(),
+                Span::from_usize(start, start + 2),
+            )]
+        };
         assert_eq!(diagnostics(&re2c, source), expected);
     }
 }

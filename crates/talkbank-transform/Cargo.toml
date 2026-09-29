@@ -39,6 +39,7 @@ thiserror = { workspace = true } #unified
 toml = { workspace = true }
 tracing = { workspace = true }
 unicode-normalization = { workspace = true }
+unicode-segmentation = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

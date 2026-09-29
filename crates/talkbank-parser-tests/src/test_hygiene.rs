@@ -142,9 +142,6 @@ impl Resolved {
 /// Each entry states which of the categories in the repo's testing doctrine it
 /// survives under; the same sentence is in the test's own docstring.
 pub const ACCEPTED_VACUOUS: &[&str] = &[
-    // Behaviour a signature cannot describe: guards integer overflow on large
-    // inputs, which no return type states and no lint catches.
-    "crates/talkbank-transform/src/num_words/ordinal_year_eng.rs::ordinal_large_values_dont_crash",
     // Wire format, documentation sense: the assertion is that the book's
     // published example still COMPILES against the current public API.
     "crates/talkbank-transform/tests/integration/book_library_usage_examples.rs::book_custom_error_handling",

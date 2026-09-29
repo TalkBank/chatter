@@ -1,95 +1,13 @@
-//! Diagnostic KIND and validation PROFILE: the two orthogonal axes that
-//! replace a single, overloaded [`Severity`](super::Severity) bucket.
+//! Intrinsic diagnostic categories and optional presentation profiles.
 //!
-//! # Background
+//! `spec/codes/error-codes.toml` owns the per-code classification; regenerate
+//! the exhaustive lookup with `just spec-gen`. Presentation severity is not a
+//! validity verdict: an internal failure blocks successful admission but says
+//! nothing about whether the source is valid CHAT. Consumers must inspect the
+//! category before suppressing or downgrading diagnostics for display.
 //!
-//! Before this module, `Severity` had exactly two variants (`Error`,
-//! `Warning`) and the `Warning` bucket silently mashed together five
-//! unrelated concerns (policy-downgraded invalidity, model incompleteness,
-//! parse-mode recovery, deprecation, and style), decided ad hoc at roughly
-//! three dozen emit sites with no central registry recording the decision.
-//! Full history and rationale:
-//! `docs/design/2026-07-13-diagnostic-kind-and-profile-refactor.md`
-//! (private meta-repo).
-//!
-//! This module separates the two axes a diagnostic actually varies along:
-//!
-//! - [`DiagnosticKind`] (Axis 1): what the diagnostic intrinsically IS, a
-//!   property of the *rule*. Looked up per [`ErrorCode`] via [`kind_of`],
-//!   an EXHAUSTIVE match with no wildcard arm, so a new `ErrorCode` variant
-//!   that nobody assigned a kind is a compile error, not a silent gap.
-//! - [`ValidationProfile`] (Axis 2): who is asking, a property of the
-//!   *consumer* (never of the file, never of the rule).
-//!
-//! [`Severity`](super::Severity) is DERIVED from the two, via [`severity`],
-//! and is never stored directly on a diagnostic. `None` means the finding
-//! is not surfaced as an error or a warning under that profile at all (for
-//! example an [`Unmodeled`](DiagnosticKind::Unmodeled) finding, which is a
-//! chatter coverage gap, never a file fault, and so never renders as
-//! [`Severity::Error`](super::Severity::Error) or
-//! [`Severity::Warning`](super::Severity::Warning) under any profile).
-//!
-//! # Landing state (2026-07-31)
-//!
-//! [`kind_of`] is now GENERATED from `spec/errors/*.md`'s required
-//! `- **Kind**:` metadata field (`just spec-gen`, in
-//! `spec/runtime-tools`), not hand-written: the per-code adjudication this
-//! module used to defer to a hand-curated proposal table now lives as
-//! ordinary spec content, read directly off the same file that already
-//! documents the code's `## CHAT Rule` / `## Notes`, so the two cannot
-//! independently drift. The generated match is in
-//! `generated_diagnostic_kind.rs`; do not hand-edit it, and see that
-//! file's header for the regeneration command.
-//!
-//! `ErrorCode` and `spec/errors/` are two independently hand-maintained
-//! sets, and the generator FAILS CLOSED on any divergence between them
-//! (a variant with no spec file, or a spec-named code with no matching
-//! variant) instead of defaulting a gap to `Invalidity`: see that
-//! generator's module docs. The two sets are exhaustively reconciled as of
-//! this landing: of the 221 `ErrorCode` variants (226 minus 5 retired the
-//! same day: `E366`, `E369`, `E700`, `E703`, `W999`/`LegacyWarning`, none
-//! of which had any emit site anywhere in the workspace), 218 are
-//! `Invalidity`, 2 (`CodeGluedToFollowingContent` / E757,
-//! `PrefixedFormGluedToPrecedingWord` / E764) are `Style`, and 1
-//! (`InvalidTimTierFormat` / E603) is `Unmodeled`. Every variant has
-//! exactly one spec file naming it.
-//!
-//! No [`ValidationProfile`] is wired into any consumer: this module is
-//! still purely additive and changes nothing about `chatter validate`'s
-//! behaviour, because nothing calls [`kind_of`] or [`severity`] outside
-//! this module's own tests.
-//!
-//! A caveat on the "warnings don't matter" argument for why the exact
-//! current classification is safe to land inert: [`Severity::Warning`](super::Severity::Warning)
-//! is NOT structurally unreachable through `chatter validate`. A handful of
-//! production call sites construct it directly today (e.g.
-//! `ErrorCode::InvalidTimTierFormat` in
-//! `model/file/utterance/validate.rs`, `ErrorCode::SpeakerNotFoundInParticipants`
-//! in `model/content/main_tier/mod.rs`, and `ErrorCode::TierValidationError`'s
-//! two alignment-diagnostic helpers). What IS true, checked against each
-//! of those sites: none of them has been observed to independently flip a
-//! file's overall pass/fail verdict, either because the same call site
-//! that reports the warning also reports a `Severity::Error` for the same
-//! condition at the same span, or because the triggering condition
-//! (`ParseHealthState::Unknown`, the default for content never touched by
-//! a parser) does not occur on content that reached `chatter validate`
-//! through its real parse path. See the adjudication table's "Notable
-//! Findings" section for the full citations; do not repeat the flatter
-//! "unreachable" claim elsewhere without that caveat.
-//!
-//! `Style`'s derived [`severity`] is silent under `Strict`/`Editor`/
-//! `Pipeline` (surfacing only under an opt-in `Lint` profile), which is in
-//! LATENT TENSION with `E757`/`E764` each being `Layer: validation, Status:
-//! implemented` today and with the project rule that CHECK-parity style
-//! rules follow CHECK as hard errors. It is inert tension only: no
-//! consumer reads `severity()` yet, so `chatter validate` is unaffected.
-//! Resolving it (either by giving `Style` a different derivation under
-//! `Strict`, or by accepting that a future wiring-up would change these two
-//! codes' behaviour) is the maintainer's call, not this generator's.
-//!
-//! Reclassifying a code's `Kind`, or wiring a non-`Strict` profile into a
-//! consumer, is the maintainer's call: change the code's spec file, then
-//! regenerate.
+//! Profiles define presentation policy. Existing diagnostic producers also
+//! supply explicit severities; this module does not silently override them.
 
 use super::codes::ErrorCode;
 use super::source_location::Severity;
@@ -106,11 +24,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticKind {
+    /// The tool failed. Blocks admission under every profile without asserting
+    /// that the input is invalid CHAT.
+    InternalFailure,
     /// Violates the spec, or the construct does not make sense. The
-    /// CHECK-equivalent axis, and the ONLY kind that bears on "is this
-    /// valid CHAT". Most codes are classified this way; see the module
-    /// docs' "Landing state" section for the current counts and the small
-    /// set of exceptions.
+    /// ONLY kind that asserts the input is not valid CHAT.
     Invalidity,
     /// Chatter preserves the construct but does not yet interpret it: a
     /// chatter coverage gap (e.g. an unsupported `@Media` value that is
@@ -129,9 +47,11 @@ pub enum DiagnosticKind {
 ///
 /// This is Axis 2 of the two-axis model documented in the module docs.
 /// [`severity`] derives a [`Severity`] from a [`DiagnosticKind`] plus one
-/// of these. As of the current landing only [`Strict`](Self::Strict) is
-/// wired into any consumer; the others are part of the type shape this
-/// module establishes, not yet exercised behaviour.
+/// of these. These are library policy projections, not a promise of selectable
+/// CLI or editor modes. Existing consumers can retain producer-supplied
+/// severities independently; asking for a projection does not mutate a finding
+/// or issue a validity certificate. Canonical diagnostic tests exercise the
+/// projections on findings produced from specification examples.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ValidationProfile {
@@ -175,31 +95,19 @@ pub fn kind_of(code: ErrorCode) -> DiagnosticKind {
 /// on a separate advisory stream elsewhere; that is out of scope for this
 /// function, which only ever answers the error/warning/silent question).
 ///
-/// Severity is deliberately never stored on a diagnostic alongside its
-/// kind; storing a mirrored, independently-mutable copy is exactly the
-/// ad-hoc-decision problem this module exists to remove. Compute it here,
-/// at the point where a profile is actually known.
-///
 /// This is an exhaustive match over every `(DiagnosticKind, ValidationProfile)`
 /// pair, so a newly added variant on either enum is a compile error here
-/// too. Only the `Invalidity` row under `Strict` is exercised by any
-/// consumer as of the current landing (see the module docs); the remaining
-/// entries follow directly from the design doc's stated intent for each
-/// profile but are UNVALIDATED by any running consumer and are provisional
-/// pending the maintainer's adjudication of the open profile-semantics
-/// questions in that doc.
+/// too. Internal failures are visible under every profile; they never become
+/// validity claims through presentation policy.
 pub fn severity(kind: DiagnosticKind, profile: ValidationProfile) -> Option<Severity> {
     match (kind, profile) {
-        // Invalidity is the CHECK-equivalent axis: Strict is the
-        // publication/roundtrip gate, so it blocks. This is the only
-        // (kind, profile) pair any consumer exercises today.
+        (DiagnosticKind::InternalFailure, _) => Some(Severity::Error),
+        // Strict validation blocks on invalidity.
         (DiagnosticKind::Invalidity, ValidationProfile::Strict) => Some(Severity::Error),
         // Editor/LSP recovers from invalidity rather than rejecting the
         // document outright, so the same finding renders as a warning.
         (DiagnosticKind::Invalidity, ValidationProfile::Editor) => Some(Severity::Warning),
-        // Pipeline profiles block on "hard" invalidity; every code is
-        // currently classified Invalidity (nothing has been adjudicated
-        // into a softer kind yet), so Pipeline agrees with Strict for now.
+        // Pipeline profiles also block on invalidity.
         (DiagnosticKind::Invalidity, ValidationProfile::Pipeline) => Some(Severity::Error),
         // Lint is an opt-in STYLE pass layered on top of whichever base
         // profile already reports invalidity; it does not additionally
@@ -213,7 +121,7 @@ pub fn severity(kind: DiagnosticKind, profile: ValidationProfile) -> Option<Seve
         | (DiagnosticKind::Unmodeled, ValidationProfile::Lint) => None,
         // Deprecation: valid now, discouraged; a warning under every
         // profile until a future sunset mechanically flips the code's
-        // kind to Invalidity (see the design doc's open question 3).
+        // kind to Invalidity.
         (DiagnosticKind::Deprecation, ValidationProfile::Strict)
         | (DiagnosticKind::Deprecation, ValidationProfile::Editor)
         | (DiagnosticKind::Deprecation, ValidationProfile::Pipeline) => Some(Severity::Warning),
@@ -233,14 +141,31 @@ pub fn severity(kind: DiagnosticKind, profile: ValidationProfile) -> Option<Seve
 mod tests {
     use super::*;
 
+    /// Presentation policy must never suppress or downgrade tool failure.
+    #[test]
+    fn internal_failure_is_an_error_under_every_profile() {
+        for profile in [
+            ValidationProfile::Strict,
+            ValidationProfile::Editor,
+            ValidationProfile::Pipeline,
+            ValidationProfile::Lint,
+        ] {
+            assert_eq!(
+                severity(DiagnosticKind::InternalFailure, profile),
+                Some(Severity::Error)
+            );
+        }
+    }
+
     /// Pins the exact spec-derived classification: every code is
     /// `Invalidity` EXCEPT the codes named here. A change to this test is a
-    /// deliberate reclassification (edit the code's spec file's `Kind`
-    /// bullet, regenerate, then update this list to match) and must never
+    /// deliberate reclassification (edit the code registry's `kind`,
+    /// regenerate, then update this list to match) and must never
     /// be a silent drive-by edit made only to turn the test green.
     #[test]
     fn kind_of_matches_the_spec_derived_classification() {
         let non_invalidity: &[(ErrorCode, DiagnosticKind)] = &[
+            (ErrorCode::InternalError, DiagnosticKind::InternalFailure),
             (ErrorCode::InvalidTimTierFormat, DiagnosticKind::Unmodeled), // E603
             (
                 ErrorCode::CodeGluedToFollowingContent,

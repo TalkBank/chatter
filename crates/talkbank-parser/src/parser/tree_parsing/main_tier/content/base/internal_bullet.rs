@@ -1,19 +1,19 @@
 //! Parsing for media bullets embedded in main-tier content.
 
 use crate::error::{ErrorSink, Span};
-use crate::generated_traversal::{AsRawNode, BulletNode};
+use crate::generated_traversal::{AsRawNode, BulletNode, SourceBound};
 use crate::model::UtteranceContent;
 use crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps;
 use talkbank_model::ParseOutcome;
 
 /// Converts a structured `bullet` node into `UtteranceContent::InternalBullet`.
-pub(crate) fn parse_internal_bullet(
-    typed: BulletNode<'_>,
-    source: &str,
+pub(crate) fn parse_internal_bullet<'tree>(
+    typed: SourceBound<'tree, '_, BulletNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
-    let (start_ms, end_ms) = match parse_bullet_node_timestamps(typed, source, errors) {
+    let source = typed.source();
+    let (start_ms, end_ms) = match parse_bullet_node_timestamps(typed, errors) {
         Ok(times) => times,
         // "could not extract timestamps" said nothing a reader could act on,
         // and its context carried an empty string where the bullet text

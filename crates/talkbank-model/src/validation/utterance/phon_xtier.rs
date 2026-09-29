@@ -106,7 +106,7 @@ fn source_word(source: Option<&PhoTier>, i: usize) -> Option<&str> {
 
 fn validate_syllabification(utterance: &Utterance, errors: &impl ErrorSink) {
     if let Some(modsyl) = utterance.modsyl_tier() {
-        let recon_clean = utterance.parse_health.can_align_modsyl_to_mod();
+        let recon_clean = utterance.parse_health().can_align_modsyl_to_mod();
         validate_syl_tier(
             modsyl,
             utterance.mod_tier(),
@@ -117,7 +117,7 @@ fn validate_syllabification(utterance: &Utterance, errors: &impl ErrorSink) {
         );
     }
     if let Some(phosyl) = utterance.phosyl_tier() {
-        let recon_clean = utterance.parse_health.can_align_phosyl_to_pho();
+        let recon_clean = utterance.parse_health().can_align_phosyl_to_pho();
         validate_syl_tier(
             phosyl,
             utterance.pho_tier(),
@@ -230,7 +230,7 @@ fn validate_phoaln(utterance: &Utterance, errors: &impl ErrorSink) {
     let Some(phoaln) = utterance.phoaln_tier() else {
         return;
     };
-    let reconstruction_clean = utterance.parse_health.can_align_phoaln();
+    let reconstruction_clean = utterance.parse_health().can_align_phoaln();
     for (i, binding) in utterance.phoaln_word_bindings().enumerate() {
         let word = binding.word();
         // E739: a pair with both sides null (∅↔∅) is never legal. (Missing-arrow
@@ -361,7 +361,7 @@ fn validate_xphoint(utterance: &Utterance, errors: &impl ErrorSink) {
     };
     let span = xphoint.span;
     let pho_tier = utterance.pho_tier();
-    let reconstruction_clean = utterance.parse_health.can_align_xphoint_to_pho();
+    let reconstruction_clean = utterance.parse_health().can_align_xphoint_to_pho();
 
     // E746: one group per %pho word.
     if reconstruction_clean

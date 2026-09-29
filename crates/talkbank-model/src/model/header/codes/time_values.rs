@@ -262,12 +262,12 @@ fn parse_duration_segments(duration: &str) -> Option<Vec<TimeSegment>> {
             continue;
         }
         let parsed = if let Some((left, right)) = segment.split_once('-') {
-            let start = parse_time_value(left)?;
-            let end = parse_time_value(right)?;
+            let start = parse_time_value_with_pair(left, TimePairMeaning::HoursMinutes)?;
+            let end = parse_time_value_with_pair(right, TimePairMeaning::HoursMinutes)?;
             TimeSegment::Range { start, end }
         } else if let Some((left, right)) = segment.split_once(';') {
-            let start = parse_time_value(left)?;
-            let end = parse_time_value(right)?;
+            let start = parse_time_value_with_pair(left, TimePairMeaning::HoursMinutes)?;
+            let end = parse_time_value_with_pair(right, TimePairMeaning::HoursMinutes)?;
             TimeSegment::Range { start, end }
         } else {
             TimeSegment::Single(parse_time_value(segment)?)
@@ -282,6 +282,18 @@ fn parse_duration_segments(duration: &str) -> Option<Vec<TimeSegment>> {
 /// depfile.cut defines `@t<ss>` (bare seconds) as valid for `%tim`, so we
 /// accept 1-part, 2-part, and 3-part time values.
 pub(crate) fn parse_time_value(s: &str) -> Option<TimeValue> {
+    parse_time_value_with_pair(s, TimePairMeaning::MinutesSeconds)
+}
+
+/// The owning time field selects the meaning before components are constructed.
+/// A two-component duration endpoint cannot silently inherit `%tim` semantics.
+#[derive(Clone, Copy)]
+enum TimePairMeaning {
+    HoursMinutes,
+    MinutesSeconds,
+}
+
+fn parse_time_value_with_pair(s: &str, pair: TimePairMeaning) -> Option<TimeValue> {
     let (hms_part, millis) = if let Some((hms, ms)) = s.split_once('.') {
         let millis: u32 = ms.parse().ok()?;
         (hms, Some(millis))
@@ -301,13 +313,21 @@ pub(crate) fn parse_time_value(s: &str) -> Option<TimeValue> {
             })
         }
         2 => {
-            let minutes: u32 = parts[0].parse().ok()?;
-            let seconds: u32 = parts[1].parse().ok()?;
-            Some(TimeValue {
-                hours: 0,
-                minutes,
-                seconds,
-                millis,
+            let first: u32 = parts[0].parse().ok()?;
+            let second: u32 = parts[1].parse().ok()?;
+            Some(match pair {
+                TimePairMeaning::HoursMinutes => TimeValue {
+                    hours: first,
+                    minutes: second,
+                    seconds: 0,
+                    millis,
+                },
+                TimePairMeaning::MinutesSeconds => TimeValue {
+                    hours: 0,
+                    minutes: first,
+                    seconds: second,
+                    millis,
+                },
             })
         }
         3 => {

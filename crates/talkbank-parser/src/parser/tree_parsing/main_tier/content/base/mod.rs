@@ -13,10 +13,10 @@ mod overlap_point;
 // Re-export overlap_point parser for use in other modules
 pub(crate) use overlap_point::{parse_overlap_point, parse_overlap_point_token};
 
-use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, BaseContentItemChoice, BaseContentItemNode, KindSlot, LongFeatureLabelNode, NoChild,
-    NodeSlot, RecoveryNode, extract_base_content_item,
+    AsRawNode, BaseContentItemChoiceBoundView, BaseContentItemNode, KindSlot, LongFeatureLabelNode,
+    NoChild, NodeSlot, RecoveryNode, SourceBound, SourceSlotView,
 };
 use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
@@ -52,69 +52,71 @@ use crate::parser::tree_parsing::parser_helpers::{
 /// classifier could not place in this position, is the one thing E340 is
 /// for, and the only way it is reached. Whatever else filled no position is
 /// surfaced through `surface_displaced`.
-pub(crate) fn parse_base_content(
-    typed: BaseContentItemNode<'_>,
-    source: &str,
+pub(crate) fn parse_base_content<'tree>(
+    typed: SourceBound<'tree, '_, BaseContentItemNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let children = extract_base_content_item(typed);
-    let content = match children.content.slot() {
-        NodeSlot::Present(choice) => match choice {
-            BaseContentItemChoice::WordWithOptionalAnnotations(node) => {
-                parse_word_content(*node, source, errors)
+    let source = typed.source();
+    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+        typed.extract(),
+        typed.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
+    let children = associated.children();
+    let content = match associated.field_content().slot().view() {
+        SourceSlotView::Present(choice) => {
+            let Some(choice) = crate::parser::typed_cst::read_source_field(choice, errors) else {
+                surface_displaced(&children.unexpected, "base_content", source, errors);
+                return ParseOutcome::rejected();
+            };
+            match choice.view() {
+                BaseContentItemChoiceBoundView::WordWithOptionalAnnotations(node) => {
+                    parse_word_content(node, errors)
+                }
+                BaseContentItemChoiceBoundView::PauseToken(node) => {
+                    parse_pause_node(node.node(), source, errors).map(UtteranceContent::Pause)
+                }
+                BaseContentItemChoiceBoundView::NonwordWithOptionalAnnotations(node) => {
+                    parse_nonword_content(node.node(), source, errors)
+                }
+                BaseContentItemChoiceBoundView::Freecode(node) => {
+                    parse_freecode(node.node(), source, errors)
+                }
+                BaseContentItemChoiceBoundView::Bullet(node) => {
+                    internal_bullet::parse_internal_bullet(node, errors)
+                }
+                BaseContentItemChoiceBoundView::UnderlineBegin(node) => {
+                    // Underline begin marker (U+0002 U+0001)
+                    ParseOutcome::parsed(UtteranceContent::UnderlineBegin(
+                        talkbank_model::UnderlineMarker::from_span(span_of(node.node().raw_node())),
+                    ))
+                }
+                BaseContentItemChoiceBoundView::UnderlineEnd(node) => {
+                    // Underline end marker (U+0002 U+0002)
+                    ParseOutcome::parsed(UtteranceContent::UnderlineEnd(
+                        talkbank_model::UnderlineMarker::from_span(span_of(node.node().raw_node())),
+                    ))
+                }
+                BaseContentItemChoiceBoundView::LongFeature(node) => {
+                    long_feature::parse_long_feature(node.node(), source, errors)
+                }
+                BaseContentItemChoiceBoundView::Nonvocal(node) => {
+                    nonvocal::parse_nonvocal(node.node(), source, errors)
+                }
+                BaseContentItemChoiceBoundView::OtherSpokenEvent(node) => {
+                    other_spoken::parse_other_spoken_event(node.node(), source, errors)
+                }
             }
-            BaseContentItemChoice::PauseToken(node) => {
-                parse_pause_node(*node, source, errors).map(UtteranceContent::Pause)
-            }
-            BaseContentItemChoice::NonwordWithOptionalAnnotations(node) => {
-                parse_nonword_content(*node, source, errors)
-            }
-            BaseContentItemChoice::Freecode(node) => parse_freecode(*node, source, errors),
-            BaseContentItemChoice::Bullet(node) => {
-                internal_bullet::parse_internal_bullet(*node, source, errors)
-            }
-            BaseContentItemChoice::UnderlineBegin(node) => {
-                // Underline begin marker (U+0002 U+0001)
-                ParseOutcome::parsed(UtteranceContent::UnderlineBegin(
-                    talkbank_model::UnderlineMarker::from_span(span_of(node.raw_node())),
-                ))
-            }
-            BaseContentItemChoice::UnderlineEnd(node) => {
-                // Underline end marker (U+0002 U+0002)
-                ParseOutcome::parsed(UtteranceContent::UnderlineEnd(
-                    talkbank_model::UnderlineMarker::from_span(span_of(node.raw_node())),
-                ))
-            }
-            BaseContentItemChoice::LongFeature(node) => {
-                long_feature::parse_long_feature(*node, source, errors)
-            }
-            BaseContentItemChoice::Nonvocal(node) => {
-                nonvocal::parse_nonvocal(*node, source, errors)
-            }
-            BaseContentItemChoice::OtherSpokenEvent(node) => {
-                other_spoken::parse_other_spoken_event(*node, source, errors)
-            }
-        },
-        NodeSlot::Missing(missing) => {
-            check_not_missing(*missing, source, errors, "base_content");
+        }
+        SourceSlotView::Missing(missing) => {
+            check_not_missing(missing.raw_node(), source, errors, "base_content");
             ParseOutcome::rejected()
         }
-        NodeSlot::Error(_) | NodeSlot::Absent(NoChild) => ParseOutcome::rejected(),
-        NodeSlot::Unexpected(bad) => {
-            // The grammar produced an alternative this parser does not know:
-            // a grammar/parser mismatch, not a fault in the CHAT input.
-            errors.report(
-                ParseError::new(
-                    ErrorCode::UnknownBaseContent,
-                    Severity::Error,
-                    SourceLocation::from_offsets(bad.start_byte(), bad.end_byte()),
-                    ErrorContext::new(source, bad.start_byte()..bad.end_byte(), ""),
-                    format!("Unknown base content type '{}'", bad.kind()),
-                )
-                .with_suggestion("This may be a new grammar feature not yet supported"),
-            );
-            ParseOutcome::rejected()
-        }
+        SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => ParseOutcome::rejected(),
+        SourceSlotView::Unexpected(never) => match never {},
     };
     surface_displaced(&children.unexpected, "base_content", source, errors);
     content

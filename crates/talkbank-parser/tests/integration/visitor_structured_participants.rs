@@ -10,20 +10,14 @@
     clippy::unimplemented
 )]
 
-//! Characterization tests for the @Participants header parser's OUTER child-access
-//! (Task 2i, Level-2 PARTIAL structured migration).
+//! Characterization and source-range admission tests for @Participants.
 //!
 //! `parse_participants_header` lives in
 //! `tree_parsing/header/participants.rs` and is SHARED by both the line path
 //! (`header_parser/dispatch/structured.rs`) and the single-line
-//! `header_dispatch/parse.rs` API. Task 2i migrates the OUTER
-//! `find_child_by_kind(node, PARTICIPANTS_CONTENTS)` call off the raw
-//! `node.kind()` scan onto the generated, typed `extract_participants_header(node).child_2`
-//! slot (reached through the shared `HeaderTraversal` ZST seam in
-//! `tree_parsing/header/typed.rs`). The INNER loops over participants and
-//! participant_word tokens stay as `node.kind()` walks (the generator's
-//! `repeat(seq)` limit: both the participant list and the participant_word list
-//! use `repeat(seq)`, which is not yet fully slotted).
+//! `header_dispatch/parse.rs` API. Both list and entry traversal use generated
+//! positional slots. Entry lowering now admits selected ranges before decoding;
+//! it retains typed recovery states and never rematches raw token text.
 //!
 //! This migration is BEHAVIOUR-PRESERVING: the produced `Header` payloads and
 //! every diagnostic must stay byte-identical.
@@ -54,6 +48,72 @@ const HEB_CONVERSATION: &str =
 const PHON_INTERVALS: &str = include_str!("../../../../corpus/reference/tiers/phon-intervals.cha");
 const EMPTY_AND_MINIMAL: &str =
     include_str!("../../../../corpus/reference/edge-cases/empty-and-minimal.cha");
+
+/// Admission checks every selected range once; retained reads add no checks.
+/// Storage figures are layout evidence, not a throughput or peak-memory claim.
+#[test]
+fn participant_reference_range_admission_preserves_fields_and_counts_work() {
+    use talkbank_parser::generated_traversal::{
+        AsRawNode, ParsedSource, ParticipantNode, ReadableSlot,
+    };
+    let mut entries = 0;
+    for source in [HEB_CONVERSATION, PHON_INTERVALS, EMPTY_AND_MINIMAL] {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_talkbank::LANGUAGE.into())
+            .unwrap();
+        let parsed = ParsedSource::parse(&mut parser, source, None).unwrap();
+        let foreign = ParsedSource::parse(&mut parser, source, None).unwrap();
+        for slice in parsed.root().unwrap().descendants() {
+            let Some(entry) = slice.unwrap().typed::<ParticipantNode>() else {
+                continue;
+            };
+            entries += 1;
+            assert!(
+                foreign.bind(entry.raw_node()).is_err(),
+                "equal text is not the same parse owner"
+            );
+            let selected = entry.extract().unwrap();
+            assert!(selected.children().unexpected.is_empty());
+            let raw_inline = std::mem::size_of_val(selected.children());
+            let raw_groups = selected.children().child_1.slot();
+            let raw_heap = std::mem::size_of_val(raw_groups.as_slice());
+            let admitted = selected.admit_ranges().unwrap();
+            let fields = admitted.children();
+            let expected_checks =
+                1 + 2 * fields.child_1.slot.len() + usize::from(fields.child_2.slot.is_some());
+            assert_eq!(admitted.checked_range_count(), expected_checks);
+            let ReadableSlot::Present(speaker) = &fields.code.slot else {
+                panic!("speaker")
+            };
+            for _ in 0..100 {
+                assert!(!speaker.text().is_empty());
+                assert_eq!(speaker.source(), source);
+                for position in &fields.child_1.slot {
+                    let ReadableSlot::Present(group) = &position.slot else {
+                        panic!("group")
+                    };
+                    let ReadableSlot::Present(word) = &group.child_1.slot else {
+                        panic!("name/role")
+                    };
+                    assert!(!word.text().is_empty());
+                    assert_eq!(word.source(), source);
+                }
+            }
+            assert_eq!(admitted.checked_range_count(), expected_checks);
+            eprintln!(
+                "PARTICIPANT RANGE COST checks={expected_checks} raw_inline={raw_inline} raw_heap={raw_heap} admitted_inline={} admitted_heap={} admitted_owner={}",
+                std::mem::size_of_val(fields),
+                std::mem::size_of_val(fields.child_1.slot.as_slice()),
+                std::mem::size_of_val(&admitted),
+            );
+        }
+    }
+    assert_eq!(
+        entries, 6,
+        "all authored participant entries must be witnessed"
+    );
+}
 
 /// Parse `input` at the real streaming boundary and return the `Debug` string of
 /// every `Header::Participants` (in document order) plus every collected diagnostic

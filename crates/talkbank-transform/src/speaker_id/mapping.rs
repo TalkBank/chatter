@@ -1,6 +1,6 @@
 //! Operator-supplied speaker-mapping spec: parsing + types.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use talkbank_model::{ParticipantRole, SpeakerCode};
 
@@ -46,6 +46,8 @@ pub type MappingSpec = HashMap<SpeakerCode, SpeakerAssignment>;
 /// - One or more comma-separated assignments.
 /// - Each assignment is `OLD=drop` or `OLD=CODE:ROLE`.
 /// - Whitespace around tokens is ignored.
+/// - Each source speaker appears once; repeated assignments are refused,
+///   including identical repeats, rather than silently replacing a decision.
 ///
 /// # Examples
 ///
@@ -83,7 +85,17 @@ pub fn parse_mapping_spec(spec: &str) -> Result<MappingSpec, SpeakerIdError> {
                 specific_role: None,
             }
         };
-        out.insert(old_code, assignment);
+        match out.entry(old_code) {
+            Entry::Vacant(slot) => {
+                slot.insert(assignment);
+            }
+            Entry::Occupied(slot) => {
+                return Err(SpeakerIdError::InvalidMappingSpec(format!(
+                    "repeated assignment for source speaker {:?}",
+                    slot.key().as_str()
+                )));
+            }
+        }
     }
     Ok(out)
 }

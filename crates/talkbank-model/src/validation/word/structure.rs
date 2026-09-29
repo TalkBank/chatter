@@ -6,10 +6,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#WordInternalPause_Marker>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Part_of_Speech>
 
-use std::ops::RangeInclusive;
-
 use crate::model::content::word::{MarkerSpelling, UntranscribedStatus};
-use crate::model::{FormType, Word, WordContent, WordMaterial, WordStressMarkerType};
+use crate::model::{Word, WordContent, WordMaterial, WordStressMarkerType};
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 
 /// Enforce character-level hygiene for the normalized word surface.
@@ -25,6 +23,37 @@ use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLoca
 /// This validation catches parser bugs where word boundaries are incorrectly determined.
 pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
     let cleaned = word.cleaned_text();
+
+    // Orthographic leaves cannot encode structure owned by typed markers.
+    // Phonetic leaves have a separate alphabet and are deliberately excluded.
+    for content in word.content() {
+        let text = match content {
+            WordContent::Text(text) => Some(text.as_ref()),
+            WordContent::Shortening(text) => Some(text.as_ref()),
+            WordContent::Phonetic(_)
+            | WordContent::OverlapPoint(_)
+            | WordContent::CAElement(_)
+            | WordContent::CADelimiter(_)
+            | WordContent::StressMarker(_)
+            | WordContent::Lengthening(_)
+            | WordContent::SyllablePause(_)
+            | WordContent::UnderlineBegin(_)
+            | WordContent::UnderlineEnd(_)
+            | WordContent::CompoundMarker(_)
+            | WordContent::CliticBoundary(_) => None,
+        };
+        if let Some(text) = text
+            && text.contains(['@', '(', ')'])
+        {
+            errors.report(ParseError::new(
+                ErrorCode::IllegalCharactersInWord,
+                Severity::Error,
+                SourceLocation::new(word.span),
+                ErrorContext::new(text, word.span, text),
+                "Lexical text contains a structural delimiter; use typed word markers",
+            ));
+        }
+    }
 
     // Check for whitespace
     if cleaned.chars().any(|c| c.is_whitespace()) {
@@ -129,12 +158,11 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
         }
     }
 
-    // Reject Private-Use-Area and other non-standard high-BMP code points (CLAN
-    // CHECK error 86); the rejected range is named once in
-    // `is_nonstandard_unicode_word_char`.
+    // Lexical scalar policy, independent of CHECK's encoded-byte predicate.
+    // Control characters retain their separate diagnostics above.
     for (idx, ch) in cleaned.char_indices() {
-        let cp = ch as u32;
-        if is_nonstandard_unicode_word_char(ch) {
+        if let Some(rejected) = RejectedLexicalScalar::admit(ch) {
+            let (character, category) = rejected.into_parts();
             errors.report(
                 ParseError::new(
                     ErrorCode::IllegalCharactersInWord,
@@ -142,84 +170,44 @@ pub(crate) fn check_word_characters(word: &Word, errors: &impl ErrorSink) {
                     SourceLocation::new(word.span),
                     ErrorContext::new(cleaned, word.span, cleaned),
                     format!(
-                        "Word contains a non-standard Unicode character U+{cp:04X} at position {idx} (private-use or compatibility area)"
+                        "Word contains a Unicode {category} U+{:04X} at position {idx}",
+                        character as u32,
                     ),
                 )
                 .with_suggestion(
-                    "Replace private-use and compatibility-area characters with their standard Unicode equivalents; CHAT requires standard Unicode.",
+                    "Use the intended standard Unicode transcription character; do not silently delete or normalize this scalar.",
                 ),
             );
         }
     }
 }
 
-/// Whether a Unicode scalar falls in the CHECK-compatible rejected BMP block.
-/// Accepting `char` excludes surrogate and out-of-range integers by construction.
-///
-/// CHECK 86's `isIllegalASCII` exempts U+F170..=U+F264 (internal markup) and
-/// U+FF01..=U+FF5E (fullwidth ASCII). These are policy ranges, not Unicode's
-/// definition of standard characters. Its 21-Sep-2026 byte predicate also
-/// rejects U+10000; this scalar-based policy deliberately does not copy that
-/// supplementary-plane overreach. See spec E243_unicode_boundaries.md.
-fn is_nonstandard_unicode_word_char(character: char) -> bool {
-    let cp = character as u32;
-    // The 3-byte high-BMP block CLAN treats as non-standard.
-    const NONSTANDARD_BLOCK: RangeInclusive<u32> = 0xE000..=0xFFFF;
-    // CLAN-internal markup, whitelisted inside the block.
-    const CLAN_INTERNAL_MARKUP: RangeInclusive<u32> = 0xF170..=0xF264;
-    // Fullwidth ASCII forms, whitelisted inside the block.
-    const FULLWIDTH_ASCII: RangeInclusive<u32> = 0xFF01..=0xFF5E;
-    NONSTANDARD_BLOCK.contains(&cp)
-        && !CLAN_INTERNAL_MARKUP.contains(&cp)
-        && !FULLWIDTH_ASCII.contains(&cp)
+/// A scalar admitted as forbidden lexical content, retaining its category.
+/// Rust `char` already excludes surrogates and out-of-range integers.
+/// Unicode defines these stable ranges; CHAT chooses to reject them in words.
+/// https://www.unicode.org/faq/private_use.html
+enum RejectedLexicalScalar {
+    PrivateUse(char),
+    Noncharacter(char),
 }
 
-/// Validate that shortening markers use properly nested parentheses.
-///
-/// Uses stack-based validation to ensure proper pairing, not just counting.
-pub(crate) fn check_shortening_balance(word: &Word, errors: &impl ErrorSink) {
-    let mut depth = 0i32;
-
-    // Use raw_text to preserve parser-recovered boundary information.
-    for ch in word.raw_text().chars() {
-        if ch == '(' {
-            depth += 1;
-        } else if ch == ')' {
-            depth -= 1;
-            if depth < 0 {
-                errors.report(
-                    ParseError::new(
-                        ErrorCode::UnbalancedShortening,
-                        Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                        "Closing parenthesis ')' without corresponding opening '('",
-                    )
-                    .with_suggestion(
-                        "Ensure each closing ')' has a matching opening '(' before it",
-                    ),
-                );
-                // Reset depth to prevent cascading errors
-                depth = 0;
-            }
+impl RejectedLexicalScalar {
+    fn admit(character: char) -> Option<Self> {
+        let cp = character as u32;
+        if matches!(cp, 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD) {
+            Some(Self::PrivateUse(character))
+        } else if matches!(cp, 0xFDD0..=0xFDEF) || cp & 0xFFFF >= 0xFFFE {
+            Some(Self::Noncharacter(character))
+        } else {
+            None
         }
     }
 
-    // Check for unclosed parentheses
-    if depth > 0 {
-        errors.report(
-            ParseError::new(
-                ErrorCode::UnbalancedShortening,
-                Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.cleaned_text(), word.span, word.cleaned_text()),
-                format!(
-                    "Unbalanced shortening markers: {} unclosed opening '('",
-                    depth
-                ),
-            )
-            .with_suggestion("Ensure each opening '(' has a matching closing ')'"),
-        );
+    fn into_parts(self) -> (char, &'static str) {
+        match self {
+            Self::PrivateUse(character) => (character, "private-use character"),
+            Self::Noncharacter(character) => (character, "noncharacter"),
+        }
     }
 }
 
@@ -325,8 +313,8 @@ pub(crate) fn illegal_untranscribed_marker(word: &Word) -> Option<UntranscribedS
 
 /// Word content measured for prosodic placement checks.
 ///
-/// Construction makes one linear pass; checking makes one more with constant-
-/// time neighbor queries, plus the cost of emitted diagnostics. The former
+/// Construction and checking take linear time with constant-time neighbor
+/// queries, plus the cost of emitted diagnostics. The former
 /// per-marker prefix/suffix scans were quadratic on marker-heavy words.
 /// The immutable borrow prevents mutation between measurement and checking.
 ///
@@ -438,24 +426,30 @@ impl<'a> ProsodicWord<'a> {
             );
         }
 
-        for (i, item) in content.iter().enumerate() {
-            // E244: Check for consecutive stress markers
-            if matches!(item, WordContent::StressMarker(_)) {
-                if matches!(content.get(i + 1), Some(WordContent::StressMarker(_))) {
-                    errors.report(
-                        ParseError::new(
-                            ErrorCode::ConsecutiveStressMarkers,
-                            Severity::Error,
-                            SourceLocation::new(word.span),
-                            ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                            "Multiple consecutive stress markers",
-                        )
-                        .with_suggestion(
-                            "A syllable can only have one stress marker (primary ˈ or secondary ˌ)",
-                        ),
-                    );
-                }
+        // E244 carries a word-level span, not a pair-level span. Report once
+        // for that immutable word, so longer runs cannot create duplicate fixes.
+        if content.windows(2).any(|pair| {
+            matches!(
+                pair,
+                [WordContent::StressMarker(_), WordContent::StressMarker(_)]
+            )
+        }) {
+            errors.report(
+                ParseError::new(
+                    ErrorCode::ConsecutiveStressMarkers,
+                    Severity::Error,
+                    SourceLocation::new(word.span),
+                    ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
+                    "Multiple consecutive stress markers",
+                )
+                .with_suggestion(
+                    "A syllable can only have one stress marker (primary ˈ or secondary ˌ)",
+                ),
+            );
+        }
 
+        for (i, item) in content.iter().enumerate() {
+            if matches!(item, WordContent::StressMarker(_)) {
                 // E245: Stress must be followed by spoken material
                 let has_following_text = spoken.follows(i);
 
@@ -538,99 +532,4 @@ fn is_spoken_material(content: &WordContent) -> bool {
 /// actual spoken content presence.
 pub(crate) fn has_spoken_material(word: &Word) -> bool {
     word.content().iter().any(is_spoken_material)
-}
-
-/// Validate inline `@...` marker integrity from raw text.
-///
-/// Re2c retains malformed suffixes in a recovered word so these checks can
-/// report the declared E202/E203 instead of a generic utterance parse error.
-/// A repeated marker is one E203 even when its final character is `@`;
-/// classify that case before considering a single dangling marker.
-///
-/// The remaining raw-text inspection belongs in producer-issued suffix
-/// provenance when the model carries it. This compatibility check also serves
-/// programmatically constructed words that have no parser provenance.
-pub(crate) fn check_inline_at_markers(word: &Word, errors: &impl ErrorSink) {
-    let at_count = word
-        .raw_text()
-        .as_bytes()
-        .iter()
-        .filter(|&&b| b == b'@')
-        .count();
-    if at_count == 0 {
-        return;
-    }
-
-    // Tree-sitter reports undeclared markers at parse time. Do not duplicate
-    // that diagnostic during model validation.
-    if matches!(word.form_type, Some(FormType::Undeclared(_))) {
-        return;
-    }
-
-    if at_count > 1 {
-        errors.report(
-            ParseError::new(
-                ErrorCode::InvalidFormType,
-                Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                "Malformed form marker suffix",
-            )
-            // Deliberately says nothing about WHICH markers exist: this is a
-            // shape complaint (more than one `@`), and an inventory example
-            // here would be a copy that goes stale.
-            .with_suggestion("Use exactly one form marker"),
-        );
-        return;
-    }
-
-    if word.raw_text().ends_with('@') {
-        errors.report(
-            ParseError::new(
-                ErrorCode::MissingFormType,
-                Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                "Dangling '@' marker in word",
-            )
-            .with_suggestion("Remove '@' or provide a valid marker suffix"),
-        );
-    }
-
-    if let Some(form_type) = &word.form_type {
-        let marker = format!("@{}", form_type.to_chat_marker());
-        if let Some(marker_pos) = word.raw_text().rfind(&marker) {
-            let trailing = &word.raw_text()[marker_pos + marker.len()..];
-            if !trailing.is_empty() && !trailing.starts_with('@') && !trailing.starts_with('$') {
-                errors.report(
-                    ParseError::new(
-                        ErrorCode::InvalidFormType,
-                        Severity::Error,
-                        SourceLocation::new(word.span),
-                        ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                        "Invalid characters after form marker",
-                    )
-                    // Shape, not inventory: see the suggestion above.
-                    .with_suggestion("Use a marker suffix only, with nothing after it"),
-                );
-            }
-        }
-    }
-
-    if word.form_type.is_none() && word.lang.is_none() && !word.raw_text().ends_with('@') {
-        errors.report(
-            ParseError::new(
-                ErrorCode::InvalidFormType,
-                Severity::Error,
-                SourceLocation::new(word.span),
-                ErrorContext::new(word.raw_text(), word.span, word.raw_text()),
-                "Unknown '@' marker suffix",
-            )
-            // The inventory is the registry's, not this function's: this site
-            // used to name three markers by hand, so retiring one left it
-            // advertised in a user-facing string. `@s:` is the language suffix,
-            // a separate construct, and is named separately.
-            .with_suggestion(crate::model::FormType::DECLARED_MARKERS_SUGGESTION),
-        );
-    }
 }

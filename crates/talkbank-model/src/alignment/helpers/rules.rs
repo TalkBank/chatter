@@ -133,7 +133,8 @@ fn is_linguistic_content(word: &Word) -> bool {
 fn is_wor_timing_token(word: &Word) -> bool {
     // %wor tiers interleave lexical tokens with timing markers like `100_200`.
     // Those markers are alignment metadata, not alignable lexical content.
-    let raw = word.raw_text().as_bytes();
+    let spelling = word.raw_text();
+    let raw = spelling.as_bytes();
     let Some(split_at) = raw.iter().position(|&byte| byte == b'_') else {
         return false;
     };
@@ -148,14 +149,8 @@ fn is_wor_timing_token(word: &Word) -> bool {
 /// Return whether a replaced word should align in `%pho`/`%sin` domains.
 ///
 /// Omissions never align. Fragment-like words are excluded when a replacement
-/// exists.
-///
-/// Takes the whole `ReplacedWord`, not `(&Word, has_replacement: bool)`. The
-/// bool was a DERIVED value the callee can compute: all five call sites already
-/// held this struct and all five passed the identical
-/// `!entry.replacement.words.is_empty()`, so the only thing the parameter added
-/// was five chances to pass the wrong expression, in a predicate whose answer
-/// changes what aligns.
+/// exists. `ReplacedWord` proves its replacement has at least one word; no
+/// independent boolean or empty-alternative fallback can contradict that fact.
 pub fn should_align_replaced_word_in_pho_sin(replaced: &ReplacedWord) -> bool {
     if replaced
         .word
@@ -166,7 +161,7 @@ pub fn should_align_replaced_word_in_pho_sin(replaced: &ReplacedWord) -> bool {
         return false;
     }
 
-    if !replaced.replacement.words.is_empty() && is_fragment_like(&replaced.word) {
+    if is_fragment_like(&replaced.word) {
         return false;
     }
 

@@ -14,8 +14,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use talkbank_model::ErrorCollector;
 use talkbank_model::{ChatFile, WriteChat};
+use talkbank_model::{CompletedDiagnostics, ErrorCollector, InternalFailure};
 
 use super::worker::ParserDispatch;
 
@@ -91,37 +91,41 @@ impl RoundtripFailure {
 ///
 /// Assumes validation already passed (caller checks for real errors first).
 /// The `chat_file` is the already-parsed result from validation.
-pub(super) fn run_roundtrip(chat_file: &ChatFile, parser: &ParserDispatch) -> RoundtripResult {
+pub(super) fn run_roundtrip(
+    chat_file: &ChatFile,
+    parser: &ParserDispatch,
+) -> Result<RoundtripResult, InternalFailure> {
     // Pass 1: serialize the already-parsed ChatFile
     let mut serialized_a = String::new();
     if let Err(err) = chat_file.write_chat(&mut serialized_a) {
-        return RoundtripResult::Failed(RoundtripFailure::Serialization {
+        return Ok(RoundtripResult::Failed(RoundtripFailure::Serialization {
             pass: SerializationPass::First,
             error: err.to_string(),
-        });
+        }));
     }
 
     // Pass 2: re-parse the serialized output (parse-only, skip validation,
     // roundtrip checks serialization fidelity, not content validity)
     let reparse_sink = ErrorCollector::new();
     let reparsed = parser.parse_chat_file_streaming(&serialized_a, &reparse_sink);
+    CompletedDiagnostics::admit(reparse_sink.into_vec())?;
 
     // Serialize again (pass 2 output)
     let mut serialized_b = String::new();
     if let Err(err) = reparsed.write_chat(&mut serialized_b) {
-        return RoundtripResult::Failed(RoundtripFailure::Serialization {
+        return Ok(RoundtripResult::Failed(RoundtripFailure::Serialization {
             pass: SerializationPass::Second,
             error: err.to_string(),
-        });
+        }));
     }
 
     // Compare: is serialization idempotent?
     if serialized_a == serialized_b {
-        RoundtripResult::Passed
+        Ok(RoundtripResult::Passed)
     } else {
-        RoundtripResult::Failed(RoundtripFailure::Mismatch {
+        Ok(RoundtripResult::Failed(RoundtripFailure::Mismatch {
             diff: build_text_diff(&serialized_a, &serialized_b),
-        })
+        }))
     }
 }
 

@@ -1,6 +1,6 @@
 # Dependent Tier Alignment Rules
 
-**Last modified:** 2026-08-30 16:04 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 This document specifies the alignment validation rules for all dependent tiers
 that participate in alignment during CHAT file validation.
@@ -49,7 +49,7 @@ domain:
 | Fragments (`&+fr`)                     | No  | Yes | Yes | No  |
 | Untranscribed (`xxx`, `yyy`, `www`)    | No  | Yes | Yes | No  |
 | Omissions (`0word`)                    | No  | No  | No  | No  |
-| Tag separators (`,` `"` `+`)          | Yes | No  | No  | No  |
+| Tag separators (`,` `„` `‡`)          | Yes | No  | No  | No  |
 | Pauses (`(.)`, `(..)`, `(...)`)        | No  | Yes | No  | No  |
 | Retraced/reformulated words            | No  | Yes | Yes | Yes |
 | Retraced/reformulated groups           | No  | Yes | Yes | Yes |
@@ -81,8 +81,8 @@ item.
 - Regular words (excluding fragments, fillers, nonwords, untranscribed)
 - Tag marker separators:
   - Comma (`,`) -> `cm|cm` in `%mor`
-  - Tag (`"`) -> `end|end` in `%mor`
-  - Vocative (`+`) -> `beg|beg` in `%mor`
+  - Tag (`„`) -> `end|end` in `%mor`
+  - Vocative (`‡`) -> `beg|beg` in `%mor`
 - Replacement words: when a word has `[: replacement]`, the **replacement**
   words are counted (not the original)
 - Groups, PhoGroups, SinGroups, Quotations: their inner words are counted
@@ -204,6 +204,11 @@ tier. A parsed `%wor` tier may be absent, count-drifted, count-matched, or
 lexically corroborated. Only the corroborated state exposes positional timing
 slots, and a later assessment is required before a complete timing hull is
 available.
+
+Canonical witnesses: `corpus/reference/tiers/wor.cha` has matching display
+tokens; `corpus/reference/tiers/wor-drift.cha` has both count-drift directions
+and a same-count lexical edit. Drift is valid sidecar state, not permission
+to reuse the old timing correspondence or independently rewrite its words.
 
 **What counts as a slot:**
 

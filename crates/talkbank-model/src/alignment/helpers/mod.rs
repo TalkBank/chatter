@@ -14,14 +14,17 @@
 mod count;
 mod descent;
 mod domain;
+mod measurement;
 pub mod overlap;
 pub mod overlap_groups;
+mod positions;
 mod rules;
 mod walk;
 
 pub use count::{
-    MorAlignableWordCount, MorItemCount, TierPosition, collect_tier_items, count_tier_positions,
-    count_tier_positions_until,
+    MorAlignableWordCount, MorItemCount, MorPosition, PhoWordPosition, TierPosition,
+    collect_tier_items, count_tier_positions, count_tier_positions_until, visit_mor_positions,
+    visit_pho_words,
 };
 
 /// Render any [`WriteChat`](crate::model::WriteChat) value into owned text

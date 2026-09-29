@@ -6,8 +6,8 @@
 
 use super::format::format_positional_mismatch;
 use super::helpers::{
-    PositionalDomain, TierPosition, collect_tier_items, count_tier_positions,
-    to_chat_display_string as to_string,
+    MorAlignableWordCount, MorItemCount, PositionalDomain, TierPosition, collect_tier_items,
+    count_tier_positions, to_chat_display_string as to_string,
 };
 use super::indices::{MainWordIndex, MorItemIndex};
 use super::types::AlignmentPair;
@@ -37,8 +37,7 @@ pub struct MorAlignment {
 
     /// Errors produced while checking `%mor` alignment invariants.
     ///
-    /// Includes count mismatches, terminator mismatches, and terminator
-    /// presence/absence inconsistencies.
+    /// Includes count mismatches and terminator value mismatches.
     pub errors: Vec<ParseError>,
 }
 
@@ -139,86 +138,73 @@ pub fn align_main_to_mor(main: &MainTier, mor: &MorTier) -> MorAlignment {
     }
 
     // Extract alignable content indices from main tier
-    let alignable_count = count_tier_positions(&main.content.content, PositionalDomain::Mor);
+    let alignable_count = MorAlignableWordCount::new(count_tier_positions(
+        &main.content.content,
+        PositionalDomain::Mor,
+    ));
 
+    append_position_alignment(
+        &mut alignment,
+        main,
+        mor,
+        alignable_count,
+        MorItemCount::new(mor.items.len()),
+    );
+    alignment
+}
+
+/// Keep expected main-tier positions distinct from observed morphology items.
+/// A missing tier is not admitted here: the caller must supply an actual tier.
+fn append_position_alignment(
+    alignment: &mut MorAlignment,
+    main: &MainTier,
+    mor: &MorTier,
+    expected: MorAlignableWordCount,
+    observed: MorItemCount,
+) {
     // Terminator is now a separate field, not counted in items
-    let expected_mor_count = alignable_count;
+    let expected_mor_count = expected.get();
 
-    let mor_count = mor.items.len();
+    let mor_count = observed.get();
 
-    // Create 1-1 pairs for the common range
-    let min_len = expected_mor_count.min(mor_count);
-    for i in 0..min_len {
-        alignment = alignment.with_pair(AlignmentPair::new(
-            Some(MainWordIndex::new(i)),
-            Some(MorItemIndex::new(i)),
+    // Preserve the common prefix and represent excess positions on either side.
+    for i in 0..expected_mor_count.max(mor_count) {
+        alignment.pairs.push(AlignmentPair::new(
+            (i < expected_mor_count).then(|| MainWordIndex::new(i)),
+            (i < mor_count).then(|| MorItemIndex::new(i)),
         ));
     }
 
-    // Handle length mismatch
-    if expected_mor_count > mor_count {
-        let main_items = collect_tier_items(&main.content.content, PositionalDomain::Mor);
-        let mor_items: Vec<TierPosition> = mor
-            .items
-            .iter()
-            .map(|item| TierPosition {
-                text: to_string(item),
-                description: None,
-            })
-            .collect();
-
-        let detailed_message =
-            format_positional_mismatch("Main tier", "%mor tier", &main_items, &mor_items);
-
-        let error = ParseError::at_span(
+    let (code, suggestion) = match expected_mor_count.cmp(&mor_count) {
+        std::cmp::Ordering::Equal => return,
+        std::cmp::Ordering::Greater => (
             ErrorCode::MorCountMismatchTooFew,
-            Severity::Error,
-            main.span,
-            detailed_message,
-        )
-        .with_label(ErrorLabel::new(main.span, "Main tier"))
-        .with_label(ErrorLabel::new(mor.span, "%mor tier"))
-        .with_suggestion("Each alignable word in main tier must have corresponding %mor item");
-
-        alignment = alignment.with_error(error);
-
-        // Add placeholders for extra main tier items
-        for i in mor_count..expected_mor_count {
-            alignment = alignment.with_pair(AlignmentPair::new(Some(MainWordIndex::new(i)), None));
-        }
-    } else if mor_count > expected_mor_count {
-        let main_items = collect_tier_items(&main.content.content, PositionalDomain::Mor);
-        let mor_items: Vec<TierPosition> = mor
-            .items
-            .iter()
-            .map(|item| TierPosition {
-                text: to_string(item),
-                description: None,
-            })
-            .collect();
-
-        let detailed_message =
-            format_positional_mismatch("Main tier", "%mor tier", &main_items, &mor_items);
-
-        let error = ParseError::at_span(
+            "Each alignable word in main tier must have corresponding %mor item",
+        ),
+        std::cmp::Ordering::Less => (
             ErrorCode::MorCountMismatchTooMany,
-            Severity::Error,
-            main.span,
-            detailed_message,
-        )
+            "Remove extra %mor items or add corresponding words to main tier",
+        ),
+    };
+    let main_items = collect_tier_items(&main.content.content, PositionalDomain::Mor);
+    let mor_items: Vec<TierPosition> = mor
+        .items
+        .iter()
+        .map(|item| TierPosition {
+            text: to_string(item),
+            description: None,
+        })
+        .collect();
+
+    let detailed_message =
+        format_positional_mismatch("Main tier", "%mor tier", &main_items, &mor_items);
+
+    let error = ParseError::at_span(code, Severity::Error, main.span, detailed_message)
         .with_label(ErrorLabel::new(main.span, "Main tier"))
         .with_label(ErrorLabel::new(mor.span, "%mor tier"))
-        .with_suggestion("Remove extra %mor items or add corresponding words to main tier");
+        .with_suggestion(suggestion);
 
-        alignment = alignment.with_error(error);
-
-        // Add placeholders for extra %mor items
-        for i in expected_mor_count..mor_count {
-            alignment = alignment.with_pair(AlignmentPair::new(None, Some(MorItemIndex::new(i))));
-        }
-    }
-
-    alignment
+    alignment.errors.push(error);
 }
 
 /// Build a `%mor` alignment error with shared labeling and preview context.
@@ -235,14 +221,11 @@ fn build_alignment_error(
 ) -> ParseError {
     let alignment_context = build_alignment_preview(main, mor);
 
-    let suggestion_text = if alignment_context.is_empty() {
-        suggestion.to_string()
-    } else {
-        format!(
-            "{}\n\nAlignment preview:\n{}",
-            suggestion, alignment_context
-        )
-    };
+    // The preview always contains its heading, including for empty tiers.
+    let suggestion_text = format!(
+        "{}\n\nAlignment preview:\n{}",
+        suggestion, alignment_context
+    );
 
     let mut error = ParseError::at_span(error_code, Severity::Error, location_span, message)
         .with_suggestion(suggestion_text);

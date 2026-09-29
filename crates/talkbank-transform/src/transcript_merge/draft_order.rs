@@ -31,11 +31,25 @@ pub enum DraftOrderReason {
     },
 }
 
-/// A recorded convention choice, alongside a visible comment in the output.
+/// A boundary counted in output utterances, never CHAT lines or headers.
+///
+/// Constructed by assembly from its emitted utterances. Zero denotes the
+/// boundary before the first utterance; the terminal boundary is also legal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OutputUtteranceBoundary(usize);
+
+impl OutputUtteranceBoundary {
+    /// Number of output utterances preceding this boundary.
+    pub fn utterances_before(self) -> usize {
+        self.0
+    }
+}
+
+/// A recorded convention choice for presentation outside the transcript.
 #[derive(Debug, Clone)]
 pub struct DraftOrderReview {
-    /// Zero-based output utterance boundary where the review comment appears.
-    pub before_output_utterance: usize,
+    /// Output utterance boundary at which the unresolved frontier was encountered.
+    pub before_output_utterance: OutputUtteranceBoundary,
     /// Unresolved frontier; no source speech was removed by this choice.
     pub reason: DraftOrderReason,
 }
@@ -76,52 +90,8 @@ impl DraftOrderPolicy {
             other => return Err(other),
         };
         Ok(DraftOrderReview {
-            before_output_utterance: boundary,
+            before_output_utterance: OutputUtteranceBoundary(boundary),
             reason,
         })
-    }
-}
-
-impl DraftOrderReview {
-    pub(super) fn comment(&self) -> String {
-        let source = |origin: MergeOrigin| match origin {
-            MergeOrigin::Retained(index) => {
-                format!("reference utterance {}", index.utterance().raw() + 1)
-            }
-            MergeOrigin::Inserted(index) => {
-                format!("selected donor utterance {}", index.utterance().raw() + 1)
-            }
-        };
-        let header = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
-        let time = |value: Option<u64>| match value {
-            Some(ms) => format!("{}:{:02}.{:03}", ms / 60000, (ms / 1000) % 60, ms % 1000),
-            None => "unavailable".into(),
-        };
-        let frontier = match &self.reason {
-            DraftOrderReason::Utterances { reference, donor } => {
-                format!("{} versus {}", source(*reference), source(*donor))
-            }
-            DraftOrderReason::Section {
-                header: marker,
-                competing,
-                previous_end,
-                next_start,
-            } => format!(
-                "{} versus {}; preceding utterance end {}, following utterance start {} (navigation bounds, not inferred marker times)",
-                header(marker),
-                source(*competing),
-                time(*previous_end),
-                time(*next_start)
-            ),
-            DraftOrderReason::Sections { reference, donor } => format!(
-                "reference marker {} versus donor marker {}",
-                header(reference),
-                header(donor)
-            ),
-        };
-        format!(
-            "REVIEW GENERATED: Ambiguous cross-source ordering before output utterance {}. Reference-first draft serialization preserves both source sequences and all speech; it does not establish chronology or task membership. Listen and adjudicate this interleaving: {frontier}.",
-            self.before_output_utterance + 1
-        )
     }
 }

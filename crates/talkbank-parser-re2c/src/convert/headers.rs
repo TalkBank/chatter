@@ -244,7 +244,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
             label: if all_content.is_empty() {
                 None
             } else {
-                Some(GemLabel::new(&all_content))
+                Some(gem_label(content))
             },
         },
         Token::HeaderPrefix(p) if p.text().starts_with("@G:") || p.text() == "@G" => {
@@ -252,7 +252,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
                 label: if all_content.is_empty() {
                     None
                 } else {
-                    Some(GemLabel::new(&all_content))
+                    Some(gem_label(content))
                 },
             }
         }
@@ -260,7 +260,7 @@ pub fn header_to_model(h: &ast::HeaderParsed<'_>) -> Header {
             label: if all_content.is_empty() {
                 None
             } else {
-                Some(GemLabel::new(&all_content))
+                Some(gem_label(content))
             },
         },
         _ => {
@@ -375,22 +375,31 @@ pub(crate) fn tokens_to_bullet_content(tokens: &[Token<'_>]) -> BulletContent {
 
 /// Convert participant words [SPK, Name, Role] to ParticipantEntry.
 pub(crate) fn participant_words_to_entry(words: &[&str]) -> ParticipantEntry {
-    let speaker_code = SpeakerCode::new(words.first().copied().unwrap_or(""));
-    let role = if words.len() >= 2 {
-        ParticipantRole::new(*words.last().unwrap())
-    } else {
-        ParticipantRole::new("")
-    };
-    let name = if words.len() == 3 {
-        Some(ParticipantName::new(words[1]))
-    } else {
-        None
+    // Slice shapes bind the optional name to the admitted interior fields.
+    // Preserve all name words, not only a three-field special case.
+    let (speaker, name, role) = match words {
+        [] => ("", None, ""),
+        [speaker] => (*speaker, None, ""),
+        [speaker, role] => (*speaker, None, *role),
+        [speaker, name @ .., role] => (*speaker, Some(ParticipantName::new(name.join(" "))), *role),
     };
     ParticipantEntry {
-        speaker_code,
+        speaker_code: SpeakerCode::new(speaker),
         name,
-        role,
+        role: ParticipantRole::new(role),
     }
+}
+
+/// A continuation token separates logical label words; it is not label data.
+fn gem_label(content: &[Token<'_>]) -> GemLabel {
+    let text: String = content
+        .iter()
+        .map(|token| match token {
+            Token::Continuation(_) => " ",
+            token => token.text(),
+        })
+        .collect();
+    GemLabel::new(text)
 }
 
 // ═══════════════════════════════════════════════════════════════

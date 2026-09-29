@@ -153,7 +153,6 @@ pub(super) fn admit_media_header(
     let Some(media_name) = desc.media_name.as_ref() else {
         return Ok(None);
     };
-    let normalized_media_name = normalize_media_name(media_name);
     let media_type = match desc.media_type.as_deref().map(MediaType::from_text) {
         None => MediaType::Audio,
         Some(MediaType::Unsupported(value)) => {
@@ -164,7 +163,7 @@ pub(super) fn admit_media_header(
         Some(kind @ (MediaType::Audio | MediaType::Video | MediaType::Missing)) => kind,
     };
 
-    let filename = MediaFilename::parse(&normalized_media_name)?;
+    let filename = admit_media_name(media_name)?;
     let mut header = MediaHeader::new(filename, media_type);
     if let Some(status) = &desc.media_status {
         header = header.with_status(status.clone());
@@ -172,13 +171,22 @@ pub(super) fn admit_media_header(
     Ok(Some(header))
 }
 
-fn normalize_media_name(raw: &str) -> String {
-    let candidate = Path::new(raw);
-    candidate
+/// Preserve admitted remote references; only local inputs use filesystem stems.
+/// Admit the complete spelling before path reduction, so discarded components
+/// cannot hide malformed input. The reduced local stem is admitted again.
+fn admit_media_name(raw: &str) -> Result<MediaFilename, BuildChatError> {
+    let filename = MediaFilename::parse(raw)?;
+    if filename.is_remote_url() {
+        return Ok(filename);
+    }
+
+    let candidate = Path::new(filename.as_str());
+    let normalized = candidate
         .file_stem()
         .filter(|stem| !stem.is_empty())
         .or_else(|| candidate.file_name())
         .filter(|name| !name.is_empty())
         .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| raw.to_string())
+        .unwrap_or_else(|| raw.to_string());
+    Ok(MediaFilename::parse(&normalized)?)
 }

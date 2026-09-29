@@ -28,6 +28,11 @@ pub enum RoundtripVerdict {
 /// File validation status (without error details - those stream separately)
 #[derive(Debug, Clone)]
 pub enum FileStatus {
+    /// The tool failed; no valid or invalid verdict was established.
+    InternalFailure {
+        /// Complete diagnostic evidence from the failed attempt.
+        failure: talkbank_model::InternalFailure,
+    },
     /// File passed validation, and the roundtrip check if it was requested.
     Valid {
         /// Whether the result came from the cache.
@@ -76,6 +81,7 @@ pub struct ValidationStats {
     cache_hits: AtomicUsize,
     cache_misses: AtomicUsize,
     parse_errors: AtomicUsize,
+    internal_failures: AtomicUsize,
     roundtrip_passed: AtomicUsize,
     roundtrip_failed: AtomicUsize,
     cancelled: AtomicBool,
@@ -91,6 +97,7 @@ impl ValidationStats {
             cache_hits: AtomicUsize::new(0),
             cache_misses: AtomicUsize::new(0),
             parse_errors: AtomicUsize::new(0),
+            internal_failures: AtomicUsize::new(0),
             roundtrip_passed: AtomicUsize::new(0),
             roundtrip_failed: AtomicUsize::new(0),
             cancelled: AtomicBool::new(false),
@@ -110,6 +117,11 @@ impl ValidationStats {
     /// Record that a file could not be parsed.
     pub fn record_parse_error(&self) {
         self.parse_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a tool failure, never a CHAT invalidity verdict.
+    pub fn record_internal_failure(&self) {
+        self.internal_failures.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Record that a result was served from cache.
@@ -146,6 +158,7 @@ impl ValidationStats {
             cache_hits: self.cache_hits.load(Ordering::Relaxed),
             cache_misses: self.cache_misses.load(Ordering::Relaxed),
             parse_errors: self.parse_errors.load(Ordering::Relaxed),
+            internal_failures: self.internal_failures.load(Ordering::Relaxed),
             roundtrip_passed: self.roundtrip_passed.load(Ordering::Relaxed),
             roundtrip_failed: self.roundtrip_failed.load(Ordering::Relaxed),
             cancelled: self.cancelled.load(Ordering::Relaxed),
@@ -165,6 +178,8 @@ impl ValidationStats {
 /// Snapshot of validation stats at a point in time (Clone + Send)
 #[derive(Debug, Clone)]
 pub struct ValidationStatsSnapshot {
+    /// Failed tool attempts whose CHAT validity was not determined.
+    pub internal_failures: usize,
     /// Total number of `.cha` files discovered.
     pub total_files: usize,
     /// Files that passed validation.
@@ -224,13 +239,14 @@ impl ValidationStatsSnapshot {
 
     /// Files that produced a per-file result of any kind.
     ///
-    /// Exactly one of these three counters is incremented per completed file
+    /// Exactly one of these four counters is incremented per completed file
     /// (`update_stats` in `worker.rs` folds roundtrip failures and read errors
     /// into `invalid_files`), so this is a count of files, not of events.
     pub fn files_accounted_for(&self) -> usize {
         self.valid_files
             .saturating_add(self.invalid_files)
             .saturating_add(self.parse_errors)
+            .saturating_add(self.internal_failures)
     }
 
     /// Reconcile what was discovered against what was actually processed.

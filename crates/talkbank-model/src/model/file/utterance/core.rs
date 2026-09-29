@@ -144,7 +144,7 @@ pub struct Utterance {
     #[schemars(skip)]
     #[semantic_eq(skip)]
     #[span_shift(skip)]
-    pub parse_health: ParseHealthState,
+    pub(super) parse_health: ParseHealthState,
 
     /// Explicit utterance-level language state.
     ///

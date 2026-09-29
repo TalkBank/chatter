@@ -130,101 +130,39 @@ fn test_error_messages_dont_expose_internals() {
 /// Tests error spans point to problem locations.
 #[test]
 fn test_error_spans_point_to_problem_locations() {
-    // Test that errors point to the actual problem location with EXACT byte positions
-
-    // Test case 1: Lone @ symbol should produce error at exact position
-    let input1 = "@UTF8\n@Begin\n*CHI:\thello @ world .\n@End\n";
-    //           012345 6789AB CDEF0123456789...
-    // Byte offset breakdown:
-    //   "@UTF8\n"                    = 6 bytes (0-5)
-    //   "@Begin\n"                   = 7 bytes (6-12)
-    //   "*CHI:\t"                    = 6 bytes (13-18)
-    //   "hello @ world .\n"          = 16 bytes (19-34)
-    //        "hello "                = 6 bytes (19-24)
-    //              "@ "              = 2 bytes (25-26)  ← Error here!
-    //                "world .\n"     = 8 bytes (27-34)
-    //   "@End\n"                     = 5 bytes (35-39)
-    // Total: 40 bytes
-
-    assert_eq!(input1.len(), 40, "Sanity check: input1 length");
-
-    let errors1 = parse_and_collect_errors(input1);
-    if !errors1.is_empty() {
-        // ✅ EXACT assertion: error should point to the "@" at byte 25
-        let lone_at_error = errors1.iter().find(|e| {
-            // Error should be in the region of the lone @
-            e.location.span.start >= 25 && e.location.span.start <= 26
-        });
-
-        assert!(
-            lone_at_error.is_some(),
-            "Expected error at exact position 25-26 (lone @), got spans: {:?}",
-            errors1
-                .iter()
-                .map(|e| (e.location.span.start, e.location.span.end))
-                .collect::<Vec<_>>()
-        );
-
-        // Verify it points to the right character
-        if let Some(err) = lone_at_error {
-            let start = err.location.span.start as usize;
-            let end = err.location.span.end as usize;
-            let error_text = &input1[start..end.min(input1.len())];
-            assert!(
-                matches!(error_text.chars().next(), Some('@')),
-                "Error should point to '@', got: '{}'",
-                error_text
-            );
+    // Precision comes from actual CST recovery nodes, not a second text scan
+    // narrowing an ERROR to the visually suspicious character inside it.
+    for input in [
+        "@UTF8\n@Begin\n*CHI:\thello @ world .\n@End\n",
+        "@UTF8\n@Begin\n*CHI:\thello [: world .\n@End\n",
+    ] {
+        let parser = talkbank_parser::TreeSitterParser::new().unwrap();
+        let parsed = parser.parse_source_incremental(input, None).unwrap();
+        let mut pending = vec![parsed.root_node()];
+        let mut recovery = Vec::new();
+        while let Some(node) = pending.pop() {
+            if node.is_error() {
+                recovery.push(node.byte_range());
+            }
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
         }
-    }
-
-    // Test case 2: Unclosed bracket [: should produce error at exact position
-    let input2 = "@UTF8\n@Begin\n*CHI:\thello [: world .\n@End\n";
-    //           012345 6789AB CDEF0123456789ABCDEF01234567...
-    // Byte offset breakdown:
-    //   "@UTF8\n"                    = 6 bytes (0-5)
-    //   "@Begin\n"                   = 7 bytes (6-12)
-    //   "*CHI:\t"                    = 6 bytes (13-18)
-    //   "hello [: world .\n"         = 17 bytes (19-35)
-    //        "hello "                = 6 bytes (19-24)
-    //              "[: "             = 3 bytes (25-27)  ← Error here!
-    //                  "world .\n"   = 8 bytes (28-35)
-    //   "@End\n"                     = 5 bytes (36-40)
-    // Total: 41 bytes
-
-    assert_eq!(input2.len(), 41, "Sanity check: input2 length");
-
-    let errors2 = parse_and_collect_errors(input2);
-    if !errors2.is_empty() {
-        // ✅ EXACT assertion: error should point to the "[:" at byte 25-27
-        let unclosed_bracket_error = errors2.iter().find(|e| {
-            // Error should be in the region of the unclosed bracket
-            e.location.span.start >= 25 && e.location.span.start <= 27
-        });
-
+        let errors = parse_and_collect_errors(input);
+        assert!(!errors.is_empty(), "malformed input must not pass silently");
         assert!(
-            unclosed_bracket_error.is_some(),
-            "Expected error at exact position 25-27 (unclosed [: ), got spans: {:?}",
-            errors2
-                .iter()
-                .map(|e| (e.location.span.start, e.location.span.end))
-                .collect::<Vec<_>>()
+            errors.iter().any(|error| {
+                let range = error.location.span.start as usize..error.location.span.end as usize;
+                error.code == talkbank_model::ErrorCode::UnparsableContent
+                    && range.contains(&25)
+                    && recovery.contains(&range)
+            }),
+            "diagnostic must retain the producer's recovery span: {errors:?}"
         );
-
-        // All errors should be within file bounds
-        for error in &errors2 {
-            let span = &error.location.span;
+        for error in errors {
+            let span = error.location.span;
             assert!(
-                span.start <= input2.len() as u32,
-                "Error span start {} exceeds input length {}",
-                span.start,
-                input2.len()
-            );
-            assert!(
-                span.end <= input2.len() as u32,
-                "Error span end {} exceeds input length {}",
-                span.end,
-                input2.len()
+                input.get(span.start as usize..span.end as usize).is_some(),
+                "diagnostic must stay within readable source coordinates"
             );
         }
     }
@@ -328,9 +266,7 @@ fn test_e747_fires_only_on_genuinely_blank_lines() {
         .map(|error| format!("{:?}", error.code))
         .collect();
     assert!(
-        codes
-            .iter()
-            .any(|code| code.contains("EmptySpeaker") || code.contains("MissingMainTier")),
+        codes.iter().any(|code| code == "UnparsableContent"),
         "the malformed tier must stay flagged: {codes:?}"
     );
     assert!(

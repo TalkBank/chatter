@@ -1,15 +1,16 @@
 ---
-source: crates/talkbank-tree-sitter-parser/src/parser/chat_file_parser/header_dispatch/tests.rs
-assertion_line: 225
+source: crates/talkbank-parser/src/parser/chat_file_parser/header_dispatch/tests.rs
 expression: result
 ---
 Ok(
     Date {
-        date: Valid {
-            day: 29,
-            month: Feb,
-            year: 1996,
-            raw: "29-FEB-1996",
-        },
+        date: Valid(
+            CheckedChatDate {
+                day: 29,
+                month: Feb,
+                year: 1996,
+                raw: "29-FEB-1996",
+            },
+        ),
     },
 )

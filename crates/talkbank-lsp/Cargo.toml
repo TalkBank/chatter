@@ -10,8 +10,7 @@ keywords.workspace = true
 categories.workspace = true
 description = "Language Server Protocol server for TalkBank CHAT"
 readme = "README.md"
-# Hold back crates.io publication until the Wave 1B editor/support contract lands.
-publish = false
+# Registry installation is required alongside standalone binary distribution.
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

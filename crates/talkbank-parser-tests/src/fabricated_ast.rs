@@ -1,4 +1,9 @@
-//! Refuse to let fabricated-AST construction grow, per crate.
+//! Track construction sentinels separately from admitted boundary-test evidence.
+//!
+//! The lexical count is not a correctness or CHAT-coverage metric. Named
+//! diagnostic/source-boundary tests may intentionally supply an unknown span
+//! or assert that one was refused. Their exact inventories are checked below;
+//! they do not consume the general construction allowance or claim CHAT coverage.
 //!
 //! # What this counts, and why those two spellings
 //!
@@ -13,17 +18,12 @@
 //!
 //! # Why a ratchet rather than a ban
 //!
-//! Both spellings are load-bearing today. `talkbank-model` declares no parser
-//! dependency, so it cannot turn CHAT text into a model at all; every test in
-//! it fabricates the AST it then judges, stating the raw text and the parsed
-//! structure separately with nothing forcing the two to agree. A test that
-//! fabricates its own input cannot be wrong about the format, only about
-//! itself.
-//!
-//! The cure is a type change: make the AST constructible only from a parse
-//! product, at which point that family does not get better tests, it stops
-//! compiling and has to move onto spec-derived input. That is a large
-//! migration. This ratchet is what makes it provable while it happens.
+//! Both spellings are load-bearing today. CHAT semantic examples belong in
+//! specs/reference inputs, but constructor, wire-format and failure-boundary
+//! tests legitimately exercise values that no parser should admit. Preserve
+//! those contracts. Typed construction is a supported producer, distinct from
+//! parser provenance; derived raw spelling cannot contradict its structure.
+//! The lexical ratchet prioritizes review, not automatic deletion of tests.
 //!
 //! # The dev-dependency shortcut, tried 2026-09-08 and half misread
 //!
@@ -257,7 +257,7 @@ const CEILING: &[(&str, usize)] = &[
     // `from_checked_literal`, a door this list counts (its definition and
     // the macro's one call are the two sites that arrived); four test
     // literals in `validation/{utterance,word}/tests.rs` went through it.
-    ("talkbank-model", 102),
+    ("talkbank-model", 100),
     // 8 -> 6 the same day: the user-defined and unsupported tier dispatchers
     // read their prefix through `expect_present` and one `tier_name` helper
     // (a MISSING prefix builds no tier, where its empty placeholder text
@@ -285,7 +285,27 @@ const CEILING: &[(&str, usize)] = &[
     // (`PlaceholderToken` holds a `NonEmptyString`, a literal prefix and
     // the index), handed to the word-text types through `From`; the
     // shortening placeholder and one test literal are `non_empty_literal!`.
-    ("talkbank-transform", 7),
+    ("talkbank-transform", 6),
+];
+
+/// Reviewed source-boundary evidence, not hand-built CHAT semantic examples.
+/// Exact sentinel counts are checked in both directions, including disappearance.
+const BOUNDARY_SPANS: &[(&str, usize)] = &[
+    // Unknown-location admission, overflow and rebasing contracts.
+    (
+        "crates/talkbank-parser-tests/tests/integration/public_error_types.rs",
+        6,
+    ),
+    // Reject an external splice proposal with an unadmitted coordinate.
+    (
+        "crates/talkbank-parser-tests/tests/integration/splice_corpus.rs",
+        1,
+    ),
+    // Assertions that parsed reference decorations have real source locations.
+    (
+        "crates/talkbank-parser-tests/tests/integration/tier_decoration_corpus.rs",
+        2,
+    ),
 ];
 
 /// Fabricated-AST construction may only fall.
@@ -388,6 +408,25 @@ impl Gate for FabricatedAstGate {
                     "crates/talkbank-probe-new/src/lib.rs",
                     "fn f() { let s = Span::DUMMY; }\n",
                 );
+                Ok(())
+            },
+        )
+        .refusing(
+            "a reviewed boundary gains another sentinel",
+            "boundary sentinel inventory changed",
+            |edit| {
+                let (path, _) = BOUNDARY_SPANS[0];
+                let mut source = edit.read(path)?;
+                source.push_str("\nfn extra() { let s = Span::DUMMY; }\n");
+                edit.write(path, source);
+                Ok(())
+            },
+        )
+        .refusing(
+            "a reviewed boundary disappears",
+            "boundary sentinel inventory changed",
+            |edit| {
+                edit.write(BOUNDARY_SPANS[0].0, "// removed boundary\n");
                 Ok(())
             },
         )
@@ -517,6 +556,21 @@ const PROBE_FILE: &str = "crates/talkbank-model/src/probe_fabricated_ast.rs";
 /// rather than a measurement, and a floor compared against a ceiling reports
 /// progress that did not happen.
 fn count_by_crate(tree: &ReadTree) -> Result<BTreeMap<String, usize>, String> {
+    // Admit the entire reviewed inventory before subtracting any allowance.
+    // A missing/changed entry never produces a partial clean measurement.
+    for &(path, expected) in BOUNDARY_SPANS {
+        let source = tree
+            .read_to_string(&crate::gate::tree::RelPath::new(path))
+            .map_err(|err| format!("FAIL: boundary sentinel inventory changed: {path}: {err}"))?;
+        let blanked = blank_literals(&source);
+        if blanked.matches("Span::DUMMY").count() != expected
+            || fabrications_in(&source) != expected
+        {
+            return Err(format!(
+                "FAIL: boundary sentinel inventory changed: {path}; review its {expected} admitted unknown-span observations"
+            ));
+        }
+    }
     let files = tree
         .files_under("crates")
         .map_err(|err| format!("FAIL: could not enumerate the crates tree: {err}"))?;
@@ -538,7 +592,14 @@ fn count_by_crate(tree: &ReadTree) -> Result<BTreeMap<String, usize>, String> {
             let text = tree.read_to_string(&path).map_err(|err| {
                 format!("FAIL: a file could not be read, so the count is a floor: {err}")
             })?;
-            fabrications_in(&text)
+            if BOUNDARY_SPANS
+                .iter()
+                .any(|(boundary, _)| *boundary == as_str)
+            {
+                0
+            } else {
+                fabrications_in(&text)
+            }
         } else {
             0
         };

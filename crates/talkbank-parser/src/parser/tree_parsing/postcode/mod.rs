@@ -7,7 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{AsRawNode, PostcodeNode};
+use crate::generated_traversal::{AsRawNode, PostcodeNode, SourceBound};
 use crate::model::Postcode;
 use talkbank_model::ParseOutcome;
 
@@ -20,25 +20,13 @@ use talkbank_model::ParseOutcome;
 ///
 /// The node is now a single leaf token. Extract the code by stripping
 /// the `[+ ` prefix and `]` suffix, then trimming trailing whitespace.
-pub fn parse_postcode_node(
-    typed: PostcodeNode<'_>,
-    source: &str,
+pub fn parse_postcode_node<'tree>(
+    typed: SourceBound<'tree, '_, PostcodeNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Postcode> {
     let node = typed.raw_node();
-    let text = match source.get(node.byte_range()) {
-        Some(text) => text,
-        None => {
-            errors.report(ParseError::new(
-                ErrorCode::InvalidPostcode,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), "postcode"),
-                "Postcode range is not a UTF-8 slice of the supplied source",
-            ));
-            return ParseOutcome::rejected();
-        }
-    };
+    let source = typed.source();
+    let text = typed.text();
 
     // Strip "[+ " prefix and "]" suffix
     let code = text
@@ -47,7 +35,9 @@ pub fn parse_postcode_node(
         .map(|s| s.trim_end());
 
     match code {
-        Some(c) if !c.is_empty() => ParseOutcome::parsed(Postcode::new(c)),
+        Some(c) if !c.is_empty() => ParseOutcome::parsed(Postcode::new(c).with_span(
+            talkbank_model::Span::from_usize(node.start_byte(), node.end_byte()),
+        )),
         _ => {
             errors.report(ParseError::new(
                 ErrorCode::InvalidPostcode,
@@ -70,7 +60,7 @@ mod tests {
     use crate::generated_traversal::FromNodeKind;
 
     #[test]
-    fn real_postcodes_refuse_an_out_of_source_range() {
+    fn real_postcodes_require_their_original_parse_owner() {
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../corpus/reference/content/postcodes-and-freecodes.cha"
@@ -79,6 +69,9 @@ mod tests {
         let parsed = parser
             .parse_source_incremental(source, None)
             .expect("parse");
+        let foreign = parser
+            .parse_source_incremental(source, None)
+            .expect("independent equal-bytes parse");
         let mut pending = vec![parsed.root_node()];
         let mut checked = 0;
         while let Some(node) = pending.pop() {
@@ -88,12 +81,19 @@ mod tests {
                 continue;
             };
             let errors = ErrorCollector::new();
-            assert!(parse_postcode_node(postcode, source, &errors).is_some());
+            let bound = parsed.bind_typed(postcode).expect("original owner");
+            let ParseOutcome::Parsed(value) = parse_postcode_node(bound, &errors) else {
+                panic!("reference postcode must parse");
+            };
+            assert_eq!(
+                value.span,
+                talkbank_model::Span::from_usize(node.start_byte(), node.end_byte())
+            );
             assert!(errors.to_vec().is_empty());
-            assert!(parse_postcode_node(postcode, "", &errors).is_none());
-            let diagnostics = errors.into_vec();
-            assert_eq!(diagnostics.len(), 1);
-            assert_eq!(diagnostics[0].code, ErrorCode::InvalidPostcode);
+            assert!(
+                foreign.bind_typed(postcode).is_err(),
+                "equal text is not the same parse owner"
+            );
             checked += 1;
         }
         assert!(checked > 0, "fixture must exercise postcode admission");

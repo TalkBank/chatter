@@ -11,8 +11,7 @@ categories.workspace = true
 description = "Rust bindings for opening files in the CLAN application"
 readme = "README.md"
 build = "build.rs"
-# Hold back crates.io publication until the Wave 1B support contract lands.
-publish = false
+# Runtime dependency of the registry-installable CLI.
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

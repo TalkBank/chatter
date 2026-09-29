@@ -4,13 +4,12 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Types_Header>
 
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, SlotView, TypesHeaderNode, extract_types_header,
+    AsRawNode, KindSlot, NoChild, SourceBound, SourceBoundKind, SourceField, SourceSlotView,
+    TypesHeaderNode,
 };
-use tree_sitter::Node;
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Header, TypesHeader};
 
@@ -34,11 +33,11 @@ use talkbank_model::model::{Header, TypesHeader};
 /// ```
 ///
 /// The @Types header has three mandatory fields: design, activity, group.
-pub fn parse_types_header(
-    typed: TypesHeaderNode<'_>,
-    source: &str,
+pub fn parse_types_header<'tree>(
+    typed: SourceBound<'tree, '_, TypesHeaderNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Header {
+) -> Result<Header, crate::CstFailure> {
+    let source = typed.source();
     let node = typed.raw_node();
 
     // Grammar: seq(types_prefix, header_sep, types_design, comma, whitespaces?,
@@ -46,21 +45,24 @@ pub fn parse_types_header(
     // models the interstitial whitespace as its own position (no longer skipped),
     // so the three mandatory fields sit at `child_2` (design, UNCHANGED),
     // `child_6` (activity, was `child_4`), `child_10` (group, was `child_6`); read
-    // through the NEW backend's free, typed `extract_types_header`, each field
-    // matched EXHAUSTIVELY. The per-field diagnostics + the caller's
-    // `unknown_types_header` recovery are byte-identical to the pre-migration
-    // `find_child_text` behaviour; the design->activity->group order (and its
-    // short-circuit on the first missing field) is preserved.
-    let children = extract_types_header(typed);
+    // through source-bound extraction. The design->activity->group order and
+    // short-circuit on the first missing field are preserved. Present fields
+    // separately admit readable source ranges; failures remain producer faults.
+    let children = typed.extract()?;
 
     let ParseOutcome::Parsed(design) = read_types_field(
-        children.child_2.slot(),
-        node,
-        source,
+        children.field_child_2().slot(),
+        typed,
         errors,
         "types_design",
-    ) else {
-        surface_displaced(&children.unexpected, "types_header", source, errors);
+    )?
+    else {
+        surface_displaced(
+            &children.children().unexpected,
+            "types_header",
+            source,
+            errors,
+        );
         return super::super::unknown_header(
             node,
             source,
@@ -71,13 +73,18 @@ pub fn parse_types_header(
     };
 
     let ParseOutcome::Parsed(activity) = read_types_field(
-        children.child_6.slot(),
-        node,
-        source,
+        children.field_child_6().slot(),
+        typed,
         errors,
         "types_activity",
-    ) else {
-        surface_displaced(&children.unexpected, "types_header", source, errors);
+    )?
+    else {
+        surface_displaced(
+            &children.children().unexpected,
+            "types_header",
+            source,
+            errors,
+        );
         return super::super::unknown_header(
             node,
             source,
@@ -88,13 +95,18 @@ pub fn parse_types_header(
     };
 
     let ParseOutcome::Parsed(group) = read_types_field(
-        children.child_10.slot(),
-        node,
-        source,
+        children.field_child_10().slot(),
+        typed,
         errors,
         "types_group",
-    ) else {
-        surface_displaced(&children.unexpected, "types_header", source, errors);
+    )?
+    else {
+        surface_displaced(
+            &children.children().unexpected,
+            "types_header",
+            source,
+            errors,
+        );
         return super::super::unknown_header(
             node,
             source,
@@ -104,40 +116,41 @@ pub fn parse_types_header(
         );
     };
 
-    surface_displaced(&children.unexpected, "types_header", source, errors);
+    surface_displaced(
+        &children.children().unexpected,
+        "types_header",
+        source,
+        errors,
+    );
     let types_header = TypesHeader::new(design, activity, group);
 
-    Header::Types(types_header)
+    Ok(Header::Types(types_header))
 }
 
-/// Read one mandatory `@Types` field from its typed positional slot, reproducing
-/// the pre-migration `find_child_text` text + diagnostic handling EXACTLY.
+/// Read one mandatory `@Types` field from its source-bound positional slot.
 ///
 /// `slot` is the field's `child_N` slot (e.g. `KindSlot<TypesDesignNode>`);
-/// `node` is the `@Types` header node (used for the missing-field diagnostic
+/// `header` is the bound `@Types` header (used for the missing-field diagnostic
 /// span); `label` is the field name (`types_design` / `types_activity` /
 /// `types_group`) used to build the preserved diagnostic messages and context.
 /// The slot match is EXHAUSTIVE over every `NodeSlot` variant; there is
 /// deliberately no `_` catch-all that could silently drop a recovery slot.
-fn read_types_field<'tree, T: AsRawNode<'tree> + Copy>(
-    slot: &KindSlot<'tree, T>,
-    node: Node,
-    source: &str,
+/// Source-read failures propagate separately from authored missing-field errors.
+fn read_types_field<'tree, T: SourceBoundKind<'tree>>(
+    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, T>>,
+    header: SourceBound<'tree, '_, TypesHeaderNode<'tree>>,
     errors: &impl ErrorSink,
     label: &str,
-) -> ParseOutcome<String> {
+) -> Result<ParseOutcome<String>, crate::CstFailure> {
+    let node = header.raw_node();
+    let source = header.source();
     match slot.view() {
-        SlotView::Present(field) => {
-            // Checked text admission retains the typed field and its diagnostic.
-            decode_present_child(field, source, errors, label, |e| {
-                format!("Failed to extract UTF-8 text from {}: {}", label, e)
-            })
-        }
+        SourceSlotView::Present(field) => Ok(ParseOutcome::parsed(field.read()?.text().to_owned())),
         // The pre-migration `find_child_text` returned `None` for an absent /
         // missing / error / unexpected field child, funnelling to the SAME
         // "Missing <label> in @Types header" diagnostic at the HEADER NODE span.
         // Preserve that exactly.
-        SlotView::Missing(_) | SlotView::Absent(NoChild) | SlotView::Error(_) => {
+        SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) | SourceSlotView::Error(_) => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
@@ -145,7 +158,8 @@ fn read_types_field<'tree, T: AsRawNode<'tree> + Copy>(
                 ErrorContext::new(source, node.start_byte()..node.end_byte(), "types_header"),
                 format!("Missing {} in @Types header", label),
             ));
-            ParseOutcome::rejected()
+            Ok(ParseOutcome::rejected())
         }
+        SourceSlotView::Unexpected(never) => match never {},
     }
 }

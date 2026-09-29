@@ -440,9 +440,6 @@ impl AdmittedMerge {
                 Ok(Some(order)) => order,
                 Err(error) => {
                     let review = self.draft_order.resolve(error, origins.len())?;
-                    lines.push(Line::header(Header::Comment {
-                        content: talkbank_model::model::BulletContent::from_text(review.comment()),
-                    }));
                     draft_order_reviews.push(review);
                     true
                 }

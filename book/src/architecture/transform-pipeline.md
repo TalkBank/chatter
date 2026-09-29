@@ -1,11 +1,21 @@
 # Transform Pipeline
 
 **Status:** Current
-**Last updated:** 2026-08-03 09:06 EDT
+**Last updated:** 2026-09-28 10:49 EDT
 
 The `talkbank-transform` crate provides high-level pipelines that compose parsing, validation, and serialization into reusable workflows.
 
 ## Core Pipelines
+
+### Transcript construction
+
+`build_chat` assembles a typed `TranscriptDescription` into a mutable CHAT
+document; validation remains a separate step. Media names accepted by
+`MediaFilename` as HTTP/HTTPS references are preserved verbatim, including
+quotes, extensions and Unicode spelling. They are not filesystem paths and
+are never fetched. Complete input spelling must pass media representability
+admission before local basename/extension reduction; malformed directory text
+cannot be hidden by normalization. The resulting local stem is admitted again.
 
 ### Parse + Validate
 
@@ -61,6 +71,156 @@ let normalized = normalize_chat(source, &parser)?;
 
 `normalize_chat` lives in
 `crates/talkbank-transform/src/pipeline/convert.rs`.
+
+### Selective name pseudonymization: planning API under development
+
+`pseudonymize::NameMap` admits a private caller-supplied mapping.
+`TranscriptNames::admit_document` binds that mapping to parsed, validated source,
+including alignment checks. `PseudonymizationInput::plan_words` creates sensitive
+review previews without mutating the input. `PseudonymizationInput::prepare_output`
+can now produce an admitted in-memory `PseudonymizedDocument`, but this is
+**not yet a user-facing de-identification command**. Private receipt persistence,
+CLI integration and broader policy/corpus acceptance remain unfinished.
+
+Output preparation refuses unsafe lexical, morphology, timing or pronunciation
+plans. It applies only their source-bound edit ranges, copying every intervening
+byte unchanged; applied private receipt entries are built during that same
+operation. The rewritten source must pass parsing and alignment-aware validation
+under the input's filename and rule context. The output parse is reused for a
+follow-up plan, which must propose no further changes. A refusal retains original
+review findings but exposes no partial output text. Accepted output still is not
+a promise of complete de-identification: report-only findings remain visible in
+its private review and callers must protect both output and receipts.
+
+Lexical reviews retain a producer-assigned `WordLocation`: zero-based utterance
+and original-word indices, plus `WordSpelling` distinguishing spoken material
+from an indexed editorial replacement target. Retraced words count; separators
+and targets do not advance the original-word index. These are review coordinates,
+not morphology or phonology alignment indices. Aligned morphology, corroborated
+timing and pronunciation refusals carry the selecting word's location through
+their existing bindings. Applied lexical edits retain it in `EditOrigin`; their
+`EditKind` is derived from that origin rather than stored independently. Multiple
+source fields removed from one shortening retain the same word location.
+Metadata findings and edits carry `HeaderFieldLocation` (header index plus typed
+field); prose uses `ProseLocation`, which distinguishes a document header from
+an utterance's dependent tier. Header indices count all headers, including
+structural ones; dependent-tier indices count all tier kinds. Independently
+reported morphology uses `LemmaLocation`: utterance, morphology-item index and
+`LemmaPart::Main` or a specific post-clitic. It never invents a main-tier match
+for an unmatched lemma. Exact source ranges remain available alongside this
+context. All indices are zero-based. Persistent CLI receipts are being integrated.
+
+The CLI publication boundary is being implemented separately from the transform.
+It stages only admitted `PseudonymizedDocument` bytes beside an explicit output
+destination and uses no-clobber publication. Existing files, directories and
+symlinks are not replaced; a collision after staging also refuses publication.
+Abandoning preparation removes its temporary file, not the input or destination.
+Unix staging files are owner-only; other systems require a protected destination
+directory's inherited ACL. This does not establish a cross-file transaction or
+crash-durable directory update.
+
+The receipt owner now encloses the low-level publisher. Its `PreparedPublication`
+owns both the staged file and a committed private SQLite receipt; callers cannot
+separate that evidence from its output or call the enclosed publisher directly.
+The receipt records source/output BLAKE3 identities, the exact applied edits,
+typed locations and report-only findings in queryable tables, not JSON blobs.
+It starts as `prepared`, becomes `written` only after publication and file sync,
+or records `publication_failed` on a no-clobber failure. An interruption or failed
+completion update can leave `prepared`; that state means uncertain publication,
+not success or proof of absence. Existing receipt files are never overwritten.
+SQL dependencies live in the CLI, not the transform core. The user command
+remains unavailable pending command routing and end-to-end acceptance. Refused
+plans have separate `output_refused` receipts: proposals are labeled `proposed`,
+never applied, and output coordinates and identity are absent. Input admission
+refusals and missing map entries are distinct states. A derived summary view
+distinguishes a mapped document with no findings from an unmapped document.
+
+The authored `word-features/pseudonymizer-source.cha` / `pseudonymizer-expected.cha`
+pair tests exact output, every untouched gap, cross-tier changes, metadata,
+possessive retention, deterministic application and idempotence. Existing
+pronunciation, morphology and timing mismatch references also exercise whole-
+document refusal. A placeholder that reintroduces a mapped word at a Unicode
+boundary is refused during map admission, before document planning. Placeholders
+must first be plain CHAT lexical tokens; invalid tokens are refused separately.
+The output stability check remains an independent boundary safeguard.
+
+Admission retains the producer-owned `ParsedSource` alongside the validated
+model. `TreeSitterParser::parse_chat_file_with_source` returns both from one
+parse; its diagnostics still require review and its model still requires
+validation. The retained CST enables generated source-bound field traversal
+without a second parse, raw-line searches, or assuming whole-header serialization
+preserves untouched formatting. CST ownership alone is not a validity proof.
+Admission refuses both errors and warnings. Canonical controls exercise empty
+input, missing participant roles, forbidden controls inside free text, and a
+warning-only non-NFC media name paired with its canonical spelling. Even rejected
+empty input can retain a CST; its existence never authorizes transformation.
+
+Header-field review covers whole Unicode-bounded names within participant names and
+typed `@ID` group, education and custom fields, including repeated names within
+longer metadata text. It uses the same matcher and report-only possessive
+policy as prose, not a second whole-field replacement path. Generated field
+projections supply exact source ranges; a binding failure is a refusal, not
+permission to search raw lines. `ParticipantWordRoles` owns the name/role
+partition for both parser lowering and source-bound review. Speaker codes,
+participant roles, spacing and structural pipes are not selected. Each match
+has exactly one metadata or prose owner; these are still review findings, not
+complete writable pseudonymization.
+
+The current planning policy uses exact-case typed lexical components, reports
+case near misses, and derives dependent-tier changes from selected main-tier
+words. Main-tier previews now retain exact generated text/shortening edits;
+each shortening owns its parentheses and inner segment, so it cannot create
+overlapping edits. Marker bytes, suffixes, annotations and unselected compound
+partners remain outside those ranges. Source association and lexical-piece
+corroboration are required: failure creates a refusal instead of an unbound
+proposal. The `word-features/selective-name-fields.cha` reference exercises
+lengthening and names on either side of a compound boundary.
+
+Free-text planning uses `unicode-segmentation` word boundaries on typed prose
+payloads, with apostrophe-s possessives such as `Rose’s` and `Rose's` reported
+rather than partially rewritten. A mapped name may span several segments, such
+as `Rose-Marie`. At each boundary the longest recognized spelling takes
+precedence, including report-only near misses and possessives: mapping both
+`Rose` and `Rose-Marie` never partly rewrites `Rose-marie` as `Rose`.
+The `headers/unicode-name-boundaries.cha` reference exercises this policy in
+participant names, ID metadata and prose. `LexicalPlan::free_text` returns private
+source-bound exact matches, case near misses and possessive review findings.
+The CST supplies prose segments within descriptive headers and free-text
+dependent tiers (including user-defined tiers); timing bullets, identifiers,
+configuration headers and structured tiers are not treated as prose. This does
+not tokenize raw CHAT structure. Header-field review above reuses this matcher
+while retaining its own typed metadata classification.
+The `headers/free-text-names.cha` reference covers accented names, punctuation,
+continuation lines, timing, possessives and several dependent-tier kinds.
+
+Dependent-tier proposals are driven by the selected main-tier
+words. Morphology requires established lemma correspondence. Edit locations
+are not inferred from text searches: each morphology proposal retains
+the generated, source-bound main-lemma field from the same admitted parse.
+Tier item counts and lemma values corroborate the association; failure refuses
+the proposal. Post-clitic fields are not mistaken for subsequent main items.
+The canonical `tiers/mor-name-source-fields.cha` example exercises repeated
+names, both shortening forms, uneven spacing and a preceding post-clitic item.
+This establishes exact edit locations, not writable document output.
+Unchanged mapped lemmas, including post-clitics, are reported separately as
+exact matches or case near misses; the lemma scan cannot authorize an
+independent replacement. Compound
+components without proven lemma-part correspondence produce a refusal.
+Timing uses the [`%wor` corroboration transition](wor-timing.md). Words within a
+timing tier receive the selected main word's existing component decisions, not
+another name-map lookup. Equal cleaned spellings with different compound
+structure refuse the change. Exact timing-word lexical edits preserve markers
+and leave timing bullets outside their ranges; a failure refuses the tier's
+proposal rather than exposing a partial list. The selective-name reference
+also covers a name that occurs only in the timing tier: it is not independently
+replaced.
+
+Words within a phonological group share the group's alignment position.
+Pronunciation findings retain the
+original `%pho`/`%mod` item and refuse automatic output; structured Phon
+companions require correspondence review. No tier is silently dropped and no
+orthographic placeholder is treated as a pronunciation. These review objects
+contain protected transcript content and must not be logged by default.
 
 ## Validation + Roundtrip Cache Lifecycle
 
@@ -119,13 +279,14 @@ or reached by a directory walk.
 
 ### How a run ends, and who decides
 
-Every stream ends with exactly one terminal `ValidationEvent`, and the
-runner is the only thing that decides which:
+While its receiver remains connected, every stream ends with exactly one
+terminal `ValidationEvent`, and the runner decides which:
 
-- `Finished(stats)`: every discovered file was accounted for. This is the
-  ONLY warrant for a claim about the whole input ("all files valid", a
-  zero exit status). A cancelled run still arrives here, carrying
-  `stats.cancelled`, because its shortfall was requested.
+- `Finished(stats)`: processing ended with accounted-for outcomes or an
+  explicitly requested cancellation. Consumers must still inspect the totals
+  and `stats.cancelled`; this variant alone does not mean "all files valid"
+  or justify a zero exit status. A cancelled run arrives here because its
+  shortfall was requested.
 - `FinishedIncomplete { stats, lost_files }`: the run reached its end
   without covering everything it discovered, because worker threads
   unwound and abandoned files. `stats` describes only what was
@@ -139,6 +300,19 @@ variant breaks external consumers on purpose: a new terminal event that
 a consumer silently ignores is precisely the defect these variants
 exist to prevent, so a downstream crate should get a non-exhaustive
 match error and decide for itself what a dead or incomplete run means.
+The compiler-checked `validate_directory_streaming` rustdoc example shows an
+exhaustive event loop. Keep the cancellation sender alive while consuming the
+stream, and treat channel closure without a terminal event as a tool failure,
+not successful validation.
+
+Dropping the result receiver is also a stop boundary. Once a worker fails to
+deliver a file-completion event, it must not start another queued file. This
+applies to fresh validation, cached results and file-read failures alike. The
+already completed attempt is accounted for before delivery; disconnection does
+not turn an unreadable input into a parser error or a cacheable result. With
+multiple workers, other in-flight attempts may finish before observing closure.
+The reference-backed lifecycle contract synchronizes at a cache lookup and
+checks subsequent work counts, rather than relying on sleeps or timing.
 
 Two design points worth keeping:
 

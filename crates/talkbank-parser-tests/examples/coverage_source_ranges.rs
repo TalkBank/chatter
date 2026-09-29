@@ -1,4 +1,4 @@
-//! Emit source-bound inline-test ranges for the Rust files named on stdin.
+//! Emit source-bound test ranges and omission candidates for files on stdin.
 //! Input is a JSON array of repository-relative paths; output is keyed by path.
 
 use std::collections::BTreeMap;

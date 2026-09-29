@@ -1,7 +1,7 @@
 # Library Usage
 
 **Status:** Current
-**Last updated:** 2026-09-05 11:27 EDT
+**Last updated:** 2026-09-28 10:22 EDT
 
 The TalkBank Rust crates can be used as dependencies in your own Rust
 projects for parsing, validating, and manipulating CHAT files. This page
@@ -41,6 +41,37 @@ talkbank-parser = { path = "../chatter/crates/talkbank-parser" }
 
 The published-crate workflow is tracked separately; once it lands these
 paths can become `version = "X.Y"` deps.
+
+## Explicit English number generation
+
+`talkbank_transform::num_words::expand_number` spells supported numeric input
+for callers constructing transcripts. It is not a CHAT parser, validator, or
+automatic repair of existing speech. The caller remains responsible for the
+intended pronunciation; unsupported input is preserved exactly rather than
+partially rewritten or assigned a guessed pronunciation.
+
+English ordinal composition supports 0–9999 and retains British-style
+conjunctions without prose commas. Larger suffix-bearing ordinals are preserved,
+including their original suffix: `10001st` must not become `10001th`.
+
+English decade expansion requires a multiple of ten in one of these domains:
+
+| Input domain | Examples | Generated words |
+| --- | --- | --- |
+| Shorthand 0–90 | `0s`, `80s`, `90s` | `zeros`, `eighties`, `nineties` |
+| Full-year 1100–2990 | `1100s`, `1950s`, `2990s` | `eleven hundreds`, `nineteen fifties`, `twenty-nine nineties` |
+
+Other suffix forms, such as `21s`, `100s`, `2001s`, and `3000s`, remain
+unchanged. This deliberately avoids inventing phrases such as “twenty-ones”
+or “two thousand and ones”. Neither support nor preservation certifies CHAT
+validity: English digit-bearing words still require an authored transcription.
+Initial zero has omission semantics in CHAT, so the raw-string `0s` and
+leading-zero API cases are not interchangeable with parsed CHAT words.
+
+These are bounded generation policies, not claims about every possible English
+number expression or the speaker's intent. The [testing contract](../../contributing/testing.md)
+pairs authored written reference controls with invalid numeric specimens and
+keeps raw-string boundary tests separate.
 
 ## Parsing and Validating a CHAT File
 

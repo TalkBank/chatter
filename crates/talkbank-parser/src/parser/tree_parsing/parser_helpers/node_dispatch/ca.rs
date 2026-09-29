@@ -74,9 +74,12 @@ fn parse_ca_token<'tree, T: CaToken<'tree>>(
         return ParseOutcome::rejected();
     };
     let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
+    // Present CA tokens are single symbols from the shared generated registry.
+    // Empty or unknown text means a producer or source-association fault;
+    // actual MISSING recovery was handled above.
     let Some(ch) = text.chars().next() else {
         errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
+            ErrorCode::InternalError,
             Severity::Error,
             SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
             ErrorContext::new(source, node.byte_range(), ""),
@@ -88,7 +91,7 @@ fn parse_ca_token<'tree, T: CaToken<'tree>>(
         Some(value) => ParseOutcome::parsed(value),
         None => {
             errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
+                ErrorCode::InternalError,
                 Severity::Error,
                 SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
                 ErrorContext::new(source, node.byte_range(), ""),
@@ -157,7 +160,7 @@ mod tests {
             );
             let diagnostics = errors.into_vec();
             assert_eq!(diagnostics.len(), 1);
-            assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
+            assert_eq!(diagnostics[0].code, ErrorCode::InternalError);
         }
     }
 }

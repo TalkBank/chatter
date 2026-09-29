@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Authored control: omitted speech has no lexical morphology; the tier retains its terminator.
+@Comment:	Combines the omitted-utterance form in E544 with the terminator-only MOR construct mor_example_9.
+*CHI:	0 .
+%mor:	.
+@End

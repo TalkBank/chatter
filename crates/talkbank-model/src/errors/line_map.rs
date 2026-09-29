@@ -135,10 +135,12 @@ impl LineMap {
     /// For the last line (or a line beyond the file), returns `source_len`.
     #[inline]
     pub fn line_end(&self, line: usize, source_len: u32) -> u32 {
-        if line + 1 < self.line_starts.len() {
-            self.line_starts[line + 1]
-        } else {
-            source_len
+        match line
+            .checked_add(1)
+            .and_then(|next| self.line_starts.get(next))
+        {
+            Some(&end) => end,
+            None => source_len,
         }
     }
 

@@ -35,12 +35,24 @@ impl<'input> UtteranceInput<'input> {
         let probe = WrappedFragment::new(&[], input, newline, 0)?;
         let complete = {
             let parsed = probe.parse(parser)?;
-            SourceFileNode::from_node(parsed.parsed_source().root_node()).is_some_and(|root| {
-                matches!(
-                    extract_source_file(root).content.slot(),
-                    NodeSlot::Present(SourceFileChoice::FullDocument(_))
-                )
-            })
+            match SourceFileNode::from_node(parsed.parsed_source().root_node()) {
+                Some(root) => {
+                    let children = extract_source_file(root).map_err(|fault| {
+                        crate::error::ParseErrors::from(vec![
+                            crate::parser::typed_cst::cst_failure_diagnostic(
+                                parsed.parsed_source().root_node(),
+                                parsed.parsed_source().source(),
+                                fault,
+                            ),
+                        ])
+                    })?;
+                    matches!(
+                        children.content.slot(),
+                        NodeSlot::Present(SourceFileChoice::FullDocument(_))
+                    )
+                }
+                None => false,
+            }
         };
         Ok(if complete {
             Self::Complete(probe)

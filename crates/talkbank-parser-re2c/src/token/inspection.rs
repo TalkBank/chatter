@@ -132,7 +132,7 @@ impl<'a> Token<'a> {
             | Token::AltAnnotation(s)
             | Token::PercentAnnotation(s)
             | Token::Langcode(s)
-            | Token::Replacement(s)
+            | Token::ReplacementBegin(s)
             | Token::WordSegment(s)
             | Token::Shortening(s)
             | Token::Lengthening(s)

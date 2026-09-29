@@ -15,8 +15,10 @@
 use super::content::report_tree_shape;
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, NodeSlot, RecoveryNode, StandaloneWordChild0Choice, StandaloneWordChild2Choice,
-    StandaloneWordNode, WordBodyChoice, WordBodyNode, extract_standalone_word, extract_word_body,
+    AdmittedStandaloneWordChild0Choice as StandaloneWordChild0Choice,
+    AdmittedStandaloneWordChild2Choice as StandaloneWordChild2Choice,
+    AdmittedWordBodyChoiceSourceView as WordBodyChoiceSourceView, AsRawNode, NodeSlot,
+    RecoveryNode, SourceBound, SourceSlotView, StandaloneWordNode, WordBodyNode,
 };
 use crate::model::Word;
 use crate::parser::tree_parsing::parser_helpers::{
@@ -44,14 +46,16 @@ use pieces::push_slot;
 /// [`build_word_contents`]. Until 2026-09-09 this walked the children by
 /// `node.kind()` string, with a silent arm for anything else.
 ///
-/// Content, replacement, %wor and fragment callers retain the generated word
-/// wrapper. Missing placeholders still reject; a typed kind is not validity.
-pub fn convert_word_node(
-    typed: StandaloneWordNode<'_>,
-    source: &str,
+/// Content, replacement, %wor and fragment callers retain the producer-bound
+/// word and its admitted source text. Missing placeholders still reject;
+/// source ownership and a typed kind are not syntax validity. Body and piece
+/// projections retain ownership; suffix and CA adapters remain transitional.
+pub fn convert_word_node<'tree>(
+    typed: SourceBound<'tree, '_, StandaloneWordNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Word> {
-    let node = typed.raw_node();
+    let source = typed.source();
+    let node = typed.node().raw_node();
     if node.is_missing() {
         errors.report(ParseError::new(
             ErrorCode::MalformedWordContent,
@@ -66,14 +70,17 @@ pub fn convert_word_node(
         return ParseOutcome::rejected();
     }
 
-    let talkbank_model::ParseOutcome::Parsed(raw_text) =
-        extract_utf8_text(node, source, errors, "standalone_word")
-    else {
-        return ParseOutcome::rejected();
-    };
+    let raw_text = typed.text();
     let span = talkbank_model::Span::from_usize(node.start_byte(), node.end_byte());
 
-    let children = extract_standalone_word(typed);
+    let extraction = crate::parser::typed_cst::canonical_grammar()
+        .and_then(|grammar| typed.extract_admitted(grammar));
+    let Ok(bound_children) =
+        crate::parser::typed_cst::report_reconstruction(extraction, node, source, errors)
+    else {
+        return ParseOutcome::Rejected;
+    };
+    let children = bound_children.children();
 
     // Position 0: a category prefix (`&-`, `&~`, `&+`) or the omission
     // `zero`, which the grammar inlines here rather than through
@@ -92,14 +99,15 @@ pub fn convert_word_node(
 
     // Position 1: the body, required.
     let mut content_items: SmallVec<[WordContent; 2]> = SmallVec::new();
-    if let Some(body) = taken(
-        children.child_1.slot(),
-        "word_body",
-        "standalone_word",
-        source,
-        errors,
-    ) {
-        build_word_contents(*body, source, errors, &mut content_items);
+    match bound_children.field_child_1().slot().view() {
+        SourceSlotView::Present(body) => {
+            if let Some(body) = crate::parser::typed_cst::read_source_field(body, errors) {
+                build_word_contents(body, errors, &mut content_items);
+            }
+        }
+        SourceSlotView::Unexpected(never) => match never {},
+        SourceSlotView::Missing(never) => match never {},
+        SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {}
     }
 
     // Position 2: one `@` suffix run, or the node the grammar builds for a
@@ -167,8 +175,8 @@ pub fn convert_word_node(
         .collect();
 
     // Parser recovery can produce a word node with empty text (from
-    // `[: unclosed`, for instance), and a node whose text does not decode
-    // arrives here as the empty fallback. The word's source text is proven
+    // `[: unclosed`, for instance). Source admission proves a readable slice,
+    // not that it contains any text. The word's source text is proven
     // non-empty here, where the diagnostic can name the node; the
     // constructor takes the proof.
     let raw_text = match NonEmptyString::new(raw_text) {
@@ -229,7 +237,7 @@ pub fn convert_word_node(
         content_items
     };
 
-    let mut word = Word::new(raw_text, cleaned);
+    let mut word = Word::new(cleaned);
     word.span = span;
     word.category = category;
     word.form_type = form_type;
@@ -437,40 +445,48 @@ fn repeated_form_marker(node: Node, source: &str, errors: &impl ErrorSink) -> Op
 /// lowered to a [`Piece`] and converted once by [`push_piece`]; the two
 /// unexpected sinks are surfaced, where the old walk's `_ =>` arm skipped
 /// whatever it did not name.
-fn build_word_contents(
-    body: WordBodyNode<'_>,
-    source: &str,
+fn build_word_contents<'tree>(
+    body: SourceBound<'tree, '_, WordBodyNode<'tree>>,
     errors: &impl ErrorSink,
     items: &mut SmallVec<[WordContent; 2]>,
 ) {
-    let children = extract_word_body(body);
-    surface_displaced(&children.unexpected, "word_body", source, errors);
-    let Some(content) = taken(
-        children.content.slot(),
-        "word body content",
-        "word_body",
+    let source = body.source();
+    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| body.extract_admitted(grammar)),
+        body.raw_node(),
         source,
         errors,
     ) else {
         return;
     };
-    match content {
-        WordBodyChoice::WordSegment(segment_initial) => {
-            surface_displaced(&segment_initial.unexpected, "word_body", source, errors);
-            push_slot(segment_initial.child_0.slot(), source, errors, items);
-            for positioned in segment_initial.child_1.slot() {
-                push_slot(positioned.slot(), source, errors, items);
+    surface_displaced(&children.children().unexpected, "word_body", source, errors);
+    let content = match children.field_content().slot().view() {
+        SourceSlotView::Present(content) => content,
+        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => return,
+        SourceSlotView::Unexpected(never) => match never {},
+    };
+    match content.view() {
+        WordBodyChoiceSourceView::WordSegment(segment_initial) => {
+            for bad in segment_initial.field_unexpected().iter() {
+                surface_displaced(&[bad.raw_node()], "word_body", source, errors);
+            }
+            push_slot(segment_initial.field_child_0().slot(), errors, items);
+            for positioned in segment_initial.field_child_1().slot().iter() {
+                push_slot(positioned.slot(), errors, items);
             }
         }
-        WordBodyChoice::OverlapPoint(marker_initial) => {
-            surface_displaced(&marker_initial.unexpected, "word_body", source, errors);
-            push_slot(marker_initial.child_0.slot(), source, errors, items);
-            for positioned in marker_initial.child_1.slot() {
-                push_slot(positioned.slot(), source, errors, items);
+        WordBodyChoiceSourceView::OverlapPoint(marker_initial) => {
+            for bad in marker_initial.field_unexpected().iter() {
+                surface_displaced(&[bad.raw_node()], "word_body", source, errors);
             }
-            push_slot(marker_initial.child_2.slot(), source, errors, items);
-            for positioned in marker_initial.child_3.slot() {
-                push_slot(positioned.slot(), source, errors, items);
+            push_slot(marker_initial.field_child_0().slot(), errors, items);
+            for positioned in marker_initial.field_child_1().slot().iter() {
+                push_slot(positioned.slot(), errors, items);
+            }
+            push_slot(marker_initial.field_child_2().slot(), errors, items);
+            for positioned in marker_initial.field_child_3().slot().iter() {
+                push_slot(positioned.slot(), errors, items);
             }
         }
     }

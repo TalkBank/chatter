@@ -8,8 +8,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#QuotedNewLine_Terminator>
 
 use crate::generated_traversal::{
-    AsRawNode, MorContentsChild0BreakForCodingChoice,
-    MorContentsChild0MorContentChild2Child1Choice, UtteranceEndChild0Choice,
+    AdmittedMorContentsChild0BreakForCodingChoice,
+    AdmittedMorContentsChild0MorContentChild2Child1Choice, AdmittedUtteranceEndChild0Choice,
+    AdmittedWorTierBodyChild2Choice, AsRawNode, MorContentsChild0BreakForCodingChoice,
+    MorContentsChild0MorContentChild2Child1Choice, TerminatorChoice, UtteranceEndChild0Choice,
     WorTierBodyChild2Choice,
 };
 use crate::model::Terminator;
@@ -83,9 +85,14 @@ macro_rules! impl_new_terminator_choice {
 }
 
 impl_new_terminator_choice!(UtteranceEndChild0Choice);
+impl_new_terminator_choice!(AdmittedUtteranceEndChild0Choice);
+impl_new_terminator_choice!(TerminatorChoice);
 impl_new_terminator_choice!(WorTierBodyChild2Choice);
+impl_new_terminator_choice!(AdmittedWorTierBodyChild2Choice);
 impl_new_terminator_choice!(MorContentsChild0MorContentChild2Child1Choice);
 impl_new_terminator_choice!(MorContentsChild0BreakForCodingChoice);
+impl_new_terminator_choice!(AdmittedMorContentsChild0MorContentChild2Child1Choice);
+impl_new_terminator_choice!(AdmittedMorContentsChild0BreakForCodingChoice);
 
 /// Map any NEW-backend terminator supertype choice (see [`NewTerminatorChoice`])
 /// to its [`Terminator`] model variant.

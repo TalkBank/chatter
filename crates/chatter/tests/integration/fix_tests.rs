@@ -37,17 +37,11 @@ fn harness_with_fixture(name: &str, contents: &str) -> Result<(CliHarness, PathB
     Ok((harness, path))
 }
 
-/// One clean utterance (`*CHI:\txx .`, E241 `IllegalUntranscribed`, a
-/// `BatchSafety::Mechanical` catalog fix) and one utterance whose main tier
-/// does not parse (`*MOT:\t&- .`: a bare filler prefix with no following
-/// word body, which the grammar cannot fold into a `standalone_word`).
-///
-/// Verified against `chatter validate`: exactly E316 `UnparsableContent`
-/// (the MOT line, no catalog entry), two E504 `MissingRequiredHeader`
-/// (missing `@Languages` and `@Participants`; the former has no catalog
-/// entry, the latter is `BatchSafety::Semantic`), and E241 (the CHI line,
-/// `BatchSafety::Mechanical`) fire, and no other code does.
-const PARTIAL_FIXTURE: &str = "@UTF8\n@Begin\n*CHI:\txx .\n*MOT:\t&- .\n@End\n";
+/// The authored E241 recovery control supplies two structurally owned
+/// utterances: the first is clean; malformed morphology taints only the second.
+const PARTIAL_FIXTURE: &str = include_str!(
+    "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E241_illegal_untranscribed_marker_3.cha"
+);
 
 /// A single clean utterance carrying one `BatchSafety::Mechanical`
 /// diagnostic (E241 `IllegalUntranscribed`, `"xx"` is not legal) and one
@@ -77,6 +71,18 @@ fn path_arg(path: &std::path::Path) -> Result<&str, TestError> {
 /// elsewhere, and must itself come out byte-identical.
 #[test]
 fn a_broken_region_does_not_block_a_fix_elsewhere() -> Result<(), TestError> {
+    use talkbank_model::{ErrorCollector, ParseHealthState};
+    let parser = talkbank_parser::TreeSitterParser::new()
+        .map_err(|error| TestError::Failure(error.to_string()))?;
+    let errors = ErrorCollector::new();
+    let file = parser.parse_chat_file_streaming(PARTIAL_FIXTURE, &errors);
+    let utterances: Vec<_> = file.utterances().collect();
+    assert_eq!(utterances.len(), 2, "two owned recovery domains");
+    assert_eq!(utterances[0].parse_health(), ParseHealthState::Clean);
+    assert!(matches!(
+        utterances[1].parse_health(),
+        ParseHealthState::Tainted(_)
+    ));
     let (harness, path) = harness_with_fixture("partial.cha", PARTIAL_FIXTURE)?;
 
     let output = harness.run_output(&["fix", path_arg(&path)?, "--apply"])?;
@@ -88,13 +94,58 @@ fn a_broken_region_does_not_block_a_fix_elsewhere() -> Result<(), TestError> {
 
     let after = fs::read_to_string(&path)?;
     assert!(
-        after.contains("*CHI:\txxx ."),
-        "the clean utterance was not fixed: {after}"
+        after.contains("*CHI:\tI said xxx today ."),
+        "the clean utterance was not fixed: {after}\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
     assert!(
-        after.contains("*MOT:\t&- ."),
+        after.contains("*CHI:\thello .\n%mor no_tab_separator\n"),
         "the broken utterance was rewritten: {after}"
     );
+    Ok(())
+}
+
+/// An apparent line boundary is not authority to split a recovered domain.
+/// Preserve the original regression input and require fail-closed behavior.
+#[test]
+fn unstructured_following_main_tier_does_not_license_a_partial_fix() -> Result<(), TestError> {
+    let source = "@UTF8\n@Begin\n*CHI:\txx .\n*MOT:\t&- .\n@End\n";
+    let (harness, path) = harness_with_fixture("recovered.cha", source)?;
+    let output = harness.run_output(&["fix", path_arg(&path)?, "--apply"])?;
+    assert!(output.status.success());
+    assert_eq!(fs::read_to_string(&path)?, source);
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .contains("the enclosing utterance needed parser recovery")
+    );
+    Ok(())
+}
+
+/// Bare `--apply` must not touch a semantic code.
+#[test]
+fn orphaned_gra_removal_requires_opt_in_and_preserves_other_tiers() -> Result<(), TestError> {
+    let source = include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E604_gra_without_mor_2.cha"
+    );
+    let expected = include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E604_gra_without_mor_3.cha"
+    );
+    let (harness, path) = harness_with_fixture("orphaned.cha", source)?;
+    let preview = harness.run_output(&["fix", path_arg(&path)?, "--apply"])?;
+    assert!(preview.status.success());
+    assert_eq!(
+        fs::read_to_string(&path)?,
+        source,
+        "no implicit semantic opt-in"
+    );
+    let applied = harness.run_output(&["fix", path_arg(&path)?, "--apply", "--code", "E604"])?;
+    assert!(
+        applied.status.success(),
+        "{}",
+        String::from_utf8_lossy(&applied.stderr)
+    );
+    assert_eq!(fs::read_to_string(&path)?, expected);
     Ok(())
 }
 

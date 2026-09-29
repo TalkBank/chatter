@@ -1,10 +1,10 @@
 //! Alignment-domain counting/extraction over main-tier content trees.
 //!
-//! Every function here takes a [`PositionalDomain`], which has no `%wor`:
+//! General operations take a [`PositionalDomain`], which has no `%wor`:
 //! the `%wor` count and pairing belong to `WorMainTierProjection`, and until
 //! 2026-09-08 two `Wor` arms in this file computed the count a second time.
 //!
-//! One traversal, two sinks: [`count_tier_positions`] counts what
+//! One traversal, multiple sinks: [`count_tier_positions`] counts what
 //! [`collect_tier_items`] collects, over the same walk, so the two cannot
 //! disagree. Until 2026-09-08 the file carried a counting traversal and an
 //! extracting traversal side by side, each with its own arms over the two
@@ -24,16 +24,14 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 use crate::model::{
-    Action, Annotated, BracketedContent, BracketedItem, ContentAnnotation, Pause, ReplacedWord,
-    Separator, UtteranceContent, Word,
+    BracketedContent, BracketedItem, ContentAnnotation, ReplacedWord, UtteranceContent, Word,
 };
 
-use super::descent::{AtomicUnit, Descent, descend, excluded_by_annotations};
+use super::descent::{Descent, descend_for, excluded_by_annotations};
 use super::domain::PositionalDomain;
-use super::rules::{
-    counts_for_tier, is_tag_marker_separator, should_align_replaced_word_in_pho_sin,
-};
-use super::to_chat_display_string as to_string;
+use super::measurement::{Mor, Pho, Sin};
+use super::positions::{AlignablePosition, PositionDomain, PositionLeaf};
+use super::rules::{counts_for_tier, should_align_replaced_word_in_pho_sin};
 
 /// One extracted alignable item shown in mismatch diagnostics.
 #[derive(Debug, Clone, PartialEq)]
@@ -134,6 +132,14 @@ pub fn collect_tier_items(
     content: &[UtteranceContent],
     domain: PositionalDomain,
 ) -> Vec<TierPosition> {
+    match domain {
+        PositionalDomain::Mor => collect_for(content, Mor),
+        PositionalDomain::Pho => collect_for(content, Pho),
+        PositionalDomain::Sin => collect_for(content, Sin),
+    }
+}
+
+fn collect_for<D: PositionDomain>(content: &[UtteranceContent], domain: D) -> Vec<TierPosition> {
     let mut items = Vec::new();
     for item in content {
         walk_alignable_item(item, domain, &mut |position| {
@@ -141,6 +147,109 @@ pub fn collect_tier_items(
         });
     }
     items
+}
+
+/// A main-tier position in the `%mor` sequence, borrowed from the canonical walk.
+///
+/// A non-word position still occupies its index (for example a tag separator).
+/// Private construction keeps the index and selected word associated; visitors
+/// cannot accidentally compact away non-word slots before looking up `%mor`.
+pub struct MorPosition<'main> {
+    index: crate::alignment::MainWordIndex,
+    word: Option<&'main Word>,
+}
+
+impl<'main> MorPosition<'main> {
+    /// Index in the complete morphology-alignment sequence, not the raw word list.
+    pub fn index(&self) -> crate::alignment::MainWordIndex {
+        self.index
+    }
+
+    /// Selected word, including an editorial replacement target where applicable.
+    /// `None` means an alignable non-word position, not a missing word.
+    pub fn word(&self) -> Option<&'main Word> {
+        self.word
+    }
+}
+
+/// Visit borrowed morphology positions without rendering, cloning or reparsing.
+///
+/// This is another sink on the same walk used by alignment counts and diagnostic
+/// extraction. Replacement selection, retrace exclusion and separator membership
+/// stay with that owner. It proves membership/order, not agreement with a supplied
+/// `%mor` tier; a caller still needs the tier's alignment evidence.
+pub fn visit_mor_positions<'main>(
+    content: &'main [UtteranceContent],
+    sink: &mut impl FnMut(MorPosition<'main>),
+) {
+    let mut next_index = 0;
+    for item in content {
+        walk_alignable_item(item, Mor, &mut |position| {
+            let word = match position {
+                AlignablePosition::Word(word) => Some(word),
+                AlignablePosition::Atomic(never) => match never {},
+                AlignablePosition::Other(_) => None,
+            };
+            sink(MorPosition {
+                index: crate::alignment::MainWordIndex::new(next_index),
+                word,
+            });
+            next_index += 1;
+        });
+    }
+}
+
+/// A spoken word and its owning phonology position. Words inside an atomic
+/// phonological group share a position; pauses still consume their own slots.
+pub struct PhoWordPosition<'main> {
+    index: crate::alignment::MainWordIndex,
+    word: &'main Word,
+}
+
+impl<'main> PhoWordPosition<'main> {
+    /// Index of the owning unit in the complete phonology sequence.
+    pub fn index(&self) -> crate::alignment::MainWordIndex {
+        self.index
+    }
+    /// Spoken word; editorial replacement targets are not phonology input.
+    pub fn word(&self) -> &'main Word {
+        self.word
+    }
+}
+
+/// Visit spoken words with their phonology positions through the alignment
+/// owner's traversal. This establishes membership, not dependent-tier agreement.
+pub fn visit_pho_words<'main>(
+    content: &'main [UtteranceContent],
+    sink: &mut impl FnMut(PhoWordPosition<'main>),
+) {
+    let mut next_index = 0;
+    for item in content {
+        walk_alignable_item(item, Pho, &mut |position| {
+            visit_position_words(
+                position,
+                crate::alignment::MainWordIndex::new(next_index),
+                sink,
+            );
+            next_index += 1;
+        });
+    }
+}
+
+fn visit_position_words<'main>(
+    position: AlignablePosition<'main, Pho>,
+    index: crate::alignment::MainWordIndex,
+    sink: &mut impl FnMut(PhoWordPosition<'main>),
+) {
+    match position {
+        AlignablePosition::Word(word) => sink(PhoWordPosition { index, word }),
+        AlignablePosition::Atomic(group) => {
+            walk_alignable_bracketed(&group.content, Pho, &mut |child| {
+                visit_position_words(child, index, sink);
+            });
+        }
+        AlignablePosition::Other(_) => {}
+    }
 }
 
 /// Count alignable units for a given alignment domain.
@@ -196,6 +305,17 @@ fn count_items<'a>(
     items: impl Iterator<Item = &'a UtteranceContent>,
     domain: PositionalDomain,
 ) -> usize {
+    match domain {
+        PositionalDomain::Mor => count_for(items, Mor),
+        PositionalDomain::Pho => count_for(items, Pho),
+        PositionalDomain::Sin => count_for(items, Sin),
+    }
+}
+
+fn count_for<'a, D: PositionDomain>(
+    items: impl Iterator<Item = &'a UtteranceContent>,
+    domain: D,
+) -> usize {
     let mut count = 0usize;
     for item in items {
         walk_alignable_item(item, domain, &mut |_| count += 1);
@@ -203,63 +323,12 @@ fn count_items<'a>(
     count
 }
 
-/// One position a dependent tier aligns to, as the walk meets it.
-///
-/// A count needs only that it was met; a diagnostic needs its text, which
-/// [`Self::into_tier_position`] renders. The two consumers share the walk.
-enum AlignablePosition<'a> {
-    /// A word, or the replacement or original a replaced word contributes.
-    Word(&'a Word),
-    /// A container that IS one position in this tier (a phonological group
-    /// under `%pho`, a sign group under `%sin`).
-    Atomic(AtomicUnit<'a>),
-    /// A tag-marker separator, which `%mor` aligns.
-    Separator(&'a Separator),
-    /// A pause, at the top level or inside a group, which `%pho` aligns.
-    Pause(&'a Pause),
-    /// A top-level action, which `%sin` aligns.
-    Action(&'a Action),
-    /// A top-level annotated action, rendered with its annotations.
-    AnnotatedAction(&'a Annotated<Action>),
-}
-
-impl AlignablePosition<'_> {
-    fn into_tier_position(self) -> TierPosition {
-        match self {
-            Self::Word(word) => TierPosition {
-                text: to_string(word),
-                description: None,
-            },
-            Self::Atomic(unit) => TierPosition {
-                text: unit.display_text(),
-                description: Some(unit.description().to_string()),
-            },
-            Self::Separator(sep) => TierPosition {
-                text: to_string(sep),
-                description: None,
-            },
-            Self::Pause(pause) => TierPosition {
-                text: to_string(pause),
-                description: Some("pause".to_string()),
-            },
-            Self::Action(action) => TierPosition {
-                text: to_string(action),
-                description: Some("action".to_string()),
-            },
-            Self::AnnotatedAction(action) => TierPosition {
-                text: to_string(action),
-                description: Some("action".to_string()),
-            },
-        }
-    }
-}
-
 /// Walks one main-tier item, handing every alignable position in `domain`
 /// to `sink`, in document order.
-fn walk_alignable_item<'a>(
+fn walk_alignable_item<'a, D: PositionDomain>(
     item: &'a UtteranceContent,
-    domain: PositionalDomain,
-    sink: &mut impl FnMut(AlignablePosition<'a>),
+    domain: D,
+    sink: &mut impl FnMut(AlignablePosition<'a, D>),
 ) {
     match item {
         UtteranceContent::Word(word) => walk_alignable_word(word, &[], domain, sink),
@@ -285,37 +354,27 @@ fn walk_alignable_item<'a>(
         | UtteranceContent::Quotation(_)
         | UtteranceContent::AnnotatedQuotation(_)
         | UtteranceContent::Retrace(_)
-        | UtteranceContent::AnnotatedRetrace(_) => {
-            match descend(item.structure(), Some(domain.into())) {
-                Descent::Into(entered) => {
-                    walk_alignable_bracketed(entered.content(), domain, sink);
-                }
-                Descent::Atomic(unit) => sink(AlignablePosition::Atomic(unit)),
-                Descent::Excluded => {}
+        | UtteranceContent::AnnotatedRetrace(_) => match descend_for::<D>(item.structure()) {
+            Descent::Into(entered) => {
+                walk_alignable_bracketed(entered.content(), domain, sink);
             }
-        }
+            Descent::Atomic(unit) => sink(AlignablePosition::Atomic(unit)),
+            Descent::Excluded => {}
+        },
         UtteranceContent::Separator(sep) => {
-            if domain == PositionalDomain::Mor && is_tag_marker_separator(sep) {
-                sink(AlignablePosition::Separator(sep));
-            }
+            D::emit_leaf(PositionLeaf::Separator(sep), sink);
         }
         UtteranceContent::Pause(pause) => {
             // Pauses are phonological events that get transcribed in %pho tiers
             // but NOT in %wor tiers (which only contain actual words)
             // %mor and %sin also don't align to pauses
-            if domain == PositionalDomain::Pho {
-                sink(AlignablePosition::Pause(pause));
-            }
+            D::emit_leaf(PositionLeaf::Pause(pause), sink);
         }
         UtteranceContent::Action(action) => {
-            if domain == PositionalDomain::Sin {
-                sink(AlignablePosition::Action(action));
-            }
+            D::emit_leaf(PositionLeaf::Action(action), sink);
         }
         UtteranceContent::AnnotatedAction(action) => {
-            if domain == PositionalDomain::Sin {
-                sink(AlignablePosition::AnnotatedAction(action));
-            }
+            D::emit_leaf(PositionLeaf::AnnotatedAction(action), sink);
         }
         // All remaining variants are non-alignable for every dependent tier:
         // events, markers, formatting, freecodes, overlap points, internal bullets.
@@ -336,10 +395,10 @@ fn walk_alignable_item<'a>(
 }
 
 /// Walks bracketed content recursively, depth-first, in document order.
-fn walk_alignable_bracketed<'a>(
+fn walk_alignable_bracketed<'a, D: PositionDomain>(
     content: &'a BracketedContent,
-    domain: PositionalDomain,
-    sink: &mut impl FnMut(AlignablePosition<'a>),
+    domain: D,
+    sink: &mut impl FnMut(AlignablePosition<'a, D>),
 ) {
     for item in &content.content {
         walk_alignable_bracketed_item(item, domain, sink);
@@ -349,10 +408,10 @@ fn walk_alignable_bracketed<'a>(
 /// Walks one bracketed item. Mirrors the top-level rules for bracket-scoped
 /// structures, with the action difference stated below (a pause mirrors the
 /// top level since 2026-09-09).
-fn walk_alignable_bracketed_item<'a>(
+fn walk_alignable_bracketed_item<'a, D: PositionDomain>(
     item: &'a BracketedItem,
-    domain: PositionalDomain,
-    sink: &mut impl FnMut(AlignablePosition<'a>),
+    domain: D,
+    sink: &mut impl FnMut(AlignablePosition<'a, D>),
 ) {
     match item {
         BracketedItem::Word(word) => walk_alignable_word(word, &[], domain, sink),
@@ -375,19 +434,15 @@ fn walk_alignable_bracketed_item<'a>(
         | BracketedItem::Quotation(_)
         | BracketedItem::AnnotatedQuotation(_)
         | BracketedItem::Retrace(_)
-        | BracketedItem::AnnotatedRetrace(_) => {
-            match descend(item.structure(), Some(domain.into())) {
-                Descent::Into(entered) => {
-                    walk_alignable_bracketed(entered.content(), domain, sink);
-                }
-                Descent::Atomic(unit) => sink(AlignablePosition::Atomic(unit)),
-                Descent::Excluded => {}
+        | BracketedItem::AnnotatedRetrace(_) => match descend_for::<D>(item.structure()) {
+            Descent::Into(entered) => {
+                walk_alignable_bracketed(entered.content(), domain, sink);
             }
-        }
+            Descent::Atomic(unit) => sink(AlignablePosition::Atomic(unit)),
+            Descent::Excluded => {}
+        },
         BracketedItem::Separator(sep) => {
-            if domain == PositionalDomain::Mor && is_tag_marker_separator(sep) {
-                sink(AlignablePosition::Separator(sep));
-            }
+            D::emit_leaf(PositionLeaf::Separator(sep), sink);
         }
         // A pause inside bracketed content is a phonological token exactly as
         // a top-level one is (see the `UtteranceContent::Pause` arm): the
@@ -409,9 +464,7 @@ fn walk_alignable_bracketed_item<'a>(
         // (208 files clean with a pause token in every phonological tier)
         // extends inside a group, as the note predicted it would.
         BracketedItem::Pause(pause) => {
-            if domain == PositionalDomain::Pho {
-                sink(AlignablePosition::Pause(pause));
-            }
+            D::emit_leaf(PositionLeaf::Pause(pause), sink);
         }
         // All remaining variants produce no alignable items inside bracketed
         // content: actions, events, markers, formatting, freecodes, overlap points.
@@ -435,18 +488,18 @@ fn walk_alignable_bracketed_item<'a>(
 
 /// A word position, unless its own scoped annotations exclude it from the
 /// domain or the membership rule does.
-fn walk_alignable_word<'a>(
+fn walk_alignable_word<'a, D: PositionDomain>(
     word: &'a Word,
     annotations: &[ContentAnnotation],
-    domain: PositionalDomain,
-    sink: &mut impl FnMut(AlignablePosition<'a>),
+    _domain: D,
+    sink: &mut impl FnMut(AlignablePosition<'a, D>),
 ) {
     // A word carries its own scoped annotations exactly as a group does, and
     // the exclusion question is the same one, so it asks the same owner.
-    if excluded_by_annotations(annotations, Some(domain.into())) {
+    if excluded_by_annotations(annotations, D::DOMAIN) {
         return;
     }
-    if !counts_for_tier(word, domain.into()) {
+    if !counts_for_tier(word, D::POSITIONAL.into()) {
         return;
     }
     sink(AlignablePosition::Word(word));
@@ -458,24 +511,20 @@ fn walk_alignable_word<'a>(
 /// follows the corrected transcript slot; `%pho` and `%sin` align to the
 /// original word (what was actually spoken or produced), at most once
 /// whatever the replacement holds.
-fn walk_alignable_replaced_word<'a>(
+fn walk_alignable_replaced_word<'a, D: PositionDomain>(
     entry: &'a ReplacedWord,
-    domain: PositionalDomain,
-    sink: &mut impl FnMut(AlignablePosition<'a>),
+    _domain: D,
+    sink: &mut impl FnMut(AlignablePosition<'a, D>),
 ) {
-    if excluded_by_annotations(&entry.scoped_annotations, Some(domain.into())) {
+    if excluded_by_annotations(&entry.scoped_annotations, D::DOMAIN) {
         return;
     }
-    match domain {
+    match D::POSITIONAL {
         PositionalDomain::Mor => {
-            if !entry.replacement.words.is_empty() {
-                for word in &entry.replacement.words {
-                    if counts_for_tier(word, domain.into()) {
-                        sink(AlignablePosition::Word(word));
-                    }
+            for word in &entry.replacement.words {
+                if counts_for_tier(word, D::POSITIONAL.into()) {
+                    sink(AlignablePosition::Word(word));
                 }
-            } else if counts_for_tier(&entry.word, domain.into()) {
-                sink(AlignablePosition::Word(&entry.word));
             }
         }
         PositionalDomain::Pho | PositionalDomain::Sin => {

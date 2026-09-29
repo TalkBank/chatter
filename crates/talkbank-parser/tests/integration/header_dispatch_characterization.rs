@@ -188,7 +188,7 @@ fn headers_time_and_types_fixture_parses_with_zero_diagnostics() {
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: Some(Valid { years: 2, months: Some(6), days: None, raw: "2;06." }), sex: Some(Male), group: Some(GroupName("TD")), ses: Some(SesOnly(UC)), role: ParticipantRole("Child"), education: Some(EducationDescription("graduate")), custom_field: Some(CustomIdField("custom field")) })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("MOT"), age: None, sex: Some(Female), group: None, ses: Some(Combined { eth: White, ses: MC }), role: ParticipantRole("Mother"), education: None, custom_field: None })"#,
         r#"TimeStart { start: Parsed { hours: 8, minutes: 30, seconds: 31, millis: None, raw: "8:30:31" } }"#,
-        r#"TimeDuration { duration: Parsed { segments: [Range { start: TimeValue { hours: 0, minutes: 17, seconds: 30, millis: None }, end: TimeValue { hours: 0, minutes: 18, seconds: 0, millis: None } }], raw: "17:30-18:00" } }"#,
+        r#"TimeDuration { duration: Parsed { segments: [Range { start: TimeValue { hours: 17, minutes: 30, seconds: 0, millis: None }, end: TimeValue { hours: 18, minutes: 0, seconds: 0, millis: None } }], raw: "17:30-18:00" } }"#,
         r#"Types(TypesHeader { design: DesignType("long"), activity: ActivityType("toyplay"), group: GroupType("TD") })"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Time, type, and option headers" })]) } }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Constructs: time_start_header, time_duration_header, time_duration_contents," }), Continuation, Text(BulletContentText { text: "types_header, types_design, types_activity, types_group," }), Continuation, Text(BulletContentText { text: "options_header, options_contents, option_name," }), Continuation, Text(BulletContentText { text: "id_corpus, id_age, id_sex, id_group, id_ses, id_education, id_custom_field" })]) } }"#,
@@ -291,7 +291,7 @@ fn unsupported_header_recovers_silently_and_thumbnail_gap_rejects_with_e525() {
             "E525".to_string(),
             116,
             155,
-            "Unrecognized header type 'thumbnail_header'".to_string(),
+            "Unsupported @Thumbnail header".to_string(),
         )],
         "expected exactly one E525 for the thumbnail_header gap (unsupported_header emits none), got: {diags:?}"
     );

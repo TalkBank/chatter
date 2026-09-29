@@ -10,23 +10,13 @@
     clippy::unimplemented
 )]
 
-//! Regression test for the E207 bare-`&` suggestion text.
-//!
-//! Background: the canonical CHAT changelog (`changes.txt`) retired the
-//! bare `&XYZ` form long ago. Modern CHAT uses four marker prefixes:
-//!
-//! - `&-XYZ` filler  (`changes.txt` line 537)
-//! - `&+XYZ` fragment (changes.txt line 539, reassigned from "incomplete")
-//! - `&~XYZ` nonword  (changes.txt line 175, replaced the bare-`&` "fragment")
-//! - `&=XYZ` event    (longstanding)
-//!
-//! The E207 suggestion in `errors.rs` previously said `'&uh' for filler`,
-//! which itself fails to parse, because bare `&uh` is the very pattern E207
-//! rejects. The suggestion contradicted the parser's own behavior.
+//! Source recovery for incomplete ampersand markers follows the canonical
+//! E207 spec's E316 subsumption policy. No raw-text classifier may manufacture
+//! a marker kind or require specialized repair suggestions from an ERROR.
 
 use crate::common::parse_and_collect_errors;
 
-/// Minimal CHAT fragment containing a bare `&um` that E207 rejects.
+/// Retained legacy input: it stays invalid, without its retired E207 classifier.
 const CHAT_WITH_BARE_AMP: &str = "@UTF8\n\
     @Begin\n\
     @Languages:\teng\n\
@@ -35,52 +25,30 @@ const CHAT_WITH_BARE_AMP: &str = "@UTF8\n\
     *CHI:\t&um something .\n\
     @End\n";
 
-/// Discriminator: `ErrorCode::UnknownAnnotation` is also raised by the
-/// `[@ xyz]` scoped-annotation path, so we additionally key on the
-/// bare-`&` message substring to pick the right E207 variant.
-fn e207_bare_amp_suggestion(input: &str) -> String {
-    parse_and_collect_errors(input)
-        .into_iter()
-        .find(|e| e.message.contains("must be followed by annotation name"))
-        .expect("expected an E207 bare-`&` error")
-        .suggestion
-        .expect("E207 must carry a help suggestion")
-}
-
 #[test]
-fn e207_suggestion_uses_canonical_prefixed_filler_form() {
-    let suggestion = e207_bare_amp_suggestion(CHAT_WITH_BARE_AMP);
-    assert!(
-        suggestion.contains("&-uh") || suggestion.contains("&-um"),
-        "suggestion should reference the canonical prefixed filler form, got: {suggestion:?}"
-    );
-}
-
-#[test]
-fn e207_suggestion_does_not_reference_retired_bare_amp_form() {
-    let suggestion = e207_bare_amp_suggestion(CHAT_WITH_BARE_AMP);
-    // The pre-fix suggestion was `"Complete the annotation like '&=laugh'
-    // or '&uh' for filler"`. The literal `'&uh'` is retired; modern CHAT
-    // uses `'&-uh'`. Pin against any quoted-bare-`&uh`-style recurrence.
-    for forbidden in ["'&uh'", "'&um'", "'&mhm'"] {
+fn incomplete_ampersand_retains_recovery_and_valid_filler_control() {
+    let control = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E207_5.cha"
+    ));
+    let truncated = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E207_6.cha"
+    ));
+    assert!(parse_and_collect_errors(control).is_empty());
+    for source in [truncated, CHAT_WITH_BARE_AMP] {
+        let diagnostics = parse_and_collect_errors(source);
         assert!(
-            !suggestion.contains(forbidden),
-            "suggestion must not reference the retired bare-`&` form {forbidden}, got: {suggestion:?}"
+            diagnostics
+                .iter()
+                .any(|d| d.code == talkbank_model::ErrorCode::UnparsableContent),
+            "incomplete marker remains invalid: {diagnostics:?}"
         );
-    }
-}
-
-#[test]
-fn e207_suggestion_covers_all_four_canonical_marker_kinds() {
-    let suggestion = e207_bare_amp_suggestion(CHAT_WITH_BARE_AMP);
-    // All four canonical prefixes per java-chatter changes.txt should
-    // appear, so a confused contributor reading a single error message
-    // learns the current four-way distinction (filler / fragment /
-    // nonword / event).
-    for prefix in ["&-", "&+", "&~", "&="] {
         assert!(
-            suggestion.contains(prefix),
-            "suggestion should reference the {prefix} marker kind, got: {suggestion:?}"
+            diagnostics
+                .iter()
+                .all(|d| d.code != talkbank_model::ErrorCode::UnknownAnnotation),
+            "an ERROR cannot fabricate typed marker identity: {diagnostics:?}"
         );
     }
 }

@@ -232,7 +232,7 @@ fn parsed_wor_filler_keeps_category_and_timing() {
         .utterances()
         .next()
         .expect("fixture should contain one utterance");
-    assert_eq!(utterance.parse_health, ParseHealthState::Clean);
+    assert_eq!(utterance.parse_health(), ParseHealthState::Clean);
 
     let wor = utterance
         .wor_tier()

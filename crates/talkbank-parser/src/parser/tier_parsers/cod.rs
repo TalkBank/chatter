@@ -38,17 +38,17 @@ use talkbank_model::model::CodTier;
 pub fn parse_cod_tier<'tree>(
     typed: SourceBound<'tree, '_, CodDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> CodTier {
+) -> Result<CodTier, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = typed.extract();
+    let children = typed.extract()?;
     let content = parse_optional_text_tier_content(
         typed,
         children.field_child_2().slot(),
         &children.children().unexpected,
         errors,
-    );
-    CodTier::new(content).with_span(span)
+    )?;
+    Ok(CodTier::new(content).with_span(span))
 }
 
 #[cfg(test)]

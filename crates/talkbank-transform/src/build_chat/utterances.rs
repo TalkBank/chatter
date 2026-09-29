@@ -1,12 +1,12 @@
 //! Assemble utterance lines from pre-formatted CHAT main-tier text.
 //!
 //! Each [`super::UtteranceDesc`] carries a CHAT utterance as text; this module parses
-//! it through the tree-sitter parser (so the result is real, validated model
-//! structure, never hand-built) and applies an optional per-utterance language
+//! it through the tree-sitter parser (producing parsed model structure, not a
+//! whole-file validation proof) and applies an optional per-utterance language
 //! override. The batchalign word-level path (timed ASR tokens, retrace runs,
 //! `%wor` generation) is not part of this general builder.
 
-use talkbank_model::model::{LanguageCode, Line};
+use talkbank_model::model::{LanguageCode, Line, Utterance};
 
 use super::UtteranceDesc;
 use super::parser::BuildChatContext;
@@ -64,20 +64,18 @@ pub(super) fn build_utterance_lines(context: &BuildChatContext<'_>) -> Result<Ve
     for utterance in utterances {
         let built = build_text_utterance(context, TextInput::admit(utterance)?)?;
 
-        if let Some(mut line) = built {
+        if let Some(mut built) = built {
             apply_utterance_language_override(
-                &mut line,
+                &mut built,
                 utterance.lang.as_deref(),
                 context.primary_lang(),
             )?;
-            if let Line::Utterance(ref mut built) = line
-                && let Some(comment) = &utterance.comment
-            {
+            if let Some(comment) = &utterance.comment {
                 built
                     .dependent_tiers
                     .push(talkbank_model::model::DependentTier::Com(comment.clone()).into());
             }
-            lines.push(line);
+            lines.push(Line::Utterance(Box::new(built)));
         } else if utterance.comment.is_some() {
             return Err("an utterance comment requires main-tier content".to_owned());
         }
@@ -87,13 +85,12 @@ pub(super) fn build_utterance_lines(context: &BuildChatContext<'_>) -> Result<Ve
 }
 
 fn apply_utterance_language_override(
-    line: &mut Line,
+    utterance: &mut Utterance,
     utterance_lang: Option<&str>,
     primary_lang: &LanguageCode,
 ) -> Result<(), String> {
     if let Some(utterance_lang) = utterance_lang
         && utterance_lang != primary_lang.as_str()
-        && let Line::Utterance(utterance) = line
     {
         let code = LanguageCode::new(utterance_lang)
             .map_err(|e| format!("invalid utterance language code {utterance_lang:?}: {e}"))?;
@@ -106,10 +103,12 @@ fn apply_utterance_language_override(
 ///
 /// Parses a main-tier fragment through the description-bound semantic context.
 /// File-level options must influence the model before it leaves the builder.
+/// Retains the fragment parser's utterance type through row enrichment; only
+/// insertion into the file widens it to `Line`, so headers cannot enter here.
 fn build_text_utterance(
     context: &BuildChatContext<'_>,
     input: TextInput<'_>,
-) -> Result<Option<Line>, String> {
+) -> Result<Option<Utterance>, String> {
     let TextInput::Present {
         speaker,
         text,
@@ -138,5 +137,5 @@ fn build_text_utterance(
     let utterance = context
         .parse_utterance(&line)
         .map_err(|error| format!("Failed to parse utterance for speaker {speaker}: {error}"))?;
-    Ok(Some(Line::Utterance(Box::new(utterance))))
+    Ok(Some(utterance))
 }

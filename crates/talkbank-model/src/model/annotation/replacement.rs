@@ -41,25 +41,51 @@ use talkbank_derive::{SemanticEq, SpanShift};
 ///
 /// Reference:
 /// - <https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope>
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema, SemanticEq, SpanShift)]
 #[serde(transparent)]
 #[schemars(transparent)]
-pub struct ReplacementWords(Vec<Word>);
+pub struct ReplacementWords(#[schemars(length(min = 1))] Vec<Word>);
 
-crate::collection_newtype_ops!(ReplacementWords, Word);
+/// Replacement syntax requires at least one intended word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("a replacement must contain at least one word")]
+pub struct EmptyReplacementWords;
 
 impl ReplacementWords {
     /// Wraps replacement tokens in transcript order.
     ///
-    /// Construction is infallible; replacement-specific constraints are checked
-    /// later by [`crate::validation::Validate`].
-    pub fn new(words: Vec<Word>) -> Self {
-        Self(words)
+    /// Empty collections are rejected at admission, including JSON decoding.
+    pub fn new(words: Vec<Word>) -> Result<Self, EmptyReplacementWords> {
+        if words.is_empty() {
+            Err(EmptyReplacementWords)
+        } else {
+            Ok(Self(words))
+        }
     }
 
-    /// Returns `true` when no intended tokens were provided.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+    /// Admit a known first word without a fallible collection check.
+    pub fn from_word(word: Word) -> Self {
+        Self(vec![word])
+    }
+
+    /// Borrow the words without permitting collection resizing.
+    pub fn as_slice(&self) -> &[Word] {
+        &self.0
+    }
+
+    /// Edit individual words without emptying the collection.
+    pub fn as_mut_slice(&mut self) -> &mut [Word] {
+        &mut self.0
+    }
+
+    /// Consume the proof before resizing or filtering; rebuilding rechecks it.
+    pub fn into_vec(self) -> Vec<Word> {
+        self.0
+    }
+
+    /// Append an intended word while retaining nonempty admission.
+    pub fn push(&mut self, word: Word) {
+        self.0.push(word);
     }
 }
 
@@ -72,10 +98,18 @@ impl Deref for ReplacementWords {
     }
 }
 
-impl From<Vec<Word>> for ReplacementWords {
-    /// Wraps a plain vector as `ReplacementWords`.
-    fn from(words: Vec<Word>) -> Self {
-        Self(words)
+impl TryFrom<Vec<Word>> for ReplacementWords {
+    type Error = EmptyReplacementWords;
+
+    /// Admit a raw collection without bypassing the nonempty constraint.
+    fn try_from(words: Vec<Word>) -> Result<Self, Self::Error> {
+        Self::new(words)
+    }
+}
+
+impl<'de> Deserialize<'de> for ReplacementWords {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(Vec::<Word>::deserialize(deserializer)?).map_err(serde::de::Error::custom)
     }
 }
 
@@ -110,34 +144,12 @@ impl IntoIterator for ReplacementWords {
 }
 
 impl crate::validation::Validate for ReplacementWords {
-    /// Enforces replacement-specific word constraints (non-empty, no omissions/untranscribed).
+    /// Enforces lexical constraints; collection nonemptiness is proved at admission.
     fn validate(
         &self,
         context: &crate::validation::ValidationContext,
         errors: &impl crate::ErrorSink,
     ) {
-        let span = match context.field_span {
-            Some(span) => span,
-            None => crate::Span::DUMMY,
-        };
-        // DEFAULT: Absent field text is reported as empty for error context.
-        let text = context.field_text.as_deref().unwrap_or_default();
-        // DEFAULT: Missing label falls back to "replacement" for error messaging.
-        let label = context.field_label.unwrap_or("replacement");
-
-        if self.is_empty() {
-            errors.report(
-                crate::ParseError::new(
-                    crate::ErrorCode::EmptyReplacement,
-                    crate::Severity::Error,
-                    crate::SourceLocation::new(span),
-                    crate::ErrorContext::new(text, span, label),
-                    "Replacement [: text] must contain at least one word",
-                )
-                .with_suggestion("Add replacement text after [: "),
-            );
-        }
-
         for replacement_word in &self.0 {
             replacement_word.validate(context, errors);
 
@@ -322,37 +334,32 @@ impl IntoIterator for ReplacedWordAnnotations {
 /// );
 ///
 /// // Multi-word replacement
-/// let replacement = Replacement::new(vec![
+/// let replacement = Replacement::new(talkbank_model::model::annotation::ReplacementWords::new(vec![
 ///     Word::simple("went"),
 ///     Word::simple("home"),
-/// ]);
+/// ]).expect("nonempty words"));
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
 pub struct Replacement {
     /// The intended word(s).
     ///
     /// What should have been said instead of the actual utterance.
-    /// Must contain at least one word (validated during parsing).
+    /// Nonempty by construction and JSON admission.
     pub words: ReplacementWords,
 }
 
 impl Replacement {
     /// Builds replacement payload from one or more intended words.
     ///
-    /// An empty list is allowed at construction time so parser pipelines can
-    /// keep building an AST and surface a typed validation error afterward.
-    pub fn new(words: Vec<Word>) -> Self {
-        // Note: Nonempty constraint validated during validation phase, not here
-        // This allows lenient parsing with validation errors reported later
-        Self {
-            words: words.into(),
-        }
+    /// The argument already proves collection nonemptiness.
+    pub fn new(words: ReplacementWords) -> Self {
+        Self { words }
     }
 
     /// Convenience constructor for the common single-target form `[: word]`.
     pub fn from_word(word: Word) -> Self {
         Self {
-            words: vec![word].into(),
+            words: ReplacementWords::from_word(word),
         }
     }
 

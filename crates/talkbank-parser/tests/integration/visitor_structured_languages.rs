@@ -10,20 +10,14 @@
     clippy::unimplemented
 )]
 
-//! Characterization tests for the @Languages header parser's INTERNAL child-access
-//! (Task 2h, Level-2 PARTIAL structured migration).
+//! Reference contracts for the source-bound @Languages header decoder.
 //!
 //! `parse_languages_header` lives in
 //! `tree_parsing/header/metadata/languages.rs` and is SHARED by both the line path
 //! (`header_parser/dispatch/structured.rs`) and the single-line
-//! `header_dispatch/parse.rs` API. Task 2h migrates the OUTER
-//! `find_child_by_kind(node, LANGUAGES_CONTENTS)` call off the raw
-//! `node.kind()` scan onto the generated, typed `extract_languages_header(node).child_2`
-//! slot (reached through the shared `HeaderTraversal` ZST seam in
-//! `tree_parsing/header/typed.rs`). The INNER loop over language codes stays as a
-//! `node.kind()` walk (Repeat(Seq) generator limit, documented in `languages.rs`).
-//! This migration is BEHAVIOUR-PRESERVING: the produced `Header` payloads and every
-//! diagnostic must stay byte-identical.
+//! `header_dispatch/parse.rs` API. Generated source-associated fields own both
+//! contents selection and the repeated code list. These contracts preserve
+//! model payloads and CHAT diagnostics across ownership improvements.
 //!
 //! These tests pin the OBSERVABLE behaviour at the real parser boundary
 //! (`parse_chat_file_streaming` -> `ChatFile` + collected diagnostics) on the
@@ -34,8 +28,7 @@
 //! - `@Languages` with a single code (`eng`):        `empty-and-minimal.cha`
 //!
 //! All asserted values were captured by RUNNING the pre-migration parser. The
-//! tests PASS on the current code and MUST STAY GREEN after the outer child-access
-//! migration.
+//! tests retain those observable contracts independently of decoder internals.
 
 use talkbank_model::ErrorCollector;
 use talkbank_model::model::{Header, Line};

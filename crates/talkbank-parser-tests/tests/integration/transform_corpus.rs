@@ -8,6 +8,12 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::chat_corpus::ChatCorpus;
 use talkbank_parser_tests::test_error::strict_parse;
 
+#[path = "adjudication_corpus.rs"]
+mod adjudication_contracts;
+
+#[path = "speaker_identification_corpus.rs"]
+mod speaker_identification_contracts;
+
 #[path = "alignment_diagnostic_corpus.rs"]
 mod alignment_diagnostic_contracts;
 #[path = "build_chat_corpus.rs"]
@@ -16,6 +22,8 @@ mod build_chat_contracts;
 mod cache_contracts;
 #[path = "catalog_corpus.rs"]
 mod catalog_contracts;
+#[path = "channel_corpus.rs"]
+mod channel_contracts;
 #[path = "coordinated_corpus.rs"]
 mod coordinated_contracts;
 #[path = "diagnostic_corpus.rs"]
@@ -28,10 +36,16 @@ mod gem_merge_contracts;
 mod json_contracts;
 #[path = "transform_language_corpus.rs"]
 mod language_contracts;
+#[path = "legacy_validation_corpus.rs"]
+mod legacy_validation_contracts;
 #[path = "merge_corpus.rs"]
 mod merge_contracts;
+#[path = "pseudonymizer_corpus.rs"]
+mod pseudonymizer_contracts;
 #[path = "rediarize_corpus.rs"]
 mod rediarize_contracts;
+#[path = "retrace_join_corpus.rs"]
+mod retrace_join_contracts;
 #[path = "runner_corpus.rs"]
 mod runner_contracts;
 #[path = "sanitize_corpus.rs"]
@@ -48,6 +62,256 @@ mod tier_contracts;
 mod validation_contracts;
 #[path = "wor_timing_corpus.rs"]
 mod wor_timing_contracts;
+
+#[test]
+fn reference_header_json_conforms_to_generated_model_schema() {
+    use talkbank_model::model::{
+        ChatOptionFlags, Header, LanguageCode, LanguageCodes, ParticipantEntries,
+    };
+    use talkbank_parser_tests::repo_paths::workspace_root;
+    let schema =
+        serde_json::to_value(schemars::schema_for!(ChatFile)).expect("model schema serializes");
+    let validator = jsonschema::validator_for(&schema).expect("generated schema compiles");
+    let parser = TreeSitterParser::new().expect("parser");
+    let mut collections = [0usize; 3];
+    for name in [
+        "headers-time-and-types.cha",
+        "clock-contexts.cha",
+        "headers-recording.cha",
+        "headers-media.cha",
+        "headers-media-notrans.cha",
+        "headers-speaker-info.cha",
+    ] {
+        let source =
+            std::fs::read_to_string(workspace_root().join("corpus/reference/core").join(name))
+                .expect("authored header reference");
+        let file = strict_parse(parser.parse_chat_file(&source)).expect("reference parses");
+        for header in file.headers() {
+            let rebuilt = match header.clone() {
+                Header::Languages { codes } => {
+                    for code in &codes {
+                        let spelling = code.as_str();
+                        assert_eq!(
+                            LanguageCode::try_from(spelling).expect("parsed code"),
+                            *code
+                        );
+                        assert_eq!(
+                            LanguageCode::try_from(spelling.to_owned()).expect("owned code"),
+                            *code
+                        );
+                        assert_eq!(AsRef::<str>::as_ref(code), spelling);
+                        assert_eq!(std::ops::Deref::deref(code), spelling);
+                        assert_eq!(code.is_undetermined(), spelling == "und");
+                        // Consumers can query a typed-key index without constructing
+                        // another code; Borrow must use the same spelling and hash.
+                        let lookup = std::collections::HashMap::from([(code.clone(), spelling)]);
+                        assert_eq!(lookup.get(spelling), Some(&spelling));
+                    }
+                    let preview: Vec<_> = (&codes).into_iter().cloned().collect();
+                    let moved: Vec<_> = codes.into_iter().collect();
+                    assert_eq!(preview, moved, "borrowed and owned language order agree");
+                    collections[0] += 1;
+                    Header::Languages {
+                        codes: LanguageCodes::new(moved),
+                    }
+                }
+                Header::Participants { entries } => {
+                    let moved = entries.into_iter().collect();
+                    collections[1] += 1;
+                    Header::Participants {
+                        entries: ParticipantEntries::new(moved),
+                    }
+                }
+                Header::Options { options } => {
+                    let preview: Vec<_> = (&options).into_iter().cloned().collect();
+                    let mut rebuilt = ChatOptionFlags::new(Vec::new());
+                    assert!(rebuilt.is_empty());
+                    for flag in options {
+                        rebuilt.push(flag);
+                    }
+                    assert_eq!(
+                        rebuilt.as_slice(),
+                        preview.as_slice(),
+                        "option order is not a set"
+                    );
+                    collections[2] += 1;
+                    Header::Options { options: rebuilt }
+                }
+                _ => continue,
+            };
+            assert_eq!(
+                &rebuilt, header,
+                "public collection construction preserves the complete header"
+            );
+        }
+        let emitted = serde_json::to_string(&file).expect("reference model JSON");
+        let wire: serde_json::Value = serde_json::from_str(&emitted).expect("schema input");
+        let failures: Vec<_> = validator
+            .iter_errors(&wire)
+            .map(|error| error.to_string())
+            .collect();
+        assert!(failures.is_empty(), "{name}: {failures:?}");
+        // Value is a schema-validation view, not an order-preserving model
+        // transport: its object maps may reorder participant keys.
+        let decoded: ChatFile = serde_json::from_str(&emitted).expect("model admission");
+        if !file.semantic_eq(&decoded) {
+            use talkbank_model::{
+                SemanticDiff, SemanticDiffContext, SemanticDiffReport, SemanticPath,
+            };
+            let mut differences = SemanticDiffReport::new(8);
+            file.semantic_diff_into(
+                &decoded,
+                &mut SemanticPath::new(),
+                &mut differences,
+                &mut SemanticDiffContext::new(),
+            );
+            panic!("{name}: JSON changed semantics: {differences:?}");
+        }
+
+        // This mutates external wire data, not a model: a closed line container
+        // must be rejected by both schema validation and model deserialization.
+        let mut malformed = wire;
+        let lines = malformed
+            .get_mut("lines")
+            .expect("serialized line container");
+        *lines = serde_json::Value::Bool(false);
+        assert!(
+            !validator.is_valid(&malformed),
+            "{name}: schema rejection control"
+        );
+        assert!(serde_json::from_value::<ChatFile>(malformed).is_err());
+    }
+    assert!(
+        collections.iter().all(|count| *count > 0),
+        "language, participant and option witnesses must execute: {collections:?}"
+    );
+}
+
+#[test]
+fn participant_specs_preserve_names_and_retain_valid_siblings() {
+    use talkbank_model::model::{Header, TranscriptName};
+    use talkbank_model::{ErrorCode, ErrorCollector, WriteChat};
+    use talkbank_parser_tests::repo_paths::workspace_root;
+
+    let parser = TreeSitterParser::new().expect("parser");
+    let corpus =
+        workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
+    for (example, expected, rejection) in [
+        (2, vec![("CHI", Some("Ruth"), "Target_Child")], None),
+        (
+            3,
+            vec![
+                ("CHI", Some("Ruth"), "Target_Child"),
+                ("MOT", Some("Éva Marie"), "Mother"),
+            ],
+            None,
+        ),
+        (
+            4,
+            vec![("CHI", Some("Ruth"), "Target_Child")],
+            Some(ErrorCode::EmptyParticipantRole),
+        ),
+    ] {
+        let source = std::fs::read_to_string(corpus.join(format!("E513_{example}.cha")))
+            .expect("authored participant name/role spec");
+        let errors = ErrorCollector::new();
+        let file = parser.parse_chat_file_streaming(&source, &errors);
+        let diagnostics = errors.into_vec();
+        let declarations: Vec<_> = file
+            .headers()
+            .filter_map(|header| match header {
+                Header::Participants { entries } => Some(entries),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(declarations.len(), 1, "one surviving declaration header");
+        let actual: Vec<_> = declarations[0]
+            .iter()
+            .map(|entry| {
+                (
+                    entry.speaker_code.as_str(),
+                    entry.name.as_ref().map(|name| name.as_str()),
+                    entry.role.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            actual, expected,
+            "E513_{example}: typed entries preserve names and roles"
+        );
+
+        match rejection {
+            Some(code) => {
+                // The retained spec observation also reports the now-orphaned
+                // MOT @ID. It must not turn that ID into a declared entry.
+                assert_eq!(
+                    diagnostics
+                        .iter()
+                        .map(|error| error.code)
+                        .collect::<Vec<_>>(),
+                    vec![code, ErrorCode::OrphanIDHeader]
+                );
+                let span = diagnostics[0].location.span;
+                assert_eq!(&source[span.start as usize..span.end as usize], "MOT");
+                // Recovery preserves the first entry without granting proof
+                // that this rejected source was a valid transcript.
+            }
+            None => {
+                assert!(diagnostics.is_empty(), "{diagnostics:?}");
+                let errors = ErrorCollector::new();
+                let admitted = file
+                    .validate_into(&errors, TranscriptName::Anonymous)
+                    .expect("legal participant spec admits validity");
+                assert!(errors.is_empty());
+                let canonical = admitted.document().to_chat_string();
+                assert_eq!(canonical, source);
+                let wire = serde_json::to_string(admitted.document()).expect("model JSON");
+                let decoded: ChatFile = serde_json::from_str(&wire).expect("model JSON admission");
+                assert!(admitted.document().semantic_eq(&decoded));
+                let reparsed = strict_parse(parser.parse_chat_file(&canonical))
+                    .expect("serialized participant names parse");
+                assert!(admitted.document().semantic_eq(&reparsed));
+            }
+        }
+    }
+}
+
+#[test]
+fn participant_spacing_spec_normalizes_without_losing_entries() {
+    use talkbank_model::{ErrorCollector, WriteChat, model::TranscriptName};
+    use talkbank_parser_tests::repo_paths::workspace_root;
+    let source = std::fs::read_to_string(
+        workspace_root()
+            .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E506_4.cha"),
+    )
+    .expect("authored separator-spacing spec");
+    let parser = TreeSitterParser::new().expect("parser");
+    let parsed =
+        strict_parse(parser.parse_chat_file(&source)).expect("spacing requires no recovery");
+    let errors = ErrorCollector::new();
+    let admitted = parsed
+        .validate_into(&errors, TranscriptName::Anonymous)
+        .expect("both declared speakers remain valid");
+    assert!(errors.is_empty());
+    assert_eq!(admitted.document().all_participants().len(), 2);
+    let canonical = admitted.document().to_chat_string();
+    assert_ne!(
+        canonical, source,
+        "optional separator whitespace is normalized"
+    );
+    assert!(canonical.contains("@Participants:\tCHI Target_Child, MOT Mother\n"));
+    let reparsed =
+        strict_parse(parser.parse_chat_file(&canonical)).expect("canonical output parses");
+    assert!(
+        admitted.document().semantic_eq(&reparsed),
+        "normalization preserves participant roles, codes and all transcript content"
+    );
+    assert_eq!(
+        reparsed.to_chat_string(),
+        canonical,
+        "canonical spelling is stable"
+    );
+}
 
 #[test]
 fn internal_bullet_spec_enters_linked_media_state() {
@@ -301,6 +565,47 @@ fn spec_validation_preserves_admission_and_streamed_evidence() {
                 "streamed evidence: {} {alignment:?}",
                 fixture.path().display()
             );
+            if let (Err(admission), Err(pipeline)) = (&admitted, &streamed) {
+                use talkbank_transform::speaker_id::{
+                    RecordedSpeakerIdentificationAttempt, RecordedSpeakerIdentificationInput,
+                };
+                // The admission failure owns the expected diagnostics. The
+                // speaker-id wire adapter consumes the independent pipeline
+                // result; neither may turn invalid CHAT into a lexical score.
+                let (phase, diagnostics) = match admission {
+                    ValidatedParseError::Parse(product) => ("parse", product.diagnostics()),
+                    ValidatedParseError::InternalFailure { failure, .. } => {
+                        ("internal_failure", failure.diagnostics())
+                    }
+                    ValidatedParseError::Validation(failure) if failure.has_incomplete_parse() => {
+                        ("incomplete_validation", failure.diagnostics())
+                    }
+                    ValidatedParseError::Validation(failure) => {
+                        ("validation", failure.diagnostics())
+                    }
+                };
+                let expected_codes: Vec<_> = diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.code.to_string())
+                    .collect();
+                for (input, label) in [
+                    (RecordedSpeakerIdentificationInput::Donor, "donor"),
+                    (RecordedSpeakerIdentificationInput::Reference, "reference"),
+                ] {
+                    let record =
+                        RecordedSpeakerIdentificationAttempt::input_rejected(input, pipeline);
+                    let wire = serde_json::to_value(record).expect("rejected input evidence wire");
+                    assert_eq!(wire["schema_version"], 1);
+                    assert_eq!(wire["outcome"], "input_rejected");
+                    assert_eq!(wire["input"], label);
+                    assert_eq!(wire["failure_kind"], phase);
+                    assert_eq!(wire["diagnostic_codes"], serde_json::json!(expected_codes));
+                    assert!(
+                        wire.get("match_report").is_none(),
+                        "no match without admitted inputs"
+                    );
+                }
+            }
             match (admitted, streamed) {
                 (Ok(accepted), Ok(model)) => {
                     assert_eq!(accepted.policy(), policy);

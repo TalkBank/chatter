@@ -1,7 +1,7 @@
 # Desktop App Testing
 
 **Status:** Current
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 This document covers the testing strategy for the Chatter desktop app
 (`apps/chatter-desktop/`). Testing is split into three tiers by speed and scope.
@@ -46,12 +46,14 @@ boundary tests rather than inventing a second fixture oracle.
 `validationState.ts::fileOutcome` projects a streamed `FileEntry` into a
 discriminated union: pending, valid, or problem with an explanation. Both the
 file tree and the detail panel use it. In particular, `readError`, `parseError`,
-`roundtripFailed` and cached invalid statuses must remain visible when there is
+`internalFailure`, `roundtripFailed` and cached invalid statuses must remain visible when there is
 no diagnostic array. Do not infer success from an empty array.
 
 `shouldShowAllFilesValid` additionally requires a nonempty, non-cancelled,
 finished population whose totals certify all files as valid, with no read/parse
-or roundtrip failures. `finishedRunSummary` is shared by the window title,
+or internal/roundtrip failures. An internal failure increments `internalFailures`,
+not the valid or invalid counter: CHAT validity remains undetermined.
+`finishedRunSummary` is shared by the window title,
 notification and status bar. Regression tests exercise failure statuses without
 diagnostics, warning visibility, cancellation, empty populations and success.
 When adding a new wire status, update the exhaustive projection, not a second
@@ -108,6 +110,28 @@ manifests, with versions tied to the exact release commit.
 
 ## Tier 1 & 2: Unit and integration tests
 
+### Candidate evidence matrix
+
+An implemented test is not a passing receipt, and a headless receipt is not
+native interaction evidence. Record candidate identity, platform, actual result
+and remaining gaps in the release record; do not copy historical success into
+a new candidate's acceptance.
+
+| Workflow | Existing automated boundary | Required native observation |
+|---|---|---|
+| Valid and invalid files | Reference corpus and canonical spec bridge tests | Select each; verify visible verdict, diagnostic navigation and completion |
+| Unreadable or unsupported target | Typed outcome projection and path-contract tests | Surface failure visibly; do not show an all-valid result |
+| Directory selection | Nested discovery and event/statistics bridge tests | Select a directory; inspect relative paths and final totals |
+| Unicode paths | Stored-identity W109 runtime bridge test | Open an accented path through the native chooser and inspect media warnings |
+| Cancel and revalidate | Runner lifecycle and cancelled-state seam tests | Cancel an active run, change input, revalidate; no stale result may claim success |
+| Copy and export | Typed export admission and refusal tests | Check clipboard and saved output, including failure without diagnostic cards |
+| Menus and updates | Single-flight update seam tests | Exercise menu feedback; test signed installation/update separately |
+| Settings preservation | No complete native proof supplied by bridge tests | Verify preferences survive relaunch and upgrade without touching unrelated settings |
+
+Declare platform support and installation/update acceptance explicitly. A
+configured CI target or available installer is not evidence that every workflow
+above has been exercised on that platform.
+
 ### Running
 
 ```bash
@@ -129,7 +153,7 @@ cargo test -p chatter-desktop --test validation_bridge
 | `frontend_events_serialize_to_expected_json_shape` | Every event has `type` field; camelCase field names match TypeScript types; diagnostics include `renderedText` |
 | `protocol_contracts_serialize_to_expected_json_shape` | Rust command/event constants and request payloads stay aligned with the TypeScript protocol module |
 | `single_file_validation` | Single-file path validates exactly the selected file |
-| `finished_stats_match_file_events` | `valid + invalid + parseErrors == totalFiles`; FileComplete count matches |
+| `finished_stats_match_file_events` | Typed valid, invalid, parse-error and internal-failure counts account for the population; FileComplete count matches |
 | `rendered_html_present_for_errors` | Every diagnostic carries non-empty miette HTML with box-drawing characters and `style=` attributes (ANSI colors converted to HTML) |
 
 ### Adding new tests
@@ -227,42 +251,28 @@ renders the expected UI elements:
 
 ### Limitations
 
-**File dialogs cannot be driven via WebDriver.** The native file picker
-(`@tauri-apps/plugin-dialog`) opens an OS-level dialog that WebDriver can't
-interact with. Options for testing the validation flow:
+The native file picker is outside this suite's WebDriver-controlled DOM.
+The checked-in smoke suite verifies launch UI only: it does not yet automate
+file selection, a validation run, cancellation, export, or native menus.
+The Rust integration tests cover the shared validation pipeline and bridge,
+not those native interactions.
 
-1. **Test-only Tauri command**: add `validate_for_test(path)` behind
-   `#[cfg(debug_assertions)]` that bypasses the file dialog
-2. **Programmatic invoke**: use `driver.executeScript()` to call
-    `window.__TAURI__.core.invoke("validate", { path })` directly
-3. **Drag-and-drop simulation**: possible but platform-dependent and fragile
-
-For now, the Rust integration tests cover the full validation pipeline. E2E
-tests focus on UI rendering and user-visible layout.
+Do not copy a direct `window.__TAURI__.core.invoke("validate", { path })`
+example: this app does not enable the global Tauri API, and `validate` also
+requires roundtrip, parser-kind and strict-linker arguments. Production calls
+use the typed runtime capability and transport. A future automated native
+validation test must use that contract, subscribe before starting the run,
+await its terminal event with a bounded timeout, and isolate cache/settings.
+A fixed sleep is not proof of completion. Do not add a production test-only
+command or bypass admission just to drive a test.
 
 ### Adding E2E tests
 
 Test file: `apps/chatter-desktop/tests/e2e/*.spec.ts`
 
-WebdriverIO provides `$()` and `$$()` for CSS selectors, plus Tauri-aware
-capabilities:
-
-```typescript
-it("should show validation results", async () => {
-  // Programmatically trigger validation (bypasses file dialog)
-    await browser.executeAsync(async (path, done) => {
-      await (window as any).__TAURI__.core.invoke("validate", {
-        path,
-      });
-      // Wait for finished event
-      setTimeout(done, 5000);
-  }, "/path/to/corpus");
-
-  const tree = await $(".file-tree-panel");
-  const text = await tree.getText();
-  expect(text).not.toContain("No files loaded");
-});
-```
+Follow the existing selector-based launch checks for layout assertions.
+New validation-flow coverage must meet the lifecycle and isolation requirements
+above; passing a DOM assertion after a delay is not a validation receipt.
 
 ### When to run E2E tests
 
@@ -295,7 +305,7 @@ All tests use the reference corpus at `corpus/reference/`. This
 corpus is checked into the repo and must always pass validation with
 zero hard errors (warnings are allowed). The exact set of files and
 the current warning-emitting files are whatever
-`find corpus/reference -name '*.cha' -type f` and the validator
+`rg --files corpus/reference -g '*.cha'` and the validator
 report, do not hard-code those lists here.
 
 Do not create ad-hoc `.cha` test files. Use existing reference corpus files

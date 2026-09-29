@@ -22,7 +22,7 @@ pub(crate) struct ReadableRecovery<'tree, 'source> {
 }
 
 impl<'tree, 'source> ReadableRecovery<'tree, 'source> {
-    fn from_bound(bound: SourceSlice<'tree, 'source>) -> Self {
+    pub(crate) fn from_bound(bound: SourceSlice<'tree, 'source>) -> Self {
         Self {
             node: bound.raw_node(),
             source: bound.source(),
@@ -61,96 +61,6 @@ impl<'tree, 'source> ReadableRecovery<'tree, 'source> {
             message,
         )
     }
-
-    pub(crate) fn preceding_byte(&self) -> Option<u8> {
-        self.node
-            .start_byte()
-            .checked_sub(1)
-            .and_then(|at| self.source.as_bytes().get(at))
-            .copied()
-    }
-}
-
-/// Analyze ERROR node and provide user-friendly message.
-///
-/// Inspects the ERROR node's content to determine what went wrong
-/// and provides context-specific error messages with suggestions.
-///
-/// This function is used to transform tree-sitter's internal "ERROR" nodes
-/// into actionable, user-friendly error messages that don't expose parser internals.
-/// An ERROR node whose text opens a bracket or a parenthesis and never
-/// closes it: E312 or E313. One owner for the pattern, read by the generic
-/// analyzer below and by the main-tier word-error classifier
-/// (`main_tier/content/errors.rs`), so an unclosed `[` gets the same name
-/// on the tier body, inside a group and on a dependent tier. Until
-/// 2026-09-08 only the generic analyzer knew the pattern, and the bracketed
-/// constructs happened to route their ERROR nodes there, which made
-/// "inside a group" the one place chatter could say "unclosed bracket".
-///
-/// "Never closes" means no closing delimiter anywhere in the text, not
-/// merely not at the end: recovery often grows an ERROR node past a closed
-/// annotation (`[/] hello`), and the older test on the last character
-/// called that an unclosed bracket, which it is not.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DelimiterKind {
-    /// Opens with `[` and holds no `]`.
-    Bracket,
-    /// Opens with `(` and holds no `)`.
-    Parenthesis,
-}
-
-/// A recognized unclosed delimiter, retaining the admitted node/text pair
-/// that proved it. Diagnostic conversion cannot substitute another node.
-pub(crate) struct UnclosedDelimiter<'tree, 'text> {
-    kind: DelimiterKind,
-    node: Node<'tree>,
-    text: &'text str,
-}
-
-impl<'tree, 'text> UnclosedDelimiter<'tree, 'text> {
-    /// Recognize only the text belonging to an admitted recovery node.
-    pub(crate) fn in_recovery(recovery: &ReadableRecovery<'tree, 'text>) -> Option<Self> {
-        let text = recovery.text();
-        let kind = Self::classify_text(text)?;
-        Some(Self {
-            kind,
-            node: recovery.node(),
-            text,
-        })
-    }
-
-    fn classify_text(error_text: &str) -> Option<DelimiterKind> {
-        Some(match error_text.chars().next()? {
-            '[' if !error_text.contains(']') => DelimiterKind::Bracket,
-            '(' if !error_text.contains(')') => DelimiterKind::Parenthesis,
-            _ => return None,
-        })
-    }
-
-    /// The diagnostic, spanning the whole ERROR node, worded for `context`.
-    pub(crate) fn into_diagnostic(self, context: &str) -> ParseError {
-        let node = self.node;
-        let (code, what, suggestion) = match self.kind {
-            DelimiterKind::Bracket => (
-                ErrorCode::UnclosedBracket,
-                "bracket",
-                "Add closing bracket ']' or check bracket nesting",
-            ),
-            DelimiterKind::Parenthesis => (
-                ErrorCode::UnclosedParenthesis,
-                "parenthesis",
-                "Add closing parenthesis ')' to complete the group",
-            ),
-        };
-        ParseError::new(
-            code,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(self.text, 0..self.text.len(), self.text),
-            format!("Unclosed {what} in {context}"),
-        )
-        .with_suggestion(suggestion)
-    }
 }
 
 /// Analyze a producer-bound recovery slice without re-admitting its text.
@@ -162,17 +72,11 @@ pub(crate) fn analyze_error_node(node: Node, source: &str, context: &str) -> Par
     let recovery = match ReadableRecovery::admit(node, source) {
         Some(recovery) => recovery,
         None => {
-            return ParseError::new(
-                ErrorCode::UnparsableContent,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
-                format!(
-                    "Unparsable content in {}: node range is not a UTF-8 slice of the supplied source",
-                    context
-                ),
-            )
-            .with_suggestion("Ensure the file is saved as valid UTF-8 encoding");
+            return crate::parser::typed_cst::cst_failure_diagnostic(
+                node,
+                source,
+                crate::generated_traversal::SourceBindingError::InvalidRange,
+            );
         }
     };
     analyze_readable_error(recovery, context)
@@ -194,38 +98,6 @@ fn analyze_readable_error(recovery: ReadableRecovery<'_, '_>, context: &str) -> 
             format!("Unexpected syntax in {}", context),
         )
         .with_suggestion("Check for missing or malformed elements");
-    }
-
-    if let Some(unclosed) = UnclosedDelimiter::in_recovery(&recovery) {
-        return unclosed.into_diagnostic(context);
-    }
-
-    // Redundant terminator in utterance_end (. after .)
-    if context == "utterance_end"
-        && (error_text.trim() == "." || error_text.trim() == "!" || error_text.trim() == "?")
-    {
-        return recovery
-            .fragment_diagnostic(
-                ErrorCode::MissingTerminator,
-                "Redundant utterance delimiter".to_string(),
-            )
-            .with_suggestion("Remove the extra terminator, only one is allowed per utterance");
-    }
-
-    // Text after terminator in utterance_end
-    if context == "utterance_end"
-        && error_text
-            .trim()
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == ' ')
-    {
-        return recovery.fragment_diagnostic(
-            ErrorCode::MissingTerminator,
-            "Text after utterance delimiter is not allowed".to_string(),
-        )
-        .with_suggestion(
-            "Utterance delimiter (. ! ?) must be the last item before any bullet or end of line",
-        );
     }
 
     // Generic fallback: Show what was found
@@ -277,11 +149,9 @@ mod tests {
     use super::*;
     use crate::TreeSitterParser;
 
-    /// The spec's actual one-byte ERROR witnesses the classifier priority:
-    /// a lone opening bracket is E312, never the shadowed incomplete-annotation
-    /// fallback. Keep this boundary test even though the finding carries its text.
+    /// A recovery slice proves location, not an unclosed delimiter.
     #[test]
-    fn lone_bracket_recovery_uses_the_admitted_delimiter_finding() {
+    fn lone_bracket_recovery_retains_location_without_guessing_syntax() {
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../talkbank-parser-tests/tests/error_corpus/validation_errors/E312_2.cha"
@@ -297,7 +167,7 @@ mod tests {
             pending.extend(node.children(&mut cursor));
             if node.is_error() && source.get(node.byte_range()) == Some("[") {
                 let diagnostic = analyze_error_node(node, source, "parse tree");
-                assert_eq!(diagnostic.code, ErrorCode::UnclosedBracket);
+                assert_eq!(diagnostic.code, ErrorCode::UnparsableContent);
                 assert_eq!(
                     diagnostic.location.span,
                     crate::error::Span::from_usize(node.start_byte(), node.end_byte())
@@ -307,7 +177,7 @@ mod tests {
                     assert!(ReadableRecovery::admit(node, incompatible).is_none());
                     assert_eq!(
                         analyze_error_node(node, incompatible, "parse tree").code,
-                        ErrorCode::UnparsableContent,
+                        ErrorCode::InternalError,
                     );
                 }
                 witnessed = true;
@@ -317,8 +187,5 @@ mod tests {
             witnessed,
             "the retained E312 spec must reach a lone-bracket ERROR"
         );
-        // Leading whitespace is not an unclosed-delimiter finding; the word
-        // classifier's later trim-based bracket recovery must remain available.
-        assert!(UnclosedDelimiter::classify_text(" [").is_none());
     }
 }

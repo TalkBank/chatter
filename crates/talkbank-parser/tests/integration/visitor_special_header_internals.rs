@@ -108,8 +108,8 @@ fn speaker_info_special_headers_decode_to_exact_payloads() {
     assert_eq!(
         headers,
         vec![
-            r#"Birth { participant: SpeakerCode("CHI"), date: Valid { day: 28, month: Jun, year: 2001, raw: "28-JUN-2001" } }"#.to_string(),
-            r#"Birth { participant: SpeakerCode("MOT"), date: Valid { day: 15, month: Mar, year: 1975, raw: "15-MAR-1975" } }"#.to_string(),
+            r#"Birth { participant: SpeakerCode("CHI"), date: Valid(CheckedChatDate { day: 28, month: Jun, year: 2001, raw: "28-JUN-2001" }) }"#.to_string(),
+            r#"Birth { participant: SpeakerCode("MOT"), date: Valid(CheckedChatDate { day: 15, month: Mar, year: 1975, raw: "15-MAR-1975" }) }"#.to_string(),
             r#"Birthplace { participant: SpeakerCode("MOT"), place: BirthplaceDescription("Taipei, Taiwan") }"#.to_string(),
             r#"L1Of { participant: SpeakerCode("F_A_T"), language: LanguageCode("ara") }"#.to_string(),
             r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Speaker info headers: @Birth of, @Birthplace of, @L1 of" })]) } }"#.to_string(),

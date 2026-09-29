@@ -45,14 +45,14 @@ fn parse_first_utterance(
     (utterance, diagnostics)
 }
 
-/// Verifies malformed standard dependent tiers taint only their own alignment domain.
+/// Unstructured recovery cannot identify a tier by scanning its text prefix.
 #[test]
-fn malformed_standard_dependent_tiers_taint_only_their_alignment_domain() {
+fn unstructured_dependent_tiers_taint_all_alignment_domains() {
     let cases = [
-        ("%mor no_tab_separator", ParseHealthTier::Mor),
-        ("%gra no_tab_separator", ParseHealthTier::Gra),
-        ("%pho no_tab_separator", ParseHealthTier::Pho),
-        ("%wor no_tab_separator", ParseHealthTier::Wor),
+        "%mor no_tab_separator",
+        "%gra no_tab_separator",
+        "%pho no_tab_separator",
+        "%wor no_tab_separator",
     ];
     let dependent_tiers = [
         ParseHealthTier::Mor,
@@ -63,7 +63,7 @@ fn malformed_standard_dependent_tiers_taint_only_their_alignment_domain() {
         ParseHealthTier::Sin,
     ];
 
-    for (malformed_tier, expected_taint) in cases {
+    for malformed_tier in cases {
         let input = format!("@UTF8\n@Begin\n*CHI:\thello .\n{malformed_tier}\n@End\n");
         let (utterance, diagnostics) = parse_first_utterance(&input);
         assert!(
@@ -71,7 +71,7 @@ fn malformed_standard_dependent_tiers_taint_only_their_alignment_domain() {
             "Expected parse diagnostics for malformed tier {malformed_tier}"
         );
 
-        let ParseHealthState::Tainted(health) = utterance.parse_health else {
+        let ParseHealthState::Tainted(health) = utterance.parse_health() else {
             panic!("Expected parse health taint from malformed dependent tier");
         };
         assert!(
@@ -80,10 +80,8 @@ fn malformed_standard_dependent_tiers_taint_only_their_alignment_domain() {
         );
 
         for tier in dependent_tiers {
-            let expected_clean = tier != expected_taint;
-            assert_eq!(
-                tier_is_clean(&health, tier),
-                expected_clean,
+            assert!(
+                !tier_is_clean(&health, tier),
                 "Unexpected parse-health state for {tier:?} from malformed tier {malformed_tier}"
             );
         }
@@ -100,7 +98,7 @@ fn malformed_unknown_dependent_tier_taints_all_alignment_dependents() {
         "Expected diagnostics for malformed unknown dependent tier"
     );
 
-    let ParseHealthState::Tainted(health) = utterance.parse_health else {
+    let ParseHealthState::Tainted(health) = utterance.parse_health() else {
         panic!("Expected parse health taint from malformed unknown dependent tier");
     };
     assert!(health.is_tier_clean(ParseHealthTier::Main));
@@ -138,7 +136,7 @@ fn malformed_gra_relation_does_not_fabricate_default_relation_values() {
         gra.relations()
     );
 
-    let ParseHealthState::Tainted(health) = utterance.parse_health else {
+    let ParseHealthState::Tainted(health) = utterance.parse_health() else {
         panic!("Expected parse health taint from malformed %gra relation");
     };
     assert!(
@@ -156,11 +154,10 @@ fn missing_speaker_does_not_create_empty_speaker_utterance() {
     let file = parser.parse_chat_file_streaming(input, &errors);
     let diagnostics = errors.to_vec();
     assert!(
-        diagnostics.iter().any(|err| matches!(
-            err.code,
-            ErrorCode::MissingSpeaker | ErrorCode::MissingMainTier
-        )),
-        "Expected MissingSpeaker or MissingMainTier diagnostic, got: {:?}",
+        diagnostics
+            .iter()
+            .any(|err| matches!(err.code, ErrorCode::UnparsableContent)),
+        "Expected structural recovery without reconstructing a speaker, got: {:?}",
         diagnostics
             .iter()
             .map(|err| (&err.code, &err.message))

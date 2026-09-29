@@ -42,6 +42,45 @@ use talkbank_parser::TreeSitterParser;
 const MEDIA_BULLETS: &str = include_str!("../../../../corpus/reference/content/media-bullets.cha");
 const HEADERS_MEDIA: &str = include_str!("../../../../corpus/reference/core/headers-media.cha");
 
+/// Count admission work and retained storage on real reference headers, rather
+/// than assuming that eager range admission is a free performance improvement.
+#[test]
+fn media_reference_range_admission_preserves_payload_and_counts_work() {
+    use talkbank_parser::generated_traversal::{MediaContentsNode, ParsedSource, ReadableSlot};
+    for (source, expected_checks) in [(MEDIA_BULLETS, 4), (HEADERS_MEDIA, 7)] {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_talkbank::LANGUAGE.into())
+            .unwrap();
+        let parsed = ParsedSource::parse(&mut parser, source, None).unwrap();
+        let mut seen = 0;
+        for slice in parsed.root().unwrap().descendants() {
+            let Some(contents) = slice.unwrap().typed::<MediaContentsNode>() else {
+                continue;
+            };
+            seen += 1;
+            let selected = contents.extract().unwrap();
+            let raw_bytes = std::mem::size_of_val(selected.children());
+            let admitted = selected.admit_ranges().unwrap();
+            assert_eq!(admitted.checked_range_count(), expected_checks);
+            let ReadableSlot::Present(filename) = &admitted.children().child_0.slot else {
+                panic!("reference filename")
+            };
+            for _ in 0..100 {
+                assert!(!filename.text().is_empty());
+                assert_eq!(filename.source(), source);
+            }
+            assert_eq!(admitted.checked_range_count(), expected_checks);
+            eprintln!(
+                "MEDIA RANGE COST checks={expected_checks} raw_inline={raw_bytes} admitted_inline={} admitted_owner={}",
+                std::mem::size_of_val(admitted.children()),
+                std::mem::size_of_val(&admitted)
+            );
+        }
+        assert_eq!(seen, 1, "one media body in each reference fixture");
+    }
+}
+
 /// Whether `h` is a `Header::Media` variant.
 fn is_media(h: &Header) -> bool {
     matches!(h, Header::Media(_))

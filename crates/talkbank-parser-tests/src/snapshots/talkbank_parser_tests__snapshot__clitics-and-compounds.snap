@@ -76,14 +76,14 @@ expression: snapshot
         "content": {
           "segments": [
             {
-              "text": "%mor tier with clitics (tilde-separated: pos|stem~pos|stem),",
+              "text": "%mor tier with clitics (tilde-separated: pos|stem~pos|stem)",
               "type": "text"
             },
             {
               "type": "continuation"
             },
             {
-              "text": "compound words on main tier (A+B), hyphen-separated UD features",
+              "text": "and hyphen-separated UD features; main-tier words have no compound join markers",
               "type": "text"
             }
           ]
@@ -97,7 +97,7 @@ expression: snapshot
         "content": {
           "segments": [
             {
-              "text": "Constructs: mor_post_clitic, mor_feature, compound words",
+              "text": "Constructs: mor_post_clitic, mor_feature",
               "type": "text"
             }
           ]

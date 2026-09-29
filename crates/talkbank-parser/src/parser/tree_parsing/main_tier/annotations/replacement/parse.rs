@@ -6,8 +6,8 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, ReplacementNode, SeqSlot, SlotView, StandaloneWordNode,
-    extract_replacement,
+    AsRawNode, NoChild, NonMissingKindSlot, ReplacementNode, SourceBound, SourceField,
+    SourceSlotView, StandaloneWordNode,
 };
 use crate::model::{Replacement, Word};
 use crate::parser::ChildCapacity;
@@ -26,18 +26,23 @@ use tree_sitter::Node;
 /// construction, so only the node's sink is surfaced. Until 2026-09-09 this walked the children by index and
 /// `kind()` string with a catch-all for anything unnamed.
 ///
-/// The diagnostics keep their code and words: a delimiter that lost its
-/// shape, a MISSING word (a placeholder tree-sitter inserted) and a
-/// zero-width word are each `ReplacementParseError` as before; a MISSING
-/// delimiter is the whole-tree pass's, as the old walk left it. A
-/// replacement with no word is rejected.
-pub(crate) fn parse_replacement(
-    typed: ReplacementNode<'_>,
-    source: &str,
+/// Compiled grammar admission proves that composite word slots cannot be
+/// Missing. Delimiter recovery and zero-width word refusal retain their existing
+/// diagnostics; a replacement with no admitted word remains rejected.
+pub(crate) fn parse_replacement<'tree>(
+    typed: SourceBound<'tree, '_, ReplacementNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Replacement> {
-    let node = typed.raw_node();
-    let children = extract_replacement(typed);
+    let source = typed.source();
+    let node = typed.node().raw_node();
+    let extraction = crate::parser::typed_cst::canonical_grammar()
+        .and_then(|grammar| typed.extract_admitted(grammar));
+    let Ok(associated) =
+        crate::parser::typed_cst::report_reconstruction(extraction, node, source, errors)
+    else {
+        return ParseOutcome::Rejected;
+    };
+    let children = associated.children();
     expect_delimiter(children.child_0.slot(), |bad| {
         report(
             bad,
@@ -61,15 +66,14 @@ pub(crate) fn parse_replacement(
         );
     });
 
-    let repeat = children.child_3.slot();
     // A capacity hint: at most one word per child of the node.
     let mut words = ChildCapacity::for_node(node).into_vec();
-    if let Some(first) = sequence(children.child_2.slot()) {
-        push_word(first.child_1.slot(), 0, &mut words, source, errors);
+    if let SourceSlotView::Present(first) = associated.field_child_2().slot().view() {
+        push_word(first.field_child_1().slot(), &mut words, errors);
     }
-    for (index, element) in repeat.iter().enumerate() {
-        if let Some(next) = sequence(element.slot()) {
-            push_word(next.child_1.slot(), index + 1, &mut words, source, errors);
+    for element in associated.field_child_3().slot().iter() {
+        if let SourceSlotView::Present(next) = element.slot().view() {
+            push_word(next.field_child_1().slot(), &mut words, errors);
         }
     }
 
@@ -83,56 +87,36 @@ pub(crate) fn parse_replacement(
     });
     surface_displaced(&children.unexpected, "replacement", source, errors);
 
-    if words.is_empty() {
-        ParseOutcome::rejected()
-    } else {
-        ParseOutcome::parsed(Replacement::new(words))
+    match talkbank_model::model::annotation::ReplacementWords::new(words) {
+        Ok(words) => ParseOutcome::parsed(Replacement::new(words)),
+        Err(_) => ParseOutcome::rejected(),
     }
 }
 
-/// The element a word sequence position holds: `None` for a sequence that
-/// did not match (`Absent`) or lost its shape to an ERROR, which the
-/// whole-tree pass names. A sequence is never MISSING or displaced, and
-/// the slot's type says so.
-fn sequence<'a, 'tree, T>(slot: &'a SeqSlot<'tree, T>) -> Option<&'a T> {
-    match slot.view() {
-        SlotView::Present(element) => Some(element),
-        SlotView::Error(_) | SlotView::Absent(NoChild) => None,
-    }
-}
-
-/// Convert the word at a sequence element's word position, or report why
-/// there is none: a MISSING placeholder and a zero-width word are the two
-/// recovery shapes the old walk named, and they keep their words; `position`
-/// counts words in the run, as the old message did.
-fn push_word(
-    slot: &KindSlot<'_, StandaloneWordNode<'_>>,
-    position: usize,
+/// Convert an admitted composite word slot, preserving zero-width refusal,
+/// source-read failures and the existing Error/Absent recovery policy.
+fn push_word<'tree>(
+    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, StandaloneWordNode<'tree>>>,
     words: &mut Vec<Word>,
-    source: &str,
     errors: &impl ErrorSink,
 ) {
+    let source = slot.source();
     match slot.view() {
-        SlotView::Present(word) => {
+        SourceSlotView::Present(word) => {
             let raw = word.raw_node();
             if raw.start_byte() == raw.end_byte() {
                 report(raw, source, errors, "Replacement text empty".to_string());
                 return;
             }
-            if let ParseOutcome::Parsed(word) = convert_word_node(*word, source, errors) {
+            if let Some(word) = crate::parser::typed_cst::read_source_field(word, errors)
+                && let ParseOutcome::Parsed(word) = convert_word_node(word, errors)
+            {
                 words.push(word);
             }
         }
-        SlotView::Missing(missing) => report(
-            missing,
-            source,
-            errors,
-            format!(
-                "Missing word in replacement at position {position} (tree-sitter inserted placeholder)"
-            ),
-        ),
+        SourceSlotView::Missing(never) => match never {},
         // An ERROR at the word position is the whole-tree pass's to name.
-        SlotView::Error(_) | SlotView::Absent(NoChild) => {}
+        SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {}
     }
 }
 

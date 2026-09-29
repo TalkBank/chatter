@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	Authored legal-code controls for OEHS (E) and ambisyllabic (A) constituents.
+@Comment:	These exercise the documented Phon code vocabulary, not production attestation or automatic syllabification.
+*CHI:	chip butter .
+%mod:	tʃɪp bʌtə
+%pho:	tʃɪp bʌtə
+%xmodsyl:	t:Eʃ:Oɪ:Np:C b:Oʌ:Nt:Aə:N
+%xphosyl:	t:Eʃ:Oɪ:Np:C b:Oʌ:Nt:Aə:N
+@End

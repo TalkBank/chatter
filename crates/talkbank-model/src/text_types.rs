@@ -204,12 +204,7 @@ mod tests {
 
     #[test]
     fn cleaned_and_raw_text_remain_distinct() {
-        // `Word::new_unchecked` builds a `Word` whose `cleaned_text()` is the
-        // second argument, derived through the `compute_cleaned_text` projection
-        // on a single-`Text`-element `WordContents`. The raw_text and cleaned
-        // values can legitimately differ (e.g., raw "hello@c" with cleaned
-        // "hello") because `WordContents` carries cleaned material only.
-        let word = Word::new_unchecked("hello@c", "hello");
+        let word = Word::simple("hello").with_form_type(crate::model::FormType::C);
         let raw = ChatRawText::from_word_raw(&word);
         let cleaned = ChatCleanedText::from_word(&word);
 

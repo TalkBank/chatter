@@ -63,6 +63,7 @@ pub(super) fn status_is_error(status: &FileStatus) -> bool {
     match status {
         FileStatus::Valid { .. } => false,
         FileStatus::Invalid { .. }
+        | FileStatus::InternalFailure { .. }
         | FileStatus::RoundtripFailed { .. }
         | FileStatus::ParseError { .. }
         | FileStatus::ReadError { .. } => true,
@@ -221,6 +222,9 @@ impl ValidationRenderer for TextRenderer {
                 }
             }
             FileStatus::Invalid { .. } => {}
+            FileStatus::InternalFailure { failure } => {
+                eprintln!("✗ {} ({failure})", file_event.path.display());
+            }
             FileStatus::RoundtripFailed { .. } => {}
             FileStatus::ParseError { message } => {
                 eprintln!("✗ {} (parse error: {})", file_event.path.display(), message);
@@ -267,6 +271,12 @@ impl ValidationRenderer for TextRenderer {
         println!("Total files: {}", stats.total_files);
         println!("Valid: {}", stats.valid_files);
         println!("Invalid: {}", stats.invalid_files);
+        if stats.internal_failures > 0 {
+            println!(
+                "Internal failures (validity undetermined): {}",
+                stats.internal_failures
+            );
+        }
         if stats.parse_errors > 0 {
             println!("Parse errors: {}", stats.parse_errors);
         }
@@ -299,33 +309,11 @@ impl ValidationRenderer for JsonRenderer {
     fn handle_started(&mut self, _total_files: usize) {}
 
     fn handle_errors(&mut self, error_event: &ErrorEvent) -> usize {
-        let json_errors: Vec<_> = error_event
-            .errors
-            .iter()
-            .map(|error| {
-                serde_json::json!({
-                    "code": error.code.to_string(),
-                    "severity": format!("{:?}", error.severity),
-                    "message": error.message
-                })
-            })
-            .collect();
-
-        let mut line = serde_json::json!({
-            "type": "file",
-            "file": error_event.path.to_string_lossy(),
-            "status": "invalid",
-            "error_count": error_event.errors.len(),
-            "errors": json_errors
-        });
-
-        if should_show_cascading_hint(&error_event.errors) {
-            line["note"] = serde_json::json!(
-                "Some additional checks may not have run because of structural errors. Fix the structural errors first, then re-validate."
-            );
+        // The terminal InternalFailure record owns the complete failed batch.
+        // Emitting the usual invalid-file record here would contradict it.
+        if let Some(record) = input_diagnostic_record(error_event) {
+            println!("{}", record);
         }
-
-        println!("{}", line);
         error_event.errors.len()
     }
 
@@ -359,6 +347,9 @@ impl ValidationRenderer for JsonRenderer {
                 println!("{}", line);
             }
             FileStatus::Invalid { .. } => {}
+            FileStatus::InternalFailure { failure } => {
+                println!("{}", internal_failure_record(&file_event.path, failure));
+            }
             FileStatus::RoundtripFailed { .. } => {}
             FileStatus::ParseError { message } => {
                 let line = serde_json::json!({
@@ -403,6 +394,7 @@ impl ValidationRenderer for JsonRenderer {
             "valid": stats.valid_files,
             "invalid": stats.invalid_files,
             "parse_errors": stats.parse_errors,
+            "internal_failures": stats.internal_failures,
             "cache_hits": stats.cache_hits,
             "cache_misses": stats.cache_misses,
             "cache_hit_rate": stats.cache_hit_rate(),
@@ -438,4 +430,98 @@ fn status_is_cache_hit(status: &FileStatus) -> bool {
             ..
         }
     )
+}
+
+/// A failed attempt has one record retaining diagnostics, never an invalid-file
+/// record followed by a contradictory internal-failure record.
+fn internal_failure_record(
+    path: &Path,
+    failure: &talkbank_model::InternalFailure,
+) -> serde_json::Value {
+    let diagnostics: Vec<_> = failure
+        .diagnostics()
+        .iter()
+        .map(|error| {
+            serde_json::json!({
+                "code": error.code.to_string(),
+                "severity": format!("{:?}", error.severity),
+                "message": error.message,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "type": "file",
+        "file": path.to_string_lossy(),
+        "status": "internal_failure",
+        "error": failure.to_string(),
+        "errors": diagnostics,
+    })
+}
+
+/// Internal failures are emitted only with their terminal, non-validity status.
+fn input_diagnostic_record(event: &ErrorEvent) -> Option<serde_json::Value> {
+    if event.errors.iter().any(|error| {
+        talkbank_model::kind_of(error.code) == talkbank_model::DiagnosticKind::InternalFailure
+    }) {
+        return None;
+    }
+    let errors: Vec<_> = event
+        .errors
+        .iter()
+        .map(|error| {
+            serde_json::json!({
+                "code": error.code.to_string(),
+                "severity": format!("{:?}", error.severity),
+                "message": error.message,
+            })
+        })
+        .collect();
+    let mut record = serde_json::json!({
+        "type": "file", "file": event.path.to_string_lossy(),
+        "status": "invalid", "error_count": event.errors.len(), "errors": errors,
+    });
+    if should_show_cascading_hint(&event.errors) {
+        record["note"] = serde_json::json!(
+            "Some additional checks may not have run because of structural errors. Fix the structural errors first, then re-validate."
+        );
+    }
+    Some(record)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal_failure_json_preserves_evidence_without_a_validity_record() {
+        let failure =
+            talkbank_model::CompletedDiagnostics::admit(vec![talkbank_model::ParseError::at_span(
+                talkbank_model::ErrorCode::InternalError,
+                talkbank_model::Severity::Warning,
+                talkbank_model::Span::new(0, 1),
+                "fault",
+            )])
+            .unwrap_err();
+        let record = internal_failure_record(Path::new("sample.cha"), &failure);
+        assert_eq!(record["status"], "internal_failure");
+        assert_eq!(record["errors"][0]["code"], "E001");
+        assert!(
+            record["error"]
+                .as_str()
+                .unwrap()
+                .contains("validity was not determined")
+        );
+        assert!(
+            input_diagnostic_record(&ErrorEvent {
+                path: "sample.cha".into(),
+                errors: failure.diagnostics().to_vec(),
+                source: "".into(),
+            })
+            .is_none(),
+            "no contradictory invalid-file record before completion"
+        );
+        let status = FileStatus::InternalFailure { failure };
+        assert!(status_is_error(&status));
+        assert!(!status_is_cache_hit(&status));
+    }
 }

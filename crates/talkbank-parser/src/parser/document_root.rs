@@ -5,10 +5,11 @@
 //! selected document loses errors outside it. Keep both scopes in one owner.
 
 use crate::generated_traversal::{
-    AsRawNode, FullDocumentChildren, FullDocumentNode, ParsedSource, SourceBindingError,
-    SourceBound, SourceChildren, SourceSlice,
+    AdmittedFullDocumentChildren as FullDocumentChildren, AsRawNode, FullDocumentNode,
+    ParsedSource, SourceBound, SourceChildren, SourceSlice,
 };
 use crate::node_types::SOURCE_FILE;
+use crate::parser::typed_cst::CstFailure;
 use tree_sitter::Node;
 
 /// The document position and its complete syntax-error scope, classified once.
@@ -55,7 +56,7 @@ impl<'tree> DocumentRoot<'tree> {
     /// document takes precedence over a recovery sibling; otherwise preserve
     /// the existing recovery classification at the document position. Every
     /// path retains the original syntax root for whole-input diagnostics.
-    pub fn classify(parsed: &'tree ParsedSource<'tree>) -> Result<Self, SourceBindingError> {
+    pub fn classify(parsed: &'tree ParsedSource<'tree>) -> Result<Self, CstFailure> {
         let syntax_root = parsed.root()?;
         if syntax_root.raw_node().kind() == SOURCE_FILE {
             let mut cursor = syntax_root.raw_node().walk();
@@ -80,18 +81,22 @@ impl<'tree> DocumentRoot<'tree> {
         };
         Ok(Self {
             parsed,
-            document: Self::of_node(node),
+            document: Self::of_node(node)?,
         })
     }
 
-    fn of_node(node: SourceSlice<'tree, 'tree>) -> DocumentShape<'tree> {
+    fn of_node(node: SourceSlice<'tree, 'tree>) -> Result<DocumentShape<'tree>, CstFailure> {
         if let Some(document) = node.typed::<FullDocumentNode>() {
-            return DocumentShape::Complete { document };
+            return Ok(DocumentShape::Complete { document });
         }
-        match node.extract_full_document_from_error_recovery() {
-            Some(children) => DocumentShape::Recovered { children },
-            None => DocumentShape::NotADocument { node },
-        }
+        Ok(
+            match node.extract_full_document_from_error_recovery_admitted(
+                crate::parser::typed_cst::canonical_grammar()?,
+            )? {
+                Some(children) => DocumentShape::Recovered { children },
+                None => DocumentShape::NotADocument { node },
+            },
+        )
     }
 
     /// The selected document or recovery node for document-local traversal.
@@ -127,11 +132,13 @@ impl<'tree> DocumentRoot<'tree> {
     pub(crate) fn for_each_part(
         self,
         mut visit: impl FnMut(DocumentPart<'tree>),
-    ) -> Result<(), SourceBindingError> {
+    ) -> Result<(), CstFailure> {
         let selected = self.node();
         let syntax_root = self.parsed.root()?;
         let mut document = Some(match self.document {
-            DocumentShape::Complete { document } => document.extract(),
+            DocumentShape::Complete { document } => {
+                document.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?
+            }
             DocumentShape::Recovered { children, .. } => {
                 // A reconstructed ERROR wrapper does not establish a complete
                 // document boundary. Its siblings remain whole-input recovery;
@@ -186,7 +193,7 @@ mod tests {
                 format!("@End\n{DOCUMENT}"),
                 0,
                 5,
-                ErrorCode::DuplicateHeader,
+                ErrorCode::UnparsableContent,
             ),
         ];
         let parser = TreeSitterParser::new().expect("grammar loads");

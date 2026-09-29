@@ -237,14 +237,10 @@ fn collect_replaced_word(
 
     match domain {
         PositionalDomain::Mor => {
-            if !entry.replacement.words.is_empty() {
-                for word in &entry.replacement.words {
-                    if counts_for_tier(word, TierDomain::Mor) {
-                        push_word(out, word, scope);
-                    }
+            for word in &entry.replacement.words {
+                if counts_for_tier(word, TierDomain::Mor) {
+                    push_word(out, word, scope);
                 }
-            } else if counts_for_tier(&entry.word, TierDomain::Mor) {
-                push_word(out, &entry.word, scope);
             }
         }
         PositionalDomain::Pho | PositionalDomain::Sin => {
@@ -436,13 +432,7 @@ mod tests {
     }
 
     #[test]
-    fn replaced_word_uses_original_when_replacement_empty_in_mor() {
-        // When replacement has no words, Mor falls back to original.
-        // This is tested via the code path: entry.replacement.words.is_empty() == true
-        // In practice, CHAT always has at least one replacement word, but the code
-        // handles the empty case by falling back to the original word.
-        // We test the code path with a normal replaced word where the replacement
-        // is present, the replacement is used, not the original.
+    fn replaced_word_uses_intended_alternative_in_mor() {
         let chat = parse_chat(&one_utterance("goed [: went] ."));
         let result = extract_words(&chat, PositionalDomain::Mor);
         let texts: Vec<&str> = result[0].words.iter().map(|w| w.text.as_str()).collect();

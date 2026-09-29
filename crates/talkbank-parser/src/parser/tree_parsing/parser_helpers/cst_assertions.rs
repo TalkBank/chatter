@@ -9,7 +9,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{Absence, RecoveryNode};
+use crate::generated_traversal::{Absence, RecoveryNode, SourceBindingError};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
@@ -54,18 +54,13 @@ pub fn extract_utf8_text<'a>(
     match source.get(node.byte_range()) {
         Some(text) => ParseOutcome::parsed(text),
         None => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), node.kind()),
-                format!(
-                    "Node range in {} is not a UTF-8 slice of the supplied source",
-                    context
-                ),
-            ).with_suggestion(
-                "Use the source that produced this tree; node ranges must be valid UTF-8 boundaries in that source."
-            ));
+            errors.report(crate::parser::typed_cst::cst_failure_diagnostic(
+                node,
+                source,
+                SourceBindingError::InvalidRange,
+            ).with_suggestion(format!(
+                "While reading {context}, use the source that produced this tree; node ranges must be valid UTF-8 boundaries in that source."
+            )));
             ParseOutcome::rejected()
         }
     }
@@ -246,6 +241,7 @@ mod text_boundary_tests {
         assert!(extract_utf8_text(parsed.root_node(), "", &errors, "root").is_none());
         let diagnostics = errors.into_vec();
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
+        assert_eq!(diagnostics[0].code, ErrorCode::InternalError);
+        assert!(talkbank_model::CompletedDiagnostics::admit(diagnostics).is_err());
     }
 }

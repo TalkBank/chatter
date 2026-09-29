@@ -123,8 +123,8 @@ fn headers_speaker_info_fixture_parses_with_zero_diagnostics() {
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng"), LanguageCode("ara")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("CHI"), age: Some(Valid { years: 1, months: Some(8), days: Some(2), raw: "1;08.02" }), sex: Some(Female), group: Some(GroupName("normal")), ses: None, role: ParticipantRole("Child"), education: None, custom_field: None })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng"), LanguageCode("ara")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("MOT"), age: None, sex: Some(Female), group: None, ses: None, role: ParticipantRole("Mother"), education: None, custom_field: None })"#,
         r#"ID(IDHeader { language: LanguageCodes([LanguageCode("eng"), LanguageCode("ara")]), corpus: CorpusName("corpus"), speaker: SpeakerCode("F_A_T"), age: None, sex: None, group: None, ses: None, role: ParticipantRole("Father"), education: None, custom_field: None })"#,
-        r#"Birth { participant: SpeakerCode("CHI"), date: Valid { day: 28, month: Jun, year: 2001, raw: "28-JUN-2001" } }"#,
-        r#"Birth { participant: SpeakerCode("MOT"), date: Valid { day: 15, month: Mar, year: 1975, raw: "15-MAR-1975" } }"#,
+        r#"Birth { participant: SpeakerCode("CHI"), date: Valid(CheckedChatDate { day: 28, month: Jun, year: 2001, raw: "28-JUN-2001" }) }"#,
+        r#"Birth { participant: SpeakerCode("MOT"), date: Valid(CheckedChatDate { day: 15, month: Mar, year: 1975, raw: "15-MAR-1975" }) }"#,
         r#"Birthplace { participant: SpeakerCode("MOT"), place: BirthplaceDescription("Taipei, Taiwan") }"#,
         r#"L1Of { participant: SpeakerCode("F_A_T"), language: LanguageCode("ara") }"#,
         r#"Comment { content: BulletContent { segments: BulletContentSegments([Text(BulletContentText { text: "Speaker info headers: @Birth of, @Birthplace of, @L1 of" })]) } }"#,
@@ -259,7 +259,7 @@ const TYPES_MISSING_ACTIVITY_AND_GROUP: &str = "\
 ";
 
 #[test]
-fn id_missing_tail_yields_e505_via_document_level_recovery() {
+fn id_missing_tail_keeps_structural_recovery_without_a_fabricated_header() {
     let (reprs, diags) = parse_lines_and_diags(ID_MISSING_TAIL);
 
     let expected: Vec<&str> = vec![
@@ -276,10 +276,10 @@ fn id_missing_tail_yields_e505_via_document_level_recovery() {
         diags,
         vec![
             (
-                "E505".to_string(),
+                "E316".to_string(),
                 54,
                 73,
-                "Invalid @ID header format: structure could not be parsed".to_string(),
+                "Unparsable content at file level: '@ID:\teng|corpus|CHI'".to_string(),
             ),
             (
                 "E522".to_string(),
@@ -332,7 +332,7 @@ fn participants_missing_role_rejects_entry_with_e513() {
 }
 
 #[test]
-fn media_empty_contents_yields_e509_via_document_level_recovery() {
+fn media_empty_contents_keeps_structural_recovery_without_a_fabricated_header() {
     let (reprs, diags) = parse_lines_and_diags(MEDIA_EMPTY_CONTENTS);
 
     let expected: Vec<&str> = vec![
@@ -349,10 +349,10 @@ fn media_empty_contents_yields_e509_via_document_level_recovery() {
     assert_eq!(
         diags,
         vec![(
-            "E509".to_string(),
+            "E316".to_string(),
             87,
             95,
-            "@Media header cannot be empty".to_string(),
+            "Unparsable content at file level: '@Media:\t'".to_string(),
         ),],
         "media_empty_contents diagnostics changed, got: {diags:?}"
     );

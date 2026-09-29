@@ -11,24 +11,19 @@ use crate::parser::tree_parsing::helpers::ReadableRecovery;
 use tree_sitter::Node;
 
 /// Classifies one dependent-tier error node with optional tier context.
-pub(crate) fn analyze_dependent_tier_error_with_context(
+fn analyze_dependent_tier_error_with_context(
     error_node: Node,
     source: &str,
     tier_type: Option<&str>,
 ) -> ParseError {
-    let start = error_node.start_byte();
-    let end = error_node.end_byte();
     let recovery = match ReadableRecovery::admit(error_node, source) {
         Some(recovery) => recovery,
         None => {
-            return ParseError::new(
-                ErrorCode::InvalidControlCharacter,
-                Severity::Error,
-                SourceLocation::from_offsets(start, end),
-                ErrorContext::new(source, start..end, ""),
-                "Dependent tier node range is not a UTF-8 slice of the supplied source",
-            )
-            .with_suggestion("Re-enter using Unicode standard characters");
+            return crate::parser::typed_cst::cst_failure_diagnostic(
+                error_node,
+                source,
+                crate::generated_traversal::SourceBindingError::InvalidRange,
+            );
         }
     };
     analyze_readable_dependent_error(recovery, tier_type)
@@ -53,39 +48,6 @@ pub(crate) fn analyze_readable_dependent_error(
     // typed relation parser (`tier_parsers/gra/relation.rs`), which knows a
     // head field when it has one (the re2c backend has its own). A `%gra`
     // recovery node is the generic E316 below.
-
-    // E760: %mor item with an EMPTY part-of-speech field (`|we`). More
-    // specific than the missing-pipe case below: the pipe is present but
-    // the field before it is empty, which is never meaningful %mor
-    // content (modern reading of CLAN CHECK error 11). Recognized when the
-    // caller supplies mor tier context, when the ERROR sits on a `%mor`
-    // line, and when the whole line is the ERROR node (then the text STARTS
-    // with the `%mor:` prefix; until 2026-09-08 this tested `contains`, and
-    // an `%eng` body that mentioned `%mor:` beside a `|token` was reported
-    // as a `%mor` fault). The span is narrowed to the offending item.
-    if (tier_type == Some("mor")
-        || error_text.starts_with("%mor:")
-        || super::dedicated::on_mor_tier_line(source, start))
-        && let Some(item) = super::dedicated::mor_item_with_empty_pos(
-            error_text,
-            super::dedicated::at_item_boundary(source, start),
-        )
-    {
-        let range = item.range();
-        let (item_start, item_end) = (start + range.start, start + range.end);
-        let item = item.text();
-        return ParseError::new(
-            ErrorCode::MorItemEmptyPos,
-            Severity::Error,
-            SourceLocation::from_offsets(item_start, item_end),
-            ErrorContext::new(source, item_start..item_end, item),
-            format!("MOR item '{item}' has an empty part-of-speech field"),
-        )
-        .with_suggestion(
-            "Every %mor item is pos|stem with a non-empty part of speech before the pipe \
-             (e.g., pro|we, v|go)",
-        );
-    }
 
     // E702: a recovery ERROR carrying content inside a `%mor` tier.
     //
@@ -156,7 +118,7 @@ mod tests {
                 continue;
             }
             let original = analyze_dependent_tier_error_with_context(node, source, Some("mor"));
-            if original.code != ErrorCode::MorItemEmptyPos {
+            if original.code != ErrorCode::InvalidMorphologyFormat {
                 continue;
             }
             witnessed += 1;
@@ -168,7 +130,7 @@ mod tests {
                 assert!(ReadableRecovery::admit(node, incompatible).is_none());
                 assert_eq!(
                     analyze_dependent_tier_error_with_context(node, incompatible, Some("mor")).code,
-                    ErrorCode::InvalidControlCharacter,
+                    ErrorCode::InternalError,
                 );
             }
         }

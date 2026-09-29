@@ -104,7 +104,8 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
         "the fixture must navigate to a full_document node"
     );
 
-    let children = extract_full_document(classify::<FullDocumentNode>(full_doc));
+    let children = extract_full_document(classify::<FullDocumentNode>(full_doc))
+        .expect("producer reconstruction");
 
     // child_3: repeat(line). The recovery-aware engine absorbs the mid-repeat
     // ERROR as an element and keeps consuming the trailing valid line, so the
@@ -240,11 +241,11 @@ fn a_recovery_node_in_both_the_child_list_and_the_sink_reports_once() {
         *CHI:\t[: closed] .\n@End\n";
 
     let (_utterances, diags) = crate::common::parse_utterances_and_diags(ANNOTATION_FIRST);
-    let e759: Vec<&(String, u32, u32, String)> =
-        diags.iter().filter(|(code, ..)| code == "E759").collect();
+    let recovery: Vec<&(String, u32, u32, String)> =
+        diags.iter().filter(|(code, ..)| code == "E316").collect();
     assert_eq!(
-        e759.len(),
+        recovery.len(),
         1,
-        "the annotation is one problem and must be reported once; got {e759:#?}"
+        "the unstructured recovery must be reported once; got {diags:#?}"
     );
 }

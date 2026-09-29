@@ -3,7 +3,7 @@
 //! These are thin convenience wrappers over `talkbank-parser` that keep
 //! common parse-and-validate call patterns available in one place.
 
-use talkbank_model::model::ChatFile;
+use talkbank_model::model::{ChatFile, DependentTier, GraTier, MorTier};
 pub use talkbank_parser::TreeSitterParser;
 
 /// Parse CHAT text leniently (tree-sitter with error recovery).
@@ -14,51 +14,57 @@ pub use talkbank_parser::TreeSitterParser;
 /// tiers: their slots stay present in the recovered AST, but their parse
 /// diagnostics are not surfaced through this helper. Main-tier and header
 /// parse failures still come back in `error_vec`.
+/// Suppression requires the diagnostic's complete span to belong to an actual
+/// parsed `%mor` or `%gra` tier. Unknown locations and similarly named tiers
+/// remain visible; the recovered model's alignment taint is never cleared.
 pub fn parse_lenient(
     parser: &TreeSitterParser,
     chat_text: &str,
 ) -> (ChatFile, Vec<talkbank_model::ParseError>) {
     let errors = talkbank_model::ErrorCollector::new();
     let chat_file = parser.parse_chat_file_streaming(chat_text, &errors);
+    let generated: Vec<_> = chat_file
+        .utterances()
+        .flat_map(|utterance| &utterance.dependent_tiers)
+        .filter_map(|entry| GeneratedTier::from_tier(&entry.tier))
+        .collect();
     let error_vec = errors.into_vec();
     let error_vec = error_vec
         .into_iter()
-        .filter(|error| {
-            generated_tier_at_offset(chat_text, error.location.span.start as usize).is_none()
-        })
+        .filter(|error| !generated.iter().any(|tier| tier.owns(error.location.span)))
         .collect();
     (chat_file, error_vec)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum IgnoredGeneratedTierKind {
-    Mor,
-    Gra,
+/// Only actual generated tiers from this parse can own ignored diagnostics.
+/// Holding typed payloads prevents similarly named free-text tiers from being
+/// admitted by a string-prefix comparison; their full spans include continuations.
+enum GeneratedTier<'file> {
+    Mor(&'file MorTier),
+    Gra(&'file GraTier),
 }
 
-fn generated_tier_at_offset(chat_text: &str, offset: usize) -> Option<IgnoredGeneratedTierKind> {
-    let mut byte_offset = 0usize;
-
-    for raw_line in chat_text.split_inclusive('\n') {
-        let line_start = byte_offset;
-        let line_end = byte_offset + raw_line.len();
-        let line = raw_line.trim_end_matches('\n').trim_end_matches('\r');
-        let trimmed = line.trim_start();
-
-        if line_start <= offset && offset < line_end {
-            return if trimmed.starts_with("%mor") {
-                Some(IgnoredGeneratedTierKind::Mor)
-            } else if trimmed.starts_with("%gra") {
-                Some(IgnoredGeneratedTierKind::Gra)
-            } else {
-                None
-            };
+impl<'file> GeneratedTier<'file> {
+    fn from_tier(tier: &'file DependentTier) -> Option<Self> {
+        match tier {
+            DependentTier::Mor(tier) => Some(Self::Mor(tier)),
+            DependentTier::Gra(tier) => Some(Self::Gra(tier)),
+            _ => None,
         }
-
-        byte_offset = line_end;
     }
 
-    None
+    fn owns(&self, diagnostic: talkbank_model::Span) -> bool {
+        let owner = match self {
+            Self::Mor(tier) => tier.span,
+            Self::Gra(tier) => tier.span,
+        };
+        !owner.is_dummy()
+            && !diagnostic.is_dummy()
+            && owner.start <= diagnostic.start
+            && diagnostic.start < owner.end
+            && diagnostic.start <= diagnostic.end
+            && diagnostic.end <= owner.end
+    }
 }
 
 /// Parse CHAT text strictly (tree-sitter, no error recovery).

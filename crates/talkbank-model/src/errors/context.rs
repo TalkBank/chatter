@@ -5,10 +5,28 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
-use super::Span;
+use super::{FragmentRangeError, FragmentSource, Span};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
+
+/// Source excerpt admission failed before a diagnostic context was constructed.
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+pub enum SourceExcerptError {
+    /// The requested range is reversed, outside the source, or splits UTF-8.
+    #[error("excerpt range {start}..{end} is not a UTF-8 slice of source length {source_len}")]
+    InvalidRange {
+        /// Requested start byte.
+        start: usize,
+        /// Requested exclusive end byte.
+        end: usize,
+        /// Original source length in bytes.
+        source_len: usize,
+    },
+    /// The excerpt cannot fit the model's snippet-coordinate space.
+    #[error(transparent)]
+    Unrepresentable(#[from] FragmentRangeError),
+}
 
 /// Rich error context for helpful error messages
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -83,32 +101,41 @@ impl ErrorContext {
     /// Create error context from full source text and byte span, calculating line offset automatically
     ///
     /// This extracts a snippet around the span and calculates which line number it starts at
+    ///
+    /// Invalid byte ranges and unrepresentable snippet coordinates are errors,
+    /// never substituted with an empty snippet. Valid zero-width ranges remain valid.
     pub fn from_source_with_span(
         full_source: &str,
         span_start: usize,
         span_end: usize,
         found: impl Into<String>,
-    ) -> Self {
+    ) -> Result<Self, SourceExcerptError> {
         use crate::SourceLocation;
+
+        let text =
+            full_source
+                .get(span_start..span_end)
+                .ok_or(SourceExcerptError::InvalidRange {
+                    start: span_start,
+                    end: span_end,
+                    source_len: full_source.len(),
+                })?;
+        let admitted = FragmentSource::new(text, 0)?;
 
         // Calculate line number for the start of the span
         let (line, _column) = SourceLocation::calculate_line_column(span_start, full_source);
 
-        // Extract the snippet (for now, just use the span itself - could be enhanced to show context)
-        let source_text = match full_source.get(span_start..span_end) {
-            Some(text) => text.to_string(),
-            None => String::new(),
-        };
+        let source_text = admitted.input().to_owned();
 
         // Create context with relative span (0..length within the snippet)
         let relative_span = Span::from_usize(0, source_text.len());
 
-        Self {
+        Ok(Self {
             source_text,
             span: relative_span,
             expected: SmallVec::new(),
             found: found.into(),
             line_offset: Some(line),
-        }
+        })
     }
 }

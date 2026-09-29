@@ -1,7 +1,7 @@
 # Summary
 
 **Status:** Current
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 [Introduction](introduction.md)
 [Install](install/index.md)
@@ -60,7 +60,7 @@
 - [Merge Pipeline, Adjudication Workflow](architecture/adjudication-workflow.md)
 - [Errors, CHAT core](architecture/errors-and-validation/chat-core-errors.md)
 - [Validation](architecture/errors-and-validation/validation.md)
-- [CHECK Parity Audit](architecture/errors-and-validation/check-parity-audit.md)
+- [CHECK Assessment](architecture/errors-and-validation/check-parity-audit.md)
 - [Crate Reference](architecture/crate-reference.md)
 - [CLI Startup and the Program Stack](architecture/cli-startup-and-stack.md)
 - [Repo Architecture](architecture/repo-architecture.md)

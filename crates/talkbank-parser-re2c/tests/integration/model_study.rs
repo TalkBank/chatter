@@ -30,6 +30,76 @@ fn ts() -> TreeSitterParser {
     TreeSitterParser::new().expect("grammar loads")
 }
 
+/// Reference replacements retain word structure and full-file source coordinates.
+#[test]
+fn reference_replacement_words_are_structural_and_source_bound() {
+    use talkbank_model::{ChatParser, ErrorCollector, ParseOutcome, UtteranceContent, WriteChat};
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../corpus/reference/annotation/errors-and-replacements.cha"
+    ));
+    let errors = ErrorCollector::new();
+    let parser = talkbank_parser_re2c::Re2cParser::new();
+    let ParseOutcome::Parsed(file) = parser.parse_chat_file(source, 0, &errors) else {
+        panic!("reference file rejected");
+    };
+    assert!(errors.is_empty(), "{:?}", errors.to_vec());
+    let mut words = Vec::new();
+    for utterance in file.utterances() {
+        for item in &utterance.main.content.content {
+            if let UtteranceContent::ReplacedWord(replaced) = item {
+                for word in &replaced.replacement.words {
+                    let spelling = word.to_chat_string();
+                    assert_eq!(
+                        source.get(word.span.start as usize..word.span.end as usize),
+                        Some(spelling.as_str())
+                    );
+                    words.push(spelling);
+                }
+            }
+        }
+    }
+    assert_eq!(words, ["rocking+horse", "a+er", "b", "children"]);
+}
+
+/// The historical empty-alternative spec must fail before model validation.
+#[test]
+fn empty_replacement_spec_is_rejected_by_re2c_grammar() {
+    use talkbank_model::{ChatParser, ErrorCollector};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let specs = talkbank_parser_tests::error_specs::load(root).unwrap();
+    let spec = specs
+        .iter()
+        .find(|spec| spec.filename == "E208.md")
+        .unwrap();
+    assert_eq!(
+        spec.examples().len(),
+        2,
+        "invalid spelling and its legal control"
+    );
+    let parser = talkbank_parser_re2c::Re2cParser::new();
+    for example in spec.examples() {
+        let errors = ErrorCollector::new();
+        let _ = parser.parse_chat_file(example.chat.as_str(), 0, &errors);
+        if matches!(
+            example.claim,
+            talkbank_spec_vocabulary::frontmatter::Claim::Legal
+        ) {
+            assert!(
+                errors.is_empty(),
+                "legal replacement rejected: {:?}",
+                errors.to_vec()
+            );
+        } else {
+            assert!(errors.has_errors(), "empty replacement silently accepted");
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Word equivalence tests (not ignored; these run in CI)
 // ═══════════════════════════════════════════════════════════════

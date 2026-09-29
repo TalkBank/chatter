@@ -7,7 +7,7 @@
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
     AsRawNode, NoChild, NonColonSeparatorChoice, NonColonSeparatorNode, SeparatorChoice,
-    SeparatorNode, SlotValue, extract_non_colon_separator, extract_separator,
+    SeparatorNode, SlotValue, SourceBound, extract_non_colon_separator, extract_separator,
 };
 use crate::model::Separator;
 use crate::parser::node_span::span_of;
@@ -66,7 +66,14 @@ fn parse_non_colon_separator_node(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Separator> {
     let node = typed.raw_node();
-    let children = extract_non_colon_separator(typed);
+    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+        extract_non_colon_separator(typed),
+        node,
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
     match children.content.slot().typed_or_placeholder() {
         SlotValue::Present(choice) | SlotValue::Placeholder(choice) => {
             ParseOutcome::parsed(separator_for(&choice))
@@ -114,12 +121,7 @@ fn parse_non_colon_separator_node(
             errors,
             "non_colon_separator contains an ERROR node",
         ),
-        SlotValue::Unexpected(other) => reject(
-            other,
-            source,
-            errors,
-            format!("Unknown non_colon_separator kind '{}'", other.kind()),
-        ),
+        SlotValue::Unexpected(never) => match never {},
     }
 }
 
@@ -161,7 +163,14 @@ fn parse_separator_contents(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Separator> {
     let node = typed.raw_node();
-    let children = extract_separator(typed);
+    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+        extract_separator(typed),
+        node,
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
     surface_displaced(&children.unexpected, "separator", source, errors);
 
     match children.content.slot().typed_or_placeholder() {
@@ -173,11 +182,8 @@ fn parse_separator_contents(
                 span: span_of(colon.raw_node()),
             }),
         },
-        // A MISSING placeholder of a kind the choice does not name, or a present
-        // node of one. The removed hand-walk reported both as "Expected
-        // 'non_colon_separator' or 'colon'"; the kind is still named, without
-        // this file restating what the grammar admits.
-        SlotValue::UnclassifiedPlaceholder(other) | SlotValue::Unexpected(other) => reject(
+        // A MISSING placeholder of a kind the choice does not name.
+        SlotValue::UnclassifiedPlaceholder(other) => reject(
             other,
             source,
             errors,
@@ -186,6 +192,7 @@ fn parse_separator_contents(
         SlotValue::Error(error) => {
             reject(error, source, errors, "separator contains an ERROR node")
         }
+        SlotValue::Unexpected(never) => match never {},
         SlotValue::Absent(NoChild) => reject(
             node,
             source,
@@ -199,24 +206,21 @@ fn parse_separator_contents(
 ///
 /// The producer already classified the carrier. Bare colon/non-colon leaves
 /// cannot enter this boundary; recovery inside the separator remains explicit.
-pub(crate) fn parse_separator_node(
-    typed: SeparatorNode<'_>,
-    source: &str,
+pub(crate) fn parse_separator_node<'tree>(
+    typed: SourceBound<'tree, '_, SeparatorNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Separator> {
     let node = typed.raw_node();
     // Preserve the childless recovery policy: only the three punctuation
     // spellings have a text interpretation, and empty/unknown text rejects.
-    if node.child_count() == 0
-        && let Some(text) = source.get(node.byte_range())
-    {
+    if node.child_count() == 0 {
         let span = span_of(node);
-        return match text {
+        return match typed.text() {
             ":" => ParseOutcome::parsed(Separator::Colon { span }),
             "," => ParseOutcome::parsed(Separator::Comma { span }),
             ";" => ParseOutcome::parsed(Separator::Semicolon { span }),
             _ => ParseOutcome::rejected(),
         };
     }
-    parse_separator_contents(typed, source, errors)
+    parse_separator_contents(typed.node(), typed.source(), errors)
 }

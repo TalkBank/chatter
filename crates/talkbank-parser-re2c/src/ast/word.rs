@@ -59,11 +59,53 @@ pub enum ParsedAnnotation<'a> {
     /// Retrace markers change the preceding content structure.
     Retrace(RetraceKindParsed),
     /// A replacement changes the word's structure.
-    Replacement(&'a str),
+    Replacement(ReplacementParsed<'a>),
     /// An utterance language code.
     Langcode(&'a str),
     /// An utterance postcode.
     Postcode(&'a str),
+}
+
+/// A replacement admitted by the word grammar, nonempty by construction.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ReplacementParsed<'a> {
+    first: Box<WordWithAnnotations<'a>>,
+    rest: Vec<WordWithAnnotations<'a>>,
+    end: &'a str,
+}
+
+impl<'a> ReplacementParsed<'a> {
+    pub(crate) fn new(
+        first: WordWithAnnotations<'a>,
+        rest: Vec<WordWithAnnotations<'a>>,
+        end: &'a str,
+    ) -> Self {
+        Self {
+            first: Box::new(first),
+            rest,
+            end,
+        }
+    }
+
+    /// The required first word, admitted by the replacement grammar.
+    pub fn first(&self) -> &WordWithAnnotations<'a> {
+        &self.first
+    }
+
+    /// Additional intended words, in authored order.
+    pub fn rest(&self) -> &[WordWithAnnotations<'a>] {
+        &self.rest
+    }
+
+    fn chat_text(&self) -> String {
+        let mut text = format!("[: {}", self.first.raw_text);
+        for word in &self.rest {
+            text.push(' ');
+            text.push_str(&word.raw_text);
+        }
+        text.push(']');
+        text
+    }
 }
 
 /// A parsed scoped annotation. Tag-extracted content, no delimiters.
@@ -115,7 +157,7 @@ impl<'a> ParsedAnnotation<'a> {
                 RetraceKindParsed::Multiple => "[///]".to_owned(),
                 RetraceKindParsed::Reformulation => "[/-]".to_owned(),
             },
-            Self::Replacement(text) => format!("[: {text}]"),
+            Self::Replacement(replacement) => replacement.chat_text(),
             Self::Langcode(code) => format!("[- {code}]"),
             Self::Postcode(code) => format!("[+ {code}]"),
         }
@@ -129,19 +171,20 @@ impl<'a> ParsedAnnotation<'a> {
         }
     }
 
-    /// Return replacement content directly, never an index to look up again.
-    pub fn replacement_text(&self) -> Option<&'a str> {
+    /// Return admitted replacement words, without reparsing their spelling.
+    pub fn replacement(&self) -> Option<&ReplacementParsed<'a>> {
         match self {
-            Self::Replacement(text) => Some(text),
+            Self::Replacement(replacement) => Some(replacement),
             Self::Scoped(_) | Self::Retrace(_) | Self::Langcode(_) | Self::Postcode(_) => None,
         }
     }
 
-    /// The borrowed source payload, when the marker carries one.
+    /// A borrowed source anchor (the closing delimiter for replacements).
     pub fn content_slice(&self) -> Option<&'a str> {
         match self {
             Self::Scoped(scoped) => scoped.content_slice(),
-            Self::Replacement(text) | Self::Langcode(text) | Self::Postcode(text) => Some(text),
+            Self::Replacement(replacement) => Some(replacement.end),
+            Self::Langcode(text) | Self::Postcode(text) => Some(text),
             Self::Retrace(_) => None,
         }
     }

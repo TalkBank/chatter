@@ -110,13 +110,17 @@ pub(super) fn unknown_header(
     label: &str,
     suggested_fix: &str,
     parse_reason: impl Into<String>,
-) -> talkbank_model::model::Header {
+) -> Result<talkbank_model::model::Header, crate::CstFailure> {
     // The one builder, in `parser_helpers::header_slots`, since 2026-09-08;
-    // this wrapper keeps the structured headers' calling shape. `label` was
-    // the text for a node with no bytes, a case a matched header node never
-    // presents; the shared builder names the node's kind there instead.
+    // this wrapper keeps the structured headers' calling shape. The legacy
+    // `label` is not authored input and must not substitute for unreadable text.
     let _ = label;
-    unknown_header_from_node(node, source, parse_reason, Some(suggested_fix))
+    Ok(unknown_header_from_node(
+        node,
+        source,
+        parse_reason,
+        Some(suggested_fix),
+    )?)
 }
 
 pub(crate) fn report_header_structural_errors(

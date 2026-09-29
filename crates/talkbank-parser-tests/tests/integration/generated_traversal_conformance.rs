@@ -97,7 +97,7 @@ fn generated_traversal_conformance_no_misclassification_on_valid_corpus() {
                 }
             }
             if let Some(item) = ContentItemNode::from_node(node) {
-                let children = extract_content_item(item);
+                let children = extract_content_item(item).expect("producer reconstruction");
                 if let NodeSlot::Present(expected) = children.content.slot() {
                     let classified = ContentItemChoice::from_node(expected.raw_node())
                         .expect("the producer's content alternative is kind-classifiable");

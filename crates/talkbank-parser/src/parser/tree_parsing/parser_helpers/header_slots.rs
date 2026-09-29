@@ -5,14 +5,17 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NamedKind, NoChild, SourceBound, SourceBoundKind, SourceField,
-    SourceSlotView,
+    AsRawNode, KindSlot, NamedKind, Never, NoChild, ReadableSlot, SourceBindingError, SourceBound,
+    SourceBoundKind, SourceField, SourceSlotView,
 };
 use crate::model::{Header, WarningText};
+use crate::parser::typed_cst::CstFailure;
+use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 /// Build `Header::Unknown` from malformed header input: the header's own text
-/// when it has any, else its node kind, with the reason the parser gave up.
+/// with the reason the parser gave up. Unreadable text is a producer failure,
+/// not a header whose text is the grammar node's name.
 /// Shared by the simple and special header families, the pre-`@Begin`
 /// headers and `@Media`, each of which had written its own copy.
 pub(crate) fn unknown_header_from_node(
@@ -20,16 +23,63 @@ pub(crate) fn unknown_header_from_node(
     input: &str,
     reason: impl Into<String>,
     suggested_fix: Option<&str>,
-) -> Header {
-    let text = match header_actual.utf8_text(input.as_bytes()) {
-        Ok(raw) if !raw.is_empty() => raw.to_string(),
-        _ => header_actual.kind().to_string(),
-    };
+) -> Result<Header, SourceBindingError> {
+    let text = input
+        .get(header_actual.byte_range())
+        .ok_or(SourceBindingError::InvalidRange)?;
+    Ok(unknown_header_from_text(text, reason, suggested_fix))
+}
 
+fn unknown_header_from_text(
+    text: &str,
+    reason: impl Into<String>,
+    suggested_fix: Option<&str>,
+) -> Header {
     Header::Unknown {
-        text: WarningText::new(text),
+        text: WarningText::new(text.to_owned()),
         parse_reason: Some(reason.into()),
         suggested_fix: suggested_fix.map(str::to_string),
+    }
+}
+
+#[cfg(test)]
+mod unknown_header_admission_tests {
+    use super::*;
+    use crate::generated_traversal::{FromNodeKind, LanguagesHeaderNode};
+
+    #[test]
+    fn unknown_header_retains_admitted_text_and_refuses_unreadable_source() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../corpus/reference/tiers/mor-gra.cha"
+        ));
+        let parser = crate::TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("reference");
+        let mut pending = vec![parsed.root_node()];
+        let mut witnessed = 0;
+        while let Some(node) = pending.pop() {
+            let mut cursor = node.walk();
+            pending.extend(node.children(&mut cursor));
+            let Some(header) = LanguagesHeaderNode::from_node(node) else {
+                continue;
+            };
+            let site = HeaderSite::bound(parsed.bind_typed(header).expect("owner"));
+            let observed =
+                unknown_header_from_node(node, source, "boundary control", None).expect("readable");
+            assert_eq!(site.unknown("boundary control", None), observed);
+            let Header::Unknown { text, .. } = observed else {
+                panic!("unknown header")
+            };
+            assert_eq!(text.to_string(), &source[node.byte_range()]);
+            assert!(matches!(
+                unknown_header_from_node(node, "", "boundary control", None),
+                Err(SourceBindingError::InvalidRange)
+            ));
+            witnessed += 1;
+        }
+        assert!(witnessed > 0);
     }
 }
 
@@ -44,6 +94,7 @@ pub(crate) struct HeaderSite<'tree, 'src> {
     actual: Node<'tree>,
     kind: &'static str,
     input: &'src str,
+    text: &'src str,
 }
 
 impl<'tree, 'src> HeaderSite<'tree, 'src> {
@@ -55,6 +106,7 @@ impl<'tree, 'src> HeaderSite<'tree, 'src> {
             actual: typed.raw_node(),
             kind: T::KIND,
             input: typed.source(),
+            text: typed.text(),
         }
     }
 
@@ -75,7 +127,7 @@ impl<'tree, 'src> HeaderSite<'tree, 'src> {
 
     /// The `Header::Unknown` recovery for this header, with `reason`.
     pub(crate) fn unknown(&self, reason: impl Into<String>, suggested_fix: Option<&str>) -> Header {
-        unknown_header_from_node(self.actual, self.input, reason, suggested_fix)
+        unknown_header_from_text(self.text, reason, suggested_fix)
     }
 }
 
@@ -90,6 +142,45 @@ impl Refused<'_> {
     /// The `Header::Unknown` for the refused slot, at `site`.
     pub(crate) fn into_header(self, site: &HeaderSite<'_, '_>) -> Header {
         site.unknown(self.0.missing, self.0.suggested_fix)
+    }
+}
+
+/// Structural recovery may retain an unknown header; a producer fault may not.
+#[derive(Debug)]
+pub(crate) enum ContentReadError<'w> {
+    /// The recovery diagnostic was already reported by the slot owner.
+    Recovery(Refused<'w>),
+    /// Source admission failed; the dispatch boundary must report this fault.
+    Producer(CstFailure),
+}
+
+impl ContentReadError<'_> {
+    /// Preserve the distinction until a fallible header consumer handles it.
+    pub(crate) fn into_header(self, site: &HeaderSite<'_, '_>) -> Result<Header, CstFailure> {
+        match self {
+            Self::Recovery(refused) => Ok(refused.into_header(site)),
+            Self::Producer(failure) => Err(failure),
+        }
+    }
+
+    /// Finish at a diagnostic-sink boundary without fabricating fault recovery.
+    pub(crate) fn into_outcome(
+        self,
+        site: &HeaderSite<'_, '_>,
+        errors: &impl ErrorSink,
+    ) -> ParseOutcome<Header> {
+        match self.into_header(site) {
+            Ok(header) => ParseOutcome::parsed(header),
+            Err(failure) => {
+                crate::parser::typed_cst::report_cst_failure(
+                    site.actual(),
+                    site.input(),
+                    failure,
+                    errors,
+                );
+                ParseOutcome::rejected()
+            }
+        }
     }
 }
 
@@ -133,14 +224,41 @@ pub(crate) fn read_source_content<'tree, 'source, 'w, T: SourceBoundKind<'tree> 
     content_slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<&'source str, Refused<'w>> {
+) -> Result<&'source str, ContentReadError<'w>> {
     match content_slot.view() {
-        SourceSlotView::Present(content) => {
-            crate::parser::typed_cst::read_source_field(content, errors)
-                .map(|bound| bound.text())
-                .ok_or(Refused(words))
-        }
+        SourceSlotView::Present(content) => content
+            .read()
+            .map(|bound| bound.text())
+            .map_err(|error| ContentReadError::Producer(error.into())),
         SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) | SourceSlotView::Error(_) => {
+            Err(ContentReadError::Recovery(words.refuse(
+                site,
+                T::KIND,
+                errors,
+            )))
+        }
+    }
+}
+
+/// Read a range-admitted lexical slot. Only structural recovery can refuse;
+/// the producer-failure transition has already completed for this carrier.
+pub(crate) fn read_admitted_content<'tree, 'source, 'w, T: SourceBoundKind<'tree> + NamedKind>(
+    site: &HeaderSite<'tree, '_>,
+    slot: &ReadableSlot<
+        'tree,
+        'source,
+        SourceBound<'tree, 'source, T>,
+        SourceBound<'tree, 'source, T>,
+        Never,
+        NoChild,
+    >,
+    words: &'w ContentSlot<'w>,
+    errors: &impl ErrorSink,
+) -> Result<&'source str, Refused<'w>> {
+    match slot {
+        ReadableSlot::Present(content) => Ok(content.text()),
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Missing(_) | ReadableSlot::Absent(NoChild) | ReadableSlot::Error(_) => {
             Err(words.refuse(site, T::KIND, errors))
         }
     }

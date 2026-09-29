@@ -1,14 +1,15 @@
-//! English ordinal + year + decade expansion. Round 2 of the
-//! number-expansion rework documented in
-//! `book/src/architecture/number-expansion.md`.
+//! English ordinal + year + decade expansion. The authored generation
+//! controls and their acceptance contract are documented in
+//! `book/src/contributing/testing.md`.
 //!
 //! Only English realistically hits these modes: ordinal and decade tokens are
 //! detected via English-style suffixes (`"3rd"`, `"1950s"`), so non-English
 //! text never reaches this module.
 //!
-//! Cross-validated against `num2words` output for ordinals 0-1234
-//! and years 1900-2100 (see fixture
-//! `data/eng_ordinal_year_fixtures.json`).
+//! Lexical forms were cross-validated against `num2words` for ordinals 0-1234
+//! and years 1900-2100. Ordinals intentionally omit prose commas: the output
+//! is a spoken word sequence. The retained fixture records that CHAT policy
+//! (`data/eng_ordinal_year_fixtures.json`).
 
 /// Cardinal forms 0-19 for composing ordinals 20+ ("twenty-first").
 const CARDINAL_TENS: [&str; 10] = [
@@ -76,7 +77,17 @@ const CARDINAL_0_19: [&str; 20] = [
     "nineteen",
 ];
 
-/// English ordinal: 0..=9999. Mirrors `num2words(n, to="ordinal", lang="en")`.
+/// An ordinal within the composer's supported range; rejection preserves input.
+#[derive(Clone, Copy)]
+pub(super) struct SupportedOrdinal(u16);
+
+impl SupportedOrdinal {
+    pub(super) fn admit(value: u64) -> Option<Self> {
+        (value < 10_000).then_some(Self(value as u16))
+    }
+}
+
+/// English ordinal: 0..=9999, with British-style conjunctions and no prose commas.
 ///
 /// Composition rule:
 /// - 0-19: irregular table lookup
@@ -84,7 +95,7 @@ const CARDINAL_0_19: [&str; 20] = [
 /// - 100-999: `cardinal-N-hundred` then either `"th"` (for `N00`) or
 ///   `" and "` + sub-100 ordinal
 /// - 1000-9999: same shape with thousands
-pub fn expand_ordinal_eng(n: u64) -> String {
+pub(super) fn expand_ordinal_eng(SupportedOrdinal(n): SupportedOrdinal) -> String {
     if n < 20 {
         return ORDINAL_0_19[n as usize].to_string();
     }
@@ -103,39 +114,61 @@ pub fn expand_ordinal_eng(n: u64) -> String {
         if remainder == 0 {
             return format!("{head}th");
         }
-        return format!("{head} and {}", expand_ordinal_eng(remainder));
+        return format!(
+            "{head} and {}",
+            expand_ordinal_eng(SupportedOrdinal(remainder))
+        );
     }
-    if n < 10_000 {
-        let thousands = n / 1000;
-        let remainder = n % 1000;
-        let head = format!("{} thousand", CARDINAL_0_19[thousands as usize]);
-        if remainder == 0 {
-            return format!("{head}th");
+    // Admission bounds the thousands index; each remainder stays admitted.
+    let thousands = n / 1000;
+    let remainder = n % 1000;
+    let head = format!("{} thousand", CARDINAL_0_19[thousands as usize]);
+    if remainder == 0 {
+        return format!("{head}th");
+    }
+    let connector = if remainder < 100 { " and " } else { " " };
+    format!(
+        "{head}{connector}{}",
+        expand_ordinal_eng(SupportedOrdinal(remainder))
+    )
+}
+
+/// A year inside the lexical composer's supported domain.
+struct SupportedYear(u16);
+
+impl SupportedYear {
+    fn admit(n: u64) -> Option<Self> {
+        (1100..=2999).contains(&n).then_some(Self(n as u16))
+    }
+}
+
+enum Decade {
+    Shorthand(u8),
+    FullYear(SupportedYear),
+}
+
+/// Only admitted multiples of ten can reach decade inflection.
+pub(super) struct SupportedDecade(Decade);
+
+impl SupportedDecade {
+    pub(super) fn admit(n: u64) -> Option<Self> {
+        if !n.is_multiple_of(10) {
+            return None;
         }
-        let connector = if remainder < 100 { ", and " } else { ", " };
-        return format!("{head}{connector}{}", expand_ordinal_eng(remainder));
+        let decade = if n <= 90 {
+            Decade::Shorthand(n as u8)
+        } else {
+            Decade::FullYear(SupportedYear::admit(n)?)
+        };
+        Some(Self(decade))
     }
-    // Beyond 9999, fall back to the cardinal+th pattern; ASR rarely
-    // produces ordinals that high, and this avoids a recursive
-    // explosion on truly large values.
-    format!("{}th", n)
 }
 
 /// English year-form: `1950 → "nineteen fifty"`, `2007 → "two
 /// thousand and seven"`, `2010 → "twenty ten"`. Mirrors
 /// `num2words(n, to="year", lang="en")` for 4-digit years
-/// 1100-2999. Years outside that range fall back to the
-/// raw integer string.
-pub fn expand_year_eng(n: u64) -> String {
-    // 2-digit "decade" shorthand ("the 80s"); caller usually
-    // routes these via `expand_decade_eng`; keep the year function
-    // honest for whatever it gets.
-    if n < 100 {
-        return cardinal_under_100(n as u32);
-    }
-    if !(1100..=2999).contains(&n) {
-        return n.to_string();
-    }
+/// 1100-2999. Unsupported years cannot enter composition.
+fn expand_year_eng(SupportedYear(n): SupportedYear) -> String {
     let century = n / 100;
     let two_low = n % 100;
 
@@ -163,14 +196,20 @@ pub fn expand_year_eng(n: u64) -> String {
 /// English decade: `1950s → "nineteen fifties"`, `80s → "eighties"`.
 /// Composes year-form for 4-digit, then pluralizes the trailing
 /// decade word per English rule (`-y` → `-ies`, otherwise `-s`).
-pub fn expand_decade_eng(n: u64) -> String {
-    if n < 100 {
-        // 2-digit shorthand: "80s" → "eighties"
-        let cardinal = cardinal_under_100(n as u32);
-        return pluralize_last_word(&cardinal);
+pub(super) fn expand_decade_eng(SupportedDecade(decade): SupportedDecade) -> String {
+    // Numeric construction supplies a nonempty phrase with no trailing space.
+    // Keep inflection here: an arbitrary-string helper would admit empty input
+    // and lose the producer invariant. Decade separates supported full years
+    // from the bounded shorthand input consumed by cardinal_under_100.
+    let phrase = match decade {
+        Decade::FullYear(year_input) => expand_year_eng(year_input),
+        Decade::Shorthand(n) => cardinal_under_100(u32::from(n)),
+    };
+    if let Some(stem) = phrase.strip_suffix('y') {
+        format!("{stem}ies")
+    } else {
+        format!("{phrase}s")
     }
-    let year = expand_year_eng(n);
-    pluralize_last_word(&year)
 }
 
 fn cardinal_under_100(n: u32) -> String {
@@ -185,34 +224,40 @@ fn cardinal_under_100(n: u32) -> String {
     format!("{}-{}", CARDINAL_TENS[tens], CARDINAL_0_19[ones])
 }
 
-/// Pluralize the last whitespace-separated word per English decade
-/// rule: trailing `-y` → `-ies`; trailing `hundred` → `hundreds`;
-/// otherwise append `s`. Mirrors `_pluralize_decade` in the
-/// soon-to-be-deleted `_number_expansion.py`.
-fn pluralize_last_word(s: &str) -> String {
-    let mut parts: Vec<&str> = s.split_whitespace().collect();
-    if parts.is_empty() {
-        return s.to_string();
-    }
-    // is_empty guard above ensures pop() returns Some.
-    #[allow(clippy::unwrap_used)]
-    let last = parts.pop().unwrap();
-    let pluralized = if let Some(stem) = last.strip_suffix('y') {
-        format!("{stem}ies")
-    } else {
-        format!("{last}s")
-    };
-    if parts.is_empty() {
-        pluralized
-    } else {
-        format!("{} {}", parts.join(" "), pluralized)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde::Deserialize;
+
+    #[test]
+    fn decade_admission_preserves_unsupported_spelling_at_the_public_boundary() {
+        for input in [
+            "1s",
+            "21s",
+            "99s",
+            "100s",
+            "1090s",
+            "1101s",
+            "2001s",
+            "2991s",
+            "3000s",
+            "00021s",
+            "02001s",
+            "0100s",
+            "03000s",
+            "18446744073709551615s",
+        ] {
+            assert_eq!(crate::num_words::expand_number(input, "eng"), input);
+        }
+        // Raw strings, not CHAT fixtures: initial zero is CHAT omission syntax.
+        for (input, expected) in [
+            ("0s", "zeros"),
+            ("000s", "zeros"),
+            ("01950s", "nineteen fifties"),
+        ] {
+            assert_eq!(crate::num_words::expand_number(input, "eng"), expected);
+        }
+    }
 
     #[derive(Deserialize)]
     struct Fixtures {
@@ -225,19 +270,17 @@ mod tests {
         serde_json::from_str(raw).expect("parse fixture")
     }
 
-    /// Cross-check every ordinal in the fixture file against the
-    /// Rust implementation. Any divergence from the reference output
-    /// is a bug: we promise behavioural parity for the values that
-    /// realistically route through this path.
+    /// Check the retained lexical fixture, including the reviewed CHAT
+    /// punctuation policy rather than general-purpose prose-format parity.
     #[test]
-    fn ordinals_match_num2words_fixture() {
+    fn ordinals_match_chat_spelling_fixture() {
         let f = load_fixtures();
         for (k, expected) in &f.ordinal {
             let n: u64 = k.parse().expect("numeric key");
-            let actual = expand_ordinal_eng(n);
+            let actual = expand_ordinal_eng(SupportedOrdinal::admit(n).expect("supported fixture"));
             assert_eq!(
                 &actual, expected,
-                "ordinal({n}), Rust: {actual:?}, num2words: {expected:?}"
+                "ordinal({n}), actual: {actual:?}, CHAT spelling: {expected:?}"
             );
         }
     }
@@ -248,7 +291,7 @@ mod tests {
         let f = load_fixtures();
         for (k, expected) in &f.year {
             let n: u64 = k.parse().expect("numeric key");
-            let actual = expand_year_eng(n);
+            let actual = expand_year_eng(SupportedYear::admit(n).expect("supported year fixture"));
             assert_eq!(
                 &actual, expected,
                 "year({n}), Rust: {actual:?}, num2words: {expected:?}"
@@ -260,29 +303,44 @@ mod tests {
     /// users will actually see (Whisper "1950s" / "80s" output).
     #[test]
     fn decade_pluralizes_year_form() {
-        assert_eq!(expand_decade_eng(1950), "nineteen fifties");
-        assert_eq!(expand_decade_eng(1920), "nineteen twenties");
-        assert_eq!(expand_decade_eng(1900), "nineteen hundreds");
-        assert_eq!(expand_decade_eng(2010), "twenty tens");
-        // 2-digit shorthand
-        assert_eq!(expand_decade_eng(80), "eighties");
-        assert_eq!(expand_decade_eng(20), "twenties");
-        assert_eq!(expand_decade_eng(10), "tens");
+        for (n, expected) in [
+            (1950, "nineteen fifties"),
+            (1920, "nineteen twenties"),
+            (1900, "nineteen hundreds"),
+            (2010, "twenty tens"),
+            (80, "eighties"),
+            (20, "twenties"),
+            (10, "tens"),
+            (90, "nineties"),
+            (1100, "eleven hundreds"),
+            (2990, "twenty-nine nineties"),
+        ] {
+            let admitted = SupportedDecade::admit(n).expect("supported decade control");
+            assert_eq!(expand_decade_eng(admitted), expected);
+        }
     }
 
-    /// SURVIVES: behaviour a signature cannot describe. The return type says
-    /// a `String` comes back; it cannot say the arithmetic inside does not
-    /// overflow. Integer overflow panics in debug builds and wraps in release,
-    /// and no lint catches either, so a large-input probe is the only thing
-    /// standing between a caller and a panic on `expand_ordinal_eng(1_000_000)`.
-    ///
-    /// Deliberately asserts nothing about the OUTPUT: what large ordinals
-    /// should read like is unsettled, and pinning today's rendering would
-    /// freeze an answer nobody has chosen.
+    /// Checked admission owns the range; unsupported values cannot reach composition.
     #[test]
-    fn ordinal_large_values_dont_crash() {
-        let _ = expand_ordinal_eng(10_000);
-        let _ = expand_ordinal_eng(1_000_000);
-        let _ = expand_ordinal_eng(u64::MAX);
+    fn ordinal_admission_bounds_composition_and_preserves_rejected_spelling() {
+        for value in [0, 19, 99, 999, 9999] {
+            assert_eq!(
+                SupportedOrdinal::admit(value).map(|n| u64::from(n.0)),
+                Some(value)
+            );
+        }
+        for value in [10_000, 1_000_000, u64::MAX] {
+            assert!(SupportedOrdinal::admit(value).is_none());
+        }
+        // A leading zero in CHAT denotes omission; this is the raw string API,
+        // not an invented CHAT fixture that bypasses that grammar distinction.
+        for input in [
+            "010001st",
+            "00010002nd",
+            "10003rd",
+            "18446744073709551615th",
+        ] {
+            assert_eq!(crate::num_words::expand_number(input, "eng"), input);
+        }
     }
 }

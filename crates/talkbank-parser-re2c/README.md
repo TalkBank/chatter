@@ -1,6 +1,6 @@
 # talkbank-parser-re2c
 
-**Last modified:** 2026-05-30 20:04 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 Alternate CHAT transcript parser using a
 [re2c](https://re2c.org/manual/manual_rust.html) DFA lexer and
@@ -8,9 +8,15 @@ Alternate CHAT transcript parser using a
 
 This crate implements the `ChatParser` trait from `talkbank-model`, but it is
 not the default parser surface for the TalkBank toolchain. Its primary role is
-to provide an independently implemented parser that can act as an equivalence
-oracle against `talkbank-parser`, while still remaining usable as a specialist
-parser surface in its own right.
+to provide an independent, experimental implementation for comparison and
+specialist parsing, not an oracle against `talkbank-parser`.
+
+## Compatibility contract
+
+The book's [Backend compatibility mandate](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate)
+is authoritative for users and developers. Read it before switching parsers or
+changing a parity expectation; the [parity report](docs/parity-report.md)
+contains dated measurements, not a competing policy.
 
 Use `talkbank-parser-re2c` when you want:
 
@@ -111,15 +117,15 @@ these timings have not been remeasured after that ownership change.
 ### Limitations
 
 - **Long-running service posture:** This crate is designed first as an
-  independently implemented parser oracle and batch parser, not as the
+  independently implemented experimental batch parser, not as the
   toolchain's long-lived incremental parser service. The LSP and default
   editor/runtime path continue to use `talkbank-parser`.
 - **No incremental parsing.** TreeSitter supports incremental reparsing
   (essential for the LSP). Re2c+chumsky does not. The LSP always uses
   TreeSitterParser.
-- **Error recovery.** TreeSitter has built-in error recovery producing
-  partial CSTs. The chumsky parser reports unhandled tokens via
-  `ErrorSink` but does not attempt structural recovery.
+- **Error recovery.** The backends have different recovery architectures.
+  re2c has parser-owned recovery paths but does not promise tree-sitter's
+  recovered output or diagnostic identity. See the compatibility contract.
 
 ## Build & Test
 

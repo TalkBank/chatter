@@ -85,9 +85,9 @@ impl<'a> UtteranceScopedEdit<'a> {
     }
 
     fn admit(self) -> Result<SpliceEdit, Skipped> {
-        let reason = match self.utterance.parse_health {
+        let reason = match self.utterance.parse_health() {
             ParseHealthState::Clean => return Ok(self.edit),
-            ParseHealthState::Unknown => SkipReason::UnknownHealth,
+            ParseHealthState::Unknown | ParseHealthState::Constructed => SkipReason::UnknownHealth,
             ParseHealthState::Tainted(_) => match self.edit.recovery_safety() {
                 RecoverySafety::RequiresClean => SkipReason::TaintedUtterance,
                 RecoverySafety::RepairsTaintingSyntax => return Ok(self.edit),
@@ -110,7 +110,7 @@ impl<'a> UtteranceScopedEdit<'a> {
 /// text is trustworthy, so a negative test (`!= Tainted`) would silently
 /// admit edits into content the parser never vouched for. That is exactly
 /// the sentinel-shaped failure this engine exists to rule out, so the match
-/// below is exhaustive over all three `ParseHealthState` variants and
+/// below also rejects checked construction, which cannot certify source spans;
 /// `Clean` is the only one that admits.
 pub fn admit_edits(file: &ChatFile, edits: Vec<SpliceEdit>) -> Admission {
     let mut admission = Admission::default();
@@ -178,7 +178,7 @@ mod tests {
             .next()
             .expect("fixture assumption: a first utterance exists");
         assert_eq!(
-            first.parse_health,
+            first.parse_health(),
             ParseHealthState::Clean,
             "fixture assumption: the first utterance must parse clean despite \
              the second utterance's malformed %mor tier"
@@ -196,16 +196,11 @@ mod tests {
     /// the silent-sentinel failure this engine exists to stop.
     #[test]
     fn unknown_health_is_refused_not_treated_as_clean() {
-        // Built directly rather than through the parser, so nothing ever
-        // attaches parse provenance. `Utterance::new` sets `Clean` as a
-        // convenience default for hand-assembled test/transform fixtures
-        // (see `builder.rs`), so `Unknown` is set explicitly here to model
-        // the true "no provenance was ever attached" case rather than
-        // relying on a constructor that happens to say otherwise.
+        // Ordinary construction cannot certify parser provenance, even when
+        // the caller supplies source locations.
         let main = MainTier::new("CHI", vec![], Terminator::Period { span: Span::DUMMY })
             .with_span(Span::new(0, 20));
-        let mut utterance = Utterance::new(main);
-        utterance.parse_health = ParseHealthState::Unknown;
+        let utterance = Utterance::new(main);
         let file = ChatFile::new(vec![Line::Utterance(Box::new(utterance))]);
 
         let admission = admit_edits(&file, vec![make_edit(EditTarget::InsertAt(5))]);
@@ -227,9 +222,9 @@ mod tests {
             .nth(1)
             .expect("fixture assumption: a second utterance exists");
         assert!(
-            matches!(second.parse_health, ParseHealthState::Tainted(_)),
+            matches!(second.parse_health(), ParseHealthState::Tainted(_)),
             "fixture assumption: the malformed %mor tier must taint its own utterance, got {:?}",
-            second.parse_health
+            second.parse_health()
         );
         let offset = second.main.span.start;
 
@@ -249,13 +244,14 @@ mod tests {
         let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t< dog> [/] dog .\n@End\n";
         let parser = TreeSitterParser::new().expect("grammar loads");
         let errors = ErrorCollector::new();
-        let file = parser.parse_chat_file_streaming(source, &errors);
+        let (file, parsed) = parser.parse_chat_file_with_source(source, &errors);
+        let parsed = parsed.expect("source-bound parse");
         let diagnostic = errors
             .into_vec()
             .into_iter()
             .find(|error| error.code.as_str() == "E750")
             .expect("fixture emits E750");
-        let fix = crate::splice::catalog_fix(&diagnostic, source).expect("E750 has a fix");
+        let fix = crate::splice::catalog_fix(&diagnostic, &parsed).expect("E750 has a fix");
         let edits = match fix.kind {
             crate::splice::FixKind::Deterministic(edits) => edits,
             crate::splice::FixKind::Alternatives(_) => panic!("E750 is deterministic"),

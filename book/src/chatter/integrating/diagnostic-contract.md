@@ -1,7 +1,7 @@
 # Diagnostic and JSON Output Contract
 
 **Status:** Current
-**Last updated:** 2026-06-15 15:00 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 This page documents the machine-readable JSON surfaces currently exposed by the
 top-level `chatter` CLI.
@@ -57,6 +57,21 @@ Parser-failure files use `"status":"parse_error"` with an `error`
 string. Read-failure files use `"status":"read_error"` with an
 `error` string.
 
+Internal tool failures use `"status":"internal_failure"` with an `error`
+string and the retained `errors` array. They do not also emit an `invalid`
+record. E001 belongs to `DiagnosticKind::InternalFailure`, not CHAT invalidity.
+The attempt determines neither validity nor invalidity, even if other findings
+were collected. It is not cached as a validation verdict and exits unsuccessfully.
+Report the failure; do not alter CHAT merely to accommodate a producer bug.
+Suppression or severity downgrades cannot admit the failed attempt.
+
+This also applies to producer faults during `--roundtrip` reparsing: the attempt
+contributes to neither roundtrip counter and writes neither cache verdict.
+Retained fault spans from that reparse refer to serialized intermediate text,
+not the original file; they are not emitted as original-source annotations.
+Earlier input findings are withheld if that roundtrip attempt fails internally,
+so they cannot publish a conflicting invalid-file verdict.
+
 ### Summary record
 
 ```json
@@ -67,6 +82,7 @@ string. Read-failure files use `"status":"read_error"` with an
   "valid": 1,
   "invalid": 1,
   "parse_errors": 0,
+  "internal_failures": 0,
   "cache_hits": 0,
   "cache_misses": 2,
   "cache_hit_rate": 0.0,
@@ -112,10 +128,10 @@ it now sees a record.
   stable for `valid` records. `error_count` and `errors` are
   stable for `invalid` records.
 - For summary records: `directory`, `total_files`, `valid`,
-  `invalid`, `parse_errors`, `cache_hits`, `cache_misses`,
+  `invalid`, `parse_errors`, `internal_failures`, `cache_hits`, `cache_misses`,
   `cache_hit_rate`, and `cancelled` are stable.
 - `status` values currently observed: `valid`, `invalid`,
-  `parse_error`, `read_error`. New status values may appear.
+  `parse_error`, `read_error`, `internal_failure`. New status values may appear.
 - Errors do not include a byte-offset `location` field in the
   NDJSON surface; for byte-offset diagnostics use the LSP or the
   non-JSON renderer.

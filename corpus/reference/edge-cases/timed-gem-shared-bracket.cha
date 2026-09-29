@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|sample|CHI|||||Child|||
+@ID:	eng|sample|MOT|||||Mother|||
+@Media:	timed-gem-shared-bracket, audio
+@Comment:	Authored control: independent speaker projections retain overlapping timing brackets for the same gem.
+@Comment:	Constructs: paired gem, cross-speaker interval overlap, ambiguous cross-source section order.
+*CHI:	look . 10_20
+*MOT:	yes . 15_25
+@Bg:	shared
+*CHI:	here . 30_40
+*MOT:	good . 35_45
+@Eg:	shared
+*CHI:	done . 50_60
+*MOT:	okay . 55_65
+@End

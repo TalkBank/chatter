@@ -10,12 +10,12 @@ use talkbank_transform::validation_runner::{AbortReason, ValidationStatsSnapshot
 /// A snapshot alone invites `if invalid > 0 { exit(1) }`, which answers 0 for a
 /// run that lost half its files to a crashed worker: the missing files
 /// contributed to no counter, so partial totals look immaculate. As a closed
-/// enum, the compiler asks about each ending exactly once, in
-/// `commands::validate`.
+/// enum, the compiler asks about each ending in [`Self::failed`], which the
+/// command uses to decide its exit status.
 #[derive(Debug)]
 pub enum ValidationOutcome {
     /// Every discovered file was accounted for. The only outcome entitled to a
-    /// success exit status (subject to the usual invalid/parse-error check).
+    /// success exit status (subject to invalidity, parse and internal failures).
     Complete {
         /// Totals for the whole input.
         stats: ValidationStatsSnapshot,
@@ -39,6 +39,36 @@ pub enum ValidationOutcome {
     /// condition that guard exists to prevent, so collapsing it into a
     /// success would re-open the hole if the guard ever regressed.
     NoTerminalEvent,
+}
+
+impl ValidationOutcome {
+    /// A completed run can still contain failed tool attempts. None of the
+    /// incomplete/aborted states can authorize a successful CLI exit.
+    pub fn failed(&self) -> bool {
+        match self {
+            Self::Complete { stats } => {
+                stats.invalid_files > 0 || stats.parse_errors > 0 || stats.internal_failures > 0
+            }
+            Self::Incomplete { .. } | Self::Aborted { .. } | Self::NoTerminalEvent => true,
+        }
+    }
+}
+
+#[cfg(test)]
+mod internal_failure_tests {
+    use super::*;
+
+    #[test]
+    fn internal_failure_prevents_successful_exit_without_invalid_files() {
+        let mut stats = empty_stats(Cancellation::NotRequested);
+        stats.total_files = 1;
+        stats.internal_failures = 1;
+        assert_eq!(
+            stats.valid_files + stats.invalid_files + stats.parse_errors,
+            0
+        );
+        assert!(ValidationOutcome::Complete { stats }.failed());
+    }
 }
 
 /// Whether a run stopped because the user asked it to.
@@ -76,6 +106,7 @@ pub fn empty_stats(cancellation: Cancellation) -> ValidationStatsSnapshot {
         cache_hits: 0,
         cache_misses: 0,
         parse_errors: 0,
+        internal_failures: 0,
         roundtrip_passed: 0,
         roundtrip_failed: 0,
         cancelled: cancellation.was_requested(),

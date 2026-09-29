@@ -10,9 +10,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Action_Code>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
-use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
+use crate::error::{ErrorSink, Span};
 use crate::generated_traversal::{
     AsRawNode, EventNode, NonwordChoice, NonwordNode, NonwordWithOptionalAnnotationsNode,
     extract_event, extract_nonword, extract_nonword_with_optional_annotations,
@@ -24,7 +22,7 @@ use super::super::annotations::parse_scoped_annotations;
 use super::marker_chain::fold_marker_chain;
 use super::report_tree_shape;
 use crate::parser::tree_parsing::parser_helpers::{
-    SlotState, expect_delimiter, expect_present, surface_displaced,
+    SlotState, expect_delimiter, expect_present, extract_utf8_text, surface_displaced,
 };
 
 /// Converts `nonword_with_optional_annotations` into `UtteranceContent`.
@@ -46,7 +44,14 @@ pub(crate) fn parse_nonword_content(
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
     let full_span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let children = extract_nonword_with_optional_annotations(typed);
+    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+        extract_nonword_with_optional_annotations(typed),
+        typed.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
 
     // Position `nonword`, required.
     let core = match expect_present(
@@ -65,7 +70,15 @@ pub(crate) fn parse_nonword_content(
         Some(slot) => {
             match expect_present(slot, "nonword_with_optional_annotations", source, errors) {
                 SlotState::Present(annotations) => {
-                    parse_scoped_annotations(*annotations, source, errors)
+                    match crate::parser::typed_cst::report_reconstruction(
+                        parse_scoped_annotations(*annotations, source, errors),
+                        annotations.raw_node(),
+                        source,
+                        errors,
+                    ) {
+                        Ok(markers) => markers,
+                        Err(_) => return ParseOutcome::Rejected,
+                    }
                 }
                 SlotState::Absent | SlotState::Recovered => Vec::new(),
             }
@@ -95,7 +108,14 @@ fn nonword_core(
 ) -> Option<UtteranceContent> {
     let raw = nonword.raw_node();
     let span = Span::new(raw.start_byte() as u32, raw.end_byte() as u32);
-    let children = extract_nonword(nonword);
+    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+        extract_nonword(nonword),
+        nonword.raw_node(),
+        source,
+        errors,
+    ) else {
+        return None;
+    };
     surface_displaced(&children.unexpected, "nonword", source, errors);
     match expect_present(children.content.slot(), "nonword", source, errors) {
         SlotState::Present(NonwordChoice::Event(event)) => event_of(*event, span, source, errors),
@@ -115,7 +135,14 @@ fn event_of(
     source: &str,
     errors: &impl ErrorSink,
 ) -> Option<UtteranceContent> {
-    let children = extract_event(event);
+    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+        extract_event(event),
+        event.raw_node(),
+        source,
+        errors,
+    ) else {
+        return None;
+    };
     surface_displaced(&children.unexpected, "event", source, errors);
     expect_delimiter(children.child_0.slot(), |bad| {
         report_tree_shape(
@@ -131,19 +158,10 @@ fn event_of(
         return None;
     };
     let raw = segment.raw_node();
-    match source.get(raw.byte_range()) {
-        Some(description) => Some(UtteranceContent::Event(
+    match extract_utf8_text(raw, source, errors, "event description") {
+        ParseOutcome::Parsed(description) => Some(UtteranceContent::Event(
             Event::new(description).with_span(span),
         )),
-        None => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(raw.start_byte(), raw.end_byte()),
-                ErrorContext::new(source, raw.start_byte()..raw.end_byte(), ""),
-                "Event description range is not a UTF-8 slice of the supplied source",
-            ));
-            None
-        }
+        ParseOutcome::Rejected => None,
     }
 }

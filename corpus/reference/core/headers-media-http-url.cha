@@ -1,0 +1,12 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|sample|CHI|2;00.||||Child|||
+@ID:	eng|sample|MOT|||||Mother|||
+@Media:	"http://example.org/café,part.mp3", audio, missing
+@Comment:	Authored HTTP media URL control with a quoted comma and decomposed
+	Unicode path. Remote URLs remain opaque and are not normalized or fetched.
+*CHI:	I can hear the music .
+*MOT:	yes that is a nice song .
+@End

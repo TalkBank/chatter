@@ -1,7 +1,7 @@
 # Spec System
 
 **Status:** Current
-**Last modified:** 2026-09-06 04:19 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 `spec/` is the source of truth for what CHAT is and for what chatter rejects.
 Tests, fixtures and error documentation are GENERATED from it. You change the
@@ -234,13 +234,13 @@ Tree-sitter corpus membership, which the field used to route, is derived from
 the snapshot instead: an example joins iff it produced parse-stage
 diagnostics, so there is structure to pin.
 
-### `status` decides whether an example is checked at all
+### `status` controls implementation checking, not every regression contract
 
 | Value | Effect |
 |-------|--------|
 | `implemented` | Examples are verified. |
-| `not_implemented` | Examples are DEFERRED, not checked, and generated tests carry `#[ignore]`. |
-| `deprecated`, `unreachable_from_chat` | Deferred, same as above. |
+| `not_implemented` | Own-code implementation is DEFERRED and generated tests carry `#[ignore]`; explicit legal/subsumption claims remain checked separately. |
+| `deprecated`, `unreachable_from_chat` | Implementation is deferred; legal/subsumption regression claims remain checked. |
 | **absent** | REFUSED: `spec/codes/error-codes.toml` fails to load, naming the entry. |
 
 Declared per CODE, in the registry, since R1. It was a per-FILE field, and
@@ -253,6 +253,15 @@ each of its spec files claiming it separately.
 Changing a spec from `not_implemented` to `implemented` un-`#[ignore]`s its
 generated tests, and those tests may never have run. Regenerate and run them in
 the same change.
+
+Deferred code status is not a count of missing validation rules. Run
+`cargo run --manifest-path spec/Cargo.toml --bin spec_status -- --deferred`
+to see each authored claim beside its observed codes. This view distinguishes
+verified legal/subsumption claims, contradicted claims and planned violation
+claims using the claim's shared evaluator. The separate deferred-spec regression
+test enforces legal/subsumption claims even when their historical code is not
+implemented. A verified alternate diagnostic does not reactivate that code;
+an observed emission of the historical code instead requires status review.
 
 ### `source` names the transcript
 
@@ -347,25 +356,15 @@ The first four run in CI under
 is `#[ignore]`d and catches UPSTREAM drift; `refresh-unix-clan.sh` runs it after
 a successful CLAN sync, which is the moment it matters.
 
-## CLAN CHECK parity
+## CLAN CHECK assessment
 
-CHECK is a decades-old approximation and a QUESTION LIST, never a
-specification. For each of its error codes the question is whether the
-construct it rejects actually fails to make sense, answered against `spec/`,
-the grammar and real corpus data.
-
-Every code carries a verdict in
-`crates/talkbank-parser-tests/tests/check_parity/manifest.json`:
-
-- **parity**, chatter rejects it too;
-- **divergence**, chatter deliberately accepts it, with the reason recorded;
-- **no_obligation**, CLAN cannot emit it (commented out, no emission path,
-  unreachable in file mode, or GUI-only), with the reason as a typed value.
-
-`just spec-status` prints the current counts. CHECK's silence is not authority:
-when upstream retired error 76 in the 2026-08-07 bundle, chatter KEPT its rule,
-because the changelog showed enforcement being abandoned rather than a
-linguistic question being decided.
+See the generated [CHECK Assessment](errors-and-validation/check-parity-audit.md)
+for the current inventory, adjudications, architectural mandate, completion
+limits and rules for reopening an obligation. Its authored manifest is the
+single authority; this chapter deliberately does not repeat the verdict scheme
+or completion claims. `just spec-status` derives its assessment summary from
+the same shared types and manifest. Neither report substitutes for a fresh
+runtime observation of a specific CHECK executable.
 
 ## Related
 

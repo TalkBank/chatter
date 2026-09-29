@@ -333,6 +333,98 @@ expression: snapshot
     },
     {
       "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Authored precision controls; submillisecond digits remain in the source spelling.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "wait",
+              "content": [
+                {
+                  "content": "wait",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "wait",
+              "type": "word"
+            },
+            {
+              "duration": {
+                "seconds": "0.25",
+                "type": "timed"
+              },
+              "type": "pause"
+            },
+            {
+              "cleaned_text": "a",
+              "content": [
+                {
+                  "content": "a",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "a",
+              "type": "word"
+            },
+            {
+              "duration": {
+                "seconds": "0.125",
+                "type": "timed"
+              },
+              "type": "pause"
+            },
+            {
+              "cleaned_text": "little",
+              "content": [
+                {
+                  "content": "little",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "little",
+              "type": "word"
+            },
+            {
+              "duration": {
+                "seconds": "0.1234",
+                "type": "timed"
+              },
+              "type": "pause"
+            },
+            {
+              "cleaned_text": "longer",
+              "content": [
+                {
+                  "content": "longer",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "longer",
+              "type": "word"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "MOT"
+      }
+    },
+    {
+      "header": {
         "type": "end"
       },
       "line_type": "header"

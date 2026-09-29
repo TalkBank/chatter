@@ -243,22 +243,11 @@ fn auto_generated_id_preserves_fields() {
 }
 
 /// Malformed / truncated @ID lines that cannot form a valid `id_header` CST node
-/// are caught by the error-analysis pass (E505) and never reach
-/// `parse_id_header`: NO `Header::ID` or `Header::Unknown` is produced, and the
-/// E505 diagnostic is emitted. This confirms the migration leaves the malformed
-/// dispatch path untouched (the diagnostics below are byte-identical pre/post).
+/// retain structural E316 recovery and never reach `parse_id_header`:
+/// no `Header::ID` or `Header::Unknown` is fabricated from the ERROR's text.
 #[test]
-fn malformed_truncated_id_emits_e505_no_header() {
-    let expected_diags = vec![
-        (
-            "E505".to_string(),
-            "Invalid @ID header format: structure could not be parsed".to_string(),
-        ),
-        (
-            "E522".to_string(),
-            "Speaker 'CHI' declared in @Participants but has no matching @ID header".to_string(),
-        ),
-    ];
+fn malformed_truncated_id_reports_recovery_without_an_id_header() {
+    let expected_diags = ["E316", "E522"];
     for (name, src) in [("E505_1", E505_1), ("E505_2", E505_2), ("E505_3", E505_3)] {
         let (headers, diags) = id_headers_and_diags(src);
         assert!(
@@ -266,8 +255,12 @@ fn malformed_truncated_id_emits_e505_no_header() {
             "{name}: malformed @ID must not yield an ID/Unknown header, got {headers:?}"
         );
         assert_eq!(
-            diags, expected_diags,
-            "{name}: malformed @ID must emit the same E505 diagnostics as before"
+            diags
+                .iter()
+                .map(|(code, _)| code.as_str())
+                .collect::<Vec<_>>(),
+            expected_diags,
+            "{name}: canonical E505 examples are subsumed by structural E316"
         );
     }
 }

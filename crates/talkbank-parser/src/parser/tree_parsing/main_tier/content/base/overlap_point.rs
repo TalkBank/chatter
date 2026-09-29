@@ -6,9 +6,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{AsRawNode, OverlapPointNode};
+use crate::generated_traversal::{AsRawNode, OverlapPointNode, SourceBound};
 use crate::model::{OverlapIndex, OverlapPoint, OverlapPointKind, UtteranceContent};
-use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
 
 /// Converts one overlap-point token node into `UtteranceContent`.
@@ -27,12 +26,11 @@ use talkbank_model::ParseOutcome;
 /// - Overlap markers are single atomic tokens (e.g., "⌈", "⌊2", "⌉3")
 /// - Index (2-9) is embedded in the token text, not a separate child node
 /// - Parser extracts marker kind and optional index from token text
-pub(crate) fn parse_overlap_point(
-    typed: OverlapPointNode<'_>,
-    source: &str,
+pub(crate) fn parse_overlap_point<'tree>(
+    typed: SourceBound<'tree, '_, OverlapPointNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    match parse_overlap_point_token(typed, source, errors) {
+    match parse_overlap_point_token(typed, errors) {
         ParseOutcome::Parsed(point) => ParseOutcome::parsed(UtteranceContent::OverlapPoint(point)),
         ParseOutcome::Rejected => ParseOutcome::rejected(),
     }
@@ -43,17 +41,13 @@ pub(crate) fn parse_overlap_point(
 /// as in `butt⌈er⌉`, where the word converter used to keep a second copy of
 /// the marker table with a `TopOverlapBegin` fallback for a character the
 /// grammar cannot produce.
-pub(crate) fn parse_overlap_point_token(
-    typed: OverlapPointNode<'_>,
-    source: &str,
+pub(crate) fn parse_overlap_point_token<'tree>(
+    typed: SourceBound<'tree, '_, OverlapPointNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<OverlapPoint> {
     let node = typed.raw_node();
-    // Extract text from atomic token
-    let ParseOutcome::Parsed(text) = extract_utf8_text(node, source, errors, "overlap_point")
-    else {
-        return ParseOutcome::rejected();
-    };
+    let source = typed.source();
+    let text = typed.text();
 
     let mut chars = text.chars();
 

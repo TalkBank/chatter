@@ -503,6 +503,72 @@ expression: snapshot
     },
     {
       "header": {
+        "content": {
+          "segments": [
+            {
+              "text": "Authored interaction: quick uptake before an utterance-language precode.",
+              "type": "text"
+            }
+          ]
+        },
+        "type": "comment"
+      },
+      "line_type": "header"
+    },
+    {
+      "line_type": "utterance",
+      "main": {
+        "content": {
+          "content": [
+            {
+              "cleaned_text": "我",
+              "content": [
+                {
+                  "content": "我",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "我",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "要",
+              "content": [
+                {
+                  "content": "要",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "要",
+              "type": "word"
+            },
+            {
+              "cleaned_text": "吃",
+              "content": [
+                {
+                  "content": "吃",
+                  "type": "text"
+                }
+              ],
+              "raw_text": "吃",
+              "type": "word"
+            }
+          ],
+          "language_code": "zho",
+          "linkers": [
+            {
+              "type": "quick_uptake_overlap"
+            }
+          ],
+          "terminator": {
+            "type": "period"
+          }
+        },
+        "speaker": "CHI"
+      }
+    },
+    {
+      "header": {
         "type": "end"
       },
       "line_type": "header"

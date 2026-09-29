@@ -134,6 +134,51 @@ use super::model::Divergence::{Conflicting, Re2cExtra, Re2cIncomplete, Re2cSilen
 /// belongs beside it as a comment. That is the case the docstring above asks
 /// for, and a comment carries it without requiring the other 98 to lie.
 pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
+    // Interim 0.27 adjudication: all canonical results meet the authored specs.
+    // Missing form suffix and morphology-terminator cases remain experimental
+    // re2c validity gaps; do not advertise a clean re2c result as validation.
+    ("E202_missing_form_type.md#1", Re2cSilent),
+    ("E202_missing_form_type.md#10", Re2cSilent),
+    ("E202_missing_form_type.md#2", Re2cSilent),
+    ("E202_missing_form_type.md#3", Re2cSilent),
+    ("E202_missing_form_type.md#4", Re2cSilent),
+    ("E202_missing_form_type.md#6", Re2cSilent),
+    ("E202_missing_form_type.md#8", Re2cSilent),
+    ("E203.md#1", Re2cSilent),
+    ("E203.md#2", Re2cSilent),
+    ("E305_mor_terminator.md#2", Re2cSilent),
+    // Both backends reject these inputs. Structure-owned canonical recovery
+    // replaces old CHECK-specific classifications; re2c retains its native
+    // lexical/recovery codes. Diagnostic-set identity is not the contract.
+    ("E207.md#1", Conflicting),
+    ("E207.md#4", Conflicting),
+    ("E241_illegal_untranscribed_marker.md#3", Conflicting),
+    ("E244_recovery.md#2", Conflicting),
+    ("E258_recovery.md#2", Conflicting),
+    ("E259_recovery.md#2", Conflicting),
+    ("E303.md#1", Conflicting),
+    ("E303.md#10", Conflicting),
+    ("E303.md#2", Conflicting),
+    ("E303.md#4", Conflicting),
+    ("E303.md#5", Conflicting),
+    ("E305_recovery.md#1", Conflicting),
+    ("E305_recovery.md#2", Conflicting),
+    ("E342_nested_group.md#2", Conflicting),
+    ("E375.md#2", Conflicting),
+    ("E501.md#1", Conflicting),
+    ("E501.md#5", Conflicting),
+    ("E501_recovery.md#2", Conflicting),
+    ("E602.md#2", Conflicting),
+    ("E711.md#2", Conflicting),
+    ("E737.md#8", Conflicting),
+    ("E738.md#8", Conflicting),
+    ("E759.md#1", Conflicting),
+    ("E759.md#2", Conflicting),
+    ("E759.md#3", Conflicting),
+    ("E760.md#1", Conflicting),
+    ("E760.md#2", Conflicting),
+    ("E760.md#4", Conflicting),
+    ("E760.md#6", Conflicting),
     // Interim 0.26 corpus expansion: canonical results satisfy the authored
     // specs; these experimental-backend limitations are retained, not fixed.
     // tree-sitter [E203, E316] vs re2c [E321]; spec expects [E203]
@@ -189,9 +234,9 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     // tree-sitter [E303, E504] vs re2c [E303, E507]; spec expects [E303]
     ("E316.md#25", Conflicting),
     // tree-sitter [E303] vs re2c [E303, E525]; spec expects [E303]
-    ("E316.md#27", Re2cExtra),
+    ("E316.md#27", Conflicting),
     // tree-sitter [E303] vs re2c [E303, E518]; spec expects [E303]
-    ("E316.md#28", Re2cExtra),
+    ("E316.md#28", Conflicting),
     // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
     ("E316.md#29", Re2cSilent),
     // tree-sitter [E316] vs re2c [(silent)]; spec expects [E316]
@@ -261,7 +306,7 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     // tree-sitter [E342, E507, E758] vs re2c [E507, E758]; spec expects [E507]
     ("E507.md#4", Re2cIncomplete),
     // tree-sitter [E504, E507] vs re2c [E507]; spec expects [E507]
-    ("E507.md#5", Re2cIncomplete),
+    ("E507.md#5", Conflicting),
     // tree-sitter [E509] vs re2c [E525]; spec expects [E509]
     ("E509.md#3", Conflicting),
     // tree-sitter [E509] vs re2c [E525, E758]; spec expects [E509]
@@ -282,8 +327,6 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E702.md#5", Conflicting),
     // tree-sitter [E360, E544] vs re2c [E360, E362, E748]; spec expects [E360]
     ("E748.md#5", Conflicting),
-    // tree-sitter [E757] vs re2c [(silent)]; spec expects [E757]
-    ("E757.md#20", Re2cSilent),
     // tree-sitter [E312] vs re2c [E321]; spec expects [E312]
     ("E759.md#4", Conflicting),
     // tree-sitter [E243, E375] vs re2c [E321]; spec expects [E375]
@@ -492,7 +535,7 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E505.md#2", Conflicting),
     ("E505.md#3", Conflicting),
     ("E506.md#1", Re2cIncomplete),
-    ("E507.md#1", Re2cIncomplete),
+    ("E507.md#1", Conflicting),
     ("E507.md#2", Re2cIncomplete),
     ("E509.md#1", Conflicting),
     ("E512.md#1", Conflicting),
@@ -501,7 +544,7 @@ pub(super) const KNOWN_DIVERGENCES: &[(&str, Divergence)] = &[
     ("E533.md#1", Conflicting),
     ("E600.md#1", Conflicting),
     ("E601.md#1", Conflicting),
-    ("E602.md#1", Re2cExtra),
+    ("E602.md#1", Conflicting),
     // ADDED 2026-09-08 with the example that created it, which is the honest
     // order: E702 was registered `not_implemented` and the prose in its spec
     // said "there is no E702 today". Both were false, measured, and adding an

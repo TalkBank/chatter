@@ -6,8 +6,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, KindSlotValue, MorContentNode, MorPostCliticChildren, MorPostCliticNode,
-    MorWordNode, NoChild, SlotView, extract_mor_content, extract_mor_post_clitic,
+    AsRawNode, MorContentNode, MorPostCliticNode, MorWordNode, NoChild, NonMissingKindSlot,
+    SlotView, SourceBound, SourceField, SourceSlotView,
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::ParseOutcome;
@@ -30,39 +30,37 @@ use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 /// Driven by the generated typed visitor: `extract_mor_content` yields the
 /// named `main` and `post_clitics` fields as typed `Positioned` slots,
 /// replacing the removed flat `while node.child(idx)` walk that dispatched by
-/// `child.kind()`. Note the removed walk called neither `check_not_missing`
-/// nor any other MISSING-specific gate: a MISSING `mor_word` still carries the
-/// `mor_word` kind, so it was dispatched into [`parse_mor_word`] exactly like
-/// a real one (which itself then finds zero children and reports its own
-/// "missing POS/lemma" diagnostics). The migration reproduces that by feeding
-/// `Present` AND `Missing` slots to [`parse_mor_word`] / [`parse_mor_post_clitic`]
-/// identically; only `Error`/`Unexpected` diverge from `Present`/`Missing`,
-/// matching the removed loop's `_ =>` arm.
-pub fn parse_mor_content(
-    typed: MorContentNode<'_>,
-    source: &str,
+/// `child.kind()`. Canonical grammar admission proves that composite `mor_word`
+/// and `mor_post_clitic` nodes cannot themselves be Missing. Their children may
+/// still contain lexical recovery; Error, absent main words, displaced children
+/// and source failures retain their own handling.
+pub fn parse_mor_content<'tree>(
+    typed: SourceBound<'tree, '_, MorContentNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<Mor> {
+) -> Result<ParseOutcome<Mor>, crate::CstFailure> {
+    let source = typed.source();
     let node = typed.raw_node();
-    let children = extract_mor_content(typed);
+    let bound_children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let children = bound_children.children();
     surface_displaced(&children.unexpected, "mor_content", source, errors);
 
-    let main_word = decode_main_word(children.main.slot(), source, errors);
+    let main_word = decode_main_word(bound_children.field_main().slot(), errors)?;
 
     let mut post_clitics = Vec::new();
-    for element in children.post_clitics.slot() {
-        match element.slot().known_or_placeholder() {
-            KindSlotValue::Present(clitic) | KindSlotValue::Placeholder(clitic) => {
+    for element in bound_children.field_post_clitics().slot().iter() {
+        match element.slot().view() {
+            SourceSlotView::Present(clitic) => {
                 if let ParseOutcome::Parsed(Some(clitic)) =
-                    parse_mor_post_clitic(clitic, source, errors)
+                    parse_mor_post_clitic(clitic.read()?, errors)?
                 {
                     post_clitics.push(clitic);
                 }
             }
-            KindSlotValue::Error(raw) => {
-                errors.report(unexpected_node_error(raw, source, "mor_content"));
+            SourceSlotView::Error(raw) => {
+                errors.report(unexpected_node_error(raw.raw_node(), source, "mor_content"));
             }
-            KindSlotValue::Absent(NoChild) => {}
+            SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
+            SourceSlotView::Absent(never) => match never {},
         }
     }
 
@@ -72,33 +70,32 @@ pub fn parse_mor_content(
             source,
             "mor_content missing main mor_word",
         ));
-        return ParseOutcome::rejected();
+        return Ok(ParseOutcome::rejected());
     };
 
-    ParseOutcome::parsed(Mor::new(main).with_post_clitics(post_clitics))
+    Ok(ParseOutcome::parsed(
+        Mor::new(main).with_post_clitics(post_clitics),
+    ))
 }
 
-/// Decode the `main` field slot, dispatching `Present`/`Missing` into
-/// [`parse_mor_word`] alike (see the module doc comment for why), and
-/// reporting `Error`/`Unexpected` the way the removed loop's `_ =>` arm did.
+/// Decode the admitted `main` field, retaining absent and recovered states.
 fn decode_main_word<'tree>(
-    slot: &KindSlot<'tree, MorWordNode<'tree>>,
-    source: &str,
+    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, MorWordNode<'tree>>>,
     errors: &impl ErrorSink,
-) -> Option<MorWord> {
-    match slot.known_or_placeholder() {
-        KindSlotValue::Present(word) | KindSlotValue::Placeholder(word) => {
-            match parse_mor_word(word, source, errors) {
-                ParseOutcome::Parsed(word) => Some(word),
-                ParseOutcome::Rejected => None,
-            }
-        }
-        KindSlotValue::Error(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_content"));
+) -> Result<Option<MorWord>, crate::CstFailure> {
+    let source = slot.source();
+    Ok(match slot.view() {
+        SourceSlotView::Present(word) => match parse_mor_word(word.read()?, errors)? {
+            ParseOutcome::Parsed(word) => Some(word),
+            ParseOutcome::Rejected => None,
+        },
+        SourceSlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw.raw_node(), source, "mor_content"));
             None
         }
-        KindSlotValue::Absent(NoChild) => None,
-    }
+        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
+        SourceSlotView::Absent(NoChild) => None,
+    })
 }
 
 /// Converts one `mor_post_clitic` CST node (`~` + `mor_word`).
@@ -109,18 +106,17 @@ fn decode_main_word<'tree>(
 /// ```
 ///
 /// Driven by the generated typed visitor: `extract_mor_post_clitic` yields the
-/// tilde and `mor_word` positions as typed `Positioned` slots. The removed
-/// walk called no MISSING-specific gate either (see [`parse_mor_content`]'s
-/// doc comment); a MISSING `tilde` is a no-op exactly like a present one
-/// (`kind::TILDE => {}` never distinguished missing-ness), and a MISSING
-/// `mor_word` is still dispatched into [`parse_mor_word`] like a present one.
-fn parse_mor_post_clitic(
-    typed: MorPostCliticNode<'_>,
-    source: &str,
+/// tilde and `mor_word` positions as typed `Positioned` slots. Lexical tilde
+/// recovery retains its existing no-op policy. Canonical admission rules out
+/// a Missing composite `mor_word`, not absence or recovery within that word.
+fn parse_mor_post_clitic<'tree>(
+    typed: SourceBound<'tree, '_, MorPostCliticNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<Option<MorWord>> {
+) -> Result<ParseOutcome<Option<MorWord>>, crate::CstFailure> {
+    let source = typed.source();
     let node = typed.raw_node();
-    let children: MorPostCliticChildren<'_> = extract_mor_post_clitic(typed);
+    let bound_children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let children = bound_children.children();
     surface_displaced(&children.unexpected, "mor_post_clitic", source, errors);
 
     match children.child_0.slot().view() {
@@ -130,16 +126,21 @@ fn parse_mor_post_clitic(
         }
     }
 
-    match children.child_1.slot().known_or_placeholder() {
-        KindSlotValue::Present(word) | KindSlotValue::Placeholder(word) => {
-            if let ParseOutcome::Parsed(word) = parse_mor_word(word, source, errors) {
-                return ParseOutcome::parsed(Some(word));
+    match bound_children.field_child_1().slot().view() {
+        SourceSlotView::Present(word) => {
+            if let ParseOutcome::Parsed(word) = parse_mor_word(word.read()?, errors)? {
+                return Ok(ParseOutcome::parsed(Some(word)));
             }
         }
-        KindSlotValue::Error(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_post_clitic"));
+        SourceSlotView::Error(raw) => {
+            errors.report(unexpected_node_error(
+                raw.raw_node(),
+                source,
+                "mor_post_clitic",
+            ));
         }
-        KindSlotValue::Absent(NoChild) => {}
+        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
+        SourceSlotView::Absent(NoChild) => {}
     }
 
     errors.report(unexpected_node_error(
@@ -147,5 +148,5 @@ fn parse_mor_post_clitic(
         source,
         "mor_post_clitic missing mor_word",
     ));
-    ParseOutcome::parsed(None)
+    Ok(ParseOutcome::parsed(None))
 }

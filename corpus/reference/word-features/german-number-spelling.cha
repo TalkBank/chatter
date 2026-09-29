@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	deu
+@Participants:	CHI Child
+@ID:	deu|sample|CHI|||||Child|||
+@Comment:	Authored standalone cardinal controls: 0, 21, 100, 200, 1000, 10000.
+@Comment:	Exact lexical controls do not license generic scale composition.
+*CHI:	null .
+*CHI:	einundzwanzig .
+*CHI:	einhundert .
+*CHI:	zweihundert .
+*CHI:	eintausend .
+*CHI:	zehntausend .
+@End

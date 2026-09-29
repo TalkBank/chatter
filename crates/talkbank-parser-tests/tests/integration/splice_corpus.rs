@@ -6,7 +6,8 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, test_error::strict_parse};
 use talkbank_transform::splice::{
     EditProvenance, EditTarget, GateError, Replacement, SkipReason, SpliceEdit, SpliceError,
-    TransformName, admit_edits, apply_edits_verified, mapped_edit_sites, verify_splice,
+    TransformName, admit_edits, apply_edits, apply_edits_verified, mapped_edit_sites,
+    verify_splice,
 };
 
 fn identity_edit(source: &str, span: Span) -> SpliceEdit {
@@ -109,6 +110,61 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
             source
         );
 
+        // External proposals have not yet earned source-coordinate admission.
+        // A zero-width replacement is not an insertion; the target enum must
+        // preserve that distinction even when the resulting bytes would match.
+        enum Refusal {
+            Dummy,
+            Empty,
+            Bounds,
+        }
+        let len = u32::try_from(source.len()).expect("reference fits coordinates");
+        for (target, refusal) in [
+            (EditTarget::Replace(Span::DUMMY), Refusal::Dummy),
+            (EditTarget::Replace(Span::at(len)), Refusal::Empty),
+            (
+                EditTarget::Replace(Span::new(len, len + 1)),
+                Refusal::Bounds,
+            ),
+            (EditTarget::InsertAt(len + 1), Refusal::Bounds),
+        ] {
+            let edit = SpliceEdit::new(
+                target,
+                Replacement::new(""),
+                EditProvenance::Transform(TransformName::new("unadmitted-coordinate")),
+            );
+            for error in [
+                mapped_edit_sites(source, std::slice::from_ref(&edit))
+                    .expect_err("invalid target cannot acquire mapped coordinates"),
+                apply_edits(source, std::slice::from_ref(&edit))
+                    .expect_err("invalid target cannot produce output"),
+            ] {
+                match (&refusal, error) {
+                    (Refusal::Dummy, SpliceError::DummySpan { provenance }) => {
+                        assert_eq!(&provenance, edit.provenance());
+                    }
+                    (Refusal::Empty, SpliceError::EmptyReplaceRange { span }) => {
+                        assert_eq!(span, Span::at(len));
+                    }
+                    (Refusal::Bounds, SpliceError::OutOfBounds { len: actual, .. }) => {
+                        assert_eq!(actual, len);
+                    }
+                    (_, error) => panic!("wrong coordinate refusal: {error}"),
+                }
+            }
+        }
+        for offset in [0, len] {
+            let insertion = SpliceEdit::new(
+                EditTarget::InsertAt(offset),
+                Replacement::new(""),
+                EditProvenance::Transform(TransformName::new("boundary-insertion")),
+            );
+            assert_eq!(
+                apply_edits(source, &[insertion]).expect("explicit boundary insertion"),
+                source
+            );
+        }
+
         let normalized: Vec<_> = file
             .utterances()
             .map(|u| {
@@ -194,6 +250,17 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
             );
             assert!(matches!(mapped_edit_sites(source, &[edit]),
                 Err(SpliceError::NotCharBoundary { offset: actual }) if actual == offset));
+            // Both ends of a replacement must be admitted, independently of
+            // the insertion-point check above.
+            for span in [Span::new(offset, offset + 1), Span::new(0, offset)] {
+                let replacement = SpliceEdit::new(
+                    EditTarget::Replace(span),
+                    Replacement::new(""),
+                    EditProvenance::Transform(TransformName::new("split-unicode-replacement")),
+                );
+                assert!(matches!(apply_edits(source, &[replacement]),
+                    Err(SpliceError::NotCharBoundary { offset: actual }) if actual == offset));
+            }
             unicode_refusals += 1;
         }
         edits_seen += mapped.len();

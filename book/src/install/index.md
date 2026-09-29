@@ -1,7 +1,7 @@
 # Install
 
 **Status:** Current
-**Last modified:** 2026-07-31 06:13 EDT
+**Last modified:** 2026-09-28 08:30 EDT
 
 Everything here comes from the [latest
 release](https://github.com/TalkBank/chatter/releases/latest).
@@ -97,6 +97,13 @@ Or download the per-platform archive (`talkbank-lsp-<target>.tar.xz`, or `.zip`
 on Windows) from the release and point your editor's LSP client at the
 `talkbank-lsp` binary (it speaks LSP over stdio on `.cha` files, language id
 `chat`).
+
+Editor quick fixes do not supply missing participant names, roles or languages.
+Enter those facts yourself: an undeclared speaker or missing/empty header does
+not establish the right value. E308, E504 and E507 therefore offer no guessed
+edit, consistent with the [CLI fix policy](../chatter/user-guide/cli-reference.md).
+Diagnostics remain visible, including parser recovery diagnostics when a
+malformed header cannot be lowered. Other supported quick fixes remain available.
 
 ## Rust crates and the grammar (embed in your own program)
 

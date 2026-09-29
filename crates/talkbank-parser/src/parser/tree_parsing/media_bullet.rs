@@ -19,9 +19,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Media_Header>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{
-    AsRawNode, BulletNode, BulletTimestampNode, KindSlot, NoChild, SlotView, extract_bullet,
-};
+use crate::generated_traversal::{AsRawNode, BulletNode, NoChild, SourceBound, SourceSlotView};
 use tree_sitter::Node;
 
 /// Closed timestamp roles shared by field admission and diagnostics.
@@ -80,6 +78,8 @@ impl<'text> LeadingZeroTime<'text> {
 /// A message cannot be right about a fact the return type threw away.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BulletRejection {
+    /// Reconstruction or source admission failed; this is not a malformed bullet.
+    Producer(crate::CstFailure),
     /// The bullet or a descendant carries a tree-sitter ERROR node.
     ///
     /// Catches ill-formed bullets like the removed `·\d+_\d+-·` skip marker,
@@ -87,7 +87,7 @@ pub(crate) enum BulletRejection {
     /// fields still resolve. Without this gate the parser would silently
     /// accept data that violates the grammar.
     ContainsRecoveryNode,
-    /// A named time field is absent, or its bytes are not UTF-8.
+    /// A named time field is structurally absent or recovered.
     TimeFieldAbsent {
         /// The grammar field whose text could not be admitted.
         which: BulletTime,
@@ -105,6 +105,7 @@ impl BulletRejection {
     /// The sentence a reader gets, one per route.
     pub(crate) fn describe(&self) -> String {
         match self {
+            Self::Producer(fault) => format!("internal producer failure: {fault}"),
             Self::ContainsRecoveryNode => {
                 "legal form is ·START_END·, two millisecond integers and nothing \
                  else"
@@ -119,12 +120,12 @@ impl BulletRejection {
     }
 }
 
-/// Report E360 for a bullet that could not be read, saying which route.
+/// Report source rejection as E360, or producer failure as E001.
 ///
 /// # One reporter, because there were three
 ///
-/// Every caller of [`parse_bullet_node_timestamps`] that cannot proceed
-/// reports E360, and each wrote its own sentence: "Invalid media bullet:
+/// Source-invalidity callers of [`parse_bullet_node_timestamps`] report E360.
+/// Previously each wrote its own sentence: "Invalid media bullet:
 /// grammar rejected '...'. Legal form: ·START_END· with numeric timestamps
 /// only" in `ending.rs`, and "Invalid bullet: could not extract timestamps"
 /// in the two others. The first was false for the only input that reaches it;
@@ -137,6 +138,10 @@ pub(crate) fn report_bullet_rejection(
     rejection: &BulletRejection,
     errors: &impl ErrorSink,
 ) {
+    if let BulletRejection::Producer(fault) = rejection {
+        crate::parser::typed_cst::report_cst_failure(node, source, *fault, errors);
+        return;
+    }
     // The context carries the bullet's text where it can be read; bytes that
     // are not UTF-8 leave the node's kind as the context, a fact about the
     // node rather than a text the parser invented.
@@ -163,18 +168,20 @@ pub(crate) fn report_bullet_rejection(
 /// the file invalid. Centralized here because every structured-bullet
 /// consumer (main tier, `%wor`, endings, bullet content) flows through
 /// this function.
-pub(crate) fn parse_bullet_node_timestamps(
-    typed: BulletNode<'_>,
-    source: &str,
+pub(crate) fn parse_bullet_node_timestamps<'tree>(
+    typed: SourceBound<'tree, '_, BulletNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<(u64, u64), BulletRejection> {
     let node = typed.raw_node();
+    let source = typed.source();
     if node.has_error() {
         return Err(BulletRejection::ContainsRecoveryNode);
     }
-    let children = extract_bullet(typed);
+    let children = typed
+        .extract()
+        .map_err(|fault| BulletRejection::Producer(fault.into()))?;
     crate::parser::tree_parsing::parser_helpers::surface_displaced(
-        &children.unexpected,
+        &children.children().unexpected,
         "bullet",
         source,
         errors,
@@ -182,19 +189,22 @@ pub(crate) fn parse_bullet_node_timestamps(
     // Keep the role and the generated field together at the admission point.
     // The producer retains recovery slots; kind admission alone is not validity.
     let text = |which: BulletTime| -> Result<&str, BulletRejection> {
-        let slot: &KindSlot<'_, BulletTimestampNode<'_>> = match which {
-            BulletTime::Start => children.start_time.slot(),
-            BulletTime::End => children.end_time.slot(),
+        let slot = match which {
+            BulletTime::Start => children.field_start_time().slot(),
+            BulletTime::End => children.field_end_time().slot(),
         };
         let timestamp = match slot.view() {
-            SlotView::Present(timestamp) => timestamp,
-            SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => {
+            SourceSlotView::Present(timestamp) => timestamp,
+            SourceSlotView::Missing(_)
+            | SourceSlotView::Error(_)
+            | SourceSlotView::Absent(NoChild) => {
                 return Err(BulletRejection::TimeFieldAbsent { which });
             }
         };
-        source
-            .get(timestamp.raw_node().byte_range())
-            .ok_or(BulletRejection::TimeFieldAbsent { which })
+        Ok(timestamp
+            .read()
+            .map_err(|fault| BulletRejection::Producer(fault.into()))?
+            .text())
     };
     let start_text = text(BulletTime::Start)?;
     let end_text = text(BulletTime::End)?;
@@ -226,12 +236,32 @@ mod tests {
     use super::*;
     use crate::TreeSitterParser;
     use crate::error::ErrorCollector;
-    use crate::generated_traversal::FromNodeKind;
 
-    /// Real parsed bullets exercise both field/source admission failures;
-    /// a wrong source must be refused, not indexed or replaced by zero times.
     #[test]
-    fn timestamp_fields_reject_out_of_source_ranges() {
+    fn producer_rejection_is_not_a_malformed_bullet() {
+        let source = include_str!("../../../../../corpus/reference/content/media-bullets.cha");
+        let parser = TreeSitterParser::new().expect("grammar");
+        let parsed = parser
+            .parse_source_incremental(source, None)
+            .expect("parse");
+        let errors = ErrorCollector::new();
+        report_bullet_rejection(
+            parsed.root_node(),
+            source,
+            &BulletRejection::Producer(
+                crate::generated_traversal::ReconstructionFault::UnexpectedDecision.into(),
+            ),
+            &errors,
+        );
+        let diagnostics = errors.into_vec();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, ErrorCode::InternalError);
+    }
+
+    /// Reference bullets retain their producing source through field admission.
+    /// The reader no longer accepts an independent (possibly wrong) source.
+    #[test]
+    fn timestamp_fields_preserve_source_ownership() {
         let source = include_str!("../../../../../corpus/reference/content/media-bullets.cha");
         let parser = TreeSitterParser::new().expect("grammar");
         let parsed = parser
@@ -242,32 +272,16 @@ mod tests {
         while let Some(node) = pending.pop() {
             let mut cursor = node.walk();
             pending.extend(node.children(&mut cursor));
-            let Some(bullet) = BulletNode::from_node(node) else {
+            let Some(bullet) = parsed
+                .bind(node)
+                .expect("canonical range")
+                .typed::<BulletNode>()
+            else {
                 continue;
             };
             let errors = ErrorCollector::new();
-            assert!(parse_bullet_node_timestamps(bullet, source, &errors).is_ok());
+            assert!(parse_bullet_node_timestamps(bullet, &errors).is_ok());
             assert!(errors.to_vec().is_empty());
-            assert_eq!(
-                parse_bullet_node_timestamps(bullet, "", &errors),
-                Err(BulletRejection::TimeFieldAbsent {
-                    which: BulletTime::Start
-                }),
-            );
-            let children = extract_bullet(bullet);
-            let SlotView::Present(start) = children.start_time.slot().view() else {
-                panic!("valid corpus bullet must expose its start field");
-            };
-            assert_eq!(
-                parse_bullet_node_timestamps(
-                    bullet,
-                    &source[..start.raw_node().end_byte()],
-                    &errors
-                ),
-                Err(BulletRejection::TimeFieldAbsent {
-                    which: BulletTime::End
-                }),
-            );
             checked += 1;
         }
         assert!(checked > 0, "fixture must exercise structured bullets");

@@ -24,10 +24,9 @@ use talkbank_model::non_empty_literal;
 fn utterance_round_trip_simple() {
     let main = MainTier::new(
         "CHI",
-        vec![UtteranceContent::Word(Box::new(Word::new(
+        vec![UtteranceContent::Word(Box::new(Word::new(WordText::from(
             non_empty_literal!("hello"),
-            WordText::from(non_empty_literal!("hello")),
-        )))],
+        ))))],
         Terminator::Period { span: Span::DUMMY },
     );
     let utterance = Utterance::new(main);
@@ -44,10 +43,9 @@ fn utterance_round_trip_simple() {
 fn utterance_round_trip_with_dependent_tiers() {
     let main = MainTier::new(
         "CHI",
-        vec![UtteranceContent::Word(Box::new(Word::new(
+        vec![UtteranceContent::Word(Box::new(Word::new(WordText::from(
             non_empty_literal!("hello"),
-            WordText::from(non_empty_literal!("hello")),
-        )))],
+        ))))],
         Terminator::Period { span: Span::DUMMY },
     );
 
@@ -73,10 +71,9 @@ fn chat_file_round_trip() {
         }),
         Line::utterance(Utterance::new(MainTier::new(
             "CHI",
-            vec![UtteranceContent::Word(Box::new(Word::new(
+            vec![UtteranceContent::Word(Box::new(Word::new(WordText::from(
                 non_empty_literal!("hello"),
-                WordText::from(non_empty_literal!("hello")),
-            )))],
+            ))))],
             Terminator::Period { span: Span::DUMMY },
         ))),
     ];

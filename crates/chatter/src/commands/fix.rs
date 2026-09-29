@@ -24,11 +24,13 @@
 //! # Parsing choice
 //!
 //! Every file is parsed with
-//! [`TreeSitterParser::parse_chat_file_streaming`], never the `ParseProduct`
+//! [`TreeSitterParser::parse_chat_file_with_source`], never the `ParseProduct`
 //! constructor: streaming parsing always hands back a `ChatFile`, including
 //! for a file whose other regions needed recovery, which is exactly what
 //! lets a broken region elsewhere in a file fail to block a fix in a clean
 //! utterance.
+//! The retained source-bound CST is reused by fix planning; no catalog entry
+//! reparses the unchanged input. Changed output is still parsed for verification.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -308,7 +310,7 @@ fn fix_one_file(
     name: TranscriptName<'_>,
 ) -> FileFixOutcome {
     let sink = ErrorCollector::new();
-    let mut chat_file = parser.parse_chat_file_streaming(source, &sink);
+    let (mut chat_file, parsed) = parser.parse_chat_file_with_source(source, &sink);
 
     if skip_alignment {
         chat_file.validate(&sink, name);
@@ -327,7 +329,7 @@ fn fix_one_file(
         }
         classify_diagnostic(
             diagnostic,
-            source,
+            parsed.as_ref(),
             requested_codes,
             &mut candidate_edits,
             &mut report_lines,
@@ -599,7 +601,7 @@ fn mapped_fix_sites(
 /// catalog.
 fn classify_diagnostic(
     diagnostic: &ParseError,
-    source: &str,
+    parsed: Option<&talkbank_parser::generated_traversal::ParsedSource<'_>>,
     requested_codes: &CodeSelection,
     candidate_edits: &mut Vec<SpliceEdit>,
     report_lines: &mut Vec<String>,
@@ -614,7 +616,15 @@ fn classify_diagnostic(
         *skipped_count += 1;
     };
 
-    let Some(fix) = catalog_fix(diagnostic, source) else {
+    let Some(parsed) = parsed else {
+        skip(
+            report_lines,
+            skipped_count,
+            "source-bound parse unavailable",
+        );
+        return;
+    };
+    let Some(fix) = catalog_fix(diagnostic, parsed) else {
         skip(report_lines, skipped_count, "no catalog entry");
         return;
     };

@@ -546,6 +546,7 @@ mod tests {
             cache_hits: 0,
             cache_misses: valid_files,
             parse_errors: 0,
+            internal_failures: 0,
             roundtrip_passed: 0,
             roundtrip_failed: 0,
             cancelled: false,

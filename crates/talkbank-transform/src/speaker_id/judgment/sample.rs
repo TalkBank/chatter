@@ -139,19 +139,13 @@ fn utterance_spoken_text(u: &Utterance) -> String {
     tokens.join(" ")
 }
 
-/// Return at most `head + tail` items from `all`. When `all.len() <=
-/// head + tail` every item is returned. Otherwise the first `head` and the
-/// last `tail` are concatenated in document order. Borrows slices, so no
-/// unnecessary allocation on the pass-through path.
+/// Select a bounded head, then a suffix of the remaining slice. The split
+/// makes overlap impossible: the tail cannot refer to a head item. No sum of
+/// caller-supplied limits is needed, even when either limit is `usize::MAX`.
 fn apply_head_tail(all: &[String], budget: SampleBudget) -> Vec<&str> {
-    let window = budget.head + budget.tail;
-    if all.len() <= window {
-        return all.iter().map(String::as_str).collect();
-    }
-    let mut out: Vec<&str> = Vec::with_capacity(window);
-    out.extend(all[..budget.head].iter().map(String::as_str));
-    out.extend(all[all.len() - budget.tail..].iter().map(String::as_str));
-    out
+    let (head, remaining) = all.split_at(budget.head.min(all.len()));
+    let tail = &remaining[remaining.len().saturating_sub(budget.tail)..];
+    head.iter().chain(tail).map(String::as_str).collect()
 }
 
 /// Truncate `s` to at most `cap` Unicode scalar values. No ellipsis is

@@ -2,6 +2,9 @@
 //!
 //! This module re-exports the lower-level morphology parser used by
 //! `ChatParser::parse_dependent_tier` and typed dispatch in the chat-file parser.
+//! Its input is a generated `SourceBound<MorDependentTierNode>` from the
+//! existing `ParsedSource` owner, not an independently supplied node/text pair.
+//! The string-based morphology fragment APIs are unchanged.
 //!
 //! # Related CHAT Manual Sections
 //!

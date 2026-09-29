@@ -5,6 +5,9 @@ use talkbank_model::model::SemanticEq;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, test_error::strict_parse};
 
+#[path = "morphology_counting_corpus.rs"]
+mod counting_contracts;
+
 #[test]
 fn feature_specs_preserve_main_and_clitic_values_and_independent_diagnostics() {
     use talkbank_model::model::{MorFeature, MorTier, WriteChat};
@@ -47,6 +50,17 @@ fn feature_specs_preserve_main_and_clitic_values_and_independent_diagnostics() {
                 None => MorFeature::flat(feature.value()),
             };
             assert!(rebuilt.semantic_eq(feature));
+            assert_eq!(feature.to_string(), feature.to_chat_string());
+            for nontext in [
+                serde_json::Value::Null,
+                serde_json::json!(42),
+                serde_json::json!([]),
+            ] {
+                assert!(
+                    serde_json::from_value::<MorFeature>(nontext).is_err(),
+                    "feature imports require a string"
+                );
+            }
             assert_eq!(
                 serde_json::to_value(&rebuilt).expect("rebuilt feature"),
                 serde_json::to_value(feature).expect("source feature")
@@ -88,9 +102,72 @@ fn feature_specs_preserve_main_and_clitic_values_and_independent_diagnostics() {
     }
 }
 
+/// A JSON-imported lexical payload is not a validated morphological analysis.
+#[test]
+fn clitic_json_imports_report_empty_lemma_and_pos_without_repair() {
+    use talkbank_model::{ErrorCode, ErrorCollector};
+    use talkbank_parser_tests::repo_paths::workspace_root;
+
+    #[derive(Clone, Copy)]
+    enum Target {
+        Main,
+        PostClitic,
+    }
+
+    let parser = TreeSitterParser::new().expect("parser");
+    let source = std::fs::read_to_string(workspace_root().join(
+        "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E711_postclitic_features_2.cha",
+    )).expect("canonical keyed-feature control");
+    let file = strict_parse(parser.parse_chat_file(&source)).expect("control syntax");
+    let original = file
+        .utterances()
+        .next()
+        .expect("utterance")
+        .mor_tier()
+        .expect("morphology");
+    let control_errors = ErrorCollector::new();
+    original.validate_content(&control_errors);
+    assert!(control_errors.into_vec().is_empty());
+
+    for target in [Target::Main, Target::PostClitic] {
+        for (field, message) in [("lemma", "empty lemma"), ("pos", "empty POS category")] {
+            let mut imported = original.clone();
+            let item = &mut imported.items_mut()[0];
+            let word = match target {
+                Target::Main => &mut item.main,
+                Target::PostClitic => &mut item.post_clitics[0],
+            };
+            let mut wire = serde_json::to_value(&*word).expect("observed word JSON");
+            *wire
+                .as_object_mut()
+                .expect("word object")
+                .get_mut(field)
+                .expect("authored field") = serde_json::json!("");
+            *word =
+                serde_json::from_value(wire.clone()).expect("lexical import precedes validation");
+            assert_eq!(serde_json::to_value(&*word).expect("retained import"), wire);
+
+            let before = serde_json::to_value(&imported).expect("imported tier");
+            let errors = ErrorCollector::new();
+            imported.validate_content(&errors);
+            let findings = errors.into_vec();
+            assert_eq!(findings.len(), 1, "{field}: {findings:?}");
+            assert_eq!(findings[0].code, ErrorCode::MorEmptyContent);
+            assert_eq!(findings[0].location.span, original.span);
+            assert!(findings[0].message.contains(message));
+            assert_eq!(
+                serde_json::to_value(&imported).expect("validated import"),
+                before,
+                "validation must not repair the payload"
+            );
+        }
+    }
+}
+
 #[test]
 fn reference_clitic_projection_preserves_authored_items_and_dependency_heads() {
-    use talkbank_model::alignment::indices::{GraHeadRef, MorItemIndex};
+    use talkbank_model::SpanShift;
+    use talkbank_model::alignment::indices::{GraHeadRef, MorItemIndex, SemanticWordIndex1};
     use talkbank_model::model::MorChunkKind;
     use talkbank_parser_tests::repo_paths::workspace_root;
     let source = std::fs::read_to_string(
@@ -135,6 +212,9 @@ fn reference_clitic_projection_preserves_authored_items_and_dependency_heads() {
     }
     for (item, (start, head)) in [(1, 4), (3, 4), (4, 0)].into_iter().enumerate() {
         let item = MorItemIndex::new(item);
+        let raw_item: usize = item.into();
+        assert_eq!(MorItemIndex::from(raw_item), item);
+        assert_eq!(item.to_string(), raw_item.to_string());
         assert_eq!(
             mor.semantic_index_of_item_start(item)
                 .expect("item start")
@@ -145,6 +225,55 @@ fn reference_clitic_projection_preserves_authored_items_and_dependency_heads() {
             mor.governing_head_for_item(gra, item)
                 .expect("authored head"),
             GraHeadRef::from_raw(head)
+        );
+        let mut actual = mor
+            .governing_head_for_item(gra, item)
+            .expect("authored head");
+        assert_eq!(actual.as_raw(), head);
+        let wire = serde_json::to_string(&actual).expect("head wire format");
+        assert_eq!(
+            wire,
+            head.to_string(),
+            "ROOT and word heads remain integer JSON"
+        );
+        assert_eq!(
+            serde_json::from_str::<GraHeadRef>(&wire).expect("head admission"),
+            actual
+        );
+        match actual.word() {
+            None => assert_eq!(head, 0, "ROOT is not a word index"),
+            Some(mut word) => {
+                assert_eq!(
+                    SemanticWordIndex1::try_from(head).expect("positive head"),
+                    word
+                );
+                let nonzero = std::num::NonZeroUsize::new(head).expect("word head is nonzero");
+                assert_eq!(SemanticWordIndex1::from_nonzero(nonzero), word);
+                assert_eq!(word.to_string(), head.to_string());
+                assert!(mor.chunk_at(word.to_chunk_index().as_usize()).is_some());
+                word.shift_spans_after(0, 17);
+                assert_eq!(
+                    word.as_usize(),
+                    head,
+                    "source edits cannot renumber dependencies"
+                );
+            }
+        }
+        actual.shift_spans_after(0, -3);
+        assert_eq!(actual.as_raw(), head);
+        let mut shifted_item = item;
+        shifted_item.shift_spans_after(0, 17);
+        assert_eq!(shifted_item, item);
+    }
+    assert!(
+        SemanticWordIndex1::try_from(0).is_err(),
+        "ROOT cannot enter the word-index state"
+    );
+    assert!(serde_json::from_str::<SemanticWordIndex1>("0").is_err());
+    for invalid in ["-1", "1.5", "null", "\"1\""] {
+        assert!(
+            serde_json::from_str::<GraHeadRef>(invalid).is_err(),
+            "{invalid}"
         );
     }
     for index in [5, usize::MAX] {

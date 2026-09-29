@@ -54,9 +54,7 @@ fn simple_mor(pos: &str, lemma: &str) -> Mor {
 fn test_mor_alignment_errors_have_no_bogus_context() {
     let main = MainTier::new(
         "CHI",
-        vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
-            "one", "one",
-        )))],
+        vec![UtteranceContent::Word(Box::new(Word::new_unchecked("one")))],
         Terminator::Period { span: Span::DUMMY },
     )
     .with_span(Span::from_usize(0, 15));

@@ -9,8 +9,7 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, QuotationNode, QuotationWithOptionalAnnotationsNode, extract_quotation,
-    extract_quotation_with_optional_annotations,
+    AsRawNode, QuotationNode, QuotationWithOptionalAnnotationsNode, SourceBound, SourceSlotView,
 };
 use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
@@ -32,13 +31,22 @@ use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, present, sur
 /// verified against `node-types.json`, not by reading the JS). Narrowing the
 /// visibility is what makes that structural fact hold, rather than leaving four
 /// callers that a future grammar change could quietly revive.
-fn parse_quotation_content(
-    typed: QuotationNode<'_>,
-    source: &str,
+fn parse_quotation_content<'tree>(
+    typed: SourceBound<'tree, '_, QuotationNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
-    let children = extract_quotation(typed);
+    let source = typed.source();
+    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| typed.extract_admitted(grammar)),
+        typed.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
+    let children = associated.children();
 
     expect_delimiter(children.child_0.slot(), |bad| {
         report_tree_shape(
@@ -51,7 +59,7 @@ fn parse_quotation_content(
             errors,
         );
     });
-    let group_items = match contents_of(children.child_1.slot(), |bad| {
+    let group_items = match contents_of(associated.field_child_1().slot(), errors, |bad| {
         report_tree_shape(
             bad,
             format!("Expected 'contents' in quotation, found '{}'", bad.kind()),
@@ -59,7 +67,7 @@ fn parse_quotation_content(
             errors,
         );
     }) {
-        Some(contents) => parse_group_contents(&contents, source, errors),
+        Some(contents) => parse_group_contents(&contents, errors),
         None => Vec::new(),
     };
     expect_delimiter(children.child_2.slot(), |bad| {
@@ -123,13 +131,22 @@ fn parse_quotation_content(
 /// whole of the model-side change.
 ///
 /// [`NodeSlot`]: crate::generated_traversal::NodeSlot
-pub(crate) fn parse_quotation_with_annotations_content(
-    typed: QuotationWithOptionalAnnotationsNode<'_>,
-    source: &str,
+pub(crate) fn parse_quotation_with_annotations_content<'tree>(
+    typed: SourceBound<'tree, '_, QuotationWithOptionalAnnotationsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
-    let children = extract_quotation_with_optional_annotations(typed);
+    let source = typed.source();
+    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| typed.extract_admitted(grammar)),
+        typed.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
+    let children = associated.children();
     // Reported before any early return: a child that filled no grammar
     // position is a fact about the input whether or not the rest parses.
     surface_displaced(
@@ -139,13 +156,15 @@ pub(crate) fn parse_quotation_with_annotations_content(
         errors,
     );
 
-    // A MISSING or ERROR quotation is rejected rather than reconstructed. The
-    // grammar makes the absent case unreachable on a well-formed parse; on a
-    // recovered one it is exactly the state that must not produce a value.
-    let Some(quotation) = present(children.quotation.slot()) else {
+    // Compiled grammar admission excludes Missing for this composite quotation.
+    // Error or absence must still refuse to produce a quotation value.
+    let SourceSlotView::Present(quotation) = associated.field_quotation().slot().view() else {
         return ParseOutcome::rejected();
     };
-    let ParseOutcome::Parsed(content) = parse_quotation_content(*quotation, source, errors) else {
+    let Some(quotation) = crate::parser::typed_cst::read_source_field(quotation, errors) else {
+        return ParseOutcome::rejected();
+    };
+    let ParseOutcome::Parsed(content) = parse_quotation_content(quotation, errors) else {
         // The inner parser has already reported why; propagate rather than
         // inventing an empty quotation to hang the annotations on.
         return ParseOutcome::rejected();
@@ -157,10 +176,22 @@ pub(crate) fn parse_quotation_with_annotations_content(
     let markers = match children.annotations.slot() {
         Some(slot) => match present(slot) {
             Some(annotations) => {
-                super::super::annotations::parse_scoped_annotations(*annotations, source, errors)
+                match crate::parser::typed_cst::report_reconstruction(
+                    super::super::annotations::parse_scoped_annotations(
+                        *annotations,
+                        source,
+                        errors,
+                    ),
+                    annotations.raw_node(),
+                    source,
+                    errors,
+                ) {
+                    Ok(markers) => markers,
+                    Err(_) => return ParseOutcome::Rejected,
+                }
             }
-            // Present-but-unusable (MISSING/ERROR): the quotation still stands,
-            // and the recovery state is the extractor's to have surfaced.
+            // Present-but-unusable (ERROR): the quotation still stands, and
+            // recovery remains explicit despite composite nonmissing admission.
             None => Vec::new(),
         },
         // Genuinely absent: a bare quotation, which folds to itself.

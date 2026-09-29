@@ -58,12 +58,6 @@ impl crate::validation::Validate for Word {
         // This must run FIRST to catch parser bugs
         structure::check_word_characters(self, errors);
 
-        // E203/E243/E248: Inline marker integrity checks.
-        structure::check_inline_at_markers(self, errors);
-
-        // E231: Check shortening marker balance
-        structure::check_shortening_balance(self, errors);
-
         // E232-E233: Check compound marker validity
         structure::check_compound_markers(self, errors);
 

@@ -7,10 +7,11 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
     Severity, SourceLocation,
 };
-use crate::generated_traversal::{AsRawNode, FromNodeKind, FullDocumentChild1Choice};
+use crate::generated_traversal::{
+    AdmittedFullDocumentChild1Choice as FullDocumentChild1Choice, AsRawNode,
+};
 use crate::model::Header;
 use crate::node_types::*;
-use crate::parser::tree_parsing::parser_helpers::unknown_header_from_node;
 use talkbank_model::ParseOutcome;
 
 /// Lowering owns the node and the source whose complete input it represents.
@@ -94,8 +95,19 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
         // SelectedHeader admits only generated named header kinds, never a
         // generic ERROR. MISSING placeholders still require normal lowering
         // and recovery diagnostics; kind admission does not certify validity.
-        let header = if let Some(choice) = FullDocumentChild1Choice::from_node(header_node) {
-            parse_pre_begin_header(&choice, wrapped, &error_sink)
+        let header = if let Some(choice) = source.typed::<FullDocumentChild1Choice>() {
+            match parse_pre_begin_header(choice, &error_sink) {
+                Ok(header) => header,
+                Err(fault) => {
+                    crate::parser::typed_cst::report_cst_failure(
+                        header_node,
+                        wrapped,
+                        fault,
+                        &error_sink,
+                    );
+                    return Err(ParseErrors::from(inner_sink.to_vec()));
+                }
+            }
         } else {
             match header_node.kind() {
                 // Document anchors are outside both header supertype choices.
@@ -139,12 +151,10 @@ impl<'tree, 'source, 'input> HeaderFragment<'tree, 'source, 'input> {
                             "Unknown header type '{unknown}' - will be flagged during validation"
                         ),
                     ));
-                        unknown_header_from_node(
-                            header_node,
-                            wrapped,
-                            format!("Unrecognized header type: {unknown}"),
-                            None,
-                        )
+                        // Rejection already has diagnostics; do not construct
+                        // an unknown-header model solely to discard it below.
+                        drop(error_sink);
+                        return Err(ParseErrors::from(inner_sink.into_vec()));
                     }
                 },
             }

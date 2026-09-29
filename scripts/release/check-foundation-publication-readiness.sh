@@ -26,6 +26,10 @@ first_wave=(
     talkbank-parser
     talkbank-parser-re2c
     talkbank-transform
+    send2clan
+    talkbank-llm
+    talkbank-lsp
+    chatter
 )
 
 echo "==> Checking first-wave crates.io publication metadata"

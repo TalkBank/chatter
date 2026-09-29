@@ -63,6 +63,19 @@ class ProspectiveDates(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("STALE: a page.md", result.stderr)
 
+    def test_index_commit_does_not_redate_untouched_unpublished_documents(self) -> None:
+        self.page.write_text(self.page.read_text() + "\nUnpublished.\n")
+        git(["add", "."], self.root)
+        git(["commit", "-qm", "unpublished"], self.root, date="2020-01-01")
+        hook = self.root / ".git" / "hooks" / "pre-commit"
+        shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook)
+        hook.chmod(0o755)
+        (self.root / "code.txt").write_text("unrelated change\n")
+        git(["add", "code.txt"], self.root)
+        self.assertEqual(self.check("--prospective", "--snapshot", "index").returncode, 0)
+        git(["commit", "-qm", "ordinary checkpoint"], self.root)
+        self.assertNotEqual(self.check("--prospective").returncode, 0)
+
     def test_detached_ci_checks_committed_history_without_redating_it(self) -> None:
         git(["checkout", "--detach", "-q"], self.root)
         self.assertEqual(self.check("--prospective").returncode, 0)

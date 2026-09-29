@@ -9,7 +9,6 @@ Ok(
             end: 7,
         },
         word_id: None,
-        raw_text: "hel(lo)",
         content: WordContents(
             [
                 Text(

@@ -205,15 +205,20 @@ fn text_utterance_is_parsed_into_the_model() {
 #[test]
 fn a_media_name_containing_the_delimiter_is_rejected() {
     let mut desc = desc_with(None);
-    desc.media_name = Some("take1,take2".to_string());
-    let built = build_chat(&desc);
-    assert!(
-        built.is_err(),
-        "expected a rejection, got a header reading {:?}",
-        built
-            .as_ref()
-            .map(|chat| media_header(chat).filename.as_str())
-    );
+    for raw in [
+        "take1,take2",
+        "bad,dir/rec.mp3",
+        "bad\ndir/rec.mp3",
+        "bad\rdir/rec.mp3",
+        "bad\"dir/rec.mp3",
+        " dir/rec.mp3",
+    ] {
+        desc.media_name = Some(raw.to_owned());
+        assert!(
+            build_chat(&desc).is_err(),
+            "malformed source was normalized: {raw:?}"
+        );
+    }
 }
 
 /// A description naming no language is REFUSED, not given `eng`.

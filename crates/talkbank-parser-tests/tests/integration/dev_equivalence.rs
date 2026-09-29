@@ -166,7 +166,6 @@ fn equiv_stress_markers() {
 
 /// Verifies parser handles CA-element inputs.
 #[test]
-#[ignore = "TreeSitterParser does not parse mid-word CA elements (‡, ↑, ↓)"]
 fn equiv_ca_elements() {
     let inputs = [
         (
@@ -239,7 +238,6 @@ fn equiv_shortening() {
 
 /// Verifies parser handles mixed-marker complex word inputs.
 #[test]
-#[ignore = "Depends on CA element support in TreeSitterParser"]
 fn equiv_complex_words() {
     let inputs = [
         (

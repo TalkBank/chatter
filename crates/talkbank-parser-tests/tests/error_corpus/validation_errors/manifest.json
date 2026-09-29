@@ -22,7 +22,7 @@
       "code": "E101",
       "claim": {
         "subsumed_by": [
-          "E501"
+          "E326"
         ]
       },
       "status": "not_implemented",
@@ -32,7 +32,11 @@
       "fixture": "E202_missing_form_type_1.cha",
       "transcript_name": "anonymous",
       "code": "E202",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E202_missing_form_type.md"
     },
@@ -40,7 +44,11 @@
       "fixture": "E202_missing_form_type_10.cha",
       "transcript_name": "anonymous",
       "code": "E202",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E202_missing_form_type.md"
     },
@@ -96,7 +104,11 @@
       "fixture": "E202_missing_form_type_4.cha",
       "transcript_name": "anonymous",
       "code": "E202",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E202_missing_form_type.md"
     },
@@ -112,7 +124,11 @@
       "fixture": "E202_missing_form_type_6.cha",
       "transcript_name": "anonymous",
       "code": "E202",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E202_missing_form_type.md"
     },
@@ -128,7 +144,11 @@
       "fixture": "E202_missing_form_type_8.cha",
       "transcript_name": "anonymous",
       "code": "E202",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E202_missing_form_type.md"
     },
@@ -164,7 +184,11 @@
       "fixture": "E203_3.cha",
       "transcript_name": "anonymous",
       "code": "E203",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E203.md"
     },
@@ -188,7 +212,11 @@
       "fixture": "E203_6.cha",
       "transcript_name": "anonymous",
       "code": "E203",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E203.md"
     },
@@ -196,7 +224,11 @@
       "fixture": "E203_7.cha",
       "transcript_name": "anonymous",
       "code": "E203",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E203.md"
     },
@@ -206,7 +238,11 @@
         "named": "E207_multiple_form_types"
       },
       "code": "E207",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E207.md"
     },
@@ -216,7 +252,7 @@
       "code": "E207",
       "claim": {
         "subsumed_by": [
-          "E375",
+          "E316",
           "E342"
         ]
       },
@@ -243,7 +279,11 @@
       "fixture": "E207_4.cha",
       "transcript_name": "anonymous",
       "code": "E207",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E207.md"
     },
@@ -279,7 +319,11 @@
       "fixture": "E207_8.cha",
       "transcript_name": "anonymous",
       "code": "E207",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E207.md"
     },
@@ -302,7 +346,15 @@
           "E376"
         ]
       },
-      "status": "implemented",
+      "status": "deprecated",
+      "source_spec": "spec/errors/E208.md"
+    },
+    {
+      "fixture": "E208_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E208",
+      "claim": "legal",
+      "status": "deprecated",
       "source_spec": "spec/errors/E208.md"
     },
     {
@@ -516,12 +568,60 @@
       "source_spec": "spec/errors/E220_bare_numerals.md"
     },
     {
+      "fixture": "E220_currency_forms_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E220",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_currency_forms.md"
+    },
+    {
       "fixture": "E220_english_number_forms_1.cha",
       "transcript_name": "anonymous",
       "code": "E220",
       "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E220_english_number_forms.md"
+    },
+    {
+      "fixture": "E220_numeric_overflow_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E220",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_numeric_overflow.md"
+    },
+    {
+      "fixture": "E220_numeric_overflow_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E220",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_numeric_overflow.md"
+    },
+    {
+      "fixture": "E220_numeric_overflow_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E220",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_numeric_overflow.md"
+    },
+    {
+      "fixture": "E220_numeric_overflow_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E220",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_numeric_overflow.md"
+    },
+    {
+      "fixture": "E220_spanish_generation_limits_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E220",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E220_spanish_generation_limits.md"
     },
     {
       "fixture": "E230_1.cha",
@@ -557,7 +657,7 @@
       "code": "E231",
       "claim": {
         "subsumed_by": [
-          "E313"
+          "E316"
         ]
       },
       "status": "implemented",
@@ -567,7 +667,11 @@
       "fixture": "E231_2.cha",
       "transcript_name": "anonymous",
       "code": "E231",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E342"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E231.md"
     },
@@ -682,6 +786,46 @@
       "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
+    },
+    {
+      "fixture": "E241_illegal_untranscribed_marker_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E241",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_illegal_untranscribed_marker.md"
+    },
+    {
+      "fixture": "E241_marker_boundaries_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E241",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_marker_boundaries.md"
+    },
+    {
+      "fixture": "E241_marker_boundaries_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E241",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_marker_boundaries.md"
+    },
+    {
+      "fixture": "E241_marker_boundaries_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E241",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_marker_boundaries.md"
+    },
+    {
+      "fixture": "E241_marker_boundaries_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E241",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E241_marker_boundaries.md"
     },
     {
       "fixture": "E242_1.cha",
@@ -825,7 +969,7 @@
       "fixture": "E243_unicode_boundaries_2.cha",
       "transcript_name": "anonymous",
       "code": "E243",
-      "claim": "legal",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E243_unicode_boundaries.md"
     },
@@ -839,6 +983,22 @@
     },
     {
       "fixture": "E243_unicode_boundaries_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E243",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E243_unicode_boundaries.md"
+    },
+    {
+      "fixture": "E243_unicode_boundaries_5.cha",
+      "transcript_name": "anonymous",
+      "code": "E243",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E243_unicode_boundaries.md"
+    },
+    {
+      "fixture": "E243_unicode_boundaries_6.cha",
       "transcript_name": "anonymous",
       "code": "E243",
       "claim": "legal",
@@ -899,6 +1059,110 @@
       "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E244.md"
+    },
+    {
+      "fixture": "E244_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244.md"
+    },
+    {
+      "fixture": "E244_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244.md"
+    },
+    {
+      "fixture": "E244_recovery_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_recovery.md"
+    },
+    {
+      "fixture": "E244_recovery_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_recovery.md"
+    },
+    {
+      "fixture": "E244_stress_runs_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
+    },
+    {
+      "fixture": "E244_stress_runs_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
+    },
+    {
+      "fixture": "E244_stress_runs_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
+    },
+    {
+      "fixture": "E244_stress_runs_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
+    },
+    {
+      "fixture": "E244_stress_runs_5.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
+    },
+    {
+      "fixture": "E244_stress_runs_6.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
+    },
+    {
+      "fixture": "E244_stress_runs_7.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
+    },
+    {
+      "fixture": "E244_stress_runs_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
+    },
+    {
+      "fixture": "E244_stress_runs_9.cha",
+      "transcript_name": "anonymous",
+      "code": "E244",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E244_stress_runs.md"
     },
     {
       "fixture": "E245_1.cha",
@@ -1198,7 +1462,11 @@
       "fixture": "E256_3.cha",
       "transcript_name": "anonymous",
       "code": "E256",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E256.md"
     },
@@ -1206,7 +1474,11 @@
       "fixture": "E256_4.cha",
       "transcript_name": "anonymous",
       "code": "E256",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E256.md"
     },
@@ -1251,6 +1523,46 @@
       "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E258.md"
+    },
+    {
+      "fixture": "E258_6.cha",
+      "transcript_name": "anonymous",
+      "code": "E258",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E258.md"
+    },
+    {
+      "fixture": "E258_7.cha",
+      "transcript_name": "anonymous",
+      "code": "E258",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E258.md"
+    },
+    {
+      "fixture": "E258_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E258",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E258.md"
+    },
+    {
+      "fixture": "E258_recovery_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E258",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E258_recovery.md"
+    },
+    {
+      "fixture": "E258_recovery_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E258",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E258_recovery.md"
     },
     {
       "fixture": "E259_1.cha",
@@ -1365,12 +1677,56 @@
       "source_spec": "spec/errors/E259.md"
     },
     {
+      "fixture": "E259_initial_comma_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E259",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_initial_comma.md"
+    },
+    {
+      "fixture": "E259_initial_comma_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_initial_comma.md"
+    },
+    {
+      "fixture": "E259_initial_comma_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_initial_comma.md"
+    },
+    {
+      "fixture": "E259_recovery_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E259",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_recovery.md"
+    },
+    {
+      "fixture": "E259_recovery_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E259",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E259_recovery.md"
+    },
+    {
       "fixture": "E301_1.cha",
       "transcript_name": {
         "named": "E301_empty_speaker"
       },
       "code": "E301",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E301.md"
     },
@@ -1402,7 +1758,11 @@
         "named": "E303_header_colon_space"
       },
       "code": "E303",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E303.md"
     },
@@ -1410,7 +1770,11 @@
       "fixture": "E303_10.cha",
       "transcript_name": "anonymous",
       "code": "E303",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E303.md"
     },
@@ -1418,7 +1782,11 @@
       "fixture": "E303_2.cha",
       "transcript_name": "anonymous",
       "code": "E303",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E303.md"
     },
@@ -1434,7 +1802,11 @@
       "fixture": "E303_4.cha",
       "transcript_name": "anonymous",
       "code": "E303",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E303.md"
     },
@@ -1442,7 +1814,11 @@
       "fixture": "E303_5.cha",
       "transcript_name": "anonymous",
       "code": "E303",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E303.md"
     },
@@ -1490,7 +1866,7 @@
       "code": "E304",
       "claim": {
         "subsumed_by": [
-          "E301"
+          "E316"
         ]
       },
       "status": "not_implemented",
@@ -1601,6 +1977,102 @@
       "source_spec": "spec/errors/E305_bullet_retention.md"
     },
     {
+      "fixture": "E305_mor_terminator_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_mor_terminator.md"
+    },
+    {
+      "fixture": "E305_mor_terminator_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_mor_terminator.md"
+    },
+    {
+      "fixture": "E305_postcodes_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_postcodes.md"
+    },
+    {
+      "fixture": "E305_postcodes_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_postcodes.md"
+    },
+    {
+      "fixture": "E305_recovery_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_recovery.md"
+    },
+    {
+      "fixture": "E305_recovery_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_recovery.md"
+    },
+    {
+      "fixture": "E305_standard_terminator_deletions_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_standard_terminator_deletions.md"
+    },
+    {
+      "fixture": "E305_standard_terminator_deletions_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_standard_terminator_deletions.md"
+    },
+    {
+      "fixture": "E305_standard_terminator_deletions_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_standard_terminator_deletions.md"
+    },
+    {
+      "fixture": "E305_standard_terminator_deletions_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_standard_terminator_deletions.md"
+    },
+    {
+      "fixture": "E305_standard_terminator_deletions_5.cha",
+      "transcript_name": "anonymous",
+      "code": "E305",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E305_standard_terminator_deletions.md"
+    },
+    {
       "fixture": "E305_timed_terminators_1.cha",
       "transcript_name": {
         "named": "media-bullets"
@@ -1644,7 +2116,11 @@
       "fixture": "E306_2.cha",
       "transcript_name": "anonymous",
       "code": "E306",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E306.md"
     },
@@ -1655,6 +2131,30 @@
       "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E306.md"
+    },
+    {
+      "fixture": "E306_separator_only_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E306",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E306_separator_only.md"
+    },
+    {
+      "fixture": "E306_separator_only_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E306",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E306_separator_only.md"
+    },
+    {
+      "fixture": "E306_separator_only_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E306",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E306_separator_only.md"
     },
     {
       "fixture": "E307_1.cha",
@@ -1794,7 +2294,7 @@
         "named": "E310_failed_parse_headers"
       },
       "code": "E310",
-      "claim": "violates",
+      "claim": "legal",
       "status": "not_implemented",
       "source_spec": "spec/errors/E310.md"
     },
@@ -1804,8 +2304,12 @@
         "named": "E311_failed_parse_utterance"
       },
       "code": "E311",
-      "claim": "violates",
-      "status": "implemented",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "deprecated",
       "source_spec": "spec/errors/E311.md"
     },
     {
@@ -1814,8 +2318,12 @@
         "named": "E311_unclosed_replacement_mid_utterance"
       },
       "code": "E311",
-      "claim": "violates",
-      "status": "implemented",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "deprecated",
       "source_spec": "spec/errors/E311.md"
     },
     {
@@ -1823,7 +2331,7 @@
       "transcript_name": "anonymous",
       "code": "E311",
       "claim": "legal",
-      "status": "implemented",
+      "status": "deprecated",
       "source_spec": "spec/errors/E311.md"
     },
     {
@@ -1837,15 +2345,19 @@
           "E375"
         ]
       },
-      "status": "implemented",
+      "status": "deprecated",
       "source_spec": "spec/errors/E312.md"
     },
     {
       "fixture": "E312_2.cha",
       "transcript_name": "anonymous",
       "code": "E312",
-      "claim": "violates",
-      "status": "implemented",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "deprecated",
       "source_spec": "spec/errors/E312.md"
     },
     {
@@ -1854,8 +2366,12 @@
         "named": "E313_unclosed_parenthesis"
       },
       "code": "E313",
-      "claim": "violates",
-      "status": "implemented",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "deprecated",
       "source_spec": "spec/errors/E313.md"
     },
     {
@@ -1863,15 +2379,19 @@
       "transcript_name": "anonymous",
       "code": "E313",
       "claim": "legal",
-      "status": "implemented",
+      "status": "deprecated",
       "source_spec": "spec/errors/E313.md"
     },
     {
       "fixture": "E313_3.cha",
       "transcript_name": "anonymous",
       "code": "E313",
-      "claim": "violates",
-      "status": "implemented",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "deprecated",
       "source_spec": "spec/errors/E313.md"
     },
     {
@@ -1882,7 +2402,7 @@
       "code": "E314",
       "claim": {
         "subsumed_by": [
-          "E375"
+          "E316"
         ]
       },
       "status": "unreachable_from_chat",
@@ -1951,6 +2471,22 @@
       "transcript_name": "anonymous",
       "code": "E315",
       "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E315.md"
+    },
+    {
+      "fixture": "E315_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E315",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E315.md"
+    },
+    {
+      "fixture": "E315_9.cha",
+      "transcript_name": "anonymous",
+      "code": "E315",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E315.md"
     },
@@ -2106,11 +2642,7 @@
       "fixture": "E316_25.cha",
       "transcript_name": "anonymous",
       "code": "E316",
-      "claim": {
-        "subsumed_by": [
-          "E303"
-        ]
-      },
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E316.md"
     },
@@ -2126,11 +2658,7 @@
       "fixture": "E316_27.cha",
       "transcript_name": "anonymous",
       "code": "E316",
-      "claim": {
-        "subsumed_by": [
-          "E303"
-        ]
-      },
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E316.md"
     },
@@ -2138,11 +2666,7 @@
       "fixture": "E316_28.cha",
       "transcript_name": "anonymous",
       "code": "E316",
-      "claim": {
-        "subsumed_by": [
-          "E303"
-        ]
-      },
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E316.md"
     },
@@ -2326,7 +2850,7 @@
       "code": "E319",
       "claim": {
         "subsumed_by": [
-          "E602"
+          "E316"
         ]
       },
       "status": "implemented",
@@ -2605,6 +3129,15 @@
       "source_spec": "spec/errors/E341.md"
     },
     {
+      "fixture": "E341_5.cha",
+      "transcript_name": "anonymous",
+      "code": "E341",
+      "claim": "legal",
+      "rules": "strict_linkers",
+      "status": "implemented",
+      "source_spec": "spec/errors/E341.md"
+    },
+    {
       "fixture": "E342_1.cha",
       "transcript_name": "anonymous",
       "code": "E342",
@@ -2701,6 +3234,26 @@
       "source_spec": "spec/errors/E342_empty_scoped_content.md"
     },
     {
+      "fixture": "E342_nested_group_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E342",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E342_nested_group.md"
+    },
+    {
+      "fixture": "E342_nested_group_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E342",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E342_nested_group.md"
+    },
+    {
       "fixture": "E344_1.cha",
       "transcript_name": "anonymous",
       "code": "E344",
@@ -2755,10 +3308,36 @@
       "source_spec": "spec/errors/E346.md"
     },
     {
+      "fixture": "E346_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E346",
+      "claim": "legal",
+      "rules": "strict_linkers",
+      "status": "implemented",
+      "source_spec": "spec/errors/E346.md"
+    },
+    {
+      "fixture": "E346_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E346",
+      "claim": "violates",
+      "rules": "strict_linkers",
+      "status": "implemented",
+      "source_spec": "spec/errors/E346.md"
+    },
+    {
       "fixture": "E347_1.cha",
       "transcript_name": "anonymous",
       "code": "E347",
       "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E347.md"
+    },
+    {
+      "fixture": "E347_10.cha",
+      "transcript_name": "anonymous",
+      "code": "E347",
+      "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E347.md"
     },
@@ -2811,10 +3390,26 @@
       "source_spec": "spec/errors/E347.md"
     },
     {
+      "fixture": "E347_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E347",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E347.md"
+    },
+    {
+      "fixture": "E347_9.cha",
+      "transcript_name": "anonymous",
+      "code": "E347",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E347.md"
+    },
+    {
       "fixture": "E348_1.cha",
       "transcript_name": "anonymous",
       "code": "E348",
-      "claim": "violates",
+      "claim": "legal",
       "status": "not_implemented",
       "source_spec": "spec/errors/E348.md"
     },
@@ -3248,8 +3843,8 @@
       "code": "E364",
       "claim": {
         "subsumed_by": [
-          "E246",
-          "E249"
+          "E249",
+          "E316"
         ]
       },
       "status": "not_implemented",
@@ -3261,7 +3856,7 @@
         "named": "E365_malformed_tier_content"
       },
       "code": "E365",
-      "claim": "violates",
+      "claim": "legal",
       "status": "not_implemented",
       "source_spec": "spec/errors/E365.md"
     },
@@ -3340,6 +3935,126 @@
       "claim": "legal",
       "status": "implemented",
       "source_spec": "spec/errors/E370.md"
+    },
+    {
+      "fixture": "E370_6.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370.md"
+    },
+    {
+      "fixture": "E370_7.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370.md"
+    },
+    {
+      "fixture": "E370_split_retrace_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_10.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_11.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_12.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_13.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_5.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_6.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_7.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
+    },
+    {
+      "fixture": "E370_split_retrace_9.cha",
+      "transcript_name": "anonymous",
+      "code": "E370",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E370_split_retrace.md"
     },
     {
       "fixture": "E371_1.cha",
@@ -3465,7 +4180,11 @@
         "named": "E350_unexpected_annotation_node"
       },
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3473,7 +4192,11 @@
       "fixture": "E375_10.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3509,7 +4232,11 @@
       "fixture": "E375_14.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3525,7 +4252,11 @@
       "fixture": "E375_16.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3541,7 +4272,11 @@
       "fixture": "E375_18.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3557,7 +4292,11 @@
       "fixture": "E375_2.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3565,7 +4304,11 @@
       "fixture": "E375_20.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3581,7 +4324,11 @@
       "fixture": "E375_22.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3641,7 +4388,11 @@
       "fixture": "E375_6.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3657,7 +4408,11 @@
       "fixture": "E375_8.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3665,7 +4420,11 @@
       "fixture": "E375_9.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375.md"
     },
@@ -3681,7 +4440,11 @@
       "fixture": "E375_repetition_recovery_2.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375_repetition_recovery.md"
     },
@@ -3689,7 +4452,11 @@
       "fixture": "E375_repetition_recovery_3.cha",
       "transcript_name": "anonymous",
       "code": "E375",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E375_repetition_recovery.md"
     },
@@ -3757,7 +4524,7 @@
       "code": "E382",
       "claim": {
         "subsumed_by": [
-          "E760"
+          "E702"
         ]
       },
       "status": "not_implemented",
@@ -3917,7 +4684,11 @@
         "named": "E404_orphaned_dependent_tier"
       },
       "code": "E404",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E404.md"
     },
@@ -3926,6 +4697,58 @@
       "transcript_name": {
         "named": "E501_duplicate_header"
       },
+      "code": "E501",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_10.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_11.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_12.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_13.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_14.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_15.cha",
+      "transcript_name": "anonymous",
       "code": "E501",
       "claim": "violates",
       "status": "implemented",
@@ -3959,7 +4782,11 @@
       "fixture": "E501_5.cha",
       "transcript_name": "anonymous",
       "code": "E501",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E501.md"
     },
@@ -3967,7 +4794,11 @@
       "fixture": "E501_6.cha",
       "transcript_name": "anonymous",
       "code": "E501",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E501.md"
     },
@@ -3978,6 +4809,38 @@
       "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_9.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501.md"
+    },
+    {
+      "fixture": "E501_recovery_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501_recovery.md"
+    },
+    {
+      "fixture": "E501_recovery_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E501",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E501_recovery.md"
     },
     {
       "fixture": "E502_1.cha",
@@ -4053,7 +4916,11 @@
         "named": "E505_invalid_id_format"
       },
       "code": "E505",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E505.md"
     },
@@ -4061,7 +4928,11 @@
       "fixture": "E505_2.cha",
       "transcript_name": "anonymous",
       "code": "E505",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E505.md"
     },
@@ -4069,7 +4940,11 @@
       "fixture": "E505_3.cha",
       "transcript_name": "anonymous",
       "code": "E505",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E505.md"
     },
@@ -4108,12 +4983,24 @@
       "source_spec": "spec/errors/E506.md"
     },
     {
+      "fixture": "E506_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E506",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E506.md"
+    },
+    {
       "fixture": "E507_1.cha",
       "transcript_name": {
         "named": "E507_empty_languages_header"
       },
       "code": "E507",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E507.md"
     },
@@ -4145,7 +5032,11 @@
       "fixture": "E507_5.cha",
       "transcript_name": "anonymous",
       "code": "E507",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E507.md"
     },
@@ -4177,7 +5068,11 @@
         "named": "E509_empty_media_header"
       },
       "code": "E509",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E509.md"
     },
@@ -4193,7 +5088,11 @@
       "fixture": "E509_3.cha",
       "transcript_name": "anonymous",
       "code": "E509",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E509.md"
     },
@@ -4201,7 +5100,11 @@
       "fixture": "E509_4.cha",
       "transcript_name": "anonymous",
       "code": "E509",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E509.md"
     },
@@ -4478,6 +5381,46 @@
       "source_spec": "spec/errors/E518.md"
     },
     {
+      "fixture": "E518_12.cha",
+      "transcript_name": "anonymous",
+      "code": "E518",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518.md"
+    },
+    {
+      "fixture": "E518_13.cha",
+      "transcript_name": "anonymous",
+      "code": "E518",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518.md"
+    },
+    {
+      "fixture": "E518_14.cha",
+      "transcript_name": "anonymous",
+      "code": "E518",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518.md"
+    },
+    {
+      "fixture": "E518_15.cha",
+      "transcript_name": "anonymous",
+      "code": "E518",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518.md"
+    },
+    {
+      "fixture": "E518_16.cha",
+      "transcript_name": "anonymous",
+      "code": "E518",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E518.md"
+    },
+    {
       "fixture": "E518_2.cha",
       "transcript_name": "anonymous",
       "code": "E518",
@@ -4745,6 +5688,18 @@
     },
     {
       "fixture": "E525_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E525",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E525.md"
+    },
+    {
+      "fixture": "E525_4.cha",
       "transcript_name": "anonymous",
       "code": "E525",
       "claim": "violates",
@@ -5414,6 +6369,54 @@
       "source_spec": "spec/errors/E540.md"
     },
     {
+      "fixture": "E540_10.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540.md"
+    },
+    {
+      "fixture": "E540_11.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540.md"
+    },
+    {
+      "fixture": "E540_12.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540.md"
+    },
+    {
+      "fixture": "E540_13.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540.md"
+    },
+    {
+      "fixture": "E540_14.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540.md"
+    },
+    {
+      "fixture": "E540_15.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540.md"
+    },
+    {
       "fixture": "E540_2.cha",
       "transcript_name": "anonymous",
       "code": "E540",
@@ -5478,6 +6481,110 @@
       "source_spec": "spec/errors/E540.md"
     },
     {
+      "fixture": "E540_numeric_boundaries_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_10.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_11.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_12.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_13.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_5.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_6.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_7.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
+      "fixture": "E540_numeric_boundaries_9.cha",
+      "transcript_name": "anonymous",
+      "code": "E540",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E540_numeric_boundaries.md"
+    },
+    {
       "fixture": "E541_1.cha",
       "transcript_name": "anonymous",
       "code": "E541",
@@ -5506,6 +6613,22 @@
       "transcript_name": "anonymous",
       "code": "E541",
       "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E541_clock.md"
+    },
+    {
+      "fixture": "E541_clock_10.cha",
+      "transcript_name": "anonymous",
+      "code": "E541",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E541_clock.md"
+    },
+    {
+      "fixture": "E541_clock_11.cha",
+      "transcript_name": "anonymous",
+      "code": "E541",
+      "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E541_clock.md"
     },
@@ -5891,7 +7014,11 @@
         "named": "E601_invalid_dependent_tier"
       },
       "code": "E601",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E601.md"
     },
@@ -5909,7 +7036,11 @@
         "named": "E602_malformed_tier_header"
       },
       "code": "E602",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E602.md"
     },
@@ -5917,7 +7048,11 @@
       "fixture": "E602_2.cha",
       "transcript_name": "anonymous",
       "code": "E602",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E602.md"
     },
@@ -5939,6 +7074,30 @@
     },
     {
       "fixture": "E604_gra_without_mor_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E604",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E604_gra_without_mor.md"
+    },
+    {
+      "fixture": "E604_gra_without_mor_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E604",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E604_gra_without_mor.md"
+    },
+    {
+      "fixture": "E604_gra_without_mor_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E604",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E604_gra_without_mor.md"
+    },
+    {
+      "fixture": "E604_gra_without_mor_4.cha",
       "transcript_name": "anonymous",
       "code": "E604",
       "claim": "violates",
@@ -6054,6 +7213,22 @@
       "transcript_name": {
         "named": "E704_speaker_self_overlap"
       },
+      "code": "E704",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E704.md"
+    },
+    {
+      "fixture": "E704_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E704",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E704.md"
+    },
+    {
+      "fixture": "E704_3.cha",
+      "transcript_name": "anonymous",
       "code": "E704",
       "claim": "violates",
       "status": "implemented",
@@ -6247,7 +7422,7 @@
       "code": "E711",
       "claim": {
         "subsumed_by": [
-          "E760"
+          "E702"
         ]
       },
       "status": "implemented",
@@ -6776,6 +7951,22 @@
       "source_spec": "spec/errors/E735.md"
     },
     {
+      "fixture": "E735_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E735",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E735.md"
+    },
+    {
+      "fixture": "E735_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E735",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E735.md"
+    },
+    {
       "fixture": "E736_1.cha",
       "transcript_name": "anonymous",
       "code": "E736",
@@ -6832,6 +8023,34 @@
       "source_spec": "spec/errors/E737.md"
     },
     {
+      "fixture": "E737_7.cha",
+      "transcript_name": "anonymous",
+      "code": "E737",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E737.md"
+    },
+    {
+      "fixture": "E737_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E737",
+      "claim": {
+        "subsumed_by": [
+          "E342"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/E737.md"
+    },
+    {
+      "fixture": "E737_9.cha",
+      "transcript_name": "anonymous",
+      "code": "E737",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E737.md"
+    },
+    {
       "fixture": "E738_1.cha",
       "transcript_name": "anonymous",
       "code": "E738",
@@ -6876,6 +8095,26 @@
       "transcript_name": "anonymous",
       "code": "E738",
       "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E738.md"
+    },
+    {
+      "fixture": "E738_7.cha",
+      "transcript_name": "anonymous",
+      "code": "E738",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E738.md"
+    },
+    {
+      "fixture": "E738_8.cha",
+      "transcript_name": "anonymous",
+      "code": "E738",
+      "claim": {
+        "subsumed_by": [
+          "E342"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E738.md"
     },
@@ -7158,6 +8397,38 @@
       "claim": "violates",
       "status": "implemented",
       "source_spec": "spec/errors/E750.md"
+    },
+    {
+      "fixture": "E750_group_edges_1.cha",
+      "transcript_name": "anonymous",
+      "code": "E750",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E750_group_edges.md"
+    },
+    {
+      "fixture": "E750_group_edges_2.cha",
+      "transcript_name": "anonymous",
+      "code": "E750",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E750_group_edges.md"
+    },
+    {
+      "fixture": "E750_group_edges_3.cha",
+      "transcript_name": "anonymous",
+      "code": "E750",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E750_group_edges.md"
+    },
+    {
+      "fixture": "E750_group_edges_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E750",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E750_group_edges.md"
     },
     {
       "fixture": "E751_1.cha",
@@ -7555,7 +8826,11 @@
       "fixture": "E759_1.cha",
       "transcript_name": "anonymous",
       "code": "E759",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E759.md"
     },
@@ -7563,7 +8838,11 @@
       "fixture": "E759_2.cha",
       "transcript_name": "anonymous",
       "code": "E759",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E759.md"
     },
@@ -7571,7 +8850,11 @@
       "fixture": "E759_3.cha",
       "transcript_name": "anonymous",
       "code": "E759",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E316"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E759.md"
     },
@@ -7581,7 +8864,7 @@
       "code": "E759",
       "claim": {
         "subsumed_by": [
-          "E312"
+          "E316"
         ]
       },
       "status": "implemented",
@@ -7601,7 +8884,7 @@
       "code": "E759",
       "claim": {
         "subsumed_by": [
-          "E375"
+          "E316"
         ]
       },
       "status": "implemented",
@@ -7611,7 +8894,11 @@
       "fixture": "E760_1.cha",
       "transcript_name": "anonymous",
       "code": "E760",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E702"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E760.md"
     },
@@ -7619,7 +8906,11 @@
       "fixture": "E760_2.cha",
       "transcript_name": "anonymous",
       "code": "E760",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E702"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E760.md"
     },
@@ -7635,7 +8926,11 @@
       "fixture": "E760_4.cha",
       "transcript_name": "anonymous",
       "code": "E760",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E702"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E760.md"
     },
@@ -7651,7 +8946,11 @@
       "fixture": "E760_6.cha",
       "transcript_name": "anonymous",
       "code": "E760",
-      "claim": "violates",
+      "claim": {
+        "subsumed_by": [
+          "E702"
+        ]
+      },
       "status": "implemented",
       "source_spec": "spec/errors/E760.md"
     },

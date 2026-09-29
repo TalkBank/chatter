@@ -12,7 +12,7 @@
 //!
 //! [`SessionContextRecord`]: super::session_context::SessionContextRecord
 
-use talkbank_model::model::ChatFile;
+use talkbank_model::model::{AgeValue, ChatFile};
 
 use super::session_context::{
     AgeMonths, ConsentTierLabel, RoleLabel, SampleTypeLabel, SessionContextFile,
@@ -41,53 +41,38 @@ pub fn session_context(
     session_id: &str,
     chat: &ChatFile,
 ) -> JudgmentContext {
-    let id_age = id_header_age_months(chat);
     match context_file.and_then(|file| file.get(session_id)) {
         Some(record) => JudgmentContext {
             sample_type: record.sample_type.clone(),
             declared_roles: record.declared_roles.clone(),
             consent_tier: record.consent_tier.clone(),
-            age_months: record.age_months.or(id_age),
+            age_months: record.age_months.or_else(|| id_header_age_months(chat)),
         },
         None => JudgmentContext {
             sample_type: None,
             declared_roles: Vec::new(),
             consent_tier: None,
-            age_months: id_age,
+            age_months: id_header_age_months(chat),
         },
     }
 }
 
-/// Parse the first `@ID` participant's age field (`years;months.days`) into
-/// total months. Returns `None` when no `@ID` carries a parseable age.
-///
-/// The accessor `Participant::age()` returns `Option<&str>` with the raw CHAT
-/// age string (e.g. `"3;06."` or `"8;05."`) verbatim from the `@ID` header
-/// (`crates/talkbank-model/src/model/participant/accessors.rs`).
+/// Project the first supported `@ID` age with explicit months into total months.
+/// Unsupported ages and unspecified months remain unknown. This consumes the
+/// model's numeric representation rather than reinterpreting its retained text;
+/// it is not a substitute for age syntax/range validation or anchor selection.
 fn id_header_age_months(chat: &ChatFile) -> Option<AgeMonths> {
-    const MONTHS_PER_YEAR: u32 = 12;
     for participant in chat.all_participants() {
-        let Some(raw_age) = participant.age() else {
+        let Some(AgeValue::Valid {
+            years,
+            months: Some(months),
+            ..
+        }) = participant.id.age.as_ref()
+        else {
             continue;
         };
-        if raw_age.is_empty() {
-            continue;
-        }
-        let Some((years_str, rest)) = raw_age.split_once(';') else {
-            continue;
-        };
-        let months_part = rest.trim_end_matches('.');
-        let months_only = match months_part.split_once('.') {
-            Some((months, _)) => months,
-            None => months_part,
-        };
-        let Ok(years) = years_str.trim().parse::<u32>() else {
-            continue;
-        };
-        let Ok(months) = months_only.trim().parse::<u32>() else {
-            continue;
-        };
-        return Some(AgeMonths(years * MONTHS_PER_YEAR + months));
+        // u16 years and u8 months cannot overflow their widened u32 total.
+        return Some(AgeMonths(u32::from(*years) * 12 + u32::from(*months)));
     }
     None
 }
@@ -121,9 +106,16 @@ mod tests {
         let file = file_with(
             "NF201-3",
             SessionContextRecord {
-                sample_type: Some(SampleTypeLabel("clinician interview".to_string())),
-                declared_roles: vec![RoleLabel("Investigator".to_string())],
-                consent_tier: Some(ConsentTierLabel("video+audio".to_string())),
+                sample_type: Some(
+                    SampleTypeLabel::try_from("clinician interview".to_string())
+                        .expect("nonblank label"),
+                ),
+                declared_roles: vec![
+                    RoleLabel::try_from("Investigator".to_string()).expect("nonblank label"),
+                ],
+                consent_tier: Some(
+                    ConsentTierLabel::try_from("video+audio".to_string()).expect("nonblank label"),
+                ),
                 age_months: Some(AgeMonths(101)),
             },
         );
@@ -131,15 +123,18 @@ mod tests {
         let ctx = session_context(Some(&file), "NF201-3", &chat);
         assert_eq!(
             ctx.sample_type,
-            Some(SampleTypeLabel("clinician interview".to_string()))
+            Some(
+                SampleTypeLabel::try_from("clinician interview".to_string())
+                    .expect("nonblank label")
+            )
         );
         assert_eq!(
             ctx.declared_roles,
-            vec![RoleLabel("Investigator".to_string())]
+            vec![RoleLabel::try_from("Investigator".to_string()).expect("nonblank label")]
         );
         assert_eq!(
             ctx.consent_tier,
-            Some(ConsentTierLabel("video+audio".to_string()))
+            Some(ConsentTierLabel::try_from("video+audio".to_string()).expect("nonblank label"))
         );
         // The record's age wins over the @ID age (42 months here).
         assert_eq!(ctx.age_months, Some(AgeMonths(101)));
@@ -152,7 +147,9 @@ mod tests {
             SessionContextRecord {
                 sample_type: None,
                 declared_roles: Vec::new(),
-                consent_tier: Some(ConsentTierLabel("audio only".to_string())),
+                consent_tier: Some(
+                    ConsentTierLabel::try_from("audio only".to_string()).expect("nonblank label"),
+                ),
                 age_months: None,
             },
         );
@@ -160,7 +157,7 @@ mod tests {
         let ctx = session_context(Some(&file), "NF201-3", &chat);
         assert_eq!(
             ctx.consent_tier,
-            Some(ConsentTierLabel("audio only".to_string()))
+            Some(ConsentTierLabel::try_from("audio only".to_string()).expect("nonblank label"))
         );
         assert_eq!(ctx.age_months, Some(AgeMonths(101)));
     }

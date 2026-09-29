@@ -76,6 +76,7 @@ pub mod join_retrace;
 pub mod media_timing;
 pub mod num_words;
 pub mod parse;
+pub mod pseudonymize;
 pub mod redact;
 pub mod rediarize;
 pub mod retag_language;

@@ -125,24 +125,68 @@ impl Month {
 /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#Date_Header>
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift, ValidationTagged)]
 pub enum ChatDate {
-    /// Successfully parsed `DD-MMM-YYYY` date.
-    Valid {
-        /// Day of month (1-31).
-        #[span_shift(skip)]
-        day: u8,
-        /// Month abbreviation.
-        #[span_shift(skip)]
-        month: Month,
-        /// Four-digit year.
-        #[span_shift(skip)]
-        year: u16,
-        /// Original text preserved for roundtrip.
-        #[semantic_eq(skip)]
-        #[span_shift(skip)]
-        raw: SmolStr,
-    },
+    /// Successfully admitted `DD-MMM-YYYY` date components.
+    Valid(CheckedChatDate),
     /// Unrecognized value preserved for validation.
     Unsupported(String),
+}
+
+/// Date components admitted together with their original spelling.
+///
+/// Obtain this payload through [`ChatDate::from_text`]. Admission checks format
+/// and the day range 01–31, not calendar or leap-year validity.
+/// Components cannot be changed independently of the stored text.
+///
+/// ```compile_fail
+/// use talkbank_model::model::ChatDate;
+/// if let ChatDate::Valid(mut date) = ChatDate::from_text("01-JAN-2024") {
+///     date.day = 0;
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use talkbank_model::model::{CheckedChatDate, Month};
+/// let date = CheckedChatDate {
+///     day: 0, month: Month::Jan, year: 2024, raw: "01-JAN-2024".into(),
+/// };
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
+pub struct CheckedChatDate {
+    /// Day of month (1-31).
+    #[span_shift(skip)]
+    day: u8,
+    /// Month abbreviation.
+    #[span_shift(skip)]
+    month: Month,
+    /// Four-digit year.
+    #[span_shift(skip)]
+    year: u16,
+    /// Original text preserved for roundtrip.
+    #[semantic_eq(skip)]
+    #[span_shift(skip)]
+    raw: SmolStr,
+}
+
+impl CheckedChatDate {
+    /// Admitted day of month, in 1–31.
+    pub fn day(&self) -> u8 {
+        self.day
+    }
+
+    /// Admitted uppercase month abbreviation.
+    pub fn month(&self) -> Month {
+        self.month
+    }
+
+    /// Admitted four-digit year, in 0–9999.
+    pub fn year(&self) -> u16 {
+        self.year
+    }
+
+    /// Original spelling admitted with these components.
+    pub fn as_str(&self) -> &str {
+        self.raw.as_str()
+    }
 }
 
 impl ChatDate {
@@ -150,12 +194,12 @@ impl ChatDate {
     ///
     /// Returns `Valid` for well-formed dates, `Unsupported` otherwise.
     pub fn from_text(value: &str) -> Self {
-        let parts: Vec<&str> = value.split('-').collect();
-        if parts.len() != 3 {
+        let mut parts = value.split('-');
+        let (Some(day_str), Some(month_str), Some(year_str), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
             return Self::Unsupported(value.to_string());
-        }
-
-        let (day_str, month_str, year_str) = (parts[0], parts[1], parts[2]);
+        };
 
         let Some(day) = parse_day(day_str) else {
             return Self::Unsupported(value.to_string());
@@ -169,12 +213,12 @@ impl ChatDate {
             return Self::Unsupported(value.to_string());
         };
 
-        Self::Valid {
+        Self::Valid(CheckedChatDate {
             day,
             month,
             year,
             raw: SmolStr::from(value),
-        }
+        })
     }
 
     /// Returns the date as a string.
@@ -182,7 +226,7 @@ impl ChatDate {
     /// Returns the original text for both valid and unsupported dates.
     pub fn as_str(&self) -> &str {
         match self {
-            Self::Valid { raw, .. } => raw.as_str(),
+            Self::Valid(date) => date.as_str(),
             Self::Unsupported(s) => s.as_str(),
         }
     }
@@ -271,6 +315,51 @@ impl Validate for ChatDate {
                     "Use format: 01-JAN-2024 (two-digit day, uppercase month, four-digit year)",
                 ),
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ChatDate, Month};
+
+    #[test]
+    fn checked_date_preserves_format_only_admission() {
+        // Pin the existing policy: no calendar validation is introduced by the
+        // checked payload, including for year zero and impossible month days.
+        for text in ["31-FEB-0000", "29-FEB-2023", "01-JAN-9999"] {
+            let date = ChatDate::from_text(text);
+            let ChatDate::Valid(checked) = &date else {
+                panic!("format admitted")
+            };
+            assert_eq!(checked.as_str(), text);
+            assert_eq!(
+                format!(
+                    "{:02}-{}-{:04}",
+                    checked.day(),
+                    checked.month().as_str(),
+                    checked.year()
+                ),
+                text
+            );
+            assert_eq!(serde_json::to_string(&date).unwrap(), format!("\"{text}\""));
+            assert_eq!(
+                serde_json::from_str::<ChatDate>(&format!("\"{text}\"")).unwrap(),
+                date
+            );
+        }
+        let ChatDate::Valid(date) = ChatDate::new("31-FEB-0000") else {
+            panic!("format admitted")
+        };
+        assert_eq!((date.day(), date.month(), date.year()), (31, Month::Feb, 0));
+        for text in [
+            "00-JAN-2024",
+            "32-JAN-2024",
+            "01-JAN-10000",
+            "01-JAN-2024-extra",
+        ] {
+            assert!(matches!(ChatDate::new(text), ChatDate::Unsupported(_)));
+            assert_eq!(ChatDate::new(text).as_str(), text);
         }
     }
 }

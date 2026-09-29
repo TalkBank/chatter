@@ -1,7 +1,7 @@
 # Grammar System and Token Governance
 
 **Status:** Current
-**Last modified:** 2026-05-29 18:43 EDT
+**Last modified:** 2026-09-28 13:01 EDT
 
 ## Current Reality
 `grammar/grammar.js` encodes substantial implicit language knowledge directly in regex exclusions,
@@ -56,6 +56,42 @@ Explicitly classify every lenient parse behavior:
 - Parse-strict (hard fail).
 
 Document this matrix in the [Leniency Policy](leniency-policy.md).
+
+### Recognized but unsupported headers
+
+Grammar recognition does not guarantee a supported model representation.
+`@Thumbnail` is recognized structurally but remains unsupported: source-bound
+lowering reports E525 over the declaration and refuses to admit that header.
+Recovery preserves following speech, but the recovered document is not a
+strictly accepted document or a lossless serialization of the input. The E525
+spec pairs this refusal with an otherwise identical supported `@Comment`
+control. This is a Chatter support boundary, not a claim that thumbnail headers
+are forbidden by the wider CHAT language.
+
+### Date and time token selection
+
+Date/time headers declare strict lexical alternatives and whole-line fallbacks.
+Their selection must respect both complete values and malformed suffixes.
+Higher lexical precedence is not a harmless tie-break: it can select a strict
+prefix before a longer malformed value. Rule-order changes must also preserve
+empty-header recovery, not merely improve selection on valid examples. Follow
+Tree-sitter's [conflicting-token rules](https://tree-sitter.github.io/tree-sitter/creating-parsers/3-writing-the-grammar.html#conflicting-tokens)
+and review the complete diagnostic snapshot after any such change.
+
+These CST types prove lexical shape, not calendar or clock validity. In
+particular, `strict_time` includes the shared digit/separator alphabet; the
+checked model and header-specific validator still decide whether a value is
+supported and in range. Selection tests need complete reference values, suffix
+error specimens and the established empty-header policies. A declared strict
+alternative alone does not prove that the compiled lexer ever selects it.
+
+Empty fields have header-specific policy: an empty `@Date` is E516, whereas
+empty birth/start/duration values retain the existing omission policy. Their
+spec controls require the header and following speech to survive parsing and
+JSON replay with byte-exact CHAT output. Nonempty malformed suffixes remain
+E518/E540/E541. Do not infer midnight from the legacy start-time model's zero
+components when its preserved value is empty; that representation is not
+evidence of a known time.
 
 ## Grammar Test Strategy
 1. Keep corpus tests generated from `spec/constructs`.

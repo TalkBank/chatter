@@ -1,9 +1,9 @@
 +++
 code = 'E243'
-name = 'High-BMP word-character boundaries'
+name = 'Unicode lexical scalar policy'
 
 [[example]]
-title = 'Standard Unicode controls below the high-BMP block'
+title = 'Ordinary and below-surrogate lexical controls'
 level = 'word'
 claim = 'legal'
 chat = '''
@@ -17,21 +17,7 @@ chat = '''
 '''
 
 [[example]]
-title = 'Both inclusive endpoints of the two CHECK-compatible exemptions'
-level = 'word'
-claim = 'legal'
-chat = '''
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	ab ab a！b a～b .
-@End
-'''
-
-[[example]]
-title = 'Rejected endpoints and the neighbors immediately outside each exemption'
+title = 'All private-use endpoints and former CLAN exemption endpoints'
 level = 'word'
 claim = 'violates'
 chat = '''
@@ -40,11 +26,26 @@ chat = '''
 @Languages:	eng
 @Participants:	CHI Target_Child
 @ID:	eng|corpus|CHI|||||Target_Child|||
-*CHI:	ab ab ab a＀b a｟b a￿b .
+*CHI:	ab ab ab ab a󰀀b a󿿽b a􀀀b a􏿽b .
 @End
 '''
+
 [[example]]
-title = 'A supplementary-plane scalar is not in the rejected BMP block'
+title = 'Every Unicode noncharacter'
+level = 'word'
+claim = 'violates'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	a﷐b a﷑b a﷒b a﷓b a﷔b a﷕b a﷖b a﷗b a﷘b a﷙b a﷚b a﷛b a﷜b a﷝b a﷞b a﷟b a﷠b a﷡b a﷢b a﷣b a﷤b a﷥b a﷦b a﷧b a﷨b a﷩b a﷪b a﷫b a﷬b a﷭b a﷮b a﷯b a￾b a￿b a🿾b a🿿b a𯿾b a𯿿b a𿿾b a𿿿b a񏿾b a񏿿b a񟿾b a񟿿b a񯿾b a񯿿b a񿿾b a񿿿b a򏿾b a򏿿b a򟿾b a򟿿b a򯿾b a򯿿b a򿿾b a򿿿b a󏿾b a󏿿b a󟿾b a󟿿b a󯿾b a󯿿b a󿿾b a󿿿b a􏿾b a􏿿b .
+@End
+'''
+
+[[example]]
+title = 'Standard supplementary-plane scalar'
 level = 'word'
 claim = 'legal'
 chat = '''
@@ -56,43 +57,71 @@ chat = '''
 *CHI:	a𐀀b .
 @End
 '''
+
+[[example]]
+title = 'Assigned high-BMP letters and symbols are not a forbidden block'
+level = 'word'
+claim = 'legal'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	a豈b aﬀb aﵐb aﷰb aﹰb a！b a～b a｟b a�b .
+@End
+'''
+
+[[example]]
+title = 'Neighbors outside private-use and noncharacter ranges'
+level = 'word'
+claim = 'legal'
+chat = '''
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	a豈b a﷏b aﷰb a🿽b a󯿽b .
+@End
+'''
 +++
 
 ## Description
 
-These cases isolate the existing E243 high-BMP rule by replacing the middle
-character of the same ordinary `a…b` word. They preserve surrounding lexical
-material, document scaffolding and termination; no recovered or manufactured
-model is the oracle.
+Lexical words reject Unicode private-use scalars and noncharacters. They do
+not reject ordinary characters merely because they occur in a high BMP or
+supplementary range. The existing control-character and CHAT punctuation
+rules remain separate and unchanged. No character is silently normalized or
+removed, and no CLAN-internal private-use exception applies.
 
-The accepted controls are ASCII, U+00B7, U+D7FF and U+10000. The four exempt
-endpoints are U+F170, U+F264, U+FF01 and U+FF5E. The six rejected characters
-are U+E000, U+F16F, U+F265, U+FF00, U+FF5F and U+FFFF, in that order.
-U+D7FF is the final scalar before the surrogate block; surrogates are not
-Unicode scalar values and cannot appear in a UTF-8 CHAT source.
+## CHAT Rule
 
-This is the CHECK-compatible policy implemented by
-`is_nonstandard_unicode_word_char`: reject U+E000..=U+FFFF except the two
-inclusive ranges U+F170..=U+F264 and U+FF01..=U+FF5E. The source-level basis
-is CLAN CHECK's `isIllegalASCII` and its two encoded-byte exemptions. These
-are implementation-policy boundaries, not a claim that all characters in
-this BMP block are nonstandard Unicode or that every exempt private-use
-character is recommended transcription practice. A `legal` claim here means
-absence of E243, not universal admissibility under every CHAT rule.
+This is Chatter's lexical interchange policy, not a claim that private-use
+characters or noncharacters are ill-formed Unicode. Private-use meanings depend
+on a private agreement; noncharacters have no standard textual interpretation.
+Use the intended standard transcription character rather than a private glyph
+or internal sentinel.
 
-## Expected behavior
+Unicode defines private-use ranges U+E000–U+F8FF, U+F0000–U+FFFFD, and
+U+100000–U+10FFFD. Noncharacters comprise U+FDD0–U+FDEF and the last two
+scalars of each of the 17 planes. See the
+[Unicode FAQ](https://www.unicode.org/faq/private_use.html).
+This rule is not an assigned-character database or a general ban on unassigned
+scalars. U+FFFD is not a noncharacter; it is allowed by this particular rule,
+not a certification that an encoding conversion preserved the intended text.
 
-All four documents parse without recovery. Examples 1, 2 and 4 produce no E243.
-Example 3 produces one E243 per rejected word, with its original source span.
-The six errors must not collapse into one presence-only witness. Byte-exact
-roundtrip preserves the tested character rather than normalizing it away.
+## Expected Behavior
+
+Every document parses without recovery and round-trips byte-exactly. Private-use
+and noncharacter examples produce one located E243 per word; controls produce
+none. The fixture includes every noncharacter, both ends of each private-use
+range, and both ends of the former CLAN exemption. Word spans and diagnostic
+categories are checked independently of the code-set observation snapshot.
 
 ## CHECK scope
 
-The 21-Sep-2026 CHECK build agrees on the BMP controls and exemptions, but
-also reports CHECK 86 for U+10000. Its byte predicate accepts lead bytes
-greater than or equal to 0xEE and checks only the next two continuation
-bytes; it does not restrict that branch to three-byte UTF-8 sequences.
-Chatter deliberately retains its scalar-based BMP boundary instead of
-rejecting standard supplementary-plane text. The CHECK 86 parity fixture
-for U+E000 witnesses that shape only, not universal agreement on Unicode.
+The U+E000 CHECK 86 fixture still witnesses agreement on that one invalid word.
+Chatter no longer copies CHECK's high-BMP blacklist or internal-markup exemption.
+The previously recorded 21-Sep-2026 CHECK rejection of U+10000 is an intentional
+divergence. No new CHECK observation is claimed by this policy change.

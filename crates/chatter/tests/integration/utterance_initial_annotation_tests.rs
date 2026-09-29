@@ -13,9 +13,9 @@
 //! An annotation that opens an utterance must be diagnosed ACCURATELY.
 //!
 //! `*CHI:\t[: closed] .` is a correctly closed replacement with nothing before
-//! it. Its one fault is that a replacement scopes over preceding material and
-//! there is none, which is E759 (CLAN CHECK rule 52). Real CLAN CHECK reports
-//! exactly that and nothing else.
+//! it. A replacement scopes over preceding material and there is none. The
+//! E759 spec now requires structural rejection, not reconstruction of CHECK's
+//! dedicated diagnostic from raw text.
 //!
 //! chatter also reported E305 "Missing terminator in main tier" on a line whose
 //! terminator is right there and IS in the parse tree
@@ -37,7 +37,7 @@ use tempfile::tempdir;
 
 use crate::common::{CliHarness, combined_output, write_fixture};
 
-/// A closed replacement at utterance start: E759, and nothing about a
+/// A closed replacement at utterance start: structural rejection, and nothing about a
 /// terminator.
 #[test]
 fn closed_replacement_at_utterance_start_does_not_claim_a_missing_terminator()
@@ -55,9 +55,9 @@ fn closed_replacement_at_utterance_start_does_not_claim_a_missing_terminator()
     let text = combined_output(&output);
 
     assert!(
-        text.contains("E759"),
-        "the real fault, a replacement with nothing to scope over, must be \
-         reported (E759, CLAN CHECK 52). Got:\n{text}"
+        !output.status.success() && text.contains("E316"),
+        "the misplaced replacement must be rejected from structural evidence \
+         as required by the E759 spec. Got:\n{text}"
     );
     assert!(
         !text.contains("E305"),

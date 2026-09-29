@@ -87,6 +87,9 @@ pub enum FrontendFileStatus {
     ParseError { message: String },
 
     #[serde(rename_all = "camelCase")]
+    InternalFailure { message: String },
+
+    #[serde(rename_all = "camelCase")]
     ReadError { message: String },
 }
 
@@ -100,6 +103,7 @@ pub struct FrontendStats {
     pub cache_hits: usize,
     pub cache_misses: usize,
     pub parse_errors: usize,
+    pub internal_failures: usize,
     pub roundtrip_passed: usize,
     pub roundtrip_failed: usize,
     pub cancelled: bool,
@@ -179,6 +183,9 @@ pub fn to_frontend_event(event: ValidationEvent, root: &Path) -> Option<Frontend
 
 fn convert_status(status: FileStatus) -> FrontendFileStatus {
     match status {
+        FileStatus::InternalFailure { failure } => FrontendFileStatus::InternalFailure {
+            message: failure.to_string(),
+        },
         FileStatus::Valid { cache_hit, .. } => FrontendFileStatus::Valid { cache_hit },
         FileStatus::Invalid {
             error_count,
@@ -203,6 +210,7 @@ fn convert_stats(s: ValidationStatsSnapshot) -> FrontendStats {
         cache_hits: s.cache_hits,
         cache_misses: s.cache_misses,
         parse_errors: s.parse_errors,
+        internal_failures: s.internal_failures,
         roundtrip_passed: s.roundtrip_passed,
         roundtrip_failed: s.roundtrip_failed,
         cancelled: s.cancelled,

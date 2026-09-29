@@ -34,16 +34,16 @@ macro_rules! body_carriers {
 body_carriers! {
     ContentsChildren => ContentsNode,
     ContentItemChildren => ContentItemNode,
-    GroupWithAnnotationsChildren => GroupWithAnnotationsNode,
-    MainPhoGroupChildren => MainPhoGroupNode,
-    MainSinGroupChildren => MainSinGroupNode,
-    TierBodyChildren => TierBodyNode,
-    TierBodyLanguageCodeChildren => TierBodyNode,
-    UtteranceEndChildren => UtteranceEndNode,
-    UtteranceEndChild2Children => UtteranceEndNode,
-    FinalCodesChildren => FinalCodesNode,
-    FinalCodesChild0Children => FinalCodesNode,
-    FinalCodesChild1Children => FinalCodesNode,
+    AdmittedGroupWithAnnotationsChildren => GroupWithAnnotationsNode,
+    AdmittedMainPhoGroupChildren => MainPhoGroupNode,
+    AdmittedMainSinGroupChildren => MainSinGroupNode,
+    AdmittedTierBodyChildren => TierBodyNode,
+    AdmittedTierBodyLanguageCodeChildren => TierBodyNode,
+    AdmittedUtteranceEndChildren => UtteranceEndNode,
+    AdmittedUtteranceEndChild2Children => UtteranceEndNode,
+    AdmittedFinalCodesChildren => FinalCodesNode,
+    AdmittedFinalCodesChild0Children => FinalCodesNode,
+    AdmittedFinalCodesChild1Children => FinalCodesNode,
 }
 
 /// Classify every displaced body child with its carrier's own context.

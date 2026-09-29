@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Standard terminators: period (.), question (?), exclamation (!)
+@Comment:	Constructs: period, question, exclamation
+*CHI:	I see a cat .
+*MOT:	where is the cat ?
+*CHI:	wow it is so big !
+*MOT:	yes it is a big cat .
+@End

@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	fra
+@Participants:	CHI Child
+@ID:	fra|sample|CHI|||||Child|||
+@Comment:	Authored standalone cardinal controls: 0, 21, 100, 200, 1000, 10000.
+@Comment:	Traditional French spelling; exact lexical controls do not license generic scale composition.
+*CHI:	zéro .
+*CHI:	vingt et un .
+*CHI:	cent .
+*CHI:	deux cents .
+*CHI:	mille .
+*CHI:	dix mille .
+@End

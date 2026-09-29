@@ -122,7 +122,7 @@ fn test_e243_word_with_leading_space() {
 fn test_e243_word_with_bullet_marker() {
     // Bullet marker U+0015 (byte 0x15) should never be in word text
     let word_with_bullet = "hello\x15".to_string();
-    let word = Word::new_unchecked(&word_with_bullet, &word_with_bullet);
+    let word = Word::new_unchecked(&word_with_bullet);
     let errors = run_word_validation(&word, None, &[], false);
 
     assert!(
@@ -186,7 +186,7 @@ fn test_e243_clean_word_no_error() {
 fn test_e243_word_with_space_and_bullet() {
     // This is the exact pattern from %wor tier bug: "word \x15"
     let word_with_space_and_bullet = "hello \x15".to_string();
-    let word = Word::new_unchecked(&word_with_space_and_bullet, &word_with_space_and_bullet);
+    let word = Word::new_unchecked(&word_with_space_and_bullet);
     let errors = run_word_validation(&word, None, &[], false);
 
     // Should get at least one E243 error (maybe two - one for space, one for bullet)

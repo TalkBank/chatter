@@ -122,13 +122,10 @@ impl<'de> Deserialize<'de> for SampleTypeVerdict {
             return Ok(Self::Uncertain);
         }
         if let Some(rest) = raw.strip_prefix(CORRECTED_PREFIX) {
-            let label = rest.trim();
-            if label.is_empty() {
-                return Err(serde::de::Error::custom(
-                    "corrected: requires a non-empty sample-type label",
-                ));
-            }
-            return Ok(Self::Corrected(SampleTypeLabel(label.to_string())));
+            let label = SampleTypeLabel::try_from(rest.trim().to_string()).map_err(|_| {
+                serde::de::Error::custom("corrected: requires a non-empty sample-type label")
+            })?;
+            return Ok(Self::Corrected(label));
         }
         Err(serde::de::Error::custom(format!(
             "expected confirmed | uncertain | corrected:<type>, got {raw:?}"
@@ -193,7 +190,9 @@ mod tests {
         let j: HolisticJudgment = serde_json::from_str(&s).expect("parse corrected");
         assert_eq!(
             j.sample_type,
-            SampleTypeVerdict::Corrected(SampleTypeLabel("reading aloud".to_string()))
+            SampleTypeVerdict::Corrected(
+                SampleTypeLabel::try_from("reading aloud".to_string()).expect("nonblank label")
+            )
         );
     }
 

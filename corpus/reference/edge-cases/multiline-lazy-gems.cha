@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Authored control: lazy gem labels with multiple continuation lines.
+@G:	morning
+	café
+	play
+*CHI:	hello .
+@G:	reading
+	time
+*CHI:	goodbye .
+@End

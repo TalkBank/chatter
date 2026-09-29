@@ -116,6 +116,16 @@ impl ChatParser for TreeSitterParser {
         self.parse_word_fragment(input, offset, errors)
     }
 
+    fn parse_word_with_context(
+        &self,
+        input: &str,
+        offset: usize,
+        context: &FragmentSemanticContext,
+        errors: &impl ErrorSink,
+    ) -> ParseOutcome<Word> {
+        self.parse_word_fragment_with_context(input, offset, context, errors)
+    }
+
     fn parse_mor_tier(
         &self,
         input: &str,

@@ -17,6 +17,16 @@ use super::word_contents::WordContents;
 use super::word_type::Word;
 use crate::model::Bullet;
 
+/// Stream the structural spelling through serde without allocating a second
+/// word string or caching a view that public marker mutation could invalidate.
+struct WordSpelling<'a>(&'a Word);
+
+impl Serialize for WordSpelling<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self.0)
+    }
+}
+
 impl Serialize for Word {
     /// Serializes Word to JSON with computed fields (`cleaned_text`, `untranscribed`).
     ///
@@ -57,7 +67,7 @@ impl Serialize for Word {
         if let Some(ref id) = self.word_id {
             state.serialize_field("word_id", id)?;
         }
-        state.serialize_field("raw_text", self.raw_text())?;
+        state.serialize_field("raw_text", &WordSpelling(self))?;
         state.serialize_field("cleaned_text", self.cleaned_text())?;
         state.serialize_field("content", self.content())?;
         if let Some(ref cat) = self.category {
@@ -98,7 +108,7 @@ struct WordJsonSchema {
     #[schemars(skip_serializing_if = "Option::is_none")]
     word_id: Option<smol_str::SmolStr>,
 
-    /// Raw text exactly as it appeared in the input, including all markers.
+    /// Current CHAT spelling derived from structure, including all markers.
     raw_text: smol_str::SmolStr,
 
     /// Cleaned text suitable for downstream NLP.

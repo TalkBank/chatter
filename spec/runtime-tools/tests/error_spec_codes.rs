@@ -79,6 +79,26 @@ fn deferred_specs_are_not_already_implemented() -> Result<(), String> {
                     definition.code
                 ));
             }
+            // Deferring a code does not defer an explicit contract about
+            // accepted input or the other diagnostic that rejects it. Keep
+            // planned `violates` examples deferred; use the claim's own
+            // semantics for legal controls and subsumption, not a second
+            // interpretation of the frontmatter.
+            if !matches!(
+                &example.claim,
+                talkbank_spec_vocabulary::frontmatter::Claim::Violates
+            ) && !example.claim.satisfied_by(&definition.code, |code| {
+                emitted
+                    .all()
+                    .any(|error| error.code.as_str() == code.as_str())
+            }) {
+                stale.push(format!(
+                    "{} has a stale deferred claim {:?}; observed {:?}",
+                    spec.source_file(),
+                    example.claim,
+                    emitted.all_distinct_codes()
+                ));
+            }
         }
     }
 
@@ -86,9 +106,9 @@ fn deferred_specs_are_not_already_implemented() -> Result<(), String> {
         return Ok(());
     }
     Err(format!(
-        "{} spec(s) are marked deferred while the rule already works, so their \
-         generated tests are `#[ignore]`d for nothing. Set `Status: implemented`, \
-         declare the codes the example actually emits, and regenerate:\n  {}",
+        "{} deferred spec discrepancy/discrepancies require adjudication. \
+         Review implementation status and explicit legal/subsumption claims; \
+         do not change expectations solely to match output:\n  {}",
         stale.len(),
         stale.join("\n  ")
     ))

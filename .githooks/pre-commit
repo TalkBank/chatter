@@ -17,7 +17,8 @@ set -euo pipefail
 
 # Git history changes when the commit is created, without changing the tree
 # checked by the full gate. Check pending document dates against the prospective
-# commit date now, including an earlier day's edits or unpublished squash range.
+# commit date now. Only staged changes since HEAD belong to this commit;
+# the worktree release check owns the unpublished squash range.
 repo_root="$(git rev-parse --show-toplevel)"
 python3 "$repo_root/scripts/check_doc_dates.py" --prospective --snapshot index
 

@@ -1,7 +1,9 @@
 //! Owned validation evidence. Mutable models and accepted models have distinct APIs.
 
 use crate::model::{FileStem, TranscriptName};
-use crate::{ChatFile, ErrorCollector, ErrorSink, ParseError, RuleSelection, WriteChat};
+use crate::{
+    ChatFile, CompletedDiagnostics, ErrorCollector, ErrorSink, ParseError, RuleSelection, WriteChat,
+};
 
 /// Whether validation also computes and checks dependent-tier alignments.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,7 +94,13 @@ impl ValidChatFile {
 
     /// Discard validity evidence before editing or transforming the payload.
     pub fn into_unchecked(self) -> ChatFile {
-        self.document
+        let mut document = self.document;
+        for line in &mut document.lines {
+            if let crate::model::Line::Utterance(utterance) = line {
+                utterance.forget_construction_admission();
+            }
+        }
+        document
     }
 
     /// The policy under which this payload was accepted.
@@ -130,7 +138,16 @@ pub struct ValidationFailure {
     diagnostics: Vec<ParseError>,
     policy: ValidationPolicy,
     name: CheckedName,
-    incomplete_parse: bool,
+    reason: ValidationFailureReason,
+}
+
+/// Why no accepted-model evidence could be issued. Internal failure takes
+/// precedence over input findings and does not assert invalid CHAT.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ValidationFailureReason {
+    InternalFailure,
+    IncompleteParse,
+    Invalidity,
 }
 
 impl ValidationFailure {
@@ -161,15 +178,28 @@ impl ValidationFailure {
 
     /// Whether unknown or recovered tier provenance prevented full checking.
     pub fn has_incomplete_parse(&self) -> bool {
-        self.incomplete_parse
+        self.reason == ValidationFailureReason::IncompleteParse
+    }
+
+    /// Whether the tool failed instead of completing a validity determination.
+    pub fn has_internal_failure(&self) -> bool {
+        self.reason == ValidationFailureReason::InternalFailure
     }
 }
 
 impl std::fmt::Display for ValidationFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "model validation failed")?;
-        if self.incomplete_parse {
-            write!(f, ": unknown or recovered parse provenance")?;
+        match self.reason {
+            ValidationFailureReason::InternalFailure => {
+                write!(f, "internal tool failure; CHAT validity was not determined")?;
+            }
+            ValidationFailureReason::IncompleteParse => {
+                write!(
+                    f,
+                    "model validation incomplete: unknown or recovered parse provenance"
+                )?;
+            }
+            ValidationFailureReason::Invalidity => write!(f, "model validation failed")?,
         }
         for diagnostic in &self.diagnostics {
             write!(f, "\n  {} {}", diagnostic.code.as_str(), diagnostic.message)?;
@@ -194,6 +224,36 @@ impl<S: ErrorSink> ErrorSink for RecordingSink<'_, S> {
 }
 
 impl ChatFile {
+    /// Validate an explicitly assembled typed document without reparsing CHAT.
+    ///
+    /// This certifies only the supplied structure under `policy`, never its
+    /// completeness relative to original source text. Recorded parser recovery
+    /// still rejects; it is not erased by this operation. Unknown utterances are
+    /// checked as new constructions, including alignment when selected. Only
+    /// success returns construction admission, inside an immutable proof.
+    /// Failure returns the payload without newly granted runtime authority.
+    pub fn validate_construction_with_policy(
+        mut self,
+        policy: ValidationPolicy,
+        errors: &impl ErrorSink,
+        name: TranscriptName<'_>,
+    ) -> Result<ValidChatFile, ValidationFailure> {
+        for line in &mut self.lines {
+            if let crate::model::Line::Utterance(utterance) = line {
+                utterance.prepare_construction_validation();
+            }
+        }
+        self.validate_with_policy(policy, errors, name)
+            .map_err(|mut failure| {
+                for line in &mut failure.document.lines {
+                    if let crate::model::Line::Utterance(utterance) = line {
+                        utterance.forget_construction_admission();
+                    }
+                }
+                failure
+            })
+    }
+
     /// Validate with default model rules, accepting warnings and rejecting errors.
     pub fn validate_into(
         self,
@@ -222,23 +282,40 @@ impl ChatFile {
             collected: &collected,
             target: errors,
         };
-        let incomplete_parse = self.utterances().any(|u| !u.parse_health.is_clean());
+        let incomplete_parse = self
+            .utterances()
+            .any(|u| !u.parse_health().permits_validation());
         match policy.alignment {
             AlignmentValidation::Structure => self.validate_with_rules(policy.rules, &sink, name),
             AlignmentValidation::IncludeTierAlignment => {
                 self.validate_with_alignment_and_rules(policy.rules, &sink, name);
             }
         }
-        let rejected = incomplete_parse || collected.has_errors();
-        let diagnostics = collected.into_vec();
+        let has_errors = collected.has_errors();
+        let (diagnostics, reason) = match CompletedDiagnostics::admit(collected.into_vec()) {
+            Err(failure) => (
+                failure.into_diagnostics(),
+                Some(ValidationFailureReason::InternalFailure),
+            ),
+            Ok(completed) => {
+                let reason = if incomplete_parse {
+                    Some(ValidationFailureReason::IncompleteParse)
+                } else if has_errors {
+                    Some(ValidationFailureReason::Invalidity)
+                } else {
+                    None
+                };
+                (completed.into_diagnostics(), reason)
+            }
+        };
         let name = CheckedName::capture(name);
-        if rejected {
+        if let Some(reason) = reason {
             Err(ValidationFailure {
                 document: Box::new(self),
                 diagnostics,
                 policy,
                 name,
-                incomplete_parse,
+                reason,
             })
         } else {
             Ok(ValidChatFile {

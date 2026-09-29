@@ -1,10 +1,16 @@
 # Re2c parser parity
 
 **Status:** Current
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
-The re2c backend does not yet match tree-sitter on every declared invalid
-example. Tree-sitter remains the CHAT validity authority. Passing the re2c
+The [Backend compatibility mandate](../../../book/src/architecture/parser-backends.md#backend-compatibility-mandate)
+is the single policy authority for this report. Diagnostic-set agreement is
+a measurement, not the definition of correctness or a demand to emulate
+tree-sitter recovery.
+
+The re2c backend remains experimental and incomplete. Tree-sitter is the
+default production validator; neither backend defines CHAT policy by its
+observed behavior. Passing the re2c
 regression gate means its remaining differences match an explicit baseline;
 it does not mean the backends agree or satisfy every specification.
 
@@ -33,7 +39,28 @@ An unrecorded difference fails the gate, and an obsolete baseline entry must
 be removed when a fix makes the backends agree. Do not add a baseline entry
 merely to make a failing test pass.
 
+A reviewed architectural difference may remain deliberately. An exact-code
+expectation failure does not by itself prove a missed validity rule. Classify
+the semantic outcome and user impact under the compatibility mandate before
+changing either implementation or baseline.
+
 ## Measured snapshot
+
+### Interim 0.27 assessment (2026-09-28)
+
+The comparison measured 669 invalid/subsumption cases across 267 spec files:
+487 equal diagnostic sets and 182 differences. The canonical parser met all
+669 authored claims; re2c met 511, missed 119 and was silent on 39. Another
+374 legal claims are checked separately, and 19 not-implemented cases were
+skipped. These dimensions must not be conflated with coverage percentages.
+
+The updated baseline records native recovery-code differences after removal
+of CHECK-specific classification, plus existing experimental gaps exposed by
+the expanded suffix and morphology controls. It does not endorse silent
+acceptance. The default parser remains required for production validation.
+Reference comparison also found lost multiword participant names and literal
+continuation tokens in gem labels; conversion now preserves all name fields
+and projects lexer-owned continuation tokens to logical label separators.
 
 ### Interim 0.26 specification expansion (2026-09-24)
 
@@ -112,22 +139,8 @@ comparisons are investigation evidence, not a validity or release gate.
 For the broader release criteria and evidence, see
 [1.0 readiness](../../../book/src/contributing/one-zero-readiness.md).
 
-## MISSING-Token Recovery Policy
+## Recovery policy
 
-Tree-sitter can insert a zero-length MISSING token to continue parsing a
-malformed construct. Recovery has two obligations: preserve the useful model
-structure and report the defect. A recovered node is not evidence that its
-source was valid.
-
-Re2c recovery belongs in the lexer or parser rule that owns the construct.
-Carry the recovered structure into the model and emit the corresponding
-diagnostic through the caller's error sink. Do not infer the construct by
-scanning a generic error's source text afterward, or silently invent a valid
-annotation to keep the parse moving.
-
-For example, a group without its required postfix marker needs an explicit
-recovery decision and a diagnostic. Matching the recovered model alone is
-insufficient: `SemanticEq` does not compare diagnostic streams. Test model
-recovery and error locations separately against the declared specification.
-The baseline above records remaining diagnostic differences; it is not a
-waiver of either recovery obligation.
+See the authoritative [Backend compatibility mandate](../../../book/src/architecture/parser-backends.md#backend-compatibility-mandate).
+The dated observations above do not require identical recovered models or
+diagnostics and do not certify the architecture of every existing recovery path.

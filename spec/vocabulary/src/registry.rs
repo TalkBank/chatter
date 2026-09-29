@@ -52,7 +52,7 @@ use crate::{SpecErrorCode, Status, UnknownMetadataValue};
 /// and there is exactly one of these files.
 pub const REGISTRY_PATH: &str = "spec/codes/error-codes.toml";
 
-/// The four `DiagnosticKind` axis values a code can be classified as.
+/// The closed `DiagnosticKind` axis values a code can be classified as.
 ///
 /// Mirrors `talkbank_model::errors::DiagnosticKind` structurally by name.
 /// This crate cannot depend on `talkbank-model` (that would be circular:
@@ -73,7 +73,7 @@ pub const REGISTRY_PATH: &str = "spec/codes/error-codes.toml";
 ///
 /// # Deserialized THROUGH [`FromStr`], not by the derive
 ///
-/// A plain `Deserialize` derive would spell the four variant names a second
+/// A plain `Deserialize` derive would spell the variant names a second
 /// time, in serde's generated code, where nothing holds them to
 /// [`Self::as_str`]. That is the same duplication this type's own doc warns
 /// about one paragraph up, so the read route goes through the table rather
@@ -81,6 +81,8 @@ pub const REGISTRY_PATH: &str = "spec/codes/error-codes.toml";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "String")]
 pub enum ErrorKind {
+    /// The tool failed; no source-validity conclusion is available.
+    InternalFailure,
     /// Violates the spec, or the construct does not make sense.
     Invalidity,
     /// Preserved but not interpreted: a chatter coverage gap, never a fault
@@ -105,6 +107,7 @@ impl ErrorKind {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::InternalFailure => "InternalFailure",
             Self::Invalidity => "Invalidity",
             Self::Unmodeled => "Unmodeled",
             Self::Deprecation => "Deprecation",
@@ -128,12 +131,13 @@ impl ErrorKind {
 impl FromStr for ErrorKind {
     type Err = UnknownMetadataValue;
 
-    /// Case-sensitive and exact: the four spelled-out variant names, nothing
+    /// Case-sensitive and exact: the spelled-out variant names, nothing
     /// else. A plain match, the shape [`Status::from_str`] uses, and for the
     /// reason recorded there: an `ALL` array is a second hand-maintained list
     /// that nothing checks for completeness.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim() {
+            "InternalFailure" => Ok(Self::InternalFailure),
             "Invalidity" => Ok(Self::Invalidity),
             "Unmodeled" => Ok(Self::Unmodeled),
             "Deprecation" => Ok(Self::Deprecation),

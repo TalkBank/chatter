@@ -1,12 +1,18 @@
 # Correctness Architecture
 
 **Status:** Current
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 This is the target design of chatter's correctness machinery, written for the
 maintainer who inherits it. It is not a patch list and not a description of the
 tree as it stands today. Where the current tree disagrees with this page, the
 tree is what has to move.
+
+The historical execution sections and counts below are design evidence, not a
+current completion report. For the current measurement boundary, use
+[Coverage scope and completeness](testing.md#coverage-scope-and-completeness).
+Uncovered code is an investigation target, never automatic permission to delete
+recovery, constructor, wire-format or internal-failure handling.
 
 Read [Testing](testing.md) for what the layers are called today and
 [Spec System](../architecture/spec-system.md) for what the spec fields mean.
@@ -270,7 +276,7 @@ gates::every_registered_gate_passes`, both on a warm dev build.
 ## The answers, in one screen
 
 **What proves what.** Six evidence classes, and nothing outside them survives:
-spec examples (normative), oracles (two parsers, and CLAN CHECK), properties
+spec examples (normative), comparisons (experimental backend and adjudicated CHECK fixtures), properties
 (universally quantified), boundary tests (subprocess, stdio, cross-process),
 algorithm units (behaviour no type can hold), and derived artifacts (which
 prove nothing and are the mechanism). Section
@@ -349,7 +355,7 @@ move onto spec-derived input, which is the permanent deliverable anyway.
 | Class | What only this class can prove | Where | Size today | Who may add |
 |---|---|---|---|---|
 | **SPEC (normative)** | That a stated input violates, or does not violate, a stated rule. The only artifact a successor with no corpus can read and act on. | `spec/errors/` (223 specs, 436 examples), `spec/constructs/` (138 specs) | 436 lowered fixtures, one data-driven runner | Anyone. This is the default destination for new evidence. |
-| **ORACLE** | That a defect exists in ONE implementation without a human having stated the right answer. | `talkbank-parser-re2c` differential (48 known divergences), `check_parity` (164 manifest entries, 146 fixtures) | 2 gating tests, 2 CLAN-gated | Only by shrinking a baseline, never by adding a hand-typed entry. |
+| **COMPARISON** | A disagreement requiring independent policy adjudication; neither implementation is an oracle. | [Authoritative CHECK assessment](../architecture/errors-and-validation/check-parity-audit.md); experimental re2c comparisons | Derived by the owning reports | Add independently justified regression evidence, not diagnostic mimicry. |
 | **PROPERTY** | A statement quantified over all inputs: never panics, roundtrip, span arithmetic, cleaned-text invariants. The spec format has no quantifier and never will. | `talkbank-parser-tests/tests/integration/property_tests/` | 27 files, 18 `proptest!` blocks | Anyone, at a real case budget (see below). |
 | **BOUNDARY** | Behaviour of the actual seam: argv, exit codes, stdout contracts, LSP stdio lifecycle, Tauri async runtime, cross-process cache. No type of ours reaches the outside world. | `crates/chatter/tests/integration` (269 attrs, 136 spawns), `talkbank-lsp` stdio tests, `apps/chatter-desktop/src-tauri/tests` | 147 of 2,868 attrs (5.1%) reach a subprocess or runtime | Anyone. This class should GROW. |
 | **ALGORITHM UNIT** | Behaviour no signature describes and no type can hold: number-to-words, POS mapping. | `talkbank-transform/src/num_words/`, `clan_ud_mapping.rs` | 65 attrs | Anyone, labelled in source with the category. |
@@ -453,7 +459,7 @@ by the spec. Adding that identifier is what lets the two meet.
 
 The target is 100% line, region and branch coverage of handwritten parser,
 model, validation and transform code. Tree-sitter has first priority; re2c
-remains supported. Generated code is reported separately. Uncovered executable
+remains experimental and lower priority. Generated code is reported separately. Uncovered executable
 behavior remains work: do not exclude it or fabricate an impossible model to
 raise the percentage. A path removed through a type invariant needs evidence
 that the invariant holds at its producer and that no consumer bypass remains.
@@ -587,10 +593,10 @@ One JSON file, one row per branch, plus a rendered page:
 `function` comes from the export's function-to-region nesting, so it is an exact
 lookup rather than a line-range guess, and it resolves correctly through the
 `include!`d generated test bodies. `function_regions_uncovered` over
-`function_region_total` is the delete-versus-fixture discriminator, computed
-rather than judged: a ratio of 1.0 is a delete candidate, one uncovered arm out
-of thirty is a fixture candidate. Sorting by that ratio surfaces the deletions
-first, which is the direction this redesign wants.
+`function_region_total` helps prioritize investigation; it cannot decide
+deletion versus a missing fixture. A ratio of 1.0 says only that this measured
+population did not execute the function. Review its public boundary, supported
+configuration and producer invariants before assigning a disposition.
 
 The verdict set is closed:
 
@@ -599,10 +605,10 @@ The verdict set is closed:
 | `REACHED_BY_SPEC` | a spec example reaches it | none, this is the goal |
 | `NEEDS_SPEC_EXAMPLE` | reachable from CHAT, nothing reaches it | write the example; this count ratchets down |
 | `NEEDS_PROPERTY` | quantified, no single example expresses it | write the property |
-| `UNREACHABLE_FROM_CHAT` | no CHAT input reaches it | delete the code |
-| `UNREACHABLE_BY_TYPE` | the type already forbids the state | delete the arm, or the type is wrong |
+| `UNREACHABLE_FROM_CHAT` | no CHAT input reaches it | Classify supported API, recovery and tool-failure boundaries separately; retain needed handling and its boundary evidence. CHAT unreachability alone does not justify deletion. |
+| `UNREACHABLE_BY_TYPE` | the producer and all admitted consumers forbid the state | Remove the redundant arm only after checking construction, deserialization and mutation bypasses. |
 | `REACHED_ONLY_BY_WILD_DATA` | only the production corpus reaches it | synthesize a fixture, then re-verdict |
-| `COVERED_ONLY_BY_FABRICATION` | reached, but only by a test that hand-built its input | not coverage; delete the test or convert it |
+| `COVERED_ONLY_BY_FABRICATION` | reached only by hand-built inputs | Not canonical CHAT evidence; convert semantic examples to parsed fixtures, but preserve legitimate constructor, wire and fault-boundary tests separately. |
 | `OUT_OF_SCOPE_GENERATED` | generated code | excluded by the registry, never hand-marked |
 
 ### Coverage has a PROVENANCE, and fabricated coverage counts as uncovered
@@ -642,19 +648,21 @@ machine,
 and read that way it can only make the suite bigger. It is equally a DELETION
 instrument, and the deletions are the cheaper half:
 
-- A function with a ratio of 1.00 is code nothing runs. Delete the code, and its
-  tests go with it.
-- A region that is fabrication-backed only is a test that proves nothing about
-  CHAT. Convert it to a parse, or delete it.
+- A function with a ratio of 1.00 was not run by the measured population.
+  Remove it only if its supported ownership and producer paths prove it
+  redundant; otherwise classify the missing workflow or boundary evidence.
+- A region reached only through hand-built input does not establish CHAT
+  coverage. Use parsed evidence for CHAT behavior, while retaining necessary
+  constructor, serialization and fault-injection contracts separately.
 - A test whose parse-backed coverage is a subset of another's, and which pins no
   policy of its own, is redundant. The suite is not better for having it.
-- `UNREACHABLE_FROM_CHAT` and `UNREACHABLE_BY_TYPE` are already deletion
-  verdicts in the table above; they were written as consequences for CODE and
-  they apply to the tests that reach that code too.
+- Type-enforced impossibility can remove a redundant implementation check.
+  Keep tests of the constructor, policy and external boundary that establish
+  the invariant; failure to reach a branch through CHAT is not that proof.
 
 The standing rule that a test a type could obsolete should not exist is the same
-instruction from the other end. Neither a count of tests nor a coverage
-percentage is a goal; both go DOWN in a good week.
+instruction from the other end. Test count is not the goal. The canonical
+coverage target remains 100%, without exclusions that conceal unfinished work.
 
 The repository already trusts this exact shape twice: `node_coverage.rs` splits
 its exclusions into `INVALID_BY_CONSTRUCTION` and `NOT_YET_IN_CORPUS` and argues
@@ -1067,12 +1075,13 @@ practised).
 *"Forcing validation tests through the parser couples two crates, so a parser
 defect can now mask a validator defect."* True, and intended. A validation rule
 that can only be triggered by an AST no parser produces is not a rule about
-CHAT; the specs for those rules already admit as much in their own text. The
-masking risk is bounded by the differential: a parse-stage defect that hides a
-validation rule shows up as a divergence unless both parsers share it. Where a
-validator genuinely guards a construct the grammar does not yet produce, the
-honest verdict is `UNREACHABLE_FROM_CHAT`, and the honest action is to delete the
-code and re-add it with the construct.
+CHAT through that parser alone. Independent authored expectations, legal and
+invalid controls, and separately admitted constructor/wire boundaries limit
+the masking risk; a second parser is not a required correctness oracle.
+Where no CHAT input reaches a guard, record that fact and assess all supported
+producers. Preserve genuine recovery and internal-failure handling until
+producer invariants justify removal. Do not invent CHAT fixtures to exercise
+tool failures or delete those failures merely to improve coverage.
 
 *"Branch coverage as a gate is Goodhart bait."* It would be, as a percentage.
 It is gated as a verdict per row, and the percentage is deliberately not a gate

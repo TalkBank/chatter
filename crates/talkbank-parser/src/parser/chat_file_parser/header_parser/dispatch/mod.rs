@@ -25,12 +25,12 @@ mod structured;
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
     AsRawNode, HeaderChoice, HeaderChoiceSourceView, SourceField, SourceSlice, SourceSlotView,
+    ThumbnailHeaderNode,
 };
 use crate::model::Header;
 use crate::node_types::THUMBNAIL_HEADER;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
 /// Parse a header CST node into a typed `Header`.
 ///
@@ -81,7 +81,7 @@ fn dispatch_header_choice<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     // The adapters below keep other header families on their existing lowering
-    // API while bound participant, media and scalar lowering retain source identity.
+    // API while bound participant, media, ID and scalar lowering retain source identity.
     macro_rules! lower {
         (bound $parse:path, $field:expr) => {
             match crate::parser::typed_cst::read_source_field($field, errors) {
@@ -102,22 +102,22 @@ fn dispatch_header_choice<'tree>(
         HeaderChoiceSourceView::BlankHeader(_) => ParseOutcome::parsed(Header::Blank),
 
         // Structured headers (dedicated sub-parsers in tree_parsing/header/).
-        HeaderChoiceSourceView::LanguagesHeader(n) => lower!(structured::languages, n),
+        HeaderChoiceSourceView::LanguagesHeader(n) => lower!(bound structured::languages, n),
         HeaderChoiceSourceView::ParticipantsHeader(n) => {
             match crate::parser::typed_cst::read_source_field(n, errors) {
                 Some(bound) => structured::participants(bound, errors),
                 None => ParseOutcome::rejected(),
             }
         }
-        HeaderChoiceSourceView::IdHeader(n) => lower!(structured::id, n),
+        HeaderChoiceSourceView::IdHeader(n) => lower!(bound structured::id, n),
         HeaderChoiceSourceView::MediaHeader(n) => {
             match crate::parser::typed_cst::read_source_field(n, errors) {
                 Some(bound) => structured::media(bound, errors),
                 None => ParseOutcome::rejected(),
             }
         }
-        HeaderChoiceSourceView::SituationHeader(n) => lower!(structured::situation, n),
-        HeaderChoiceSourceView::TypesHeader(n) => lower!(structured::types, n),
+        HeaderChoiceSourceView::SituationHeader(n) => lower!(bound structured::situation, n),
+        HeaderChoiceSourceView::TypesHeader(n) => lower!(bound structured::types, n),
 
         // Special (mixed-shape) headers.
         HeaderChoiceSourceView::CommentHeader(n) => lower!(bound special::comment, n),
@@ -132,9 +132,9 @@ fn dispatch_header_choice<'tree>(
         HeaderChoiceSourceView::OptionsHeader(n) => lower!(special::options, n),
 
         // GEM headers.
-        HeaderChoiceSourceView::BgHeader(n) => lower!(gem::bg, n),
-        HeaderChoiceSourceView::EgHeader(n) => lower!(gem::eg, n),
-        HeaderChoiceSourceView::GHeader(n) => lower!(gem::g, n),
+        HeaderChoiceSourceView::BgHeader(n) => lower!(bound gem::bg, n),
+        HeaderChoiceSourceView::EgHeader(n) => lower!(bound gem::eg, n),
+        HeaderChoiceSourceView::GHeader(n) => lower!(bound gem::g, n),
 
         // Simple scalar headers.
         HeaderChoiceSourceView::DateHeader(n) => lower!(bound simple::date, n),
@@ -154,26 +154,27 @@ fn dispatch_header_choice<'tree>(
             simple::unsupported(n.raw_node(), n.source(), errors)
         }
 
-        // Gap: `thumbnail_header` is the one `header` subtype with no model
-        // variant. Preserve the pre-migration `ends_with("_header")`
-        // fall-through, which reported `UnknownHeader` and rejected.
-        HeaderChoiceSourceView::ThumbnailHeader(n) => thumbnail(n.raw_node(), n.source(), errors),
+        // Grammar recognition does not imply supported model semantics.
+        HeaderChoiceSourceView::ThumbnailHeader(n) => thumbnail(n, errors),
     }
 }
 
 /// Report the `UnknownHeader` diagnostic for a `@Thumbnail` header and reject.
 ///
-/// Reproduces exactly what the pre-migration `ends_with("_header")`
-/// fall-through emitted for the one `header` subtype with no per-kind logic:
-/// `ErrorCode::UnknownHeader` at the node span with the node-kind context and
-/// the `"Unrecognized header type '<kind>'"` message.
-fn thumbnail(node: Node, input: &str, errors: &impl ErrorSink) -> ParseOutcome<Header> {
+/// The grammar recognizes this declaration, but no supported model variant
+/// exists. Keep its diagnostic bound to the admitted node's own source.
+fn thumbnail<'tree>(
+    typed: SourceField<'_, 'tree, '_, ThumbnailHeaderNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> ParseOutcome<Header> {
+    let node = typed.raw_node();
+    let input = typed.source();
     errors.report(ParseError::new(
         ErrorCode::UnknownHeader,
         Severity::Error,
         SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
         ErrorContext::new(input, node.start_byte()..node.end_byte(), THUMBNAIL_HEADER),
-        format!("Unrecognized header type '{}'", THUMBNAIL_HEADER),
+        "Unsupported @Thumbnail header",
     ));
     ParseOutcome::rejected()
 }

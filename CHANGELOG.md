@@ -9,6 +9,365 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-09-28
+
+### Changed
+
+- Experimental re2c conversion preserves multiword participant names and
+  treats lexer continuation tokens as separators in logical gem labels.
+  Diagnostic differences remain explicitly assessed, not copied from the
+  default parser; re2c is still not a production validity authority.
+
+- Pseudonymization review stores proposed morphology and refused-plan payloads
+  behind owned boxes, reducing inline variant and error sizes without changing
+  admission or output policy. `MorphologyOutcome::Proposed::proposed` is now
+  `Box<Mor>` for Rust callers.
+
+- Updated the Rust and JavaScript desktop dependencies together, including
+  Tauri and its plugins, and refreshed jsonschema, cc, and Vite.
+
+- Participant parsing admits selected source ranges before decoding names and
+  roles. Recovery states are retained; unreadable producer ranges reject the
+  entry as an internal failure rather than admitting a partial participant.
+
+- **Breaking (low-level Rust parser API):** `parse_postcode_node` accepts a
+  generated `SourceBound<PostcodeNode>` instead of a node and separate source
+  string. Final-code lowering preserves source association and propagates
+  range failures as internal failures. `ChatParser` APIs and CHAT/JSON behavior
+  are unchanged.
+
+- The primary parser preserves postcode source spans, allowing incremental
+  relocation and diagnostics to retain the original token location. CHAT and
+  JSON output are unchanged.
+
+- **Breaking (Rust API):** `Utterance::new` starts with unknown provenance;
+  `parse_health` is private and read through `parse_health()`. Parser adapters
+  finish through accumulated `ParseHealth::finish_utterance`. Appending dependent
+  tiers withdraws provenance and alignment caches. Programmatic producers use
+  `ChatFile::validate_construction_with_policy` for checked typed construction,
+  without reparsing CHAT. `ParseHealthState::Constructed` permits model checks
+  but never source-byte splicing or a claim of parser-backed cleanliness.
+  JSON remains unchanged and carries no runtime admission evidence.
+
+- English decade generation now admits only multiples of ten in 0–90 shorthand
+  or 1100–2990 full-year form. Other suffix-bearing inputs retain their exact
+  spelling instead of acquiring a guessed plural year phrase.
+
+- Generated typed-CST carriers support opt-in range admission, preserving
+  recovery while making subsequent payload text reads infallible. `@Media`
+  body lowering uses this boundary; CHAT and JSON policy are unchanged.
+- **Breaking (generated Rust API):** selected repeat/optional elements carry
+  an uninhabited `Absent` payload. Empty repetitions and optional `None` remain
+  possible; an element already selected cannot independently become absent.
+
+- LSP quick fixes no longer invent participant or language facts for E308,
+  E504 or E507, matching the shared fix catalog. Diagnostic prose is no longer
+  parsed to construct participant declarations; enter the actual facts explicitly.
+
+- English ordinal generation preserves tokens outside its supported 0–9999
+  range unchanged, instead of rewriting their suffix to `th`.
+
+- English ordinal generation omits prose commas in thousands with remainders,
+  retaining the existing conjunction convention. For example, `1234th` expands
+  to `one thousand two hundred and thirty-fourth`, a spoken word sequence.
+
+- **Breaking (Rust API):** `ReplacementWords::new` and `TryFrom<Vec<Word>>`
+  reject empty lists; JSON admission enforces the same invariant.
+  `Replacement::new` accepts admitted `ReplacementWords`. Use `into_vec` and
+  checked reconstruction instead of `take`/`retain`, or edit elements through
+  mutable slices. Single-word construction remains infallible.
+- re2c replacements use the existing word grammar directly, retaining source
+  spans instead of splitting/reparsing text or inventing plain words on failure.
+  Empty and unclosed replacements are parser errors. Glued replacements receive
+  a diagnostic on re2c's opening token, without copied tree-sitter recovery
+  diagnostics. Historical E208 is deprecated; primary-parser E376/E342 rejection
+  and the empty-replacement regression remain.
+
+- **Breaking (Rust API):** `PauseTimedDuration::Parsed` now carries a checked
+  `ParsedPauseDuration` with private fields and read-only `seconds()`,
+  `millis()` and `as_str()` accessors. Construct through
+  `PauseTimedDuration::new`; CHAT and JSON formats are unchanged.
+
+- Diagnostic display enrichment preserves legitimate zero-width EOF locations
+  instead of moving them back onto the preceding byte, including when the file
+  ends with a newline.
+
+- E306 empty-turn deletion now declines turns with dependent tiers, preventing
+  their content from being silently reassigned to the preceding turn.
+
+- E241 marker-spelling repairs now require an exact source-bound word. The
+  existing spelling vocabulary remains authoritative; comment text and
+  omission/shortening notation are not rewritten as plain markers.
+
+- E750 group-edge repairs now require source-bound whitespace at the owning
+  annotated group's content boundary instead of neighboring delimiter bytes.
+  Complete space runs and nested groups retain recovery-repair admission;
+  groups with unrelated structural recovery decline a proposal.
+
+- E244 now reports adjacent stress markers once per affected word. Longer runs
+  no longer create duplicate diagnostics and overlapping repair proposals.
+
+- Duplicate-comma proposals now require exact source-bound comma tokens in a
+  clean tier body, sharing token admission with semantic comma deletion.
+
+- Duplicate-primary-stress repair now traverses source-bound stress tokens.
+  An earlier isolated mark no longer hides a later duplicate run, and all
+  separate primary-duplicate runs in the word are repaired together. Only
+  duplicate tokens are removed; other stress positions and diagnostics remain.
+
+- E259 comma-deletion proposals now use source-bound comma, tier-body and
+  whitespace nodes. Removing an initial comma consumes its complete separator
+  instead of leaving leading spaces; interior commas preserve their separator.
+  The proposal remains a semantic change requiring user review.
+
+- Missing-terminator fix alternatives now use a source-bound grammar ending
+  for insertion, before final postcodes on main tiers. This prevents misplaced
+  terminators and splitting CRLF line endings, and refuses tiers
+  whose structural boundary cannot be established. Choosing the terminator
+  remains a user decision; these proposals are not automatic repairs.
+
+- E501 fix proposals now require source-bound, byte-identical repeated headers
+  with no conflicting declaration of that kind. Conflicts, formatting differences
+  and recovered structure decline a proposal. Complete CST header ranges replace
+  physical-line guessing; the existing header-write restriction is unchanged.
+
+- Structured dependent-tier recovery now retains generated source ownership
+  through recursive traversal instead of accepting raw nodes and independent
+  text. Utterance recovery slots likewise preserve their source-bound fields
+  through read admission. Recovery classifications, conservative alignment taint
+  and placeholder behavior are unchanged.
+
+- Adding recovery taint no longer promotes unknown parse provenance (such as
+  JSON-imported utterances) into partially clean provenance. Alignment remains
+  unavailable until parser-backed provenance has actually been established.
+
+- Unreadable CST source ranges in generic, dependent-tier and utterance recovery
+  now report internal failure, not invalid CHAT or an encoding repair suggestion.
+  Readable recovery diagnostics and conservative alignment taint are unchanged.
+
+- Morphology tier-body, main-word and post-clitic parsing now consumes the
+  generated canonical-grammar admission proof. Impossible missing-composite
+  states are removed from these boundaries; lexical and structural recovery,
+  absent children and internal-failure reporting remain distinct.
+
+- Fix planning no longer invents participant declarations, roles or default
+  languages for E308/E504/E507. Supply those facts explicitly. E604 removal
+  uses the complete typed GRA tier, preserving intervening dependent tiers and
+  handling continuation lines; multiple targets refuse selection. E306 likewise
+  uses the typed main-tier boundary rather than a line-prefix guess and refuses
+  grammar-recovered main tiers.
+
+- `splice::catalog_fix` now borrows `ParsedSource` instead of accepting raw
+  source text. Retain the owner from `TreeSitterParser::parse_chat_file_with_source`
+  and pass diagnostics from the same input. W109 planning reuses this CST instead
+  of creating a parser and reparsing for each diagnostic. Recovery admission and
+  changed-output verification are unchanged.
+
+- Speaker-identification input-rejection reports now use the distinct
+  `incomplete_validation` failure category when parser provenance prevents
+  complete validation. Previously this was collapsed into `validation`.
+  Consumers of the typed enum or JSON failure category must handle the new
+  variant; no match evidence or CHAT-invalidity claim is inferred from it.
+
+- Word spelling is derived from typed structure, including the JSON `raw_text`
+  field. Imported computed spelling cannot override content. Rust
+  `Word::new` and `new_unchecked` no longer accept a separate raw argument;
+  `raw_text()` returns an owned string and `set_raw_text` is removed. Use
+  typed builders for markers and streaming `WriteChat`/`Display` when appropriate.
+  Original source bytes must be read from the source, not from derived spelling.
+  External token producers should handle fragment-parser refusal instead of
+  falling back to unchecked construction. Shortening/embedded-marker errors
+  retain grammar diagnostics without duplicate raw-spelling rescans.
+
+- Number conversion uses exact lexical entries for languages without a
+  language-specific composer. Unsupported numerals, currency and number groups
+  remain unchanged instead of using generic multiplication or partial rewrites.
+- Transcript construction rejects malformed media source spelling before
+  reducing local paths, including malformed discarded directory components.
+  Admitted remote URLs remain unchanged.
+
+- Generated source-bound `extract_admitted` APIs accept compiled-language
+  evidence and exclude Missing only for proven nonterminal slots. Participant
+  and language headers, document/utterance and main-tier/body/ending reconstruction
+  use this admission; lexical Missing, Error, applicable
+  Absent and source-read failures remain supported. Raw extraction stays broad.
+  `ReconstructionFault` adds `GrammarBinding` for failed producer admission;
+  downstream exhaustive matches must handle this as an internal tool failure.
+  Low-level pre-begin and dependent-tier dispatch now consume generated admitted
+  choice types. Document recovery source-ownership failures report E001 rather
+  than classifying a producer fault as invalid CHAT.
+
+- Generated repeat elements and present optional elements now use selected-slot
+  types with uninhabited `Absent` payloads. Consumers can eliminate impossible
+  absence diagnostics while retaining MISSING/ERROR recovery, nested fixed
+  positions, empty repeats and optional `None`. Kind-preserving projections
+  retain the slot's absence type.
+
+- Low-level `%pho`/`%mod` parsing now requires source-bound generated nodes
+  and returns `CstFailure` for source/reconstruction failures. Compound spelling,
+  grouped content, recovery and string fragment APIs are unchanged.
+
+- Low-level `%sin` parsing now requires a source-bound generated node and
+  returns `CstFailure` for source/reconstruction failures. Sign-group fallback
+  and empty-token policies remain; string fragment APIs are unchanged.
+
+- Low-level `%gra` parsing requires a source-bound generated node and returns
+  `CstFailure` for source/reconstruction failures. String fragment APIs, numeric
+  admission, recovery and relation completeness accounting are unchanged.
+
+- Low-level `%mor` tier parsing now requires a source-bound generated node
+  instead of a node plus independent text. Bind through the existing
+  `ParsedSource` owner; string fragment APIs are unchanged. Recovery and
+  placeholder handling are retained. Word/post-clitic/feature readers retain
+  the same source association; producer faults propagate separately from
+  missing morphological content.
+
+- Generated `ChoiceSlot` makes `Unexpected` uninhabited: selected-choice
+  extraction consumes its retained match plan and returns producer faults
+  through `ReconstructionFault`. Parser consumers no longer invent CHAT
+  diagnostics for that impossible choice state. Missing, Error, Absent,
+  displaced nodes and supertype-classification recovery remain supported.
+
+- Source-bound bullet/text tier adapters return `CstFailure`, preserving
+  source-binding failures alongside reconstruction faults without substituting
+  empty content. The nested bullet-content reader propagates the same failures
+  rather than returning a shortened segment list. High-level fragment parser
+  signatures are unchanged.
+
+- `ChatDate::Valid` now holds `CheckedChatDate` with private fields. Construct
+  dates through `ChatDate::from_text` or `new`; match `Valid(date)` and use
+  `day()`, `month()`, `year()` and `as_str()` instead of field access. JSON
+  remains a string; format/day-range admission is unchanged (not calendar validation).
+
+- Generated concrete CST extraction now returns `Result<_, ReconstructionFault>`;
+  ERROR-root extraction returns `Result<Option<_>, _>`. Source-bound match plans
+  retain selection decisions for consumption instead of independently rematching.
+  Affected public header and tier adapters also return `Result`; callers must
+  propagate producer failure, not substitute empty carriers. `DocumentRoot::classify`
+  now returns the publicly exported `CstFailure`.
+- E001 is classified as `DiagnosticKind::InternalFailure`, not CHAT invalidity.
+  Validation/admission and transformation pipelines preserve this distinction.
+  CLI file records add `internal_failure`, summary records add `internal_failures`,
+  and desktop events carry `internalFailure`/`internalFailures`. Failed attempts
+  are neither valid nor invalid and never enter the validation cache. Producer
+  faults during optional roundtrip reparsing also remain internal failures,
+  rather than mismatches, and write neither validation nor roundtrip cache entries.
+  Legacy checked node/source reads report E001 for incompatible ranges or UTF-8
+  boundaries instead of misclassifying those API faults as CHAT errors.
+
+- Flagged reference-first merge drafts return ordering uncertainty exclusively
+  through `DraftOrderReview` records; they no longer insert generated review
+  `@Comment` lines. Contributor comments, source ordering and strict-policy
+  refusals are unchanged. Reviews are also accessible on unvalidated `MergeDraft`.
+  `before_output_utterance` now has type `OutputUtteranceBoundary`; use
+  `utterances_before()` for its count rather than treating it as a line index.
+
+- `ParseErrorBuilder` requires message and location in its type state before
+  `finish()`, which now returns `ParseError` directly. Removed
+  `ParseErrorBuilderError` and `try_finish()`; callers must supply both fields
+  and remove result/option handling around finishing. Streaming source-range
+  rejection now returns the original parse diagnostic, not a parser-creation
+  error or a fabricated empty document.
+- Spanish cardinal expansion uses bounded hundreds/thousands composition,
+  correcting `100000` to `cien mil`. Unsupported noun scales and unresolved
+  agreement preserve the original input rather than inventing a phrase.
+
+- Lexical Unicode validation now rejects private-use scalars and noncharacters
+  across all planes instead of copying CHECK's high-BMP blacklist and private
+  markup exemption. Ordinary compatibility characters are no longer rejected
+  by that range rule; control-character checks are unchanged.
+
+- Retrace joining carries admitted utterance ownership into mutation instead
+  of raw line indices. A forward scan preserves header barriers and chain
+  repairs without repeated removal of later lines; repair policies are unchanged.
+
+- Vector and small-vector semantic differences share one sequence comparison
+  policy, preserving bounded-report ordering and unmatched-tail diagnostics.
+
+- `ErrorContext::from_source_with_span` now returns `Result<_, SourceExcerptError>`.
+  Invalid source slices and unrepresentable snippet coordinates are refused,
+  rather than replaced by an empty context. Valid zero-width ranges remain valid.
+
+- Context label fields are private. Construct `SampleTypeLabel`, `RoleLabel`
+  and `ConsentTierLabel` through `TryFrom<String>`; read them with `as_str()`.
+  Corrected sample-type verdicts share this nonblank admission boundary.
+
+- Standalone-word conversion and `%wor` parsing require producer-bound nodes,
+  not separate node/source pairs. Main-tier words, replacement words, timed
+  words and standalone fragments preserve their source association to conversion.
+- Main-tier CST conversion now requires a producer-bound `MainTierNode`, not a
+  typed node paired with independent source text. Fragment, utterance, and EOF
+  recovery callers retain that association through conversion.
+- Main-tier contents parsing now consumes a bound `ContentsNode`; the shared
+  contents/group cycle retains generated source association through recursive
+  group and quotation dispatch, including recovery placeholders.
+- Speaker-mapping strings now refuse repeated source assignments, including
+  identical repeats, instead of silently keeping the last assignment.
+- `AdjudicationError` adds `InvalidDecisionMapping`; exhaustive library matches
+  must handle this refusal when a rename lacks its required adult role.
+
+### Fixed
+
+- Transcript construction preserves admitted HTTP/HTTPS media references
+  verbatim instead of reducing them to local filesystem basenames.
+
+- Line-map end lookup clamps extreme out-of-range line indexes to source EOF
+  instead of overflowing its next-line calculation.
+
+- Empty source spans no longer report overlap with a surrounding range;
+  diagnostic insertion points remain distinct from byte-covering highlights.
+
+- `ParseError::internal` now emits E001 (`InternalError`) rather than a CHAT
+  syntax diagnostic, preserving failure-versus-invalidity admission even if
+  presentation severity is downgraded.
+
+- Display-span normalization clamps extreme out-of-source coordinates before
+  interpolation, avoiding integer overflow while retaining UTF-8-safe spans.
+
+- Structured bullet timestamp readers now retain the producing source through
+  all four consumers and distinguish failed source admission from missing fields.
+
+- Main-tier body lowering propagates failed content/ending reads as internal
+  failures and preserves source ownership into utterance-ending extraction.
+
+- `%wor` bullet handling retains internal reconstruction failures instead of
+  silently treating them as unavailable word timing.
+
+- Header lowering no longer substitutes an unknown comment or a partial
+  participant name/role after an internal source-read failure.
+
+- Rebasing a `ParseError` now preserves its independently owned context text
+  and relative highlight instead of shifting that highlight out of its snapshot.
+  Document locations and secondary labels continue to move together.
+
+- Dependent-tier fragments reject trailing tiers or speech instead of returning
+  the first tier and silently discarding the rest of the caller's input.
+
+- Single grammatical-relation, phonological-word and participant-entry fragments
+  reject extra items instead of silently discarding them. GRA and PHO fragments
+  no longer append synthetic content; empty-input errors retain caller offsets.
+
+- Single MOR-word fragments reject multiple items and post-clitics instead of
+  silently returning only the first main word. Refusal diagnostics retain caller
+  coordinates; complete MOR-tier parsing still accepts those structures.
+
+- Lenient transform parsing no longer hides diagnostics on tiers whose names
+  merely start with `mor` or `gra`. Suppression uses actual parsed generated-tier
+  ownership and retains unlocated or cross-tier diagnostics and alignment taint.
+- Shortening validation uses source-bounded, nonnegative nesting depth, avoiding
+  signed-counter overflow on very large imported spellings while retaining
+  unmatched-closing and unclosed-opening diagnostics.
+- Judgment context consumes typed header ages instead of reparsing raw text.
+  Unsupported ages no longer yield a numeric age from a valid-looking prefix;
+  bounded components prevent arithmetic overflow, and explicit ages skip fallback.
+- Speaker-sample head/tail limits no longer overflow for large budgets. Selection
+  is bounded by available turns and overlapping windows never duplicate speech.
+- Adjudication library failures now preserve the failing request and every later
+  pending request in order. Retrying does not reapply already accepted decisions.
+- Adjudication admits mapping conversion before recording a decision. A rename
+  without its required role is refused without consuming the pending request;
+  the CLI exits with status 2 and leaves its files unchanged.
+
 ## [0.26.0] - 2026-09-24
 
 - `spec-perturb` emits explicitly unreviewed candidates, not stale expected
@@ -3537,7 +3896,8 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/TalkBank/chatter/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/TalkBank/chatter/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/TalkBank/chatter/compare/v0.24.2...v0.25.0
 [0.24.2]: https://github.com/TalkBank/chatter/compare/v0.24.1...v0.24.2

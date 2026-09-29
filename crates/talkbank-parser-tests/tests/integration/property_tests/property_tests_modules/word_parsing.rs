@@ -9,11 +9,9 @@ use super::*;
 /// Verifies overlap markers can appear inside lexical tokens.
 /// CHAT principle: contiguous non-whitespace is one word. Adjacent overlap
 /// markers (⌈⌉⌊⌋) are part of the word in both full-file and fragment parsing.
-/// cleaned_text() does NOT strip them; they are raw word content.
-/// This test expects stripping, which is wrong. When cleaned_text is updated
-/// to strip overlap markers (NLP preprocessing concern), remove the #[ignore].
+/// The typed lexical projection excludes structural overlap markers while
+/// raw_text() preserves the authored token.
 #[test]
-#[ignore = "Test expects cleaned_text to strip overlap markers, not yet implemented"]
 fn overlap_in_word() -> Result<(), TestError> {
     for parser in parser_suite()? {
         let result = parser.parse_word("hel⌈lo");

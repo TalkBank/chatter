@@ -26,11 +26,14 @@ impl InlineBulletTimes {
 pub(super) fn parse_inline_bullet<'tree>(
     typed: SourceBound<'tree, '_, BulletNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<(u64, u64)> {
+) -> Result<ParseOutcome<(u64, u64)>, crate::CstFailure> {
     let node = typed.raw_node();
     let source = typed.source();
-    let (start_ms, end_ms) = match parse_bullet_node_timestamps(typed.node(), source, errors) {
+    let (start_ms, end_ms) = match parse_bullet_node_timestamps(typed, errors) {
         Ok(times) => times,
+        Err(crate::parser::tree_parsing::media_bullet::BulletRejection::Producer(fault)) => {
+            return Err(fault);
+        }
         // "could not extract timestamps" said nothing a reader could act on,
         // and its context carried an empty string where the bullet text
         // belongs. The rejection knows which of the four routes it took.
@@ -38,7 +41,7 @@ pub(super) fn parse_inline_bullet<'tree>(
             crate::parser::tree_parsing::media_bullet::report_bullet_rejection(
                 node, source, &why, errors,
             );
-            return ParseOutcome::rejected();
+            return Ok(ParseOutcome::rejected());
         }
     };
 
@@ -50,10 +53,10 @@ pub(super) fn parse_inline_bullet<'tree>(
             ErrorContext::new(source, node.start_byte()..node.end_byte(), ""),
             "Invalid bullet: both start and end timestamps are 0",
         ));
-        return ParseOutcome::rejected();
+        return Ok(ParseOutcome::rejected());
     };
 
-    ParseOutcome::parsed(times.into_pair())
+    Ok(ParseOutcome::parsed(times.into_pair()))
 }
 
 #[cfg(test)]
@@ -95,7 +98,9 @@ mod tests {
                     .expect("canonical bullet range")
                     .typed::<BulletNode>()
                     .expect("bullet kind");
-                let result = parse_inline_bullet(bound, &errors).into_option();
+                let result = parse_inline_bullet(bound, &errors)
+                    .expect("source-bound bullet producer")
+                    .into_option();
                 let diagnostics = errors.into_vec();
                 if times == (0, 0) {
                     assert!(result.is_none());

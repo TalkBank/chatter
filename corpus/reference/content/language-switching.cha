@@ -14,4 +14,6 @@
 *MOT:	hey@s:spa there what is hao3@s:eng&zho&fra ?
 @Comment:	Authored single-word ambiguity control for language metadata queries.
 *MOT:	ma@s:eng&zho .
+@Comment:	Authored interaction: quick uptake before an utterance-language precode.
+*CHI:	+^ [- zho] 我 要 吃 .
 @End

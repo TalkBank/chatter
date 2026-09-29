@@ -10,6 +10,7 @@ use crate::error::{
 };
 use crate::generated_traversal::{AsRawNode, FreecodeNode};
 use crate::model::{Freecode, UtteranceContent};
+use crate::parser::tree_parsing::parser_helpers::extract_utf8_text;
 use talkbank_model::ParseOutcome;
 
 /// Parse freecode node [^ text] into UtteranceContent.
@@ -27,18 +28,8 @@ pub fn parse_freecode(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
-    let text = match source.get(node.byte_range()) {
-        Some(t) => t,
-        None => {
-            errors.report(ParseError::new(
-                ErrorCode::EmptyUtterance,
-                Severity::Error,
-                SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.start_byte()..node.end_byte(), "freecode"),
-                "Freecode node range is not a UTF-8 slice of the supplied source",
-            ));
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(text) = extract_utf8_text(node, source, errors, "freecode") else {
+        return ParseOutcome::rejected();
     };
 
     // Strip "[^ " prefix and "]" suffix

@@ -1,7 +1,7 @@
 # JSON Output Reference
 
 **Status:** Reference
-**Last updated:** 2026-05-11 23:45 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 This document describes the structure of JSON produced by `chatter to-json`.
 For the formal JSON Schema, see [JSON Schema](json-schema.md).
@@ -49,7 +49,7 @@ carries these fields:
 | Field | Type | Always? | Description |
 |-------|------|---------|-------------|
 | `type` | `"word"` | yes | Discriminator |
-| `raw_text` | string | yes | Exact text from the transcript, including all CHAT markers |
+| `raw_text` | string | yes | Current CHAT spelling derived from typed structure, including markers |
 | `cleaned_text` | string | yes | NLP-ready text (shortenings restored, markers stripped) |
 | `content` | array | yes | Structured breakdown of word parts (see below) |
 | `category` | string | no | `"omission"`, `"filler"`, `"nonword"`, `"fragment"`, `"ca_omission"` |
@@ -65,8 +65,27 @@ Word content items use `"content"` for the text value:
 
 ### Computed Fields
 
-`cleaned_text` and `untranscribed` are **computed from `content`** during
-serialization. They do not exist as stored fields in the data model.
+`raw_text`, `cleaned_text` and `untranscribed` are computed views, not
+independently authoritative input fields. Imported values cannot override the
+typed content, category, form, language or part-of-speech markers. Import still
+requires model validation; ignoring a stale display field does not admit
+malformed structural fields.
+
+`raw_text` is not a byte-exact source slice. In particular, recovery may retain
+a partial typed word while separately reporting rejected source material.
+Source-coordinate consumers must retain the original source and use its spans;
+they must not index derived spelling with offsets into that source.
+
+Rust callers use `Word::new(WordText)` for a nonempty plain-text model, then
+explicit typed builders for markers. Nonempty construction alone is not full
+CHAT admission. For external CHAT/ASR tokens, use `ChatParser::parse_word_fragment`
+and handle rejection explicitly instead of falling back to unchecked construction.
+The former independent raw/cleaned constructor arguments and `set_raw_text` are
+removed. `raw_text()` returns an owned string; use `WriteChat::write_chat` or
+`Display` when streaming avoids an intermediate allocation. JSON serialization
+streams that display projection directly. The existing cleaned-text cache is
+still invalidated by content mutation; no raw-text cache can become stale after
+public marker mutation.
 
 - **`cleaned_text`**: Concatenates `Text` and `Shortening` elements from `content`.
   Excludes lengthening markers (`:`), stress markers, CA elements, overlap points,

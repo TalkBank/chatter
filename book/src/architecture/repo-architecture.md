@@ -1,7 +1,7 @@
 # Repository Architecture and Boundaries
 
 **Status:** Current
-**Last modified:** 2026-07-29 18:20 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 ## Top-level layout
 
@@ -13,7 +13,7 @@ crates/                   all Rust crates (root Cargo workspace)
   talkbank-model/         data model, validation, alignment, errors, parser API trait
   talkbank-derive/        proc macros (SemanticEq, SpanShift, ValidationTagged, error_code_enum)
   talkbank-parser/        canonical parser (tree-sitter)
-  talkbank-parser-re2c/   alternate parser (specification oracle, opt-in batch parser)
+  talkbank-parser-re2c/   experimental alternate parser (opt-in)
   talkbank-parser-tests/  parser equivalence and roundtrip tests
   talkbank-transform/     pipelines, CHAT↔JSON, caching, parallel validation
   chatter/           the `chatter` CLI binary

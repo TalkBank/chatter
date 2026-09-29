@@ -1,7 +1,7 @@
 # CHAT Processing Playbook for Developers
 
 **Status:** Current
-**Last updated:** 2026-03-23 23:49 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 ## Objective
 Provide an implementation playbook for developers building or extending CHAT parsing,
@@ -37,7 +37,9 @@ recovery vs rejection, and whether a tier is safe to pass into alignment.
 
 ## Word Parsing Rules of Thumb
 - Parse suffix markers in strict order (`@...`, `@s...`, `$...`) with explicit precedence.
-- Keep `raw_text` exact, `cleaned_text` policy-driven and test-locked.
+- Derive `raw_text` from typed structure; use the original source and its spans
+  when exact input bytes are required. Keep `cleaned_text` policy-driven and
+  test-locked. See the [JSON contract](../chatter/integrating/json-output.md#computed-fields).
 - Treat CA delimiters and special symbols via centralized symbol sets.
 - Never embed ad hoc symbol literals in multiple files.
 

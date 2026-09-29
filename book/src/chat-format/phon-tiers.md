@@ -1,7 +1,7 @@
 # Phon Tiers (%xmodsyl, %xphosyl, %xphoaln, %xphoint)
 
 **Status:** Reference
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** 2026-09-28 15:09 EDT
 
 The Phon extension tiers provide syllable-level phonological annotation,
 segmental alignment between target and actual IPA, and per-phone time
@@ -19,12 +19,20 @@ than a rule to settle here.
 
 chatter parses and **validates all four tiers as first-class CHAT tiers**.
 
-> **The `x` prefix.** Phon emits these tiers with a leading `x` (`%xmodsyl`,
-> `%xphosyl`, `%xphoaln`, `%xphoint`) to mark them as extension tiers. The
-> grammar accepts **both** the `x`-prefixed names and the historical non-`x`
-> names (`%modsyl`, `%phosyl`, `%phoaln`, `%phoint`); the parser and validator
-> key off the tier *kind*, not the literal prefix. The canonical serialized form
-> is the `x`-prefixed name.
+> **The `x` prefix.** Current Phon exports no longer use the leading `x`.
+> Chatter accepts **both** the legacy `x`-prefixed names (`%xmodsyl`,
+> `%xphosyl`, `%xphoaln`, `%xphoint`) and the unprefixed names (`%modsyl`,
+> `%phosyl`, `%phoaln`, `%phoint`); the parser and validator key off the tier
+> *kind*, not the literal prefix. Chatter's canonical serialized form currently
+> remains `x`-prefixed; input compatibility and output spelling are distinct.
+
+CLAN's dependent-tier definitions added `%phoint` on September 25, 2026
+(`clan-info` commit `f062b58`). This closes the earlier missing-declaration
+issue for the unprefixed tier. Acceptance depends on the definitions actually
+loaded by CHECK; an older bundled `depfile.cut` may still reject it. The entry
+permits arbitrary tier content and does not specify or validate the internal
+Phon interval grammar. This update does not change Chatter's existing aliases
+or canonical output spelling.
 
 ## The four tiers
 
@@ -73,6 +81,12 @@ The constituent code is one character. The legal codes are `O N C L R E A D U`:
 | `A`  | Ambisyllabic | |
 | `D`  | Diphthong | a nucleus member of a diphthong/triphthong; treated as a nucleus |
 | `U`  | Unknown | Phon could not assign a concrete constituent; common on `%xphosyl` when the model `%xmodsyl` is fully syllabified |
+
+The reference corpus exercises all nine codes. The
+`tiers/phon-constituent-controls.cha` fixture supplies explicitly authored `E`
+and `A` acceptance controls; it is not a production attestation or a claim that
+Chatter automatically assigns syllable constituents. The corpus workflow checks
+their typed-code conversion, output, parsing, validation and roundtrip.
 
 The remaining Phon `SyllableConstituentType` mnemonics, `B` (boundary),
 `S` (stress), `W` (word boundary), `T` (tone), are **not** emitted on these

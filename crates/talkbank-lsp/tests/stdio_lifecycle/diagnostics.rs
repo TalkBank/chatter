@@ -30,6 +30,85 @@ impl Editor {
 }
 
 #[test]
+fn spec_diagnostics_do_not_offer_guessed_participant_or_language_facts() {
+    let mut editor = Editor::start();
+    editor.initialize();
+    for (source, code) in [
+        (
+            include_str!(
+                "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E308_2.cha"
+            ),
+            "E308",
+        ),
+        (
+            include_str!(
+                "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E504_1.cha"
+            ),
+            "E504",
+        ),
+        (
+            include_str!(
+                "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E504_2.cha"
+            ),
+            "E504",
+        ),
+        (
+            include_str!(
+                "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E507_2.cha"
+            ),
+            // The editor reports primary-parser missing-token recovery here;
+            // do not invent E507 to imitate a later validation stage.
+            "E342",
+        ),
+    ] {
+        editor.open(source);
+        let diagnostics = editor.diagnostics();
+        let diagnostic = diagnostics
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|diagnostic| diagnostic["code"] == code)
+            .unwrap_or_else(|| panic!("{code} not published: {diagnostics}"));
+        editor.send(
+            json!({"jsonrpc":"2.0","id":3,"method":"textDocument/codeAction","params":{
+            "textDocument":{"uri":URI},"range":diagnostic["range"],
+            "context":{"diagnostics":[diagnostic]}}}),
+        );
+        let response = editor.response(3);
+        assert!(response["error"].is_null(), "{code}: {response}");
+        assert_eq!(response["result"], Value::Null, "{code}: no guessed edit");
+        editor.close();
+    }
+
+    // Positive control: refusal is selective, not a disabled code-action endpoint.
+    editor.open(include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E503_1.cha"
+    ));
+    let diagnostics = editor.diagnostics();
+    let diagnostic = diagnostics
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "E503")
+        .unwrap();
+    editor.send(
+        json!({"jsonrpc":"2.0","id":4,"method":"textDocument/codeAction","params":{
+        "textDocument":{"uri":URI},"range":diagnostic["range"],
+        "context":{"diagnostics":[diagnostic]}}}),
+    );
+    let response = editor.response(4);
+    assert!(response["error"].is_null(), "{response}");
+    let actions = response["result"].as_array().unwrap();
+    assert_eq!(actions.len(), 1);
+    assert_eq!(actions[0]["edit"]["changes"][URI][0]["newText"], "@UTF8\n");
+    editor.close();
+    editor.send(json!({"jsonrpc":"2.0","id":2,"method":"shutdown"}));
+    assert!(editor.response(2)["error"].is_null());
+    editor.send(json!({"jsonrpc":"2.0","method":"exit"}));
+    editor.expect_exit(0);
+}
+
+#[test]
 fn edited_diagnostics_match_fresh_open() {
     let mut editor = Editor::start();
     editor.initialize();

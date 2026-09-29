@@ -1,7 +1,9 @@
-//! Public entrypoints for `%pho` and `%mod` parsing from CST nodes.
+//! Public `%pho` parsing entrypoint from a source-bound CST node.
 //!
 //! `%pho` and `%mod` share the same internal item model (`PhoTier`) and this
-//! module re-exports both typed parsers used by dependent-tier dispatch.
+//! module re-exports the `%pho` adapter used by dependent-tier dispatch.
+//! Bind through the owning `ParsedSource`; internal source/reconstruction faults
+//! return `CstFailure`. String-based fragment parser signatures are unchanged.
 //!
 //! # Related CHAT Manual Sections
 //!

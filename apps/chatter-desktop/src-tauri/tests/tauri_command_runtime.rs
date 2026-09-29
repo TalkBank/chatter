@@ -216,6 +216,7 @@ fn text_export_retains_failures_without_diagnostic_cards() {
     let results = serde_json::json!([
         {"path":"read.cha", "errors":[], "status":{"type":"readError", "message":"permission denied"}},
         {"path":"parse.cha", "errors":[], "status":{"type":"parseError", "message":"parser failed"}},
+        {"path":"internal.cha", "errors":[], "status":{"type":"internalFailure", "message":"validity not determined"}},
         {"path":"roundtrip.cha", "errors":[], "status":{"type":"roundtripFailed", "cacheHit":false, "reason":"model changed"}},
         {"path":"invalid.cha", "errors":[], "status":{"type":"invalid", "cacheHit":true, "errorCount":2}},
         {"path":"valid.cha", "errors":[], "status":{"type":"valid", "cacheHit":true}},
@@ -233,6 +234,7 @@ fn text_export_retains_failures_without_diagnostic_cards() {
         "permission denied",
         "parse.cha",
         "parser failed",
+        "internal.cha\nInternal failure: validity not determined",
         "roundtrip.cha",
         "model changed",
         "invalid.cha",

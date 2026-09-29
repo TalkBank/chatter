@@ -18,6 +18,56 @@ use tempfile::tempdir;
 
 struct NoopCache;
 
+#[test]
+fn internal_failure_is_neither_valid_nor_invalid_and_never_cached() {
+    use super::cancel::CancelSignal;
+    use super::worker::{ParserDispatch, worker_loop_with_parser};
+    use super::{FileStatus, ValidationStats};
+    use std::sync::Arc;
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("producer-fault.cha");
+    fs::write(
+        &path,
+        include_str!("../../../../corpus/reference/languages/eng-conversation.cha"),
+    )
+    .unwrap();
+    let (work_tx, work_rx) = crossbeam_channel::unbounded();
+    work_tx.send(path).unwrap();
+    drop(work_tx);
+    let (event_tx, event_rx) = crossbeam_channel::unbounded();
+    let (_cancel_tx, cancel_rx) = crossbeam_channel::unbounded();
+    let cache = Arc::new(RecordingCache::new());
+    let stats = Arc::new(ValidationStats::new(1));
+    worker_loop_with_parser(
+        work_rx,
+        event_tx,
+        Arc::new(CancelSignal::new(cancel_rx)),
+        Some(cache.clone()),
+        ValidationConfig {
+            roundtrip: true,
+            presentation: crate::PresentationPolicy::new()
+                .disable(talkbank_model::ErrorCode::InternalError),
+            ..ValidationConfig::default()
+        },
+        stats.clone(),
+        ParserDispatch::InternalFailure,
+    );
+    let events: Vec<_> = event_rx.try_iter().collect();
+    assert!(matches!(&events[..], [ValidationEvent::Errors(errors),
+        ValidationEvent::FileComplete(complete)]
+        if errors.errors[0].code == talkbank_model::ErrorCode::InternalError
+            && matches!(complete.status, FileStatus::InternalFailure { .. })));
+    assert!(cache.outcomes().is_empty());
+    let stats = stats.snapshot();
+    assert_eq!(stats.internal_failures, 1);
+    assert_eq!(
+        stats.valid_files + stats.invalid_files + stats.parse_errors,
+        0
+    );
+    assert_eq!(stats.roundtrip_passed + stats.roundtrip_failed, 0);
+    assert_eq!(stats.files_accounted_for(), 1);
+}
+
 impl ValidationCache for NoopCache {
     fn get(&self, _path: &Path, _check_alignment: bool) -> Option<CacheOutcome> {
         None
@@ -36,12 +86,14 @@ impl ValidationCache for NoopCache {
 /// Cache that records what was stored, for verifying cache semantics.
 struct RecordingCache {
     stored: std::sync::Mutex<Vec<(std::path::PathBuf, CacheOutcome)>>,
+    roundtrips: std::sync::Mutex<Vec<CacheOutcome>>,
 }
 
 impl RecordingCache {
     fn new() -> Self {
         Self {
             stored: std::sync::Mutex::new(Vec::new()),
+            roundtrips: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -51,6 +103,15 @@ impl RecordingCache {
 }
 
 impl ValidationCache for RecordingCache {
+    fn set_roundtrip(
+        &self,
+        _path: &Path,
+        _check_alignment: bool,
+        outcome: CacheOutcome,
+    ) -> Result<(), String> {
+        self.roundtrips.lock().unwrap().push(outcome);
+        Ok(())
+    }
     fn get(&self, _path: &Path, _check_alignment: bool) -> Option<CacheOutcome> {
         None
     }
@@ -67,6 +128,72 @@ impl ValidationCache for RecordingCache {
             .push((path.to_path_buf(), outcome));
         Ok(())
     }
+}
+
+#[test]
+fn roundtrip_internal_failure_is_not_a_mismatch_or_cached_verdict() {
+    assert_roundtrip_internal_failure(include_str!(
+        "../../../../corpus/reference/languages/eng-conversation.cha"
+    ));
+}
+
+#[test]
+fn roundtrip_internal_failure_does_not_publish_earlier_input_warnings() {
+    assert_roundtrip_internal_failure(include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E546_1.cha"
+    ));
+}
+
+fn assert_roundtrip_internal_failure(input: &str) {
+    use super::cancel::CancelSignal;
+    use super::worker::{ParserDispatch, worker_loop_with_parser};
+    use super::{FileStatus, ValidationStats};
+    use std::sync::Arc;
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("roundtrip-producer-fault.cha");
+    fs::write(&path, input).unwrap();
+    let (work_tx, work_rx) = crossbeam_channel::unbounded();
+    work_tx.send(path).unwrap();
+    drop(work_tx);
+    let (event_tx, event_rx) = crossbeam_channel::unbounded();
+    let (_cancel_tx, cancel_rx) = crossbeam_channel::unbounded();
+    let cache = Arc::new(RecordingCache::new());
+    let stats = Arc::new(ValidationStats::new(1));
+    worker_loop_with_parser(
+        work_rx,
+        event_tx,
+        Arc::new(CancelSignal::new(cancel_rx)),
+        Some(cache.clone()),
+        ValidationConfig {
+            roundtrip: true,
+            presentation: crate::PresentationPolicy::new().downgrade(
+                talkbank_model::ErrorCode::UnsupportedSesValue,
+                talkbank_model::Severity::Warning,
+            ),
+            ..ValidationConfig::default()
+        },
+        stats.clone(),
+        ParserDispatch::FailAfterInitial(std::cell::Cell::new(Some(
+            talkbank_parser::TreeSitterParser::new().unwrap(),
+        ))),
+    );
+    let events: Vec<_> = event_rx.try_iter().collect();
+    assert!(
+        matches!(&events[..], [ValidationEvent::FileComplete(complete)]
+        if matches!(&complete.status, FileStatus::InternalFailure { failure }
+            if failure.diagnostics()[0].code == talkbank_model::ErrorCode::InternalError)),
+        "unexpected events: {events:?}"
+    );
+    assert!(cache.outcomes().is_empty());
+    assert!(cache.roundtrips.lock().unwrap().is_empty());
+    let stats = stats.snapshot();
+    assert_eq!(stats.internal_failures, 1);
+    assert_eq!(
+        stats.valid_files + stats.invalid_files + stats.parse_errors,
+        0
+    );
+    assert_eq!(stats.roundtrip_passed + stats.roundtrip_failed, 0);
+    assert_eq!(stats.files_accounted_for(), 1);
 }
 
 /// Regression test: a file producing only warnings (no errors) must be cached
@@ -318,6 +445,7 @@ fn snapshot_covering(coverage: Coverage) -> ValidationStatsSnapshot {
         cache_hits: 0,
         cache_misses: accounted_for,
         parse_errors: 0,
+        internal_failures: 0,
         roundtrip_passed: 0,
         roundtrip_failed: 0,
         cancelled,

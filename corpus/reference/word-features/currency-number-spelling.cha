@@ -1,0 +1,16 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|sample|CHI|||||Child|||
+@Comment:	Authored English generation controls for the E220 currency forms, in matching order.
+@Comment:	Constructs: written cardinal and currency names; prefix and suffix currency input equivalents.
+*CHI:	twelve pounds .
+*CHI:	twelve yen .
+*CHI:	twelve rupees .
+*CHI:	twelve won .
+*CHI:	twelve rubles .
+*CHI:	twelve euros .
+*CHI:	twelve euros .
+*CHI:	twelve rupees .
+@End

@@ -9,6 +9,410 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::chat_corpus::ChatCorpus;
 use talkbank_parser_tests::repo_paths::workspace_root;
 
+#[path = "presentation_corpus.rs"]
+mod presentation_contracts;
+
+/// Imported age values preserve unsupported text without claiming source provenance.
+#[test]
+fn age_spec_values_preserve_the_string_wire_contract() {
+    use talkbank_model::model::{AgeValue, Header, WriteChat};
+    let parser = TreeSitterParser::new().expect("parser");
+    let corpus = ChatCorpus::read(
+        &workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors"),
+    )
+    .expect("canonical error corpus");
+    let mut supported = 0;
+    let mut unsupported = 0;
+    for fixture in corpus.fixtures().iter().filter(|fixture| {
+        fixture
+            .path()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("E517_"))
+    }) {
+        let file = talkbank_parser_tests::test_error::strict_parse(
+            parser.parse_chat_file(fixture.source()),
+        )
+        .expect("age specimen syntax");
+        for header in file.headers() {
+            let Header::ID(id) = header else {
+                continue;
+            };
+            let Some(age) = &id.age else {
+                continue;
+            };
+            match age {
+                AgeValue::Valid { .. } => supported += 1,
+                AgeValue::Unsupported(_) => unsupported += 1,
+            }
+            assert_eq!(AgeValue::from(age.as_str()), *age);
+            assert_eq!(AgeValue::from(age.as_str().to_owned()), *age);
+            assert_eq!(age.to_string(), age.as_str());
+            assert_eq!(age.to_chat_string(), age.as_str());
+            let wire = serde_json::to_string(age).expect("age JSON");
+            assert_eq!(
+                wire,
+                serde_json::to_string(age.as_str()).expect("string JSON")
+            );
+            assert_eq!(
+                serde_json::from_str::<AgeValue>(&wire).expect("age admission"),
+                *age
+            );
+        }
+    }
+    assert!(
+        supported > 0 && unsupported > 0,
+        "both preserved states need canonical witnesses: {supported}/{unsupported}"
+    );
+    for wire in ["null", "0", "[]", "{}"] {
+        assert!(serde_json::from_str::<AgeValue>(wire).is_err(), "{wire}");
+    }
+}
+
+/// Independent incomplete syllable units must each retain their diagnostic.
+#[test]
+fn syllable_spec_deletions_report_each_malformed_word_without_rejecting_pause_control() {
+    let parser = TreeSitterParser::new().expect("parser");
+    for (fixture, expected_count) in [("E735_2.cha", 0), ("E735_3.cha", 3)] {
+        let source = std::fs::read_to_string(
+            workspace_root()
+                .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors")
+                .join(fixture),
+        )
+        .expect("syllable spec fixture");
+        let mut file =
+            talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&source))
+                .expect("tier body parses without recovery");
+        let errors = ErrorCollector::new();
+        file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+        let errors = errors.into_vec();
+        assert_eq!(errors.len(), expected_count, "{fixture}: {errors:?}");
+        for (index, error) in errors.iter().enumerate() {
+            assert_eq!(error.code, talkbank_model::ErrorCode::SylUnitMalformed);
+            assert!(
+                error.message.contains(&format!("word {}", index + 1)),
+                "each changed word retains its position: {error:?}"
+            );
+        }
+    }
+}
+
+/// Imported raw spelling remains subject to suffix validation after decoding.
+#[test]
+fn reference_word_wire_spelling_does_not_bypass_form_marker_validation() {
+    use talkbank_model::ErrorCode;
+    use talkbank_model::alignment::helpers::{WordItem, walk_words};
+    use talkbank_model::model::Word;
+    use talkbank_model::validation::{Validate, ValidationContext};
+    let parser = TreeSitterParser::new().expect("parser");
+    for (fixture, token) in [
+        ("corpus/reference/core/basic-conversation.cha", "cookies"),
+        (
+            "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E203_5.cha",
+            "c(a)t@b",
+        ),
+    ] {
+        let source =
+            std::fs::read_to_string(workspace_root().join(fixture)).expect("canonical source");
+        let file = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&source))
+            .expect("reference parses");
+        let mut seed = None;
+        for utterance in file.utterances() {
+            walk_words(&utterance.main.content.content, None, &mut |item| {
+                if let WordItem::Word(word) = item
+                    && word.raw_text() == token
+                {
+                    seed = Some(serde_json::to_value(word).expect("reference wire"));
+                }
+            });
+        }
+        let seed = seed.expect("reference lexical control");
+        // Display fields supplied by importers have no authority over structure.
+        for spelling in [
+            "cookies@",
+            "cookies@@",
+            "cookies)(",
+            "c(a)t@bx",
+            "c(a)t@b$n",
+        ] {
+            let mut wire = seed.clone();
+            wire["raw_text"] = spelling.into();
+            wire["cleaned_text"] = "stale".into();
+            let word: Word = serde_json::from_value(wire).expect("legacy computed fields ignored");
+            assert!(word.span.is_dummy());
+            assert_eq!(word.raw_text(), token);
+            assert_eq!(serde_json::to_value(&word).expect("derived wire"), seed);
+        }
+        let mut without_display = seed.clone();
+        without_display
+            .as_object_mut()
+            .expect("word object")
+            .remove("raw_text");
+        let word: Word = serde_json::from_value(without_display).expect("structure alone suffices");
+        assert_eq!(word.raw_text(), token);
+        if token == "cookies" {
+            for spelling in [
+                "cookies",
+                "cookies@",
+                "cookies@@",
+                "co(ok)ies",
+                "cookies)(",
+                "co\u{15}okies",
+            ] {
+                let mut wire = seed.clone();
+                wire["content"][0]["content"] = spelling.into();
+                let word: Word =
+                    serde_json::from_value(wire).expect("unvalidated structured import");
+                assert_eq!(word.raw_text(), spelling);
+                let errors = ErrorCollector::new();
+                word.validate(&ValidationContext::default(), &errors);
+                assert_eq!(
+                    errors
+                        .into_vec()
+                        .iter()
+                        .any(|error| error.code == ErrorCode::IllegalCharactersInWord),
+                    spelling != "cookies",
+                    "{spelling:?}",
+                );
+            }
+        }
+    }
+}
+
+/// Retrace model import preserves the violation but cannot restore source labels.
+#[test]
+fn retrace_specs_import_without_fabricating_source_labels() {
+    use talkbank_model::ErrorCode;
+    use talkbank_model::model::ChatFile;
+    let parser = TreeSitterParser::new().expect("parser");
+    for (fixture, code) in [
+        ("E370_1.cha", ErrorCode::StructuralOrderError),
+        ("E370_2.cha", ErrorCode::StructuralOrderError),
+        ("E377_1.cha", ErrorCode::RetraceWithNoMaterial),
+        ("E378_1.cha", ErrorCode::RetraceWithoutWords),
+    ] {
+        let source = std::fs::read_to_string(
+            workspace_root()
+                .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors")
+                .join(fixture),
+        )
+        .expect("canonical retrace spec");
+        let mut located =
+            talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&source))
+                .expect("retrace specimen has clean syntax");
+        let mut imported: ChatFile =
+            serde_json::from_value(serde_json::to_value(&located).expect("encode spec model"))
+                .expect("decode spec model");
+        let collect = |file: &mut ChatFile| {
+            let errors = ErrorCollector::new();
+            file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+            errors
+                .into_vec()
+                .into_iter()
+                .filter(|error| error.code == code)
+                .collect::<Vec<_>>()
+        };
+        let before = collect(&mut located);
+        let after = collect(&mut imported);
+        assert!(!before.is_empty(), "{fixture}: declared violation");
+        assert_eq!(before.len(), after.len());
+        for (located, imported) in before.iter().zip(&after) {
+            assert!(!located.location.span.is_dummy());
+            assert!(!located.labels.is_empty());
+            assert!(imported.location.span.is_dummy());
+            assert!(imported.labels.is_empty(), "no byte-zero source label");
+            assert_eq!(located.message, imported.message);
+            assert_eq!(located.suggestion, imported.suggestion);
+            assert_eq!(located.severity, imported.severity);
+            assert!(located.context.is_none() && imported.context.is_none());
+            assert!(located.help_url.is_none() && imported.help_url.is_none());
+        }
+    }
+}
+
+/// Optional recovery metadata survives import without inventing parser evidence.
+#[test]
+fn unknown_header_spec_import_preserves_optional_recovery_metadata() {
+    use talkbank_model::ErrorCode;
+    use talkbank_model::model::{ChatFile, Header, Line};
+    let parser = TreeSitterParser::new().expect("parser");
+    let source = std::fs::read_to_string(
+        workspace_root()
+            .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E525_1.cha"),
+    )
+    .expect("unknown-header spec");
+    let parse_errors = ErrorCollector::new();
+    let seed = parser.parse_chat_file_streaming(&source, &parse_errors);
+    // This recovery producer retains Header::Unknown and delegates E525 to
+    // model validation; it does not emit a separate parse diagnostic.
+    assert!(parse_errors.into_vec().is_empty());
+    for retain_reason in [true, false] {
+        for supplied_fix in [None, Some("Use @Comment for free text")] {
+            let mut imported: ChatFile =
+                serde_json::from_value(serde_json::to_value(&seed).expect("spec model wire"))
+                    .expect("spec model import");
+            let mut expected = None;
+            for line in &mut imported.lines {
+                if let Line::Header { header, .. } = line
+                    && let Header::Unknown {
+                        text,
+                        parse_reason,
+                        suggested_fix,
+                    } = header.as_mut()
+                {
+                    assert!(expected.is_none(), "one unknown header in specimen");
+                    assert!(parse_reason.is_some());
+                    assert!(
+                        suggested_fix.is_none(),
+                        "unsupported-header producer has no fix"
+                    );
+                    if !retain_reason {
+                        *parse_reason = None;
+                    }
+                    // Authored import advice follows E525's documented policy;
+                    // it is not presented as advice emitted by this parser.
+                    *suggested_fix = supplied_fix.map(str::to_owned);
+                    let message = match parse_reason {
+                        Some(reason) => {
+                            format!("Unknown or malformed header: {} ({reason})", text.as_str())
+                        }
+                        None => format!("Unknown or malformed header: {}", text.as_str()),
+                    };
+                    expected = Some((message, suggested_fix.clone()));
+                }
+            }
+            let (message, fix) = expected.expect("recovered unknown header");
+            let errors = ErrorCollector::new();
+            imported.validate_with_alignment(&errors, TranscriptName::Anonymous);
+            let errors: Vec<_> = errors
+                .into_vec()
+                .into_iter()
+                .filter(|error| error.code == ErrorCode::UnknownHeader)
+                .collect();
+            assert_eq!(errors.len(), 1);
+            assert_eq!(errors[0].message, message);
+            match fix {
+                Some(fix) => assert_eq!(errors[0].suggestion.as_deref(), Some(fix.as_str())),
+                None => assert_eq!(
+                    errors[0].suggestion.as_deref(),
+                    Some(
+                        "Check the CHAT manual for valid header types: https://talkbank.org/0info/manuals/CHAT.html#File_Headers",
+                    )
+                ),
+            }
+        }
+    }
+}
+
+/// Editor lookup must select the actual owning turn, including continuation
+/// and dependent-tier bytes, without swallowing headers or the next turn.
+#[test]
+fn reference_editor_offsets_preserve_tier_ownership_and_half_open_boundaries() {
+    let parser = TreeSitterParser::new().expect("parser");
+    let corpus = ChatCorpus::reference().expect("reference corpus");
+    let mut main_tiers = 0;
+    let mut dependent_tiers = 0;
+    for fixture in corpus.fixtures() {
+        let file = talkbank_parser_tests::test_error::strict_parse(
+            parser.parse_chat_file(fixture.source()),
+        )
+        .expect("reference syntax");
+        assert_eq!(file.header_count(), file.headers().count());
+        assert_eq!(file.utterance_count(), file.utterances().count());
+        for utterance in file.utterances() {
+            let mut end = utterance.main.span.end;
+            for (span, marker) in std::iter::once((utterance.main.span, b'*')).chain(
+                utterance
+                    .dependent_tiers
+                    .iter()
+                    .map(|entry| (entry.tier.span(), b'%')),
+            ) {
+                assert!(
+                    !span.is_dummy() && span.start < span.end,
+                    "reference tier has source coordinates"
+                );
+                assert_eq!(
+                    fixture.source().as_bytes()[span.start as usize],
+                    marker,
+                    "tier span begins at its source marker: {}",
+                    fixture.path().display()
+                );
+                for offset in [span.start, span.start + 1, span.end - 1] {
+                    let selected = file
+                        .utterance_containing(offset)
+                        .expect("tier byte has an owner");
+                    assert!(
+                        std::ptr::eq(selected, utterance),
+                        "lookup returns the owning object, not a similar turn"
+                    );
+                }
+                end = end.max(span.end);
+                if marker == b'*' {
+                    main_tiers += 1;
+                } else {
+                    dependent_tiers += 1;
+                }
+            }
+            if let Some(selected) = file.utterance_containing(end) {
+                assert!(
+                    !std::ptr::eq(selected, utterance),
+                    "exclusive end cannot select the finished turn"
+                );
+            }
+        }
+        for (_, span) in file.headers_with_spans() {
+            if !span.is_dummy() {
+                assert!(
+                    file.utterance_containing(span.start).is_none(),
+                    "header is not speech"
+                );
+            }
+        }
+        assert!(
+            file.utterance_containing(fixture.source().len() as u32)
+                .is_none()
+        );
+    }
+    assert!(
+        main_tiers > 0 && dependent_tiers > 0,
+        "both editor lookup routes are witnessed"
+    );
+}
+
+/// An invalid ID join does not erase the declaration or create missing data.
+#[test]
+fn missing_id_spec_keeps_declared_speaker_visible_without_metadata() {
+    let parser = TreeSitterParser::new().expect("parser");
+    let source = std::fs::read_to_string(
+        workspace_root()
+            .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E522_2.cha"),
+    )
+    .expect("canonical missing-ID spec");
+    let errors = ErrorCollector::new();
+    let mut file = parser.parse_chat_file_streaming(&source, &errors);
+    file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+    assert!(
+        errors
+            .to_vec()
+            .iter()
+            .any(|error| error.code.to_string() == "E522"),
+        "usable declaration access must not certify invalid CHAT"
+    );
+    let declared: Vec<_> = file.declared_speakers().collect();
+    assert_eq!(declared.len(), 2);
+    assert_eq!(declared[0].code().as_str(), "CHI");
+    assert_eq!(declared[0].name().map(|name| name.as_str()), Some("Ruth"));
+    assert_eq!(declared[0].role().as_str(), "Target_Child");
+    assert!(declared[0].id_metadata().is_none());
+    assert_eq!(declared[1].code().as_str(), "MOT");
+    assert_eq!(declared[1].role().as_str(), "Mother");
+    assert!(declared[1].id_metadata().is_some());
+    assert!(file.get_participant("CHI").is_none());
+    assert!(file.get_participant("MOT").is_some());
+    assert_eq!(file.participant_count(), 1);
+    assert_eq!(file.all_participants().len(), 1);
+}
+
 /// Spec controls and single-space deletions retain exact source boundaries at
 /// every content depth; serialization restores only the missing separator.
 #[test]
@@ -152,9 +556,12 @@ fn duration_specs_preserve_assessment_across_header_and_json_boundaries() {
     use talkbank_model::model::{ChatFile, Header, Line, TimeDurationValue, WriteChat};
     use talkbank_parser_tests::test_error::strict_parse;
     let parser = TreeSitterParser::new().expect("parser");
-    for example in 1..=9 {
+    let cases = (1..=15)
+        .map(|example| ("E540", example, matches!(example, 6 | 7 | 10)))
+        .chain((1..=11).map(|example| ("E540_numeric_boundaries", example, example == 1)));
+    for (stem, example, legal) in cases {
         let source = std::fs::read_to_string(workspace_root().join(format!(
-            "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E540_{example}.cha",
+            "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/{stem}_{example}.cha",
         )))
         .expect("canonical duration spec");
         let file = strict_parse(parser.parse_chat_file(&source)).expect("duration spec parses");
@@ -163,8 +570,8 @@ fn duration_specs_preserve_assessment_across_header_and_json_boundaries() {
         let findings = errors.into_vec();
         assert_eq!(
             findings.len(),
-            usize::from(!matches!(example, 6 | 7)),
-            "E540_{example}: {findings:?}"
+            usize::from(!legal),
+            "{stem}_{example}: {findings:?}"
         );
         assert!(
             findings
@@ -172,6 +579,20 @@ fn duration_specs_preserve_assessment_across_header_and_json_boundaries() {
                 .all(|error| error.code == ErrorCode::InvalidTimeDuration)
         );
         assert_eq!(file.to_chat_string(), source);
+
+        let wire = serde_json::to_string(&file).expect("serialize original duration");
+        let decoded: ChatFile = serde_json::from_str(&wire).expect("restore original duration");
+        assert_eq!(decoded.to_chat_string(), source, "{stem}_{example}");
+        let errors = ErrorCollector::new();
+        decoded.validate_headers_only(&errors, TranscriptName::Anonymous);
+        let restored_findings = errors.into_vec();
+        assert!(
+            restored_findings
+                .iter()
+                .map(|error| (error.code, &error.message))
+                .eq(findings.iter().map(|error| (error.code, &error.message))),
+            "JSON must not change duration assessment: {stem}_{example}"
+        );
 
         // A public model constructor can represent an empty optional value
         // even if raw CHAT parsing rejects the corresponding empty header.
@@ -196,6 +617,126 @@ fn duration_specs_preserve_assessment_across_header_and_json_boundaries() {
             "existing optional-empty model policy"
         );
         assert_eq!(decoded.to_chat_string(), omitted.to_chat_string());
+    }
+}
+
+/// Two-component duration ranges are hours/minutes, not the minutes/seconds
+/// convention used by general time values. Pin the typed meaning of real CHAT.
+#[test]
+fn duration_reference_retains_hour_minute_endpoint_meaning() {
+    use talkbank_model::model::{Header, TimeDurationValue, TimeSegment, WriteChat};
+    use talkbank_parser_tests::test_error::strict_parse;
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../corpus/reference/core/headers-time-and-types.cha"
+    ));
+    let parser = TreeSitterParser::new().expect("parser");
+    let file = strict_parse(parser.parse_chat_file(source)).expect("reference parses");
+    let segments: Vec<_> = file
+        .headers()
+        .filter_map(|header| match header {
+            Header::TimeDuration { duration } => Some(duration.segments()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    let [TimeSegment::Range { start, end }] = segments.as_slice() else {
+        panic!("reference must supply one duration range");
+    };
+    assert_eq!((start.hours, start.minutes, start.seconds), (17, 30, 0));
+    assert_eq!((end.hours, end.minutes, end.seconds), (18, 0, 0));
+    let Header::TimeDuration { duration } = file
+        .headers()
+        .find(|header| matches!(header, Header::TimeDuration { .. }))
+        .expect("authored duration")
+    else {
+        unreachable!()
+    };
+    assert_eq!(TimeDurationValue::from(duration.as_str()), *duration);
+    assert_eq!(
+        TimeDurationValue::from(duration.as_str().to_owned()),
+        *duration
+    );
+    assert_eq!(duration.to_chat_string(), "17:30-18:00");
+    assert_eq!(
+        serde_json::to_string(duration).expect("duration string JSON"),
+        "\"17:30-18:00\""
+    );
+    for invalid in ["0", "null", "[]", "{}"] {
+        assert!(serde_json::from_str::<TimeDurationValue>(invalid).is_err());
+    }
+}
+
+#[test]
+fn clock_context_reference_keeps_start_and_timing_in_minutes_seconds() {
+    use talkbank_model::model::{
+        ChatFile, DependentTier, Header, TimeSegment, TimeStartValue, WriteChat,
+    };
+    use talkbank_parser_tests::test_error::strict_parse;
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../corpus/reference/core/clock-contexts.cha"
+    ));
+    let parser = TreeSitterParser::new().expect("parser");
+    let file = strict_parse(parser.parse_chat_file(source)).expect("clock reference parses");
+    for header in file.headers() {
+        if let Header::TimeStart { start } = header {
+            assert_eq!(TimeStartValue::from(start.as_str()), *start);
+            assert_eq!(TimeStartValue::from(start.as_str().to_owned()), *start);
+            assert_eq!(start.to_chat_string(), start.as_str());
+            assert_eq!(
+                serde_json::to_string(start).expect("start JSON"),
+                serde_json::to_string(start.as_str()).expect("string JSON")
+            );
+        }
+    }
+    for invalid in ["0", "null", "[]", "{}"] {
+        assert!(serde_json::from_str::<TimeStartValue>(invalid).is_err());
+    }
+    let wire = serde_json::to_string(&file).expect("serialize clock contexts");
+    let decoded: ChatFile = serde_json::from_str(&wire).expect("restore clock contexts");
+    for file in [&file, &decoded] {
+        let mut seen = [0; 3];
+        for header in file.headers() {
+            match header {
+                Header::TimeStart { start: time } => {
+                    let TimeStartValue::Parsed {
+                        hours,
+                        minutes,
+                        seconds,
+                        ..
+                    } = time
+                    else {
+                        panic!("structured start time");
+                    };
+                    assert_eq!((*hours, *minutes, *seconds), (0, 59, 59));
+                    seen[0] += 1;
+                }
+                Header::TimeDuration { duration } => {
+                    let [TimeSegment::Range { start, end }] = duration.segments() else {
+                        panic!("structured duration range");
+                    };
+                    assert_eq!((start.hours, start.minutes, start.seconds), (17, 30, 0));
+                    assert_eq!((end.hours, end.minutes, end.seconds), (18, 0, 0));
+                    seen[1] += 1;
+                }
+                _ => {}
+            }
+        }
+        for utterance in file.utterances() {
+            for entry in &utterance.dependent_tiers {
+                if let DependentTier::Tim(tier) = &entry.tier {
+                    let [talkbank_model::model::dependent_tier::TimSegment::Single(time)] =
+                        tier.segments()
+                    else {
+                        panic!("structured timing value")
+                    };
+                    assert_eq!((time.hours, time.minutes, time.seconds), (0, 59, 59));
+                    seen[2] += 1;
+                }
+            }
+        }
+        assert_eq!(seen, [1, 1, 1]);
     }
 }
 
@@ -341,7 +882,7 @@ fn timed_pause_specs_preserve_unrepresentable_numeric_projections() {
         };
         assert_eq!(duration.total_millis(), millis);
         assert_eq!(
-            matches!(duration, PauseTimedDuration::Parsed { .. }),
+            matches!(duration, PauseTimedDuration::Parsed(_)),
             millis.is_some()
         );
         let encoded = serde_json::to_string(duration).expect("pause JSON");
@@ -402,6 +943,7 @@ fn nested_comma_specs_require_prior_spoken_content_at_the_actual_comma() {
 fn date_specs_reject_signed_components_without_rewriting_source() {
     use talkbank_model::ErrorCode;
     use talkbank_model::model::{ChatDate, Header, WriteChat};
+    use talkbank_model::validation::{Validate, ValidationContext};
     let parser = TreeSitterParser::new().expect("parser");
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
@@ -429,16 +971,51 @@ fn date_specs_reject_signed_components_without_rewriting_source() {
             assert_eq!(dates.len(), 1, "{spec}_{example}: date-bearing header");
             for date in dates {
                 assert_eq!(
-                    matches!(date, ChatDate::Valid { .. }),
+                    matches!(date, ChatDate::Valid(_)),
                     example == control,
                     "{spec}_{example}: parsed date admission"
                 );
                 let encoded = serde_json::to_string(date).expect("date wire value");
+                assert_eq!(encoded, serde_json::to_string(date.as_str()).unwrap());
+                assert_eq!(ChatDate::new(date.as_str()), *date);
+                assert_eq!(ChatDate::from(date.as_str()), *date);
+                assert_eq!(ChatDate::from(date.as_str().to_owned()), *date);
+                assert_eq!(date.to_chat_string(), date.as_str());
+                if let ChatDate::Valid(checked) = date {
+                    assert_eq!(checked.as_str(), date.as_str());
+                    assert_eq!(
+                        format!(
+                            "{:02}-{}-{:04}",
+                            checked.day(),
+                            checked.month().as_str(),
+                            checked.year()
+                        ),
+                        date.as_str(),
+                        "admitted components and preserved text agree"
+                    );
+                }
                 let decoded: ChatDate = serde_json::from_str(&encoded).expect("date wire decoding");
                 assert_eq!(
                     &decoded, date,
                     "{spec}_{example}: wire admission and spelling"
                 );
+                // A standalone imported value has neither a header role nor
+                // document coordinates. Full-file validation below retains both.
+                let value_errors = ErrorCollector::new();
+                decoded.validate(&ValidationContext::default(), &value_errors);
+                let value_errors = value_errors.into_vec();
+                if example == control {
+                    assert!(value_errors.is_empty());
+                } else {
+                    assert_eq!(value_errors.len(), 1);
+                    assert_eq!(value_errors[0].code, ErrorCode::InvalidDateFormat);
+                    assert_eq!(value_errors[0].severity, talkbank_model::Severity::Error);
+                    assert_eq!(
+                        value_errors[0].location.span,
+                        talkbank_model::Span::from_usize(0, 0)
+                    );
+                    assert!(value_errors[0].message.contains(date.as_str()));
+                }
             }
             let errors = ErrorCollector::new();
             file.validate_with_alignment(&errors, TranscriptName::Anonymous);
@@ -463,6 +1040,12 @@ fn date_specs_reject_signed_components_without_rewriting_source() {
                 "date validation does not normalize input"
             );
         }
+    }
+    for invalid_wire in ["null", "0", "[]", "{}"] {
+        assert!(
+            serde_json::from_str::<ChatDate>(invalid_wire).is_err(),
+            "date wire admission requires a string: {invalid_wire}"
+        );
     }
 }
 
@@ -749,26 +1332,118 @@ fn unicode_boundary_specs_preserve_words_and_locate_each_rejection() {
     use talkbank_model::{ErrorCode, Span};
     enum Expectation {
         Accepted,
-        Rejected,
+        PrivateUse,
+        Noncharacter,
     }
     let parser = TreeSitterParser::new().expect("parser");
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
     for (example, characters, expectation) in [
-        (1, &['a', '\u{00b7}', '\u{d7ff}'][..], Expectation::Accepted),
+        (
+            1,
+            &['\u{61}', '\u{b7}', '\u{d7ff}'][..],
+            Expectation::Accepted,
+        ),
         (
             2,
-            &['\u{f170}', '\u{f264}', '\u{ff01}', '\u{ff5e}'][..],
-            Expectation::Accepted,
+            &[
+                '\u{e000}',
+                '\u{f170}',
+                '\u{f264}',
+                '\u{f8ff}',
+                '\u{f0000}',
+                '\u{ffffd}',
+                '\u{100000}',
+                '\u{10fffd}',
+            ][..],
+            Expectation::PrivateUse,
         ),
         (
             3,
             &[
-                '\u{e000}', '\u{f16f}', '\u{f265}', '\u{ff00}', '\u{ff5f}', '\u{ffff}',
+                '\u{fdd0}',
+                '\u{fdd1}',
+                '\u{fdd2}',
+                '\u{fdd3}',
+                '\u{fdd4}',
+                '\u{fdd5}',
+                '\u{fdd6}',
+                '\u{fdd7}',
+                '\u{fdd8}',
+                '\u{fdd9}',
+                '\u{fdda}',
+                '\u{fddb}',
+                '\u{fddc}',
+                '\u{fddd}',
+                '\u{fdde}',
+                '\u{fddf}',
+                '\u{fde0}',
+                '\u{fde1}',
+                '\u{fde2}',
+                '\u{fde3}',
+                '\u{fde4}',
+                '\u{fde5}',
+                '\u{fde6}',
+                '\u{fde7}',
+                '\u{fde8}',
+                '\u{fde9}',
+                '\u{fdea}',
+                '\u{fdeb}',
+                '\u{fdec}',
+                '\u{fded}',
+                '\u{fdee}',
+                '\u{fdef}',
+                '\u{fffe}',
+                '\u{ffff}',
+                '\u{1fffe}',
+                '\u{1ffff}',
+                '\u{2fffe}',
+                '\u{2ffff}',
+                '\u{3fffe}',
+                '\u{3ffff}',
+                '\u{4fffe}',
+                '\u{4ffff}',
+                '\u{5fffe}',
+                '\u{5ffff}',
+                '\u{6fffe}',
+                '\u{6ffff}',
+                '\u{7fffe}',
+                '\u{7ffff}',
+                '\u{8fffe}',
+                '\u{8ffff}',
+                '\u{9fffe}',
+                '\u{9ffff}',
+                '\u{afffe}',
+                '\u{affff}',
+                '\u{bfffe}',
+                '\u{bffff}',
+                '\u{cfffe}',
+                '\u{cffff}',
+                '\u{dfffe}',
+                '\u{dffff}',
+                '\u{efffe}',
+                '\u{effff}',
+                '\u{ffffe}',
+                '\u{fffff}',
+                '\u{10fffe}',
+                '\u{10ffff}',
             ][..],
-            Expectation::Rejected,
+            Expectation::Noncharacter,
         ),
         (4, &['\u{10000}'][..], Expectation::Accepted),
+        (
+            5,
+            &[
+                '\u{f900}', '\u{fb00}', '\u{fd50}', '\u{fdf0}', '\u{fe70}', '\u{ff01}', '\u{ff5e}',
+                '\u{ff5f}', '\u{fffd}',
+            ][..],
+            Expectation::Accepted,
+        ),
+        (
+            6,
+            &['\u{f900}', '\u{fdcf}', '\u{fdf0}', '\u{1fffd}', '\u{efffd}'][..],
+            Expectation::Accepted,
+        ),
     ] {
         let source =
             std::fs::read_to_string(corpus.join(format!("E243_unicode_boundaries_{example}.cha",)))
@@ -803,6 +1478,12 @@ fn unicode_boundary_specs_preserve_words_and_locate_each_rejection() {
             });
         }
         assert_eq!(observed_words, expected, "Unicode example {example}");
+        use talkbank_model::WriteChat;
+        assert_eq!(
+            file.to_chat_string(),
+            source,
+            "byte-exact Unicode preservation"
+        );
         file.validate_with_alignment(&errors, TranscriptName::Anonymous);
         let observed = errors.into_vec();
         assert!(
@@ -811,9 +1492,23 @@ fn unicode_boundary_specs_preserve_words_and_locate_each_rejection() {
                 .all(|error| error.code == ErrorCode::IllegalCharactersInWord),
             "no unrelated errors: {observed:?}"
         );
+        let category = match expectation {
+            Expectation::Accepted => None,
+            Expectation::PrivateUse => Some("Unicode private-use character"),
+            Expectation::Noncharacter => Some("Unicode noncharacter"),
+        };
+        if let Some(category) = category {
+            assert!(
+                observed
+                    .iter()
+                    .all(|error| error.message.contains(category))
+            );
+        }
         let expected_spans: Vec<_> = match expectation {
             Expectation::Accepted => Vec::new(),
-            Expectation::Rejected => expected.iter().map(|(_, span)| *span).collect(),
+            Expectation::PrivateUse | Expectation::Noncharacter => {
+                expected.iter().map(|(_, span)| *span).collect()
+            }
         };
         assert_eq!(
             observed
@@ -1056,6 +1751,33 @@ fn attribute_specs_preserve_the_source_bound_lexical_boundary() {
                 let validation = ErrorCollector::new();
                 file.validate_with_alignment(&validation, TranscriptName::Anonymous);
                 assert!(validation.into_vec().is_empty());
+                // Editor buffers can end inside either attribute pair. Use
+                // exact prefixes of the legal source; do not fabricate CHAT
+                // scaffolding or infer whole-document validity from E315.
+                for marker in ["\u{0002}\u{0001}", "\u{0002}\u{0002}"] {
+                    let start = source.find(marker).expect("canonical underline marker");
+                    for length in [1, marker.len()] {
+                        let prefix = source.get(..start + length).expect("ASCII marker boundary");
+                        let errors = ErrorCollector::new();
+                        let _recovered = parser.parse_chat_file_streaming(prefix, &errors);
+                        let lexical: Vec<_> = errors
+                            .into_vec()
+                            .into_iter()
+                            .filter(|error| error.code == ErrorCode::InvalidControlCharacter)
+                            .collect();
+                        match length {
+                            1 => {
+                                assert_eq!(lexical.len(), 1, "incomplete pair at EOF");
+                                assert_eq!(
+                                    lexical[0].location.span,
+                                    Span::from_usize(start, start + 1)
+                                );
+                                assert!(lexical[0].message.contains("U+0002"));
+                            }
+                            _ => assert!(lexical.is_empty(), "complete pair is lexically admitted"),
+                        }
+                    }
+                }
             }
         }
     }
@@ -1096,23 +1818,104 @@ fn option_specs_preserve_typed_flags_through_recovery() {
     }
 }
 
-/// Diagnostic wording is a public boundary: a recognized annotation shape
-/// does not prove that a space is missing in the original source.
+/// Removed recovery scanners must not turn malformed CHAT into accepted input.
+/// Retired E311 examples remain executable contracts rather than deferred evidence.
+#[test]
+fn marker_recovery_specs_preserve_admission_without_text_scanners() {
+    let parser = TreeSitterParser::new().expect("parser");
+    let corpus =
+        workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
+    for (spec, invalid, valid) in [
+        (
+            "E202_missing_form_type",
+            &[1, 4, 6, 8, 10][..],
+            &[5, 7, 9][..],
+        ),
+        ("E311", &[1, 2][..], &[3][..]),
+    ] {
+        for example in invalid {
+            let source = std::fs::read_to_string(corpus.join(format!("{spec}_{example}.cha")))
+                .expect("canonical invalid marker fixture");
+            let errors = ErrorCollector::new();
+            let _file = parser.parse_chat_file_streaming(&source, &errors);
+            assert!(
+                errors
+                    .into_vec()
+                    .iter()
+                    .any(|e| e.severity == talkbank_model::Severity::Error),
+                "{spec}_{example} must remain rejected"
+            );
+        }
+        for example in valid {
+            let source = std::fs::read_to_string(corpus.join(format!("{spec}_{example}.cha")))
+                .expect("canonical valid marker control");
+            let errors = ErrorCollector::new();
+            let file = parser.parse_chat_file_streaming(&source, &errors);
+            assert!(errors.into_vec().is_empty(), "{spec}_{example}");
+            let validation = ErrorCollector::new();
+            file.validate(&validation, TranscriptName::Anonymous);
+            assert!(validation.into_vec().is_empty(), "{spec}_{example}");
+        }
+    }
+}
+
+/// Malformed brackets do not establish any maximum legal nesting depth.
+/// Keep rejection and valid controls while forbidding unsupported repair advice.
+#[test]
+fn malformed_bracket_specs_do_not_invent_a_nesting_limit() {
+    let parser = TreeSitterParser::new().expect("parser");
+    let corpus =
+        workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
+    for example in [1, 6, 8] {
+        let source = std::fs::read_to_string(corpus.join(format!("E375_{example}.cha")))
+            .expect("canonical malformed bracket spec");
+        let errors = ErrorCollector::new();
+        let _file = parser.parse_chat_file_streaming(&source, &errors);
+        let observed = errors.into_vec();
+        assert!(
+            observed
+                .iter()
+                .any(|e| e.severity == talkbank_model::Severity::Error),
+            "E375_{example} must remain rejected"
+        );
+        for error in observed {
+            assert!(!error.message.contains("Quadruple nested"), "{error:?}");
+            assert!(
+                error
+                    .suggestion
+                    .as_deref()
+                    .is_none_or(|s| !s.contains("triple nested")),
+                "{error:?}"
+            );
+        }
+    }
+    for example in [5, 7] {
+        let source = std::fs::read_to_string(corpus.join(format!("E375_{example}.cha")))
+            .expect("canonical valid bracket control");
+        let errors = ErrorCollector::new();
+        let file = parser.parse_chat_file_streaming(&source, &errors);
+        assert!(errors.into_vec().is_empty(), "E375_{example}");
+        let validation = ErrorCollector::new();
+        file.validate(&validation, TranscriptName::Anonymous);
+        assert!(validation.into_vec().is_empty(), "E375_{example}");
+    }
+}
+
+/// Recovery must reject malformed annotations without reconstructing their
+/// syntax from a text prefix and the preceding character.
 #[test]
 fn annotation_specs_require_source_evidence_for_spacing_advice() {
-    use talkbank_model::ErrorCode;
     enum Boundary {
-        Glued,
-        Separated,
+        Invalid,
         Valid,
     }
     let parser = TreeSitterParser::new().expect("parser");
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
     for (example, boundary) in [
-        (14, Boundary::Glued),
-        (16, Boundary::Separated),
-        (18, Boundary::Separated),
+        (14, Boundary::Invalid),
+        (16, Boundary::Invalid),
+        (18, Boundary::Invalid),
         (15, Boundary::Valid),
         (17, Boundary::Valid),
         (19, Boundary::Valid),
@@ -1123,25 +1926,21 @@ fn annotation_specs_require_source_evidence_for_spacing_advice() {
         let file = parser.parse_chat_file_streaming(&source, &errors);
         let parsed = errors.into_vec();
         match boundary {
-            Boundary::Glued | Boundary::Separated => {
-                let annotations: Vec<_> = parsed
-                    .iter()
-                    .filter(|error| error.code == ErrorCode::ContentAnnotationParseError)
-                    .collect();
-                assert!(!annotations.is_empty(), "E375_{example}");
-                for error in annotations {
-                    assert_eq!(
-                        error.message.contains("Space required"),
-                        matches!(boundary, Boundary::Glued),
-                        "E375_{example}: {error:?}"
-                    );
-                    assert_eq!(
+            Boundary::Invalid => {
+                assert!(
+                    parsed
+                        .iter()
+                        .any(|error| error.severity == talkbank_model::Severity::Error),
+                    "E375_{example} must remain rejected"
+                );
+                for error in parsed {
+                    assert!(!error.message.contains("Space required"), "{error:?}");
+                    assert!(
                         error
                             .suggestion
                             .as_deref()
-                            .is_some_and(|s| s.contains("Add a space")),
-                        matches!(boundary, Boundary::Glued),
-                        "E375_{example}: {error:?}"
+                            .is_none_or(|s| !s.contains("Add a space")),
+                        "{error:?}"
                     );
                 }
             }
@@ -1166,7 +1965,21 @@ fn speaker_specs_reject_non_ascii_at_the_source_boundary() {
         let source = std::fs::read_to_string(corpus.join(format!("E307_{example}.cha")))
             .expect("canonical speaker spec");
         let errors = ErrorCollector::new();
-        let _file = parser.parse_chat_file_streaming(&source, &errors);
+        let file = parser.parse_chat_file_streaming(&source, &errors);
+        let parsed = errors.to_vec();
+        assert!(
+            parsed
+                .iter()
+                .any(|error| error.code == ErrorCode::UnparsableContent)
+        );
+        assert!(
+            parsed
+                .iter()
+                .all(|error| error.code != ErrorCode::SpeakerNotDefined)
+        );
+        // Typed ID fields retain E307; recovery may also leave incomplete
+        // participant declarations, whose subsequent join checks are separate.
+        file.validate(&errors, TranscriptName::Anonymous);
         let diagnostics = errors.into_vec();
         let syntax: Vec<_> = diagnostics
             .iter()
@@ -1175,21 +1988,16 @@ fn speaker_specs_reject_non_ascii_at_the_source_boundary() {
         assert!(!syntax.is_empty(), "E307_{example}: {diagnostics:?}");
         for error in syntax {
             let span = error.location.span;
-            assert_eq!(&source[span.start as usize..span.end as usize], code);
+            assert!(source[span.start as usize..span.end as usize].contains(code));
             assert!(error.message.contains("ASCII"));
         }
-        assert!(
-            diagnostics
-                .iter()
-                .all(|error| error.code != ErrorCode::SpeakerNotDefined)
-        );
     }
 }
 
 /// Legacy count syntax must not be offered as the repair for its own error.
 /// The modern explicit repetition is admitted through the same public parser.
 #[test]
-fn repetition_specs_recommend_supported_explicit_speech() {
+fn repetition_specs_reject_legacy_counts_without_guessing_repairs() {
     use talkbank_model::ErrorCode;
     enum Notation {
         LegacyComplete,
@@ -1214,20 +2022,8 @@ fn repetition_specs_recommend_supported_explicit_speech() {
                 assert!(
                     parsed
                         .iter()
-                        .any(|error| error.code == ErrorCode::ContentAnnotationParseError)
+                        .any(|error| error.code == ErrorCode::UnparsableContent)
                 );
-                if matches!(notation, Notation::LegacyComplete) {
-                    assert!(
-                        parsed
-                            .iter()
-                            .any(|error| error.message.contains("unsupported")
-                                && error
-                                    .suggestion
-                                    .as_ref()
-                                    .is_some_and(|text| text.contains("word [/] word"))),
-                        "example {example}: {parsed:?}"
-                    );
-                }
                 assert!(parsed.iter().all(|error| {
                     error
                         .suggestion
@@ -1294,8 +2090,10 @@ fn shortening_specs_distinguish_embedded_markers_from_admitted_suffixes() {
                         .all(|error| error.code == ErrorCode::UnparsableContent)
                 );
                 assert_eq!(forms, [None]);
-                assert_eq!(validated.len(), 1);
-                assert_eq!(validated[0].code, ErrorCode::InvalidFormType);
+                assert!(
+                    validated.is_empty(),
+                    "parser rejection needs no raw-text rescan"
+                );
             }
             Placement::Absent => {
                 assert!(parsed.is_empty() && validated.is_empty());
@@ -1563,26 +2361,25 @@ fn comma_specs_keep_main_tier_semantics_separate_from_dependent_recovery() {
     }
 }
 
-/// Empty POS diagnostics must locate the original bytes, including UTF-8
-/// and continued lines; accepted controls must not acquire recovery errors.
+/// Grammar-rejected morphology stays rejected without reparsing recovery text
+/// to distinguish empty POS from split tails; valid controls remain clean.
 #[test]
 fn morphology_specs_distinguish_empty_pos_from_split_tails() {
-    use talkbank_model::{ErrorCode, Span};
+    use talkbank_model::ErrorCode;
     enum Expectation {
         Accepted,
-        EmptyPos(&'static str),
         Malformed,
     }
     let parser = TreeSitterParser::new().expect("parser");
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
     for (spec, example, expectation) in [
-        ("E760", 1, Expectation::EmptyPos("|we")),
-        ("E760", 2, Expectation::EmptyPos("|home")),
+        ("E760", 1, Expectation::Malformed),
+        ("E760", 2, Expectation::Malformed),
         ("E760", 3, Expectation::Accepted),
-        ("E760", 4, Expectation::EmptyPos("|go")),
+        ("E760", 4, Expectation::Malformed),
         ("E760", 5, Expectation::Accepted),
-        ("E760", 6, Expectation::EmptyPos("|café")),
+        ("E760", 6, Expectation::Malformed),
         ("E702", 3, Expectation::Accepted),
         ("E702", 4, Expectation::Malformed),
         ("E702", 5, Expectation::Malformed),
@@ -1594,15 +2391,6 @@ fn morphology_specs_distinguish_empty_pos_from_split_tails() {
         let observed = errors.into_vec();
         match expectation {
             Expectation::Accepted => assert!(observed.is_empty(), "{spec}_{example}: {observed:?}"),
-            Expectation::EmptyPos(item) => {
-                assert_eq!(observed.len(), 1, "{spec}_{example}: {observed:?}");
-                let start = source.find(item).expect("authored offending item");
-                assert_eq!(observed[0].code, ErrorCode::MorItemEmptyPos);
-                assert_eq!(
-                    observed[0].location.span,
-                    Span::from_usize(start, start + item.len())
-                );
-            }
             Expectation::Malformed => {
                 assert!(!observed.is_empty(), "{spec}_{example} must be rejected");
                 assert!(
@@ -1746,6 +2534,69 @@ fn empty_tier_specs_preserve_namespace_and_content_presence() {
     }
 }
 
+#[test]
+fn reference_excerpt_admission_distinguishes_empty_from_invalid_ranges() {
+    use talkbank_model::{ErrorContext, SourceExcerptError, SourceLocation, Span};
+    let source = std::fs::read_to_string(
+        workspace_root().join("corpus/reference/audio/chinese-adult-conversation.cha"),
+    )
+    .expect("Unicode reference source");
+    let (start, character) = source
+        .char_indices()
+        .find(|(_, ch)| ch.len_utf8() > 1)
+        .expect("reference contains a multibyte scalar");
+    let end = start + character.len_utf8();
+    for range in [0..0, start..end, source.len()..source.len()] {
+        let checked = SourceLocation::from_offsets_in_source(range.start, range.end, &source)
+            .expect("reference range");
+        let line = checked.line.expect("checked source line");
+        let column = checked.column.expect("checked source column");
+        let explicit =
+            SourceLocation::from_offsets_with_position(range.start, range.end, line, column);
+        assert_eq!(explicit, checked);
+        let relative = SourceLocation::from_range(range);
+        assert_eq!(relative.span, checked.span);
+        assert_eq!((relative.line, relative.column), (None, None));
+        assert_eq!(relative.with_position(line, column), checked);
+        let from_span: SourceLocation = checked.span.into();
+        assert_eq!(from_span.span, checked.span);
+        assert_eq!((from_span.line, from_span.column), (None, None));
+    }
+    let excerpt = ErrorContext::from_source_with_span(&source, start, end, &source[start..end])
+        .expect("whole scalar is a valid source excerpt");
+    assert_eq!(excerpt.source_text, character.to_string());
+    assert_eq!(excerpt.span, Span::from_usize(0, character.len_utf8()));
+    for offset in [0, start, source.len()] {
+        let empty = ErrorContext::from_source_with_span(&source, offset, offset, "")
+            .expect("valid insertion range");
+        assert!(empty.source_text.is_empty());
+        assert_eq!(empty.span, Span::from_usize(0, 0));
+    }
+    for (start, end) in [
+        (1, 0),
+        (0, source.len() + 1),
+        (start + 1, end),
+        (start, end - 1),
+        (usize::MAX, usize::MAX),
+    ] {
+        let error = ErrorContext::from_source_with_span(&source, start, end, "")
+            .expect_err("invalid range cannot produce even an empty context");
+        let SourceExcerptError::InvalidRange {
+            start: actual_start,
+            end: actual_end,
+            source_len,
+        } = error
+        else {
+            panic!("invalid source range must be distinguished from coordinate capacity");
+        };
+        assert_eq!(
+            (actual_start, actual_end, source_len),
+            (start, end, source.len())
+        );
+        assert!(error.to_string().contains("not a UTF-8 slice"));
+    }
+}
+
 fn assert_document_rebasing(errors: &[talkbank_model::ParseError], source: &str) -> (usize, usize) {
     use talkbank_model::{ErrorSink, RebasedErrorSink, SourceLocation, Span};
     // Model a CHAT source embedded after a real prefix, without parsing the
@@ -1829,6 +2680,40 @@ fn assert_fragment_projection(
         let Some(fragment) = source.get(origin..error.location.span.end as usize) else {
             continue;
         };
+        if let Some(original_context) = error.context.as_ref()
+            && !error.location.span.is_dummy()
+        {
+            // A confirmed source range permits a fresh, snippet-relative
+            // context. Keep the diagnostic's found/expected evidence verbatim;
+            // do not confuse this excerpt with any reconstructed old context.
+            let excerpt = talkbank_model::ErrorContext::from_source_with_span(
+                source,
+                origin,
+                error.location.span.end as usize,
+                original_context.found.clone(),
+            )
+            .expect("confirmed source range")
+            .with_expected(original_context.expected.clone());
+            assert_eq!(excerpt.source_text, fragment);
+            assert_eq!(excerpt.span, Span::from_usize(0, fragment.len()));
+            assert_eq!(
+                excerpt.line_offset,
+                Some(
+                    source.as_bytes()[..origin]
+                        .iter()
+                        .filter(|byte| **byte == b'\n')
+                        .count()
+                        + 1
+                )
+            );
+            assert_eq!(excerpt.found, original_context.found);
+            assert_eq!(excerpt.expected, original_context.expected);
+            let decoded: talkbank_model::ErrorContext = serde_json::from_value(
+                serde_json::to_value(&excerpt).expect("source excerpt wire"),
+            )
+            .expect("decode source excerpt");
+            assert_eq!(decoded, excerpt);
+        }
         let project = |span: Span| {
             Span::from_usize(
                 (span.start as usize)
@@ -1869,6 +2754,7 @@ fn assert_fragment_projection(
 
 #[test]
 fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
+    use talkbank_model::SourceLocation;
     let corpus = ChatCorpus::read(
         &workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors"),
     )
@@ -1901,8 +2787,101 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
         projected_large_contexts += contexts;
         let mut rendered = original.clone();
         let index = SourceIndex::new(fixture.source());
+        // Source-aware API admission is separate from display enrichment:
+        // it must preserve real diagnostic spans, not clamp malformed input.
+        for diagnostic in &original {
+            for label in &diagnostic.labels {
+                let located = SourceLocation::from_offsets_in_source(
+                    label.span.start as usize,
+                    label.span.end as usize,
+                    fixture.source(),
+                )
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "{}: {} label must belong to its source: {error:?}",
+                        fixture.path().display(),
+                        diagnostic.code,
+                    )
+                });
+                assert_eq!(located.span, label.span);
+                assert!(
+                    fixture
+                        .source()
+                        .get(label.span.start as usize..label.span.end as usize,)
+                        .is_some(),
+                    "label must select complete UTF-8 source bytes"
+                );
+            }
+            let span = diagnostic.location.span;
+            if span.is_dummy() {
+                continue;
+            }
+            let located = SourceLocation::from_offsets_in_source(
+                span.start as usize,
+                span.end as usize,
+                fixture.source(),
+            )
+            .expect("concrete diagnostic range belongs to its source");
+            let point =
+                SourceLocation::from_offset_in_source(span.start as usize, fixture.source())
+                    .expect("diagnostic start belongs to its source");
+            let (line, column) = index.line_col_of(span.start);
+            assert_eq!(located.span, span);
+            assert_eq!(
+                (located.line, located.column),
+                (Some(line + 1), Some(column + 1))
+            );
+            assert_eq!((point.line, point.column), (located.line, located.column));
+            assert_eq!(point.span.start, point.span.end);
+        }
+        let end = fixture.source().len();
+        let eof = SourceLocation::from_offset_in_source(end, fixture.source())
+            .expect("zero-width EOF location is legitimate");
+        assert_eq!(eof.span.start as usize, end);
+        assert_eq!(eof.span.start, eof.span.end);
+        assert!(SourceLocation::from_offset_in_source(end + 1, fixture.source()).is_err());
+        assert!(SourceLocation::from_offsets_in_source(1, 0, fixture.source()).is_err());
+        assert!(SourceLocation::from_offsets_in_source(0, end + 1, fixture.source()).is_err());
         enhance_errors_with_index(&mut rendered, &index);
         assert_eq!(original.len(), rendered.len());
+        let shared_source =
+            miette::NamedSource::new("spec.cha", std::sync::Arc::new(fixture.source().to_owned()));
+        for (raw, enhanced) in original.iter().zip(&rendered) {
+            // Embedded display context and full-file source are different
+            // coordinate spaces. The standalone helper consumes the former;
+            // the shared-source helper must also accept untouched diagnostics.
+            let standalone = talkbank_transform::render_error_with_miette(enhanced);
+            let shared_raw =
+                talkbank_transform::render_error_with_miette_with_named_source(raw, &shared_source);
+            let shared_enhanced = talkbank_transform::render_error_with_miette_with_named_source(
+                enhanced,
+                &shared_source,
+            );
+            for text in [&standalone, &shared_raw, &shared_enhanced] {
+                assert!(
+                    text.contains(&raw.code.to_string()),
+                    "diagnostic code lost: {text}"
+                );
+            }
+            assert_eq!(
+                shared_raw,
+                talkbank_transform::render_error_with_miette_with_source(
+                    raw,
+                    "spec.cha",
+                    fixture.source(),
+                ),
+                "shared ownership must not change source resolution"
+            );
+            assert_eq!(
+                shared_enhanced,
+                talkbank_transform::render_error_with_miette_with_source(
+                    enhanced,
+                    "spec.cha",
+                    fixture.source(),
+                ),
+                "embedded display context must win over fallback source"
+            );
+        }
         // The public renderer accepts raw diagnostics and owns enhancement of
         // its clone. Never feed its display-coordinate result back as raw input.
         let untouched = original.clone();
@@ -1927,6 +2906,7 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
                     !report.text.is_empty(),
                     "plain rendering must not disappear"
                 );
+                assert!(report.text.contains(&expected.code.to_string()));
                 match mode {
                     talkbank_transform::RenderMode::Plain => assert!(report.ansi.is_none()),
                     talkbank_transform::RenderMode::Ansi => {
@@ -1944,7 +2924,7 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
             assert_eq!(before.labels.len(), after.labels.len());
             // Coordinates are bytes, not Unicode scalar or display columns.
             // Count source newlines independently of the indexed lookup.
-            let offset = (after.location.span.start as usize).min(fixture.source().len() - 1);
+            let offset = (after.location.span.start as usize).min(fixture.source().len());
             let prefix = &fixture.source().as_bytes()[..offset];
             let line = prefix.iter().filter(|byte| **byte == b'\n').count() + 1;
             let column = offset
@@ -2009,4 +2989,36 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
         rebased_unlocated > 0 && rebased_unlocated < rebased_diagnostics,
         "specs must exercise both located and explicitly unlocated diagnostics"
     );
+}
+
+/// Retired delimiter codes must not defer away the actual source boundary.
+#[test]
+fn delimiter_specs_reject_recovery_without_inventing_a_balance_diagnosis() {
+    use talkbank_model::{ErrorCode, Severity};
+    let parser = TreeSitterParser::new().expect("parser");
+    let corpus =
+        workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
+    for (spec, example, valid) in [
+        ("E312", 1, false),
+        ("E312", 2, false),
+        ("E313", 1, false),
+        ("E313", 2, true),
+        ("E313", 3, false),
+    ] {
+        let source = std::fs::read_to_string(corpus.join(format!("{spec}_{example}.cha")))
+            .expect("canonical delimiter spec");
+        let errors = ErrorCollector::new();
+        let file = parser.parse_chat_file_streaming(&source, &errors);
+        file.validate(&errors, TranscriptName::Anonymous);
+        let diagnostics = errors.into_vec();
+        assert_eq!(
+            diagnostics.iter().any(|e| e.severity == Severity::Error),
+            !valid,
+            "{spec}_{example}: {diagnostics:?}"
+        );
+        assert!(diagnostics.iter().all(|e| !matches!(
+            e.code,
+            ErrorCode::UnclosedBracket | ErrorCode::UnclosedParenthesis
+        )));
+    }
 }

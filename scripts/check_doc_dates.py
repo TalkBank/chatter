@@ -38,11 +38,12 @@ sees. Stamp the affected docs with the squash date, and only after confirming
 each one is actually current: six were affected by the 2026-08-12 squash, all
 of them documenting work inside it.
 
-`--prospective` also checks changes since the configured upstream against
-today's local date, before a commit or squash can re-date them. Without an
-upstream (including detached CI), it checks uncommitted changes against HEAD.
-New, unstaged and staged documents participate; deleted documents do not.
-The gate and commit hook both use this mode: a content-only gate receipt cannot
+`--prospective --snapshot index` checks staged changes against HEAD for an
+ordinary commit. With the default worktree snapshot, `--prospective` checks
+changes since the configured upstream for a future squash, falling back to
+HEAD without an upstream (including detached CI). That worktree mode includes
+new and unstaged documents; deleted documents do not participate in either mode.
+The gate and commit hook use these distinct scopes: a content-only gate receipt cannot
 prove a history-dependent date check after a later commit. CI still checks the
 actual committed dates. No dates are automatically rewritten.
 """
@@ -171,17 +172,20 @@ def last_commit_date(path: str) -> str | None:
 
 
 def prospective_paths(snapshot: Snapshot) -> set[str]:
-    """Changes a commit/squash would re-date, including not-yet-staged pages.
+    """Changes the selected snapshot's commit operation would re-date.
 
-    A configured upstream is the last published boundary. Detached CI or a
-    branch without an upstream uses HEAD and checks its uncommitted changes;
-    committed history is still checked separately. No second checkout is made.
+    The index represents an ordinary commit, relative to HEAD. Only the
+    worktree's squash preview uses the published boundary and unstaged pages.
+    Committed history is still checked separately. No second checkout is made.
     """
-    upstream = subprocess.run(
-        ["git", "rev-parse", "--verify", "@{upstream}"],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
-    )
-    base = upstream.stdout.strip() if upstream.returncode == 0 else "HEAD"
+    base = "HEAD"
+    if snapshot is Snapshot.WORKTREE:
+        upstream = subprocess.run(
+            ["git", "rev-parse", "--verify", "@{upstream}"],
+            cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+        )
+        if upstream.returncode == 0:
+            base = upstream.stdout.strip()
     options = ["--cached"] if snapshot is Snapshot.INDEX else []
     changed = subprocess.run(
         ["git", "diff", *options, "--name-only", "-z", base, "--", "*.md"],

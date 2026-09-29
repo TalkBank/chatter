@@ -2283,7 +2283,8 @@ export default grammar({
     // Chat.flex: DUR_TIMES = ({N} | [:\-;,])+
     // Patterns: "17:30-18:00", "8:30:31"
     // Strict match for digit-and-separator patterns; generic catch-all for malformed
-    // values that the validator flags as E541/E542.
+    // values that the validator flags as E540/E541. Lexical shape alone does
+    // not prove a legal clock value or a legal pattern for either header.
     time_duration_contents: $ => choice($.strict_time, $.generic_time),
     strict_time: $ => token(/[0-9:\-;,]+/),
     generic_time: $ => /[^\r\n]+/,

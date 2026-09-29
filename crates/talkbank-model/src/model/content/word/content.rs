@@ -165,7 +165,7 @@ impl WriteChat for WordContent {
                 w.write_char('\u{0002}')?;
                 w.write_char('\u{0002}')
             }
-            WordContent::CompoundMarker(_) => w.write_char('+'),
+            WordContent::CompoundMarker(marker) => marker.write_chat(w),
             WordContent::CliticBoundary(marker) => marker.write_chat(w),
         }
     }

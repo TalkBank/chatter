@@ -284,9 +284,16 @@ mod tests {
     fn minimal_request() -> JudgmentRequest {
         JudgmentRequest {
             session_id: SessionId("test_session_001".into()),
-            sample_type: Some(SampleTypeLabel("clinician interview".into())),
-            declared_roles: vec![RoleLabel("Investigator".into())],
-            consent_tier: Some(ConsentTierLabel("audio only".into())),
+            sample_type: Some(
+                SampleTypeLabel::try_from("clinician interview".to_string())
+                    .expect("nonblank label"),
+            ),
+            declared_roles: vec![
+                RoleLabel::try_from("Investigator".to_string()).expect("nonblank label"),
+            ],
+            consent_tier: Some(
+                ConsentTierLabel::try_from("audio only".to_string()).expect("nonblank label"),
+            ),
             age_months: Some(AgeMonths(24)),
             anchor: SpeakerCode::new("CHI"),
             samples: vec![

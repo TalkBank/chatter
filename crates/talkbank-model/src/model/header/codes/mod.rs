@@ -23,7 +23,7 @@ pub(crate) mod time_values;
 
 // Re-export all public types
 pub use age::AgeValue;
-pub use date::{ChatDate, Month};
+pub use date::{ChatDate, CheckedChatDate, Month};
 pub(crate) use date::{DateDigitError, DateDigits};
 pub use header_strings::*;
 pub use language::{LanguageCode, LanguageCodeError};

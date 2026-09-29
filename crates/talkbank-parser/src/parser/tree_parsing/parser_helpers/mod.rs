@@ -28,14 +28,13 @@ pub(crate) use cst_assertions::{
     SlotState, check_not_missing, expect_delimiter, expect_present, expect_structure,
     extract_utf8_text, find_child_by_kind, present,
 };
-pub(crate) use error_analysis::{
-    analyze_dependent_tier_error, analyze_error_node, analyze_readable_dependent_error,
-};
+pub(crate) use error_analysis::{analyze_dependent_tier_error, analyze_error_node};
 pub(crate) use error_checking::{
     check_for_errors_recursive_with_context, collect_recovery_nodes, surface_displaced,
 };
 pub(crate) use header_slots::{
-    ContentSlot, HeaderSite, Refused, read_source_content, unknown_header_from_node,
+    ContentReadError, ContentSlot, HeaderSite, read_admitted_content, read_source_content,
+    unknown_header_from_node,
 };
 pub(crate) use marked_token::after_marker;
 // The CA helpers dispatch through the GENERATED `from_char` tables. The word

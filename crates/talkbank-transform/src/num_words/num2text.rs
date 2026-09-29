@@ -2,7 +2,7 @@
 //!
 //! Converts digit strings to their word-form equivalents so generated CHAT
 //! satisfies E220 (digits are not allowed in words for languages that do not
-//! permit them). Supports 13 languages via lookup tables (NUM2LANG) plus
+//! permit them). Uses language-specific lexical tables (NUM2LANG) plus
 //! Chinese/Japanese/Cantonese via `num2chinese`.
 //!
 //! Also handles currency-prefixed numbers (e.g. "$12" → "twelve dollars").
@@ -11,8 +11,9 @@
 //! 1. Strip recognized currency prefix/suffix → expand digits → append currency word
 //! 2. If not all digits → return as-is
 //! 3. If Chinese/Japanese/Cantonese → `num2chinese`
-//! 4. Otherwise → NUM2LANG table lookup (reverse key order, substring replacement)
-//! 5. If no table → return original string
+//! 4. English/Spanish → language-specific cardinal composition
+//! 5. Otherwise → exact NUM2LANG table lookup only
+//! 6. If unsupported → return original string
 
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -79,10 +80,7 @@ fn try_expand_digit_leading_hyphen(word: &str, lang: &str) -> Option<String> {
     if rest.is_empty() || !rest.chars().next()?.is_alphabetic() {
         return None;
     }
-    let expanded = expand_single_number(prefix, lang);
-    if expanded == prefix {
-        return None; // no expansion table for this language, don't rewrite
-    }
+    let expanded = expand_single_number(prefix, lang)?;
     Some(format!("{expanded}-{rest}"))
 }
 
@@ -96,13 +94,8 @@ fn try_expand_currency(word: &str, lang: &str) -> Option<String> {
         if let Some(rest) = word.strip_prefix(symbol) {
             let rest = rest.trim();
             if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
-                let expanded = expand_single_number(rest, lang);
-                // Only use currency word if the number actually expanded
-                if expanded != rest {
-                    return Some(format!("{expanded} {currency_word}"));
-                }
-                // Number didn't expand (unknown language) still strips the symbol
-                return Some(format!("{rest} {currency_word}"));
+                let expanded = expand_single_number(rest, lang)?;
+                return Some(format!("{expanded} {currency_word}"));
             }
         }
     }
@@ -112,11 +105,8 @@ fn try_expand_currency(word: &str, lang: &str) -> Option<String> {
         if let Some(rest) = word.strip_suffix(symbol) {
             let rest = rest.trim();
             if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
-                let expanded = expand_single_number(rest, lang);
-                if expanded != rest {
-                    return Some(format!("{expanded} {currency_word}"));
-                }
-                return Some(format!("{rest} {currency_word}"));
+                let expanded = expand_single_number(rest, lang)?;
+                return Some(format!("{expanded} {currency_word}"));
             }
         }
     }
@@ -132,6 +122,8 @@ fn try_expand_currency(word: &str, lang: &str) -> Option<String> {
 /// - Currency-prefixed numbers ("$12" → "twelve dollars")
 ///
 /// Returns the original string if expansion is not possible.
+/// English decades require multiples of ten in 0–90 shorthand or 1100–2990
+/// full-year form. Unsupported suffix-bearing input is preserved exactly.
 ///
 /// # Arguments
 /// * `word` - The word to potentially expand.
@@ -163,11 +155,14 @@ pub fn expand_number(word: &str, lang: &str) -> String {
                 .iter()
                 .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()));
         if all_digit_parts {
-            let expanded: Vec<String> = parts
+            let expanded: Option<Vec<String>> = parts
                 .iter()
                 .map(|part| expand_single_number(part, lang))
                 .collect();
-            return expanded.join(" ");
+            return match expanded {
+                Some(expanded) => expanded.join(" "),
+                None => word.to_owned(),
+            };
         }
 
         // Digit-leading hyphen compound ("17-year-old", "3-star"): only the
@@ -184,13 +179,17 @@ pub fn expand_number(word: &str, lang: &str) -> String {
         return expanded;
     }
 
-    expand_single_number(&normalized, lang)
+    match expand_single_number(&normalized, lang) {
+        Some(expanded) => expanded,
+        None => word.to_owned(),
+    }
 }
 
-/// Expand a single number string (no dashes).
-fn expand_single_number(word: &str, lang: &str) -> String {
+/// Admit an expansion only when a reviewed composer or exact entry supplies it.
+/// `None` means unsupported input, never a partially rewritten numeral.
+fn expand_single_number(word: &str, lang: &str) -> Option<String> {
     if !word.chars().all(|c| c.is_ascii_digit()) || word.is_empty() {
-        return word.to_string();
+        return None;
     }
 
     let lang_lower = lang.to_lowercase();
@@ -199,110 +198,37 @@ fn expand_single_number(word: &str, lang: &str) -> String {
     match lang_lower.as_str() {
         "zho" | "cmn" => {
             if let Ok(n) = word.parse::<u64>() {
-                return num2chinese(n, ChineseScript::Simplified);
+                return Some(num2chinese(n, ChineseScript::Simplified));
             }
         }
         "jpn" | "yue" => {
             if let Ok(n) = word.parse::<u64>() {
-                return num2chinese(n, ChineseScript::Traditional);
+                return Some(num2chinese(n, ChineseScript::Traditional));
             }
         }
         _ => {}
     }
 
-    // NUM2LANG lookup: exact match first, then integer decomposition
+    // Complete table phrases are not grammatical scale-unit definitions.
     if let Some(table) = NUM2LANG.get(&lang_lower) {
+        if lang_lower == "spa" {
+            return match word.parse::<u64>() {
+                Ok(n) => super::spanish_cardinal::expand(n, table).ok(),
+                Err(_) => None,
+            };
+        }
         // English table phrases include their multiplier ("one thousand").
         // They are not scale-unit names suitable for generic multiplication.
         if lang_lower == "eng" {
             return match word.parse::<u64>() {
-                Ok(n) => match super::english_cardinal::expand(n, table) {
-                    Some(expanded) => expanded,
-                    None => word.to_owned(),
-                },
-                Err(_) => word.to_owned(),
+                Ok(n) => super::english_cardinal::expand(n, table),
+                Err(_) => None,
             };
         }
-        // 1. Exact table lookup (handles 1-99, hundreds, etc.)
-        if let Some(value) = table.get(word) {
-            return value.clone();
-        }
-
-        // 2. Integer decomposition for numbers beyond exact table entries
-        if let Ok(n) = word.parse::<u64>()
-            && let Some(expanded) = decompose_with_table(n, table)
-        {
-            return expanded;
-        }
+        return table.get(word).cloned();
     }
 
-    // No expansion possible, return original
-    word.to_string()
-}
-
-/// Decompose a number into words using a lookup table.
-///
-/// Strategy: greedily subtract the largest table entry that fits,
-/// building up the word form. E.g., 1234 → "one thousand two hundred
-/// thirty-four" (if table has 1000, 200, 34 or 30+4).
-fn decompose_with_table(mut n: u64, table: &BTreeMap<String, String>) -> Option<String> {
-    if n == 0 {
-        return table.get("0").cloned();
-    }
-
-    // Build a sorted list of (numeric_key, word) pairs, largest first
-    let mut entries: Vec<(u64, &str)> = table
-        .iter()
-        .filter_map(|(k, v)| k.parse::<u64>().ok().map(|num| (num, v.as_str())))
-        .filter(|(num, _)| *num > 0)
-        .collect();
-    entries.sort_by_key(|b| std::cmp::Reverse(b.0));
-
-    let mut parts: Vec<String> = Vec::new();
-
-    for &(key_num, word_form) in &entries {
-        if key_num == 0 {
-            continue;
-        }
-        if key_num <= n {
-            if key_num >= 100 {
-                // For hundreds/thousands: "two hundred", "three thousand"
-                let multiplier = n / key_num;
-                let remainder = n % key_num;
-                if multiplier > 1 {
-                    // Recursively expand the multiplier; a multiplier this
-                    // table cannot express means the whole number cannot be
-                    // decomposed, so propagate the None.
-                    let mult_word = decompose_with_table(multiplier, table)?;
-                    parts.push(format!("{mult_word} {word_form}"));
-                } else {
-                    parts.push(word_form.to_string());
-                }
-                n = remainder;
-                if n == 0 {
-                    break;
-                }
-            } else {
-                // For units/teens/tens: exact match
-                parts.push(word_form.to_string());
-                n -= key_num;
-                if n == 0 {
-                    break;
-                }
-            }
-        }
-    }
-
-    if n > 0 {
-        // Couldn't fully decompose
-        return None;
-    }
-
-    if parts.is_empty() {
-        return None;
-    }
-
-    Some(parts.join(" "))
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -315,7 +241,7 @@ const ORDINAL_SUFFIXES_EN: &[&str] = &["st", "nd", "rd", "th"];
 /// If `word` is an English ordinal suffix form (`"3rd"`, `"21st"`),
 /// strip the suffix, parse the digit prefix, and route to
 /// `ordinal_year_eng::expand_ordinal_eng`. Returns `None` for any
-/// non-matching token so the caller falls through to its other
+/// non-matching or unsupported token so the caller falls through to its other
 /// detection branches.
 fn try_expand_eng_ordinal(word: &str) -> Option<String> {
     for suffix in ORDINAL_SUFFIXES_EN {
@@ -324,7 +250,8 @@ fn try_expand_eng_ordinal(word: &str) -> Option<String> {
             && stem.chars().all(|c| c.is_ascii_digit())
             && let Ok(n) = stem.parse::<u64>()
         {
-            return Some(super::ordinal_year_eng::expand_ordinal_eng(n));
+            let admitted = super::ordinal_year_eng::SupportedOrdinal::admit(n)?;
+            return Some(super::ordinal_year_eng::expand_ordinal_eng(admitted));
         }
     }
     None
@@ -342,7 +269,8 @@ fn try_expand_eng_decade(word: &str) -> Option<String> {
         return None;
     }
     let n: u64 = stem.parse().ok()?;
-    Some(super::ordinal_year_eng::expand_decade_eng(n))
+    let admitted = super::ordinal_year_eng::SupportedDecade::admit(n)?;
+    Some(super::ordinal_year_eng::expand_decade_eng(admitted))
 }
 
 #[cfg(test)]

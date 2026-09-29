@@ -24,7 +24,7 @@
 //!
 //! # Where the rules live
 //!
-//! [`measuring_verdict`] owns the phonological/sign table and
+//! [`super::measurement`] owns the typed phonological/sign table and
 //! [`excluded_by_annotations`] owns the annotation rule. Both entry points
 //! assemble their answer from those two and nothing else, so the two spellings
 //! below differ only in what they can carry, never in what they decide.
@@ -49,6 +49,9 @@ use crate::model::{
     BracketedContent, ContainerMut, ContentAnnotation, GroupKind, GroupRef, PhoGroup, SinGroup,
 };
 
+use super::measurement::{
+    AtomicFor, Measured, Measurement, MeasuringGroup, Mor, Pho, Sin, TraversalDomain, Unscoped, Wor,
+};
 use super::to_chat_display_string;
 use super::walk::LanguageScope;
 
@@ -113,28 +116,29 @@ enum Verdict {
     Excluded,
 }
 
-/// The phonological/sign table: what `domain` does with a group of `kind`.
-///
-/// The whole cross-product, with no cell folded into another, because the
-/// interesting fact is that the two CROSS cells differ: a phonological group
-/// is one unit under `%pho` and contributes nothing at all under `%sin`.
-/// Collapsing those to one boolean is what a walker does, and it is why a
-/// walker's answer cannot serve a count.
+/// Payload-free projection of the typed measuring policy for mutable walks.
+/// Atomic and excluded remain distinct; neither is permission to enter.
 #[inline]
 fn measuring_verdict(kind: AtomicKind, domain: Option<TierDomain>) -> Verdict {
-    match (kind, domain) {
-        // No tier domain, or a domain with no tier for these groups: the words
-        // inside are ordinary main-tier words.
-        (_, None) | (_, Some(TierDomain::Mor | TierDomain::Wor)) => Verdict::Enter,
-        // The domain that measures this kind treats it as one unit.
-        (AtomicKind::Pho, Some(TierDomain::Pho)) | (AtomicKind::Sin, Some(TierDomain::Sin)) => {
-            Verdict::Atomic
+    fn verdict<M: Measurement>(kind: AtomicKind) -> Verdict {
+        // Only the decision is needed by mutable traversal; no AST payload is
+        // fabricated or borrowed through a second route.
+        let group = match kind {
+            AtomicKind::Pho => MeasuringGroup::Pho(()),
+            AtomicKind::Sin => MeasuringGroup::Sin(()),
+        };
+        match M::measure(group) {
+            Measured::Enter => Verdict::Enter,
+            Measured::Atomic(_) => Verdict::Atomic,
+            Measured::Excluded => Verdict::Excluded,
         }
-        // The OTHER measuring domain: a phonological group has no sign
-        // representation, and a sign group has no phonological one.
-        (AtomicKind::Pho, Some(TierDomain::Sin)) | (AtomicKind::Sin, Some(TierDomain::Pho)) => {
-            Verdict::Excluded
-        }
+    }
+    match domain {
+        None => verdict::<<Unscoped as TraversalDomain>::Measurement>(kind),
+        Some(TierDomain::Mor) => verdict::<<Mor as TraversalDomain>::Measurement>(kind),
+        Some(TierDomain::Wor) => verdict::<<Wor as TraversalDomain>::Measurement>(kind),
+        Some(TierDomain::Pho) => verdict::<<Pho as TraversalDomain>::Measurement>(kind),
+        Some(TierDomain::Sin) => verdict::<<Sin as TraversalDomain>::Measurement>(kind),
     }
 }
 
@@ -232,16 +236,24 @@ impl<'a> Entered<'a> {
 
 /// What a traversal for a given domain does with one container.
 #[derive(Debug, Clone, Copy)]
-pub(super) enum Descent<'a> {
+pub(super) enum Descent<'a, A = AtomicUnit<'a>> {
     /// Enter it.
     Into(Entered<'a>),
     /// Do not enter: it is one alignable position in this tier, of its own.
-    Atomic(AtomicUnit<'a>),
+    Atomic(A),
     /// Do not enter: it contributes nothing to this tier.
     Excluded,
 }
 
-impl<'a> Descent<'a> {
+impl<'a, A> Descent<'a, A> {
+    fn map_atomic<B>(self, map: impl FnOnce(A) -> B) -> Descent<'a, B> {
+        match self {
+            Self::Into(entered) => Descent::Into(entered),
+            Self::Atomic(atomic) => Descent::Atomic(map(atomic)),
+            Self::Excluded => Descent::Excluded,
+        }
+    }
+
     /// The content to walk into, for a consumer that only emits WORDS.
     ///
     /// Such a consumer treats `Atomic` and `Excluded` identically, because
@@ -268,6 +280,20 @@ pub(super) fn descend<'a>(
     structure: ContentStructure<'a>,
     domain: Option<TierDomain>,
 ) -> Descent<'a> {
+    match domain {
+        None => descend_for::<Unscoped>(structure).map_atomic(|never| match never {}),
+        Some(TierDomain::Mor) => descend_for::<Mor>(structure).map_atomic(|never| match never {}),
+        Some(TierDomain::Wor) => descend_for::<Wor>(structure).map_atomic(|never| match never {}),
+        Some(TierDomain::Pho) => descend_for::<Pho>(structure).map_atomic(AtomicUnit::Pho),
+        Some(TierDomain::Sin) => descend_for::<Sin>(structure).map_atomic(AtomicUnit::Sin),
+    }
+}
+
+/// Typed producer: a phonology walk can receive only a phonological atom.
+pub(super) fn descend_for<'a, D: TraversalDomain>(
+    structure: ContentStructure<'a>,
+) -> Descent<'a, AtomicFor<'a, D>> {
+    let domain = D::DOMAIN;
     let into = |group: GroupRef<'a>| {
         Descent::Into(Entered {
             content: group.content(),
@@ -279,17 +305,17 @@ pub(super) fn descend<'a>(
         // attached where the reference is in hand and an angle group can never
         // reach `Atomic`.
         ContentStructure::Group(group @ GroupRef::Pho(inner)) => {
-            match measuring_verdict(AtomicKind::Pho, domain) {
-                Verdict::Enter => into(group),
-                Verdict::Atomic => Descent::Atomic(AtomicUnit::Pho(inner)),
-                Verdict::Excluded => Descent::Excluded,
+            match D::Measurement::measure(MeasuringGroup::Pho(inner)) {
+                Measured::Enter => into(group),
+                Measured::Atomic(unit) => Descent::Atomic(unit),
+                Measured::Excluded => Descent::Excluded,
             }
         }
         ContentStructure::Group(group @ GroupRef::Sin(inner)) => {
-            match measuring_verdict(AtomicKind::Sin, domain) {
-                Verdict::Enter => into(group),
-                Verdict::Atomic => Descent::Atomic(AtomicUnit::Sin(inner)),
-                Verdict::Excluded => Descent::Excluded,
+            match D::Measurement::measure(MeasuringGroup::Sin(inner)) {
+                Measured::Enter => into(group),
+                Measured::Atomic(unit) => Descent::Atomic(unit),
+                Measured::Excluded => Descent::Excluded,
             }
         }
         ContentStructure::Group(group @ (GroupRef::Angle(_) | GroupRef::Quotation(_))) => {

@@ -92,12 +92,12 @@ fn non_blank_label(raw: String, kind: LabelKind) -> Result<String, BlankLabelErr
 /// chatter-side vocabulary is imposed.
 ///
 /// Invariant: contains at least one non-whitespace character. Enforced
-/// at the JSON read boundary via `TryFrom<String>`
+/// at every public construction boundary via `TryFrom<String>`
 /// (`#[serde(try_from = "String")]`); a blank label fails the file load
 /// as a [`SessionContextError::Shape`].
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "String")]
-pub struct SampleTypeLabel(pub String);
+pub struct SampleTypeLabel(String);
 
 impl TryFrom<String> for SampleTypeLabel {
     type Error = BlankLabelError;
@@ -128,12 +128,12 @@ impl std::fmt::Display for SampleTypeLabel {
 /// the judgment prompt's `declared_adult_roles:` line.
 ///
 /// Invariant: contains at least one non-whitespace character. Enforced
-/// at the JSON read boundary via `TryFrom<String>`
+/// at every public construction boundary via `TryFrom<String>`
 /// (`#[serde(try_from = "String")]`); a blank label fails the file load
 /// as a [`SessionContextError::Shape`].
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "String")]
-pub struct RoleLabel(pub String);
+pub struct RoleLabel(String);
 
 impl TryFrom<String> for RoleLabel {
     type Error = BlankLabelError;
@@ -164,12 +164,12 @@ impl std::fmt::Display for RoleLabel {
 /// Surfaced verbatim into the judgment prompt's `consent_tier:` line.
 ///
 /// Invariant: contains at least one non-whitespace character. Enforced
-/// at the JSON read boundary via `TryFrom<String>`
+/// at every public construction boundary via `TryFrom<String>`
 /// (`#[serde(try_from = "String")]`); a blank label fails the file load
 /// as a [`SessionContextError::Shape`].
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "String")]
-pub struct ConsentTierLabel(pub String);
+pub struct ConsentTierLabel(String);
 
 impl TryFrom<String> for ConsentTierLabel {
     type Error = BlankLabelError;
@@ -324,18 +324,21 @@ mod tests {
         let record = parsed.get("NF201-3").expect("record present");
         assert_eq!(
             record.sample_type,
-            Some(SampleTypeLabel("clinician interview".to_string()))
+            Some(
+                SampleTypeLabel::try_from("clinician interview".to_string())
+                    .expect("nonblank label")
+            )
         );
         assert_eq!(
             record.declared_roles,
             vec![
-                RoleLabel("Investigator".to_string()),
-                RoleLabel("Mother".to_string())
+                RoleLabel::try_from("Investigator".to_string()).expect("nonblank label"),
+                RoleLabel::try_from("Mother".to_string()).expect("nonblank label")
             ]
         );
         assert_eq!(
             record.consent_tier,
-            Some(ConsentTierLabel("video+audio".to_string()))
+            Some(ConsentTierLabel::try_from("video+audio".to_string()).expect("nonblank label"))
         );
         assert_eq!(record.age_months, Some(AgeMonths(52)));
     }

@@ -1,17 +1,16 @@
 # AGENTS.md
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 This file provides guidance to coding agents working in this crate.
 
-**Cross-ref (root `AGENTS.md` "CST Traversal Rules"):** the *tree-sitter* production
-parser (`talkbank-parser`) must be driven by the exhaustive generated typed
-traversal module (`generated_traversal`), no hand-walk of `node.kind()` strings, no
-ERROR-text-classification. That traversal rule is specific to the tree-sitter CST and
-does NOT apply to this re2c parser's internals: `Re2cParser` is the **independent
-equivalence oracle**, with its own lexer/parser, and must produce byte-identical
-`ChatFile` ASTs. The general no-text-hacking principle (detect errors from
-structure, never by scanning raw CHAT text) DOES apply here.
+**Mandatory first read for parity, recovery or diagnostic work:**
+[Backend compatibility mandate](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate).
+That book section is the single policy authority for architecture-native
+implementation and user-visible backend differences. Do not revive earlier
+requirements for byte-identical recovered ASTs or matching diagnostics.
+Tree-sitter's generated CST traversal requirement is specific to that backend;
+it does not prescribe re2c's lexer/parser architecture.
 
 ## What This Is
 
@@ -85,12 +84,14 @@ Token::Word {
 | `MediaBullet` | start_time, end_time | Timestamp extraction |
 | `OtherSpokenEvent` | speaker, text | &*SPK:word |
 
-## Strict Adherence to grammar.js
+## Implementing the shared CHAT language
 
-The canonical grammar is `grammar/grammar.js` at this repo's root. All lexer rules and parser logic must be **directly translated** from grammar.js, not invented, not approximated. When implementing a construct:
+Use the canonical specs and `grammar/grammar.js` to establish intended syntax,
+not as an instruction to reproduce tree-sitter's implementation or recovery.
+Apply the book's compatibility mandate. When implementing a construct:
 
 1. Find the exact rule in grammar.js
-2. Translate it to re2c conditions/rules, leveraging re2c features
+2. Implement its language semantics using idiomatic re2c conditions and parser rules
 3. Verify with the matching spec in `spec/constructs/` or `spec/errors/`
 4. **Leverage re2c to produce richer tokens** than grammar.js's flat token model can express
 
@@ -193,29 +194,11 @@ Every re2c condition has a per-condition error fallback (`ErrorInMainContent`, `
 
 The lexer NEVER fails; it always returns tokens, some of which may be error tokens.
 
-## MISSING-Token Recovery Policy
+## Recovery work
 
-When the canonical (tree-sitter) parser encounters a malformed input
-that would otherwise fail to parse, it recovers by inserting a
-zero-length **MISSING** placeholder for the expected terminal and
-continues, visible in `tree-sitter parse` output as
-`(MISSING <kind> [row, col] - [row, col])`. The talkbank-parser
-tree-sitter side handles this with a two-track strategy: silent
-recovery in the model AST plus a `ParseError` diagnostic for each
-MISSING node (see
-`crates/talkbank-parser/src/parser/tree_parsing/parser_helpers/error_checking.rs`
-and the `// CRITICAL: Check for MISSING nodes - tree-sitter error
-recovery` comments at every tier-level CST entry).
-
-**Re2cParser must mirror that strategy** when it discovers a missing
-expected terminal: produce the same recovered model shape (so
-`SemanticEq` agrees on the AST) AND emit a matching diagnostic via
-`ErrorCollector` (so the malformed input remains visible to validators
-and the CLI). "Treat as known divergence" is *not* an option, the
-parity goal is whole-AST agreement, including on recovered shapes.
-
-Full policy + concrete examples + the table of construct/recovery
-pairs: `docs/parity-report.md` § MISSING-Token Recovery Policy.
+Follow the book's [Backend compatibility mandate](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate),
+not tree-sitter MISSING-node emulation. The parity report records observations
+and reproduction commands; it cannot impose a stricter recovery-equality goal.
 
 ## Rust Coding Standards
 

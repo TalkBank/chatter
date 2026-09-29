@@ -1,7 +1,7 @@
 # Toward Chatter 1.0
 
 **Status:** Current
-**Last updated:** 2026-09-05 20:17 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 This is the current readiness record; the v0.1.0 checklist is historical.
 Version 1.0 means a documented compatibility contract and reproducible evidence,
@@ -9,15 +9,14 @@ not merely a release-number change. No date is promised here.
 
 ## Baseline, 2026-09-05
 
-`just spec-status` reports 223 error specs: 179 implemented, 37 not implemented,
+On this historical baseline, `just spec-status` reported 223 error specs: 179 implemented, 37 not implemented,
 five unreachable from CHAT and two deprecated. Of 418 examples, 368 satisfy
 their claims, 50 are deferred, and none fails. These are spec/example counts,
 not a count of independent validation rules.
 
-The CHECK manifest records 131 parity cases, ten divergences and 23 no-obligation
-cases. Those are adjudicated declarations; refresh the real CHECK grounding
-before treating them as evidence for a particular CLAN build. The mapping
-inventory cannot certify runtime parity.
+The [generated CHECK assessment](../architecture/errors-and-validation/check-parity-audit.md)
+owns the current scope, adjudication counts, completion status and reopening
+criteria. This readiness record does not maintain a second CHECK status.
 
 ## Release conditions
 
@@ -44,7 +43,7 @@ names and read an obsolete Rust source path. It now reads the compiled spec
 registry, renders only mapping evidence, and has a report-currency integration
 gate. Explicit CLAN grounding cannot silently succeed without its wrapper.
 
-Next: inspect the 37 unimplemented specs with
+The baseline's next step was to inspect its 37 unimplemented specs with
 `cargo run --manifest-path spec/Cargo.toml --bin spec_status -- --deferred`.
 Prioritize rules reachable through supported CHAT input, preserve legal and
 invalid examples together, and use the observation snapshot to adjudicate

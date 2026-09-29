@@ -188,7 +188,7 @@ impl<'main> WorMainTierProjection<'main> {
 
 fn wor_display_word_from_main(word: &Word) -> Word {
     let cleaned = canonical_wor_display_text(word);
-    let mut display_word = Word::new_unchecked(cleaned, cleaned);
+    let mut display_word = Word::new_unchecked(cleaned);
     display_word.inline_bullet.clone_from(&word.inline_bullet);
     display_word
 }

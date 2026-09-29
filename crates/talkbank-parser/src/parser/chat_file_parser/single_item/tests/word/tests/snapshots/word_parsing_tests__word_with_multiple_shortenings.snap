@@ -9,7 +9,6 @@ Ok(
             end: 9,
         },
         word_id: None,
-        raw_text: "h(e)l(lo)",
         content: WordContents(
             [
                 Text(

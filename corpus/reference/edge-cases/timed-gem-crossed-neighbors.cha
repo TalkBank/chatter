@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother, INV Investigator
+@ID:	eng|sample|CHI|||||Child|||
+@ID:	eng|sample|MOT|||||Mother|||
+@ID:	eng|sample|INV|||||Investigator|||
+@Media:	timed-gem-crossed-neighbors, audio
+@Comment:	Authored control: a gem boundary falls between overlapping turns from different speakers.
+@Comment:	Constructs: paired gem, legal cross-speaker overlap, crossed section neighbors, independent competing speech.
+*CHI:	look . 10_20
+*MOT:	here we go . 15_45
+*INV:	yes . 25_26
+@Bg:	shared
+*CHI:	here . 30_40
+@Eg:	shared
+*MOT:	good . 50_60
+@End

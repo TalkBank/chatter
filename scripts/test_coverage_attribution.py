@@ -193,6 +193,17 @@ class ReportsItsOwnDisagreement(unittest.TestCase):
         self.assertIn("excluded files prevent a completeness claim", output.getvalue())
         self.assertIn("recorded command", output.getvalue())
 
+    def test_empty_residual_still_writes_requested_region_artifact(self):
+        data = export([], [file_summary("crates/c/src/a.rs", 0, 0)])
+        with (
+            patch("sys.argv", ["coverage_attribution", "unused.json", "--scope", "crates/c", "--produced-by", "recorded command", "--json", "regions.json"]),
+            patch.object(Path, "read_text", return_value=json.dumps(data)),
+            patch.object(Path, "write_text") as write,
+            patch("sys.stdout", io.StringIO()),
+        ):
+            self.assertEqual(attribution.main(), 0)
+        write.assert_called_once_with("[]\n")
+
     def test_summary_without_functions_is_not_silently_accepted(self):
         _, disagreements = attribution.build_rows(
             export([], [file_summary("crates/c/src/a.rs", 1, 2)]), REPO, "crates/c"

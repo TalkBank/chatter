@@ -10,7 +10,6 @@ expression: "(word, errors.into_vec())"
                 end: 5,
             },
             word_id: None,
-            raw_text: "hello",
             content: WordContents(
                 [
                     Text(

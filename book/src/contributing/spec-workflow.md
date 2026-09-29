@@ -1,7 +1,7 @@
 # Spec Workflow
 
 **Status:** Current
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 How to change `spec/` and leave the repository consistent. For what the fields
 MEAN, read [Spec System](../architecture/spec-system.md) first; this page is
@@ -19,6 +19,12 @@ just spec-status      # what state the spec system is in, derived from the gates
 Run it before you start, so you know what "unchanged" looks like, and again at
 the end. A change that moves the "deferred" or "failing" counts in the
 wrong direction is worth a second look.
+
+Before treating deferred examples as implementation work, inspect their live
+claim review with `cargo run --manifest-path spec/Cargo.toml --bin spec_status -- --deferred`.
+Legal controls and subsumption claims remain regression obligations, not a request
+to recreate an obsolete diagnostic. Resolve contradicted claims from policy and
+source evidence; do not flip registry status merely to reduce the deferred count.
 
 ## Adding a construct spec
 
@@ -120,6 +126,12 @@ get wrong. They are covered in full in
   load, and `status = 'not_implemented'` THERE still defers every example of
   that code and `#[ignore]`s its generated tests. Writing either key in a spec
   file is a load error naming the key.
+  The separate deferred-spec regression check still verifies explicit `legal`
+  and `subsumed_by` claims against the live parser and validator. Deferring
+  implementation of a code does not excuse a stale claim about accepted input
+  or the alternative diagnostic that rejects it. Planned `violates` examples
+  remain deferred; satisfying a subsumption claim does not implement the
+  historical code or change its registry status.
   (This bullet described `status` as a required spec field until R1, and
   before 2026-08-21 said omitting it "defaults to `implemented`". Both are
   gone: an invented answer to "is this rule live" is the kind of wrong value

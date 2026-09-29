@@ -768,18 +768,9 @@ impl<'a> Iterator for Lexer<'a> {
 
         <MAIN_CONTENT> "[- " @t1 [^\x00\]\r\n]+ @t2 "]" { emit_t1t2!(Langcode); }
 
-        // grammar.js: replacement = seq('[', ':', words..., ']')
-        // Replacement content excludes `[` as well as `]`. grammar.js builds a
-        // replacement from `standalone_word`s, and `[` cannot appear in a word,
-        // so a `[` here opens something else and this is not a replacement.
-        //
-        // Without the exclusion `[: unclosed replacement [* error]` lexed as a
-        // COMPLETE replacement whose text merely contained `[* error`, so the
-        // unmatched `[` became invisible and the parser reported that the
-        // annotation lacked preceding text: a plausible-sounding wrong reason.
-        // Real CLAN CHECK reports "Unmatched [ found on the tier" and the
-        // canonical parser reports an unclosed replacement bracket.
-        <MAIN_CONTENT> "[:" @t1 [^\x00[\]\r\n]+ @t2 "]" { emit_t1t2!(Replacement); }
+        // Leave replacement words and the closing bracket in the token stream.
+        // The existing word grammar admits their structure exactly once.
+        <MAIN_CONTENT> "[:" { emit!(ReplacementBegin); }
 
         // ── Pauses (grammar.js: pause_token with prec(10)) ──
         // grammar.js: token(prec(10, choice('(.)', '(..)', '(...)', /\(\d+(?::\d+)?\.\d*\)/)))
@@ -1102,19 +1093,14 @@ impl<'a> Iterator for Lexer<'a> {
         // An annotation whose marker no rule above recognised. LAST of the
         // bracket rules on purpose: re2c takes the longest match and, on a
         // tie, the rule written first, so every specific form above still
-        // wins for its own text. The inner class excludes BOTH `]` and `[`,
-        // the same discipline the `[:` replacement rule uses: excluding only
-        // `]` let this rule match from the first `[` of
-        // `[: unclosed replacement [* error]` to that line's only `]`,
-        // swallowing a malformed construct into a well-formed unknown
-        // annotation and reporting NOTHING where re2c previously spoke. The
-        // parity gate caught it as E311.md#0 moving from Conflicting to
-        // Re2cSilent, which is the class that must never grow.
+        // wins for its own text. Exclude nested brackets, and exclude a colon
+        // immediately after `[` so a longer unknown-annotation match cannot
+        // swallow the structured replacement opener and its word tokens.
         //
         // Without it `[@ xyz]` lexed as a bare `[` and the utterance died
         // with E321 "unparsable", where tree-sitter reported E207 "unknown
         // annotation" and `spec/errors/E207.md` says E207 is the answer.
-        <MAIN_CONTENT> "[" @t1 [^\x00[\]\r\n]+ @t2 "]" { emit_t1t2!(UnknownAnnotation); }
+        <MAIN_CONTENT> "[" @t1 [^:\x00[\]\r\n] [^\x00[\]\r\n]* @t2 "]" { emit_t1t2!(UnknownAnnotation); }
 
         <MAIN_CONTENT> "[" { emit!(LeftBracket); }
         // grammar.js: right_bracket = ']'

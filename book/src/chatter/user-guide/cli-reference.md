@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -243,13 +243,20 @@ Flags: `--apply` (write; without it, `fix` only reports what it would do);
 narrows the diagnostics considered to exactly the named codes, and is how
 a semantic-tier code opts into being written); `--skip-alignment`.
 
-**Header-scoped fixes are currently reported, not applied.** Edits are
-admitted only into utterances that parsed clean, so a catalog fix whose
-edit lands in the header region (`E501`, `E502`, `E503`, `E504`, `E506`,
-`E507`) never has an enclosing utterance to be admitted into; `fix`
-reports it as skipped instead of writing it. This is today's limit of the
-admission gate, not a missing catalog entry; a header-scoped admission
-path is separate future work.
+**Missing facts are not guessed.** E308, E504 and E507 do not offer participant,
+role or language placeholders, even with `--code`. Supply the actual facts;
+naming a diagnostic does not authorize inventing them.
+
+E604 removal selects the complete typed `%gra` tier in its owning utterance,
+including continuation lines. Other dependent tiers may intervene and remain
+unchanged. This is a semantic deletion requiring `--code E604`; multiple target
+tiers refuse selection rather than choosing one arbitrarily.
+
+**Header admission is narrow.** General header edits have no enclosing
+utterance and are reported as skipped. W109 has a separate capability admitting
+only a clean, typed media-filename token; it cannot rewrite other header data
+or rename the transcript. Recovery-aware utterance fixes retain their own
+admission and changed-output verification.
 
 ### `clean`
 

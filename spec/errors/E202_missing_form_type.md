@@ -4,7 +4,7 @@ name = 'Missing form type after @'
 
 [[example]]
 level = 'word'
-claim = 'violates'
+claim = { subsumed_by = 'E316' }
 chat = '''
 @UTF8
 @Begin
@@ -58,12 +58,12 @@ chat = '''
 '''
 [[example]]
 level = 'word'
-claim = 'violates'
+claim = { subsumed_by = 'E316' }
 title = 'the same dangling marker on another word (re-filed from E243_auto.md, whose example never demonstrated E243)'
 notes = '''
-Note: The example `hell@` triggers E202 (MissingFormType) rather than E243
-(IllegalCharactersInWord) because the parser detects the bare `@` as a missing
-form type marker. E243 fires at the validation layer on parsed words containing
+The example `hell@` is rejected by grammar recovery with E316. The removed
+raw-text classifier previously assigned E202; no dedicated parser diagnostic
+is required to enforce rejection. E243 fires at the validation layer on parsed words containing
 whitespace, control characters, or bullet markers. The paired
 E243_word_controls.md source fixtures witness retained U+007F and U+0085;
 U+0085 reaches both the whitespace and control-character checks.
@@ -97,7 +97,7 @@ chat = '''
 [[example]]
 level = 'word'
 title = 'Missing form suffix inside a scoped group after multibyte text'
-claim = 'violates'
+claim = { subsumed_by = 'E316' }
 notes = 'Derived from the preceding seed by deleting only b after @. Grouping, retracing and the multibyte prefix must not conceal the missing suffix. Exact location is not asserted by this code-presence claim.'
 chat = '''
 @UTF8
@@ -126,7 +126,7 @@ chat = '''
 [[example]]
 level = 'word'
 title = 'Missing form suffix in a phonology group'
-claim = 'violates'
+claim = { subsumed_by = 'E316' }
 notes = 'Single-character deletion from the preceding seed. A phonology group does not waive the requirement for a suffix after @.'
 chat = '''
 @UTF8
@@ -156,7 +156,7 @@ chat = '''
 [[example]]
 level = 'word'
 title = 'Missing form suffix in a sign group'
-claim = 'violates'
+claim = { subsumed_by = 'E316' }
 notes = 'Single-character deletion from the preceding seed. A sign group does not waive the requirement for a suffix after @.'
 chat = '''
 @UTF8
@@ -229,5 +229,7 @@ There used to be a copy of the list here, and it had drifted: it omitted `@u`.
 
 ## Expected Behavior
 
-The parser should report E202 and recover by treating the word as malformed.
-The raw text is preserved for downstream tools that may handle it differently.
+The tree-sitter parser rejects dangling suffix syntax through E316 without
+rescanning ERROR text for an @ character. E202 remains a model-validation
+diagnostic for admitted/imported word spelling; these are distinct boundaries.
+The paired valid controls must parse and validate without diagnostics.

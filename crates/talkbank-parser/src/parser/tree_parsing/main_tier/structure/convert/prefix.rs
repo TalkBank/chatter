@@ -19,10 +19,10 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, ColonNode, KindMissing, KindSlotValue, MainTierChildren, NoChild, NodeSlot,
-    RecoveryNode, SpeakerNode,
+    AdmittedMainTierChildren, AsRawNode, ColonNode, KindMissing, KindSlotValue, NoChild, NodeSlot,
+    RecoveryNode, SourceBound, SourceChildren, SourceField, SourceSlotView, SpeakerNode,
 };
-use crate::parser::typed_cst::read_present_child;
+use crate::parser::typed_cst::cst_failure_diagnostic;
 
 use super::{PrefixData, ReportedMainTierError, report_missing_child, report_unexpected_child};
 
@@ -34,19 +34,15 @@ pub(super) struct ParsedSpeakerPrefix {
 }
 
 impl ParsedSpeakerPrefix {
-    fn admit(
-        node: SpeakerNode<'_>,
-        source: &str,
+    fn admit<'tree>(
+        node: SourceBound<'tree, '_, SpeakerNode<'tree>>,
         errors: &impl ErrorSink,
     ) -> Result<Self, ReportedMainTierError> {
         let raw = node.raw_node();
         if raw.start_byte() == raw.end_byte() {
-            return Err(report_empty_speaker(node, source, errors));
+            return Err(report_empty_speaker(node.node(), node.source(), errors));
         }
-        let code = read_present_child(&node, source, "speaker", |err| {
-            format!("Cannot read main-tier speaker: {err}")
-        })
-        .map_err(|error| ReportedMainTierError::report(error, errors))?;
+        let code = node.text().to_owned();
         Ok(Self {
             code,
             span: Span::new(raw.start_byte() as u32, raw.end_byte() as u32),
@@ -56,6 +52,19 @@ impl ParsedSpeakerPrefix {
     pub(super) fn into_parts(self) -> (String, Span) {
         (self.code, self.span)
     }
+}
+
+/// Preserve canonical ownership until the generated leaf admits its range.
+fn read_speaker<'tree, 'source>(
+    field: SourceField<'_, 'tree, 'source, SpeakerNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<SourceBound<'tree, 'source, SpeakerNode<'tree>>, ReportedMainTierError> {
+    field.read().map_err(|error| {
+        ReportedMainTierError::report(
+            cst_failure_diagnostic(field.raw_node(), field.source(), error),
+            errors,
+        )
+    })
 }
 
 fn report_empty_speaker(
@@ -91,13 +100,14 @@ const TAB_POSITION: usize = 3;
 /// `child_2` (`colon`), `child_3` (`tab`). The valid path (all four `Present`)
 /// emits no diagnostics and yields the speaker string + span; the remaining slot
 /// states reproduce the prior recovery behavior.
-pub(super) fn parse_prefix(
-    main: &MainTierChildren,
+pub(super) fn parse_prefix<'tree>(
+    associated: &SourceChildren<'tree, '_, AdmittedMainTierChildren<'tree>>,
     carrier: std::ops::Range<usize>,
-    source: &str,
     original_input: &str,
     errors: &impl ErrorSink,
 ) -> PrefixData {
+    let main = associated.children();
+    let source = associated.source();
     // Present and kind-proven MISSING stars preserve the existing acceptance
     // policy. ERROR and absent slots keep their distinct diagnostics.
     match main.child_0.slot().known_or_placeholder() {
@@ -127,19 +137,20 @@ pub(super) fn parse_prefix(
 
     // Retain the generated speaker type through checked text admission. A
     // MISSING placeholder is zero-width recovery, never an admitted code.
-    let speaker = match main.speaker.slot().known_or_placeholder() {
-        KindSlotValue::Present(speaker_node) => {
-            ParsedSpeakerPrefix::admit(speaker_node, source, errors)
-        }
-        KindSlotValue::Placeholder(node) => Err(report_empty_speaker(node, source, errors)),
-        KindSlotValue::Error(node) => Err(report_unexpected_child(
-            node,
+    let speaker = match associated.field_speaker().slot().view() {
+        SourceSlotView::Present(speaker_node) => read_speaker(speaker_node, errors)
+            .and_then(|node| ParsedSpeakerPrefix::admit(node, errors)),
+        SourceSlotView::Missing(node) => read_speaker(node, errors)
+            .and_then(|node| Err(report_empty_speaker(node.node(), node.source(), errors))),
+        SourceSlotView::Error(node) => Err(report_unexpected_child(
+            node.raw_node(),
             source,
             errors,
             "speaker",
             SPEAKER_POSITION,
         )),
-        KindSlotValue::Absent(NoChild) => Err(report_missing_child(
+        SourceSlotView::Unexpected(never) => match never {},
+        SourceSlotView::Absent(NoChild) => Err(report_missing_child(
             carrier.clone(),
             original_input,
             errors,
@@ -220,7 +231,7 @@ mod tests {
     use crate::generated_traversal::FromNodeKind;
 
     #[test]
-    fn real_speakers_admit_text_and_span_together_and_refuse_incompatible_sources() {
+    fn real_speakers_admit_text_and_span_only_from_their_parse_owner() {
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../corpus/reference/content/linkers-multiple.cha"
@@ -229,7 +240,9 @@ mod tests {
         let parsed = parser
             .parse_source_incremental(source, None)
             .expect("parse");
-        let foreign = "é".repeat(source.len());
+        let foreign = parser
+            .parse_source_incremental(source, None)
+            .expect("separate parse owner");
         let mut pending = vec![parsed.root_node()];
         let mut checked = 0;
         while let Some(node) = pending.pop() {
@@ -239,7 +252,8 @@ mod tests {
                 continue;
             };
             let errors = ErrorCollector::new();
-            let admitted = ParsedSpeakerPrefix::admit(speaker, source, &errors)
+            let bound = parsed.bind_typed(speaker).expect("original parse owner");
+            let admitted = ParsedSpeakerPrefix::admit(bound, &errors)
                 .unwrap_or_else(|_| panic!("fixture speaker must be admitted"));
             let (code, span) = admitted.into_parts();
             assert_eq!(code, &source[node.byte_range()]);
@@ -248,16 +262,10 @@ mod tests {
                 Span::new(node.start_byte() as u32, node.end_byte() as u32)
             );
             assert!(errors.to_vec().is_empty());
-            assert_eq!(code.len() % 2, 1, "foreign source must cut a code point");
-            for incompatible in ["", foreign.as_str()] {
-                let errors = ErrorCollector::new();
-                assert!(ParsedSpeakerPrefix::admit(speaker, incompatible, &errors).is_err());
-                let diagnostics = errors.into_vec();
-                assert_eq!(diagnostics.len(), 1);
-                assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
-                assert_eq!(diagnostics[0].severity, Severity::Error);
-                assert_eq!(diagnostics[0].location.span, span);
-            }
+            assert!(
+                foreign.bind_typed(speaker).is_err(),
+                "equal text is not shared ownership"
+            );
             checked += 1;
         }
         assert!(checked > 0, "fixture must exercise speaker admission");

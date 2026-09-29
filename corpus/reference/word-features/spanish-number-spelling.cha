@@ -1,0 +1,27 @@
+@UTF8
+@Begin
+@Languages:	spa
+@Participants:	CHI Child
+@ID:	spa|sample|CHI|||||Child|||
+@Comment:	Authored cardinal controls: 100, 101, 199, 200, 201, 1000, 1101, 1100, 2000, 2001, 100000, 0, 21, 999, 10000, 11000, 111000, 999999.
+@Comment:	Source: https://www.rae.es/diccionario-estudiante/docs/numerales.pdf
+@Comment:	Standalone cardinals; no feminine agreement or prenominal apocope is implied.
+*CHI:	cien .
+*CHI:	ciento uno .
+*CHI:	ciento noventa y nueve .
+*CHI:	doscientos .
+*CHI:	doscientos uno .
+*CHI:	mil .
+*CHI:	mil ciento uno .
+*CHI:	mil cien .
+*CHI:	dos mil .
+*CHI:	dos mil uno .
+*CHI:	cien mil .
+*CHI:	cero .
+*CHI:	veintiuno .
+*CHI:	novecientos noventa y nueve .
+*CHI:	diez mil .
+*CHI:	once mil .
+*CHI:	ciento once mil .
+*CHI:	novecientos noventa y nueve mil novecientos noventa y nueve .
+@End

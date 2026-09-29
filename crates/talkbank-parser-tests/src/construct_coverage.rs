@@ -231,7 +231,6 @@ const UNCOVERED_PAIRS: &[(&str, &str)] = &[
     ("text_with_bullets", "continuation"),
     ("mor_contents", "trailing_off_question"),
     ("mor_contents", "interrupted_question"),
-    ("id_ses", "ethnicity_value"),
     ("mor_contents", "self_interrupted_question"),
     ("wor_tier_body", "quoted_new_line"),
     ("wor_tier_body", "self_interruption"),
@@ -390,9 +389,8 @@ impl Gate for ConstructCoverageGate {
                 Ok(())
             },
         )
-        .refusing(
-            "an @ID SES field holding a bare ethnicity (id_ses -> ethnicity_value)",
-            "id_ses -> ethnicity_value",
+        .accepting(
+            "an @ID SES ethnicity already covered by the reference corpus",
             |edit| {
                 edit.replace_once(
                     "corpus/reference/core/headers-time-and-types.cha",

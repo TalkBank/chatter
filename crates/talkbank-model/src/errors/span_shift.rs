@@ -43,9 +43,11 @@ impl SpanShift for ErrorContext {
 }
 
 impl SpanShift for ParseError {
+    /// Rebase document locations while preserving the independently owned
+    /// context snapshot. `ErrorContext::span` indexes its own `source_text`,
+    /// which is not edited or replaced by this operation.
     fn shift_spans_after(&mut self, offset: u32, delta: i32) {
         self.location.span.shift_spans_after(offset, delta);
-        self.context.shift_spans_after(offset, delta);
         for label in &mut self.labels {
             label.shift_spans_after(offset, delta);
         }

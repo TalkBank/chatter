@@ -53,6 +53,41 @@ kind = "speaker-id-low-confidence"
 choice = { kind = "accept-suggested" }
 "#;
 
+/// Wire-boundary refusal must not publish a decision lacking a rename role.
+#[test]
+fn adjudicate_missing_role_preserves_files() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let pending = dir.path().join("pending.toml");
+    let scripted = dir.path().join("scripted.toml");
+    let overrides = dir.path().join("batch.overrides.toml");
+    let invalid = FIX_PENDING_ONE_SPEAKER_ID.replace(
+        "adult_roles = { PAR1 = { code = \"INV\", tag = \"Investigator\" } }",
+        "adult_roles = {}",
+    );
+    fs::write(&pending, &invalid)?;
+    fs::write(&scripted, FIX_SCRIPTED_ACCEPT_SUGGESTED)?;
+    harness
+        .chatter_cmd()
+        .arg("adjudicate")
+        .arg(&pending)
+        .arg("--override-file")
+        .arg(&overrides)
+        .arg("--scripted")
+        .arg(&scripted)
+        .arg("--operator")
+        .arg("test-fixture")
+        .assert()
+        .code(2)
+        .stderr(predicates::str::contains("invalid decision mapping"));
+    assert_eq!(fs::read_to_string(&pending)?, invalid);
+    assert!(
+        !overrides.exists(),
+        "refused override must not be published"
+    );
+    Ok(())
+}
+
 /// `chatter adjudicate` with `--scripted` consumes the canned
 /// decisions in order, writes the resolved entry to the override
 /// file, and updates the pending file to remove the resolved entry.

@@ -9,4 +9,6 @@
 *CHI:	I (.) want (3.) a cookie (..) please (...) .
 *MOT:	okay (0.5) let me get one .
 *CHI:	and (1:30.5) then we eat .
+@Comment:	Authored precision controls; submillisecond digits remain in the source spelling.
+*MOT:	wait (0.25) a (0.125) little (0.1234) longer .
 @End

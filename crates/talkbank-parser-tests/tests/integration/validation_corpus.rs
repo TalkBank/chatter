@@ -61,14 +61,17 @@ fn leading_zero_specs_preserve_multiplicity_order_and_overflow_precedence() {
 #[test]
 fn overlap_specs_preserve_orphan_origin_locations() {
     let parser = TreeSitterParser::new().expect("parser");
-    for (name, orphan_indices) in [
-        ("E347_1.cha", &[0usize][..]),
-        ("E347_2.cha", &[][..]),
-        ("E347_3.cha", &[1usize][..]),
-        ("E347_4.cha", &[0usize, 1][..]),
-        ("E347_5.cha", &[][..]),
-        ("E347_6.cha", &[][..]),
-        ("E347_7.cha", &[][..]),
+    for (name, orphan_indices, groups, bottoms, orphan_tops, orphan_bottoms) in [
+        ("E347_1.cha", &[0usize][..], 0, 0, 1, 0),
+        ("E347_2.cha", &[][..], 1, 1, 0, 0),
+        ("E347_3.cha", &[1usize][..], 0, 0, 0, 1),
+        ("E347_4.cha", &[0usize, 1][..], 0, 0, 1, 1),
+        ("E347_5.cha", &[][..], 0, 0, 1, 0),
+        ("E347_6.cha", &[][..], 0, 0, 0, 1),
+        ("E347_7.cha", &[][..], 1, 2, 0, 0),
+        ("E347_8.cha", &[][..], 2, 2, 0, 0),
+        ("E347_9.cha", &[0usize][..], 1, 1, 1, 0),
+        ("E347_10.cha", &[][..], 2, 4, 0, 0),
     ] {
         let source = std::fs::read_to_string(
             workspace_root()
@@ -79,6 +82,35 @@ fn overlap_specs_preserve_orphan_origin_locations() {
         let errors = ErrorCollector::new();
         let file = parser.parse_chat_file_streaming(&source, &errors);
         assert!(errors.is_empty(), "{name}");
+        let analysis = talkbank_model::alignment::helpers::analyze_file_overlaps(&file.lines);
+        assert!(
+            analysis.has_overlaps(),
+            "unindexed orphans are still overlap markers"
+        );
+        assert_eq!(analysis.group_count(), groups, "{name}");
+        assert_eq!(analysis.total_bottoms(), bottoms, "{name}");
+        assert_eq!(analysis.orphaned_tops.len(), orphan_tops, "{name}");
+        assert_eq!(analysis.orphaned_bottoms.len(), orphan_bottoms, "{name}");
+        if name == "E347_10.cha" {
+            for group in &analysis.groups {
+                let speakers: std::collections::BTreeSet<_> = group
+                    .bottoms
+                    .iter()
+                    .map(|bottom| bottom.speaker.as_str())
+                    .collect();
+                assert_eq!(speakers, ["MOT", "FAT"].into_iter().collect());
+                assert_eq!(
+                    group.bottoms.len(),
+                    2,
+                    "one response per respondent in each group"
+                );
+            }
+        }
+        assert_eq!(
+            analysis.timed_groups().count(),
+            0,
+            "untimed markers cannot invent timing"
+        );
         let expected: Vec<_> = file
             .utterances()
             .enumerate()
@@ -95,6 +127,83 @@ fn overlap_specs_preserve_orphan_origin_locations() {
         for (diagnostic, span) in diagnostics.iter().zip(expected) {
             assert_eq!(diagnostic.code, ErrorCode::UnbalancedOverlap, "{name}");
             assert_eq!(diagnostic.location.span, span, "{name}");
+        }
+    }
+}
+
+/// Deferred legacy codes must not hide the grammar-native rejection contract.
+#[test]
+fn missing_speaker_spec_is_rejected_without_inventing_a_prefix_slot() {
+    let parser = TreeSitterParser::new().expect("parser");
+    for (name, expected) in [
+        ("E304_1.cha", vec![ErrorCode::UnparsableContent]),
+        ("E304_2.cha", vec![]),
+    ] {
+        let source = std::fs::read_to_string(
+            workspace_root()
+                .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors")
+                .join(name),
+        )
+        .expect("canonical speaker control/deletion");
+        let errors = ErrorCollector::new();
+        let _file = parser.parse_chat_file_streaming(&source, &errors);
+        let diagnostics = errors.into_vec();
+        assert_eq!(
+            diagnostics
+                .iter()
+                .map(|error| error.code)
+                .collect::<Vec<_>>(),
+            expected,
+            "{name}"
+        );
+        for error in diagnostics {
+            assert_eq!(error.severity, talkbank_model::Severity::Error);
+            assert!(error.location.span.start <= error.location.span.end);
+            assert!((error.location.span.end as usize) <= source.len());
+        }
+    }
+}
+
+/// Timing summaries expose only groups backed by authored timing bullets.
+#[test]
+fn reference_overlap_summaries_distinguish_absence_from_timed_groups() {
+    let parser = TreeSitterParser::new().expect("parser");
+    for (fixture, has_overlaps) in [
+        ("core/basic-conversation.cha", false),
+        ("ca/overlap-onsets.cha", true),
+    ] {
+        let source =
+            std::fs::read_to_string(workspace_root().join("corpus/reference").join(fixture))
+                .expect("reference transcript");
+        let file = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&source))
+            .expect("reference syntax");
+        let analysis = talkbank_model::alignment::helpers::analyze_file_overlaps(&file.lines);
+        assert_eq!(analysis.has_overlaps(), has_overlaps, "{fixture}");
+        assert_eq!(
+            analysis.timed_groups().count() > 0,
+            has_overlaps,
+            "{fixture}"
+        );
+        for group in analysis.timed_groups() {
+            assert!(group.top.bullet.is_some());
+            assert!(group.bottoms.iter().any(|bottom| bottom.bullet.is_some()));
+            for anchor in std::iter::once(&group.top).chain(group.bottoms.iter()) {
+                let utterance = file
+                    .utterances()
+                    .nth(anchor.utterance_index)
+                    .expect("origin");
+                assert_eq!(anchor.utterance_span(), utterance.main.span);
+                assert_eq!(anchor.speaker, utterance.main.speaker);
+                assert_eq!(
+                    anchor.bullet,
+                    utterance
+                        .main
+                        .content
+                        .bullet
+                        .as_ref()
+                        .map(|bullet| (bullet.timing.start_ms, bullet.timing.end_ms))
+                );
+            }
         }
     }
 }
@@ -443,7 +552,15 @@ fn canonical_validation_proofs_preserve_output_but_not_wire_authority() {
                 Err(failure) => {
                     let incomplete = failure.has_incomplete_parse();
                     let message = failure.to_string();
-                    assert!(message.starts_with("model validation failed"));
+                    assert!(
+                        !failure.has_internal_failure(),
+                        "canonical source must not fail internally"
+                    );
+                    assert!(message.starts_with(if incomplete {
+                        "model validation incomplete"
+                    } else {
+                        "model validation failed"
+                    }));
                     assert_eq!(
                         message.contains(": unknown or recovered parse provenance"),
                         incomplete
@@ -563,284 +680,5 @@ fn corpus_pipeline_options_preserve_requested_validation_policy() {
     assert!(compared > 0 && strict_witnesses > 0 && accepted > 0 && refused > 0);
 }
 
-#[test]
-fn canonical_validation_preserves_header_scope_and_wire_provenance() {
-    let parser = TreeSitterParser::new().expect("parser");
-    let mut alignment_errors = 0;
-    let mut provenance_warnings = 0;
-    let mut header_diagnostics = 0;
-    let mut metadata_warnings = [0; 8];
-    let mut cached_pairs = 0;
-    for root in [
-        "corpus/reference",
-        "crates/talkbank-parser-tests/tests/error_corpus/validation_errors",
-    ] {
-        let corpus = ChatCorpus::read(&workspace_root().join(root)).expect("canonical corpus");
-        for fixture in corpus.fixtures() {
-            // Retain the real recovery model too; taint must suppress checks
-            // whose input is incomplete, not turn partial output into proof.
-            let parse_errors = ErrorCollector::new();
-            let file = parser.parse_chat_file_streaming(fixture.source(), &parse_errors);
-            let headers = ErrorCollector::new();
-            let context = file.validate_headers_only(&headers, TranscriptName::Anonymous);
-            let full = ErrorCollector::new();
-            file.validate(&full, TranscriptName::Anonymous);
-            let header_errors = headers.to_vec();
-            assert!(
-                full.to_vec().starts_with(&header_errors),
-                "header-only checks must be full validation's initial phase: {}",
-                fixture.path().display()
-            );
-            header_diagnostics += header_errors.len();
-            let through_trait = ErrorCollector::new();
-            Validate::validate(&file, &context, &through_trait);
-            assert_eq!(
-                full.to_vec(),
-                through_trait.to_vec(),
-                "anonymous trait validation: {}",
-                fixture.path().display()
-            );
-
-            assert!(
-                file.utterances()
-                    .all(|utterance| !utterance.parse_health.is_unknown()),
-                "parser must establish provenance: {}",
-                fixture.path().display()
-            );
-            let parsed_alignment = file.validate_alignments();
-            assert!(
-                parsed_alignment
-                    .iter()
-                    .all(|error| error.severity == Severity::Error),
-                "parsed alignment must not report unknown provenance: {}",
-                fixture.path().display()
-            );
-            alignment_errors += parsed_alignment.len();
-
-            let json = serde_json::to_string(&file).expect("serialize parsed corpus model");
-            let decoded: ChatFile = serde_json::from_str(&json).expect("decode corpus wire model");
-            assert!(
-                file.semantic_eq(&decoded),
-                "wire semantics: {}",
-                fixture.path().display()
-            );
-            let mut expected_warnings = 0;
-            for utterance in decoded.utterances() {
-                assert!(
-                    utterance.parse_health.is_unknown(),
-                    "wire data cannot certify parser provenance"
-                );
-                expected_warnings += usize::from(utterance.mor_tier().is_some());
-                expected_warnings +=
-                    usize::from(utterance.mor_tier().is_some() && utterance.gra_tier().is_some());
-                expected_warnings += usize::from(utterance.pho_tier().is_some());
-                expected_warnings += usize::from(utterance.sin_tier().is_some());
-            }
-            let warnings = decoded.validate_alignments();
-            assert_eq!(
-                warnings.len(),
-                expected_warnings,
-                "wire alignment: {}",
-                fixture.path().display()
-            );
-            assert!(
-                warnings
-                    .iter()
-                    .all(|warning| warning.code == ErrorCode::TierValidationError
-                        && warning.severity == Severity::Warning),
-                "unknown wire provenance must not become alignment error/proof: {}",
-                fixture.path().display()
-            );
-            provenance_warnings += warnings.len();
-            // Exercise the derived-metadata producer, not only the separate
-            // validation facade. Recomputed wire alignments must not reuse
-            // parser-origin evidence which JSON deliberately cannot preserve.
-            let wire_context =
-                decoded.validate_headers_only(&ErrorCollector::new(), TranscriptName::Anonymous);
-            for utterance in decoded.utterances() {
-                let mut computed = utterance.clone();
-                computed.compute_alignments(&wire_context);
-                assert!(computed.parse_health.is_unknown());
-                assert!(
-                    computed.semantic_eq(utterance),
-                    "metadata computation cannot edit content"
-                );
-                let metadata = computed
-                    .alignments
-                    .as_ref()
-                    .expect("alignment metadata produced");
-                for (total, count) in metadata_warnings
-                    .iter_mut()
-                    .zip(unknown_metadata(&computed))
-                {
-                    *total += count;
-                }
-                assert!(
-                    metadata.wor_timings.is_none(),
-                    "unknown provenance cannot produce a timing-sidecar binding"
-                );
-                assert_eq!(
-                    metadata
-                        .collect_errors()
-                        .into_iter()
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                    computed.alignment_diagnostics
-                );
-                assert_eq!(
-                    metadata.is_error_free(),
-                    computed.alignment_diagnostics.is_empty()
-                );
-                let first = metadata.clone();
-                let diagnostics = computed.alignment_diagnostics.clone();
-                computed.compute_alignments(&wire_context);
-                assert_eq!(
-                    computed.alignments.as_ref(),
-                    Some(&first),
-                    "recomputation is stable"
-                );
-                assert_eq!(
-                    computed.alignment_diagnostics, diagnostics,
-                    "warnings must not accumulate on recomputation"
-                );
-            }
-            for utterance in file.utterances() {
-                let mut computed = utterance.clone();
-                computed.compute_alignments(&context);
-                assert_eq!(
-                    computed.parse_health, utterance.parse_health,
-                    "metadata cannot promote parser recovery"
-                );
-                assert!(computed.semantic_eq(utterance));
-                let metadata = computed
-                    .alignments
-                    .as_ref()
-                    .expect("parsed metadata produced");
-                assert_eq!(
-                    metadata
-                        .collect_errors()
-                        .into_iter()
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                    computed.alignment_diagnostics
-                );
-                assert_eq!(
-                    metadata.is_error_free(),
-                    computed.alignment_diagnostics.is_empty()
-                );
-                let first = metadata.clone();
-                let diagnostics = computed.alignment_diagnostics.clone();
-                computed.compute_alignments(&context);
-                assert_eq!(computed.alignments.as_ref(), Some(&first));
-                assert_eq!(computed.alignment_diagnostics, diagnostics);
-                // A wire model may already contain serialized alignment pairs.
-                // Their presence cannot restore the parser's provenance proof.
-                let mut cached: talkbank_model::Utterance = serde_json::from_str(
-                    &serde_json::to_string(&computed).expect("serialize computed metadata"),
-                )
-                .expect("decode cached metadata");
-                assert!(cached.parse_health.is_unknown());
-                assert!(cached.semantic_eq(&computed));
-                let held = cached
-                    .alignments
-                    .as_ref()
-                    .expect("wire retains legacy alignment payload");
-                let pair_count = held.mor.as_ref().map_or(0, |a| a.pairs.len())
-                    + held.gra.as_ref().map_or(0, |a| a.pairs.len())
-                    + held.pho.as_ref().map_or(0, |a| a.pairs.len())
-                    + held.mod_.as_ref().map_or(0, |a| a.pairs.len())
-                    + held.sin.as_ref().map_or(0, |a| a.pairs.len())
-                    + held.modsyl.as_ref().map_or(0, |a| a.pairs.len())
-                    + held.phosyl.as_ref().map_or(0, |a| a.pairs.len())
-                    + held.phoaln.as_ref().map_or(0, |a| a.pairs.len());
-                cached_pairs += pair_count;
-                cached.compute_alignments(&context);
-                unknown_metadata(&cached);
-                assert!(
-                    cached
-                        .alignments
-                        .as_ref()
-                        .expect("recomputed metadata")
-                        .wor_timings
-                        .is_none()
-                );
-                assert!(
-                    cached.semantic_eq(&computed),
-                    "discarding cached trust cannot edit content"
-                );
-            }
-        }
-    }
-    assert!(
-        alignment_errors > 0,
-        "specs must witness diagnosed alignment faults"
-    );
-    assert!(
-        provenance_warnings > 0,
-        "wire models must witness provenance warnings"
-    );
-    assert!(
-        header_diagnostics > 0,
-        "specs must witness header diagnostics"
-    );
-    assert!(
-        metadata_warnings.iter().all(|count| *count > 0),
-        "every structural metadata family needs blocked-provenance witnesses: {metadata_warnings:?}"
-    );
-    assert!(
-        cached_pairs > 0,
-        "serialized real alignment pairs must witness cache invalidation"
-    );
-}
-
-fn unknown_metadata(utterance: &talkbank_model::Utterance) -> [usize; 8] {
-    assert!(utterance.parse_health.is_unknown());
-    let metadata = utterance.alignments.as_ref().expect("computed metadata");
-    [
-        unknown_alignment(metadata.mor.as_ref(), utterance.mor_tier().is_some()),
-        unknown_alignment(
-            metadata.gra.as_ref(),
-            utterance.mor_tier().is_some() && utterance.gra_tier().is_some(),
-        ),
-        unknown_alignment(metadata.pho.as_ref(), utterance.pho_tier().is_some()),
-        unknown_alignment(metadata.mod_.as_ref(), utterance.mod_tier().is_some()),
-        unknown_alignment(metadata.sin.as_ref(), utterance.sin_tier().is_some()),
-        unknown_alignment(
-            metadata.modsyl.as_ref(),
-            utterance.modsyl_tier().is_some() && utterance.mod_tier().is_some(),
-        ),
-        unknown_alignment(
-            metadata.phosyl.as_ref(),
-            utterance.phosyl_tier().is_some() && utterance.pho_tier().is_some(),
-        ),
-        unknown_alignment(metadata.phoaln.as_ref(), utterance.phoaln_tier().is_some()),
-    ]
-}
-
-fn unknown_alignment<T: talkbank_model::alignment::TierAlignmentResult>(
-    alignment: Option<&T>,
-    expected: bool,
-) -> usize {
-    assert_eq!(
-        alignment.is_some(),
-        expected,
-        "tier presence determines whether alignment is attempted"
-    );
-    let Some(alignment) = alignment else {
-        return 0;
-    };
-    assert!(
-        alignment.pairs().is_empty(),
-        "unknown provenance cannot produce trusted index pairs"
-    );
-    assert_eq!(
-        alignment.errors().len(),
-        1,
-        "one explicit provenance warning per blocked alignment"
-    );
-    let warning = &alignment.errors()[0];
-    assert_eq!(warning.code, ErrorCode::TierValidationError);
-    assert_eq!(warning.severity, Severity::Warning);
-    assert!(warning.message.contains("provenance is unknown"));
-    1
-}
+#[path = "validation_provenance_corpus.rs"]
+mod provenance;

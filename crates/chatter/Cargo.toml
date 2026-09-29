@@ -10,13 +10,8 @@ keywords.workspace = true
 categories.workspace = true
 description = "Command-line interface for TalkBank CHAT validation, conversion, and analysis"
 readme = "README.md"
-# Hold back crates.io publication until the Wave 1B binary/install contract lands.
-publish = false
-
-# `publish = false` hides this crate from cargo-dist's binary discovery,
-# so opt the `chatter` binary back in explicitly. It is the single
-# user-visible artifact for v0.1.0 (talkbank-lsp is dist-opted-out until
-# standalone LSP distribution is set up).
+# CLI registry installation is required alongside binary distribution.
+# Keep cargo-dist participation explicit independently of registry publication.
 [package.metadata.dist]
 dist = true
 
@@ -26,6 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+blake3 = { workspace = true }
 axoupdater = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
@@ -39,8 +35,10 @@ ratatui = { workspace = true }
 send2clan = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
 tempfile = { workspace = true }
 toml = { workspace = true }
+tokio = { workspace = true }
 talkbank-llm = { workspace = true }
 talkbank-model = { workspace = true }
 talkbank-transform = { workspace = true }
@@ -55,7 +53,8 @@ walkdir = { workspace = true } #unified
 # TEST-ONLY. It was a regular dependency until 2026-08-19, because `new-file`
 # used a template that lived here, so this test-support crate compiled into the
 # release binary.
-talkbank-parser-tests = { workspace = true }
+# Test helpers are never published; omit this edge from the registry manifest.
+talkbank-parser-tests = { path = "../talkbank-parser-tests" }
 # TEST-ONLY. `RuleProfile::cli_flag` names the flag a generated error page tells
 # readers to pass; only a test that sees both that table and clap's `long` can
 # hold them equal, and this is the one crate that does.

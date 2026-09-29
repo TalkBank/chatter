@@ -392,7 +392,7 @@ fn parse_speaker_assignment(token: &str) -> AssignmentParse {
 
 /// Render an `AdjudicationError` to stderr and exit with the
 /// contract-defined code. `Io` / `Toml` exit 1 (file-level issues),
-/// `PrompterFailed` / `DecisionKindMismatch` exit 2 (operator-supplied
+/// Prompt, decision-kind, and mapping refusals exit 2 (operator-supplied
 /// decision rejected).
 fn exit_with_error(path: &Path, label: &str, e: AdjudicationError) -> ! {
     warn!("adjudication failed on {} {}: {}", label, path.display(), e);
@@ -403,7 +403,8 @@ fn exit_with_error(path: &Path, label: &str, e: AdjudicationError) -> ! {
         | AdjudicationError::Toml(_)
         | AdjudicationError::UnsupportedSchemaVersion { .. } => EXIT_INPUT_ERROR,
         AdjudicationError::PrompterFailed { .. }
-        | AdjudicationError::DecisionKindMismatch { .. } => EXIT_PRECONDITION,
+        | AdjudicationError::DecisionKindMismatch { .. }
+        | AdjudicationError::InvalidDecisionMapping { .. } => EXIT_PRECONDITION,
     };
     std::process::exit(code);
 }

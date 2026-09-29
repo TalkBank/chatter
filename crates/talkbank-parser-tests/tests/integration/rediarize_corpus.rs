@@ -10,7 +10,7 @@ use talkbank_parser_tests::{
 };
 use talkbank_transform::rediarize::{
     ContestedThreshold, DiarizationTimeline, DiarizationTurn, FlagReason, RediarizeSummary,
-    TimeSpanMs, rediarize, rediarize_content,
+    TimeSpanMs, parse_turns_json, rediarize, rediarize_content,
 };
 
 /// Absence of diarization and a single externally supplied track are different
@@ -18,6 +18,63 @@ use talkbank_transform::rediarize::{
 enum TimelineCase {
     Absent,
     OneTrack(SpeakerCode),
+}
+
+#[test]
+fn reference_timing_wire_refuses_inversion_before_timeline_admission() {
+    use talkbank_transform::rediarize::TurnsJsonError;
+    let parser = TreeSitterParser::new().expect("parser");
+    let text = std::fs::read_to_string(
+        workspace_root().join("corpus/reference/content/media-bullets.cha"),
+    )
+    .expect("canonical timed reference");
+    let chat = strict_parse(parser.parse_chat_file(&text)).expect("reference syntax");
+    let bullet = chat
+        .utterances()
+        .find_map(|u| u.main.content.bullet.as_ref())
+        .expect("reference timing witness");
+    let start = bullet.timing.start_ms;
+    let end = bullet.timing.end_ms;
+    assert!(
+        start < end,
+        "positive source interval for inversion control"
+    );
+    let turn = serde_json::json!({"track": "TRACK", "start_ms": start, "end_ms": end});
+    let valid = serde_json::json!({"turns": [turn.clone()]});
+    let admitted = parse_turns_json(&valid.to_string()).expect("valid wire control");
+    assert!(
+        admitted.source().is_none(),
+        "absent producer label stays unknown"
+    );
+    assert_eq!(admitted.timeline().turns().len(), 1);
+    let span = admitted.timeline().turns()[0].span;
+    assert_eq!(span.overlap_ms(&span), end - start);
+    let touching = TimeSpanMs::new(end, end).expect("empty boundary interval");
+    assert_eq!(
+        span.overlap_ms(&touching),
+        0,
+        "half-open intervals have no boundary overlap"
+    );
+    let mut inverted = turn.clone();
+    inverted["start_ms"] = end.into();
+    inverted["end_ms"] = start.into();
+    let wire = serde_json::json!({"turns": [turn, inverted]});
+    assert!(
+        matches!(
+            parse_turns_json(&wire.to_string()),
+            Err(TurnsJsonError::InvertedTurn { index: 1, .. })
+        ),
+        "refusal identifies the original second turn, not a sorted position"
+    );
+    let mut unknown = valid;
+    unknown["turns"][0]["strat_ms"] = start.into();
+    assert!(
+        matches!(
+            parse_turns_json(&unknown.to_string()),
+            Err(TurnsJsonError::Json(_))
+        ),
+        "unknown timing fields cannot silently disappear at admission"
+    );
 }
 
 #[test]
@@ -97,6 +154,14 @@ fn birth_header_spec_survives_reattribution_as_reported_error_not_silent_loss() 
 
 #[test]
 fn reference_contested_ownership_unions_duplicates_and_preserves_cross_track_time() {
+    for invalid in [f64::NAN, f64::NEG_INFINITY, f64::INFINITY, -0.01, 1.01] {
+        let error = ContestedThreshold::new(invalid).expect_err("invalid reporting threshold");
+        assert!(
+            error
+                .to_string()
+                .starts_with("a contested threshold must be a share between 0.0 and 1.0")
+        );
+    }
     let parser = TreeSitterParser::new().expect("parser");
     let corpus = ChatCorpus::reference().expect("reference corpus");
     let winner = SpeakerCode::new("TRACKA");
@@ -195,8 +260,43 @@ fn reference_contested_ownership_unions_duplicates_and_preserves_cross_track_tim
                 wire["ownership"]["shares"],
                 serde_json::json!([[winner.as_str(), duration], [rival.as_str(), duration],])
             );
+            if contested_witnesses == 0 {
+                // Exercise each possible byte boundary once, on a real row.
+                // A bounded standard-library slice returns WriteZero when full;
+                // no synthetic serializer or ownership value is involved.
+                let bytes = serde_json::to_vec(actual).expect("ownership row bytes");
+                for capacity in 0..bytes.len() {
+                    let mut output = vec![0; capacity];
+                    let mut sink = output.as_mut_slice();
+                    let failure = serde_json::to_writer(&mut sink, actual)
+                        .expect_err("truncated ownership report must not succeed");
+                    assert!(failure.is_io());
+                    assert_eq!(failure.io_error_kind(), Some(std::io::ErrorKind::WriteZero));
+                    assert_eq!(output, bytes[..capacity], "accepted bytes remain a prefix");
+                }
+                let mut complete = vec![0; bytes.len()];
+                serde_json::to_writer(complete.as_mut_slice(), actual)
+                    .expect("exact-capacity output succeeds");
+                assert_eq!(complete, bytes);
+            }
             contested_witnesses += 1;
         }
+        // Exercise the byte-producing report boundary, not only serde's
+        // in-memory Value serializer. Ownership remains the source of assigned.
+        let summary = RediarizeSummary::new(None, &outcome);
+        let bytes = serde_json::to_vec(&summary).expect("external summary JSON");
+        let decoded: serde_json::Value = serde_json::from_slice(&bytes).expect("read summary JSON");
+        assert_eq!(
+            decoded,
+            serde_json::to_value(&summary).expect("structured summary")
+        );
+        assert_eq!(
+            decoded["contested"]
+                .as_array()
+                .expect("contested rows")
+                .len(),
+            outcome.contested.len()
+        );
         let parsed = strict_parse(parser.parse_chat_file(&reported.to_chat_string()))
             .expect("contested output parses");
         assert!(reported.semantic_eq(&parsed));
@@ -243,8 +343,44 @@ fn reference_rediarization_preserves_payload_and_reconciles_used_tracks() {
                     .collect(),
             };
             let timeline = DiarizationTimeline::new(turns);
+            // Exercise the external diarizer wire boundary with these same
+            // source-backed intervals, supplied in reverse chronological order.
+            let wire_turns: Vec<_> = timeline
+                .turns()
+                .iter()
+                .rev()
+                .map(|turn| {
+                    serde_json::json!({
+                        "track": turn.track.as_str(),
+                        "start_ms": turn.span.start_ms(),
+                        "end_ms": turn.span.end_ms(),
+                    })
+                })
+                .collect();
+            let imported = parse_turns_json(
+                &serde_json::json!({
+                    "source": "authored corpus timing control", "turns": wire_turns,
+                })
+                .to_string(),
+            )
+            .expect("admit external timing controls");
+            let provenance = imported.source().expect("explicit producer label");
+            assert_eq!(provenance.as_str(), "authored corpus timing control");
+            assert_eq!(provenance.to_string(), provenance.as_str());
+            let expected: Vec<_> = timeline
+                .turns()
+                .iter()
+                .map(|turn| (&turn.track, turn.span))
+                .collect();
+            let actual: Vec<_> = imported
+                .timeline()
+                .turns()
+                .iter()
+                .map(|turn| (&turn.track, turn.span))
+                .collect();
+            assert_eq!(actual, expected, "wire admission restores time ordering");
             let errors = talkbank_model::ErrorCollector::new();
-            let (output, outcome) = rediarize(&source, &timeline, None, &errors);
+            let (output, outcome) = rediarize(&source, imported.timeline(), None, &errors);
             assert!(
                 !errors.has_errors(),
                 "reference header reconciliation: {} {:?}",
@@ -293,8 +429,14 @@ fn reference_rediarization_preserves_payload_and_reconciles_used_tracks() {
                     (index, &speaker, reason)
                 );
                 match reason {
-                    FlagReason::NoBullet => no_bullet += 1,
-                    FlagReason::NoOverlappingTurn => no_overlap += 1,
+                    FlagReason::NoBullet => {
+                        assert_eq!(actual.reason.to_string(), "no time bullet");
+                        no_bullet += 1;
+                    }
+                    FlagReason::NoOverlappingTurn => {
+                        assert_eq!(actual.reason.to_string(), "no overlapping diarization turn");
+                        no_overlap += 1;
+                    }
                 }
             }
             changed += expected_changed;

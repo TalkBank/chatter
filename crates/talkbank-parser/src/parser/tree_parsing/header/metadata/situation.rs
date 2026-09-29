@@ -3,13 +3,10 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Situation_Header>
 
-use crate::generated_traversal::{AsRawNode, SituationHeaderNode, extract_situation_header};
+use crate::generated_traversal::{AsRawNode, SituationHeaderNode, SourceBound, SourceSlotView};
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::parser::tree_parsing::parser_helpers::present;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use crate::parser::typed_cst::decode_present_child;
-use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Header, SituationDescription};
 
 /// Parse Situation header from tree-sitter node
@@ -22,23 +19,19 @@ use talkbank_model::model::{Header, SituationDescription};
 ///     $.newline
 /// )
 /// ```
-pub fn parse_situation_header(
-    typed: SituationHeaderNode<'_>,
-    source: &str,
+pub fn parse_situation_header<'tree>(
+    typed: SourceBound<'tree, '_, SituationHeaderNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Header {
+) -> Result<Header, crate::CstFailure> {
+    let source = typed.source();
     let node = typed.raw_node();
 
     // Grammar: seq(situation_prefix, header_sep, free_text, newline). The free
-    // text is DIRECT at `child_2` (there is no inner contents node, and no
-    // interstitial whitespace position at this level, so the index is unchanged
-    // from the OLD module); read it through the NEW backend's free
-    // `extract_situation_header`. `present_or_recover().ok()` keeps only a
-    // Present free_text; every non-Present recovery state funnels to the SAME
-    // "missing situation text" diagnostic at the HEADER NODE span, exactly as the
-    // pre-migration `find_child_by_kind` None branch did.
-    let children = extract_situation_header(typed);
-    let Some(free_text) = present(children.child_2.slot()) else {
+    // text is directly at child_2. Source-bound projection retains its owner;
+    // every non-present recovery state keeps the missing-text diagnostic at
+    // the header span. Readable-range admission remains a distinct obligation.
+    let children = typed.extract()?;
+    let SourceSlotView::Present(free_text) = children.field_child_2().slot().view() else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
             Severity::Error,
@@ -50,7 +43,12 @@ pub fn parse_situation_header(
             ),
             "Missing situation text in @Situation header",
         ));
-        surface_displaced(&children.unexpected, "situation_header", source, errors);
+        surface_displaced(
+            &children.children().unexpected,
+            "situation_header",
+            source,
+            errors,
+        );
         return super::super::unknown_header(
             node,
             source,
@@ -60,25 +58,16 @@ pub fn parse_situation_header(
         );
     };
 
-    // Keep the typed child through checked text admission; refusal retains the
-    // @Situation-specific diagnostic and Header::Unknown recovery.
-    let ParseOutcome::Parsed(text) =
-        decode_present_child(free_text, source, errors, "situation_text", |err| {
-            format!("Failed to extract @Situation text as UTF-8: {}", err)
-        })
-    else {
-        surface_displaced(&children.unexpected, "situation_header", source, errors);
-        return super::super::unknown_header(
-            node,
-            source,
-            "@Situation",
-            "Expected @Situation:\t<description>",
-            "Could not decode @Situation text",
-        );
-    };
+    // A failed range read is a producer failure, not missing authored text.
+    let text = free_text.read()?.text();
 
-    surface_displaced(&children.unexpected, "situation_header", source, errors);
-    Header::Situation {
+    surface_displaced(
+        &children.children().unexpected,
+        "situation_header",
+        source,
+        errors,
+    );
+    Ok(Header::Situation {
         text: SituationDescription::new(text),
-    }
+    })
 }

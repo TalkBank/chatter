@@ -1,15 +1,16 @@
 # Crates.io Publication
 
 **Status:** Current
-**Last updated:** 2026-09-06 03:03 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 ## Scope
 
-The crates.io automation in this repo currently targets the **Wave 1A foundation
-crates only**. crates.io publication is a deliberate maintainer action, not a
-tag-triggered release path.
+The 1.0 publication contract includes foundation libraries and registry-installable
+CLI/LSP binaries. Publication is a deliberate maintainer action, not a
+tag-triggered release path. The existing foundation-named check now covers the
+complete dependency closure below; enabling publication is not proof of readiness.
 
-Wave 1A is:
+The publication order is:
 
 1. `talkbank-build`
 2. `tree-sitter-talkbank`
@@ -19,46 +20,55 @@ Wave 1A is:
 6. `talkbank-parser`
 7. `talkbank-parser-re2c`
 8. `talkbank-transform`
+9. `send2clan`
+10. `talkbank-llm`
+11. `talkbank-lsp`
+12. `chatter`
 
 `talkbank-build` is build-only support for the model and parser source
 fingerprints and must be published before those consumers.
 
-`talkbank-parser-re2c` is part of the first wave because
+`talkbank-parser-re2c` is included because
 `talkbank-transform` has a **runtime dependency** on it. Holding it back would
-make `talkbank-transform` unpublishable.
+make `talkbank-transform` unpublishable. Inclusion in the dependency closure
+does not promise parser equivalence: re2c remains experimental.
 
-Every workspace package outside Wave 1A must be explicitly marked
+The CLI additionally requires `send2clan` and `talkbank-llm` at runtime. They
+must be published before it; optional Cargo dependencies would still require
+registry resolution and are not a way to hide unpublished packages.
+
+Every workspace package outside this publication set must be explicitly marked
 `publish = false`. The check derives this complement from Cargo metadata,
 so a newly added crate cannot silently escape the publication decision.
-Application/API hold-backs include:
+Internal test, vocabulary, desktop and task-runner packages remain held back;
+the script prints the complete current set. CLI/LSP binary releases and desktop
+installers remain required alongside registry installation.
 
-- `send2clan`
-- `chatter`
-- `talkbank-lsp`
-- `talkbank-llm`
-
-They stay blocked until their support contract, install story, and user-facing
-docs are ready. Internal test, vocabulary, desktop and task-runner packages
-are also checked; the script prints the complete current hold-back set.
+Before declaring registry installation supported, verify the actual published
+candidate with `cargo install chatter --locked` and
+`cargo install talkbank-lsp --locked`, including CLI validation and LSP protocol
+smoke tests. These are acceptance targets, not a claim that current registry
+versions are available. MSRV, supported platforms and post-1.0 compatibility
+policy still require explicit decisions and candidate-bound verification.
 
 ## What the repo now automates
 
-Two repo-native entry points cover the first-wave foundations:
+The existing foundation-named entry points cover the full publication set:
 
 | Surface | Purpose |
 |---------|---------|
-| `just crates-io-foundation-check` | Local preflight for first-wave crates.io readiness |
+| `just crates-io-foundation-check` | Local preflight for crates.io readiness |
 | `bash scripts/release/check-foundation-publication-readiness.sh --metadata-only` | Fast manifest, dependency and hold-back review without packaging or registry access |
-| `.github/workflows/crates-io-foundation.yml` | CI enforcement for first-wave metadata, package surfaces, hold-backs, and publish order |
+| `.github/workflows/crates-io-foundation.yml` | CI enforcement for metadata, package surfaces, hold-backs, and publish order |
 
 The readiness check enforces:
 
 - required crates.io metadata (`repository`, `homepage`, `keywords`,
   `categories`, `readme`)
 - readme-file existence
-- package assembly for every first-wave crate via `cargo package --list`
-- the first-wave runtime and build dependency graph
-- `publish = false` guards on every workspace crate outside Wave 1A
+- package file enumeration for every selected crate via `cargo package --list`
+- the selected runtime and build dependency graph
+- `publish = false` guards on every workspace crate outside the publication set
 - real `cargo publish --dry-run` checks for the standalone `talkbank-build`
   and `tree-sitter-talkbank` crates
 
@@ -78,7 +88,7 @@ So the current automation is intentionally honest:
 
 - `talkbank-build` and `tree-sitter-talkbank` get real crates.io dry-runs
   because neither depends on an unpublished workspace crate.
-- The remaining Wave 1A crates are validated by metadata, readme, and
+- The remaining selected crates are validated by metadata, readme, and
   dependency checks before publication. (No MSRV is declared yet; set a
   deliberate `rust-version` and re-add an MSRV check when publication is
   actually pursued.)
@@ -94,17 +104,10 @@ requires a staging registry/local index strategy, not just another shell loop.
 
 Before publishing anything:
 
-1. Verify crates.io name availability for every Wave 1A package.
+1. Verify crates.io name availability for every selected package.
 2. Run `just crates-io-foundation-check`.
 3. Ensure `.github/workflows/crates-io-foundation.yml` and the main CI workflow are green on the commit you intend to publish.
-4. Publish in this exact order, waiting for the crates.io index to observe each crate before moving to the next:
-   - `tree-sitter-talkbank`
-   - `talkbank-derive`
-   - `talkbank-model`
-   - `talkbank-cache`
-   - `talkbank-parser`
-   - `talkbank-parser-re2c`
-   - `talkbank-transform`
+4. Publish in the order in **Scope** above, waiting for the crates.io index to observe each crate before moving to the next. That list is the single documented order; do not omit build-only or CLI runtime dependencies.
 5. After each prerequisite becomes visible on crates.io, rerun any newly-unblocked `cargo publish --dry-run -p <crate>` checks before the next publish step.
 
 Example command shape:

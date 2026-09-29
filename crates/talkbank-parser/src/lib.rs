@@ -121,10 +121,13 @@ pub mod tokens;
 pub mod api;
 /// Internal parser implementation modules.
 pub(crate) mod parser;
+mod participant_words;
+pub use participant_words::{MissingParticipantRole, ParticipantWordRoles};
 
 /// Main parser type, initialization error, and the strict whole-file parse
 /// product type.
 pub use parser::document_root::DocumentRoot;
+pub use parser::typed_cst::CstFailure;
 pub use parser::{ParseProduct, ParserInitError, TreeSitterParser};
 /// The error type (and its `Result` alias) that every public
 /// `TreeSitterParser::parse_*` method returns. Re-exported from

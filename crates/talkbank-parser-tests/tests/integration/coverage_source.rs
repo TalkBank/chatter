@@ -1,7 +1,7 @@
 //! Coverage-tool boundary tests: Rust syntax and UTF-8 byte offsets.
 #![allow(clippy::expect_used)]
 
-use talkbank_parser_tests::coverage_source::test_source_ranges;
+use talkbank_parser_tests::coverage_source::{SourceItemKind, test_source_ranges};
 
 #[test]
 fn only_explicit_test_items_are_classified() {
@@ -36,4 +36,36 @@ mod tests { fn production_despite_name() {} }
 #[test]
 fn invalid_rust_cannot_produce_an_empty_success_inventory() {
     assert!(test_source_ranges("fn {").is_err());
+}
+
+#[test]
+fn omission_inventory_distinguishes_bodies_from_unexpanded_inputs() {
+    let source = r#"
+#[derive(Clone)] struct Value;
+trait Contract { fn required(); fn provided() {} }
+impl Value { fn method() { emit!(); } #[test] fn check() {} }
+#[cfg(feature = "optional")] fn conditional() {}
+#[cfg(test)] mod tests { fn helper() { hidden!(); } }
+mod external;
+make_functions!();
+"#;
+    let inventory = test_source_ranges(source).expect("Rust syntax");
+    let of_kind = |kind| {
+        inventory
+            .non_test_items
+            .iter()
+            .filter(|item| item.kind == kind)
+            .map(|item| &source[item.byte_range.clone()])
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(of_kind(SourceItemKind::FunctionBody).len(), 3);
+    assert_eq!(
+        of_kind(SourceItemKind::MacroTokens),
+        ["emit!()", "make_functions!()"]
+    );
+    assert_eq!(of_kind(SourceItemKind::AttributeInput).len(), 2);
+    assert_eq!(of_kind(SourceItemKind::ExternalModule), ["mod external;"]);
+    assert_eq!(inventory.test_byte_ranges.len(), 2);
+    let wire = serde_json::to_value(&inventory).expect("inventory wire representation");
+    assert_eq!(wire["non_test_items"][0]["kind"], "attribute_input");
 }

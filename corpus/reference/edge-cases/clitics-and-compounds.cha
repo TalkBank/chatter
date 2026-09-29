@@ -4,9 +4,9 @@
 @Participants:	CHI Child, MOT Mother
 @ID:	eng|corpus|CHI|4;00.||||Child|||
 @ID:	eng|corpus|MOT|||||Mother|||
-@Comment:	%mor tier with clitics (tilde-separated: pos|stem~pos|stem),
-	compound words on main tier (A+B), hyphen-separated UD features
-@Comment:	Constructs: mor_post_clitic, mor_feature, compound words
+@Comment:	%mor tier with clitics (tilde-separated: pos|stem~pos|stem)
+	and hyphen-separated UD features; main-tier words have no compound join markers
+@Comment:	Constructs: mor_post_clitic, mor_feature
 *CHI:	it's a cookie .
 %mor:	pron|it~aux|be-Pres-S3 det|a noun|cookie .
 %gra:	1|4|NSUBJ 2|1|AUX 3|4|DET 4|0|ROOT 5|4|PUNCT

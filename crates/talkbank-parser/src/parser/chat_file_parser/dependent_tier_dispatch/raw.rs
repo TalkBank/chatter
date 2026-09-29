@@ -80,8 +80,13 @@ macro_rules! plain_text_tier_appliers {
             ) {
                 let raw = node.raw_node();
                 let span = span_of(raw);
-                let children = $extract(node);
-                let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
+                let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+                    $extract(node), raw, input, errors,
+                ) else { return; };
+                let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
+                    super::helpers::dependent_tier_separator(children.child_1.slot()),
+                    raw, input, errors,
+                ) else { return; };
                 if let ParseOutcome::Parsed(tier) = read_optional_tier_body_text(
                     raw,
                     children.child_2.slot(),
@@ -134,8 +139,13 @@ macro_rules! syl_tier_appliers {
             ) {
                 let raw = node.raw_node();
                 let span = span_of(raw);
-                let children = $extract(node);
-                let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
+                let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+                    $extract(node), raw, input, errors,
+                ) else { return; };
+                let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
+                    super::helpers::dependent_tier_separator(children.child_1.slot()),
+                    raw, input, errors,
+                ) else { return; };
                 if let ParseOutcome::Parsed(content) = read_optional_tier_body_raw_text(
                     raw,
                     children.child_2.slot(),
@@ -188,8 +198,13 @@ macro_rules! fallible_content_tier_appliers {
             ) {
                 let raw = node.raw_node();
                 let span = span_of(raw);
-                let children = $extract(node);
-                let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
+                let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+                    $extract(node), raw, input, errors,
+                ) else { return; };
+                let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
+                    super::helpers::dependent_tier_separator(children.child_1.slot()),
+                    raw, input, errors,
+                ) else { return; };
                 if let ParseOutcome::Parsed(content) = read_optional_tier_body_raw_text(
                     raw,
                     children.child_2.slot(),
@@ -251,8 +266,22 @@ pub(super) fn apply_tim(
 ) {
     let raw = node.raw_node();
     let span = span_of(raw);
-    let children = extract_tim_dependent_tier(node);
-    let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
+    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+        extract_tim_dependent_tier(node),
+        raw,
+        input,
+        errors,
+    ) else {
+        return;
+    };
+    let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
+        super::helpers::dependent_tier_separator(children.child_1.slot()),
+        raw,
+        input,
+        errors,
+    ) else {
+        return;
+    };
     if let ParseOutcome::Parsed(content) = read_optional_tier_body_raw_text(
         raw,
         children.child_2.slot(),

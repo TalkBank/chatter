@@ -8,10 +8,10 @@
 use std::num::NonZeroUsize;
 
 use crate::generated_traversal::{
-    AsRawNode, GraHeadNode, GraIndexNode, GraRelationNameNode, GraRelationNode, KindSlot,
-    extract_gra_relation,
+    AsRawNode, GraHeadNode, GraIndexNode, GraRelationNameNode, GraRelationNode, KindSlot, NoChild,
+    SourceBound, SourceBoundKind, SourceField, SourceSlotView,
 };
-use crate::parser::tree_parsing::parser_helpers::{present, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::GrammaticalRelation;
 use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -25,20 +25,25 @@ use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, S
 ///
 /// Generated slots retain recovery states. Field admission rejects recovery or
 /// unreadable ranges before numeric conversion; an admitted index is nonzero.
-pub(super) fn parse_gra_relation(
-    typed: GraRelationNode<'_>,
-    source: &str,
+pub(super) fn parse_gra_relation<'tree>(
+    typed: SourceBound<'tree, '_, GraRelationNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<GrammaticalRelation> {
+) -> Result<ParseOutcome<GrammaticalRelation>, crate::CstFailure> {
+    let source = typed.source();
     let node = typed.raw_node();
     let relation_span = node.start_byte()..node.end_byte();
-    let children = extract_gra_relation(typed);
-    surface_displaced(&children.unexpected, "gra_relation", source, errors);
+    let children = typed.extract()?;
+    surface_displaced(
+        &children.children().unexpected,
+        "gra_relation",
+        source,
+        errors,
+    );
 
     let ParseOutcome::Parsed(index_text) =
-        RelationField::Index(children.index.slot()).read(typed, source, errors)
+        RelationField::Index(children.field_index().slot()).read(typed, errors)?
     else {
-        return ParseOutcome::rejected();
+        return Ok(ParseOutcome::rejected());
     };
 
     let index = match index_text.parse::<usize>() {
@@ -56,7 +61,7 @@ pub(super) fn parse_gra_relation(
                     )
                     .with_suggestion("Index must start at 1 for the first word"),
                 );
-                return ParseOutcome::rejected();
+                return Ok(ParseOutcome::rejected());
             }
         }
         Err(_) => {
@@ -70,14 +75,14 @@ pub(super) fn parse_gra_relation(
                 )
                 .with_suggestion("Index must be 1, 2, 3, ... (1-indexed)"),
             );
-            return ParseOutcome::rejected();
+            return Ok(ParseOutcome::rejected());
         }
     };
 
     let ParseOutcome::Parsed(head_text) =
-        RelationField::Head(children.head.slot()).read(typed, source, errors)
+        RelationField::Head(children.field_head().slot()).read(typed, errors)?
     else {
-        return ParseOutcome::rejected();
+        return Ok(ParseOutcome::rejected());
     };
 
     let head = match head_text.parse::<usize>() {
@@ -96,14 +101,14 @@ pub(super) fn parse_gra_relation(
                 )
                 .with_suggestion("Head must be 0 (ROOT) or a valid word index"),
             );
-            return ParseOutcome::rejected();
+            return Ok(ParseOutcome::rejected());
         }
     };
 
     let ParseOutcome::Parsed(relation_text) =
-        RelationField::Label(children.relation.slot()).read(typed, source, errors)
+        RelationField::Label(children.field_relation().slot()).read(typed, errors)?
     else {
-        return ParseOutcome::rejected();
+        return Ok(ParseOutcome::rejected());
     };
 
     if relation_text.is_empty() {
@@ -114,31 +119,35 @@ pub(super) fn parse_gra_relation(
             ErrorContext::new(source, relation_span, relation_text),
             "Missing grammatical relation label".to_string(),
         ));
-        return ParseOutcome::rejected();
+        return Ok(ParseOutcome::rejected());
     }
 
-    ParseOutcome::parsed(GrammaticalRelation::new(index.get(), head, relation_text))
+    Ok(ParseOutcome::parsed(GrammaticalRelation::new(
+        index.get(),
+        head,
+        relation_text,
+    )))
 }
 
 /// Each role carries only its own generated slot type: a head cannot be read
 /// or diagnosed as an index. Recovery never supplies fabricated field text.
-enum RelationField<'slot, 'tree> {
-    Index(&'slot KindSlot<'tree, GraIndexNode<'tree>>),
-    Head(&'slot KindSlot<'tree, GraHeadNode<'tree>>),
-    Label(&'slot KindSlot<'tree, GraRelationNameNode<'tree>>),
+enum RelationField<'slot, 'tree, 'source> {
+    Index(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraIndexNode<'tree>>>),
+    Head(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraHeadNode<'tree>>>),
+    Label(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraRelationNameNode<'tree>>>),
 }
 
-impl RelationField<'_, '_> {
-    fn read<'source>(
+impl<'tree, 'source> RelationField<'_, 'tree, 'source> {
+    fn read(
         self,
-        relation: GraRelationNode<'_>,
-        source: &'source str,
+        relation: SourceBound<'tree, 'source, GraRelationNode<'tree>>,
         errors: &impl ErrorSink,
-    ) -> ParseOutcome<&'source str> {
+    ) -> Result<ParseOutcome<&'source str>, crate::CstFailure> {
+        let source = relation.source();
         let (field, name) = match self {
-            Self::Index(slot) => (present(slot).map(AsRawNode::raw_node), "index"),
-            Self::Head(slot) => (present(slot).map(AsRawNode::raw_node), "head"),
-            Self::Label(slot) => (present(slot).map(AsRawNode::raw_node), "relation name"),
+            Self::Index(slot) => (read_present_text(slot)?, "index"),
+            Self::Head(slot) => (read_present_text(slot)?, "head"),
+            Self::Label(slot) => (read_present_text(slot)?, "relation name"),
         };
         let Some(field) = field else {
             let node = relation.raw_node();
@@ -149,22 +158,22 @@ impl RelationField<'_, '_> {
                 ErrorContext::new(source, node.byte_range(), ""),
                 format!("Missing {name} in grammatical relation"),
             ));
-            return ParseOutcome::rejected();
+            return Ok(ParseOutcome::rejected());
         };
-        match source.get(field.byte_range()) {
-            Some(text) => ParseOutcome::parsed(text),
-            None => {
-                errors.report(ParseError::new(
-                    ErrorCode::MalformedGrammarRelation,
-                    Severity::Error,
-                    SourceLocation::from_offsets(field.start_byte(), field.end_byte()),
-                    ErrorContext::new(source, field.byte_range(), ""),
-                    format!("Grammatical relation {name} range is not a UTF-8 slice of the source"),
-                ));
-                ParseOutcome::rejected()
-            }
-        }
+        Ok(ParseOutcome::parsed(field))
     }
+}
+
+fn read_present_text<'tree, 'source, T: SourceBoundKind<'tree>>(
+    slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
+) -> Result<Option<&'source str>, crate::CstFailure> {
+    Ok(match slot.view() {
+        SourceSlotView::Present(field) => Some(field.read()?.text()),
+        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
+            None
+        }
+        SourceSlotView::Unexpected(never) => match never {},
+    })
 }
 
 #[cfg(test)]
@@ -172,42 +181,37 @@ impl RelationField<'_, '_> {
 mod tests {
     use super::*;
     use crate::TreeSitterParser;
-    use crate::generated_traversal::FromNodeKind;
+    use crate::generated_traversal::SourceBindingError;
     use talkbank_model::ErrorCollector;
 
-    /// Exercise the raw-node compatibility boundary with real CHAT CST nodes,
-    /// not manufactured slots. A bad source must reject rather than panic.
+    /// Relation readers require the owning parsed source, even for equal bytes.
     #[test]
-    fn relation_fields_reject_out_of_source_ranges() {
+    fn relation_fields_require_their_source_owner() {
         let source = include_str!("../../../../../../corpus/reference/tiers/mor-gra.cha");
         let parser = TreeSitterParser::new().expect("grammar");
         let parsed = parser
             .parse_source_incremental(source, None)
             .expect("parse");
-        let mut pending = vec![parsed.root_node()];
+        let other = parser
+            .parse_source_incremental(source, None)
+            .expect("independent owner");
         let mut relations = 0;
-        while let Some(node) = pending.pop() {
-            let mut cursor = node.walk();
-            pending.extend(node.children(&mut cursor));
-            let Some(relation) = GraRelationNode::from_node(node) else {
+        for node in parsed.root().expect("root").descendants() {
+            let Some(relation) = node.expect("readable node").typed::<GraRelationNode>() else {
                 continue;
             };
             relations += 1;
             let errors = ErrorCollector::new();
-            assert!(parse_gra_relation(relation, source, &errors).is_some());
+            assert!(
+                parse_gra_relation(relation, &errors)
+                    .expect("source-bound extraction")
+                    .is_some()
+            );
             assert!(errors.to_vec().is_empty());
-            let children = extract_gra_relation(relation);
-            for field in [
-                RelationField::Index(children.index.slot()),
-                RelationField::Head(children.head.slot()),
-                RelationField::Label(children.relation.slot()),
-            ] {
-                let errors = ErrorCollector::new();
-                assert!(field.read(relation, "", &errors).is_none());
-                let diagnostics = errors.into_vec();
-                assert_eq!(diagnostics.len(), 1);
-                assert_eq!(diagnostics[0].code, ErrorCode::MalformedGrammarRelation);
-            }
+            assert!(matches!(
+                other.bind(relation.raw_node()),
+                Err(SourceBindingError::ForeignTree)
+            ));
         }
         assert_eq!(relations, 11);
     }

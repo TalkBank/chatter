@@ -128,9 +128,10 @@ impl SylTier {
 
     /// Returns the CHAT tier prefix.
     ///
-    /// Currently outputs `%xmodsyl` / `%xphosyl` to match the Phon project's
-    /// existing convention. When the tiers are officially adopted into CHAT
-    /// (dropping the `x` prefix), update this to `%modsyl` / `%phosyl`.
+    /// Outputs Chatter's current canonical `%xmodsyl` / `%xphosyl` spelling.
+    /// Both input spellings are accepted; current Phon exports omit `x`.
+    /// Input compatibility and canonical output policy are distinct; see the
+    /// book's Phon tiers chapter.
     pub fn prefix(&self) -> &'static str {
         match self.tier_type {
             SylTierType::Modsyl => "%xmodsyl",
@@ -375,7 +376,7 @@ fn numeric_pause_duration(word: &str) -> Option<crate::model::PauseTimedDuration
     use crate::model::PauseTimedDuration;
     let inner = word.strip_prefix('(')?.strip_suffix(')')?;
     match PauseTimedDuration::new(inner) {
-        parsed @ PauseTimedDuration::Parsed { .. } => Some(parsed),
+        parsed @ PauseTimedDuration::Parsed(_) => Some(parsed),
         PauseTimedDuration::Unsupported(_) => None,
     }
 }
@@ -571,7 +572,7 @@ impl std::fmt::Display for PhoalnTier {
 }
 
 impl super::WriteChat for PhoalnTier {
-    /// Serializes as `%xphoaln:` to match Phon's current convention.
+    /// Serializes as `%xphoaln:` under Chatter's current canonical output policy.
     /// When officially adopted into CHAT, update to `%phoaln:`.
     fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
         write!(w, "%xphoaln:\t{}", self)
@@ -688,7 +689,7 @@ impl std::fmt::Display for XphointTier {
 }
 
 impl super::WriteChat for XphointTier {
-    /// Serializes as `%xphoint:` to match Phon's convention.
+    /// Serializes as `%xphoint:` under Chatter's current canonical output policy.
     fn write_chat<W: std::fmt::Write>(&self, w: &mut W) -> std::fmt::Result {
         write!(w, "%xphoint:\t{}", self)
     }

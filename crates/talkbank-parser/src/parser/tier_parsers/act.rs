@@ -38,17 +38,17 @@ use talkbank_model::model::ActTier;
 pub fn parse_act_tier<'tree>(
     typed: SourceBound<'tree, '_, ActDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ActTier {
+) -> Result<ActTier, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = typed.extract();
+    let children = typed.extract()?;
     let content = parse_optional_text_tier_content(
         typed,
         children.field_child_2().slot(),
         &children.children().unexpected,
         errors,
-    );
-    ActTier::new(content).with_span(span)
+    )?;
+    Ok(ActTier::new(content).with_span(span))
 }
 
 #[cfg(test)]

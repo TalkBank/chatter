@@ -172,12 +172,10 @@ impl MergeOverride {
     /// `Drop` becomes `SpeakerAssignment::Drop`.
     ///
     /// Returns [`SpeakerIdError::OverrideRenameMissingRole`] if a
-    /// `Rename` action has no matching `adult_roles` entry. The
-    /// sanctioned constructors (`auto_decision`, `operator_decision`)
-    /// and every writer path maintain that covering invariant, so this
-    /// only fires on a hand-corrupted override file; it is surfaced as a
-    /// typed error rather than a panic (this crate forbids production
-    /// panics).
+    /// `Rename` action has no matching `adult_roles` entry. Wire input and
+    /// public record constructors can express that mismatch. Adjudication
+    /// admits this conversion before committing a decision; other consumers
+    /// must also preserve the typed refusal rather than assume the role exists.
     pub fn to_mapping_spec(&self) -> Result<MappingSpec, SpeakerIdError> {
         self.mapping
             .iter()

@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|sample|CHI|2;00.||||Child|||
+@Media:	wor-drift, audio
+@Comment:	Valid CHAT with stale timing-sidecar content after main-tier edits.
+@Comment:	Count equality alone cannot establish lexical correspondence.
+*CHI:	hello world now . 100_600
+%wor:	hello 100_300 world 300_600 .
+*CHI:	hello . 700_1200
+%wor:	hello 700_900 world 900_1200 .
+*CHI:	hello changed . 1300_1800
+%wor:	hello 1300_1500 world 1500_1800 .
+@End

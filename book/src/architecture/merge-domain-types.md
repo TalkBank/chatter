@@ -6,7 +6,7 @@
 > See the [removal notice](../chatter/user-guide/merge.md).
 
 **Status:** Draft
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 This page specifies the typed Rust vocabulary shared by `chatter merge`,
 `chatter speaker-id`, the override-file reader/writer, and the
@@ -72,6 +72,47 @@ paths are relative to `crates/talkbank-transform/src/`.
 | `SpeakerIdError` / `MergeError` / `OverrideFileError` variant sets | Shipped with revised variants; see the updated Error types section below |
 
 ## Existing types reused (not redefined)
+
+The finite reference workflow exercises lexical evidence using unchanged basic
+conversation and phonological-group CHAT. Self-comparison establishes exact
+multiset support; raising the threshold refuses the same observation without
+discarding its evidence. Nested-group speech also distinguishes an unbounded
+margin (positive winner, empty runner-up) from no information (both scores zero).
+The stable report serializes these as tagged states, not a JSON infinity or a
+fabricated finite ratio. Speaker-removal replay exercises missing-reference and
+single-donor refusals. These checks establish lexical and wire contracts, not
+that lexical similarity alone proves speaker identity.
+The spec corpus also passes its actual parse/validation failures through the
+input-rejection report for both donor and reference roles. The report must
+preserve the failure phase and ordered diagnostic codes from required admission
+without inventing a lexical match report. These corpus controls witness parse
+and ordinary validation refusal; the incomplete-validation adapter remains a
+separate coverage obligation.
+Speaker sampling likewise bounds operator head/tail limits against actual
+turns. A borrowed head and a suffix of the remaining slice make overlap
+impossible without adding the two limits; maximum-sized budgets cannot overflow
+or duplicate turns. Reference controls cover anchor-first ordering, head-only,
+tail-only, overlapping and zero windows, and CJK character caps. Character caps
+count Unicode scalars rather than UTF-8 bytes. No external judgment provider is
+needed to verify these deterministic preparation contracts.
+
+Judgment-context controls combine unchanged reference headers with explicitly
+authored sidecar records. Missing records and omitted fields preserve unknown
+labels; a configured age takes precedence over header fallback. Label admission
+rejects blank strings while preserving nonblank spelling and role order. Invalid
+labels cannot be constructed through public tuple fields: Rust callers and JSON
+both use `TryFrom<String>`, with read-only `as_str()` access afterward. Corrected
+sample-type verdicts use that same boundary after trimming their wire payload;
+their existing blank-correction error remains unchanged. Invalid
+age shapes and unknown sidecar fields are rejected, not silently treated as
+missing metadata. These controls use references with at most one declared age;
+they do not settle which participant should supply age in a multi-age session,
+nor infer consent or participant facts from the authored labels.
+Header fallback consumes the model's typed age components, not a second parser
+over retained text. Unsupported ages (including invalid day text) and missing
+months stay unknown. Widening bounded year/month components makes total-month
+arithmetic safe; an explicit sidecar age avoids fallback entirely. This projection
+does not replace CHAT validation or select the intended child among several ages.
 
 | Type | Defined in | Used as |
 |---|---|---|
@@ -955,6 +996,12 @@ If at some point a SECOND mapping syntax becomes useful (e.g.,
 JSON-inline, or a TOML fragment), add a `parse_mapping_json`
 sibling rather than reshaping `parse_mapping_spec`. The existing
 parser stays the lingua franca.
+
+Each source speaker may occur only once in this string syntax. Repeated keys,
+including identical repeats, return `InvalidMappingSpec`; a vacant map entry
+is the parser's only insertion capability, so no earlier decision is silently
+replaced. This boundary does not make the public `MappingSpec` alias a validated
+speaker/role type, nor does it prove target-code uniqueness or CHAT validity.
 
 ---
 

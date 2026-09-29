@@ -40,14 +40,27 @@
 
 use talkbank_parser_tests::test_error::TestError;
 
-/// Collection newtypes the model defines but does NOT make publicly reachable,
-/// so no consumer can name them and their accessors are unreachable API.
+/// Collection newtypes that cannot use the general mutable collection API,
+/// either because of their invariants, backing store or visibility.
 ///
-/// This is a real gap, recorded rather than fixed: exporting them widens the
-/// public surface, which is a deliberate decision and not a cleanup. The list
-/// is here so `every_collection_newtype_is_listed_here` stays exhaustive and a
-/// NEW unreachable type has to be added consciously.
+/// Each exception names its reason. Visibility gaps require a deliberate API
+/// decision; invariant-bearing types must not gain operations that erase their
+/// guarantees. The census below requires new exceptions to be explicit.
 const NOT_ON_THE_MACRO: &[(&str, &str)] = &[
+    (
+        "ReplacementWords",
+        "nonempty admission forbids take and retain",
+    ),
+    // Admission evidence must not permit mutation that changes its verdict.
+    // Consuming access discards that evidence; rebuilding requires admission.
+    (
+        "CompletedDiagnostics",
+        "immutable completion evidence; checked admission",
+    ),
+    (
+        "InternalFailure",
+        "immutable failure evidence; checked admission",
+    ),
     // NON-EMPTY by construction, which is incompatible with the macro rather
     // than merely unimplemented on it. `take` leaves a collection empty and
     // `retain` can shrink one to nothing, and both would reopen the exact
@@ -124,9 +137,112 @@ fn every_closed_collection_newtype_offers_the_consumer_api() {
     // here so the asymmetry is visible.
     assert_consumer_api!(content::TierLinkers, Linker);
     assert_consumer_api!(content::TierPostcodes, Postcode);
-    assert_consumer_api!(annotation::ReplacementWords, Word);
+    let _read: fn(&annotation::ReplacementWords) -> &[Word] =
+        annotation::ReplacementWords::as_slice;
+    let _edit: fn(&mut annotation::ReplacementWords) -> &mut [Word] =
+        annotation::ReplacementWords::as_mut_slice;
+    let _consume: fn(annotation::ReplacementWords) -> Vec<Word> =
+        annotation::ReplacementWords::into_vec;
     assert_consumer_api!(annotation::ReplacedWordAnnotations, ContentAnnotation);
     assert_consumer_api!(WordLanguageInfos, WordLanguageInfo);
+}
+
+/// Public boundary: consuming evidence retains findings, and re-admission
+/// cannot turn an internal failure into a completed validation attempt.
+#[test]
+fn diagnostic_evidence_consumer_roundtrip_preserves_admission() {
+    use std::io::Write;
+    use talkbank_model::{
+        CompletedDiagnostics, DiagnosticKind, ErrorCode, ParseError, Severity, Span,
+        ValidationProfile,
+    };
+
+    let completed = CompletedDiagnostics::admit(Vec::new()).unwrap();
+    assert!(completed.diagnostics().is_empty());
+    assert!(CompletedDiagnostics::admit(completed.into_diagnostics()).is_ok());
+
+    let failure = CompletedDiagnostics::admit(vec![ParseError::internal(
+        "producer failure",
+        Span::new(0, 1),
+    )])
+    .unwrap_err();
+    assert_eq!(failure.diagnostics().len(), 1);
+    let read: fn(&talkbank_model::InternalFailure) -> &[ParseError] =
+        talkbank_model::InternalFailure::diagnostics;
+    let consume: fn(talkbank_model::InternalFailure) -> Vec<ParseError> =
+        talkbank_model::InternalFailure::into_diagnostics;
+    assert_eq!(read(&failure).len(), 1);
+    let failure = CompletedDiagnostics::admit(consume(failure))
+        .expect_err("consuming evidence cannot erase the failed verdict");
+    // This is injected API-boundary evidence, not invalid CHAT. The public
+    // pipeline must retain that distinction in its type and user-facing text.
+    let pipeline = talkbank_transform::PipelineError::InternalFailure(failure);
+    assert_eq!(
+        pipeline.to_string(),
+        "internal tool failure; CHAT validity was not determined\n  E001 producer failure"
+    );
+    let talkbank_transform::PipelineError::InternalFailure(failure) = pipeline else {
+        panic!("pipeline relabeled a tool failure as CHAT invalidity");
+    };
+    assert_eq!(read(&failure)[0].message, "producer failure");
+    assert_eq!(read(&failure)[0].location.span, Span::new(0, 1));
+    assert!(CompletedDiagnostics::admit(consume(failure)).is_err());
+
+    // Completion is not validity: ordinary input errors remain admissible.
+    let invalid = ParseError::at_span(
+        ErrorCode::SyntaxError,
+        Severity::Error,
+        Span::new(2, 3),
+        "input finding",
+    );
+    let completed = CompletedDiagnostics::admit(vec![invalid.clone()]).unwrap();
+    assert_eq!(completed.diagnostics(), std::slice::from_ref(&invalid));
+    assert_eq!(completed.into_diagnostics(), vec![invalid.clone()]);
+    for severity in [Severity::Error, Severity::Warning] {
+        let mut internal = ParseError::internal("producer failure", Span::new(4, 5));
+        internal.severity = severity;
+        for findings in [
+            vec![invalid.clone(), internal.clone()],
+            vec![internal.clone(), invalid.clone()],
+        ] {
+            let failure = CompletedDiagnostics::admit(findings.clone())
+                .expect_err("neither ordering nor downgraded severity can conceal a tool failure");
+            assert_eq!(failure.diagnostics(), findings.as_slice());
+            let output = failure.to_string();
+            assert!(
+                output.starts_with("internal tool failure; CHAT validity was not determined\n")
+            );
+            // Standard bounded byte sinks exercise every refusal point without
+            // manufacturing a second formatter or treating the failure as CHAT.
+            for capacity in 0..output.len() {
+                let mut bytes = vec![0; capacity];
+                let error = bytes
+                    .as_mut_slice()
+                    .write_fmt(format_args!("{failure}"))
+                    .expect_err("a truncated failure report must remain a failed write");
+                assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
+                assert_eq!(bytes, output.as_bytes()[..capacity]);
+            }
+            let mut bytes = vec![0; output.len()];
+            bytes
+                .as_mut_slice()
+                .write_fmt(format_args!("{failure}"))
+                .unwrap();
+            assert_eq!(bytes, output.as_bytes());
+            assert_eq!(failure.into_diagnostics(), findings);
+        }
+    }
+    for profile in [
+        ValidationProfile::Strict,
+        ValidationProfile::Editor,
+        ValidationProfile::Pipeline,
+        ValidationProfile::Lint,
+    ] {
+        assert_eq!(
+            talkbank_model::severity(DiagnosticKind::InternalFailure, profile),
+            Some(Severity::Error)
+        );
+    }
 }
 
 /// The list above must cover every collection newtype the model defines.

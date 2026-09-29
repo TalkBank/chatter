@@ -54,16 +54,17 @@ const INVALID_BY_CONSTRUCTION: &[(&str, &str)] = &[
     ("sep_trailing_space", "E758"),
 ];
 
-/// Valid CHAT that the reference corpus does not happen to contain. An
-/// appearance is good news: delete the entry so the coverage number counts it.
+/// Nodes absent from the valid reference corpus, pending policy-aware review.
+/// This includes unselected lexical alternatives, recovery syntax and currently
+/// unsupported forms, not only missing legal specimens. Appearance requires
+/// adjudication before either the specimen or the exclusion can be accepted.
 ///
 /// Checked in that direction too. Seven entries were deleted on the day this
 /// check was written because the corpus had come to exercise them and nothing
 /// had ever asked, which had been silently understating the coverage figure.
 const NOT_YET_IN_CORPUS: &[&str] = &[
-    // Strict+catch-all pattern: the generic variant means "unrecognised value",
-    // which is a validation question rather than a grammar one, so these are
-    // deliberately NOT invalid-by-construction.
+    // Generic fallbacks preserve unrecognised values for downstream validation.
+    // Their presence alone certifies neither acceptance nor invalidity.
     "generic_id_sex",
     "generic_media_status",
     "generic_media_type",
@@ -77,10 +78,9 @@ const NOT_YET_IN_CORPUS: &[&str] = &[
     // malformed input parses gracefully, but in well-formed CHAT semicolons
     // appear only inside `age_format` tokens (2;06.), never standalone.
     "semicolon",
-    // @ID SES subcategory nodes.
-    "ethnicity_value",
+    // Unsupported @ID SES values belong in the error specs.
     "generic_id_ses",
-    // Uncommon header and tier types.
+    // Recognized but unsupported syntax; not a request for valid specimens.
     "thumbnail_header",
     "thumbnail_prefix",
     "unsupported_dependent_tier",
@@ -178,7 +178,7 @@ impl Report {
     pub fn summary(&self) -> String {
         format!(
             "concrete node types: {}/{} exercised ({:.1}%); {} excluded; \
-             {} file(s) parsed, {} with ERROR nodes",
+             {} file(s) parsed, {} with ERROR or MISSING nodes",
             self.exercised(),
             self.required,
             self.coverage_pct(),
@@ -201,11 +201,15 @@ impl Report {
         if self.missing.is_empty()
             && self.invalid_present.is_empty()
             && self.stale_exclusions.is_empty()
+            && self.files_with_errors == 0
         {
             return Ok(self.summary());
         }
 
         let mut out = self.summary();
+        if self.files_with_errors != 0 {
+            out.push_str("\n\nParser recovery (ERROR or MISSING nodes) prevents a clean reference-corpus result; node presence alone is not clean parsing.");
+        }
         if !self.missing.is_empty() {
             out.push_str(&format!(
                 "\n\n{} concrete node type(s) are exercised by no reference file.\n\
@@ -238,8 +242,9 @@ impl Report {
         if !self.stale_exclusions.is_empty() {
             out.push_str(&format!(
                 "\n\n{} exclusion(s) name a node type the corpus now exercises.\n\
-                 Good news: delete the entry from NOT_YET_IN_CORPUS, so the\n\
-                 coverage number starts counting it:",
+                 Review support and validation policy before changing the corpus\n\
+                 or exclusion. Node presence does not prove valid supported CHAT.\n\
+                 Remove an exclusion only after its supported legal witness is verified:",
                 self.stale_exclusions.len()
             ));
             for kind in &self.stale_exclusions {
@@ -455,9 +460,49 @@ fn collect_node_types(
 
 #[cfg(test)]
 mod tests {
-    use super::{INVALID_BY_CONSTRUCTION, NOT_YET_IN_CORPUS};
+    use super::{INVALID_BY_CONSTRUCTION, NOT_YET_IN_CORPUS, Report};
     use crate::repo_paths::RepoRoot;
     use talkbank_spec_vocabulary::SpecErrorCode;
+
+    /// Full node presence does not authorize a clean result when any source
+    /// needed parser recovery. Both renderers consume this same result boundary.
+    #[test]
+    fn recovered_files_refuse_a_complete_node_inventory() {
+        let mut report = Report {
+            required: 1,
+            missing: Vec::new(),
+            invalid_present: Vec::new(),
+            stale_exclusions: Vec::new(),
+            files_parsed: 1,
+            files_with_errors: 0,
+            supertype_count: 0,
+        };
+        assert!(report.outcome().is_ok(), "clean complete control");
+        report.files_with_errors = 1;
+        assert_eq!(report.coverage_pct(), 100.0, "presence is not admission");
+        let refusal = report.outcome().expect_err("recovery must refuse success");
+        assert!(refusal.contains("ERROR or MISSING"));
+    }
+
+    /// Appearance of excluded syntax is a review trigger, not proof that it
+    /// belongs in a valid reference corpus. Thumbnail is recognized by the
+    /// grammar but explicitly refused by model lowering (E525 example 4).
+    #[test]
+    fn excluded_syntax_appearance_requires_policy_review() {
+        let report = Report {
+            required: 1,
+            missing: Vec::new(),
+            invalid_present: Vec::new(),
+            stale_exclusions: vec!["thumbnail_header"],
+            files_parsed: 1,
+            files_with_errors: 0,
+            supertype_count: 0,
+        };
+        let refusal = report.outcome().expect_err("excluded syntax needs review");
+        assert!(refusal.contains("thumbnail_header"));
+        assert!(refusal.contains("support and validation policy"));
+        assert!(!refusal.contains("Good news"));
+    }
 
     /// SURVIVES: a roundtrip between two separate owners. The table names codes
     /// as strings and the registry owns which codes exist; no type of this
@@ -485,7 +530,7 @@ mod tests {
     /// SURVIVES: policy, in the same sense as the coverage gate itself. The two
     /// slices mean different things and get opposite reverse checks, so a node
     /// listed in both would be excused twice and checked inconsistently: once
-    /// as "must not appear" and once as "should appear eventually".
+    /// as "must not appear" and once as "appearance requires review".
     #[test]
     fn no_node_type_is_excused_twice() {
         for (kind, _) in INVALID_BY_CONSTRUCTION {

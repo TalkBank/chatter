@@ -230,6 +230,7 @@ export function shouldShowAllFilesValid(run: RunPhase, errorFileCount: number): 
     && !run.stats.cancelled && run.stats.totalFiles > 0
     && run.stats.validFiles === run.stats.totalFiles
     && run.stats.invalidFiles === 0 && run.stats.parseErrors === 0
+    && run.stats.internalFailures === 0
     && run.stats.roundtripFailed === 0;
 }
 
@@ -251,6 +252,7 @@ export function fileOutcome(file: FileEntry): FileOutcome {
     case "invalid": return { kind: "problem", message: `Validation failed (${status.errorCount} diagnostics)` };
     case "readError": return { kind: "problem", message: `Read error: ${status.message}` };
     case "parseError": return { kind: "problem", message: `Parse error: ${status.message}` };
+    case "internalFailure": return { kind: "problem", message: `Internal failure: ${status.message}` };
     case "roundtripFailed": return { kind: "problem", message: `Roundtrip failed: ${status.reason}` };
   }
   return assertNever(status);
@@ -265,7 +267,7 @@ export function finishedRunSummary(
   if (stats.cancelled) return "Cancelled; results are partial";
   if (stats.totalFiles === 0) return "No CHAT files found";
   if (shouldShowAllFilesValid(run, diagnostics)) return `All ${stats.totalFiles} files valid`;
-  return `${diagnostics} diagnostics; ${stats.invalidFiles} invalid files, ${stats.parseErrors} read/parse failures, ${stats.roundtripFailed} roundtrip failures`;
+  return `${diagnostics} diagnostics; ${stats.invalidFiles} invalid files, ${stats.parseErrors} read/parse failures, ${stats.internalFailures} internal failures, ${stats.roundtripFailed} roundtrip failures`;
 }
 
 export function relativeDisplayName(fullPath: string, targetPath: string): string {

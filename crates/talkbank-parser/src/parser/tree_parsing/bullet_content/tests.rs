@@ -33,7 +33,7 @@ fn parse_test_file(filename: &str) -> Result<(BulletContent, Vec<ParseError>), S
     for descendant in root.descendants() {
         let node = descendant.map_err(|err| err.to_string())?;
         if let Some(tier) = node.typed::<ActDependentTierNode>() {
-            let children = tier.extract();
+            let children = tier.extract().map_err(|err| err.to_string())?;
             if let Some(body) = children.field_child_2().slot().optional()
                 && let SourceSlotView::Present(text) = body.view()
             {
@@ -48,7 +48,7 @@ fn parse_test_file(filename: &str) -> Result<(BulletContent, Vec<ParseError>), S
         content_node.ok_or_else(|| "Should find a source-bound act content slot".to_string())?;
 
     let error_sink = ErrorCollector::new();
-    let content = parse_bullet_content(content_node, &error_sink);
+    let content = parse_bullet_content(content_node, &error_sink).expect("producer reconstruction");
     Ok((content, error_sink.into_vec()))
 }
 

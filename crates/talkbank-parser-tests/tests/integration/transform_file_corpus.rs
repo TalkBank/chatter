@@ -8,10 +8,170 @@ use talkbank_parser_tests::repo_paths::workspace_root;
 use talkbank_parser_tests::test_error::strict_parse;
 use talkbank_transform::{PipelineError, parse_and_validate_named, parse_file_and_validate};
 
+/// The collecting public API must retain the opt-in policy boundary: disabling
+/// strict quotation checks must not disable indexed overlap diagnostics.
+#[test]
+fn canonical_cross_utterance_collection_preserves_rule_selection() {
+    use std::sync::Arc;
+    use talkbank_model::validation::cross_utterance::check_cross_utterance_patterns;
+    use talkbank_model::validation::{SharedValidationData, ValidationContext};
+
+    let parser = TreeSitterParser::new().expect("parser");
+    for (spec, default_codes, strict_codes) in [
+        ("E341_2", &[][..], &["E341"][..]),
+        ("E341_3", &[][..], &[][..]),
+        ("E341_5", &[][..], &[][..]),
+        ("E346_3", &[][..], &[][..]),
+        // The orphan opens the chain; its following quoted turn continues it.
+        ("E346_4", &[][..], &["E346"][..]),
+        ("E347_1", &["E347"][..], &["E347"][..]),
+        ("E347_2", &[][..], &[][..]),
+        ("E347_3", &["E347"][..], &["E347"][..]),
+        ("E347_4", &["E347", "E347"][..], &["E347", "E347"][..]),
+        ("E704_2", &[][..], &[][..]),
+        ("E704_3", &["E704"][..], &["E704"][..]),
+    ] {
+        let source = std::fs::read_to_string(workspace_root().join(format!(
+            "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/{spec}.cha",
+        )))
+        .expect("canonical quotation or overlap specimen");
+        let file = strict_parse(parser.parse_chat_file(&source)).expect("spec syntax parses");
+        for (strict, expected) in [(false, default_codes), (true, strict_codes)] {
+            // This phase reads only the rule-selection flag; header and word
+            // validity remain the responsibility of full-file admission.
+            let context = ValidationContext::from_shared(Arc::new(SharedValidationData {
+                enable_quotation_validation: strict,
+                ..SharedValidationData::default()
+            }));
+            let diagnostics = check_cross_utterance_patterns(&file, &context);
+            let codes: Vec<_> = diagnostics
+                .iter()
+                .map(|error| error.code.to_string())
+                .collect();
+            assert_eq!(codes, expected, "{spec}, strict={strict}");
+        }
+    }
+}
+
+#[test]
+fn spec_lenient_parsing_retains_recovery_and_primary_diagnostics() {
+    use talkbank_model::model::DependentTier;
+    use talkbank_model::{ErrorCode, ErrorCollector};
+    use talkbank_transform::parse::{parse_lenient, parse_strict};
+    let parser = TreeSitterParser::new().expect("parser");
+    for (fixture, generated_recovery) in [("E702_1", true), ("E600_1", true), ("E370_3", false)] {
+        let source = std::fs::read_to_string(workspace_root().join(format!(
+            "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/{fixture}.cha",
+        )))
+        .expect("canonical malformed tier specimen");
+        let errors = ErrorCollector::new();
+        let original = parser.parse_chat_file_streaming(&source, &errors);
+        let original_errors = errors.into_vec();
+        assert!(
+            !original_errors.is_empty(),
+            "{fixture}: actual parse failure"
+        );
+        assert!(parse_strict(&parser, &source).is_err());
+        let (mut recovered, retained) = parse_lenient(&parser, &source);
+        assert!(
+            original.semantic_eq(&recovered),
+            "leniency cannot erase recovered model slots"
+        );
+        let generated_spans: Vec<_> = original
+            .utterances()
+            .flat_map(|utterance| {
+                utterance
+                    .dependent_tiers
+                    .iter()
+                    .filter_map(|entry| match &entry.tier {
+                        DependentTier::Mor(_) | DependentTier::Gra(_) => Some(entry.span()),
+                        _ => None,
+                    })
+            })
+            .collect();
+        match generated_recovery {
+            true => {
+                assert!(
+                    retained.len() < original_errors.len(),
+                    "{fixture}: generated diagnostics suppressed"
+                );
+                for error in &original_errors {
+                    if !retained.contains(error) {
+                        let offset = error.location.span.start;
+                        assert!(
+                            generated_spans
+                                .iter()
+                                .any(|span| span.start <= offset && offset < span.end),
+                            "{fixture}: suppression must belong to a typed generated tier"
+                        );
+                    }
+                }
+                let validation = ErrorCollector::new();
+                recovered.validate_with_alignment(&validation, TranscriptName::Anonymous);
+                assert!(
+                    validation
+                        .into_vec()
+                        .iter()
+                        .any(|error| error.code == ErrorCode::TierValidationError),
+                    "ignored parse diagnostics do not restore alignment trust"
+                );
+            }
+            false => {
+                assert_eq!(
+                    retained, original_errors,
+                    "primary speech errors remain visible"
+                );
+                assert!(
+                    retained
+                        .iter()
+                        .any(|error| error.code == ErrorCode::StructuralOrderError)
+                );
+            }
+        }
+    }
+    let source = std::fs::read_to_string(
+        workspace_root().join("corpus/reference/core/basic-conversation.cha"),
+    )
+    .expect("clean reference control");
+    let strict = parse_strict(&parser, &source).expect("clean source admitted");
+    let (lenient, errors) = parse_lenient(&parser, &source);
+    assert!(errors.is_empty());
+    assert!(strict.semantic_eq(&lenient));
+}
+
+#[test]
+fn spec_lenient_parsing_does_not_hide_similarly_named_tier_errors() {
+    use talkbank_model::{ErrorCode, ErrorCollector};
+    use talkbank_transform::parse::parse_lenient;
+    let parser = TreeSitterParser::new().expect("parser");
+    for fixture in ["E315_8", "E315_9"] {
+        let source = std::fs::read_to_string(workspace_root().join(format!(
+            "crates/talkbank-parser-tests/tests/error_corpus/validation_errors/{fixture}.cha",
+        )))
+        .expect("canonical misleading-prefix specimen");
+        let errors = ErrorCollector::new();
+        let original = parser.parse_chat_file_streaming(&source, &errors);
+        let errors = errors.into_vec();
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.code == ErrorCode::InvalidControlCharacter)
+        );
+        let (recovered, retained) = parse_lenient(&parser, &source);
+        assert!(original.semantic_eq(&recovered));
+        assert_eq!(
+            retained, errors,
+            "only exact generated-tier ownership permits suppression"
+        );
+    }
+}
+
 #[test]
 fn reference_files_preserve_parsed_models() {
+    use talkbank_model::model::{ChatFileLines, Header, WriteChat};
     let parser = TreeSitterParser::new().expect("parser");
     let corpus = ChatCorpus::reference().expect("canonical reference corpus");
+    let mut id_witnesses = 0;
     for fixture in corpus.fixtures() {
         let expected = strict_parse(parser.parse_chat_file(fixture.source()))
             .expect("reference parses cleanly");
@@ -22,7 +182,157 @@ fn reference_files_preserve_parsed_models() {
             "{}",
             fixture.path().display()
         );
+        assert_eq!(expected.to_chat(), expected.to_chat_string());
+        let mut ids = expected.id_headers();
+        for header in expected.headers() {
+            if let Header::ID(id) = header {
+                assert!(std::ptr::eq(
+                    ids.next().expect("ID view must retain each header"),
+                    id
+                ));
+                id_witnesses += 1;
+            }
+        }
+        assert!(
+            ids.next().is_none(),
+            "ID view cannot invent or duplicate headers"
+        );
+        // Rebuild an editor's ordered line buffer from the admitted source,
+        // retaining interleaved headers, utterances, payloads and exact spans.
+        // An empty buffer is a construction state, not an admitted CHAT file.
+        let mut lines = ChatFileLines::new(Vec::new());
+        assert!(lines.is_empty());
+        for line in expected.lines.clone() {
+            lines.insert(lines.len(), line);
+        }
+        assert!(!lines.is_empty(), "reference file must contain its headers");
+        assert_eq!(lines, expected.lines);
+        // Move out and restore boundary/interior lines through the public
+        // collection operations; no arithmetic-derived index escapes this owner.
+        for index in [0, lines.len() / 2, lines.len() - 1] {
+            let removed = lines.remove(index);
+            assert_eq!(&removed, &expected.lines[index]);
+            lines.insert(index, removed);
+            assert_eq!(
+                lines, expected.lines,
+                "line order and spans must survive editing"
+            );
+        }
     }
+    assert!(
+        id_witnesses > 0,
+        "reference files must exercise participant ID views"
+    );
+}
+
+/// Streaming is a reporting boundary, not permission to admit invalid CHAT.
+/// The named path must retain the same validation decision even with no sink.
+#[test]
+fn canonical_streaming_boundaries_preserve_models_and_required_refusals() {
+    use talkbank_model::{ErrorCollector, NullErrorSink};
+    use talkbank_transform::{
+        parse_and_validate_streaming, parse_and_validate_streaming_for_path,
+        parse_and_validate_streaming_named, parse_and_validate_streaming_with_parser,
+    };
+
+    let parser = TreeSitterParser::new().expect("parser");
+    let corpus = ChatCorpus::reference().expect("reference corpus");
+    for fixture in corpus.fixtures() {
+        let expected =
+            strict_parse(parser.parse_chat_file(fixture.source())).expect("reference parses");
+        let errors = ErrorCollector::new();
+        for actual in [
+            parse_and_validate_streaming(
+                fixture.source(),
+                ParseValidateOptions::default(),
+                &errors,
+            ),
+            parse_and_validate_streaming_with_parser(
+                &parser,
+                fixture.source(),
+                ParseValidateOptions::default(),
+                &errors,
+            ),
+            parse_and_validate_streaming_for_path(
+                fixture.path(),
+                fixture.source(),
+                ParseValidateOptions::default(),
+                &errors,
+            ),
+        ] {
+            assert!(
+                expected.semantic_eq(&actual.expect("clean streaming parse")),
+                "{}",
+                fixture.path().display()
+            );
+        }
+        assert!(errors.into_vec().is_empty(), "{}", fixture.path().display());
+    }
+
+    let corpus = ChatCorpus::read(
+        &workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors"),
+    )
+    .expect("spec corpus");
+    let mut admitted = 0;
+    let mut refused = 0;
+    for fixture in corpus.fixtures() {
+        let options = ParseValidateOptions::default()
+            .with_alignment()
+            .with_strict_linkers();
+        let expected_errors = ErrorCollector::new();
+        let actual_errors = ErrorCollector::new();
+        let expected = parse_and_validate_streaming_named(
+            &parser,
+            fixture.source(),
+            options.clone(),
+            &expected_errors,
+            TranscriptName::for_path(fixture.path()),
+        );
+        let actual = parse_and_validate_streaming_for_path(
+            fixture.path(),
+            fixture.source(),
+            options.clone(),
+            &actual_errors,
+        );
+        let silent = parse_and_validate_streaming_for_path(
+            fixture.path(),
+            fixture.source(),
+            options,
+            &NullErrorSink,
+        );
+        assert_eq!(
+            expected_errors.into_vec(),
+            actual_errors.into_vec(),
+            "{}",
+            fixture.path().display()
+        );
+        match (expected, actual, silent) {
+            (Ok(expected), Ok(actual), Ok(silent)) => {
+                assert!(expected.semantic_eq(&actual));
+                assert!(expected.semantic_eq(&silent));
+                admitted += 1;
+            }
+            (Err(expected), Err(actual), Err(silent)) => {
+                assert_eq!(
+                    std::mem::discriminant(&expected),
+                    std::mem::discriminant(&actual)
+                );
+                assert_eq!(
+                    std::mem::discriminant(&expected),
+                    std::mem::discriminant(&silent)
+                );
+                refused += 1;
+            }
+            results => panic!(
+                "streaming admission differs for {}: {results:?}",
+                fixture.path().display()
+            ),
+        }
+    }
+    assert!(
+        admitted > 0 && refused > 0,
+        "both admission transitions exercised"
+    );
 }
 
 #[test]
@@ -47,6 +357,29 @@ fn spec_files_preserve_named_admission_and_refusal_evidence() {
             let expected =
                 parse_and_validate_named(&parser, fixture.source(), options.clone(), name);
             let actual = parse_file_and_validate(fixture.path(), options.clone());
+            if let (Err(expected), Err(actual)) = (&expected, &actual) {
+                let summary = actual.to_string();
+                assert!(
+                    !summary.is_empty(),
+                    "file refusal must have a user-facing summary"
+                );
+                assert_eq!(
+                    summary,
+                    expected.to_string(),
+                    "file I/O must preserve the refusal summary"
+                );
+                match actual {
+                    PipelineError::Parse(_) => assert!(summary.starts_with("Parse errors: ")),
+                    PipelineError::Validation(errors) => assert_eq!(
+                        summary,
+                        format!("Validation failed with {} errors", errors.len()),
+                    ),
+                    PipelineError::IncompleteValidation(failure) => {
+                        assert_eq!(summary, failure.to_string())
+                    }
+                    _ => {} // The exhaustive outcome comparison below rejects unexpected variants.
+                }
+            }
             match (expected, actual) {
                 (Ok(expected), Ok(actual)) => {
                     assert!(
@@ -102,10 +435,63 @@ fn fixture_directory_is_an_io_refusal_not_empty_chat() {
         directory.is_dir(),
         "canonical reference directory must exist"
     );
-    assert!(matches!(
-        parse_file_and_validate(&directory, ParseValidateOptions::default()),
-        Err(PipelineError::Io(_))
-    ));
+    // A filesystem root exists but cannot supply a transcript basename. Even
+    // caller-supplied valid CHAT must not bypass that named-input admission.
+    let root = directory
+        .ancestors()
+        .last()
+        .expect("absolute reference path has a root");
+    assert!(root.has_root());
+    let source_path = directory.join("core/basic-conversation.cha");
+    let source = std::fs::read_to_string(&source_path).expect("reference control");
+    let errors = talkbank_model::ErrorCollector::new();
+    let accepted = talkbank_transform::parse_and_validate_streaming_for_path(
+        &source_path,
+        &source,
+        ParseValidateOptions::default(),
+        &errors,
+    );
+    assert!(accepted.is_ok() && errors.is_empty());
+    let refused = talkbank_transform::parse_and_validate_streaming_for_path(
+        root,
+        &source,
+        ParseValidateOptions::default(),
+        &errors,
+    )
+    .expect_err("a root has no transcript name");
+    let PipelineError::Io(cause) = refused else {
+        panic!("name admission must fail before CHAT processing");
+    };
+    assert_eq!(cause.kind(), std::io::ErrorKind::InvalidInput);
+    assert!(
+        errors.is_empty(),
+        "I/O refusal must not invent CHAT diagnostics"
+    );
+    let error = parse_file_and_validate(&directory, ParseValidateOptions::default())
+        .expect_err("directory is not a CHAT file");
+    let PipelineError::Io(cause) = &error else {
+        panic!("directory must be an I/O refusal: {error:?}");
+    };
+    assert_eq!(error.to_string(), format!("I/O error: {cause}"));
+    use talkbank_transform::speaker_id::{
+        RecordedSpeakerIdentificationAttempt, RecordedSpeakerIdentificationInput,
+    };
+    for (input, label) in [
+        (RecordedSpeakerIdentificationInput::Donor, "donor"),
+        (RecordedSpeakerIdentificationInput::Reference, "reference"),
+    ] {
+        let record = RecordedSpeakerIdentificationAttempt::input_rejected(input, &error);
+        let wire = serde_json::to_value(record).expect("I/O refusal evidence");
+        assert_eq!(wire["schema_version"], 1);
+        assert_eq!(wire["outcome"], "input_rejected");
+        assert_eq!(wire["input"], label);
+        assert_eq!(wire["failure_kind"], "io");
+        assert_eq!(wire["diagnostic_codes"], serde_json::json!([]));
+        assert!(
+            wire.get("match_report").is_none(),
+            "unread input supplies no lexical evidence"
+        );
+    }
 }
 
 #[cfg(unix)]

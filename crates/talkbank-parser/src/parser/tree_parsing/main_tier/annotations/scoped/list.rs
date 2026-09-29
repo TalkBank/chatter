@@ -6,9 +6,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::generated_traversal::{Absence, Never};
 use crate::generated_traversal::{
-    AsRawNode, BaseAnnotationChoice, BaseAnnotationsNode, NoChild, NodeSlot, RecoveryNode, SeqSlot,
-    SlotView, extract_base_annotations,
+    AsRawNode, BaseAnnotationChoice, BaseAnnotationsNode, NodeSlot, RecoveryNode, SlotView,
+    extract_base_annotations,
 };
 use crate::parser::ChildCapacity;
 use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
@@ -56,9 +57,9 @@ pub(crate) fn parse_scoped_annotations(
     typed: BaseAnnotationsNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
-) -> Vec<ParsedAnnotation> {
+) -> Result<Vec<ParsedAnnotation>, crate::generated_traversal::ReconstructionFault> {
     let node = typed.raw_node();
-    let children = extract_base_annotations(typed);
+    let children = extract_base_annotations(typed)?;
     let repeat = children.child_1.slot();
     let mut markers = ChildCapacity::for_pairs_of(node).into_vec();
     if let Some(first) = pair(children.child_0.slot(), 0, source, errors) {
@@ -86,7 +87,7 @@ pub(crate) fn parse_scoped_annotations(
         }
     }
     surface_displaced(&children.unexpected, "base_annotations", source, errors);
-    markers
+    Ok(markers)
 }
 
 /// The pair at `index` in the run: `None` for a sequence that did not match
@@ -94,8 +95,8 @@ pub(crate) fn parse_scoped_annotations(
 /// the old walk reported it, which expected a `whitespaces` child where the
 /// pair begins. A sequence is never MISSING or displaced, and the slot's
 /// type says so.
-fn pair<'a, 'tree, T>(
-    slot: &'a SeqSlot<'tree, T>,
+fn pair<'a, 'tree, T, A: Absence>(
+    slot: &'a NodeSlot<'tree, T, Never, Never, A>,
     index: usize,
     source: &str,
     errors: &impl ErrorSink,
@@ -112,7 +113,7 @@ fn pair<'a, 'tree, T>(
             );
             None
         }
-        SlotView::Absent(NoChild) => None,
+        SlotView::Absent(_) => None,
     }
 }
 
@@ -185,7 +186,7 @@ fn push_annotation<'tree, W, M, U, A, C>(
         }
         // A MISSING annotation is the whole-tree pass's to report (E342), and
         // its kind names nothing to decode: see the decoder's doc.
-        SlotView::Missing(_) | SlotView::Absent(NoChild) => {}
+        SlotView::Missing(_) | SlotView::Absent(_) => {}
         SlotView::Error(bad) => report_mismatch(
             bad,
             "annotation",

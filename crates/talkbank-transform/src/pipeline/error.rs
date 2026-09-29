@@ -9,6 +9,8 @@
 /// Errors that can occur in pipeline functions
 #[derive(Debug)]
 pub enum PipelineError {
+    /// The tool failed without establishing CHAT validity.
+    InternalFailure(talkbank_model::InternalFailure),
     /// I/O error (file reading/writing)
     Io(std::io::Error),
     /// Failed to create parser
@@ -35,6 +37,7 @@ impl std::fmt::Display for PipelineError {
     /// Render a concise pipeline error summary.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            PipelineError::InternalFailure(failure) => write!(f, "{failure}"),
             PipelineError::Io(err) => write!(f, "I/O error: {}", err),
             PipelineError::ParserCreation(msg) => write!(f, "Parser creation failed: {}", msg),
             PipelineError::Parse(errors) => write!(f, "Parse errors: {}", errors),

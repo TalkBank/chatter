@@ -65,7 +65,7 @@ pub enum ErrorCode {
     /// Unknown annotation type in word.
     #[code("E207")]
     UnknownAnnotation,
-    /// Replacement annotation is empty.
+    /// Replacement annotation is empty (deprecated: rejected during parsing).
     #[code("E208")]
     EmptyReplacement,
     /// Spoken content portion of word is empty.
@@ -179,19 +179,13 @@ pub enum ErrorCode {
     #[code("E310")]
     #[status(planned)]
     ParseFailed,
-    /// Unexpected node type in the parse tree.
-    ///
-    /// No longer planned as of 2026-08-11: an unclosed replacement bracket
-    /// (`*CHI:\t[: unclosed [* error] .`) reaches it and reports "Unclosed
-    /// replacement bracket". Its spec had stayed `not_implemented` on the
-    /// strength of a note saying tree-sitter recovery made it unreachable
-    /// because E316 fired first, which the parser had since outgrown.
+    /// Retired raw-text unclosed-replacement classification. Malformed source remains rejected by ordinary parser recovery; this code has no live producer.
     #[code("E311")]
     UnexpectedNode,
-    /// Unclosed bracket in annotation or word content.
+    /// Retired raw-text unclosed-bracket inference. Structural recovery still rejects malformed source.
     #[code("E312")]
     UnclosedBracket,
-    /// Unclosed parenthesis in annotation or word content.
+    /// Retired raw-text unclosed-parenthesis inference. Structural recovery still rejects malformed source.
     #[code("E313")]
     UnclosedParenthesis,
     /// Annotation is syntactically incomplete.
@@ -877,19 +871,10 @@ pub enum ErrorCode {
     /// CA option exempts the rule. Matches CLAN CHECK error 123.
     #[code("E758")]
     LeadingSpaceOnMainTier,
-    /// Utterance content begins with a postfix annotation (retrace,
-    /// overlap marker, replacement, or quotation code): the code scopes
-    /// over PRECEDING material, and there is none, so the parse is
-    /// genuinely broken and the error analysis names it instead of
-    /// falling through to the E316 catch-all. Matches CLAN CHECK
-    /// error 52 ("Item '%s' must be preceded by text.").
+    /// Postfix annotation without preceding material. The experimental re2c backend emits this dedicated diagnostic; tree-sitter rejects the construct through structural recovery (E375 or E316).
     #[code("E759")]
     AnnotationAtUtteranceStart,
-    /// `%mor` item beginning with the `|` separator (`|we`): the
-    /// part-of-speech field is empty, which is never meaningful %mor
-    /// content. Modern reading of CLAN CHECK error 11 ("Symbol is not
-    /// declared in the depfile."): the invariant is a non-empty symbol
-    /// before the pipe, not the legacy depfile mechanism.
+    /// Morphology item with an empty part-of-speech field. The experimental re2c backend emits this dedicated diagnostic; tree-sitter reports morphology recovery (E702). External depfile membership is not a CHAT validity rule.
     #[code("E760")]
     MorItemEmptyPos,
     /// `%gra` relation label whose HEAD is not one of Universal

@@ -16,7 +16,8 @@ use talkbank_model::ParseOutcome;
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::validation::ValidationPolicy;
 use talkbank_model::{
-    ErrorCode, ErrorCollector, ErrorSink, NullErrorSink, ParseError, ParseErrors, Severity,
+    ErrorCollector, ErrorSink, FragmentRangeError, FragmentSource, NullErrorSink, ParseErrors,
+    Severity,
 };
 use talkbank_parser::TreeSitterParser;
 
@@ -100,7 +101,9 @@ pub fn parse_and_validate_named(
 
     let chat_file_outcome = parser.parse_chat_file_fragment(content, 0, &parse_errors);
 
-    let parse_error_vec = parse_errors.into_vec();
+    let parse_error_vec = talkbank_model::CompletedDiagnostics::admit(parse_errors.into_vec())
+        .map_err(PipelineError::InternalFailure)?
+        .into_diagnostics();
     let actual_errors: Vec<_> = parse_error_vec
         .iter()
         .filter(|e| e.severity == Severity::Error)
@@ -141,7 +144,8 @@ pub fn parse_and_validate_named(
 ///
 /// # Returns
 ///
-/// * `ChatFile` - Always returns a ChatFile (even if there were errors)
+/// * `Ok(ChatFile)` - Recovered model when validation is not required
+/// * `Err(PipelineError)` - Source admission or required validation failed
 ///
 /// # Example
 ///
@@ -154,7 +158,7 @@ pub fn parse_and_validate_named(
 /// let options = ParseValidateOptions::default().with_validation();
 /// let errors = ErrorCollector::new();
 /// let chat_file = parse_and_validate_streaming(content, options, &errors);
-/// // Errors are in the sink, file is always returned for recovery
+/// // Errors are in the sink; source admission and required validation can fail.
 /// ```
 pub fn parse_and_validate_streaming(
     content: &str,
@@ -206,21 +210,21 @@ pub fn parse_and_validate_streaming_named(
     if let Some(policy) = options.validation_policy() {
         return required_validation(parser, content, policy, name, errors);
     }
-    let chat_file_outcome = parser.parse_chat_file_fragment(content, 0, errors);
+    let source =
+        FragmentSource::new(content, 0).map_err(|error| report_source_rejection(error, errors))?;
+    let collected = ErrorCollector::new();
+    let recording = talkbank_model::TeeErrorSink::new(errors, &collected);
+    let file = parser.parse_chat_file_streaming(source.input(), &recording);
+    talkbank_model::CompletedDiagnostics::admit(collected.into_vec())
+        .map_err(PipelineError::InternalFailure)?;
+    Ok(file)
+}
 
-    let chat_file = match chat_file_outcome {
-        ParseOutcome::Parsed(chat_file) => chat_file,
-        ParseOutcome::Rejected => {
-            let parse_error = ParseError::build(ErrorCode::ParseFailed)
-                .message("Parser rejected input without reporting errors")
-                .finish()
-                .map_err(|err| PipelineError::ParserCreation(err.to_string()))?;
-            errors.report(parse_error);
-            ChatFile::new(vec![])
-        }
-    };
-
-    Ok(chat_file)
+/// Preserve the admission owner's diagnostic in both the stream and return value.
+fn report_source_rejection(error: FragmentRangeError, errors: &impl ErrorSink) -> PipelineError {
+    let diagnostic = error.into_diagnostic();
+    errors.report(diagnostic.clone());
+    PipelineError::Parse(ParseErrors::from(vec![diagnostic]))
 }
 
 /// Compatibility APIs explicitly discard the accepted phase before returning a
@@ -235,14 +239,22 @@ fn required_validation(
     super::validated::parse_validated_with_parser(parser, content, policy, name, errors)
         .map(|accepted| accepted.into_unchecked())
         .map_err(|error| match error {
+            super::validated::ValidatedParseError::InternalFailure { failure, .. } => {
+                PipelineError::InternalFailure(failure)
+            }
             super::validated::ValidatedParseError::Parse(product) => {
                 PipelineError::Parse(ParseErrors::from(product.diagnostics().to_vec()))
             }
             super::validated::ValidatedParseError::Validation(failure) => {
-                if failure.has_incomplete_parse() {
-                    PipelineError::IncompleteValidation(Box::new(failure))
-                } else {
-                    PipelineError::Validation(failure.diagnostics().to_vec())
+                match talkbank_model::CompletedDiagnostics::admit(failure.diagnostics().to_vec()) {
+                    Err(internal) => PipelineError::InternalFailure(internal),
+                    Ok(completed) => {
+                        if failure.has_incomplete_parse() {
+                            PipelineError::IncompleteValidation(Box::new(failure))
+                        } else {
+                            PipelineError::Validation(completed.into_diagnostics())
+                        }
+                    }
                 }
             }
         })
@@ -254,6 +266,23 @@ mod tests {
     use talkbank_model::ErrorCode;
     use talkbank_model::ParseValidateOptions;
     use talkbank_parser::TreeSitterParser;
+
+    #[test]
+    fn source_rejection_is_reported_once_as_a_parse_failure() {
+        let errors = talkbank_model::ErrorCollector::new();
+        let rejection = talkbank_model::FragmentRangeError::check(0, u32::MAX as usize + 1)
+            .expect_err("oversized source");
+        let PipelineError::Parse(returned) = super::report_source_rejection(rejection, &errors)
+        else {
+            panic!("source rejection is not parser creation failure");
+        };
+        let streamed = errors.into_vec();
+        assert_eq!(streamed.len(), 1);
+        assert_eq!(returned.errors.len(), 1);
+        assert_eq!(streamed[0].code, ErrorCode::ParseFailed);
+        assert!(streamed[0].location.span.is_dummy());
+        assert_eq!(streamed[0].message, returned.errors[0].message);
+    }
 
     #[test]
     fn required_streaming_validation_rejects_errors_with_null_sink() {

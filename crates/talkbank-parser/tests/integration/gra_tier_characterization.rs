@@ -208,8 +208,8 @@ fn empty_body_gra_tier_is_handled_upstream_without_a_gra_tier() {
     assert!(
         diags
             .iter()
-            .any(|(c, start, end, _)| c == "E600" && *start == 24 && *end == 30),
-        "expected the upstream E600 'could not fully parse dependent tier' diagnostic, got: {diags:?}"
+            .any(|(c, start, end, _)| c == "E316" && *start == 24 && *end == 30),
+        "expected structural recovery at the unparsed tier, got: {diags:?}"
     );
     assert!(
         !diags.iter().any(|(c, _, _, _)| c == "E708"),

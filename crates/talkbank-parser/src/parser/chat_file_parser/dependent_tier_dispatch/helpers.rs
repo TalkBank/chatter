@@ -7,12 +7,12 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, NodeSlot, SlotView, TierSepNode, extract_tier_sep,
+    AsRawNode, KindSlot, NodeSlot, SelectedKindSlot, SlotView, TierSepNode, extract_tier_sep,
 };
 use crate::model::TextTier;
 use crate::model::{NonEmptyString, TierSeparator};
 use crate::parser::tree_parsing::parser_helpers::analyze_dependent_tier_error;
-use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::tree_parsing::parser_helpers::{extract_utf8_text, surface_displaced};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -30,8 +30,7 @@ use tree_sitter::Node;
 /// [`read_optional_tier_body_raw_text`], which unwrap the `Option` and then
 /// delegate here for a body that IS present. This function therefore describes
 /// what to do with a body that exists, and the absent case is not its business.
-/// Its `Absent` arm below is the tree-sitter recovery state, which is a
-/// different fact from "the grammar says there need not be one".
+/// The selected slot cannot be `Absent`; optional `None` owns that outcome.
 ///
 /// This replaces the removed `extract_unparsed_tier_content` hand-walk, which
 /// located the body by scanning `node.children()` for a child of kind
@@ -52,10 +51,9 @@ use tree_sitter::Node;
 ///   2026-09-08 the utterance parser's pre-attach walk reported the recovery
 ///   node; with that walk gone, the whole-tree backstop would have dropped it
 ///   as overlapping the tier-span report, and E330.md#3 lost its E316.
-/// - `Unexpected`: a node of another kind where the body belongs (the
-///   generator has not produced one here) is reported by its kind, then the
-///   same "missing content node".
-/// - `Absent`: no body child at all; "Tier is missing content node" alone.
+///
+/// Selection rules out `Unexpected` and `Absent`; producer faults remain
+/// distinct from these source-recovery states.
 ///
 /// The carrier's `unexpected` sink is surfaced FIRST via [`surface_displaced`]
 /// (R2; a no-op on valid input, load-bearing for migration Task D), at the
@@ -63,7 +61,7 @@ use tree_sitter::Node;
 /// every caller's own `extract_<kind>_dependent_tier`.
 fn read_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &KindSlot<'tree, T>,
+    body: &SelectedKindSlot<'tree, T>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -81,10 +79,6 @@ where
         SlotView::Missing(text) => decode_body_text(tier_node, text, source, errors),
         SlotView::Error(node) => {
             errors.report(analyze_dependent_tier_error(node, source));
-            report_missing_content_node(tier_node, source, errors);
-            ParseOutcome::rejected()
-        }
-        SlotView::Absent(NoChild) => {
             report_missing_content_node(tier_node, source, errors);
             ParseOutcome::rejected()
         }
@@ -122,7 +116,7 @@ fn report_missing_content_node(tier_node: Node, source: &str, errors: &impl Erro
 /// constructor's doc asks for.
 pub(crate) fn read_optional_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &Option<KindSlot<'tree, T>>,
+    body: &Option<SelectedKindSlot<'tree, T>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -161,7 +155,7 @@ where
 /// (E756 versus a parse error).
 pub(crate) fn read_optional_tier_body_raw_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &Option<KindSlot<'tree, T>>,
+    body: &Option<SelectedKindSlot<'tree, T>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -188,22 +182,9 @@ fn decode_body_text(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<NonEmptyString> {
-    let text = match body_node.utf8_text(source.as_bytes()) {
-        Ok(text) => text,
-        Err(e) => {
-            errors.report(ParseError::new(
-                ErrorCode::TreeParsingError,
-                Severity::Error,
-                SourceLocation::from_offsets(body_node.start_byte(), body_node.end_byte()),
-                ErrorContext::new(
-                    source,
-                    body_node.start_byte()..body_node.end_byte(),
-                    "tier_content",
-                ),
-                format!("Failed to extract UTF-8 text from tier content: {}", e),
-            ));
-            return ParseOutcome::rejected();
-        }
+    let ParseOutcome::Parsed(text) = extract_utf8_text(body_node, source, errors, "tier_content")
+    else {
+        return ParseOutcome::rejected();
     };
 
     match NonEmptyString::new(text) {
@@ -238,13 +219,15 @@ fn decode_body_text(
 /// parse-time). A recovered child can occur between the tab and that space;
 /// both positions must come from this carrier and remain adjacent. Otherwise
 /// the space belongs to content, not the line separator.
-pub(crate) fn dependent_tier_separator(slot: &KindSlot<'_, TierSepNode<'_>>) -> TierSeparator {
+pub(crate) fn dependent_tier_separator(
+    slot: &KindSlot<'_, TierSepNode<'_>>,
+) -> Result<TierSeparator, crate::generated_traversal::ReconstructionFault> {
     let NodeSlot::Present(tier_sep) = slot else {
-        return TierSeparator::CLEAN;
+        return Ok(TierSeparator::CLEAN);
     };
-    let tier_sep_children = extract_tier_sep(*tier_sep);
+    let tier_sep_children = extract_tier_sep(*tier_sep)?;
     let trailing = tier_sep_children.child_2.slot();
-    match trailing.as_ref().map(NodeSlot::view) {
+    Ok(match trailing.as_ref().map(NodeSlot::view) {
         Some(SlotView::Present(sep_node))
             if matches!(tier_sep_children.child_1.slot(), NodeSlot::Present(tab)
                 if tab.raw_node().end_byte() == sep_node.raw_node().start_byte()) =>
@@ -255,12 +238,8 @@ pub(crate) fn dependent_tier_separator(slot: &KindSlot<'_, TierSepNode<'_>>) -> 
                 node.end_byte() as u32,
             ))
         }
-        Some(
-            SlotView::Present(_)
-            | SlotView::Missing(_)
-            | SlotView::Error(_)
-            | SlotView::Absent(NoChild),
-        )
-        | None => TierSeparator::CLEAN,
-    }
+        Some(SlotView::Present(_) | SlotView::Missing(_) | SlotView::Error(_)) | None => {
+            TierSeparator::CLEAN
+        }
+    })
 }

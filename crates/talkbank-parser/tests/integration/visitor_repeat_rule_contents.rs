@@ -103,7 +103,8 @@ fn extract_contents_enumerates_main_tier_items() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc));
+    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc))
+        .expect("producer reconstruction");
 
     let mut present_items = 0usize;
     let mut content_item_variants = 0usize;
@@ -117,7 +118,7 @@ fn extract_contents_enumerates_main_tier_items() {
         };
 
         // Only utterance lines carry a main tier (and thus a `contents` node).
-        let line_children = extract_line(*line_node);
+        let line_children = extract_line(*line_node).expect("producer reconstruction");
         let NodeSlot::Present(LineChoice::Utterance(utterance_node)) = line_children.content.slot()
         else {
             continue;
@@ -125,11 +126,13 @@ fn extract_contents_enumerates_main_tier_items() {
 
         // utterance -> main_tier (child_0) -> tier_body (child_5) -> contents (content_2).
         // (child_4 is the optional `sep_trailing_space` E758 provenance slot.)
-        let utt = extract_utterance(*utterance_node);
+        let utt = extract_utterance(*utterance_node).expect("producer reconstruction");
         let main_tier_node = present_raw(utt.child_0.slot(), "utterance.main_tier");
-        let main_tier = extract_main_tier(classify::<MainTierNode>(main_tier_node));
+        let main_tier = extract_main_tier(classify::<MainTierNode>(main_tier_node))
+            .expect("producer reconstruction");
         let tier_body_node = present_raw(main_tier.child_5.slot(), "main_tier.tier_body");
-        let tier_body = extract_tier_body(classify::<TierBodyNode>(tier_body_node));
+        let tier_body = extract_tier_body(classify::<TierBodyNode>(tier_body_node))
+            .expect("producer reconstruction");
         let contents_node = present_raw(tier_body.content_2.slot(), "tier_body.contents");
         assert_eq!(
             contents_node.kind(),
@@ -145,7 +148,8 @@ fn extract_contents_enumerates_main_tier_items() {
         // (`whitespaces` / `content_item` / `separator` / `overlap_point`) the
         // generator mangles into two separately-named types because `contents =
         // repeat1(..)` splits into a required-first-plus-repeated-tail shape.
-        let contents_children = extract_contents(classify::<ContentsNode>(contents_node));
+        let contents_children = extract_contents(classify::<ContentsNode>(contents_node))
+            .expect("producer reconstruction");
         match contents_children.child_0.slot() {
             NodeSlot::Present(choice) => {
                 present_items += 1;
@@ -154,7 +158,8 @@ fn extract_contents_enumerates_main_tier_items() {
                 }
             }
             NodeSlot::Missing(_) | NodeSlot::Absent(NoChild) => {}
-            NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
+            NodeSlot::Unexpected(never) => match *never {},
+            NodeSlot::Error(_) => {
                 problem_items.push(format!(
                     "contents child_0: {:?}",
                     contents_children.child_0.slot()
@@ -169,8 +174,9 @@ fn extract_contents_enumerates_main_tier_items() {
                         content_item_variants += 1;
                     }
                 }
-                NodeSlot::Missing(_) | NodeSlot::Absent(NoChild) => {}
-                NodeSlot::Error(_) | NodeSlot::Unexpected(_) => {
+                NodeSlot::Missing(_) => {}
+                NodeSlot::Unexpected(never) | NodeSlot::Absent(never) => match *never {},
+                NodeSlot::Error(_) => {
                     problem_items.push(format!("contents item {i}: {:?}", item.slot()));
                 }
             }

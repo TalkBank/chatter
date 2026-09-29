@@ -55,10 +55,17 @@ impl<'source> CorroboratedWorTimings<'source> {
 #[derive(Debug, PartialEq)]
 pub struct CorroboratedWorTimingSlot<'source> {
     pub(super) main_word: &'source Word,
+    pub(super) wor_word: &'source Word,
     pub(super) timing: WorSlotTiming,
 }
 
 impl<'source> CorroboratedWorTimingSlot<'source> {
+    /// Exact corroborating word, for source-bound updates that preserve timing.
+    /// Lexical identity continues to belong to [`Self::main_word`].
+    pub fn wor_word(&self) -> &'source Word {
+        self.wor_word
+    }
+
     /// Typed main-tier word that owns lexical identity.
     pub fn main_word(&self) -> &'source Word {
         self.main_word
@@ -162,6 +169,7 @@ pub fn corroborate_wor_timing(
         .zip(wor_slots)
         .map(|(main_word, wor_word)| CorroboratedWorTimingSlot {
             main_word,
+            wor_word,
             timing: match wor_word.inline_bullet.as_ref() {
                 Some(bullet) => WorSlotTiming::Timed(WorRecordedInterval::from_bullet(bullet)),
                 None => WorSlotTiming::Unaligned,

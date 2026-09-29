@@ -124,7 +124,7 @@ fn metadata_simple_headers_decode_to_exact_payloads() {
     assert_eq!(
         headers,
         vec![
-            r#"Date { date: Valid { day: 28, month: Jul, year: 2001, raw: "28-JUL-2001" } }"#
+            r#"Date { date: Valid(CheckedChatDate { day: 28, month: Jul, year: 2001, raw: "28-JUL-2001" }) }"#
                 .to_string(),
             r#"Location { location: LocationDescription("Pittsburgh, PA") }"#.to_string(),
             r#"Activities { activities: ActivitiesDescription("block play, doll play") }"#
@@ -211,7 +211,7 @@ fn time_simple_headers_decode_to_exact_payloads() {
         vec![
             r#"TimeStart { start: Parsed { hours: 8, minutes: 30, seconds: 31, millis: None, raw: "8:30:31" } }"#
                 .to_string(),
-            r#"TimeDuration { duration: Parsed { segments: [Range { start: TimeValue { hours: 0, minutes: 17, seconds: 30, millis: None }, end: TimeValue { hours: 0, minutes: 18, seconds: 0, millis: None } }], raw: "17:30-18:00" } }"#
+            r#"TimeDuration { duration: Parsed { segments: [Range { start: TimeValue { hours: 17, minutes: 30, seconds: 0, millis: None }, end: TimeValue { hours: 18, minutes: 0, seconds: 0, millis: None } }], raw: "17:30-18:00" } }"#
                 .to_string(),
         ],
         "simple-header content access must reproduce the pre-migration payloads"

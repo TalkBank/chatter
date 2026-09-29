@@ -41,3 +41,23 @@ fn expands_digits_per_language() {
     // validator's E220 catches it if that language forbids digits).
     assert_eq!(expand_number("42", "xxx"), "42");
 }
+
+/// Unsupported composition must not partially rewrite a caller's token.
+#[test]
+fn table_only_languages_preserve_unsupported_tokens() {
+    assert_eq!(expand_number("10000", "fra"), "dix mille");
+    for language in ["fra", "deu", "xxx"] {
+        for token in [
+            "100000",
+            "$100000",
+            "100000€",
+            "5-100000",
+            "5—100000",
+            "100000-year-old",
+        ] {
+            assert_eq!(expand_number(token, language), token, "{language}: {token}");
+        }
+    }
+    assert_eq!(expand_number("5-6", "fra"), "cinq six");
+    assert_eq!(expand_number("$5", "fra"), "cinq dollars");
+}

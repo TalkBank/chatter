@@ -40,42 +40,60 @@ fn report_parse_errors(errors: ParseErrors, sink: &impl ErrorSink) {
 
 const PARTICIPANTS_HEADER_PREFIX: &str = "@Participants:\t";
 
-/// Synthetic terminator relation appended when parsing a single `%gra`
-/// relation fragment: a bare relation is not a complete `%gra` tier, so
-/// the wrapper supplies a terminator to satisfy tier structure. It must
-/// itself be parse-clean CHAT (index 1-based, any head), because
-/// `wrapper_parse_tier` rejects the WHOLE fragment if any diagnostic
-/// fires anywhere in the wrapped tier: the previous scaffold `0|0|PUNCT`
-/// tripped E709 (0 is not a valid 1-based index), which both leaked a
-/// scaffold diagnostic to the caller and rejected every single-relation
-/// fragment outright (caught 2026-07-24 by the `ChatParser` trait
-/// conformance test; the re2c backend parses the same fragment cleanly).
-const GRA_RELATION_SCAFFOLD_SUFFIX: &str = "2|1|PUNCT";
+/// Cardinality admission shared by all single-item fragment projections.
+struct SingleItem<T>(T);
 
-/// An `ErrorSink` adapter that drops diagnostics located entirely inside
-/// synthetic scaffolding appended AFTER the caller's fragment.
-///
-/// Fragment wrappers sometimes extend the caller's input with synthetic
-/// material (e.g. the `%gra` relation wrapper appends a terminator
-/// relation). Diagnostics against that synthetic region describe the
-/// wrapper's own scaffolding, not the caller's input, and must never
-/// leak into the caller's sink: the re2c parser reports nothing for the
-/// same fragment, and trait-level parser interchangeability requires
-/// the tree-sitter side to match. Diagnostics at or past
-/// `scaffold_start` (in caller coordinates, i.e. offset-adjusted) are
-/// discarded; everything before it passes through untouched.
-struct ScaffoldRegionFilter<'a, S: ErrorSink> {
-    /// The caller's sink receiving all non-scaffold diagnostics.
-    inner: &'a S,
-    /// First byte position (caller coordinates) of the synthetic region.
-    scaffold_start: u32,
+enum ItemCardinalityError {
+    Empty,
+    Multiple,
 }
 
-impl<S: ErrorSink> ErrorSink for ScaffoldRegionFilter<'_, S> {
-    fn report(&self, error: ParseError) {
-        if error.location.span.start < self.scaffold_start {
-            self.inner.report(error);
+impl<T> SingleItem<T> {
+    fn admit(items: impl IntoIterator<Item = T>) -> Result<Self, ItemCardinalityError> {
+        let mut items = items.into_iter();
+        let Some(item) = items.next() else {
+            return Err(ItemCardinalityError::Empty);
+        };
+        match items.next() {
+            None => Ok(Self(item)),
+            Some(_) => Err(ItemCardinalityError::Multiple),
         }
+    }
+}
+
+fn reject_item_shape<T>(
+    input: &str,
+    errors: &impl ErrorSink,
+    message: &'static str,
+) -> ParseOutcome<T> {
+    errors.report(ParseError::new(
+        ErrorCode::InvalidWordFormat,
+        Severity::Error,
+        SourceLocation::from_offsets(0, input.len()),
+        ErrorContext::new(input, 0..input.len(), input),
+        message,
+    ));
+    ParseOutcome::rejected()
+}
+
+/// An admitted projection that loses neither tier items nor post-clitics.
+struct SingleMorWord(MorWord);
+
+enum MorWordShapeError {
+    ItemCount,
+    PostClitics,
+}
+
+impl TryFrom<MorTier> for SingleMorWord {
+    type Error = MorWordShapeError;
+
+    fn try_from(tier: MorTier) -> Result<Self, Self::Error> {
+        let SingleItem(item) =
+            SingleItem::admit(tier.into_items()).map_err(|_| MorWordShapeError::ItemCount)?;
+        if !item.post_clitics.is_empty() {
+            return Err(MorWordShapeError::PostClitics);
+        }
+        Ok(Self(item.main))
     }
 }
 
@@ -117,6 +135,27 @@ impl TreeSitterParser {
     // =========================================================================
     // Word-Level Fragment Parsing
     // =========================================================================
+
+    /// Parse a word with the enclosing document's semantic options.
+    ///
+    /// Only admitted words are normalized; refusal and source coordinates are
+    /// retained by the ordinary fragment boundary. CA interpretation uses the
+    /// same typed operation as whole-document parsing, without reading raw text.
+    pub fn parse_word_fragment_with_context(
+        &self,
+        input: &str,
+        offset: usize,
+        context: &FragmentSemanticContext,
+        errors: &impl ErrorSink,
+    ) -> ParseOutcome<Word> {
+        self.parse_word_fragment(input, offset, errors)
+            .map(|mut word| {
+                if context.ca_mode() {
+                    talkbank_model::model::content::word::ca::normalize_ca_omission_word(&mut word);
+                }
+                word
+            })
+    }
 
     /// Parse an individual word with offset adjustment and streaming errors.
     pub fn parse_word_fragment(
@@ -339,8 +378,12 @@ impl TreeSitterParser {
         };
         match header {
             Header::Participants { entries } => {
-                let Some(entry) = entries.into_iter().next() else {
-                    return ParseOutcome::rejected();
+                let Ok(SingleItem(entry)) = SingleItem::admit(entries) else {
+                    return reject_item_shape(
+                        wrapper.source(),
+                        &adjusting_sink,
+                        "Expected exactly one participant entry",
+                    );
                 };
                 ParseOutcome::parsed(wrapper.rebase(entry))
             }
@@ -384,10 +427,19 @@ impl TreeSitterParser {
         else {
             return ParseOutcome::rejected();
         };
-        let Some(mor) = tier.into_items().into_iter().next() else {
-            return ParseOutcome::rejected();
+        let word = match SingleMorWord::try_from(tier) {
+            Ok(SingleMorWord(word)) => word,
+            Err(reason) => {
+                let message = match reason {
+                    MorWordShapeError::ItemCount => "Expected exactly one MOR word",
+                    MorWordShapeError::PostClitics => {
+                        "A MOR word fragment cannot include post-clitics"
+                    }
+                };
+                return reject_item_shape(input, &document_sink, message);
+            }
         };
-        ParseOutcome::parsed(fragment_source.rebase(mor.main))
+        ParseOutcome::parsed(fragment_source.rebase(word))
     }
 
     // =========================================================================
@@ -414,34 +466,26 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<GrammaticalRelation> {
-        // Diagnostics against the appended scaffold terminator are the
-        // wrapper's private business; only input-region diagnostics may
-        // reach the caller.
         let ParseOutcome::Parsed(fragment_source) =
             talkbank_model::FragmentSource::admit(input, offset, errors)
         else {
             return ParseOutcome::rejected();
         };
         let document_sink = fragment_source.error_sink(errors);
-        let scaffold_sink = ScaffoldRegionFilter {
-            inner: &document_sink,
-            scaffold_start: input.len() as u32,
-        };
         let Some(tier) = self
-            .parse_gra_tier_fragment(
-                &format!("{input} {GRA_RELATION_SCAFFOLD_SUFFIX}"),
-                0,
-                &scaffold_sink,
-            )
+            .parse_gra_tier_fragment(input, offset, errors)
             .into_option()
         else {
             return ParseOutcome::rejected();
         };
-        tier.into_relations()
-            .into_iter()
-            .next()
-            .map(|relation| fragment_source.rebase(relation))
-            .into()
+        match SingleItem::admit(tier.into_relations()) {
+            Ok(SingleItem(relation)) => ParseOutcome::parsed(relation),
+            Err(_) => reject_item_shape(
+                input,
+                &document_sink,
+                "Expected exactly one grammatical relation",
+            ),
+        }
     }
 
     // =========================================================================
@@ -477,17 +521,25 @@ impl TreeSitterParser {
         };
         let document_sink = fragment_source.error_sink(errors);
         let Some(tier) = self
-            .parse_pho_tier_fragment(&format!("{} .", input), 0, &document_sink)
+            .parse_pho_tier_fragment(input, offset, errors)
             .into_option()
         else {
             return ParseOutcome::rejected();
         };
-        let Some(item) = tier.items.into_vec().into_iter().next() else {
-            return ParseOutcome::rejected();
+        let Ok(SingleItem(item)) = SingleItem::admit(tier.items.into_vec()) else {
+            return reject_item_shape(
+                input,
+                &document_sink,
+                "Expected exactly one phonological word",
+            );
         };
         match item {
-            PhoItem::Word(word) => ParseOutcome::parsed(fragment_source.rebase(word)),
-            PhoItem::Group(_) => ParseOutcome::rejected(),
+            PhoItem::Word(word) => ParseOutcome::parsed(word),
+            PhoItem::Group(_) => reject_item_shape(
+                input,
+                &document_sink,
+                "A phonological word fragment cannot include a group",
+            ),
         }
     }
 

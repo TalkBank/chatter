@@ -12,7 +12,6 @@ book/src/architecture/algorithms.md
 book/src/architecture/cli-startup-and-stack.md
 book/src/architecture/crate-reference.md
 book/src/architecture/errors-and-validation/error-diagnostics-ux.md
-book/src/architecture/grammar-governance.md
 book/src/architecture/grammar.md
 book/src/architecture/memory-and-ownership.md
 book/src/architecture/overlap-binding.md
@@ -23,21 +22,16 @@ book/src/chat-format/postcodes.md
 book/src/chat-format/replacements.md
 book/src/chat-format/untranscribed-markers.md
 book/src/chat-format/utterances.md
-book/src/chat-format/word-internals.md
 book/src/chat-format/word-syntax.md
-book/src/chatter/integrating/diagnostic-contract.md
-book/src/chatter/integrating/json-output.md
 book/src/chatter/user-guide/batch-workflows.md
 book/src/chatter/user-guide/chat-processing-playbook.md
 book/src/chatter/user-guide/ci-integration.md
 book/src/chatter/user-guide/clan-line-numbering.md
-book/src/contributing/chat-processing-playbook.md
 book/src/contributing/coding-standards-extended.md
 book/src/contributing/compile-times.md
 book/src/contributing/reference-corpus.md
 book/src/release-notes.md
 crates/send2clan/README.md
-crates/talkbank-parser-re2c/README.md
 crates/talkbank-parser-tests/clan-check-reference/check-error-codes.md
 docs/design/2026-07-18-recovery-and-leniency-boundary.md
 docs/panic-audit/README.md
@@ -47,7 +41,6 @@ docs/panic-audit/talkbank-parser-re2c.md
 docs/panic-audit/talkbank-parser.md
 docs/panic-audit/talkbank-transform.md
 docs/proposals/csc-span-syntax.md
-docs/strategy/crates-io-publication-plan.md
 docs/strategy/distribution-and-signing.md
 docs/strategy/v0.1.0-release-checklist.md
 docs/superpowers/plans/2026-07-01-merge-robustness.md

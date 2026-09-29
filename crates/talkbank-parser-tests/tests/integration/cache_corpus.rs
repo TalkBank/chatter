@@ -122,10 +122,79 @@ fn canonical_cache_is_learned_cold_and_reused_without_losing_diagnostics() {
     );
 }
 
-fn collect_run(
+/// Persistence failures must not replace actual validation with invented facts.
+#[test]
+fn canonical_cache_write_failure_preserves_results_and_forces_revalidation() {
+    use std::path::Path;
+    use std::sync::Mutex;
+    use talkbank_parser_tests::repo_paths::workspace_root;
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum Attempt {
+        Validation(PathBuf, bool, CacheOutcome),
+        Roundtrip(PathBuf, bool, CacheOutcome),
+    }
+    #[derive(Default)]
+    struct RefusedWrites(Mutex<Vec<Attempt>>);
+    impl ValidationCache for RefusedWrites {
+        fn get(&self, _: &Path, _: bool) -> Option<CacheOutcome> {
+            None
+        }
+        fn set(&self, path: &Path, alignment: bool, outcome: CacheOutcome) -> Result<(), String> {
+            self.0
+                .lock()
+                .expect("attempt log")
+                .push(Attempt::Validation(path.to_owned(), alignment, outcome));
+            Err("test storage refuses persistence".into())
+        }
+        fn set_roundtrip(
+            &self,
+            path: &Path,
+            alignment: bool,
+            outcome: CacheOutcome,
+        ) -> Result<(), String> {
+            self.0.lock().expect("attempt log").push(Attempt::Roundtrip(
+                path.to_owned(),
+                alignment,
+                outcome,
+            ));
+            Err("test storage refuses persistence".into())
+        }
+    }
+    let root = workspace_root();
+    let good = root.join("corpus/reference/core/basic-conversation.cha");
+    let bad =
+        root.join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E714_4.cha");
+    let paths = [good.clone(), bad.clone()];
+    let config = ValidationConfig {
+        jobs: Some(1),
+        roundtrip: true,
+        check_alignment: true,
+        ..Default::default()
+    };
+    let cache = Arc::new(RefusedWrites::default());
+    let first = collect_run(&paths, &config, cache.clone(), &BTreeSet::new());
+    let second = collect_run(&paths, &config, cache.clone(), &BTreeSet::new());
+    assert_eq!(first.verdicts, second.verdicts);
+    assert_eq!(first.diagnostics, second.diagnostics);
+    assert_eq!(first.stats.valid_files, 1);
+    assert_eq!(first.stats.invalid_files, 1);
+    assert_eq!(first.stats.roundtrip_passed, 1);
+    let per_run = [
+        Attempt::Roundtrip(good.clone(), config.check_alignment, CacheOutcome::Valid),
+        Attempt::Validation(good, config.check_alignment, CacheOutcome::Valid),
+        Attempt::Validation(bad, config.check_alignment, CacheOutcome::Invalid),
+    ];
+    assert_eq!(
+        *cache.0.lock().expect("attempt log"),
+        per_run.iter().chain(&per_run).cloned().collect::<Vec<_>>()
+    );
+}
+
+fn collect_run<C: ValidationCache + Send + Sync + 'static>(
     paths: &[PathBuf],
     config: &ValidationConfig,
-    cache: Arc<CachePool>,
+    cache: Arc<C>,
     hits: &BTreeSet<PathBuf>,
 ) -> CompletedRun {
     let expected: BTreeSet<_> = paths.iter().cloned().collect();

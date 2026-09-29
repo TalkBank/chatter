@@ -2,12 +2,15 @@
 //!
 //! Validation is performed via **methods on model types**:
 //!
-//! ```ignore
+//! ```
 //! use talkbank_model::{ChatFile, ErrorCollector};
+//! use talkbank_model::model::TranscriptName;
+//! # fn inspect(chat_file: &ChatFile) {
 //!
 //! let errors = ErrorCollector::new();
-//! chat_file.validate(&errors);
+//! chat_file.validate(&errors, TranscriptName::Anonymous);
 //! let error_vec = errors.into_vec();
+//! # }
 //! ```
 //!
 //! ## Public API
@@ -110,7 +113,7 @@ mod tests {
         use crate::model::{MainTier, Terminator, UtteranceContent};
 
         let word = Annotated::with_one(
-            Word::new_unchecked("hello [::: stuff]", "hello"),
+            Word::new_unchecked("hello"),
             ContentAnnotation::Unknown(crate::model::ScopedUnknown {
                 marker: ":::".into(),
                 text: "stuff".into(),

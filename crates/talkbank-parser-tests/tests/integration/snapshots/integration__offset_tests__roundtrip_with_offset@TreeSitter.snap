@@ -22,7 +22,6 @@ expression: "(is_semantically_equal, main1, main2)"
                                 end: 111,
                             },
                             word_id: None,
-                            raw_text: "hello",
                             content: WordContents(
                                 [
                                     Text(
@@ -53,7 +52,6 @@ expression: "(is_semantically_equal, main1, main2)"
                                 end: 117,
                             },
                             word_id: None,
-                            raw_text: "world",
                             content: WordContents(
                                 [
                                     Text(
@@ -129,7 +127,6 @@ expression: "(is_semantically_equal, main1, main2)"
                                 end: 111,
                             },
                             word_id: None,
-                            raw_text: "hello",
                             content: WordContents(
                                 [
                                     Text(
@@ -160,7 +157,6 @@ expression: "(is_semantically_equal, main1, main2)"
                                 end: 117,
                             },
                             word_id: None,
-                            raw_text: "world",
                             content: WordContents(
                                 [
                                     Text(

@@ -57,9 +57,10 @@ impl PhoAlignment {
         self
     }
 
-    /// Returns `true` when alignment completed without mismatch diagnostics.
+    /// Returns `true` when no mismatch diagnostics are stored.
     ///
-    /// A `true` value implies all rows in `pairs` are complete one-to-one matches.
+    /// This is not a row-completeness certificate: callers may populate the
+    /// public accumulator independently of the alignment producer.
     pub fn is_error_free(&self) -> bool {
         self.errors.is_empty()
     }

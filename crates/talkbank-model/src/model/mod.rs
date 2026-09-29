@@ -100,6 +100,7 @@ pub use header::{
     ChatDate,
     ChatOptionFlag,
     ChatOptionFlags,
+    CheckedChatDate,
     ColorWordList,
     CorpusName,
     CustomIdField,
@@ -189,6 +190,7 @@ pub use content::{
     OverlapPoint,
     OverlapPointKind,
     // Content items
+    ParsedPauseDuration,
     Pause,
     PauseDuration,
     PauseTimedDuration,

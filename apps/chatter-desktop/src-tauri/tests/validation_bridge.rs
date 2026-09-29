@@ -51,6 +51,46 @@ use chatter_desktop_lib::validation::{initialize_cache_at, validate_target_strea
 use crossbeam_channel::{Receiver, Sender};
 use talkbank_transform::validation_runner::ValidationConfig;
 
+#[test]
+fn internal_failure_wire_status_is_not_invalidity_or_success() {
+    use chatter_desktop_lib::events::to_frontend_event;
+    use talkbank_model::{CompletedDiagnostics, ErrorCode, ParseError, Severity, Span};
+    use talkbank_transform::validation_runner::{
+        FileCompleteEvent, FileStatus, ValidationEvent, ValidationStats,
+    };
+    let failure = CompletedDiagnostics::admit(vec![ParseError::at_span(
+        ErrorCode::InternalError,
+        Severity::Warning,
+        Span::new(0, 1),
+        "producer fault",
+    )])
+    .unwrap_err();
+    let event = to_frontend_event(
+        ValidationEvent::FileComplete(FileCompleteEvent {
+            path: PathBuf::from("sample.cha"),
+            status: FileStatus::InternalFailure { failure },
+        }),
+        Path::new("."),
+    )
+    .unwrap();
+    let json = serde_json::to_value(event).unwrap();
+    assert_eq!(json["status"]["type"], "internalFailure");
+    assert!(
+        json["status"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("validity was not determined")
+    );
+    let stats = ValidationStats::new(1);
+    stats.record_internal_failure();
+    let event =
+        to_frontend_event(ValidationEvent::Finished(stats.snapshot()), Path::new(".")).unwrap();
+    let json = serde_json::to_value(event).unwrap();
+    assert_eq!(json["stats"]["internalFailures"], 1);
+    assert_eq!(json["stats"]["validFiles"], 0);
+    assert_eq!(json["stats"]["invalidFiles"], 0);
+}
+
 /// Test-only convenience wrapper: production always threads an explicit
 /// config and a cache pool selected for that config's active rule set (see
 /// `ValidationState::cache_for_config` in `commands.rs`), but most tests here
@@ -553,19 +593,14 @@ fn finished_stats_match_file_events() {
         .count();
 
     if let Some(FrontendEvent::Finished { stats }) = events.last() {
-        let stats_json = serde_json::to_value(stats).unwrap();
-        let total = stats_json["totalFiles"].as_u64().unwrap() as usize;
-        let valid = stats_json["validFiles"].as_u64().unwrap() as usize;
-        let invalid = stats_json["invalidFiles"].as_u64().unwrap() as usize;
-
         assert_eq!(
-            file_completes, total,
+            file_completes, stats.total_files,
             "FileComplete count should match stats.totalFiles"
         );
         assert_eq!(
-            valid + invalid + stats_json["parseErrors"].as_u64().unwrap() as usize,
-            total,
-            "valid + invalid + parseErrors should equal total"
+            stats.valid_files + stats.invalid_files + stats.parse_errors + stats.internal_failures,
+            stats.total_files,
+            "every file must have one terminal outcome"
         );
     } else {
         panic!("last event should be Finished");

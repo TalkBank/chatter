@@ -24,24 +24,7 @@ use generators::spec::metadata::Status;
 use spec_runtime_tools::error_spec_validation::{self, Request, spec_dir};
 use std::collections::BTreeMap;
 
-/// The parity manifest, read for a COUNT only.
-///
-/// Deliberately a minimal shape rather than the full typed model that
-/// `talkbank-parser-tests` owns: that crate is in the other cargo workspace,
-/// and this is a report, not an authority. The manifest's own gate
-/// (`manifest_agrees_with_clan_reference`) decides whether it is right; this
-/// only says how big each bucket is.
-#[derive(serde::Deserialize)]
-struct ParityManifest {
-    entries: Vec<ParityEntry>,
-}
-
-#[derive(serde::Deserialize)]
-struct ParityEntry {
-    status: String,
-    #[serde(default)]
-    no_obligation_reason: Option<String>,
-}
+use talkbank_spec_vocabulary::check_assessment::{ParityManifest, ParityStatus};
 
 /// The repository root, resolved by the workspace's one resolver.
 ///
@@ -81,9 +64,12 @@ fn spec_statuses(specs: &[ErrorSpec]) -> BTreeMap<String, usize> {
 /// the example's complete claim. An absent code can reflect a legal example,
 /// alternate diagnostics, or an unreachable rule rather than missing code.
 fn list_deferred(root: &RepoRoot) -> Result<(), String> {
+    use talkbank_spec_vocabulary::frontmatter::Claim;
+
     let parser = talkbank_parser::TreeSitterParser::new().map_err(|e| e.to_string())?;
     let specs = generators::spec::error::ErrorSpec::load_for_repo(root)?;
     let (mut matching, mut unmatched) = (0usize, 0usize);
+    let (mut verified_claims, mut pending_claims, mut contradicted_claims) = (0, 0, 0);
     for spec in &specs {
         if spec.status() == Status::Implemented {
             continue;
@@ -93,21 +79,40 @@ fn list_deferred(root: &RepoRoot) -> Result<(), String> {
             let codes = error_spec_validation::emit_for(&parser, example).all_distinct_codes();
             let own = &definition.code;
             let emits_own = codes.iter().any(|c| c == own.as_str());
+            let claim_review = match &example.claim {
+                Claim::Violates => {
+                    pending_claims += 1;
+                    "planned claim"
+                }
+                Claim::Legal | Claim::SubsumedBy(_) => {
+                    if example.claim.satisfied_by(own, |code| {
+                        codes.iter().any(|observed| observed == code.as_str())
+                    }) {
+                        verified_claims += 1;
+                        "claim verified"
+                    } else {
+                        contradicted_claims += 1;
+                        "claim CONTRADICTED"
+                    }
+                }
+            };
             if emits_own {
                 matching += 1;
             } else {
                 unmatched += 1;
             }
             println!(
-                "  {:<44} ex{} {:<16} {} emits: {}",
+                "  {:<44} ex{} {:<16} {}; {}; claim: {:?}; emits: {}",
                 spec.source_file(),
                 index + 1,
                 spec.status(),
                 if emits_own {
                     "emits own code"
                 } else {
-                    "still deferred"
+                    "own code absent"
                 },
+                claim_review,
+                example.claim,
                 if codes.is_empty() {
                     "nothing".to_owned()
                 } else {
@@ -118,6 +123,12 @@ fn list_deferred(root: &RepoRoot) -> Result<(), String> {
     }
     println!(
         "\n  {matching} deferred example(s) ALREADY emit their own code: review their claims and status before enabling them.\n           {unmatched} do not emit their declared code; this does not prove missing implementation.\n           Adjudicate alternate diagnostics, invalid examples, deprecation and unreachable cases."
+    );
+    println!(
+        "\n  {verified_claims} verified legal/subsumption claims; \
+         {pending_claims} planned violation claims; {contradicted_claims} contradicted claims.\n  \
+         Deferred code status is not a count of missing validation rules.\n  \
+         Verified claims do not implement or reactivate their historical codes."
     );
     Ok(())
 }
@@ -160,6 +171,9 @@ fn main() -> Result<(), String> {
         report.deferred
     );
     println!("  {:>4}  failing", report.failures.len());
+    println!(
+        "  Deferred code status is not a missing-rule count; use --deferred for live claim review."
+    );
     for failure in &report.failures {
         println!("        {failure}");
     }
@@ -178,22 +192,33 @@ fn main() -> Result<(), String> {
     )
     .map_err(|e| format!("parse {manifest_path:?}: {e}"))?;
 
+    let assessed = manifest.assess().map_err(str::to_owned)?;
     let mut by_status: BTreeMap<&str, usize> = BTreeMap::new();
-    let mut by_reason: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut by_reason: BTreeMap<String, usize> = BTreeMap::new();
     for entry in &manifest.entries {
         *by_status.entry(entry.status.as_str()).or_default() += 1;
-        if let Some(reason) = &entry.no_obligation_reason {
-            *by_reason.entry(reason.as_str()).or_default() += 1;
+        if let ParityStatus::NoObligation {
+            no_obligation_reason,
+        } = &entry.status
+        {
+            *by_reason
+                .entry(format!("{no_obligation_reason:?}"))
+                .or_default() += 1;
         }
     }
 
     println!(
-        "\nCLAN CHECK parity ({} codes adjudicated):",
+        "\nCHECK assessment ({} inventory entries; declarations, not a fresh runtime receipt):",
         manifest.entries.len()
     );
     for (status, count) in &by_status {
         println!("  {count:>4}  {status}");
     }
+    println!(
+        "  Inventoried assessment complete: {}; unresolved gaps: {}",
+        assessed.is_complete(),
+        assessed.gaps()
+    );
     for (reason, count) in &by_reason {
         println!("        {count:>4}  no_obligation: {reason}");
     }

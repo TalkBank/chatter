@@ -149,12 +149,13 @@ impl WriteChat for Pause {
 /// # Formats
 ///
 /// ```text
-/// "1.5"   → Parsed { seconds: 1, millis: Some(500), raw: "1.5" }
-/// "2"     → Parsed { seconds: 2, millis: None,      raw: "2"   }
-/// "0.5"   → Parsed { seconds: 0, millis: Some(500), raw: "0.5" }
-/// "3."    → Parsed { seconds: 3, millis: None,      raw: "3."  }
-/// "7:1.5" → Parsed { seconds: 421, millis: Some(500), raw: "7:1.5" }
-/// "abc"   → Unsupported("abc")
+/// spelling   seconds()   millis()
+/// "1.5"      1           Some(500)
+/// "2"        2           None
+/// "0.5"      0           Some(500)
+/// "3."       3           None
+/// "7:1.5"    421         Some(500)
+/// "abc"      Unsupported("abc")
 /// ```
 ///
 /// References:
@@ -163,16 +164,37 @@ impl WriteChat for Pause {
 #[derive(Clone, Debug, PartialEq, SemanticEq, SpanShift, talkbank_derive::ValidationTagged)]
 pub enum PauseTimedDuration {
     /// Successfully parsed duration: whole seconds + optional milliseconds.
-    Parsed {
-        /// Total whole seconds (for `7:1.5` this is `7*60 + 1 = 421`).
-        seconds: u32,
-        /// Fractional milliseconds (for `1.5` this is `Some(500)`).
-        millis: Option<u32>,
-        /// Original source text preserved for roundtrip fidelity.
-        raw: smol_str::SmolStr,
-    },
+    Parsed(ParsedPauseDuration),
     /// Unrecognized duration text, preserved for roundtrip.
     Unsupported(String),
+}
+
+/// Checked numeric projection of a preserved timed-pause spelling.
+///
+/// Construct through [`PauseTimedDuration::new`]; components cannot be changed
+/// independently of the spelling that produced them.
+#[derive(Clone, Debug, PartialEq, SemanticEq, SpanShift)]
+pub struct ParsedPauseDuration {
+    seconds: u32,
+    millis: Option<u32>,
+    raw: smol_str::SmolStr,
+}
+
+impl ParsedPauseDuration {
+    /// Total whole seconds, including any authored minutes.
+    pub fn seconds(&self) -> u32 {
+        self.seconds
+    }
+
+    /// Fractional milliseconds under the existing truncation policy.
+    pub fn millis(&self) -> Option<u32> {
+        self.millis
+    }
+
+    /// Original spelling, including precision beyond milliseconds.
+    pub fn as_str(&self) -> &str {
+        &self.raw
+    }
 }
 
 impl PauseTimedDuration {
@@ -183,11 +205,11 @@ impl PauseTimedDuration {
     pub fn new(text: impl Into<smol_str::SmolStr>) -> Self {
         let raw: smol_str::SmolStr = text.into();
         match Self::parse_components(&raw) {
-            Some((secs, millis)) => Self::Parsed {
+            Some((secs, millis)) => Self::Parsed(ParsedPauseDuration {
                 seconds: secs,
                 millis,
                 raw,
-            },
+            }),
             None => Self::Unsupported(raw.to_string()),
         }
     }
@@ -195,7 +217,7 @@ impl PauseTimedDuration {
     /// Returns the raw source text for serialization.
     pub fn as_str(&self) -> &str {
         match self {
-            Self::Parsed { raw, .. } => raw,
+            Self::Parsed(parsed) => parsed.as_str(),
             Self::Unsupported(s) => s,
         }
     }
@@ -203,9 +225,13 @@ impl PauseTimedDuration {
     /// Returns total duration in milliseconds, or `None` for unsupported values.
     pub fn total_millis(&self) -> Option<u64> {
         match self {
-            Self::Parsed {
-                seconds, millis, ..
-            } => Some(*seconds as u64 * 1000 + millis.unwrap_or(0) as u64),
+            Self::Parsed(parsed) => {
+                let fractional = match parsed.millis() {
+                    Some(millis) => u64::from(millis),
+                    None => 0, // An integer spelling has no fractional contribution.
+                };
+                Some(u64::from(parsed.seconds()) * 1000 + fractional)
+            }
             Self::Unsupported(_) => None,
         }
     }
@@ -350,12 +376,9 @@ mod tests {
     fn timed_duration_decimal() {
         let d = PauseTimedDuration::new("1.5");
         assert!(matches!(
-            d,
-            PauseTimedDuration::Parsed {
-                seconds: 1,
-                millis: Some(500),
-                ..
-            }
+            &d,
+            PauseTimedDuration::Parsed(parsed)
+                if parsed.seconds() == 1 && parsed.millis() == Some(500)
         ));
         assert_eq!(d.as_str(), "1.5");
         assert_eq!(d.total_millis(), Some(1500));
@@ -365,12 +388,9 @@ mod tests {
     fn timed_duration_integer() {
         let d = PauseTimedDuration::new("2");
         assert!(matches!(
-            d,
-            PauseTimedDuration::Parsed {
-                seconds: 2,
-                millis: None,
-                ..
-            }
+            &d,
+            PauseTimedDuration::Parsed(parsed)
+                if parsed.seconds() == 2 && parsed.millis().is_none()
         ));
         assert_eq!(d.total_millis(), Some(2000));
     }
@@ -379,12 +399,9 @@ mod tests {
     fn timed_duration_trailing_dot() {
         let d = PauseTimedDuration::new("3.");
         assert!(matches!(
-            d,
-            PauseTimedDuration::Parsed {
-                seconds: 3,
-                millis: None,
-                ..
-            }
+            &d,
+            PauseTimedDuration::Parsed(parsed)
+                if parsed.seconds() == 3 && parsed.millis().is_none()
         ));
         assert_eq!(d.as_str(), "3.");
     }
@@ -393,12 +410,9 @@ mod tests {
     fn timed_duration_colon_format() {
         let d = PauseTimedDuration::new("7:1.5");
         assert!(matches!(
-            d,
-            PauseTimedDuration::Parsed {
-                seconds: 421,
-                millis: Some(500),
-                ..
-            }
+            &d,
+            PauseTimedDuration::Parsed(parsed)
+                if parsed.seconds() == 421 && parsed.millis() == Some(500)
         ));
         assert_eq!(d.as_str(), "7:1.5");
         assert_eq!(d.total_millis(), Some(421_500));
@@ -408,12 +422,9 @@ mod tests {
     fn timed_duration_zero_point_five() {
         let d = PauseTimedDuration::new("0.5");
         assert!(matches!(
-            d,
-            PauseTimedDuration::Parsed {
-                seconds: 0,
-                millis: Some(500),
-                ..
-            }
+            &d,
+            PauseTimedDuration::Parsed(parsed)
+                if parsed.seconds() == 0 && parsed.millis() == Some(500)
         ));
         assert_eq!(d.total_millis(), Some(500));
     }

@@ -45,12 +45,54 @@ fn display_text(tok: &Token<'_>) -> String {
 // Annotation parsing, shared combinator replacing 4 duplicate loops
 // ═══════════════════════════════════════════════════════════
 
-/// Parse a single annotation token into `ParsedAnnotation`.
+/// Parse an annotation, including structured replacement-word sequences.
 fn annotation<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, ParsedAnnotation<'a>> + Clone {
-    any().try_map(|tok: Token<'a>, _span| {
+    replacement_annotation().or(any().try_map(|tok: Token<'a>, _span| {
         token_to_parsed_annotation(tok).ok_or_else(Default::default)
-    })
+    }))
+}
+
+/// Parse replacement words through the same unannotated word productions used
+/// by main-tier words. A missing word or closing bracket is a parser rejection.
+fn replacement_annotation<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ParsedAnnotation<'a>> + Clone {
+    let word = rich_word_with(empty().to(Vec::new()))
+        .or(subtoken_word_with(empty().to(Vec::new())))
+        .try_map(|item, _span| match item {
+            ContentItem::Word(word) => Ok(word),
+            ContentItem::Pause(_)
+            | ContentItem::Freecode(_)
+            | ContentItem::OrphanAnnotation(_)
+            | ContentItem::Separator { .. }
+            | ContentItem::OverlapPoint { .. }
+            | ContentItem::Retrace(_)
+            | ContentItem::Group(_)
+            | ContentItem::Quotation(_)
+            | ContentItem::Event(_)
+            | ContentItem::AnnotatedEvent { .. }
+            | ContentItem::MediaBullet { .. }
+            | ContentItem::UnderlineBegin
+            | ContentItem::UnderlineEnd
+            | ContentItem::OtherSpokenEvent { .. }
+            | ContentItem::PhoGroup(_)
+            | ContentItem::SinGroup(_)
+            | ContentItem::LongFeatureBegin(_)
+            | ContentItem::LongFeatureEnd(_)
+            | ContentItem::NonvocalBegin(_)
+            | ContentItem::NonvocalEnd(_)
+            | ContentItem::NonvocalSimple(_)
+            | ContentItem::Action { .. } => Err(Default::default()),
+        });
+    select! { Token::ReplacementBegin(_) => () }
+        .ignore_then(ws())
+        .ignore_then(word.clone())
+        .then(ws().ignore_then(word).repeated().collect::<Vec<_>>())
+        .then_ignore(ws())
+        .then(select! { Token::RightBracket(end) => end })
+        .map(|((first, rest), end)| {
+            ParsedAnnotation::Replacement(ReplacementParsed::new(first, rest, end))
+        })
 }
 
 /// Parse trailing annotations: optional whitespace then annotations.
@@ -198,11 +240,7 @@ fn inline_media_bullet<'tokens, 'a: 'tokens>()
 /// the tree-sitter side does through its error nodes.
 fn bare_annotation<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
-    any().try_map(|tok: Token<'a>, _span| {
-        token_to_parsed_annotation(tok)
-            .map(ContentItem::OrphanAnnotation)
-            .ok_or_else(Default::default)
-    })
+    annotation().map(ContentItem::OrphanAnnotation)
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -212,11 +250,17 @@ fn bare_annotation<'tokens, 'a: 'tokens>()
 /// Parse a rich `Token::Word` into a `ContentItem` (Word or Retrace).
 pub fn rich_word<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
+    rich_word_with(trailing_annotations())
+}
+
+fn rich_word_with<'tokens, 'a: 'tokens>(
+    annotations: impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<ParsedAnnotation<'a>>> + Clone,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     select! {
         Token::Word { raw_text, prefix, body, form_marker, lang_suffix, pos_tag } =>
             (raw_text, prefix, body, form_marker, lang_suffix, pos_tag),
     }
-    .then(trailing_annotations())
+    .then(annotations)
     .map(
         |((raw_text, prefix, body_str, form_marker, lang_suffix_opt, pos_tag), annotations)| {
             let category = match prefix {
@@ -255,6 +299,12 @@ pub fn rich_word<'tokens, 'a: 'tokens>()
 /// This path fires for inputs where the rich Word regex (`w_body`) doesn't match.
 pub fn subtoken_word<'tokens, 'a: 'tokens>()
 -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
+    subtoken_word_with(trailing_annotations())
+}
+
+fn subtoken_word_with<'tokens, 'a: 'tokens>(
+    annotations: impl Parser<'tokens, Tokens<'tokens, 'a>, Vec<ParsedAnnotation<'a>>> + Clone,
+) -> impl Parser<'tokens, Tokens<'tokens, 'a>, ContentItem<'a>> + Clone {
     // A word token: any token that is_word_token accepts
     let word_tok = select! {
         tok if is_word_token(TokenDiscriminants::from(&tok)) => tok,
@@ -264,7 +314,7 @@ pub fn subtoken_word<'tokens, 'a: 'tokens>()
         .repeated()
         .at_least(1)
         .collect::<Vec<Token<'a>>>()
-        .then(trailing_annotations())
+        .then(annotations)
         .map(|(toks, annotations)| {
             let mut category = None;
             let mut body = Vec::new();
@@ -665,7 +715,12 @@ mod base_annotation_boundary_tests {
     #[test]
     fn quotation_markers_exclude_word_and_tier_codes() {
         for annotation in [
-            ParsedAnnotation::Replacement("replacement"),
+            crate::parser::parse_word("word [: replacement]")
+                .expect("replacement control")
+                .annotations
+                .into_iter()
+                .next()
+                .expect("replacement annotation"),
             ParsedAnnotation::Langcode("eng"),
             ParsedAnnotation::Postcode("code"),
             ParsedAnnotation::Scoped(ScopedAnnotationParsed::Unknown("unknown")),

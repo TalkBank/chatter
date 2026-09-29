@@ -193,8 +193,8 @@ pub enum Token<'a> {
     Postcode(PostcodeToken<'a>),
     /// [- lang], language code
     Langcode(&'a str),
-    /// [: replacement words], replacement
-    Replacement(&'a str),
+    /// Opening `[:`; replacement words are parsed structurally.
+    ReplacementBegin(&'a str),
 
     // ── Pauses ──────────────────────────────────────────────
     /// grammar.js: token(prec(10, '(...)'))

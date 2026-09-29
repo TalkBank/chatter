@@ -86,7 +86,8 @@ fn classify_header_types_concrete_header_nodes() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc));
+    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc))
+        .expect("producer reconstruction");
 
     // child_3 is the `repeat(line)` slot: `Vec<Positioned<NodeSlot<LineNode>>>`.
     let mut header_lines = 0usize;
@@ -104,7 +105,7 @@ fn classify_header_types_concrete_header_nodes() {
         // header case is the NESTED supertype choice
         // `LineChoice::ActivitiesHeader(LineActivitiesHeaderChoice)`, not a bare
         // `LineChoice::Header(node)`; reach the concrete raw node via `raw_node()`.
-        let line_children = extract_line(line_node);
+        let line_children = extract_line(line_node).expect("producer reconstruction");
         let header_node = match &line_children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(inner)) => inner.raw_node(),
             _ => continue,

@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|sample|CHI|2;00.||||Child|||
+@Comment:	Repeated names and shortenings follow a post-clitic-bearing item.
+*CHI:	he's Ro(se) (Ro)se Rose .
+%mor:	pron|he~aux|be-Fin-Ind-Pres-S3  propn|Rose propn|Rose  propn|Rose .
+*CHI:	Rose .
+%mor:	propn|Rose .
+@End

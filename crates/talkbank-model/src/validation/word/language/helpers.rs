@@ -5,6 +5,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Language_Codes>
 
 use crate::model::LanguageCode;
+use crate::validation::context::ShortcutLanguage;
 use crate::validation::context::{language_allows_numbers, language_allows_prefix_marker};
 
 /// Resolve the alternate language for `@s` shortcut handling.
@@ -15,24 +16,7 @@ pub(super) fn get_other_language(
     current_lang: &LanguageCode,
     declared_languages: &[LanguageCode],
 ) -> Option<LanguageCode> {
-    if declared_languages.is_empty() {
-        return None;
-    }
-
-    let primary = &declared_languages[0];
-    let secondary = declared_languages.get(1);
-
-    if current_lang.as_str() == primary.as_str() {
-        secondary.cloned()
-    } else if let Some(secondary_lang) = secondary {
-        if current_lang.as_str() == secondary_lang.as_str() {
-            Some(primary.clone())
-        } else {
-            None
-        }
-    } else {
-        None
-    }
+    ShortcutLanguage::classify(current_lang, declared_languages).alternate()
 }
 
 /// Return whether `lang` is tertiary (index >= 2) in declared languages.
@@ -42,13 +26,10 @@ pub(super) fn is_tertiary_language(
     lang: &LanguageCode,
     declared_languages: &[LanguageCode],
 ) -> bool {
-    match declared_languages
-        .iter()
-        .position(|l| l.as_str() == lang.as_str())
-    {
-        Some(pos) => pos >= 2,
-        None => false,
-    }
+    matches!(
+        ShortcutLanguage::classify(lang, declared_languages),
+        ShortcutLanguage::Tertiary
+    )
 }
 
 /// Return whether a composite language code contains any digit-allowing member.

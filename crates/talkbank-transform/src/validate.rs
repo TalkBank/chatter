@@ -173,8 +173,13 @@ fn check_main_tier_valid(file: &ChatFile, errors: &mut Vec<ValidationError>) {
     }
 }
 
-/// Post-validation: verify that the output file is at least as valid as the
-/// input (no degradation). Returns diagnostics if the command corrupted the file.
+/// Check selected output invariants for a legacy command integration.
+///
+/// This receives no input document and therefore cannot prove preservation or
+/// absence of degradation. It checks required terminators, existing morphology
+/// tier counts for `morphotag`, and backwards utterance timing for `align`.
+/// Success is not a full document-validity proof. The caller remains responsible
+/// for parse diagnostics and the stronger validation required by its workflow.
 pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
 

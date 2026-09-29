@@ -1,0 +1,16 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|sample|CHI|2;00.||||Child|||
+@Comment:	Selective lexical changes require main-tier and lemma correspondence.
+@Comment:	Compound components, differing lemmas and post-clitics are distinct.
+*CHI:	ice+cream .
+%mor:	noun|icecream .
+*CHI:	later .
+%mor:	adv|late .
+*CHI:	he's .
+%mor:	pron|he~aux|be-Fin-Ind-Pres-S3 .
+*CHI:	Rose .
+%mor:	propn|Rose .
+@End

@@ -33,8 +33,9 @@
 //! type-distinct value with its own arm, and nothing here reads
 //! `node.kind()`.
 //!
-//! Fixed-kind slots retain Present, Missing, Error and Absent; their
-//! Unexpected payload is uninhabited. Whole sequence-repeat items also
+//! Compiled-language admission excludes Missing for nonterminal contents and
+//! participant slots, but lexical slots retain it. Error and fixed-slot Absent
+//! remain; their Unexpected payload is uninhabited. Whole sequence-repeat items also
 //! have an uninhabited Missing payload. Other recovery states remain even
 //! when finite fixtures have not witnessed them. The retained corpus does
 //! witness a MISSING speaker and a doubled-comma ERROR repeat item.
@@ -42,14 +43,16 @@
 //! Until 2026-09-08 this file hand-walked both repeats with an index
 //! (`child.kind() == COMMA`, `idx += 1`) with duplicated structural diagnostics.
 //! Source-bound extraction now also keeps tree/source identity through every
-//! participant group and leaf. Canonical range admission remains fallible at
-//! the shared read boundary; participant lowering cannot accept a separately
+//! participant group and leaf. Each entry admits its selected ranges once
+//! before payload decoding; retained leaf reads cannot fail independently.
+//! Admission remains fallible; participant lowering cannot accept a separately
 //! supplied string. No recovery state is removed because a finite corpus has
 //! not reached it.
 
+use crate::generated_traversal::{Absence, KindMissing, Never, NodeSlot};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, ParticipantNode, ParticipantsHeaderNode, SourceBound,
-    SourceField, SourceSlotView,
+    AsRawNode, NonMissingKindSlot, ParticipantNode, ParticipantsHeaderNode, ReadableSlot,
+    SourceBound, SourceField, SourceSlice, SourceSlotView,
 };
 use crate::node_types::{PARTICIPANT, PARTICIPANTS_CONTENTS, PARTICIPANTS_HEADER};
 use tree_sitter::Node;
@@ -71,7 +74,7 @@ use talkbank_model::model::{
 pub fn parse_participants_header<'tree>(
     typed: SourceBound<'tree, '_, ParticipantsHeaderNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Header {
+) -> Result<Header, crate::parser::typed_cst::CstFailure> {
     let node = typed.raw_node();
     let source = typed.source();
 
@@ -81,10 +84,12 @@ pub fn parse_participants_header<'tree>(
     // so it is never silently swallowed.
     super::report_header_structural_errors(node, PARTICIPANTS_HEADER, source, errors);
 
-    let header_children = typed.extract();
+    let grammar = crate::parser::typed_cst::canonical_grammar()?;
+    let header_children = typed.extract_admitted(grammar)?;
     let contents_node = match header_children.field_child_2().slot().view() {
-        SourceSlotView::Present(node) => read_source_field(node, errors),
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
+        SourceSlotView::Present(node) => Some(node),
+        SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
+        SourceSlotView::Missing(never) => match never {},
     };
     let Some(contents_node) = contents_node else {
         errors.report(ParseError::new(
@@ -119,7 +124,9 @@ pub fn parse_participants_header<'tree>(
         errors,
     );
 
-    let contents = contents_node.extract();
+    // Structural presence and readable source admission are distinct states.
+    // A producer failure must not become an empty-header CHAT diagnostic.
+    let contents = contents_node.read()?.extract_admitted(grammar)?;
     let rest = contents.field_child_1().slot().iter();
     let mut entries = Vec::with_capacity(rest.len() + 1);
 
@@ -172,7 +179,7 @@ pub fn parse_participants_header<'tree>(
             SourceSlotView::Error(bad) => {
                 ParticipantFault::Comma(bad.raw_node()).report(bad.source(), errors);
             }
-            SourceSlotView::Absent(NoChild) => {}
+            SourceSlotView::Absent(never) => match never {},
         }
     }
     surface_displaced(
@@ -182,15 +189,15 @@ pub fn parse_participants_header<'tree>(
         errors,
     );
 
-    Header::Participants {
+    Ok(Header::Participants {
         entries: entries.into(),
-    }
+    })
 }
 
 /// Structural positions need no text read, but retain their recovery policy
 /// and derive diagnostic source identity from the generated field itself.
-fn expect_source_structure<'tree, T: AsRawNode<'tree> + Copy>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, T>>,
+fn expect_source_structure<'tree, T: AsRawNode<'tree> + Copy, A: Absence>(
+    slot: SourceField<'_, 'tree, '_, NodeSlot<'tree, T, KindMissing<T>, Never, A>>,
     context: &str,
     errors: &impl ErrorSink,
     on_bad: impl FnOnce(Node<'tree>),
@@ -213,6 +220,34 @@ fn surface_source_displaced<'tree>(
         surface_displaced(
             std::slice::from_ref(&node.raw_node()),
             context,
+            node.source(),
+            errors,
+        );
+    }
+}
+
+/// Structural recovery after range admission; readability does not imply syntax validity.
+fn expect_readable_structure<'tree, T, M: AsRawNode<'tree>, A>(
+    slot: &ReadableSlot<'tree, '_, T, M, Never, A>,
+    source: &str,
+    errors: &impl ErrorSink,
+    on_bad: impl FnOnce(Node<'tree>),
+) {
+    match slot {
+        ReadableSlot::Present(_) | ReadableSlot::Absent(_) => {}
+        ReadableSlot::Missing(missing) => {
+            check_not_missing(missing.raw_node(), source, errors, PARTICIPANT);
+        }
+        ReadableSlot::Error(bad) => on_bad(bad.raw_node()),
+        ReadableSlot::Unexpected(never) => match *never {},
+    }
+}
+
+fn surface_readable_displaced(nodes: &[SourceSlice<'_, '_>], errors: &impl ErrorSink) {
+    for node in nodes {
+        surface_displaced(
+            std::slice::from_ref(&node.raw_node()),
+            PARTICIPANT,
             node.source(),
             errors,
         );
@@ -277,7 +312,7 @@ enum ParticipantPosition<'tree> {
 /// Shared admission for required and repeated participant slots. Recovery
 /// stays outside entry conversion, and positional policy remains explicit.
 fn parse_participant_slot<'tree>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, ParticipantNode<'tree>>>,
+    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, ParticipantNode<'tree>>>,
     position: ParticipantPosition<'_>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<ParticipantEntry> {
@@ -287,10 +322,7 @@ fn parse_participant_slot<'tree>(
             Some(participant) => parse_participant_entry(participant, errors),
             None => ParseOutcome::rejected(),
         },
-        SourceSlotView::Missing(missing) => {
-            check_not_missing(missing.raw_node(), source, errors, PARTICIPANTS_CONTENTS);
-            ParseOutcome::rejected()
-        }
+        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(bad) => {
             ParticipantFault::Entry {
                 node: bad.raw_node(),
@@ -299,7 +331,7 @@ fn parse_participant_slot<'tree>(
             .report(source, errors);
             ParseOutcome::rejected()
         }
-        SourceSlotView::Absent(NoChild) => {
+        SourceSlotView::Absent(_) => {
             if let ParticipantPosition::First(header) = position {
                 let node = header.raw_node();
                 errors.report(ParseError::new(
@@ -329,23 +361,34 @@ fn parse_participant_entry<'tree>(
 ) -> ParseOutcome<ParticipantEntry> {
     let node = typed.raw_node();
     let source = typed.source();
-    let children = typed.extract();
-    let unexpected = &children.children().unexpected;
-
-    let speaker_code = match children.field_code().slot().view() {
-        SourceSlotView::Present(speaker) => {
-            let Some(speaker) = read_source_field(speaker, errors) else {
-                surface_displaced(unexpected, PARTICIPANT, source, errors);
-                return ParseOutcome::rejected();
-            };
-            speaker.text()
+    let Ok(children) =
+        crate::parser::typed_cst::report_reconstruction(typed.extract(), node, source, errors)
+    else {
+        return ParseOutcome::Rejected;
+    };
+    // Keep only displaced recovery evidence across a failed consuming
+    // admission. Do not clone the complete selected carrier.
+    let displaced = children.children().unexpected.clone();
+    let admitted = match children.admit_ranges() {
+        Ok(admitted) => admitted,
+        Err(failure) => {
+            crate::parser::typed_cst::report_cst_failure(node, source, failure, errors);
+            surface_displaced(&displaced, PARTICIPANT, source, errors);
+            return ParseOutcome::Rejected;
         }
-        SourceSlotView::Missing(missing) => {
+    };
+    drop(displaced);
+    let children = admitted.children();
+    let unexpected = &children.unexpected;
+
+    let speaker_code = match &children.code.slot {
+        ReadableSlot::Present(speaker) => speaker.text(),
+        ReadableSlot::Missing(missing) => {
             check_not_missing(missing.raw_node(), source, errors, PARTICIPANT);
-            surface_displaced(unexpected, PARTICIPANT, source, errors);
+            surface_readable_displaced(unexpected, errors);
             return ParseOutcome::rejected();
         }
-        SourceSlotView::Error(bad) => {
+        ReadableSlot::Error(bad) => {
             let bad = bad.raw_node();
             errors.report(ParseError::new(
                 ErrorCode::EmptyParticipantCode,
@@ -357,10 +400,11 @@ fn parse_participant_entry<'tree>(
                     bad.kind()
                 ),
             ));
-            surface_displaced(unexpected, PARTICIPANT, source, errors);
+            surface_readable_displaced(unexpected, errors);
             return ParseOutcome::rejected();
         }
-        SourceSlotView::Absent(NoChild) => {
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(_) => {
             errors.report(ParseError::new(
                 ErrorCode::EmptyParticipantCode,
                 Severity::Error,
@@ -368,38 +412,39 @@ fn parse_participant_entry<'tree>(
                 ErrorContext::new(source, node.start_byte()..node.end_byte(), PARTICIPANT),
                 "Participant entry missing speaker code",
             ));
-            surface_displaced(unexpected, PARTICIPANT, source, errors);
+            surface_readable_displaced(unexpected, errors);
             return ParseOutcome::rejected();
         }
     };
 
     // Name words and the role, each preceded by whitespace the grammar
     // requires; the whitespace is structure and needs nothing when Present.
-    let mut words: Vec<String> = Vec::with_capacity(children.field_child_1().slot().iter().len());
-    for item in children.field_child_1().slot().iter() {
-        match item.slot().view() {
-            SourceSlotView::Present(group) => {
-                expect_source_structure(group.field_child_0().slot(), PARTICIPANT, errors, |bad| {
+    let mut words: Vec<String> = Vec::with_capacity(children.child_1.slot.len());
+    for item in &children.child_1.slot {
+        match &item.slot {
+            ReadableSlot::Present(group) => {
+                expect_readable_structure(&group.child_0.slot, source, errors, |bad| {
                     ParticipantFault::EntryShape(bad).report(source, errors);
                 });
-                match group.field_child_1().slot().view() {
-                    SourceSlotView::Present(word) => {
-                        if let Some(word) = read_source_field(word, errors) {
-                            words.push(word.text().to_owned());
-                        }
+                match &group.child_1.slot {
+                    ReadableSlot::Present(word) => {
+                        words.push(word.text().to_owned());
                     }
-                    SourceSlotView::Absent(NoChild) => {}
-                    SourceSlotView::Missing(missing) => {
+                    ReadableSlot::Unexpected(never) => match *never {},
+                    ReadableSlot::Absent(_) => {}
+                    ReadableSlot::Missing(missing) => {
                         check_not_missing(missing.raw_node(), source, errors, PARTICIPANT);
                     }
-                    SourceSlotView::Error(bad) => {
+                    ReadableSlot::Error(bad) => {
                         ParticipantFault::EntryShape(bad.raw_node()).report(source, errors);
                     }
                 }
-                surface_source_displaced(group.field_unexpected(), PARTICIPANT, errors);
+                surface_readable_displaced(&group.unexpected, errors);
             }
-            SourceSlotView::Absent(NoChild) => {}
-            SourceSlotView::Error(bad) => {
+            ReadableSlot::Absent(never)
+            | ReadableSlot::Missing(never)
+            | ReadableSlot::Unexpected(never) => match *never {},
+            ReadableSlot::Error(bad) => {
                 ParticipantFault::EntryShape(bad.raw_node()).report(source, errors);
             }
         }
@@ -407,14 +452,14 @@ fn parse_participant_entry<'tree>(
     // Trailing whitespace before the comma or newline is tolerated by the
     // grammar and carries nothing, but a node that is not whitespace there
     // is still the entry losing its shape.
-    if let Some(trailing) = children.field_child_2().slot().optional() {
-        expect_source_structure(trailing, PARTICIPANT, errors, |bad| {
+    if let Some(trailing) = &children.child_2.slot {
+        expect_readable_structure(trailing, source, errors, |bad| {
             ParticipantFault::EntryShape(bad).report(source, errors);
         });
     }
-    surface_displaced(unexpected, PARTICIPANT, source, errors);
+    surface_readable_displaced(unexpected, errors);
 
-    let Some(role) = words.pop() else {
+    let Ok(words) = crate::ParticipantWordRoles::from_words(words) else {
         errors.report(ParseError::new(
             ErrorCode::EmptyParticipantRole,
             Severity::Error,
@@ -424,15 +469,15 @@ fn parse_participant_entry<'tree>(
         ));
         return ParseOutcome::rejected();
     };
-    let name = if words.is_empty() {
+    let name = if words.names().is_empty() {
         None
     } else {
-        Some(ParticipantName::new(words.join(" ")))
+        Some(ParticipantName::new(words.names().join(" ")))
     };
 
     ParseOutcome::parsed(ParticipantEntry {
         speaker_code: SpeakerCode::new(speaker_code),
         name,
-        role: ParticipantRole::new(role),
+        role: ParticipantRole::new(words.role().as_str()),
     })
 }

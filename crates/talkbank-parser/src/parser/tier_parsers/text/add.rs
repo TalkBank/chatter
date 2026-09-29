@@ -26,15 +26,15 @@ use super::helpers::{parse_optional_text_tier_content, span_of};
 pub fn parse_add_tier<'tree>(
     typed: SourceBound<'tree, '_, AddDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> AddTier {
+) -> Result<AddTier, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = typed.extract();
+    let children = typed.extract()?;
     let content = parse_optional_text_tier_content(
         typed,
         children.field_child_2().slot(),
         &children.children().unexpected,
         errors,
-    );
-    AddTier::new(content).with_span(span)
+    )?;
+    Ok(AddTier::new(content).with_span(span))
 }

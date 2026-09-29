@@ -95,7 +95,7 @@ impl Validate for Utterance {
         // content-structure claims (E305/E306) do not fire over content the
         // parser never materialized.
         let main_context = context.clone().with_main_parse_taint(
-            self.parse_health
+            self.parse_health()
                 .is_tier_tainted(crate::model::ParseHealthTier::Main),
         );
         self.main.validate(&main_context, errors);
@@ -153,7 +153,7 @@ impl Validate for Utterance {
             )
         });
         let mor_tainted = self
-            .parse_health
+            .parse_health()
             .is_tier_tainted(crate::model::ParseHealthTier::Mor);
         if has_gra && !has_mor && !mor_tainted {
             errors.report(

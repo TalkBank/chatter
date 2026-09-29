@@ -25,6 +25,9 @@ pub enum ParseHealthState {
     Unknown,
     /// Parser-backed provenance established that no tracked tier required recovery.
     Clean,
+    /// Explicit typed construction, not evidence about any parsed source.
+    /// Validity is owned by `ValidChatFile`, not by this runtime marker.
+    Constructed,
     /// Parser-backed provenance established that one or more tracked tiers were recovered.
     Tainted(ParseHealth),
 }
@@ -109,6 +112,20 @@ impl ParseHealth {
         } else {
             ParseHealthState::Tainted(self)
         }
+    }
+
+    /// Finish a parser's utterance construction with its recorded recovery state.
+    ///
+    /// This consumes the parser accumulator; ordinary model assembly has no
+    /// implicit clean state. The producer must accumulate recovery for the
+    /// entire supplied utterance before this boundary. This is an explicit
+    /// parser-adapter contract, not proof that arbitrary caller-supplied
+    /// components came from a parser. Do not use it to certify reconstructed
+    /// or JSON-loaded content without corresponding parse evidence.
+    pub fn finish_utterance(self, mut utterance: super::Utterance) -> super::Utterance {
+        utterance.forget_parse_provenance();
+        utterance.parse_health = self.into_state();
+        utterance
     }
 
     /// Returns `true` when no tracked tier has been tainted.
@@ -238,11 +255,17 @@ impl ParseHealthState {
         matches!(self, Self::Clean)
     }
 
+    /// Whether complete model validation may run without recovery suppression.
+    /// This is eligibility for checking, not evidence that checks passed.
+    pub const fn permits_validation(self) -> bool {
+        matches!(self, Self::Clean | Self::Constructed)
+    }
+
     /// Returns `true` when the given tier is known clean.
     pub fn is_tier_clean(self, tier: ParseHealthTier) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.is_tier_clean(tier),
         }
     }
@@ -250,7 +273,7 @@ impl ParseHealthState {
     /// Returns `true` when the given tier is known tainted.
     pub fn is_tier_tainted(self, tier: ParseHealthTier) -> bool {
         match self {
-            Self::Unknown | Self::Clean => false,
+            Self::Unknown | Self::Clean | Self::Constructed => false,
             Self::Tainted(health) => health.is_tier_tainted(tier),
         }
     }
@@ -259,7 +282,7 @@ impl ParseHealthState {
     pub fn can_align_main_to_mor(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_main_to_mor(),
         }
     }
@@ -268,7 +291,7 @@ impl ParseHealthState {
     pub fn can_align_mor_to_gra(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_mor_to_gra(),
         }
     }
@@ -277,7 +300,7 @@ impl ParseHealthState {
     pub fn can_align_main_to_pho(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_main_to_pho(),
         }
     }
@@ -286,7 +309,7 @@ impl ParseHealthState {
     pub fn can_resolve_wor_timing_sidecar(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_resolve_wor_timing_sidecar(),
         }
     }
@@ -295,7 +318,7 @@ impl ParseHealthState {
     pub fn can_align_main_to_mod(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_main_to_mod(),
         }
     }
@@ -304,7 +327,7 @@ impl ParseHealthState {
     pub fn can_align_main_to_sin(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_main_to_sin(),
         }
     }
@@ -313,7 +336,7 @@ impl ParseHealthState {
     pub fn can_align_modsyl_to_mod(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_modsyl_to_mod(),
         }
     }
@@ -322,7 +345,7 @@ impl ParseHealthState {
     pub fn can_align_phosyl_to_pho(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_phosyl_to_pho(),
         }
     }
@@ -331,7 +354,7 @@ impl ParseHealthState {
     pub fn can_align_phoaln(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_phoaln(),
         }
     }
@@ -340,15 +363,19 @@ impl ParseHealthState {
     pub fn can_align_xphoint_to_pho(self) -> bool {
         match self {
             Self::Unknown => false,
-            Self::Clean => true,
+            Self::Clean | Self::Constructed => true,
             Self::Tainted(health) => health.can_align_xphoint_to_pho(),
         }
     }
 
     /// Mark one tier as tainted due to parser recovery.
+    /// Unknown provenance stays unknown: damage cannot establish that other
+    /// tiers were parsed cleanly.
     pub fn taint(&mut self, tier: ParseHealthTier) {
         match self {
-            Self::Unknown | Self::Clean => {
+            Self::Unknown => {}
+            Self::Constructed => *self = Self::Unknown,
+            Self::Clean => {
                 let mut health = ParseHealth::untainted();
                 health.taint(tier);
                 *self = Self::Tainted(health);
@@ -358,9 +385,12 @@ impl ParseHealthState {
     }
 
     /// Mark all dependent-tier alignment domains as tainted.
+    /// Unknown provenance stays unknown, including the main tier.
     pub fn taint_all_alignment_dependents(&mut self) {
         match self {
-            Self::Unknown | Self::Clean => {
+            Self::Unknown => {}
+            Self::Constructed => *self = Self::Unknown,
+            Self::Clean => {
                 let mut health = ParseHealth::untainted();
                 health.taint_all_alignment_dependents();
                 *self = Self::Tainted(health);
@@ -429,10 +459,10 @@ mod tests {
         assert!(state.is_tier_clean(ParseHealthTier::Gra));
     }
 
-    /// Taint helpers promote clean or unknown states into explicit tainted provenance.
+    /// Taint helpers withdraw existing clean provenance without creating it.
     #[test]
     fn state_tainting_promotes_into_tainted_state() {
-        let mut state = ParseHealthState::Unknown;
+        let mut state = ParseHealthState::Clean;
         state.taint(ParseHealthTier::Gra);
 
         assert!(state.is_tier_tainted(ParseHealthTier::Gra));

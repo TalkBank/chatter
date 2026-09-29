@@ -16,59 +16,59 @@ use std::sync::OnceLock;
 ///
 /// The following must be set before calling `finish()`:
 /// - `message` - Human-readable error description
+/// - `location` - Explicit diagnostic location
+///
+/// The type parameters carry the required values, or `()` before they are set.
+/// Setters may be called in either order; finishing is infallible and only
+/// available when both values are present.
 ///
 /// # Optional Fields with Defaults
 ///
 /// - `severity` - Defaults to `Severity::Error`
-/// - `location` - Required
-/// - `context` - Defaults to empty context
+/// - `context` - No context by default
 /// - `suggestion` - No suggestion by default
 ///
 /// # Example
 ///
 /// ```
-/// use talkbank_model::{ParseError, ErrorCode, Severity, ParseErrorBuilderError};
+/// use talkbank_model::{ParseError, ErrorCode, Severity};
 ///
-/// # fn build_examples() -> Result<(), ParseErrorBuilderError> {
 /// // Minimal usage
 /// let _error = ParseError::build(ErrorCode::InvalidMediaBullet)
 ///     .at(0, 1)
 ///     .message("Invalid format")
-///     .finish()?;
+///     .finish();
 ///
 /// // Full usage
 /// let _error = ParseError::build(ErrorCode::MissingTerminator)
 ///     .severity(Severity::Error)
-///     .at(100, 110)
-///     .context_from_source("hello world", 100..110, "hello")
+///     .at(0, 5)
+///     .context_from_source("hello world", 0..5, "hello")
 ///     .message("Missing utterance terminator")
 ///     .suggestion("Add a period, question mark, or exclamation point")
-///     .finish()?;
-/// # Ok(())
-/// # }
+///     .finish();
+/// ```
+///
+/// Missing message:
+/// ```compile_fail
+/// use talkbank_model::{ParseError, ErrorCode};
+/// ParseError::build(ErrorCode::ParseFailed).at(0, 1).finish();
+/// ```
+///
+/// Missing location:
+/// ```compile_fail
+/// use talkbank_model::{ParseError, ErrorCode};
+/// ParseError::build(ErrorCode::ParseFailed).message("Rejected").finish();
 /// ```
 #[derive(Debug)]
-pub struct ParseErrorBuilder {
+pub struct ParseErrorBuilder<Message = (), Location = ()> {
     code: ErrorCode,
     severity: Severity,
-    location: Option<SourceLocation>,
+    location: Location,
     context: Option<ErrorContext>,
-    message: Option<String>,
+    message: Message,
     suggestion: Option<String>,
     labels: Vec<ErrorLabel>,
-}
-
-/// Errors that can occur when building a ParseError.
-#[derive(Debug, thiserror::Error)]
-pub enum ParseErrorBuilderError {
-    /// The builder was finished without setting a message.
-    #[error("ParseErrorBuilder requires a message - call .message() before .finish()")]
-    MissingMessage,
-    /// The builder was finished without setting a location.
-    #[error(
-        "ParseErrorBuilder requires a location - call .at(), .at_span(), or .location() before .finish()"
-    )]
-    MissingLocation,
 }
 
 impl ParseErrorBuilder {
@@ -77,14 +77,16 @@ impl ParseErrorBuilder {
         Self {
             code,
             severity: Severity::Error,
-            location: None,
+            location: (),
             context: None,
-            message: None,
+            message: (),
             suggestion: None,
             labels: Vec::new(),
         }
     }
+}
 
+impl<Message, Location> ParseErrorBuilder<Message, Location> {
     /// Set the error severity (default: Error).
     pub fn severity(mut self, severity: Severity) -> Self {
         self.severity = severity;
@@ -92,21 +94,26 @@ impl ParseErrorBuilder {
     }
 
     /// Set the error location from byte offsets.
-    pub fn at(mut self, start: usize, end: usize) -> Self {
-        self.location = Some(SourceLocation::from_offsets(start, end));
-        self
+    pub fn at(self, start: usize, end: usize) -> ParseErrorBuilder<Message, SourceLocation> {
+        self.location(SourceLocation::from_offsets(start, end))
     }
 
     /// Set the error location from a Span.
-    pub fn at_span(mut self, span: Span) -> Self {
-        self.location = Some(SourceLocation::new(span));
-        self
+    pub fn at_span(self, span: Span) -> ParseErrorBuilder<Message, SourceLocation> {
+        self.location(SourceLocation::new(span))
     }
 
     /// Set the error location from a SourceLocation.
-    pub fn location(mut self, location: SourceLocation) -> Self {
-        self.location = Some(location);
-        self
+    pub fn location(self, location: SourceLocation) -> ParseErrorBuilder<Message, SourceLocation> {
+        ParseErrorBuilder {
+            code: self.code,
+            severity: self.severity,
+            location,
+            context: self.context,
+            message: self.message,
+            suggestion: self.suggestion,
+            labels: self.labels,
+        }
     }
 
     /// Set the error context directly.
@@ -133,9 +140,16 @@ impl ParseErrorBuilder {
     }
 
     /// Set the human-readable error message (required).
-    pub fn message(mut self, message: impl Into<String>) -> Self {
-        self.message = Some(message.into());
-        self
+    pub fn message(self, message: impl Into<String>) -> ParseErrorBuilder<String, Location> {
+        ParseErrorBuilder {
+            code: self.code,
+            severity: self.severity,
+            location: self.location,
+            context: self.context,
+            message: message.into(),
+            suggestion: self.suggestion,
+            labels: self.labels,
+        }
     }
 
     /// Set a suggestion for how to fix the error.
@@ -149,54 +163,23 @@ impl ParseErrorBuilder {
         self.labels.push(label);
         self
     }
+}
 
-    /// Build the ParseError, consuming the builder.
-    pub fn finish(self) -> Result<ParseError, ParseErrorBuilderError> {
-        let message = match self.message {
-            Some(message) => message,
-            None => return Err(ParseErrorBuilderError::MissingMessage),
-        };
-
-        let location = match self.location {
-            Some(location) => location,
-            None => return Err(ParseErrorBuilderError::MissingLocation),
-        };
-
+impl ParseErrorBuilder<String, SourceLocation> {
+    /// Build the diagnostic after both required fields have been supplied.
+    pub fn finish(self) -> ParseError {
         let help_url = Some(self.code.documentation_url());
 
-        Ok(ParseError {
+        ParseError {
             code: self.code,
             severity: self.severity,
-            location,
+            location: self.location,
             context: self.context,
             labels: self.labels,
-            message,
+            message: self.message,
             suggestion: self.suggestion,
             help_url,
             source_cache: OnceLock::new(),
-        })
-    }
-
-    /// Build the ParseError, returning None if required fields are missing.
-    ///
-    /// This is the non-panicking alternative to `finish()`.
-    pub fn try_finish(self) -> Option<ParseError> {
-        let message = self.message?;
-
-        let location = self.location?;
-
-        let help_url = Some(self.code.documentation_url());
-
-        Some(ParseError {
-            code: self.code,
-            severity: self.severity,
-            location,
-            context: self.context,
-            labels: self.labels,
-            message,
-            suggestion: self.suggestion,
-            help_url,
-            source_cache: OnceLock::new(),
-        })
+        }
     }
 }

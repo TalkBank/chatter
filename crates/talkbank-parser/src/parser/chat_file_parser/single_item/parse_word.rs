@@ -65,7 +65,8 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
                 format!("Expected source_file root, got '{}'", raw_root.kind()),
             )
         })?;
-        let children = extract_source_file(root);
+        let children = extract_source_file(root)
+            .map_err(|fault| failure(ErrorCode::InternalError, fault.to_string()))?;
         let NodeSlot::Present(SourceFileChoice::StandaloneWord(node)) = children.content.slot()
         else {
             // Raw shape is used only to describe the refused input. Admission
@@ -103,7 +104,7 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
         let input = self.source.source();
 
         let errors_sink = crate::error::ErrorCollector::new();
-        let outcome = convert_word_node(self.source.node(), input, &errors_sink);
+        let outcome = convert_word_node(self.source, &errors_sink);
         let tier_errors = errors_sink.into_vec();
         if tier_errors
             .iter()

@@ -50,57 +50,24 @@ use crate::gate::{Gate, Outcome, ProbeSuite, ReadTree, Tier, UnprovenRule, listi
 /// Where the observation snapshot lives, as one tree-relative spelling.
 const SNAPSHOT: &str = "spec/observations/example-diagnostics.json";
 
-/// Codes the registry calls `implemented` that no spec example demonstrates.
+/// Implemented diagnostic identities absent from the canonical file snapshot.
 ///
-/// A RATCHET. This list may only SHRINK, and there are exactly two ways to
-/// remove a code: write an example that triggers it, or establish that no CHAT
-/// input reaches it and correct its `status` in the registry, whose vocabulary
-/// already has the word. Both are real work on one code, and the second is not
-/// a shortcut: it wants evidence in the spec file, not an assertion.
-///
-/// What each remaining code needs, as of 2026-09-08. All three have been
-/// investigated; none is waiting for somebody to try harder.
-///
-/// - `E208`, `E232`: the model rule is implemented and the CANONICAL parser
-///   never reaches it. `+hello` builds no `Word`, so the word-structure check
-///   never sees one; the re2c backend DOES build it and reports E209/E232/E233
-///   on the same file, which the parity baseline already carries as a
-///   divergence. Recording re2c's output here would say a rule is demonstrated
-///   while the validity AUTHORITY never fires it, so the snapshot stays
-///   canonical-only. Two real actions, and both are the maintainer's: make the
-///   canonical parser's recovery keep enough for the rule to run, or give the
-///   registry a status for "implemented in the model, unreachable through this
-///   lowering".
-/// - `E324`: reachable only through the utterance FRAGMENT parser, the entry
-///   the LSP and the fragment API use. The snapshot lowers each example to a
-///   whole file and never takes that route, so the fragment path has no
-///   coverage here at all. A fragment stage in the snapshot would demonstrate
-///   this code and give that entry point its first.
-/// - `E309`, `E319`, `E321`: reachable only under `--parser re2c`, measured
-///   2026-09-08 (the canonical parser gives E602, E404 and E316 on the same
-///   three inputs). Exactly the `E208`/`E232` case above, and it takes the
-///   same answer: the snapshot is canonical-only on purpose, so these stay
-///   tracked rather than being demonstrated by the oracle.
-/// - `E302`: reachable, and only from a file with NO trailing newline, which
-///   leaves the main tier flattened at EOF and routes it through the fragment
-///   entry point. Every generated fixture ends in exactly one newline, put
-///   there deliberately so a fixture is not testing the rule plus a
-///   MISSING-newline recovery node, so no fixture can carry this input. With
-///   the newline the same line reports E376 instead. Its named out-of-corpus
-///   test is `e302_needs_a_file_that_does_not_end_in_a_newline`, in the CLI
-///   crate's integration tests, which writes both byte sequences and asserts
-///   the code fires for one and not the other.
-///
-/// # This list GREW on 2026-09-08, for the first time
-///
-/// Four codes arrived from `not_implemented`, a status that was FALSE for all
-/// four: each fires, on a real `.cha` file, through `chatter validate`. That
-/// status excuses a code from every rule this gate has, so the four were
-/// invisible here as well as misdescribed there. The growth is a transfer out
-/// of a false statement into a tracked one, and the ratchet's shrink-only rule
-/// still governs what happens next: each of the four names what would remove
-/// it.
-const UNDEMONSTRATED: &[&str] = &["E208", "E302", "E309", "E319", "E321", "E324"];
+/// Checked in both directions. Changes require producer/spec adjudication, not
+/// an automatic baseline update. Absence here proves neither dead code nor a
+/// missing validity rule: fragment, model and other-backend boundaries differ.
+/// E309/E319/E321 belong to experimental-backend paths; E324 is fragment-owned.
+// September 28 correction: this is an explicit residual inventory of diagnostic
+// identities NOT demonstrated by the canonical whole-file snapshot, not a list
+// of missing CHAT validity rules. The E202/E207/E231/E301/E404/E505/E509/E601/
+// E602/E759/E760 specs retain independently checked rejection/subsumption claims.
+// Model, fragment and experimental-backend producers may still use these codes;
+// do not distort the primary parser to recreate their historical specificity.
+// E302's former EOF witness now reports E376/E342 without a fragment reparse.
+// E208 is retired and therefore leaves this implemented-code inventory.
+const UNDEMONSTRATED: &[&str] = &[
+    "E202", "E207", "E231", "E301", "E302", "E309", "E319", "E321", "E324", "E404", "E505", "E509",
+    "E601", "E602", "E759", "E760",
+];
 
 /// Codes the registry calls `not_implemented` whose variant production code
 /// still NAMES.
@@ -148,7 +115,7 @@ const UNDEMONSTRATED: &[&str] = &["E208", "E302", "E309", "E319", "E321", "E324"
 ///   only for a `main_tier` node with an absent or zero-width speaker or
 ///   colon, which the grammar cannot produce: damaged prefixes become a
 ///   document-level ERROR and E301 or E316 wins first.
-/// - `E364`, `E365`, `E508`: emit sites exist and every route to them
+/// - `E364`, `E365`: emit sites exist and every route to them
 ///   is blocked by an earlier diagnostic. Each was traced to the dominating
 ///   code that week.
 /// - `E310`: reachable, but not through `chatter validate`. It needs a
@@ -161,7 +128,7 @@ const UNDEMONSTRATED: &[&str] = &["E208", "E302", "E309", "E319", "E321", "E324"
 ///   it is reachable from a LIBRARY caller and not from a file. Same shape as
 ///   E324, and the same fragment stage in the snapshot would reach both.
 const UNIMPLEMENTED_BUT_NAMED: &[&str] = &[
-    "E003", "E304", "E310", "E322", "E323", "E364", "E365", "E508", "E729", "E731", "E999",
+    "E003", "E304", "E310", "E322", "E323", "E364", "E365", "E729", "E731", "E999",
 ];
 
 /// Every implemented error code is demonstrated, or excused by a status the
@@ -325,18 +292,18 @@ impl Gate for ErrorCodeDemonstrationGate {
             "a code whose status the snapshot disproves",
             "and a spec example emits it",
             |edit| {
-                // E231 fires in the snapshot. Calling it not implemented is the
+                // E243 fires in the snapshot. Calling it not implemented is the
                 // exact lie R1 exists to refuse, and the one it found on the
                 // day it was written.
                 let registry = edit.read(REGISTRY_PATH)?;
                 let at = registry
-                    .find("code = \"E231\"")
-                    .ok_or_else(|| crate::gate::PlantFailed::new("E231 is not in the registry"))?;
+                    .find("code = \"E243\"")
+                    .ok_or_else(|| crate::gate::PlantFailed::new("E243 is not in the registry"))?;
                 let status = registry[at..]
                     .find("status = ")
                     .map(|offset| at + offset)
                     .ok_or_else(|| {
-                        crate::gate::PlantFailed::new("E231's entry declares no status")
+                        crate::gate::PlantFailed::new("E243's entry declares no status")
                     })?;
                 let end = match registry[status..].find('\n') {
                     Some(offset) => status + offset,

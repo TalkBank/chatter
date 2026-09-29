@@ -1,7 +1,7 @@
 # What a Version Bump Promises
 
 **Status:** Current
-**Last modified:** 2026-08-21 13:42 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 If you depend on chatter, two different things can move under you and they move
 independently:
@@ -76,11 +76,14 @@ the repair it surfaced was right either way.
 
 If you gate on `validate` in CI over a fixed corpus, treat a chatter upgrade
 the way you would treat a linter upgrade: pin it, upgrade deliberately, and
-diff the verdicts over your own files rather than assuming. Chatter's own
-release process does exactly this against a large real corpus before shipping,
-comparing per-code counts and roundtrip results against the previously released
-binary; a new code or a count increase is adjudicated one instance at a time,
-never waved through and never automatically treated as a regression.
+review the verdicts over your own files rather than assuming. Chatter's
+acceptance evidence comes from reviewed specifications and a finite reference
+corpus exercised through public workflows, including deliberate invalid
+variants. A full production-corpus differential run is not a release gate.
+New findings require CHAT-policy adjudication; matching another validator's
+diagnostic code, count or wording is not the acceptance criterion. See the
+[CHECK assessment](../../architecture/errors-and-validation/check-parity-audit.md)
+for its scope and reopening rules.
 
 If you only consume the parsed model and never call `validate`, only the SemVer
 half applies to you.

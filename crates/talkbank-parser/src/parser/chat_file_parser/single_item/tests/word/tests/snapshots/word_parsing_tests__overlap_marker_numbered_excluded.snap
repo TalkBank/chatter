@@ -1,6 +1,5 @@
 ---
 source: crates/talkbank-parser/src/parser/chat_file_parser/single_item/tests/word/helpers.rs
-assertion_line: 12
 expression: result
 ---
 Ok(
@@ -10,7 +9,6 @@ Ok(
             end: 15,
         },
         word_id: None,
-        raw_text: "test⌋1⌈2ing",
         content: WordContents(
             [
                 Text(

@@ -184,7 +184,7 @@ pub fn extract_overlap_info(content: &[UtteranceContent]) -> OverlapMarkerInfo {
         | ContentItem::NonvocalSimple(_) => {}
     });
 
-    let regions = pair_markers(&markers);
+    let regions = pair_markers(markers);
 
     OverlapMarkerInfo {
         total_words: word_count,
@@ -192,12 +192,21 @@ pub fn extract_overlap_info(content: &[UtteranceContent]) -> OverlapMarkerInfo {
     }
 }
 
-/// A single overlap marker occurrence with its word position.
-#[derive(Debug)]
-struct MarkerOccurrence {
-    kind: OverlapPointKind,
+/// A boundary's semantic identity and observed position.
+#[derive(Debug, Clone, Copy)]
+struct MarkerBoundary {
+    kind: OverlapRegionKind,
     index: Option<OverlapIndex>,
     word_position: usize,
+}
+
+/// Only an available closing boundary can transition to `ConsumedEnd`.
+/// Opening markers never share the closing-marker consumption state.
+#[derive(Debug, Clone, Copy)]
+enum MarkerOccurrence {
+    Begin(MarkerBoundary),
+    End(MarkerBoundary),
+    ConsumedEnd,
 }
 
 /// Record an overlap marker occurrence.
@@ -207,10 +216,22 @@ fn record_marker(
     index: Option<OverlapIndex>,
     word_position: usize,
 ) {
-    markers.push(MarkerOccurrence {
+    let boundary = |kind| MarkerBoundary {
         kind,
         index,
         word_position,
+    };
+    markers.push(match kind {
+        OverlapPointKind::TopOverlapBegin => {
+            MarkerOccurrence::Begin(boundary(OverlapRegionKind::Top))
+        }
+        OverlapPointKind::BottomOverlapBegin => {
+            MarkerOccurrence::Begin(boundary(OverlapRegionKind::Bottom))
+        }
+        OverlapPointKind::TopOverlapEnd => MarkerOccurrence::End(boundary(OverlapRegionKind::Top)),
+        OverlapPointKind::BottomOverlapEnd => {
+            MarkerOccurrence::End(boundary(OverlapRegionKind::Bottom))
+        }
     });
 }
 
@@ -219,64 +240,51 @@ fn record_marker(
 /// For each ⌈, find the next unmatched ⌉ with the same index (or both
 /// unindexed). Same for ⌊/⌋. Unmatched markers produce regions with
 /// `None` for the missing endpoint.
-fn pair_markers(markers: &[MarkerOccurrence]) -> Vec<OverlapRegion> {
+fn pair_markers(mut markers: Vec<MarkerOccurrence>) -> Vec<OverlapRegion> {
     let mut regions: Vec<OverlapRegion> = Vec::new();
-    let mut used: Vec<bool> = vec![false; markers.len()];
 
-    // First pass: match begins with ends
-    for (i, m) in markers.iter().enumerate() {
-        let (region_kind, end_point_kind) = match m.kind {
-            OverlapPointKind::TopOverlapBegin => {
-                (OverlapRegionKind::Top, OverlapPointKind::TopOverlapEnd)
-            }
-            OverlapPointKind::BottomOverlapBegin => (
-                OverlapRegionKind::Bottom,
-                OverlapPointKind::BottomOverlapEnd,
-            ),
-            // Named, not `_`: this pass pairs BEGIN markers, and a future
-            // point kind must be classified here rather than silently skipped.
-            OverlapPointKind::TopOverlapEnd | OverlapPointKind::BottomOverlapEnd => continue,
+    // Consume the next closing boundary of the same kind and index. The
+    // owned marker stream carries consumption; no parallel bitmap can drift.
+    for i in 0..markers.len() {
+        let begin = match markers[i] {
+            MarkerOccurrence::Begin(begin) => begin,
+            MarkerOccurrence::End(_) | MarkerOccurrence::ConsumedEnd => continue,
         };
-
-        if used[i] {
-            continue;
-        }
-        used[i] = true;
-
-        // Find the next unmatched end marker with the same index
-        let mut end_at_word = None;
-        for (j, candidate) in markers.iter().enumerate().skip(i + 1) {
-            if !used[j] && candidate.kind == end_point_kind && candidate.index == m.index {
-                end_at_word = Some(candidate.word_position);
-                used[j] = true;
-                break;
-            }
-        }
+        let end_at_word = markers[i + 1..]
+            .iter_mut()
+            .find_map(|candidate| match candidate {
+                MarkerOccurrence::End(end)
+                    if end.kind == begin.kind && end.index == begin.index =>
+                {
+                    let position = end.word_position;
+                    *candidate = MarkerOccurrence::ConsumedEnd;
+                    Some(position)
+                }
+                MarkerOccurrence::Begin(_)
+                | MarkerOccurrence::End(_)
+                | MarkerOccurrence::ConsumedEnd => None,
+            });
 
         regions.push(OverlapRegion {
-            kind: region_kind,
-            index: m.index,
-            begin_at_word: Some(m.word_position),
+            kind: begin.kind,
+            index: begin.index,
+            begin_at_word: Some(begin.word_position),
             end_at_word,
         });
     }
 
-    // Second pass: orphaned end markers (no matching begin)
-    for (i, m) in markers.iter().enumerate() {
-        if used[i] {
-            continue;
-        }
-        let region_kind = match m.kind {
-            OverlapPointKind::TopOverlapEnd => OverlapRegionKind::Top,
-            OverlapPointKind::BottomOverlapEnd => OverlapRegionKind::Bottom,
-            // This pass collects ORPHANED ENDS; begins were handled above.
-            OverlapPointKind::TopOverlapBegin | OverlapPointKind::BottomOverlapBegin => continue,
+    // Unconsumed closing boundaries remain observable orphaned ends. Keep
+    // the public order: opening regions first, then orphaned ends in order.
+    for marker in markers {
+        let end = match marker {
+            MarkerOccurrence::End(end) => end,
+            MarkerOccurrence::Begin(_) | MarkerOccurrence::ConsumedEnd => continue,
         };
         regions.push(OverlapRegion {
-            kind: region_kind,
-            index: m.index,
+            kind: end.kind,
+            index: end.index,
             begin_at_word: None,
-            end_at_word: Some(m.word_position),
+            end_at_word: Some(end.word_position),
         });
     }
 

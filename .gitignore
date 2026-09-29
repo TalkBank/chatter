@@ -51,3 +51,6 @@ __pycache__/
 # cargo-mutants run output (contains local toolchain paths)
 mutants.out/
 mutants.out.old/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

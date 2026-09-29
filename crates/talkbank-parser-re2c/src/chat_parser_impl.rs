@@ -528,12 +528,12 @@ impl ChatParser for Re2cParser {
         // lowering became fallible, so passing the raw sink introduced the
         // fragment-local span rather than inheriting it.
         let diagnostics = fragment_source.error_sink(errors);
-        // Named rather than passed inline as `&mut ParseHealthState::Clean`,
+        // Named rather than passed inline as a fresh parse-health accumulator,
         // for the reason `LoweredGra::tier_without_health` gives: a fragment
         // has no utterance, so recovery has nowhere to be recorded and nothing
         // downstream that could read it. The rejection itself still reaches
         // `diagnostics`. A binding a reader can see beats a temporary.
-        let mut no_utterance_health = talkbank_model::model::ParseHealthState::Clean;
+        let mut no_utterance_health = talkbank_model::model::ParseHealth::untainted();
         for line in &parsed.lines {
             if let crate::ast::Line::Utterance(u) = line
                 && let Some(tier) = u.dependent_tiers.first()

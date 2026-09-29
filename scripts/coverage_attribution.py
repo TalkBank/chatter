@@ -563,6 +563,8 @@ def main() -> int:
         if disagreements:
             print("No attributable residual rows; excluded files prevent a completeness claim.")
             return 2
+        if args.json:
+            args.json.write_text("[]\n")
         print(f"{measured} file(s) under {args.scope} measured; no uncovered source-union code regions")
         print("This is not a completeness claim for LLVM line, region or branch summaries.")
         return 0

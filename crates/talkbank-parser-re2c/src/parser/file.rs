@@ -67,26 +67,16 @@ fn report_annotation_spacing(lexed: &super::LexedSource<'_>, errors: &impl Error
         // A replacement is a separate token after a word, including a word
         // assembled from sub-tokens. Recovery retains the AST, but the missing
         // separator violates word_with_optional_annotations (CHECK 161).
-        if matches!(right, Token::Replacement(_))
+        if matches!(right, Token::ReplacementBegin(_))
             && (matches!(left, Token::Word { .. })
                 || super::classify::is_word_token(TokenDiscriminants::from(left)))
         {
             errors.report(ParseError::new(
                 talkbank_model::ErrorCode::ContentAnnotationParseError,
                 talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::from_offsets(span.end - 1, span.end),
+                talkbank_model::SourceLocation::from_offsets(span.start, span.end),
                 None,
                 "Replacement annotation must be separated from its word by whitespace",
-            ));
-            // The canonical grammar also reports the opening bracket as
-            // unparsable content. These endpoints come from the complete
-            // replacement match, not a search through reconstructed text.
-            errors.report(ParseError::new(
-                talkbank_model::ErrorCode::UnparsableContent,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::from_offsets(span.start, span.start + 1),
-                None,
-                "Replacement begins without the required preceding whitespace",
             ));
         }
         let closes_a_code = matches!(left, Token::RightBracket(_))

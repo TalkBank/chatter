@@ -51,7 +51,7 @@
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_model::model::{
     BracketedContent, BracketedItem, Bullet, ChatFile, Line, MainTier, RetraceKind, TierContent,
-    UtteranceContent,
+    Utterance, UtteranceContent,
 };
 
 /// Controls which dangling-retrace kinds the join transform handles.
@@ -109,30 +109,29 @@ impl JoinRetraceStats {
 pub fn join_dangling_retraces(chat: &mut ChatFile, scope: RetraceJoinScope) -> JoinRetraceStats {
     let mut stats = JoinRetraceStats::default();
 
-    // Index-based scan: a join removes a later line, so we cannot hold a
-    // borrow across the mutation. We re-derive indices each iteration.
-    let mut i = 0usize;
-    while i < chat.lines.len() {
-        let Some(j) = obvious_join_target(&chat.lines, i, scope) else {
-            i += 1;
-            continue;
-        };
-
-        perform_join(chat, i, j, &mut stats);
-        // Do NOT advance `i`: re-examine the merged line. If the successor V
-        // was ITSELF a dangling retrace (a chain of same-speaker dangling
-        // retraces), the merged line is still dangling and must be joined
-        // again so the whole chain collapses in one pass. Each join removes
-        // exactly one line, so `i` only stays put while joins keep happening;
-        // the loop still terminates (a self-join is impossible because the
-        // successor is always a strictly later line).
+    // The result owns the processed prefix; the iterator owns the untouched
+    // suffix. Only the last result line can meet the next source line, so
+    // headers are barriers and self-joins are unrepresentable. A merged line
+    // stays last, allowing an entire retrace chain to collapse in one pass.
+    let source = chat.lines.take();
+    let mut joined = Vec::with_capacity(source.len());
+    for next in source {
+        match (joined.last_mut(), next) {
+            (Some(Line::Utterance(previous)), Line::Utterance(successor)) => {
+                match EligibleJoin::admit(previous, successor, scope) {
+                    Ok(pair) => pair.apply(&mut stats),
+                    Err(successor) => joined.push(Line::Utterance(successor)),
+                }
+            }
+            (_, next) => joined.push(next),
+        }
     }
+    chat.lines = joined.into();
 
     stats
 }
 
-/// If the utterance at `start_index` is a qualifying dangling retrace, return
-/// the successor's line index.
+/// Whether two already adjacent utterances meet the selected repair policy.
 ///
 /// The `scope` controls which retrace kinds are eligible and what material
 /// check is required:
@@ -147,35 +146,20 @@ pub fn join_dangling_retraces(chat: &mut ChatFile, scope: RetraceJoinScope) -> J
 /// - For [`RetraceJoinScope::AllSameSpeakerSuccessor`], any kind qualifies;
 ///   neither a material purity check nor a prefix match is required.
 ///
-/// Independent of scope, the join is refused when the successor is not the
-/// immediately following line (crossing an interstitial `@`-header), when the
-/// speakers differ, or when the successor carries leading linkers or an
+/// Adjacency and header boundaries belong to the owning scan, not indices
+/// checked here. Independent of scope, the join is refused when the speakers
+/// differ, or when the successor carries leading linkers or an
 /// utterance-scoped language code (which inlining would silently drop).
-fn obvious_join_target(
-    lines: &[Line],
-    start_index: usize,
-    scope: RetraceJoinScope,
-) -> Option<usize> {
-    let Line::Utterance(u) = lines.get(start_index)? else {
-        return None;
-    };
-
+fn join_policy_allows(u: &Utterance, v: &Utterance, scope: RetraceJoinScope) -> bool {
     // U's last main-tier content node must be a dangling retrace of a kind
     // allowed by the current scope.
-    let (kind, opt_material) = dangling_retrace_kind(&u.main, scope)?;
-
-    // The successor must be the IMMEDIATELY following line and an utterance.
-    // Refusing to cross an interstitial `@`-header keeps the repair from
-    // silently moving a gem/comment past the content it scoped (see
-    // [`immediate_successor_utterance`]).
-    let v_index = immediate_successor_utterance(lines, start_index)?;
-    let Line::Utterance(v) = &lines[v_index] else {
-        return None;
+    let Some((kind, opt_material)) = dangling_retrace_kind(&u.main, scope) else {
+        return false;
     };
 
     // Same speaker.
     if v.main.speaker != u.main.speaker {
-        return None;
+        return false;
     }
 
     // Conservative successor-attribute gate: the join appends V's content
@@ -185,7 +169,7 @@ fn obvious_join_target(
     // continuation would be relabeled to the default language). Refuse the
     // join when V carries either; such cases are left for manual review.
     if v.main.content.language_code.is_some() || !v.main.content.linkers.is_empty() {
-        return None;
+        return false;
     }
 
     // Partial retrace (`[/]`) is a REPETITION marker: it requires a verifiable
@@ -203,12 +187,14 @@ fn obvious_join_target(
     match kind {
         RetraceKind::Partial => match scope {
             RetraceJoinScope::RepetitionOnly | RetraceJoinScope::RepetitionAndCorrections => {
-                let material = opt_material?;
+                let Some(material) = opt_material else {
+                    return false;
+                };
                 if material.is_empty() {
-                    return None;
+                    return false;
                 }
                 if !leading_words_match_prefix(&v.main, &material) {
-                    return None;
+                    return false;
                 }
             }
             RetraceJoinScope::AllSameSpeakerSuccessor => {
@@ -222,7 +208,7 @@ fn obvious_join_target(
         }
     }
 
-    Some(v_index)
+    true
 }
 
 /// Returns the retrace kind and optionally the retraced material's lexical-word
@@ -235,9 +221,10 @@ fn obvious_join_target(
 /// The material (`Vec<String>`) is extracted only when the retrace content is a
 /// PURE plain-word sequence. If the content contains non-word items (pauses,
 /// events, error markers, etc.), the material slot is `None`. The caller
-/// decides whether a `None` material disqualifies the join: for
-/// `RepetitionOnly` it does (prefix-match is impossible); for the broader
-/// scopes it does not (those never read the material).
+/// decides whether a `None` material disqualifies the join: a partial retrace
+/// requires plain-word material under both `RepetitionOnly` and
+/// `RepetitionAndCorrections`. Correction kinds do not require a prefix match;
+/// `AllSameSpeakerSuccessor` also permits non-plain partial retraces.
 fn dangling_retrace_kind(
     main: &MainTier,
     scope: RetraceJoinScope,
@@ -334,104 +321,70 @@ fn leading_words_match_prefix(main: &MainTier, prefix: &[String]) -> bool {
     !impure_before_prefix && leading.len() == prefix.len() && leading == prefix
 }
 
-/// Return the index of the utterance IMMEDIATELY following `from_index`.
-///
-/// The successor must be the very next line AND a `Line::Utterance`. If the
-/// next line is a `Line::Header` (any `@`-header: a gem marker `@Bg`/`@Eg`/`@G`,
-/// `@Situation`, `@Comment`, ...), the join is REFUSED by returning `None`.
-///
-/// Joining across a header would silently move that header past the content it
-/// scoped, or pull the successor out of a gem region (leaving an empty
-/// `@Bg`/`@Eg` pair). Both produce a structurally wrong file that still parses,
-/// so `validate`-after would not catch it. A conservative OBVIOUS-only repair
-/// never crosses a header boundary; such cases are left for manual review.
-///
-/// Dependent tiers (`%mor`, `%gra`, `%com`, ...) are NOT `Line`s (they live on
-/// `Utterance.dependent_tiers`), so the only thing that can sit between two
-/// utterance lines is an `@`-header; refusing to cross one is exactly right.
-fn immediate_successor_utterance(lines: &[Line], from_index: usize) -> Option<usize> {
-    match lines.get(from_index + 1)? {
-        Line::Utterance(_) => Some(from_index + 1),
-        Line::Header { .. } => None,
-    }
+/// An admitted mutation owns the successor and exclusively borrows its target.
+/// Neither endpoint can change or disappear between policy admission and apply.
+struct EligibleJoin<'a> {
+    previous: &'a mut Utterance,
+    successor: Box<Utterance>,
 }
 
-/// Perform the join of utterance at `u_index` with utterance at `v_index`.
-///
-/// Preconditions (established by [`obvious_join_target`]): both indices are
-/// `Line::Utterance`, V is the immediate successor of U, U's last content is a
-/// dangling retrace allowed by the scope, same speaker, and V carries no
-/// leading linkers or language code. `v_index > u_index`. The endpoint kinds
-/// are re-checked here so a violated precondition fails closed.
-fn perform_join(chat: &mut ChatFile, u_index: usize, v_index: usize, stats: &mut JoinRetraceStats) {
-    // Validate BOTH endpoints are utterances BEFORE any mutation. The
-    // preconditions established by `obvious_join_target` make this guard
-    // unreachable today, but checking up front means a future refactor that
-    // violates them fails CLOSED (a clean no-op) rather than half-applying the
-    // join: removing V without merging it into U would be silent data loss.
-    let both_utterances = matches!(chat.lines.get(u_index), Some(Line::Utterance(_)))
-        && matches!(chat.lines.get(v_index), Some(Line::Utterance(_)));
-    if !both_utterances {
-        return;
+impl<'a> EligibleJoin<'a> {
+    /// Refusal returns the complete untouched successor to the line scan.
+    fn admit(
+        previous: &'a mut Utterance,
+        successor: Box<Utterance>,
+        scope: RetraceJoinScope,
+    ) -> Result<Self, Box<Utterance>> {
+        if join_policy_allows(previous, &successor, scope) {
+            Ok(Self {
+                previous,
+                successor,
+            })
+        } else {
+            Err(successor)
+        }
     }
 
-    // Remove V first (higher index) so U's index stays valid. The guard above
-    // guarantees this is an utterance.
-    let Line::Utterance(v) = chat.lines.remove(v_index) else {
-        return;
-    };
-    let v = *v;
+    /// Consume the admitted pair; no line lookup or endpoint recheck is needed.
+    fn apply(self, stats: &mut JoinRetraceStats) {
+        let Self {
+            previous: u,
+            successor,
+        } = self;
+        let v = *successor;
 
-    let Some(Line::Utterance(u)) = chat.lines.as_mut_slice().get_mut(u_index) else {
-        return;
-    };
+        // Count dependent tiers dropped from BOTH sides before consuming V.
+        // Neither set aligns with the joined main tier under this repair policy.
+        let dropped = u.dependent_tiers.len() + v.dependent_tiers.len();
 
-    // Count dependent tiers that will be dropped (from BOTH sides). U's own
-    // dependent tiers are dropped because the joined main tier no longer
-    // aligns with them; V's are dropped for the same reason. Read before we
-    // consume `v.main.content` below.
-    let dropped = u.dependent_tiers.len() + v.dependent_tiers.len();
+        // Exhaustively destructure so future TierContent fields require review.
+        // Admission excludes leading linkers and language codes, which cannot
+        // be re-expressed mid-utterance. Spans are diagnostic-only here.
+        let TierContent {
+            linkers: _,
+            language_code: _,
+            content: v_items,
+            terminator: v_terminator,
+            postcodes: v_postcodes,
+            bullet: v_bullet,
+            content_span: _,
+            language_code_span: _,
+        } = v.main.content;
 
-    // Exhaustively destructure V's tier content so any FUTURE `TierContent`
-    // field becomes a compile error here instead of another silent drop.
-    // `obvious_join_target` guarantees V carries no leading linkers and no
-    // language code (a join cannot re-express either mid-utterance), so those
-    // are ignored rather than merged; `content_span` is a diagnostic-only span
-    // that does not survive serialization.
-    let TierContent {
-        linkers: _,
-        language_code: _,
-        content: v_items,
-        terminator: v_terminator,
-        postcodes: v_postcodes,
-        bullet: v_bullet,
-        content_span: _,
-        language_code_span: _,
-    } = v.main.content;
+        let unioned_bullet = union_bullets(u.main.content.bullet.as_ref(), v_bullet.as_ref());
+        // U retains its retrace marker; V supplies the final terminator.
+        u.main.content.content.append(v_items);
+        u.main.content.terminator = v_terminator;
+        u.main.content.postcodes.append(v_postcodes);
+        u.main.content.bullet = unioned_bullet;
 
-    // Union the main-tier time bullets: start from U, end from V.
-    let unioned_bullet = union_bullets(u.main.content.bullet.as_ref(), v_bullet.as_ref());
-
-    // Append V's content onto U's (U keeps its trailing retrace marker).
-    u.main.content.content.append(v_items);
-
-    // The joined utterance is terminated by V's terminator.
-    u.main.content.terminator = v_terminator;
-
-    // V's postcodes follow the joined content's terminator.
-    u.main.content.postcodes.append(v_postcodes);
-
-    // Apply the unioned bullet (or clear if neither side had one).
-    u.main.content.bullet = unioned_bullet;
-
-    // Drop ALL dependent tiers on the joined utterance (Wave 1 policy).
-    if dropped > 0 {
-        u.dependent_tiers.clear();
-        stats.dependent_tiers_dropped += dropped;
-        stats.needs_remorphotag += 1;
+        if dropped > 0 {
+            u.dependent_tiers.clear();
+            stats.dependent_tiers_dropped += dropped;
+            stats.needs_remorphotag += 1;
+        }
+        stats.joined_utterances += 1;
     }
-
-    stats.joined_utterances += 1;
 }
 
 /// Union two optional main-tier time bullets.

@@ -915,10 +915,9 @@ impl UtteranceContent {
 impl BracketedItem {
     /// The content this item encloses, reached mutably, or `None` for a leaf.
     ///
-    /// The bracketed counterpart of [`UtteranceContent::container_mut`]. Note
-    /// `BracketedItem` has no bare `Group` variant (a bare `<...>` cannot
-    /// appear inside brackets), which is why `GroupKind::Angle` arises here
-    /// only from the annotated spelling.
+    /// The bracketed counterpart of [`UtteranceContent::container_mut`]. Both
+    /// bare and annotated group variants retain their content; this model view
+    /// does not certify which spellings the parser admits as valid CHAT.
     #[inline]
     pub fn container_mut(&mut self) -> Option<ContainerMut<'_>> {
         match self {

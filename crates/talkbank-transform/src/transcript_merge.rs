@@ -32,7 +32,7 @@ mod gem_exterior;
 mod ordered;
 mod relative_order;
 mod selection;
-pub use draft_order::{DraftOrderReason, DraftOrderReview};
+pub use draft_order::{DraftOrderReason, DraftOrderReview, OutputUtteranceBoundary};
 pub use gem_exterior::{GemExterior, GemExteriorPlacement};
 pub use relative_order::RelativeOrderConstraint;
 pub use selection::{
@@ -683,6 +683,12 @@ pub enum BulletEditError {
 }
 
 impl MergeDraft {
+    /// Unresolved frontiers, available even when the draft cannot validate.
+    /// These records are not inserted into the transcript as comments.
+    pub fn draft_order_reviews(&self) -> &[DraftOrderReview] {
+        &self.draft_order_reviews
+    }
+
     /// Each output utterance with where it came from, in output order.
     pub fn utterances_with_origin(&self) -> impl Iterator<Item = (&Utterance, MergeOrigin)> {
         self.file.utterances().zip(self.origins.iter().copied())

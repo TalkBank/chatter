@@ -1,15 +1,261 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** 2026-09-28 18:02 EDT
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
+`ParseError::internal` constructs E001 producer-failure evidence; it must not
+classify a tool fault as invalid CHAT, even after presentation severity changes.
+Diagnostic display maps own their text and keep the zero-byte origin implicit.
+Only post-origin breakpoints are stored; an empty table is an identity map,
+so no caller can omit a required origin sentinel. Display events consume source
+bytes monotonically, preserving UTF-8 byte-coordinate mapping.
+Display-span normalization bounds incoming source coordinates before offset
+arithmetic, so even extreme out-of-source spans clamp safely to display EOF.
+Source-span overlap uses half-open byte ranges: an empty insertion span never
+overlaps another span, even when its point is inside it. Containment of an
+insertion point is a separate operation. Recovery deduplication retains its
+explicit same-point/same-code rule rather than treating a point as covered bytes.
+Line-end lookup also checks index arithmetic before accessing its line table:
+even an extreme out-of-range line request uses the documented source-EOF clamp.
+Header lowering rejects an unreadable comment body or participant name/role
+word after reporting the internal source-binding failure. It does not invent
+an unknown comment or reinterpret a shortened word sequence as a participant.
+This is distinct from structural CHAT recovery, whose diagnostics remain intact.
+Unsupported-tier lowering likewise reports E001 if a generated anonymous body
+span cannot be read from its source. It does not report E330 or substitute empty
+content: an unreadable span is a tool failure, whereas authored empty content
+remains represented in the model for validation.
+The shared transitional raw-node text reader also reports unreadable ranges as
+E001 through `SourceBindingError::InvalidRange`. Freecode, event and
+grammatical-relation fields use that one boundary rather than attributing a
+failed source read to malformed CHAT. This reader proves readable coordinates,
+not tree/source identity; generated source-bound admission remains the stronger
+contract. Structural recovery and lexical validation retain their own findings.
+Postcode decoding now requires `SourceBound<PostcodeNode>`: final-code groups
+project their generated source fields and admit the selected token range before
+decoding. The decoder takes no independent source string and retains the token's
+exact span. First and repeated groups share one leaf-slot decoder; displaced
+diagnostics retain their existing per-group order. Error/Absent recovery still
+contributes no postcode, while source-field failures propagate as `CstFailure`
+rather than silently dropping a code. The ownership test rejects a node from an
+independent equal-text parse; shared source admission owns range refusal.
+User-tier parse-health classification consumes a source-bound tier and admits
+its prefix before comparison; a failed read cannot become successful “no domain”
+classification. Childless separator recovery rejects unreadable text through
+the source-bound entry boundary, then reads admitted text without a second
+decode. Its internal structural extraction still retains all recovery states.
+Fragment admission and recovery likewise distinguish
+binding/range failures (E001) from missing or malformed CHAT, retaining fragment
+coordinates in the reported context.
+Main-tier word/replacement wrappers, annotated angle groups, quotations and
+phonology/sign groups consume the same compiled canonical-grammar admission.
+Their composite word, replacement, annotation, quotation and contents slots
+cannot themselves be Missing. The shared contents walker still handles lexical
+and mixed-choice recovery; delimiters, absent required content, ERROR nodes,
+source failures and empty-group refusal retain their established policies.
+Carrier-owned recovery reporting accepts the corresponding admitted group
+carriers, preserving body-region diagnostics for displaced children. This is
+not a clean-tree proof and does not permit dropping recovery inside a composite.
+
+Standalone-word and word-body extraction also carry canonical grammar admission
+through prefix, form-marker and segment/overlap-initial piece choices. The required
+composite word-body slot cannot itself be Missing. Its contents remain a mixed
+choice, so Missing, Error and Absent handling still applies there and to lexical
+pieces. The shared piece conversions, suffix policies and source-read failures
+are unchanged; admission does not certify a recovered word as valid.
+Replacement extraction uses the same proof for its first and repeated word
+slots. No word-position counter is needed to describe an impossible
+composite Missing state. Zero-width words, unreadable source, delimiter recovery,
+Error/Absent slots and refusal of an empty replacement remain separate checks.
+
+MOR item collection has a private one-way admission state. Items and failure
+health cannot be supplied independently to finalization. Any item, separator or
+terminator failure rejects the collection; subsequent traversal still reports
+diagnostics but cannot revive it. Finalization handles that rejection before
+checking for an absent terminator, preserving diagnostic precedence. Source
+failures and lexical/structural recovery remain explicit.
+
+The low-level `@ID` header entrypoint likewise takes a
+`SourceBound<IdHeaderNode>` rather than an independently supplied node and text.
+Header, contents and required/optional field projections retain that source
+association. Each present field still admits its readable range; failure flows
+as an internal producer error rather than an empty field or invalid CHAT.
+Required-field rejection, omitted optional values, displaced-node reporting and
+the whole-tree recovery backstop retain their policies. Optional field reading
+returns `Result<Option<String>, CstFailure>`: it cannot separately claim a
+CHAT rejection after a successful read. This is not a new grammar, a whole-tree
+range prepass, or a change to the public `ChatParser` trait's ID-fragment API.
+
+All six dedicated structured-header dispatch paths (`Languages`, `Participants`,
+`ID`, `Media`, `Situation`, `Types`) now retain source-bound nodes through one
+shared diagnostic-forwarding wrapper. No path in this family accepts a separate
+source argument. Situation text and the three Types fields are read through
+source-bound projections; unreadable ranges are internal failures, not missing
+authored text. Missing-field recovery, Types field order and its first-missing-
+field short-circuit are unchanged. This does not assert readable child ranges
+before their checked reads or certify recovered headers as valid.
+
+The low-level `%mor` tier entrypoint takes
+`SourceBound<MorDependentTierNode>` from the existing parse owner, with no
+independent source argument. Dependent-tier dispatch retains this capability
+through tier/contents extraction, choice and repeat projection, and item
+admission. A private admission type separates readable items, absence and
+reported failures; displaced nodes still use the shared recovery collector.
+Word, post-clitic and feature decoding also retain source-bound nodes, and
+POS/lemma/feature text comes from admitted fields rather than a second UTF-8
+decode. Source-binding/reconstruction faults propagate as `CstFailure` to the
+owning item boundary, without becoming missing POS/lemma diagnostics.
+String-based fragment APIs are unchanged. Tier-body, main morphology-word,
+post-clitic, contents-item and repeated feature boundaries consume canonical-grammar admission: their
+composite-node Missing state is uninhabited in the generated slot type. This
+does not prove that required children exist or lexical payloads are nonempty.
+Error, absent-child, displaced-node and lexical missing-placeholder recovery
+remain. Structural delimiter recovery still uses the shared slot helpers with
+the owner's source. POS, lemma and feature-value tokens still permit Missing;
+the enclosing composite feature does not. Source ownership alone would not
+justify this narrowing.
+The contents alternative remains a mixed choice with its own Missing/Error/Absent
+handling. Both admitted terminator choices use the shared exhaustive terminator
+conversion; admission does not invent a new terminator or whitespace policy.
+
+The low-level `%gra` entry likewise requires a source-bound node. Dispatch,
+tier/contents extraction, repeated pairs, relations and field text retain the
+same source owner. Index, head and label admission retains its existing order
+and numeric/empty checks; source faults propagate as `CstFailure` to dispatch
+instead of dropping a relation and misclassifying a producer failure as CHAT
+invalidity. Recovery and declared-versus-lowered completeness remain explicit.
+String-based grammar-tier and relation fragment APIs are unchanged.
+Compiled-grammar admission now narrows the tier-body and repeated relation
+carriers: composite `gra_contents` and `gra_relation` cannot be Missing.
+Error/Absent still preserve the existing truncated-body policy; lexical
+whitespace, index, head and label recovery remain. Declared-versus-lowered
+relation accounting still comes from the same traversal and is not inferred
+from this composite-node proof.
+
+The low-level `%sin` entry carries source ownership through group choices,
+repeats, tokens and whole-group fallback. Internal source failures propagate to
+dispatch as `CstFailure`; they cannot become an empty token list or trigger
+recovery fallback. Existing empty-token and whole-group recovery policies remain.
+This does not alter `%phoaln`/`%phoint` or the string fragment APIs.
+
+The shared `%pho`/`%mod` decoder also retains source ownership through tier
+selection, repeated groups, compound words and whole-group fallback. Its typed
+tier variant determines both the extractor and model tag. Low-level entry points
+accept `SourceBound` and return `CstFailure`; internal faults propagate to dispatch,
+never into empty-content or recovery branches. Compound spelling, empty-content
+omission, Missing/Error/Absent handling and string fragment APIs are unchanged.
+
+Both families now consume compiled canonical-grammar admission at their tier,
+group-list, group-choice and grouped-content boundaries. Generated
+`NonMissingKindSlot` carriers rule out Missing for composite bodies, groups,
+grouped content, `pho_words` and `sin_word`; this is a producer proof, not an
+inference from an error-free tier or a lack of failing fixtures. Outer choice
+Missing, Error, Absent, displaced nodes and lexical whitespace Missing remain
+explicit. Whole-group fallback and empty-token omission are unchanged, as are
+the public APIs. Grammar/source admission failures propagate as internal
+failures rather than taking any CHAT recovery branch.
+
+`%wor` marker construction retains its already-admitted source-bound comma,
+tag and vocative nodes, so it has no second fallible byte decode that could
+silently drop a separator. Its transitional language-token reader and raw
+dependent-tier body reader use checked range admission and report internal
+failure before lexical or empty-content policy is applied.
+The tier, body and word-item extractors also consume compiled canonical-grammar
+admission: body, language-code and standalone-word composite slots cannot
+themselves be Missing. Mixed word/bullet/marker choices, lexical whitespace and
+terminators still retain their recovery states; Error, Absent and displaced
+children remain explicit. The admitted terminator choice uses the same exhaustive
+mapping as other tiers. No clean-tier assumption substitutes for those types,
+and no timing, empty-tier or public API policy changes follow from this proof.
+Misplaced-linker diagnostics likewise retain source-bound token text instead of
+substituting a grammar name. Recovery collectors and main-tier language precodes
+report unreadable coordinates as internal failures; an unreadable word-recovery
+range is not an invalid control character and must not advise editing the CHAT.
+The same distinction applies to generic, dependent-tier and utterance recovery
+admission. An unreadable range produces an internal-failure diagnostic before
+the readable-recovery classifier can run; utterance admission still taints every
+potentially affected alignment domain. This does not change the diagnostics for
+readable malformed CHAT or turn recovery into validity.
+Structured-tier recovery keeps its generated `SourceBound` through
+`source_slice()` and source-associated child traversal. The recursive reporter
+accepts no independent source string and passes admitted recovery text directly
+to the classifier. It retains ERROR/MISSING traversal boundaries, tier context,
+diagnostic order and explicit internal failure on an unreadable child range.
+Utterance recovery slots likewise retain their generated `SourceField` until
+read admission. Their reporter accepts no independent node/text pair; equal
+source bytes from another parse do not establish ownership. Unidentified
+recovery still taints every potentially affected alignment domain, and failed
+range admission remains an internal failure rather than CHAT invalidity.
+Gem-label and option-name accumulation also rejects a failed source read rather
+than returning a shortened label or incomplete flag set. Their outcome types
+distinguish rejected admission from a genuinely absent label or empty options.
+Participant entry lowering now consumes the generated range-admitted carrier:
+speaker/name/role slices are checked before decoding and read without another
+fallible source operation. Missing/Error/Absent states, name order, role admission
+and displaced recovery diagnostics remain. Admission failure reports internal
+failure at the entry boundary and rejects the entry; it cannot expose a partial
+name whose final word would be mistaken for a role. Only displaced-node evidence
+is copied across the consuming transition, then released on success.
+This opt-in costs storage: reference code+role and code+name+role entries perform
+3/5 checks; repeated reads add none. Inline carrier storage grows 224 to 288
+bytes, with 200 to 264 occupied bytes per repeated word group on the measured
+64-bit build. The admitted owner occupies 360 bytes. These are transient layout
+figures, not peak-memory or throughput claims; malformed/recovery entries may
+also need storage for retained displaced evidence. Public APIs and grammar are
+unchanged.
+Gem headers retain `SourceBound` through their optional separator/text group
+and free-text choices. Label lowering accepts no independent source string;
+admitted text pieces need no second byte decode. Bare markers, missing/error
+positions, continuation spacing and displaced-child reporting retain their
+existing semantics. A node from an independent parse cannot enter this lowering
+through another parse's owner, even when both inputs have identical bytes.
+Unknown-header recovery preserves the authored header text, never a grammar-node
+name substituted after a failed read. `HeaderSite` retains its admitted text;
+transitional raw-node construction returns `SourceBindingError` and its callers
+propagate internal failure. A rejected header fragment does not construct a
+throwaway unknown-header model before returning its diagnostics.
+The shared bullet/text-tier reader similarly propagates `CstFailure` through
+its typed adapters to dependent-tier dispatch. A failed source-bound read cannot
+become a successful empty payload. Authored empty optional bodies still lower
+as empty content for validation, and malformed slots retain recovery diagnostics.
+Nested segment reads use the same fallible transition: text, leaf and missing-node
+source admission must succeed before accumulation can return `BulletContent`.
+A failed read rejects that content instead of silently omitting a segment.
+Inline bullet lowering likewise propagates reconstruction failure separately
+from malformed timestamp rejection; ordinary bullet recovery is unchanged.
+The `%wor` timing adapter preserves its existing alignment-owned rejection
+policy for malformed timestamps, but explicitly reports reconstruction faults
+as internal failures instead of silently discarding them with `.ok()`.
+Main-tier body lowering preserves its source-bound ending through extraction.
+Failure to read the body content or ending propagates as `CstFailure`; it cannot
+produce a successfully constructed empty body. Structural recovery remains
+separate from these producer failures.
+All structured timestamp consumers now pass `SourceBound<BulletNode>` to the
+shared reader. Start/end fields retain that association through generated field
+projection and checked reads. There is no independent source-string argument
+to mismatch with a bullet, and unreadable fields report producer failure rather
+than masquerading as missing timestamps. This changes neither overflow nor
+leading-zero policy.
 The default and canonical parser is the tree-sitter parser
 (`talkbank-parser`). A second implementation, `talkbank-parser-re2c`,
 exists alongside it as an experimental, incomplete alternative, not an
 authority for CHAT validity. It targets the same `ChatFile` model and is opt-in via
 `chatter validate --parser re2c`. The LSP and all production paths
 default to the tree-sitter parser.
+
+The finite reference workflow checks editor-facing source ownership after
+lowering: byte offsets at main/dependent-tier starts and interiors select the
+owning utterance, while headers, EOF and a turn's exclusive end do not select
+that finished turn. These are byte coordinates, including multiline tiers,
+not character indices. This does not prove that source-free reconstructed ASTs
+have usable spans.
+
+Model access is also distinct from validity. The missing-ID E522 spec still
+exposes both declared speakers through `declared_speakers()`, but the speaker
+without an ID has no `id_metadata()`. The participant-map join contains only
+the materialized ID record. Diagnostics remain present; a UI may display the
+declaration without fabricating metadata or certifying the file as valid.
 
 ## Tree-Sitter Parser
 
@@ -19,6 +265,19 @@ an arbitrary colon node followed by a zero-width test. The producer already
 distinguishes a present token from a missing placeholder. Retaining that state
 does not establish that CHAT fixtures reach it: deleting a speaker colon still
 produces generic E316 recovery, and E322 remains deferred.
+
+An `ERROR` child in main-tier contents is recovery evidence, not a word suffix.
+The parser reports its source-associated location without appending guessed
+text to a preceding word, annotated word or replacement. An `@` prefix or a
+marker-like character sequence cannot establish lexical ownership. The
+whole-tree recovery backstop remains active; removing that text heuristic does
+not remove recovery diagnostics or certify a recovered model as valid.
+
+The canonical corpus contract checks the main-tier word traversal against both
+reference files and error-spec fixtures: each retained word's raw spelling
+equals its own UTF-8 source span, including in documents with parse errors.
+This verifies source ownership, not validity of those recovered documents or
+exhaustive coverage of all possible recovery trees.
 
 The `talkbank-parser` crate wraps the tree-sitter C parser and converts its concrete syntax tree (CST) into the `ChatFile` model.
 
@@ -76,6 +335,11 @@ stores a separately replaceable source/tree pair. Detached trees remain
 available for structural queries but cannot be installed back into a revision.
 This closes stale pairing in the revision API, not the raw-tree compatibility
 APIs described above, and does not certify recovered CHAT as valid.
+New editor integrations should use the revision API. The raw CST, strict-model,
+and streaming incremental methods remain compatibility entry points whose
+callers must edit the old tree correctly; they do not accept a proof of that
+transition. Their continued availability prevents treating source-bound child
+range failures as impossible across the entire public parser API.
 The edit calculator counts shared complete Unicode scalar values, not shared
 bytes requiring later UTF-8 repair. Equal characters have equal byte widths;
 the resulting prefix is a boundary in both sources. The suffix is counted only
@@ -109,9 +373,18 @@ Missing, Error and Absent outcomes distinct, with impossible payloads remaining
 uninhabited. Leaf reads admit their canonical byte ranges at the shared boundary;
 there is no independent source argument that can be paired with a participant
 node. This removes transitional decoding from that family, not recovery.
-`@Media` now keeps the same association through its body, filename, media type
-and optional status group. Its payload reader borrows checked text directly
-instead of allocating temporary strings or accepting an independent source.
+`@Media` keeps the same association through its body, filename, media type
+and optional status group. Body extraction consumes the selected carrier through
+`admit_ranges()` before lowering: typed leaves retain checked slices and the
+payload reader can refuse only structural recovery, not source admission.
+No independent source argument or temporary payload strings are needed.
+This opt-in transition checks all selected ranges, even delimiters whose text
+lowering does not use. It trades larger transient carriers and eager checks for
+a single explicit producer-failure boundary; it is not a throughput claim.
+The two reference media headers admit four and seven ranges respectively. On
+the measured 64-bit build, their inline body carrier is 888 bytes versus 632
+before admission (960 bytes including its owner). These are transient layout
+figures, not peak-memory measurements or a reason to migrate every consumer.
 Missing/Error/Absent slots, displaced nodes, range refusals and the validated
 `MediaFilename` constructor remain. Header-level recovery still uses the shared
 diagnostic site. The thirteen scalar/text headers and the single-value
@@ -151,12 +424,12 @@ position can produce:
 | `Missing` | Tree-sitter inserted a zero-width MISSING node during recovery |
 | `Error` | An ERROR subtree occupies the position |
 | `Unexpected` | A node of an unmodeled kind landed here |
-| `Absent` | An optional position is simply empty |
+| `Absent` | A fixed position has no matching child; optional emptiness is `None` |
 
 The generator names the position's kind in the slot's type. A `ChildSlot`
 (a child taken by kind) is never `Unexpected`; a `SeqSlot` (an inline
-sequence) is never `Missing` or `Unexpected`; a `ChoiceSlot` can be any of
-the five; a `ClassifiedSlot` (a supertype rule's own node) is never
+sequence) is never `Missing` or `Unexpected`; a selected `ChoiceSlot` is never
+`Unexpected`; a `ClassifiedSlot` (a supertype rule's own node) is never
 `Absent`. The impossible states have the uninhabited `Never` as their
 payload, so an arm that reads a node out of one does not compile, and a
 match by value may omit it. Every generated accessor hands out a
@@ -164,7 +437,11 @@ reference, and a match through a reference must still name every variant,
 so a consumer matches `slot.view()`, which copies the recovery states out
 by value and borrows only the present payload. The parser's shared verbs
 (`expect_present`, `expect_structure`, `expect_delimiter`, `present`) are
-generic over all four kinds.
+generic over the slot's recovery payload types. Repeat elements and present
+optional elements use `SelectedKindSlot`, `SelectedChildSlot`,
+`SelectedSeqSlot` or `SelectedChoiceSlot`: their `Absent` payload is `Never`.
+Nested fixed positions retain their own slot types; no missing/error recovery
+is removed by selecting an outer element.
 
 This design makes silent recovery-node loss structurally impossible at
 modeled positions: `Missing` and `Error` are explicit variants every
@@ -177,8 +454,8 @@ parsed" catch-all.
 That asymmetry matters when reading a diagnostic. E342 names a specific fact
 the parser knows. E316 names the absence of one, so an E316 on input a human
 can read is a standing invitation to ask whether the parser, rather than the
-file, is at fault: a generic code standing in for a specific rule is one of the
-documented tells of a chatter defect. Hand-walking the CST
+file, is at fault. Generic rejection alone is not a specificity defect;
+a narrower diagnosis requires structural evidence. Hand-walking the CST
 with `node.kind()` comparisons, and classifying the text of ERROR nodes
 to guess what was malformed, are both banned in production parser code
 for exactly this reason.
@@ -270,11 +547,14 @@ explicit body-versus-outside-body policy.
 
 Annotated angle-bracket, phonology and sign groups belong to this sealed body-carrier set.
 Recovery can place malformed word material beside a group's contents slot;
-that placement must not downgrade a missing form suffix to generic E316.
+that material must remain rejected, without requiring a particular diagnostic.
 The E202 spec pairs a valid suffix with a one-character deletion inside a
 retraced group after multibyte text, exercising the normal document path.
 Parallel valid/deleted-suffix pairs exercise phonology and sign groups; their
-displaced word faults retain the same body-owned classification.
+displaced word faults now retain generic E316 rejection. The parser no longer
+rescans recovery text for a dangling @ or an unclosed replacement opener.
+E202 still applies at the model-validation boundary; the former parser-only
+E311 diagnostic is retired.
 
 Fragment-corpus tests also extract dependent tiers through model-owned spans
 and compare public full-line and content-only APIs against file parsing.
@@ -296,6 +576,14 @@ placeholders retain their MissingSpeaker diagnostic; unreadable source ranges
 reject with TreeParsingError. This compatibility boundary does not establish
 tree/source identity.
 
+Unsupported dependent-tier lowering retains the dispatcher's
+`SourceBound<UnsupportedDependentTierNode>` instead of separating the node from
+its source. Both unsupported and user-defined prefix decoding consume generated
+source-associated fields, so callers cannot supply independent text for those
+slots. Missing, error, and absent prefix states retain their diagnostics; marker,
+nonempty-label, and anonymous body-range checks remain. Parent source admission
+does not prove that a generated leaf span fits UTF-8 boundaries.
+
 Prefix decoding retains kind-proven placeholders for star, speaker, colon and
 tab through the generated `KindSlotValue` projection. Speaker and colon
 diagnostics receive their respective typed nodes, rather than a raw-node
@@ -316,12 +604,10 @@ tiers and fragment entry points share this admission; fragment sinks rebase
 diagnostic locations through the admitted fragment source. This does not change
 main-tier bullet timing or establish complete backend parity.
 
-Top-level recovery binds its node before dependent-tier diagnostics or header
-recovery. Both dependent-tier handling and unknown-header recovery consume the
-resulting `SourceSlice`, deriving text and location from the same producer-owned
-input. Binding refusal reports a parsing error before taint or recovered lines
-can be constructed from an unrelated node/source pair. Recovery precedence for
-bound nodes remains dependent tier, recoverable header, then generic analysis.
+Top-level recovery binds its node to a producer-owned `SourceSlice`, deriving
+text and location from the same input. Binding refusal reports a parsing error.
+Admitted recovery reaches structural delimiter evidence or generic rejection;
+no headers or tier labels are reconstructed from its text.
 Generic file-error analysis consumes that same binding instead of re-reading a
 raw node against a separately supplied string. Line-slot ERROR handling also
 binds before entering this analyzer; source-binding refusal is a parsing error,
@@ -331,25 +617,29 @@ real ERROR nodes from a retained spec fixture and a separately parsed identical
 source: the producing owner admits them, while the other owner must refuse.
 That is source-identity boundary evidence, not a production recovery-slot witness.
 
-Unclosed-delimiter findings retain the node/text pair from `ReadableRecovery`.
-Their consuming diagnostic conversion takes only a context label, so a caller
-cannot recognize one node's text and report another node's span. This retains
-the checked-range guarantee, not a new source-identity guarantee. Leading
-whitespace is still outside this finding's lexical policy; later trim-based
-bracket recovery remains distinct.
+Delimiter-specific diagnoses require grammar evidence. The former
+`UnclosedDelimiter` wrapper proved readable text, not an unclosed construct,
+and has been removed with its E312/E313 text classifiers.
 
-That bracket recovery retains the readable range in a `BracketRecovery` state.
-Recognizing an annotation prefix alone cannot select missing-space advice:
-`MissingSeparator` additionally requires adjacency to preceding non-whitespace
-in the retained source. `InvalidFormOrPosition` preserves the same rejection
-without claiming a missing separator. Neither state certifies a valid CHAT
-annotation or adds a tree/source-identity guarantee.
+The former `BracketRecovery` classifier has been removed. Its source-range
+wrapper did not establish annotation syntax: it inferred an annotation from
+text prefixes and missing whitespace from the preceding character. Those
+malformed inputs remain rejected by grammar recovery, with generic E316 where
+no structural evidence supports a narrower fault. Canonical valid controls
+remain clean; a diagnostic-specific state is not itself proof of parser
+structure.
 
-Non-ASCII main-tier speaker recovery admits a `NonAsciiSpeaker` from one bound
-node, retaining the code slice and exact span. It reports through the model's
-shared speaker-syntax assessment, the same owner used by participant, ID and
-main-tier model validation. Character syntax is E307, not the E522 declaration
-join. Non-ASCII codes are rejected; supported ASCII forms remain unchanged.
+Non-ASCII speaker IDs remain invalid. Parsed speaker fields use the model's
+E307 assessment; a main-tier ERROR without an admitted speaker field receives
+E316 rather than reconstructing a speaker ID by splitting text. Supported
+ASCII forms remain unchanged.
+
+Recovery never reconstructs headers or dependent tiers by scanning an ERROR
+prefix. Unidentified top-level recovery conservatively taints the preceding
+utterance's dependent alignments; unidentified utterance recovery taints the
+main tier and dependent alignments. A typed dependent-tier choice can still
+narrow taint to its own domain. Recovery text is retained for diagnostics, not
+promoted into a fabricated header or reparsed to select an alignment domain.
 
 Postcodes retain opaque labels in `Postcode`; their text is not reparsed as
 quotation syntax during validation. Actual quotation delimiters, typed linkers
@@ -401,12 +691,48 @@ preconditions are in [Grammar Workflow](../contributing/grammar-workflow.md).
 It is never edited by hand: generator defects are fixed in
 `tree-sitter-grammar-utils` and regenerated.
 
-The generated cursor owns its remaining-child iterator. Existing `AtChild` and
-`AtContent` transitions govern consumption, while absolute memo indices are
-derived against the stable full child slice. Exhaustion stays at EOF, and the
-consuming final sweep visits the actual remaining children. This bounds cursor
-movement without narrowing required-slot recovery or proving that repeat
-lookahead counts agree with extraction.
+The generated cursor owns its remaining-child iterator. Selection retains a
+source-bound match plan, and extraction consumes that plan without rematching.
+`PositionAdmission` distinguishes a selected position from an unmatched cursor;
+only successful carrier construction commits cursor movement and recovery.
+Absolute indices refer to the stable child slice. Exhaustion stays at EOF and
+the final sweep visits actual remaining children. A `ReconstructionFault`
+reports a producer invariant failure, not malformed CHAT. A selected choice
+therefore has an uninhabited `Unexpected` payload: it cannot independently
+rematch and disagree with selection. Missing, Error, Absent and displaced-node
+recovery remain intact, as does Unexpected for supertype classification. This
+is a producer-construction invariant, not an inference from corpus coverage.
+
+The fold also retains selected presence for repeat elements and the `Some`
+payload of optional positions. Their extraction consumes a retained element,
+so it cannot yield `Absent`. Empty repeats and optional `None` remain valid
+outcomes. This does not narrow independent fixed positions or prove that a
+selected element is free of MISSING/ERROR recovery.
+
+Document, utterance, participant/language header and main-tier/body/ending
+reconstruction use compiled-language admission. Complete document and ERROR-root
+extraction share this contract; neither route may fabricate a complete document.
+The grammar crate compiles TSGU's generated C metadata bridge against its own
+parser header. A cached, fallible `CanonicalLanguage` capability verifies the
+generated narrowing requirements once; extraction checks actual language
+identity and retains the proof in the existing selection memo. There is no
+second parser, rematching pass or consumer assertion based on a kind name.
+Admitted nonterminal slots have an uninhabited Missing payload, including the
+participant/language contents, participant entries, tier bodies, body contents,
+linkers, utterance endings, document anchors, selected lines/dependent tiers and
+final-code/postcode slots. Lexical slots such
+as speaker and language codes retain Missing, and all applicable Error, Absent,
+displaced recovery and source-read failures remain. Raw extraction stays broad.
+A failed metadata admission is an internal tool failure, not invalid CHAT.
+Main-tier body location still searches the source-associated recovery sink when
+the body is not in its expected slot. A nonmissing proof does not prove that a
+required position exists or that displaced children are impossible. Nested
+terminator recovery and lexical prefix diagnostics remain unchanged.
+Mixed line choices retain their broad Missing state when any alternative lacks
+the nonterminal proof. Document recovery ownership failures use E001 and cannot
+certify source invalidity. The low-level pre-begin/dependent-tier adapters accept
+the generated admitted choice types; their concrete header/tier policies remain
+unchanged. The generated broad/raw APIs remain available for other producers.
 
 Wrapper and supertype child positions use `KindSlot`: extraction matches the
 concrete kind before constructing `KindMissing<T>`. The kind-preserving
@@ -467,23 +793,80 @@ UTF-8 decoding before character classification. Missing placeholders remain
 rejected for whole-tree recovery reporting, and unknown symbols still diagnose
 TreeParsingError. Source compatibility is not proof of original-tree identity.
 
-Utterance construction similarly consumes a private `ReadableMainTier` carrying
-the generated node, source and checked line slice together. Failed admission
-reports TreeParsingError and taints Main without constructing an utterance.
-Successful admission preserves the existing conversion and diagnostic-taint
-transition. This boundary proves readable ranges, not original-tree identity.
+Utterance construction and main-tier conversion consume the generated
+`SourceBound<MainTierNode>`. This replaces the handwritten `ReadableMainTier`
+range wrapper: the immutable parse owner and its field projections now supply
+both node identity and checked text. Failed child-field admission reports
+an internal producer failure without constructing an utterance. Fragment
+conversion retains the same capability; its separate original-input parameter
+is diagnostic context, not a substitute source for CST text. Inner word/content
+adapters have their own migration boundaries; this parent capability alone does
+not prove that every leaf API is source-bound.
+
+Speaker-prefix admission also consumes a `SourceBound<SpeakerNode>`, projected
+from that main tier's associated children. It cannot accept a separately chosen
+source string; even identical text from a different parse owner is not the same
+capability. Present text is range-checked at the generated leaf boundary before
+nonempty speaker admission. Missing, error and absent slots retain their
+distinct recovery handling, and a failed source binding is not CHAT invalidity.
+
+Body selection projects the main tier's associated body slot and recovery sink.
+Its result distinguishes an absent body from a located body whose source range
+was refused. The latter reports an internal producer failure and rejects construction after
+the remaining main-tier diagnostics are emitted; it is not reported as a missing
+terminator. Body decoding consumes a bound `TierBodyNode` and derives its source
+and carrier range from that node. Displaced-body recovery remains available;
+its absence from current fixtures is not grounds for deleting it.
+
+Generated raw source fields provide `read_typed::<TierBodyNode>()` for this sink
+selection: `None` means a different kind, while a matching node retains either
+its range refusal or its admitted bound wrapper. This replaces the consumer's
+separate kind check, raw read, and repeated classification. The operation is
+owned by TSGU and regenerated into Chatter, not hand-edited in the generated file.
+
+The recursive contents/group cycle now retains generated source association:
+body contents, first/repeated content choices, content-item choices, annotated
+angle groups, quotations, phonology groups, and sign groups all pass bound nodes
+or associated children into the same walker. Bound choice views preserve the
+admitted wrapper without another kind classification. Kind-proven Missing
+group contents retain their placeholder identity through extraction; other
+missing content uses source-owned classification and keeps its existing policy.
+The utterance-body versus inside-brackets distinction still owns E759 behavior,
+and angle-edge whitespace still owns E750. Range refusals and recovery sinks
+remain visible.
+
+Standalone-word conversion now also requires a producer-bound word. Base-content
+choice dispatch retains that association through annotated words and replacement
+sequences; fragment lowering no longer detaches its admitted word. The independent
+`%wor` route carries its bound tier through body, repeated item choices and word
+items to the same converter. No leaf reconstructs ownership from a detached node
+and arbitrary source. Word-level source text uses the admitted slice; missing and
+empty words retain their separate refusals. Document attachment still drops
+malformed `%wor` tiers, while the public bound-node adapter retains recovery
+handling because source ownership does not prove syntax validity.
+
+Word bodies now retain ownership through both generated sequence shapes and
+every piece choice. Segments, stress, lengthening and shortening content consume
+admitted text; standalone and word-internal overlap markers share one source-bound
+decoder. Missing/error/absent positions and displaced children retain their
+existing recovery handling. Source admission does not prove nonempty lexical
+content or valid marker semantics, so those checks remain.
+
+Word suffix and CA adapters, nonword and annotation leaves, and `%wor`
+language/bullet/separator payload decoders still have transitional interfaces.
+Their child-range checks are not removed by the outer word's admission.
 
 Utterance-level recovery consumes `ReadableRecovery` too, forwarding that
 admitted value directly into dependent-tier classification when appropriate.
-Unreadable input cannot select a tier: it reports TreeParsingError and taints
+Unreadable input cannot select a tier: it reports internal failure and taints
 Main plus all alignment dependents. Valid-source recovery retains the existing
 label-based taint policy; boundary tests do not imply production slot witnesses.
 
-The generated repeat producer now retains the cursor selected by lookahead in
-`RepeatSelection`. Extraction consumes that selection using the same cursor,
-instead of applying a detached count after releasing it. This proves cursor
-identity only: per-element boundary agreement is still a separate obligation.
-No repeat recovery state is narrowed, and element-owned extras are not filtered.
+The generated repeat producer retains per-element decisions and boundaries in
+flat arena links. Consumption checks their continuity rather than rerunning
+selection or applying a detached count. Producer faults propagate through E001
+and block validation/admission; they are never empty successful carriers. No
+repeat recovery state is narrowed, and element-owned extras are not filtered.
 
 Word and main-tier fragment admission stores `SourceBound<GeneratedNode>` from
 `ParsedSource::bind_typed`. The binding's sealed wrapper trait prevents external
@@ -586,6 +969,12 @@ negative origin. A diagnostic's `ErrorContext` owns its own
 source text, so its highlight remains relative to that text. Wrapper removal
 is a separate operation owned by `WrappedFragment`; it projects the synthetic
 source before applying any document origin.
+
+The same ownership rule applies to `SpanShift` on `ParseError`: document
+locations and secondary labels shift, but the retained `ErrorContext` text and
+its relative highlight do not. Rebasing a diagnostic cannot rewrite an
+independent context snapshot. Corpus fragment contracts check this public
+operation against parser-produced rebasing, including the inverse shift.
 
 Word and main-tier fragments use the multi-root grammar directly, so there is
 no synthetic prefix to subtract. `MainTierFragment` admits a typed main-tier
@@ -735,7 +1124,7 @@ from combining a document with an unrelated diagnostic scope.
 Lowering consumes source-ordered `DocumentPart` values, rather than extracting
 document children and discarding outer recovery. ERROR siblings of a concrete
 document pass through the same producer-bound diagnostic route as errors inside
-it. A duplicate `@End` therefore retains E501 when omission of the final newline
+it. A duplicate `@End` fixture therefore retains E316 when omission of the final newline
 moves recovery outside the document node. Reconstructed ERROR wrappers do not
 establish that outer-document boundary: their siblings remain covered by the
 whole-input backstop, so a lone End after a malformed Begin is not mislabeled
@@ -766,6 +1155,10 @@ The transitional raw-node text helper returns `ParseOutcome<&str>`, rejecting
 out-of-bounds or non-boundary ranges without manufacturing empty text. Its
 consumers only construct successful model values after a successful read.
 This is a checked range boundary, not a substitute for source ownership.
+Morphology feature and marked-token readers use that same boundary: unreadable
+source associations are internal failures, not malformed features or encoding
+errors attributed to the author. Empty-feature and missing-marker recovery
+remain separate structural diagnostics.
 Other-speaker event lowering uses generated required slots; the generator,
 not a parallel list of child positions and kind strings, owns its CST shape.
 
@@ -775,6 +1168,32 @@ decoder. Its generated choice includes `@PID`, `@Window`, `@Color words`, and
 three fall through to successful `Unknown` values. Finite reference-corpus
 tests compare header, main-tier and utterance fragment models with full-file
 parsing, carrying the file's CA semantic context explicitly.
+The shared decoder now consumes a source-bound choice. Document lowering
+projects it from the associated repeat; fragment lowering classifies its
+already-bound source slice. Header spans derive from that same choice, not a
+separate caller argument. PID lowering projects its generated free-text field
+and admits its range before reading the value. A failed binding propagates as
+an internal failure, distinct from missing/empty PID recovery. Window, font and
+color-word decoding use the same generated source-associated leaf admission:
+their shared reader takes no independent source string and cannot turn a
+binding failure into a malformed-header fallback. Empty, missing and error
+slots retain their existing recovery policy.
+The `@Languages` decoder likewise retains source ownership through the contents
+and repeated list fields. Present language codes become model values only after
+source-bound leaf admission; missing codes and malformed separators retain
+their existing recovery diagnostics. A producer fault is an internal failure,
+not an empty language code or a successful partial validation.
+Participant-header contents likewise distinguish a missing structural slot
+from a failed source read. The latter propagates as an internal failure and
+rejects header construction, without adding an empty-participants diagnostic.
+The source-associated content reader for simple headers and participant metadata
+carries distinct structural-recovery and producer-failure variants.
+Only structural recovery can construct an `Unknown` header; a source-binding
+failure is reported once at dispatch and rejects construction. Media-body
+range admission propagates the producer failure before its infallible text reads,
+instead of returning an unreadable body as a successful unknown header.
+Missing/error/absent slot policies remain
+unchanged.
 Participant entries own their `WriteChat` implementation, which the enclosing
 header writer also uses. Reference-corpus entries exercise the standalone
 participant fragment API through this canonical wire boundary, without a
@@ -803,12 +1222,14 @@ Syntax completeness does not establish semantic validity; shared validation
 still owns required headers and other CHAT rules. The LSP owns source-bound
 analysis snapshots rather than a second parser-level cache-admission API.
 
-At EOF, lowering retains a generated `MainTierNode` stranded outside its line
-wrapper by reusing the normal utterance builder and parse-health transition.
+At EOF, lowering binds a generated `MainTierNode` stranded outside its line
+wrapper to the original parse owner before reusing the normal utterance builder
+and parse-health transition.
 For the flattened simple terminal sequence without a final newline,
 `TerminalMainTier` pairs the generated grammar tokens with the original source
-range. Lowering reuses the normal main-tier fragment parser, which clips its
-synthetic newline and rebases into caller coordinates. The diagnostic backstop
+range. Lowering binds the retained speaker, contents and terminator nodes to
+their original parse owner, then uses the ordinary contents and terminator
+decoders directly. It does not reparse a source fragment. The diagnostic backstop
 uses the same structural admission. The E502 example checks retained speech
 and diagnostics in both newline forms, including maximum representable source
 origins; leading and trailing recovery-region regressions remain separate.

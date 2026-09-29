@@ -38,6 +38,7 @@ pub mod clan_location;
 pub mod codes;
 /// In-memory error collectors and counters.
 pub mod collectors;
+mod completed_diagnostics;
 /// Which validation rules run: the input the cache key is derived from.
 pub mod config;
 /// Rich error context for helpful error messages.
@@ -50,8 +51,8 @@ pub mod enhance;
 /// Core error sink trait plus lightweight forwarding implementations.
 pub mod error_sink;
 mod fragment_source;
-/// Generated `DiagnosticKind` match, produced from `spec/errors/*.md` by
-/// `just spec-gen` (`spec/runtime-tools`). DO NOT EDIT BY HAND; see
+/// Generated `DiagnosticKind` match, produced from `spec/codes/error-codes.toml`
+/// by `just spec-gen`. DO NOT EDIT BY HAND; see
 /// the file's own header for the regeneration command.
 mod generated_diagnostic_kind;
 /// Byte-offset line index for O(log n) line/column lookups.
@@ -76,12 +77,13 @@ mod tests;
 
 #[cfg(feature = "async")]
 pub use async_channel_sink::AsyncChannelErrorSink;
-pub use builder::{ParseErrorBuilder, ParseErrorBuilderError};
+pub use builder::ParseErrorBuilder;
 pub use clan_location::{ClanHiddenLineError, ClanLocation, resolve_clan_location};
 pub use codes::{CheckStatus, ErrorCode, XPHON_ERROR_CODES, validation_rules_fingerprint};
 pub use collectors::{ErrorCollector, ParseTracker};
+pub use completed_diagnostics::{CompletedDiagnostics, InternalFailure};
 pub use config::RuleSelection;
-pub use context::ErrorContext;
+pub use context::{ErrorContext, SourceExcerptError};
 pub use diagnostic_kind::{DiagnosticKind, ValidationProfile, kind_of, severity};
 pub use enhance::{enhance_errors_with_index, enhance_errors_with_source};
 #[cfg(feature = "channels")]
@@ -253,7 +255,7 @@ impl Span {
 
     /// Whether this span intersects `other` (half-open byte ranges).
     ///
-    /// Two half-open ranges `[a.start, a.end)` and `[b.start, b.end)` overlap
+    /// Two nonempty half-open ranges `[a.start, a.end)` and `[b.start, b.end)` overlap
     /// iff `a.start < b.end && b.start < a.end`. Unlike [`contains_span`], this
     /// is symmetric and detects partial overlap, not just containment. A
     /// zero-width span never overlaps anything (it covers no bytes); widen it to
@@ -263,7 +265,7 @@ impl Span {
     /// [`contains_span`]: Span::contains_span
     #[inline]
     pub fn overlaps(&self, other: Span) -> bool {
-        self.start < other.end && other.start < self.end
+        !self.is_empty() && !other.is_empty() && self.start < other.end && other.start < self.end
     }
 }
 

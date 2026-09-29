@@ -1,13 +1,27 @@
 # CHAT Data Model
 
 **Status:** Current
-**Last updated:** 2026-09-09 08:49 EDT
+**Last updated:** 2026-09-28 16:31 EDT
 
 The `talkbank-model` crate defines the typed AST for CHAT files. Every
 other crate, parser, transform, CLAN, CLI, LSP, and the entire batchalign
 runtime, depends on it. This page describes the model itself, the
 three-level content hierarchy, the content-walker primitives, and the
 extract → infer → inject pattern that all NLP tasks follow.
+
+## Date admission
+
+Construct `ChatDate` through `from_text` or `new`. `Valid(CheckedChatDate)`
+contains private components admitted together with the original spelling;
+read them with `day()`, `month()`, `year()` and `as_str()`. Migrate former
+`Valid { day, month, year, raw }` matches to `Valid(date)` and these accessors.
+There is no independent component constructor or mutable field access.
+
+This checks ASCII `DD-MMM-YYYY` syntax, uppercase month abbreviations and days
+01–31, **not calendar validity**: impossible month/day combinations and year
+0000 retain their existing admission behavior. Unsupported text is preserved
+for diagnostics. JSON remains a string and deserialization uses the same
+admission boundary; no unchecked payload deserialization is exposed.
 
 ## ChatFile
 
@@ -27,6 +41,32 @@ pub struct ChatFile {
 `validate_into` consumes the mutable model and returns either an immutable
 `ValidChatFile` with policy/name/diagnostics or a `ValidationFailure` retaining
 the rejected model. `into_unchecked` consumes a proof before editing.
+
+### Constructing rather than parsing
+
+`Utterance::new` starts with unknown provenance. Appending a dependent tier
+withdraws previous provenance and derived alignment results. Read provenance
+through `parse_health()`; callers cannot assign the field. Parser adapters
+finish a complete utterance through their accumulated
+`ParseHealth::finish_utterance`, after recording recovery across all its tiers.
+That adapter is a trusted producer boundary, not a general-purpose validator.
+
+ASR and resegmentation callers assemble typed structure, then consume the file
+through `validate_construction_with_policy(policy, errors, name)`. This uses
+the existing model rules, including alignment when selected, without serializing
+and reparsing CHAT. Success returns `ValidChatFile`; newly admitted utterances
+carry `ParseHealthState::Constructed`, **not** parser-backed `Clean`. Recorded
+parser recovery still rejects. Failure withdraws new construction admission.
+This proves the supplied structure under the selected policy, not completeness
+relative to any original source or fidelity to audio.
+
+Construction admission never authorizes source-byte splicing, even when copied
+components retain spans. JSON omits runtime provenance and restores `Unknown`
+on import; the existing JSON representation is unchanged. Consuming a proof
+with `into_unchecked` withdraws its construction admission before mutation.
+Parser-backed mutable models still expose content fields: callers editing those
+fields must withdraw stale provenance with `forget_parse_provenance()`.
+The private health field is not a claim that all mutable-model edits are sealed.
 
 Each `Line` is either a `Header` or an `Utterance`. The full ownership
 tree:

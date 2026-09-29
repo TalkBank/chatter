@@ -19,16 +19,15 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation,
 };
 use crate::generated_traversal::{
-    AsRawNode, KindSlotValue, MainTierNode, NoChild, SourceBound, SourceField, SourceSlotView,
-    UtteranceChild1Choice, UtteranceChild1ChoiceBoundView, UtteranceNode, XDependentTierNode,
-    extract_x_dependent_tier,
+    AdmittedUtteranceChild1Choice as UtteranceChild1Choice,
+    AdmittedUtteranceChild1ChoiceBoundView as UtteranceChild1ChoiceBoundView, AsRawNode,
+    MainTierNode, NoChild, SourceBound, SourceField, SourceSlotView, UtteranceNode,
+    XDependentTierNode,
 };
 use crate::model::{ParseHealth, ParseHealthTier, Utterance};
 use crate::parser::tree_parsing::helpers::ReadableRecovery;
 use crate::parser::tree_parsing::main_tier::structure::convert_main_tier_node;
-use crate::parser::tree_parsing::parser_helpers::{
-    analyze_readable_dependent_error, present, surface_displaced,
-};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 
 /// Builds one `Utterance` from a CST utterance subtree and attaches dependent tiers.
@@ -54,30 +53,38 @@ pub fn parse_utterance_node<'tree>(
     // supertype already expanded to the concrete tier kinds, one `<Rule>Choice`
     // variant per tier). Every slot variant is handled explicitly so a recovery
     // node can never be silently dropped.
-    let associated = typed.extract();
+    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| typed.extract_admitted(grammar)),
+        typed.raw_node(),
+        input,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
     let children = associated.children();
 
     // child_0: the main tier. It is processed FIRST so it is built before any
     // dependent tier is attached (the dependent-tier branch consumes the built
-    // utterance via `utterance_builder.take()`). `Present` and `Missing` both
-    // retain the same generated `MainTierNode` identity, with a separate
-    // placeholder state when content is missing,
-    // matching the pre-migration `kind() == MAIN_TIER` branch, which did not
-    // distinguish a MISSING placeholder.
-    match children.child_0.slot().known_or_placeholder() {
-        // `Present` and `Placeholder` were two arms calling the same function on
-        // two spellings of the same `main_tier`-kinded node, which is what the
-        // comment above had to say in prose.
-        KindSlotValue::Present(main_tier) | KindSlotValue::Placeholder(main_tier) => {
-            utterance_builder =
-                build_main_tier_from_node(main_tier, input, errors, &mut parse_health);
+    // utterance via `utterance_builder.take()`). Compiled-language admission
+    // excludes Missing for the main-tier nonterminal, not Error or absence.
+    match associated.field_child_0().slot().view() {
+        SourceSlotView::Present(main_tier) => {
+            match crate::parser::typed_cst::read_source_field(main_tier, errors) {
+                Some(main_tier) => {
+                    utterance_builder =
+                        build_main_tier_from_node(main_tier, errors, &mut parse_health);
+                }
+                None => parse_health.taint(ParseHealthTier::Main),
+            }
         }
-        KindSlotValue::Error(error_node) => {
+        SourceSlotView::Missing(never) => match never {},
+        SourceSlotView::Error(error_node) => {
             // An ERROR at the main-tier position routes to the same recovery
             // analysis the old hand-walk ran for any ERROR utterance child.
-            handle_utterance_error_node(error_node, input, errors, &mut parse_health);
+            handle_utterance_error_node(error_node, errors, &mut parse_health);
         }
-        KindSlotValue::Absent(NoChild) => {
+        SourceSlotView::Absent(NoChild) => {
             // No main-tier child at all: nothing to build. The utterance is
             // rejected below, matching the old loop which left
             // `utterance_builder == None` when no `main_tier` child appeared.
@@ -85,9 +92,9 @@ pub fn parse_utterance_node<'tree>(
     }
 
     // child_1: the dependent-tier repeat. Each tier attaches to the already-built
-    // main tier in document order. Lookahead supplies a count independently
-    // followed by extraction; that is not proof that every extracted element is
-    // present. Retain every recovery state exposed by the generated slot type.
+    // main tier in document order. Selection and consumption share a retained
+    // plan, but that does not make recovered elements Present. Retain every
+    // recovery state exposed by the generated slot type.
     for element in associated.field_child_1().slot().iter() {
         match element.slot().view() {
             SourceSlotView::Present(tier_choice) => {
@@ -100,22 +107,13 @@ pub fn parse_utterance_node<'tree>(
                     &mut parse_health,
                 );
             }
-            // Existing malformed-tier fixtures recover at the document level,
-            // not as MISSING repeat elements. That finite observation is not a
-            // producer invariant. Retain conservative alignment taint here; the
-            // whole-tree recovery backstop emits the E342 for the MISSING node.
-            SourceSlotView::Missing(_) => {
-                parse_health.taint_all_alignment_dependents();
-            }
+            // Every selected dependent tier is a proven nonterminal. ERROR
+            // recovery still conservatively taints the affected alignment.
+            SourceSlotView::Missing(never) => match never {},
             SourceSlotView::Error(error_node) => {
-                handle_utterance_error_node(
-                    error_node.raw_node(),
-                    error_node.source(),
-                    errors,
-                    &mut parse_health,
-                );
+                handle_utterance_error_node(error_node, errors, &mut parse_health);
             }
-            SourceSlotView::Absent(NoChild) => {}
+            SourceSlotView::Absent(never) => match never {},
         }
     }
 
@@ -139,13 +137,12 @@ pub fn parse_utterance_node<'tree>(
 
 /// Recover a complete main tier whose enclosing utterance/line wrappers were
 /// lost at document EOF. Reuse the normal builder and parse-health transition.
-pub(super) fn parse_recovered_main_tier(
-    main: MainTierNode<'_>,
-    input: &str,
+pub(super) fn parse_recovered_main_tier<'tree>(
+    main: SourceBound<'tree, '_, MainTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Utterance> {
     let mut health = ParseHealth::untainted();
-    match build_main_tier_from_node(main, input, errors, &mut health) {
+    match build_main_tier_from_node(main, errors, &mut health) {
         Some(utterance) => ParseOutcome::parsed(utterance.finish(health)),
         None => ParseOutcome::rejected(),
     }
@@ -162,58 +159,15 @@ pub(super) fn parse_recovered_main_tier(
 /// It RETURNS the utterance rather than seeding an out-parameter, so it is the
 /// sole producer of [`UtteranceUnderConstruction`] and the build order is a
 /// consequence of the signatures rather than of the order of two blocks.
-fn build_main_tier_from_node(
-    typed: MainTierNode<'_>,
-    input: &str,
+/// The generated source-bound node replaces the former handwritten range-only
+/// wrapper. Binding failures are reported and tainted at the caller's boundary.
+fn build_main_tier_from_node<'tree>(
+    typed: SourceBound<'tree, '_, MainTierNode<'tree>>,
     errors: &impl ErrorSink,
     parse_health: &mut ParseHealth,
 ) -> Option<UtteranceUnderConstruction> {
-    let Some(readable) = ReadableMainTier::admit(typed, input) else {
-        let node = typed.raw_node();
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(input, node.byte_range(), "main_tier"),
-            "Main-tier node range is not a UTF-8 slice of the supplied source",
-        ));
-        parse_health.taint(ParseHealthTier::Main);
-        return None;
-    };
-    build_readable_main_tier(readable, errors, parse_health)
-}
-
-/// Typed main tier with its checked line slice. This proves range compatibility,
-/// not identity with the original tree source or validity of the utterance.
-struct ReadableMainTier<'tree, 'source> {
-    typed: MainTierNode<'tree>,
-    source: &'source str,
-    line: &'source str,
-}
-
-impl<'tree, 'source> ReadableMainTier<'tree, 'source> {
-    fn admit(typed: MainTierNode<'tree>, source: &'source str) -> Option<Self> {
-        let line = source.get(typed.raw_node().byte_range())?;
-        Some(Self {
-            typed,
-            source,
-            line,
-        })
-    }
-}
-
-fn build_readable_main_tier(
-    readable: ReadableMainTier<'_, '_>,
-    errors: &impl ErrorSink,
-    parse_health: &mut ParseHealth,
-) -> Option<UtteranceUnderConstruction> {
-    let ReadableMainTier {
-        typed,
-        source,
-        line,
-    } = readable;
     let main_tier_errors = ErrorCollector::new();
-    let main_tier = convert_main_tier_node(typed, source, line, &main_tier_errors);
+    let main_tier = convert_main_tier_node(typed, typed.text(), &main_tier_errors);
     let main_tier_error_vec = main_tier_errors.into_vec();
     if has_actual_errors(&main_tier_error_vec) {
         parse_health.taint(ParseHealthTier::Main);
@@ -230,7 +184,7 @@ fn build_readable_main_tier(
 
 /// An utterance whose MAIN TIER has been built.
 ///
-/// Only [`build_readable_main_tier`] produces one, and it is the only thing a
+/// Only [`build_main_tier_from_node`] produces one, and it is the only thing a
 /// dependent tier can attach to, so "attach a dependent tier before the main
 /// tier exists" has no signature to travel through. That ordering used to be
 /// stated in two prose paragraphs ("processed FIRST so it is built before any
@@ -247,9 +201,8 @@ fn build_readable_main_tier(
 struct UtteranceUnderConstruction(Utterance);
 
 impl UtteranceUnderConstruction {
-    fn finish(mut self, health: ParseHealth) -> Utterance {
-        self.0.parse_health = health.into_state();
-        self.0
+    fn finish(self, health: ParseHealth) -> Utterance {
+        health.finish_utterance(self.0)
     }
 }
 
@@ -273,7 +226,13 @@ fn attach_dependent_tier_child<'tree>(
         return utterance;
     };
     let mut tier_had_parse_errors = false;
-    let dependent_tier = parse_health_tier_for(choice);
+    let dependent_tier = match parse_health_tier_for(choice, errors) {
+        Ok(tier) => tier,
+        Err(_) => {
+            parse_health.taint_all_alignment_dependents();
+            return utterance;
+        }
+    };
 
     // The tier's own recovery nodes are reported by the typed dispatch below
     // (each tier kind's `report_tier_parse_error`, and the tier parser's own
@@ -303,37 +262,27 @@ fn attach_dependent_tier_child<'tree>(
     utterance
 }
 
-/// Report an `ERROR` that sits directly under the utterance, at the main-tier
-/// position or in the dependent-tier repeat.
-///
-/// Two kinds arrive here. A `%` line the grammar could not shape is reported
-/// by the dependent-tier analyzer and taints the tier it names (or every
-/// alignment tier when the label is unreadable). Anything else is reported
-/// as unrecognized and taints the main tier. This handler used to scan the
-/// ERROR's text for a bare `@` (E202) and an unclosed `[:` (E311) as well;
-/// both are the content analyzer's (`main_tier/content/errors.rs`), which
-/// reports them at the word where they occur before an ERROR could ever
-/// reach this level, so those scans had been dead since the content analyzer
-/// took them, and text-classifying an ERROR is the banned pattern besides.
-fn handle_utterance_error_node(
-    error_node: tree_sitter::Node,
-    input: &str,
+/// Report an utterance recovery slot without reconstructing a tier from text.
+/// Without a parsed identity, no affected alignment domain is certified clean.
+fn handle_utterance_error_node<'tree>(
+    error_node: SourceField<'_, 'tree, '_, tree_sitter::Node<'tree>>,
     errors: &impl ErrorSink,
     parse_health: &mut ParseHealth,
 ) {
-    let Some(recovery) = ReadableRecovery::admit(error_node, input) else {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(input, error_node.byte_range(), "utterance"),
-            "Utterance recovery node range is not a UTF-8 slice of the supplied source",
-        ));
-        // No readable text exists to choose a tier. Do not invent a label or
-        // certify any potentially affected alignment domain as clean.
-        parse_health.taint(ParseHealthTier::Main);
-        parse_health.taint_all_alignment_dependents();
-        return;
+    let node = error_node.raw_node();
+    let input = error_node.source();
+    let recovery = match error_node.read_raw() {
+        Ok(bound) => ReadableRecovery::from_bound(bound),
+        Err(fault) => {
+            errors.report(crate::parser::typed_cst::cst_failure_diagnostic(
+                node, input, fault,
+            ));
+            // No readable text exists to choose a tier. Do not invent a label or
+            // certify any potentially affected alignment domain as clean.
+            parse_health.taint(ParseHealthTier::Main);
+            parse_health.taint_all_alignment_dependents();
+            return;
+        }
     };
     handle_readable_utterance_error(recovery, errors, parse_health);
 }
@@ -349,28 +298,21 @@ fn handle_readable_utterance_error(
     let error_end = error_node.end_byte();
     let error_text = recovery.text();
 
-    if matches!(error_text.chars().next(), Some('%')) {
-        errors.report(analyze_readable_dependent_error(recovery, None));
-        match classify_percent_error_text(error_text) {
-            Some(tier) => parse_health.taint(tier),
-            None => parse_health.taint_all_alignment_dependents(),
-        }
-    } else {
-        errors.report(ParseError::new(
-            ErrorCode::UnrecognizedUtteranceError,
-            Severity::Error,
-            SourceLocation::from_offsets(error_start, error_end),
-            ErrorContext::new(input, error_start..error_end, error_text),
-            format!(
-                "Unrecognized ERROR node in utterance: {}",
-                match error_text.lines().next() {
-                    Some(line) => line,
-                    None => error_text,
-                }
-            ),
-        ));
-        parse_health.taint(ParseHealthTier::Main);
-    }
+    errors.report(ParseError::new(
+        ErrorCode::UnrecognizedUtteranceError,
+        Severity::Error,
+        SourceLocation::from_offsets(error_start, error_end),
+        ErrorContext::new(input, error_start..error_end, error_text),
+        format!(
+            "Unrecognized ERROR node in utterance: {}",
+            match error_text.lines().next() {
+                Some(line) => line,
+                None => error_text,
+            }
+        ),
+    ));
+    parse_health.taint(ParseHealthTier::Main);
+    parse_health.taint_all_alignment_dependents();
 }
 
 /// Return `true` when at least one diagnostic has `Severity::Error`.
@@ -378,41 +320,6 @@ fn has_actual_errors(errors: &[ParseError]) -> bool {
     errors
         .iter()
         .any(|error| matches!(error.severity, Severity::Error))
-}
-
-/// Best-effort tier classification for malformed `%tier` text from `ERROR` nodes.
-pub(super) fn classify_percent_error_text(text: &str) -> Option<ParseHealthTier> {
-    RecoveryTierLabel::admit(text)?.alignment_domain()
-}
-
-/// Nonempty label after a leading percent sign, without claiming CHAT validity.
-/// Unknown labels remain admitted but do not identify an alignment domain.
-struct RecoveryTierLabel<'text>(&'text str);
-
-impl<'text> RecoveryTierLabel<'text> {
-    fn admit(text: &'text str) -> Option<Self> {
-        let tail = text.strip_prefix('%')?;
-        let label = tail
-            .split_once([':', '\t', ' ', '\r', '\n'])
-            .map_or(tail, |(label, _)| label);
-        if label.is_empty() {
-            None
-        } else {
-            Some(Self(label))
-        }
-    }
-
-    fn alignment_domain(self) -> Option<ParseHealthTier> {
-        match self.0 {
-            "mor" => Some(ParseHealthTier::Mor),
-            "gra" => Some(ParseHealthTier::Gra),
-            "pho" => Some(ParseHealthTier::Pho),
-            "mod" | "xmod" => Some(ParseHealthTier::Mod),
-            "wor" => Some(ParseHealthTier::Wor),
-            "sin" => Some(ParseHealthTier::Sin),
-            _ => None,
-        }
-    }
 }
 
 /// Map a typed dependent-tier choice to its parse-health tier category.
@@ -425,16 +332,17 @@ impl<'text> RecoveryTierLabel<'text> {
 /// route `%xmod` onto `Mod` (byte-identical to the removed code).
 fn parse_health_tier_for<'tree>(
     choice: SourceBound<'tree, '_, UtteranceChild1Choice<'tree>>,
-) -> Option<ParseHealthTier> {
+    errors: &impl ErrorSink,
+) -> Result<Option<ParseHealthTier>, crate::parser::typed_cst::ReportedCstFailure> {
     use UtteranceChild1ChoiceBoundView as C;
-    match choice.view() {
+    Ok(match choice.view() {
         C::MorDependentTier(_) => Some(ParseHealthTier::Mor),
         C::GraDependentTier(_) => Some(ParseHealthTier::Gra),
         C::PhoDependentTier(_) => Some(ParseHealthTier::Pho),
         C::ModDependentTier(_) => Some(ParseHealthTier::Mod),
         C::WorDependentTier(_) => Some(ParseHealthTier::Wor),
         C::SinDependentTier(_) => Some(ParseHealthTier::Sin),
-        C::XDependentTier(n) => classify_x_tier_label(n.node(), n.source()),
+        C::XDependentTier(n) => classify_x_tier_label(n, errors)?,
         // Text / raw / unsupported tiers do not map to an alignment domain
         // (the removed `classify_dependent_tier_node` returned `None` via `_`).
         C::ActDependentTier(_)
@@ -462,24 +370,45 @@ fn parse_health_tier_for<'tree>(
         | C::TimDependentTier(_)
         | C::UnsupportedDependentTier(_)
         | C::XphointDependentTier(_) => None,
-    }
+    })
 }
 
 /// Classify `%x...` tiers that map onto known alignment tiers (currently `%xmod`).
 ///
 /// Only a generated Present `x_tier_prefix` can supply a label. Recovery and
-/// unreadable ranges yield no specific alignment domain, preserving the caller's
-/// conservative all-domain taint when attachment reports errors.
-fn classify_x_tier_label(node: XDependentTierNode<'_>, input: &str) -> Option<ParseHealthTier> {
-    let children = extract_x_dependent_tier(node);
-    let prefix = present(children.child_0.slot())?;
-    let text = input.get(prefix.raw_node().byte_range())?;
-    (text == "%xmod").then_some(ParseHealthTier::Mod)
+/// missing prefixes yield no specific alignment domain. Unreadable fields are
+/// internal failures, never successful classification as a non-alignment tier.
+fn classify_x_tier_label<'tree>(
+    node: SourceBound<'tree, '_, XDependentTierNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<Option<ParseHealthTier>, crate::parser::typed_cst::ReportedCstFailure> {
+    let children = crate::parser::typed_cst::report_reconstruction(
+        node.extract(),
+        node.raw_node(),
+        node.source(),
+        errors,
+    )?;
+    let SourceSlotView::Present(prefix) = children.field_child_0().slot().view() else {
+        return Ok(None);
+    };
+    let prefix = match prefix.read() {
+        Ok(prefix) => prefix,
+        Err(error) => {
+            crate::parser::typed_cst::report_cst_failure(
+                prefix.raw_node(),
+                prefix.source(),
+                error,
+                errors,
+            );
+            return Err(crate::parser::typed_cst::ReportedCstFailure);
+        }
+    };
+    Ok((prefix.text() == "%xmod").then_some(ParseHealthTier::Mod))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_percent_error_text, classify_x_tier_label};
+    use super::classify_x_tier_label;
     use crate::TreeSitterParser;
     use crate::generated_traversal::{FromNodeKind, XDependentTierNode};
     use crate::model::ParseHealthTier;
@@ -487,8 +416,8 @@ mod tests {
     /// Direct recovery-boundary test using real ERROR nodes; this does not
     /// claim that the fixture routes through an utterance slot in production.
     #[test]
-    fn unreadable_utterance_recovery_rejects_without_inventing_a_tier() {
-        use super::{ParseHealth, handle_utterance_error_node};
+    fn bound_utterance_recovery_retains_ownership_and_conservative_taint() {
+        use super::{ParseHealth, ReadableRecovery, handle_readable_utterance_error};
         use crate::error::{ErrorCode, ErrorCollector};
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -498,6 +427,9 @@ mod tests {
         let parsed = parser
             .parse_source_incremental(source, None)
             .expect("parse");
+        let independent = parser
+            .parse_source_incremental(source, None)
+            .expect("independent equal-bytes parse");
         let mut pending = vec![parsed.root_node()];
         let mut witnessed = false;
         while let Some(node) = pending.pop() {
@@ -507,38 +439,38 @@ mod tests {
                 continue;
             }
             // The readable side of this same recovery boundary preserves its
-            // utterance-specific diagnostic and taints only the main tier.
+            // utterance-specific diagnostic and conservatively taints all domains.
             let errors = ErrorCollector::new();
             let mut health = ParseHealth::untainted();
-            handle_utterance_error_node(node, source, &errors, &mut health);
+            assert!(
+                independent.bind(node).is_err(),
+                "equal bytes are not source ownership"
+            );
+            let bound = parsed.bind(node).expect("producing source owns recovery");
+            handle_readable_utterance_error(
+                ReadableRecovery::from_bound(bound),
+                &errors,
+                &mut health,
+            );
             let diagnostics = errors.into_vec();
             assert_eq!(diagnostics.len(), 1);
             assert_eq!(diagnostics[0].code, ErrorCode::UnrecognizedUtteranceError);
             assert!(health.is_tier_tainted(ParseHealthTier::Main));
-            assert!(!health.is_tier_tainted(ParseHealthTier::Mor));
-            let split_utf8 = format!("{}é", "x".repeat(node.end_byte() - 1));
-            for incompatible in ["", split_utf8.as_str()] {
-                let errors = ErrorCollector::new();
-                let mut health = ParseHealth::untainted();
-                handle_utterance_error_node(node, incompatible, &errors, &mut health);
-                let diagnostics = errors.into_vec();
-                assert_eq!(diagnostics.len(), 1);
-                assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
-                for tier in [
-                    ParseHealthTier::Main,
-                    ParseHealthTier::Mor,
-                    ParseHealthTier::Gra,
-                    ParseHealthTier::Pho,
-                    ParseHealthTier::Mod,
-                    ParseHealthTier::Wor,
-                    ParseHealthTier::Sin,
-                    ParseHealthTier::Modsyl,
-                    ParseHealthTier::Phosyl,
-                    ParseHealthTier::Phoaln,
-                    ParseHealthTier::Xphoint,
-                ] {
-                    assert!(health.is_tier_tainted(tier));
-                }
+            assert!(health.is_tier_tainted(ParseHealthTier::Mor));
+            for tier in [
+                ParseHealthTier::Main,
+                ParseHealthTier::Mor,
+                ParseHealthTier::Gra,
+                ParseHealthTier::Pho,
+                ParseHealthTier::Mod,
+                ParseHealthTier::Wor,
+                ParseHealthTier::Sin,
+                ParseHealthTier::Modsyl,
+                ParseHealthTier::Phosyl,
+                ParseHealthTier::Phoaln,
+                ParseHealthTier::Xphoint,
+            ] {
+                assert!(health.is_tier_tainted(tier));
             }
             witnessed = true;
         }
@@ -549,9 +481,9 @@ mod tests {
     }
 
     #[test]
-    fn main_tier_construction_requires_readable_source_and_taints_rejection() {
-        use super::{MainTierNode, ParseHealth, ReadableMainTier, build_main_tier_from_node};
-        use crate::error::{ErrorCode, ErrorCollector};
+    fn main_tier_construction_requires_its_parse_owner() {
+        use super::{MainTierNode, ParseHealth, build_main_tier_from_node};
+        use crate::error::ErrorCollector;
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../corpus/reference/content/linkers-multiple.cha"
@@ -560,6 +492,9 @@ mod tests {
         let parsed = parser
             .parse_source_incremental(source, None)
             .expect("parse");
+        let foreign = parser
+            .parse_source_incremental(source, None)
+            .expect("independent parse of identical bytes");
         let mut pending = vec![parsed.root_node()];
         let mut witnessed = 0;
         while let Some(node) = pending.pop() {
@@ -568,26 +503,17 @@ mod tests {
             let Some(typed) = MainTierNode::from_node(node) else {
                 continue;
             };
-            let readable = ReadableMainTier::admit(typed, source).expect("original line");
-            assert_eq!(readable.line, &source[node.byte_range()]);
+            let bound = parsed.bind_typed(typed).expect("original owner");
+            assert_eq!(bound.text(), &source[node.byte_range()]);
+            assert!(
+                foreign.bind_typed(typed).is_err(),
+                "equal bytes do not prove tree identity"
+            );
             let errors = ErrorCollector::new();
             let mut health = ParseHealth::untainted();
-            assert!(build_main_tier_from_node(typed, source, &errors, &mut health).is_some());
+            assert!(build_main_tier_from_node(bound, &errors, &mut health).is_some());
             assert!(health.is_clean());
             assert!(errors.into_vec().is_empty());
-            let split_utf8 = format!("{}é", "x".repeat(node.end_byte() - 1));
-            for incompatible in ["", split_utf8.as_str()] {
-                assert!(ReadableMainTier::admit(typed, incompatible).is_none());
-                let errors = ErrorCollector::new();
-                let mut health = ParseHealth::untainted();
-                assert!(
-                    build_main_tier_from_node(typed, incompatible, &errors, &mut health).is_none()
-                );
-                assert!(health.is_tier_tainted(ParseHealthTier::Main));
-                let diagnostics = errors.into_vec();
-                assert_eq!(diagnostics.len(), 1);
-                assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
-            }
             witnessed += 1;
         }
         assert!(witnessed > 0);
@@ -606,6 +532,9 @@ mod tests {
         let mut pending = vec![parsed.root_node()];
         let mut mod_count = 0;
         let mut other_count = 0;
+        let foreign = parser
+            .parse_source_incremental(source, None)
+            .expect("independent owner");
         while let Some(node) = pending.pop() {
             let mut cursor = node.walk();
             pending.extend(node.children(&mut cursor));
@@ -619,69 +548,17 @@ mod tests {
                 other_count += 1;
                 None
             };
-            assert_eq!(classify_x_tier_label(tier, source), expected);
-            assert_eq!(classify_x_tier_label(tier, ""), None);
+            let errors = talkbank_model::ErrorCollector::new();
+            assert!(
+                foreign.bind_typed(tier).is_err(),
+                "identical bytes do not establish ownership"
+            );
+            assert!(
+                matches!(classify_x_tier_label(parsed.bind_typed(tier).expect("owner"), &errors), Ok(actual) if actual == expected)
+            );
+            assert!(errors.into_vec().is_empty());
         }
         assert_eq!(mod_count, 1);
         assert!(other_count > 0);
-    }
-
-    #[test]
-    fn classify_percent_error_text_accepts_malformed_labels_without_colon() {
-        assert_eq!(
-            classify_percent_error_text("%mor no_tab_separator"),
-            Some(ParseHealthTier::Mor)
-        );
-        assert_eq!(
-            classify_percent_error_text("%gra no_tab_separator"),
-            Some(ParseHealthTier::Gra)
-        );
-        assert_eq!(
-            classify_percent_error_text("%pho no_tab_separator"),
-            Some(ParseHealthTier::Pho)
-        );
-        assert_eq!(
-            classify_percent_error_text("%wor no_tab_separator"),
-            Some(ParseHealthTier::Wor)
-        );
-        assert_eq!(
-            classify_percent_error_text("%xmod no_tab_separator"),
-            Some(ParseHealthTier::Mod)
-        );
-        assert_eq!(classify_percent_error_text("%xfoo no_tab_separator"), None);
-    }
-
-    #[test]
-    fn recovery_label_admission_preserves_exact_delimiters_and_unknown_labels() {
-        use super::RecoveryTierLabel;
-        for (label, domain) in [
-            ("mor", ParseHealthTier::Mor),
-            ("gra", ParseHealthTier::Gra),
-            ("pho", ParseHealthTier::Pho),
-            ("mod", ParseHealthTier::Mod),
-            ("xmod", ParseHealthTier::Mod),
-            ("wor", ParseHealthTier::Wor),
-            ("sin", ParseHealthTier::Sin),
-        ] {
-            for suffix in ["", ":body", "\tbody", " body", "\rbody", "\nbody"] {
-                let text = format!("%{label}{suffix}");
-                let admitted = RecoveryTierLabel::admit(&text).expect("nonempty label");
-                assert_eq!(admitted.0, label);
-                assert_eq!(admitted.alignment_domain(), Some(domain));
-                assert_eq!(classify_percent_error_text(&text), Some(domain));
-            }
-        }
-        for text in ["", "mor", "%", "%:", "%\t", "% ", "%\r", "%\n"] {
-            assert!(RecoveryTierLabel::admit(text).is_none());
-            assert_eq!(classify_percent_error_text(text), None);
-        }
-        // Do not broaden the delimiter vocabulary to Unicode whitespace or
-        // infer an alignment tier from a prefix of an unknown label.
-        for label in ["xfoo", "猫", "morning", "mor\u{a0}body", "mor\u{b}body"] {
-            let text = format!("%{label}");
-            let admitted = RecoveryTierLabel::admit(&text).expect("unknown label");
-            assert_eq!(admitted.0, label);
-            assert_eq!(admitted.alignment_domain(), None);
-        }
     }
 }

@@ -44,7 +44,7 @@ impl<'tree, 'source> MainTierFragment<'tree, 'source> {
     fn admit(parsed_fragment: &'tree ParsedFragment<'source, '_>) -> ParseResult<Self> {
         let parsed = parsed_fragment.parsed_source();
         let input = parsed_fragment.fragment().input();
-        let failure = |code, message| {
+        let failure = |code, message: &str| {
             ParseErrors::from(vec![ParseError::new(
                 code,
                 Severity::Error,
@@ -56,7 +56,13 @@ impl<'tree, 'source> MainTierFragment<'tree, 'source> {
         let source = parsed.source();
         let root = SourceFileNode::from_node(parsed.root_node())
             .ok_or_else(|| failure(ErrorCode::TreeParsingError, "Expected source_file root"))?;
-        let children = extract_source_file(root);
+        let children = extract_source_file(root).map_err(|fault| {
+            ParseErrors::from(vec![crate::parser::typed_cst::cst_failure_diagnostic(
+                root.raw_node(),
+                source,
+                fault,
+            )])
+        })?;
         let NodeSlot::Present(SourceFileChoice::MainTier(node)) = children.content.slot() else {
             return Err(failure(
                 ErrorCode::MissingMainTier,
@@ -74,10 +80,10 @@ impl<'tree, 'source> MainTierFragment<'tree, 'source> {
             ));
         }
         Ok(Self {
-            source: parsed.bind_typed(*node).map_err(|_| {
+            source: parsed.bind_typed(*node).map_err(|error| {
                 failure(
-                    ErrorCode::TreeParsingError,
-                    "Main-tier node is not bound to its parse source",
+                    ErrorCode::InternalError,
+                    &format!("Main-tier node is not bound to its parse source: {error}"),
                 )
             })?,
             input,
@@ -92,11 +98,9 @@ impl<'tree, 'source> MainTierFragment<'tree, 'source> {
             }
         }
         let Self { source, input } = self;
-        let main_tier_node = source.node();
-        let to_parse = source.source();
         // Convert the main_tier node to MainTier model
         let errors_sink = crate::error::ErrorCollector::new();
-        let main_tier = convert_main_tier_node(main_tier_node, to_parse, input, &errors_sink);
+        let main_tier = convert_main_tier_node(source, input, &errors_sink);
 
         let tier_errors = errors_sink.into_vec();
         let has_actual_errors = tier_errors
@@ -126,7 +130,7 @@ impl<'tree, 'source> MainTierFragment<'tree, 'source> {
                 Ok(bound) => bound,
                 Err(error) => {
                     errors.push(ParseError::new(
-                        ErrorCode::TreeParsingError,
+                        ErrorCode::InternalError,
                         Severity::Error,
                         SourceLocation::from_offsets(0, self.input.len()),
                         ErrorContext::new(self.input, 0..self.input.len(), self.input),
@@ -159,7 +163,7 @@ impl<'tree, 'source> MainTierFragment<'tree, 'source> {
                         errors.push(error);
                     }
                     None => errors.push(ParseError::new(
-                        ErrorCode::TreeParsingError,
+                        ErrorCode::InternalError,
                         Severity::Error,
                         SourceLocation::from_offsets(0, self.input.len()),
                         ErrorContext::new(self.input, 0..self.input.len(), self.input),

@@ -143,21 +143,20 @@ fn valid_intonation_contents_carry_trailing_separator_item() {
 }
 
 #[test]
-fn malformed_bracket_fragment_emits_exact_word_error_diagnostic() {
+fn malformed_bracket_fragment_preserves_the_structural_recovery_span() {
     let (utterances, diags) = parse_utterances_and_diags(MALFORMED_BRACKET);
 
-    // EXACTLY one diagnostic, captured from the pre-migration parser: the stray
-    // `[` fragment under `contents` is classified by `analyze_word_error` as
-    // E375 "Could not parse bracket annotation" at the fragment span.
+    // Exactly one diagnostic at the actual ERROR span. A bracket-like prefix
+    // cannot establish a typed annotation or require text-based classification.
     assert_eq!(
         diags,
         vec![(
-            "E375".to_string(),
+            "E316".to_string(),
             22,
             24,
-            "Could not parse bracket annotation".to_string(),
+            "Unparsable content on main tier: ' ['".to_string(),
         )],
-        "malformed bracket fragment must emit exactly one E375 at span (22..24)"
+        "malformed bracket fragment must emit exactly one E316 at span (22..24)"
     );
 
     // The surrounding words still parse into the model: the ERROR fragment does

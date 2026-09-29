@@ -115,6 +115,34 @@ impl<'input> WrappedFragment<'input> {
         }
     }
 
+    /// A tier may begin in the wrapper-owned prefix (its supplied tier label),
+    /// but must still account for every non-whitespace byte of caller input.
+    pub(crate) fn require_complete_tier_input(
+        &self,
+        range: std::ops::Range<usize>,
+    ) -> Result<(), FragmentCoverageError> {
+        let input_end = self.input_start + self.input.input().len();
+        if range.start > range.end
+            || range.end > self.source.len()
+            || range.start > input_end
+            || range.end < self.input_start
+        {
+            return Err(FragmentCoverageError::OutsideInput);
+        }
+        let Some((leading, trailing)) = self
+            .source
+            .get(self.input_start..range.start.max(self.input_start))
+            .zip(self.source.get(range.end.min(input_end)..input_end))
+        else {
+            return Err(FragmentCoverageError::OutsideInput);
+        };
+        if leading.trim().is_empty() && trailing.trim().is_empty() {
+            Ok(())
+        } else {
+            Err(FragmentCoverageError::Incomplete)
+        }
+    }
+
     pub(crate) fn rebase<T: SpanShift>(&self, value: T) -> T {
         self.input.rebase_from(value, self.input_start as u32)
     }

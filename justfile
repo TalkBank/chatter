@@ -547,6 +547,8 @@ traversal-gen:
         "$tsgu/target/release/examples/generate_typed_traversal" \
         grammar/src/grammar.json grammar/src/node-types.json \
         --edition "$edition" --toolchain "$toolchain"
+    python3 scripts/generate_if_changed.py grammar/bindings/rust/tsgu_language_metadata.c \
+        "$tsgu/target/release/examples/generate_typed_traversal" --metadata-bridge
 
 # The CHECK mapping inventory, `docs/audits/check-parity-audit.md`.
 #
@@ -560,7 +562,7 @@ traversal-gen:
 # stale, and the only instruction for repairing it was a sentence inside the
 # artifact. That is the serial-discovery failure the `regen` comment above
 # already describes, one artifact further on.
-[doc("Regenerate the CHECK mapping inventory.")]
+[doc("Regenerate the authoritative CHECK assessment book view and mapping index.")]
 check-mapping-gen:
     cargo run --quiet -p talkbank-parser-tests --bin audit_check_parity
 

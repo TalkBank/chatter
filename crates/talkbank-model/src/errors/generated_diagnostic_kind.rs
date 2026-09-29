@@ -17,23 +17,23 @@ use super::diagnostic_kind::DiagnosticKind;
 /// entry point that delegates here.
 pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
     match code {
-        ErrorCode::InternalError => DiagnosticKind::Invalidity, // E001
-        ErrorCode::TestError => DiagnosticKind::Invalidity,     // E002
-        ErrorCode::EmptyString => DiagnosticKind::Invalidity,   // E003
-        ErrorCode::InvalidLineFormat => DiagnosticKind::Invalidity, // E101
-        ErrorCode::MissingFormType => DiagnosticKind::Invalidity, // E202
-        ErrorCode::InvalidFormType => DiagnosticKind::Invalidity, // E203
-        ErrorCode::UnknownAnnotation => DiagnosticKind::Invalidity, // E207
-        ErrorCode::EmptyReplacement => DiagnosticKind::Invalidity, // E208
+        ErrorCode::InternalError => DiagnosticKind::InternalFailure, // E001
+        ErrorCode::TestError => DiagnosticKind::Invalidity,          // E002
+        ErrorCode::EmptyString => DiagnosticKind::Invalidity,        // E003
+        ErrorCode::InvalidLineFormat => DiagnosticKind::Invalidity,  // E101
+        ErrorCode::MissingFormType => DiagnosticKind::Invalidity,    // E202
+        ErrorCode::InvalidFormType => DiagnosticKind::Invalidity,    // E203
+        ErrorCode::UnknownAnnotation => DiagnosticKind::Invalidity,  // E207
+        ErrorCode::EmptyReplacement => DiagnosticKind::Invalidity,   // E208
         ErrorCode::EmptySpokenContent => DiagnosticKind::Invalidity, // E209
         ErrorCode::IllegalReplacementForFragment => DiagnosticKind::Invalidity, // E210
-        ErrorCode::InvalidWordFormat => DiagnosticKind::Invalidity, // E212
+        ErrorCode::InvalidWordFormat => DiagnosticKind::Invalidity,  // E212
         ErrorCode::UntranscribedInReplacement => DiagnosticKind::Invalidity, // E213
-        ErrorCode::IllegalDigits => DiagnosticKind::Invalidity, // E220
+        ErrorCode::IllegalDigits => DiagnosticKind::Invalidity,      // E220
         ErrorCode::UnbalancedCADelimiter => DiagnosticKind::Invalidity, // E230
         ErrorCode::UnbalancedShortening => DiagnosticKind::Invalidity, // E231
         ErrorCode::InvalidCompoundMarkerPosition => DiagnosticKind::Invalidity, // E232
-        ErrorCode::EmptyCompoundPart => DiagnosticKind::Invalidity, // E233
+        ErrorCode::EmptyCompoundPart => DiagnosticKind::Invalidity,  // E233
         ErrorCode::IllegalUntranscribed => DiagnosticKind::Invalidity, // E241
         ErrorCode::UnbalancedQuotation => DiagnosticKind::Invalidity, // E242
         ErrorCode::IllegalCharactersInWord => DiagnosticKind::Invalidity, // E243
@@ -46,7 +46,7 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::SecondaryStressWithoutPrimary => DiagnosticKind::Invalidity, // E250
         ErrorCode::EmptyWordContentText => DiagnosticKind::Invalidity, // E251
         ErrorCode::SyllablePauseNotBetweenSpokenMaterial => DiagnosticKind::Invalidity, // E252
-        ErrorCode::EmptyWordContent => DiagnosticKind::Invalidity, // E253
+        ErrorCode::EmptyWordContent => DiagnosticKind::Invalidity,   // E253
         ErrorCode::WholeUtteranceLanguageSwitchShouldUsePrecode => DiagnosticKind::Invalidity, // E255
         ErrorCode::IllegalCurlyQuote => DiagnosticKind::Invalidity, // E256
         ErrorCode::ConsecutiveCommas => DiagnosticKind::Invalidity, // E258

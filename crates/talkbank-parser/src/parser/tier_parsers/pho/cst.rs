@@ -1,250 +1,152 @@
-//! CST-driven parsing for `%pho` and `%mod` tiers.
-//!
-//! CHAT reference anchors:
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Phonology>
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Model_Phonology>
+//! Source-bound CST decoding for `%pho` and `%mod` tiers.
 
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, ModDependentTierNode, NoChild, PhoDependentTierNode, PhoGroupNode,
-    PhoGroupsNode, SlotView, extract_mod_dependent_tier, extract_pho_dependent_tier,
-    extract_pho_groups,
+    AsRawNode, ModDependentTierNode, NoChild, NonMissingKindSlot, PhoDependentTierNode,
+    PhoGroupNode, PhoGroupsNode, SourceBound, SourceField, SourceSlotView,
 };
 use crate::parser::node_span::span_of;
-use crate::parser::typed_cst::decode_present_child;
+use talkbank_model::ErrorSink;
 use talkbank_model::model::dependent_tier::PhoGroupWords;
 use talkbank_model::model::{PhoItem, PhoTier, PhoTierType, PhoWord};
-use talkbank_model::{ErrorSink, ParseOutcome};
 
 use super::groups::{extract_pho_group_items, push_pho_separator};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 
-/// Parse a `%pho` tier from a tree-sitter node.
-///
-/// **Grammar Rule:**
-/// ```text
-/// pho_dependent_tier: seq('%', 'pho', colon, tab, pho_groups, newline)
-/// ```
-///
-/// **Expected Sequential Order:**
-/// 1. '%' (position 0)
-/// 2. 'pho' (position 1)
-/// 3. colon (position 2)
-/// 4. tab (position 3)
-/// 5. pho_groups (position 4)
-/// 6. newline (position 5)
-pub fn parse_pho_tier(
-    node: PhoDependentTierNode<'_>,
-    source: &str,
+/// Decode a `%pho` tier admitted by its owning parsed source.
+pub fn parse_pho_tier<'tree>(
+    node: SourceBound<'tree, '_, PhoDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> PhoTier {
-    parse_pho_tier_inner(PhoBodyTier::Pho(node), source, errors)
+) -> Result<PhoTier, crate::CstFailure> {
+    parse_pho_tier_inner(PhoBodyTier::Pho(node), errors)
 }
 
-/// Parse a `%mod` tier from a tree-sitter node.
-///
-/// **Grammar Rule:**
-/// ```text
-/// mod_dependent_tier: seq('%', 'mod', colon, tab, pho_groups, newline)
-/// ```
-///
-/// **Expected Sequential Order:**
-/// 1. '%' (position 0)
-/// 2. 'mod' (position 1)
-/// 3. colon (position 2)
-/// 4. tab (position 3)
-/// 5. pho_groups (position 4)
-/// 6. newline (position 5)
-pub fn parse_mod_tier(
-    node: ModDependentTierNode<'_>,
-    source: &str,
+/// Decode a `%mod` tier admitted by its owning parsed source.
+pub fn parse_mod_tier<'tree>(
+    node: SourceBound<'tree, '_, ModDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> PhoTier {
-    parse_pho_tier_inner(PhoBodyTier::Mod(node), source, errors)
+) -> Result<PhoTier, crate::CstFailure> {
+    parse_pho_tier_inner(PhoBodyTier::Mod(node), errors)
 }
 
-/// The two tiers whose body is a `pho_groups` node, each carrying its OWN node.
-///
-/// `parse_pho_tier_inner` used to take `(node: Node, tier_type: PhoTierType)`,
-/// two parameters that had to AGREE and that nothing held together:
-/// `parse_pho_tier_inner(a_mod_node, PhoTierType::Pho)` type-checked and would
-/// have run the `%pho` extractor over a `%mod` carrier. The enum makes the tier
-/// type and the node ONE value, so both the `extract_*` to call and the
-/// [`PhoTierType`] to stamp are DERIVED from it and cannot disagree.
-///
-/// Concretely deleted: the `tier_type` parameter, and the comment that had to
-/// explain that the extractor is chosen "for the tier type (never on
-/// `node.kind()`)". There is nothing left to choose wrongly.
-enum PhoBodyTier<'tree> {
-    /// A `%pho` tier.
-    Pho(PhoDependentTierNode<'tree>),
-    /// A `%mod` tier.
-    Mod(ModDependentTierNode<'tree>),
+/// Each tier owns its node and source. The model tag and extractor are derived
+/// together; neither a mismatched tier kind nor unrelated text can be supplied.
+enum PhoBodyTier<'tree, 'source> {
+    Pho(SourceBound<'tree, 'source, PhoDependentTierNode<'tree>>),
+    Mod(SourceBound<'tree, 'source, ModDependentTierNode<'tree>>),
 }
 
-// Note: %xpho is a user-defined tier type and should be stored as unparsed.
-// It is NOT treated as a real phonological tier type in the data model.
-// The treesitter.rs parser correctly handles %xpho as an unparsed tier.
-
-/// Shared implementation for `%pho` and `%mod` tier parsing.
-///
-/// Driven by the generated typed visitor. `%pho` and `%mod` share the same body
-/// grammar (`pho_groups`), so both `extract_pho_dependent_tier` and
-/// `extract_mod_dependent_tier` expose the body as the typed `child_2.slot`; the
-/// choice between the two extractors is made on the typed [`PhoTierType`], NEVER
-/// on `node.kind()`. The body slot is matched EXHAUSTIVELY over [`NodeSlot`] (no
-/// `_` catch-all, no `.ok()`), reproducing the removed hand-walk byte for byte:
-///
-/// - `Present` / `Missing`: the removed code LOCATED the body by scanning for a
-///   child of kind `pho_groups`; a tree-sitter MISSING node retains that kind, so
-///   both a real body and a MISSING body were found (the old `Some(pho_groups)`
-///   branch) and drive group iteration. A MISSING/empty `pho_groups` yields zero
-///   items with no diagnostic, identical to the old loop iterating an empty node.
-///   Both are reached through `known_or_placeholder().present_or_placeholder()`, which answers for
-///   exactly the two states where the position identifies itself. (This
-///   paragraph used to explain why the two had to be written as separate arms.
-///   That was true of the backend at the time and is no longer: the generator
-///   now owns the question.)
-/// - `Absent` / `Error`: no child of kind `pho_groups` was found
-///   (the old `None` branch): an ERROR node or an unexpected-kind node does not
-///   match `pho_groups`, and an absent child is not there at all. Return the EMPTY
-///   tier SILENTLY (no diagnostic). This silent-partial is preserved behavior.
-///   The document dispatcher rejects tiers with tree-sitter errors before calling
-///   this decoder, but that check is not a proof that extraction cannot yield
-///   an absent body. Preserve the recovery states exposed by the producer.
-fn parse_pho_tier_inner(tier: PhoBodyTier<'_>, source: &str, errors: &impl ErrorSink) -> PhoTier {
-    // ONE match. Both carriers expose the body at `child_2` and their own
-    // top-level `unexpected` sink, and `child_2.slot`'s type is the same
-    // `KindSlot<PhoGroupsNode>` for `%pho` and `%mod`, so the only thing that
-    // varies is which `extract_*` reads it and which model tag it carries. Those
-    // were three separate matches on the same two-variant enum, which is three
-    // chances for the arms to disagree about what `Pho` means.
-    let (tier_type, node, body_slot): (
-        PhoTierType,
-        tree_sitter::Node<'_>,
-        KindSlot<PhoGroupsNode>,
-    ) = match tier {
+/// Compiled-grammar admission rules out missing composite bodies; Error/Absent
+/// retain the empty-tier policy.
+fn parse_pho_tier_inner(
+    tier: PhoBodyTier<'_, '_>,
+    errors: &impl ErrorSink,
+) -> Result<PhoTier, crate::CstFailure> {
+    let (tier_type, node, body) = match tier {
         PhoBodyTier::Pho(n) => {
-            let raw = n.raw_node();
-            let children = extract_pho_dependent_tier(n);
-            surface_displaced(&children.unexpected, "pho_dependent_tier", source, errors);
-            (PhoTierType::Pho, raw, children.child_2.slot().clone())
+            let children = n.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+            surface_displaced(
+                &children.children().unexpected,
+                "pho_dependent_tier",
+                n.source(),
+                errors,
+            );
+            (
+                PhoTierType::Pho,
+                n.raw_node(),
+                read_body(children.field_child_2().slot())?,
+            )
         }
         PhoBodyTier::Mod(n) => {
-            let raw = n.raw_node();
-            let children = extract_mod_dependent_tier(n);
-            surface_displaced(&children.unexpected, "mod_dependent_tier", source, errors);
-            (PhoTierType::Mod, raw, children.child_2.slot().clone())
+            let children = n.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+            surface_displaced(
+                &children.children().unexpected,
+                "mod_dependent_tier",
+                n.source(),
+                errors,
+            );
+            (
+                PhoTierType::Mod,
+                n.raw_node(),
+                read_body(children.field_child_2().slot())?,
+            )
         }
     };
-    let span = span_of(node);
+    let items = match body {
+        Some(groups) => parse_pho_groups(groups, errors)?,
+        None => Vec::new(),
+    };
+    Ok(PhoTier::new(tier_type, items).with_span(span_of(node)))
+}
 
-    // The two-state reading: every way of NOT having a `pho_groups` node yields
-    // the empty tier, so naming the four separately was four arms saying one
-    // thing. `present_or_placeholder` discards WHICH state occurred, which is
-    // sound only because nothing here branches on it.
-    match body_slot.known_or_placeholder().present_or_placeholder() {
-        Some(groups) => {
-            let items = parse_pho_groups(groups, source, errors);
-            PhoTier::new(tier_type, items).with_span(span)
-        }
-        None => PhoTier::new(tier_type, Vec::new()).with_span(span),
+/// Read an identified, non-missing composite body. A source
+/// admission failure is an internal failure, never an absent CHAT body.
+fn read_body<'tree, 'source>(
+    slot: SourceField<'_, 'tree, 'source, NonMissingKindSlot<'tree, PhoGroupsNode<'tree>>>,
+) -> Result<Option<SourceBound<'tree, 'source, PhoGroupsNode<'tree>>>, crate::CstFailure> {
+    match slot.view() {
+        SourceSlotView::Present(body) => Ok(Some(body.read()?)),
+        SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => Ok(None),
+        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
     }
 }
 
-/// Decode every `pho_group` under a `pho_groups` node into phonology items,
-/// driven by the generated `extract_pho_groups` visitor.
-///
-/// `pho_groups = seq(pho_group, repeat(seq(whitespaces, pho_group)))`, so the
-/// visitor exposes the first group as `child_0` and each subsequent
-/// `(whitespaces, pho_group)` pair as a `PhoGroupsChild1Children` element in
-/// `child_1`. This replaces the old `while pho_groups.child(idx)` positional
-/// walk. Unlike the OLD backend (built with `--skip whitespaces`), the NEW
-/// backend models the separating `whitespaces` token as its own explicit
-/// `child_0` position inside each repeat element (`child_1` holds the
-/// `pho_group`); that position is purely structural and handled by
-/// [`push_pho_separator`].
-fn parse_pho_groups(
-    typed: PhoGroupsNode<'_>,
-    source: &str,
+/// Traverse the generated first group and repeated separator/group pairs.
+fn parse_pho_groups<'tree>(
+    typed: SourceBound<'tree, '_, PhoGroupsNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Vec<PhoItem> {
-    let groups = extract_pho_groups(typed);
-    let mut items: Vec<PhoItem> = Vec::with_capacity(groups.child_1.slot().len() + 1);
-
-    push_pho_group(groups.child_0.slot(), source, errors, &mut items);
-    for element in groups.child_1.slot() {
+) -> Result<Vec<PhoItem>, crate::CstFailure> {
+    let source = typed.source();
+    let groups = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let mut items = Vec::with_capacity(groups.field_child_1().slot().iter().len() + 1);
+    push_pho_group(groups.field_child_0().slot(), errors, &mut items)?;
+    for element in groups.field_child_1().slot().iter() {
         match element.slot().view() {
-            SlotView::Present(pair) => {
-                push_pho_separator(pair.child_0.slot(), source, errors, "pho_groups");
-                push_pho_group(pair.child_1.slot(), source, errors, &mut items);
-                surface_displaced(&pair.unexpected, "pho_groups", source, errors);
+            SourceSlotView::Present(pair) => {
+                push_pho_separator(pair.field_child_0().slot(), errors, "pho_groups");
+                push_pho_group(pair.field_child_1().slot(), errors, &mut items)?;
+                for node in pair.field_unexpected().iter() {
+                    surface_displaced(&[node.raw_node()], "pho_groups", node.source(), errors);
+                }
             }
-            // An inline sequence is never MISSING or displaced; `SeqSlot` says so.
-            SlotView::Error(raw) => {
-                errors.report(unexpected_node_error(raw, source, "pho_groups"));
+            SourceSlotView::Error(raw) => {
+                errors.report(unexpected_node_error(raw.raw_node(), source, "pho_groups"));
             }
-            SlotView::Absent(NoChild) => {}
+            SourceSlotView::Absent(never) => match never {},
+            SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
         }
     }
-
-    surface_displaced(&groups.unexpected, "pho_groups", source, errors);
-    items
+    surface_displaced(&groups.children().unexpected, "pho_groups", source, errors);
+    Ok(items)
 }
 
-/// Decode one `pho_group` slot, extending `items` with its phonology items.
-///
-/// The `pho_group` slot is matched EXHAUSTIVELY over [`NodeSlot`] (no `_`
-/// catch-all), reproducing the removed per-child loop byte for byte:
-///
-/// - `Present`: classify the group interior via `extract_pho_group_items` (flat
-///   words vs bracketed group) and extend, exactly as the old `PHO_GROUP` arm.
-/// - `Missing`: the old loop's `check_not_missing` reported the
-///   `MissingRequiredElement` (E342) recovery diagnostic and skipped the child;
-///   reproduced here (the returned flag is discarded because the missing child is
-///   dropped either way).
-/// - `Error` / `Unexpected`: the old loop's `_` arm reported
-///   `unexpected_node_error` (ERROR nodes route through the error analyzer);
-///   reproduced here.
-/// - `Absent`: no child at this position; the old loop simply did not iterate
-///   here, so nothing is reported and nothing is pushed.
-///
-/// The document dispatcher rejects error-bearing tiers before conversion.
-/// The slot API still exposes recovery here, so those states are retained;
-/// finite non-observation does not establish producer impossibility.
+/// Decode present groups, diagnose Error, and omit absent positions.
+/// Compiled-grammar admission excludes missing composite groups.
 fn push_pho_group<'tree>(
-    slot: &KindSlot<'tree, PhoGroupNode<'tree>>,
-    source: &str,
+    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, PhoGroupNode<'tree>>>,
     errors: &impl ErrorSink,
     items: &mut Vec<PhoItem>,
-) {
+) -> Result<(), crate::CstFailure> {
+    let source = slot.source();
     match slot.view() {
-        SlotView::Present(group_node) => {
-            items.extend(extract_pho_group_items(*group_node, source, errors));
+        SourceSlotView::Present(group) => {
+            items.extend(extract_pho_group_items(group.read()?, errors)?);
         }
-        SlotView::Missing(raw) => {
-            check_not_missing(raw, source, errors, "pho_groups");
+        SourceSlotView::Missing(never) => match never {},
+        SourceSlotView::Error(raw) => {
+            errors.report(unexpected_node_error(raw.raw_node(), source, "pho_groups"));
         }
-        SlotView::Error(raw) => {
-            errors.report(unexpected_node_error(raw, source, "pho_groups"));
-        }
-        SlotView::Absent(NoChild) => {}
+        SourceSlotView::Absent(NoChild) => {}
+        SourceSlotView::Unexpected(never) => match never {},
     }
+    Ok(())
 }
 
-/// Preserve a generated phonology group's checked text when detailed parsing fails.
-pub(crate) fn fallback_group_as_text(
-    node: PhoGroupNode<'_>,
-    source: &str,
-    errors: &impl ErrorSink,
+/// Preserve the entire admitted group's text when structural recovery needs it.
+pub(crate) fn fallback_group_as_text<'tree>(
+    node: SourceBound<'tree, '_, PhoGroupNode<'tree>>,
 ) -> Vec<PhoItem> {
-    let ParseOutcome::Parsed(text) =
-        decode_present_child(&node, source, errors, "pho_group", |err| {
-            format!("Invalid UTF-8 in %pho group fallback text: {err}")
-        })
-    else {
-        return Vec::new();
-    };
+    let text = node.text();
     if text.is_empty() {
         Vec::new()
     } else {
@@ -266,13 +168,12 @@ pub(crate) fn build_group_from_words(words: Vec<&str>) -> Vec<PhoItem> {
 mod tests {
     use super::*;
     use crate::TreeSitterParser;
-    use crate::generated_traversal::FromNodeKind;
-    use talkbank_model::{ErrorCode, ErrorCollector};
+    use crate::generated_traversal::SourceBindingError;
 
-    /// Direct boundary coverage, not a claim that these valid fixtures route
-    /// into fallback through the production slot extractor.
+    /// Direct ownership boundary evidence, not a claim that the valid fixture
+    /// selects fallback through the production recovery extractor.
     #[test]
-    fn typed_phonology_fallback_preserves_real_text_and_rejects_bad_ranges() {
+    fn typed_phonology_fallback_preserves_text_from_its_owning_parse() {
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../corpus/reference/tiers/pho-groupings.cha"
@@ -281,28 +182,23 @@ mod tests {
         let parsed = parser
             .parse_source_incremental(source, None)
             .expect("parse");
-        let mut pending = vec![parsed.root_node()];
+        let other = parser
+            .parse_source_incremental(source, None)
+            .expect("independent parse");
         let mut witnessed = 0;
-        while let Some(node) = pending.pop() {
-            let mut cursor = node.walk();
-            pending.extend(node.children(&mut cursor));
-            let Some(group) = PhoGroupNode::from_node(node) else {
+        for node in parsed.root().expect("root").descendants() {
+            let node = node.expect("source-bound descendant");
+            let Some(group) = node.typed::<PhoGroupNode>() else {
                 continue;
             };
-            let errors = ErrorCollector::new();
             assert_eq!(
-                fallback_group_as_text(group, source, &errors),
-                vec![PhoItem::Word(PhoWord::new(&source[node.byte_range()]))]
+                fallback_group_as_text(group),
+                vec![PhoItem::Word(PhoWord::new(group.text()))]
             );
-            assert!(errors.into_vec().is_empty());
-            let split_utf8 = format!("{}é", "x".repeat(node.end_byte() - 1));
-            for incompatible in ["", split_utf8.as_str()] {
-                let errors = ErrorCollector::new();
-                assert!(fallback_group_as_text(group, incompatible, &errors).is_empty());
-                let diagnostics = errors.into_vec();
-                assert_eq!(diagnostics.len(), 1);
-                assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
-            }
+            assert!(matches!(
+                other.bind(group.raw_node()),
+                Err(SourceBindingError::ForeignTree)
+            ));
             witnessed += 1;
         }
         assert!(witnessed > 0);

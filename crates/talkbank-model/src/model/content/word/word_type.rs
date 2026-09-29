@@ -1,3 +1,5 @@
+#![deny(clippy::wildcard_enum_match_arm)]
+
 //! Core [`Word`] model and related helper types.
 //!
 //! This module defines the canonical typed representation of one parsed CHAT
@@ -22,7 +24,7 @@ use super::form::FormType;
 use super::language::WordLanguageMarker;
 use super::untranscribed::UntranscribedStatus;
 use super::word_contents::WordContents;
-use crate::model::{Bullet, LanguageCode, NonEmptyString};
+use crate::model::{Bullet, LanguageCode};
 
 /// A cached string value that is transparent to equality comparisons.
 ///
@@ -105,18 +107,6 @@ pub struct Word {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub word_id: Option<smol_str::SmolStr>,
 
-    /// Raw text exactly as it appeared in the input, including all markers.
-    ///
-    /// This preserves the original transcription with all CHAT-specific notation:
-    /// - Lengthening markers (`:`)
-    /// - Shortenings `(text)`
-    /// - Stress markers (`ˈ`, `ˌ`)
-    /// - CA elements and delimiters
-    /// - Overlap points
-    ///
-    /// Use this for exact reproduction of the original transcript.
-    raw_text: smol_str::SmolStr,
-
     /// Structured content breakdown.
     ///
     /// Uses a SmallVec-backed newtype - most words are simple (1 item)
@@ -160,49 +150,31 @@ impl Word {
     /// This ensures invariants are maintained for simple cases.
     pub fn simple(text: impl Into<smol_str::SmolStr>) -> Self {
         let text = text.into();
-        Self::new_unchecked(text.clone(), text)
+        Self::new_unchecked(text)
     }
 
-    /// Builds a word from its source text and its cleaned lexical text, each
-    /// proven non-empty by its type.
-    ///
-    /// The constructor a parser front end reaches for: the two proofs are
-    /// built where the texts are, so an empty word is refused THERE, with the
-    /// diagnostic that names why, rather than asserted against in here. Until
-    /// 2026-09-09 the tree-sitter parser tested both strings for emptiness by
-    /// hand and then called [`Self::new_unchecked`], whose debug assertion was
-    /// the only thing between a missed guard and a fabricated word.
-    ///
-    /// `cleaned_text` populates the initial `content` as a single `Text`
-    /// element; the word's cleaned text is always derived from `content` (via
-    /// [`compute_cleaned_text`](Self::compute_cleaned_text)), never stored
-    /// separately.
-    pub fn new(raw_text: NonEmptyString, cleaned_text: WordText) -> Self {
-        Self::from_parts(smol_str::SmolStr::new(raw_text.as_str()), cleaned_text)
+    /// Builds a plain word from nonempty lexical text. Both surface spelling
+    /// and cleaned text are derived from the resulting structure.
+    pub fn new(text: WordText) -> Self {
+        Self::from_parts(text)
     }
 
     /// Builds a word without punctuation-guard checks.
     ///
     /// Test support and the transitional front ends: nothing here proves the
-    /// texts non-empty, and [`WordText::new_unchecked`] carries the debug
-    /// assertion. Production code that holds the texts as strings should
-    /// build the proofs and call [`Self::new`].
-    pub fn new_unchecked(
-        raw_text: impl Into<smol_str::SmolStr>,
-        cleaned_text: impl Into<smol_str::SmolStr>,
-    ) -> Self {
-        Self::from_parts(
-            raw_text.into(),
-            WordText::new_unchecked(cleaned_text.into()),
-        )
+    /// text non-empty, and [`WordText::new_unchecked`] carries the debug
+    /// assertion. [`Self::new`] accepts a nonempty proof, not a proof of CHAT
+    /// validity. External CHAT tokens should use the fragment parser and
+    /// propagate refusal rather than falling back to unchecked construction.
+    pub fn new_unchecked(cleaned_text: impl Into<smol_str::SmolStr>) -> Self {
+        Self::from_parts(WordText::new_unchecked(cleaned_text.into()))
     }
 
-    /// The one place a `Word` is assembled from its two texts.
-    fn from_parts(raw: smol_str::SmolStr, cleaned: WordText) -> Self {
+    /// The one place a plain `Word` is assembled from lexical content.
+    fn from_parts(cleaned: WordText) -> Self {
         Self {
             span: crate::Span::DUMMY,
             word_id: None,
-            raw_text: raw,
             content: WordContents::new(smallvec::smallvec![WordContent::Text(cleaned)]),
             category: None,
             form_type: None,
@@ -213,12 +185,10 @@ impl Word {
         }
     }
 
-    /// Returns source-faithful raw token text.
-    ///
-    /// This includes CHAT markers and punctuation exactly as parsed, making it
-    /// suitable for roundtrip serialization and precise diagnostics.
-    pub fn raw_text(&self) -> &str {
-        &self.raw_text
+    /// Derives the current CHAT spelling from typed structure.
+    /// Original source spelling belongs to the source-bound parser, not the word.
+    pub fn raw_text(&self) -> String {
+        self.to_chat()
     }
 
     /// Returns the typed elements that make up this word.
@@ -289,8 +259,8 @@ impl Word {
 
     /// Replaces structured internal word content.
     ///
-    /// This does not rewrite `raw_text`; callers that need both fields updated
-    /// should use [`replace_simple_text`](Self::replace_simple_text) or set both.
+    /// Invalidates cached lexical text. Surface spelling is always derived
+    /// from the current structure and needs no separate update.
     pub fn with_content(mut self, content: impl Into<WordContents>) -> Self {
         self.content = content.into();
         self.cached_cleaned_text = CachedStr::default();
@@ -376,48 +346,31 @@ impl Word {
     /// every other CA delimiter (`∆` faster, `∇` slower, ...) wraps genuinely
     /// spoken material whose enclosed text IS kept (`∆fast∆` -> "fast").
     pub fn compute_cleaned_text(&self) -> String {
-        use super::ca::CADelimiterType;
-
         let mut result = String::new();
-        // Whether iteration is currently between a pair of `↫` segment-repetition
-        // delimiters, whose bracketed (stuttered) content is non-lexical and dropped.
-        let mut in_segment_repetition = false;
-        for item in &self.content {
-            match item {
-                WordContent::CADelimiter(delimiter)
-                    if delimiter.delimiter_type == CADelimiterType::SegmentRepetition =>
-                {
-                    in_segment_repetition = !in_segment_repetition;
-                }
-                WordContent::Text(t) if !in_segment_repetition => result.push_str(t.as_ref()),
-                // A @u phonetic form's cleaned text is the phonetic string
-                // verbatim (chatter's long-standing behavior, preserved
-                // through the typed-phonetic modeling change).
-                WordContent::Phonetic(f) if !in_segment_repetition => result.push_str(f.as_ref()),
-                WordContent::Shortening(s) if !in_segment_repetition => result.push_str(s.as_ref()),
-                _ => {}
+        for part in self.lexical_parts() {
+            if let super::LexicalContribution::Spoken(text) = part.contribution() {
+                result.push_str(text);
             }
         }
         result
     }
 
-    /// Replaces only `raw_text` for parser-recovery flows.
+    /// Inspect lexical contributions without losing the original typed leaves.
     ///
-    /// This is used when parser error recovery needs to attach error fragments
-    /// to a word's raw text without changing the structured content. The cleaned
-    /// text is always derived from `content`, so it doesn't need updating.
-    pub fn set_raw_text(&mut self, raw: impl Into<smol_str::SmolStr>) {
-        self.raw_text = raw.into();
+    /// Unlike [`Self::cleaned_text`], this preserves compound/clitic boundaries
+    /// and distinguishes repeated sounds from spoken lexical text. It does not
+    /// parse raw spelling or infer morphology such as an apostrophe suffix.
+    pub fn lexical_parts(&self) -> super::WordLexicalParts<'_> {
+        super::WordLexicalParts::new(self.content.as_slice())
     }
 
-    /// Replaces both raw text and content with one plain-text segment.
+    /// Replaces content with one plain-text segment.
     ///
     /// Used by ASR-postprocess pipelines when substituting a word with a
     /// replacement string. Sets content to a single `Text` element and
-    /// updates raw_text to match.
+    /// changes the derived spelling accordingly.
     pub fn replace_simple_text(&mut self, text: impl Into<smol_str::SmolStr>) {
         let text = text.into();
-        self.raw_text = text.clone();
         self.content = WordContents::new(smallvec::smallvec![WordContent::Text(
             WordText::new_unchecked(text),
         )]);

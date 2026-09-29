@@ -74,7 +74,8 @@ fn test_main_tier_all_fields_present() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "main_tier" {
-            let c = extract_main_tier(classify::<MainTierNode>(node));
+            let c =
+                extract_main_tier(classify::<MainTierNode>(node)).expect("producer reconstruction");
             assert!(
                 matches!(c.child_0.slot(), NodeSlot::Present(_)),
                 "star: {:?}",
@@ -127,7 +128,8 @@ fn test_participants_header() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "participants_header" {
-            let c = extract_participants_header(classify::<ParticipantsHeaderNode>(node));
+            let c = extract_participants_header(classify::<ParticipantsHeaderNode>(node))
+                .expect("producer reconstruction");
             // Should have all required children present
             assert!(
                 matches!(c.child_0.slot(), NodeSlot::Present(_)),
@@ -159,7 +161,8 @@ fn test_date_header() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "date_header" {
-            let c = extract_date_header(classify::<DateHeaderNode>(node));
+            let c = extract_date_header(classify::<DateHeaderNode>(node))
+                .expect("producer reconstruction");
             assert!(
                 matches!(c.child_0.slot(), NodeSlot::Present(_)),
                 "date_prefix: {:?}",
@@ -200,7 +203,8 @@ fn test_full_document_extraction() {
     let full_doc = root.child(0).expect("should have full_document child");
     assert_eq!(full_doc.kind(), "full_document");
 
-    let c = extract_full_document(classify::<FullDocumentNode>(full_doc));
+    let c = extract_full_document(classify::<FullDocumentNode>(full_doc))
+        .expect("producer reconstruction");
     assert!(
         matches!(c.child_0.slot(), Some(NodeSlot::Present(_))),
         "utf8_header: {:?}",
@@ -236,49 +240,64 @@ fn test_corpus_wide_extraction() {
             // Call extraction for key SEQ rules to verify they work
             match kind {
                 "full_document" => {
-                    let _ = extract_full_document(classify::<FullDocumentNode>(node));
+                    let _ = extract_full_document(classify::<FullDocumentNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "main_tier" => {
-                    let _ = extract_main_tier(classify::<MainTierNode>(node));
+                    let _ = extract_main_tier(classify::<MainTierNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "utterance" => {
-                    let _ = extract_utterance(classify::<UtteranceNode>(node));
+                    let _ = extract_utterance(classify::<UtteranceNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "tier_body" => {
-                    let _ = extract_tier_body(classify::<TierBodyNode>(node));
+                    let _ = extract_tier_body(classify::<TierBodyNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "utterance_end" => {
-                    let _ = extract_utterance_end(classify::<UtteranceEndNode>(node));
+                    let _ = extract_utterance_end(classify::<UtteranceEndNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "participants_header" => {
-                    let _ = extract_participants_header(classify::<ParticipantsHeaderNode>(node));
+                    let _ = extract_participants_header(classify::<ParticipantsHeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "languages_header" => {
-                    let _ = extract_languages_header(classify::<LanguagesHeaderNode>(node));
+                    let _ = extract_languages_header(classify::<LanguagesHeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "id_header" => {
-                    let _ = extract_id_header(classify::<IdHeaderNode>(node));
+                    let _ = extract_id_header(classify::<IdHeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "date_header" => {
-                    let _ = extract_date_header(classify::<DateHeaderNode>(node));
+                    let _ = extract_date_header(classify::<DateHeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "media_header" => {
-                    let _ = extract_media_header(classify::<MediaHeaderNode>(node));
+                    let _ = extract_media_header(classify::<MediaHeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "comment_header" => {
-                    let _ = extract_comment_header(classify::<CommentHeaderNode>(node));
+                    let _ = extract_comment_header(classify::<CommentHeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "mor_dependent_tier" => {
-                    let _ = extract_mor_dependent_tier(classify::<MorDependentTierNode>(node));
+                    let _ = extract_mor_dependent_tier(classify::<MorDependentTierNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "gra_dependent_tier" => {
-                    let _ = extract_gra_dependent_tier(classify::<GraDependentTierNode>(node));
+                    let _ = extract_gra_dependent_tier(classify::<GraDependentTierNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "pho_dependent_tier" => {
-                    let _ = extract_pho_dependent_tier(classify::<PhoDependentTierNode>(node));
+                    let _ = extract_pho_dependent_tier(classify::<PhoDependentTierNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "com_dependent_tier" => {
-                    let _ = extract_com_dependent_tier(classify::<ComDependentTierNode>(node));
+                    let _ = extract_com_dependent_tier(classify::<ComDependentTierNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "word_with_optional_annotations" => {
                     let _ = extract_word_with_optional_annotations(classify::<
@@ -291,29 +310,37 @@ fn test_corpus_wide_extraction() {
                     >(node));
                 }
                 "mor_word" => {
-                    let _ = extract_mor_word(classify::<MorWordNode>(node));
+                    let _ = extract_mor_word(classify::<MorWordNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "mor_content" => {
-                    let _ = extract_mor_content(classify::<MorContentNode>(node));
+                    let _ = extract_mor_content(classify::<MorContentNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "gra_relation" => {
-                    let _ = extract_gra_relation(classify::<GraRelationNode>(node));
+                    let _ = extract_gra_relation(classify::<GraRelationNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "replacement" => {
-                    let _ = extract_replacement(classify::<ReplacementNode>(node));
+                    let _ = extract_replacement(classify::<ReplacementNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "group_with_annotations" => {
                     let _ =
-                        extract_group_with_annotations(classify::<GroupWithAnnotationsNode>(node));
+                        extract_group_with_annotations(classify::<GroupWithAnnotationsNode>(node))
+                            .expect("producer reconstruction");
                 }
                 "begin_header" => {
-                    let _ = extract_begin_header(classify::<BeginHeaderNode>(node));
+                    let _ = extract_begin_header(classify::<BeginHeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "end_header" => {
-                    let _ = extract_end_header(classify::<EndHeaderNode>(node));
+                    let _ = extract_end_header(classify::<EndHeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 "utf8_header" => {
-                    let _ = extract_utf8_header(classify::<Utf8HeaderNode>(node));
+                    let _ = extract_utf8_header(classify::<Utf8HeaderNode>(node))
+                        .expect("producer reconstruction");
                 }
                 _ => {}
             }
@@ -403,7 +430,8 @@ fn test_speaker_parity_with_existing_parser() {
         let mut gen_speakers = Vec::new();
         walk_all(tree.root_node(), &mut |node| {
             if node.kind() == "main_tier" {
-                let c = extract_main_tier(classify::<MainTierNode>(node));
+                let c = extract_main_tier(classify::<MainTierNode>(node))
+                    .expect("producer reconstruction");
                 if let NodeSlot::Present(spk) = c.speaker.slot() {
                     gen_speakers.push(node_text(spk.raw_node(), source).to_string());
                 }
@@ -457,460 +485,572 @@ fn test_speaker_parity_with_existing_parser() {
 fn try_extract(node: tree_sitter::Node) -> bool {
     match node.kind() {
         "act_dependent_tier" => {
-            let _ = extract_act_dependent_tier(classify::<ActDependentTierNode>(node));
+            let _ = extract_act_dependent_tier(classify::<ActDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "activities_header" => {
-            let _ = extract_activities_header(classify::<ActivitiesHeaderNode>(node));
+            let _ = extract_activities_header(classify::<ActivitiesHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "add_dependent_tier" => {
-            let _ = extract_add_dependent_tier(classify::<AddDependentTierNode>(node));
+            let _ = extract_add_dependent_tier(classify::<AddDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "alt_dependent_tier" => {
-            let _ = extract_alt_dependent_tier(classify::<AltDependentTierNode>(node));
+            let _ = extract_alt_dependent_tier(classify::<AltDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "bck_header" => {
-            let _ = extract_bck_header(classify::<BckHeaderNode>(node));
+            let _ = extract_bck_header(classify::<BckHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "begin_header" => {
-            let _ = extract_begin_header(classify::<BeginHeaderNode>(node));
+            let _ = extract_begin_header(classify::<BeginHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "bg_header" => {
-            let _ = extract_bg_header(classify::<BgHeaderNode>(node));
+            let _ =
+                extract_bg_header(classify::<BgHeaderNode>(node)).expect("producer reconstruction");
             true
         }
         "birth_of_header" => {
-            let _ = extract_birth_of_header(classify::<BirthOfHeaderNode>(node));
+            let _ = extract_birth_of_header(classify::<BirthOfHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "birthplace_of_header" => {
-            let _ = extract_birthplace_of_header(classify::<BirthplaceOfHeaderNode>(node));
+            let _ = extract_birthplace_of_header(classify::<BirthplaceOfHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "blank_header" => {
-            let _ = extract_blank_header(classify::<BlankHeaderNode>(node));
+            let _ = extract_blank_header(classify::<BlankHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "cod_dependent_tier" => {
-            let _ = extract_cod_dependent_tier(classify::<CodDependentTierNode>(node));
+            let _ = extract_cod_dependent_tier(classify::<CodDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "coh_dependent_tier" => {
-            let _ = extract_coh_dependent_tier(classify::<CohDependentTierNode>(node));
+            let _ = extract_coh_dependent_tier(classify::<CohDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "color_words_header" => {
-            let _ = extract_color_words_header(classify::<ColorWordsHeaderNode>(node));
+            let _ = extract_color_words_header(classify::<ColorWordsHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "com_dependent_tier" => {
-            let _ = extract_com_dependent_tier(classify::<ComDependentTierNode>(node));
+            let _ = extract_com_dependent_tier(classify::<ComDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "comment_header" => {
-            let _ = extract_comment_header(classify::<CommentHeaderNode>(node));
+            let _ = extract_comment_header(classify::<CommentHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "date_header" => {
-            let _ = extract_date_header(classify::<DateHeaderNode>(node));
+            let _ = extract_date_header(classify::<DateHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "def_dependent_tier" => {
-            let _ = extract_def_dependent_tier(classify::<DefDependentTierNode>(node));
+            let _ = extract_def_dependent_tier(classify::<DefDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "full_document" => {
-            let _ = extract_full_document(classify::<FullDocumentNode>(node));
+            let _ = extract_full_document(classify::<FullDocumentNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "eg_header" => {
-            let _ = extract_eg_header(classify::<EgHeaderNode>(node));
+            let _ =
+                extract_eg_header(classify::<EgHeaderNode>(node)).expect("producer reconstruction");
             true
         }
         "end_header" => {
-            let _ = extract_end_header(classify::<EndHeaderNode>(node));
+            let _ = extract_end_header(classify::<EndHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "eng_dependent_tier" => {
-            let _ = extract_eng_dependent_tier(classify::<EngDependentTierNode>(node));
+            let _ = extract_eng_dependent_tier(classify::<EngDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "err_dependent_tier" => {
-            let _ = extract_err_dependent_tier(classify::<ErrDependentTierNode>(node));
+            let _ = extract_err_dependent_tier(classify::<ErrDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "event" => {
-            let _ = extract_event(classify::<EventNode>(node));
+            let _ = extract_event(classify::<EventNode>(node)).expect("producer reconstruction");
             true
         }
         "exp_dependent_tier" => {
-            let _ = extract_exp_dependent_tier(classify::<ExpDependentTierNode>(node));
+            let _ = extract_exp_dependent_tier(classify::<ExpDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "fac_dependent_tier" => {
-            let _ = extract_fac_dependent_tier(classify::<FacDependentTierNode>(node));
+            let _ = extract_fac_dependent_tier(classify::<FacDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "flo_dependent_tier" => {
-            let _ = extract_flo_dependent_tier(classify::<FloDependentTierNode>(node));
+            let _ = extract_flo_dependent_tier(classify::<FloDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "font_header" => {
-            let _ = extract_font_header(classify::<FontHeaderNode>(node));
+            let _ = extract_font_header(classify::<FontHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "g_header" => {
-            let _ = extract_g_header(classify::<GHeaderNode>(node));
+            let _ =
+                extract_g_header(classify::<GHeaderNode>(node)).expect("producer reconstruction");
             true
         }
         "gls_dependent_tier" => {
-            let _ = extract_gls_dependent_tier(classify::<GlsDependentTierNode>(node));
+            let _ = extract_gls_dependent_tier(classify::<GlsDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "gpx_dependent_tier" => {
-            let _ = extract_gpx_dependent_tier(classify::<GpxDependentTierNode>(node));
+            let _ = extract_gpx_dependent_tier(classify::<GpxDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "gra_contents" => {
-            let _ = extract_gra_contents(classify::<GraContentsNode>(node));
+            let _ = extract_gra_contents(classify::<GraContentsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "gra_dependent_tier" => {
-            let _ = extract_gra_dependent_tier(classify::<GraDependentTierNode>(node));
+            let _ = extract_gra_dependent_tier(classify::<GraDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "gra_relation" => {
-            let _ = extract_gra_relation(classify::<GraRelationNode>(node));
+            let _ = extract_gra_relation(classify::<GraRelationNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "group_with_annotations" => {
-            let _ = extract_group_with_annotations(classify::<GroupWithAnnotationsNode>(node));
+            let _ = extract_group_with_annotations(classify::<GroupWithAnnotationsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "header_sep" => {
-            let _ = extract_header_sep(classify::<HeaderSepNode>(node));
+            let _ = extract_header_sep(classify::<HeaderSepNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "id_contents" => {
-            let _ = extract_id_contents(classify::<IdContentsNode>(node));
+            let _ = extract_id_contents(classify::<IdContentsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "id_header" => {
-            let _ = extract_id_header(classify::<IdHeaderNode>(node));
+            let _ =
+                extract_id_header(classify::<IdHeaderNode>(node)).expect("producer reconstruction");
             true
         }
         "int_dependent_tier" => {
-            let _ = extract_int_dependent_tier(classify::<IntDependentTierNode>(node));
+            let _ = extract_int_dependent_tier(classify::<IntDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "l1_of_header" => {
-            let _ = extract_l1_of_header(classify::<L1OfHeaderNode>(node));
+            let _ = extract_l1_of_header(classify::<L1OfHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "languages_contents" => {
-            let _ = extract_languages_contents(classify::<LanguagesContentsNode>(node));
+            let _ = extract_languages_contents(classify::<LanguagesContentsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "languages_header" => {
-            let _ = extract_languages_header(classify::<LanguagesHeaderNode>(node));
+            let _ = extract_languages_header(classify::<LanguagesHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "location_header" => {
-            let _ = extract_location_header(classify::<LocationHeaderNode>(node));
+            let _ = extract_location_header(classify::<LocationHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "long_feature_begin" => {
-            let _ = extract_long_feature_begin(classify::<LongFeatureBeginNode>(node));
+            let _ = extract_long_feature_begin(classify::<LongFeatureBeginNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "long_feature_end" => {
-            let _ = extract_long_feature_end(classify::<LongFeatureEndNode>(node));
+            let _ = extract_long_feature_end(classify::<LongFeatureEndNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "main_pho_group" => {
-            let _ = extract_main_pho_group(classify::<MainPhoGroupNode>(node));
+            let _ = extract_main_pho_group(classify::<MainPhoGroupNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "main_sin_group" => {
-            let _ = extract_main_sin_group(classify::<MainSinGroupNode>(node));
+            let _ = extract_main_sin_group(classify::<MainSinGroupNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "main_tier" => {
-            let _ = extract_main_tier(classify::<MainTierNode>(node));
+            let _ =
+                extract_main_tier(classify::<MainTierNode>(node)).expect("producer reconstruction");
             true
         }
         "media_contents" => {
-            let _ = extract_media_contents(classify::<MediaContentsNode>(node));
+            let _ = extract_media_contents(classify::<MediaContentsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "media_header" => {
-            let _ = extract_media_header(classify::<MediaHeaderNode>(node));
+            let _ = extract_media_header(classify::<MediaHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "mod_dependent_tier" => {
-            let _ = extract_mod_dependent_tier(classify::<ModDependentTierNode>(node));
+            let _ = extract_mod_dependent_tier(classify::<ModDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "modsyl_dependent_tier" => {
-            let _ = extract_modsyl_dependent_tier(classify::<ModsylDependentTierNode>(node));
+            let _ = extract_modsyl_dependent_tier(classify::<ModsylDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "mor_content" => {
-            let _ = extract_mor_content(classify::<MorContentNode>(node));
+            let _ = extract_mor_content(classify::<MorContentNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "mor_contents" => {
-            let _ = extract_mor_contents(classify::<MorContentsNode>(node));
+            let _ = extract_mor_contents(classify::<MorContentsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "mor_dependent_tier" => {
-            let _ = extract_mor_dependent_tier(classify::<MorDependentTierNode>(node));
+            let _ = extract_mor_dependent_tier(classify::<MorDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "mor_feature" => {
-            let _ = extract_mor_feature(classify::<MorFeatureNode>(node));
+            let _ = extract_mor_feature(classify::<MorFeatureNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "mor_post_clitic" => {
-            let _ = extract_mor_post_clitic(classify::<MorPostCliticNode>(node));
+            let _ = extract_mor_post_clitic(classify::<MorPostCliticNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "mor_word" => {
-            let _ = extract_mor_word(classify::<MorWordNode>(node));
+            let _ =
+                extract_mor_word(classify::<MorWordNode>(node)).expect("producer reconstruction");
             true
         }
         "new_episode_header" => {
-            let _ = extract_new_episode_header(classify::<NewEpisodeHeaderNode>(node));
+            let _ = extract_new_episode_header(classify::<NewEpisodeHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "nonvocal_begin" => {
-            let _ = extract_nonvocal_begin(classify::<NonvocalBeginNode>(node));
+            let _ = extract_nonvocal_begin(classify::<NonvocalBeginNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "nonvocal_end" => {
-            let _ = extract_nonvocal_end(classify::<NonvocalEndNode>(node));
+            let _ = extract_nonvocal_end(classify::<NonvocalEndNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "nonvocal_simple" => {
-            let _ = extract_nonvocal_simple(classify::<NonvocalSimpleNode>(node));
+            let _ = extract_nonvocal_simple(classify::<NonvocalSimpleNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "nonword_with_optional_annotations" => {
             let _ = extract_nonword_with_optional_annotations(classify::<
                 NonwordWithOptionalAnnotationsNode,
-            >(node));
+            >(node))
+            .expect("producer reconstruction");
             true
         }
         "number_header" => {
-            let _ = extract_number_header(classify::<NumberHeaderNode>(node));
+            let _ = extract_number_header(classify::<NumberHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "options_contents" => {
-            let _ = extract_options_contents(classify::<OptionsContentsNode>(node));
+            let _ = extract_options_contents(classify::<OptionsContentsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "options_header" => {
-            let _ = extract_options_header(classify::<OptionsHeaderNode>(node));
+            let _ = extract_options_header(classify::<OptionsHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "ort_dependent_tier" => {
-            let _ = extract_ort_dependent_tier(classify::<OrtDependentTierNode>(node));
+            let _ = extract_ort_dependent_tier(classify::<OrtDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "other_spoken_event" => {
-            let _ = extract_other_spoken_event(classify::<OtherSpokenEventNode>(node));
+            let _ = extract_other_spoken_event(classify::<OtherSpokenEventNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "page_header" => {
-            let _ = extract_page_header(classify::<PageHeaderNode>(node));
+            let _ = extract_page_header(classify::<PageHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "par_dependent_tier" => {
-            let _ = extract_par_dependent_tier(classify::<ParDependentTierNode>(node));
+            let _ = extract_par_dependent_tier(classify::<ParDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "participant" => {
-            let _ = extract_participant(classify::<ParticipantNode>(node));
+            let _ = extract_participant(classify::<ParticipantNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "participants_contents" => {
-            let _ = extract_participants_contents(classify::<ParticipantsContentsNode>(node));
+            let _ = extract_participants_contents(classify::<ParticipantsContentsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "participants_header" => {
-            let _ = extract_participants_header(classify::<ParticipantsHeaderNode>(node));
+            let _ = extract_participants_header(classify::<ParticipantsHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "pho_dependent_tier" => {
-            let _ = extract_pho_dependent_tier(classify::<PhoDependentTierNode>(node));
+            let _ = extract_pho_dependent_tier(classify::<PhoDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "pho_grouped_content" => {
-            let _ = extract_pho_grouped_content(classify::<PhoGroupedContentNode>(node));
+            let _ = extract_pho_grouped_content(classify::<PhoGroupedContentNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "pho_groups" => {
-            let _ = extract_pho_groups(classify::<PhoGroupsNode>(node));
+            let _ = extract_pho_groups(classify::<PhoGroupsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "pho_words" => {
-            let _ = extract_pho_words(classify::<PhoWordsNode>(node));
+            let _ =
+                extract_pho_words(classify::<PhoWordsNode>(node)).expect("producer reconstruction");
             true
         }
         "phoaln_dependent_tier" => {
-            let _ = extract_phoaln_dependent_tier(classify::<PhoalnDependentTierNode>(node));
+            let _ = extract_phoaln_dependent_tier(classify::<PhoalnDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "phosyl_dependent_tier" => {
-            let _ = extract_phosyl_dependent_tier(classify::<PhosylDependentTierNode>(node));
+            let _ = extract_phosyl_dependent_tier(classify::<PhosylDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "pid_header" => {
-            let _ = extract_pid_header(classify::<PidHeaderNode>(node));
+            let _ = extract_pid_header(classify::<PidHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "quotation" => {
-            let _ = extract_quotation(classify::<QuotationNode>(node));
+            let _ = extract_quotation(classify::<QuotationNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "recording_quality_header" => {
-            let _ = extract_recording_quality_header(classify::<RecordingQualityHeaderNode>(node));
+            let _ = extract_recording_quality_header(classify::<RecordingQualityHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "replacement" => {
-            let _ = extract_replacement(classify::<ReplacementNode>(node));
+            let _ = extract_replacement(classify::<ReplacementNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "room_layout_header" => {
-            let _ = extract_room_layout_header(classify::<RoomLayoutHeaderNode>(node));
+            let _ = extract_room_layout_header(classify::<RoomLayoutHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "sin_dependent_tier" => {
-            let _ = extract_sin_dependent_tier(classify::<SinDependentTierNode>(node));
+            let _ = extract_sin_dependent_tier(classify::<SinDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "sin_grouped_content" => {
-            let _ = extract_sin_grouped_content(classify::<SinGroupedContentNode>(node));
+            let _ = extract_sin_grouped_content(classify::<SinGroupedContentNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "sin_groups" => {
-            let _ = extract_sin_groups(classify::<SinGroupsNode>(node));
+            let _ = extract_sin_groups(classify::<SinGroupsNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "sit_dependent_tier" => {
-            let _ = extract_sit_dependent_tier(classify::<SitDependentTierNode>(node));
+            let _ = extract_sit_dependent_tier(classify::<SitDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "situation_header" => {
-            let _ = extract_situation_header(classify::<SituationHeaderNode>(node));
+            let _ = extract_situation_header(classify::<SituationHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "spa_dependent_tier" => {
-            let _ = extract_spa_dependent_tier(classify::<SpaDependentTierNode>(node));
+            let _ = extract_spa_dependent_tier(classify::<SpaDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "t_header" => {
-            let _ = extract_t_header(classify::<THeaderNode>(node));
+            let _ =
+                extract_t_header(classify::<THeaderNode>(node)).expect("producer reconstruction");
             true
         }
         "tape_location_header" => {
-            let _ = extract_tape_location_header(classify::<TapeLocationHeaderNode>(node));
+            let _ = extract_tape_location_header(classify::<TapeLocationHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "thumbnail_header" => {
-            let _ = extract_thumbnail_header(classify::<ThumbnailHeaderNode>(node));
+            let _ = extract_thumbnail_header(classify::<ThumbnailHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "tier_body" => {
-            let _ = extract_tier_body(classify::<TierBodyNode>(node));
+            let _ =
+                extract_tier_body(classify::<TierBodyNode>(node)).expect("producer reconstruction");
             true
         }
         "tier_sep" => {
-            let _ = extract_tier_sep(classify::<TierSepNode>(node));
+            let _ =
+                extract_tier_sep(classify::<TierSepNode>(node)).expect("producer reconstruction");
             true
         }
         "tim_dependent_tier" => {
-            let _ = extract_tim_dependent_tier(classify::<TimDependentTierNode>(node));
+            let _ = extract_tim_dependent_tier(classify::<TimDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "time_duration_header" => {
-            let _ = extract_time_duration_header(classify::<TimeDurationHeaderNode>(node));
+            let _ = extract_time_duration_header(classify::<TimeDurationHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "time_start_header" => {
-            let _ = extract_time_start_header(classify::<TimeStartHeaderNode>(node));
+            let _ = extract_time_start_header(classify::<TimeStartHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "transcriber_header" => {
-            let _ = extract_transcriber_header(classify::<TranscriberHeaderNode>(node));
+            let _ = extract_transcriber_header(classify::<TranscriberHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "transcription_header" => {
-            let _ = extract_transcription_header(classify::<TranscriptionHeaderNode>(node));
+            let _ = extract_transcription_header(classify::<TranscriptionHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "types_header" => {
-            let _ = extract_types_header(classify::<TypesHeaderNode>(node));
+            let _ = extract_types_header(classify::<TypesHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "unsupported_dependent_tier" => {
             let _ =
-                extract_unsupported_dependent_tier(classify::<UnsupportedDependentTierNode>(node));
+                extract_unsupported_dependent_tier(classify::<UnsupportedDependentTierNode>(node))
+                    .expect("producer reconstruction");
             true
         }
         "unsupported_header" => {
-            let _ = extract_unsupported_header(classify::<UnsupportedHeaderNode>(node));
+            let _ = extract_unsupported_header(classify::<UnsupportedHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "unsupported_line" => {
-            let _ = extract_unsupported_line(classify::<UnsupportedLineNode>(node));
+            let _ = extract_unsupported_line(classify::<UnsupportedLineNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "utf8_header" => {
-            let _ = extract_utf8_header(classify::<Utf8HeaderNode>(node));
+            let _ = extract_utf8_header(classify::<Utf8HeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "utterance" => {
-            let _ = extract_utterance(classify::<UtteranceNode>(node));
+            let _ = extract_utterance(classify::<UtteranceNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "utterance_end" => {
-            let _ = extract_utterance_end(classify::<UtteranceEndNode>(node));
+            let _ = extract_utterance_end(classify::<UtteranceEndNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "videos_header" => {
-            let _ = extract_videos_header(classify::<VideosHeaderNode>(node));
+            let _ = extract_videos_header(classify::<VideosHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "warning_header" => {
-            let _ = extract_warning_header(classify::<WarningHeaderNode>(node));
+            let _ = extract_warning_header(classify::<WarningHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "window_header" => {
-            let _ = extract_window_header(classify::<WindowHeaderNode>(node));
+            let _ = extract_window_header(classify::<WindowHeaderNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "wor_dependent_tier" => {
-            let _ = extract_wor_dependent_tier(classify::<WorDependentTierNode>(node));
+            let _ = extract_wor_dependent_tier(classify::<WorDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "wor_tier_body" => {
-            let _ = extract_wor_tier_body(classify::<WorTierBodyNode>(node));
+            let _ = extract_wor_tier_body(classify::<WorTierBodyNode>(node))
+                .expect("producer reconstruction");
             true
         }
         "word_with_optional_annotations" => {
             let _ = extract_word_with_optional_annotations(classify::<
                 WordWithOptionalAnnotationsNode,
-            >(node));
+            >(node))
+            .expect("producer reconstruction");
             true
         }
         "x_dependent_tier" => {
-            let _ = extract_x_dependent_tier(classify::<XDependentTierNode>(node));
+            let _ = extract_x_dependent_tier(classify::<XDependentTierNode>(node))
+                .expect("producer reconstruction");
             true
         }
         _ => false,
@@ -997,14 +1137,16 @@ fn test_options_header_semantic_conversion() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "options_header" {
-            let children = extract_options_header(classify::<OptionsHeaderNode>(node));
+            let children = extract_options_header(classify::<OptionsHeaderNode>(node))
+                .expect("producer reconstruction");
 
             // The payload is options_contents (child_2); its slot already
             // carries the typed `OptionsContentsNode` wrapper, so it is
             // passed straight into `extract_options_contents` with no
             // unwrap-then-rewrap.
             if let NodeSlot::Present(contents_node) = children.child_2.slot() {
-                let contents_children = extract_options_contents(*contents_node);
+                let contents_children =
+                    extract_options_contents(*contents_node).expect("producer reconstruction");
 
                 if let NodeSlot::Present(option_node) = contents_children.child_0.slot() {
                     let option_text = node_text(option_node.raw_node(), source);
@@ -1033,9 +1175,11 @@ fn test_options_header_unknown_value() {
 
     walk_all(tree.root_node(), &mut |node| {
         if node.kind() == "options_header" {
-            let children = extract_options_header(classify::<OptionsHeaderNode>(node));
+            let children = extract_options_header(classify::<OptionsHeaderNode>(node))
+                .expect("producer reconstruction");
             if let NodeSlot::Present(contents_node) = children.child_2.slot() {
-                let contents_children = extract_options_contents(*contents_node);
+                let contents_children =
+                    extract_options_contents(*contents_node).expect("producer reconstruction");
                 if let NodeSlot::Present(option_node) = contents_children.child_0.slot() {
                     let value = talkbank_model::ChatOptionFlag::from_text(node_text(
                         option_node.raw_node(),

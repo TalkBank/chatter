@@ -267,17 +267,14 @@ impl ParseError {
     /// # Example
     ///
     /// ```
-    /// use talkbank_model::{ParseError, ErrorCode, Severity, ParseErrorBuilderError};
+    /// use talkbank_model::{ParseError, ErrorCode, Severity};
     ///
-    /// # fn build_error() -> Result<ParseError, ParseErrorBuilderError> {
     /// let error = ParseError::build(ErrorCode::InvalidMediaBullet)
     ///     .severity(Severity::Error)
     ///     .at(10, 20)
     ///     .message("Invalid media bullet format")
     ///     .suggestion("Use format: ·start_end·")
-    ///     .finish()?;
-    /// # Ok(error)
-    /// # }
+    ///     .finish();
     /// ```
     pub fn build(code: ErrorCode) -> ParseErrorBuilder {
         ParseErrorBuilder::new(code)
@@ -287,7 +284,7 @@ impl ParseError {
     ///
     /// Use this for internal parser errors that indicate bugs or
     /// unimplemented features rather than user-facing CHAT errors.
-    /// The error code is always [`ErrorCode::TreeParsingError`] with
+    /// The error code is always [`ErrorCode::InternalError`] with
     /// [`Severity::Error`] and no source context.
     ///
     /// # Parameters
@@ -296,7 +293,7 @@ impl ParseError {
     /// - `span`: Byte range where the unexpected condition occurred.
     pub fn internal(message: impl Into<String>, span: Span) -> Self {
         Self::new(
-            ErrorCode::TreeParsingError,
+            ErrorCode::InternalError,
             Severity::Error,
             SourceLocation::new(span),
             None,

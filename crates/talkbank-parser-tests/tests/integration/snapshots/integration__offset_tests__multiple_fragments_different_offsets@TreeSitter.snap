@@ -13,7 +13,6 @@ expression: results
                     end: 5,
                 },
                 word_id: None,
-                raw_text: "hello",
                 content: WordContents(
                     [
                         Text(
@@ -49,7 +48,6 @@ expression: results
                     end: 105,
                 },
                 word_id: None,
-                raw_text: "world",
                 content: WordContents(
                     [
                         Text(
@@ -85,7 +83,6 @@ expression: results
                     end: 203,
                 },
                 word_id: None,
-                raw_text: "foo",
                 content: WordContents(
                     [
                         Text(
@@ -121,7 +118,6 @@ expression: results
                     end: 303,
                 },
                 word_id: None,
-                raw_text: "bar",
                 content: WordContents(
                     [
                         Text(

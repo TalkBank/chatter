@@ -12,228 +12,13 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
     TeeErrorSink,
 };
-use crate::generated_traversal::{AsRawNode, SourceSlice};
-use crate::model::{ChatDate, Header, Line, WarningText};
+use crate::model::Line;
 use crate::parser::TreeSitterParser;
-use crate::parser::chat_file_parser::utterance_parser::classify_percent_error_text;
 use crate::parser::document_root::DocumentRoot;
 use crate::parser::tree_parsing::parser_helpers::collect_recovery_nodes;
 use tracing::{debug, info, trace};
 
 use super::document_lowering::DocumentLowering;
-
-/// Recover specific top-level `ERROR` nodes that still encode a valid header shape.
-pub(super) fn recover_top_level_error_node(
-    bound: SourceSlice<'_, '_>,
-    lines: &mut Vec<Line>,
-) -> bool {
-    let error_node = bound.raw_node();
-    let text = bound.text();
-
-    let bytes = text.as_bytes();
-    if bytes.starts_with(b"@Date:")
-        && bytes[6..]
-            .iter()
-            .all(|byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r'))
-    {
-        let span = Span::new(error_node.start_byte() as u32, error_node.end_byte() as u32);
-        let date_value = text[6..].trim_matches(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r'));
-        lines.push(Line::header_with_span(
-            Header::Date {
-                date: ChatDate::new(date_value),
-            },
-            span,
-        ));
-        return true;
-    }
-
-    if recover_unknown_header_line(bound, lines) {
-        return true;
-    }
-
-    false
-}
-
-/// Convert an unknown `@Header:` line embedded in an `ERROR` node into `Header::Unknown`.
-fn recover_unknown_header_line(bound: SourceSlice<'_, '_>, lines: &mut Vec<Line>) -> bool {
-    let error_node = bound.raw_node();
-    let text = bound.text();
-    let first_line = match text.lines().next() {
-        Some(line) => line.trim_end(),
-        None => return false,
-    };
-    if !first_line.starts_with('@') {
-        return false;
-    }
-
-    let colon_index = match first_line.find(':') {
-        Some(idx) => idx,
-        None => return false,
-    };
-    if colon_index <= 1 {
-        return false;
-    }
-
-    let label = &first_line[1..colon_index];
-    if is_known_header_label(label) {
-        return false;
-    }
-
-    let span = Span::new(error_node.start_byte() as u32, error_node.end_byte() as u32);
-    lines.push(Line::header_with_span(
-        Header::Unknown {
-            text: WarningText::new(first_line.to_string()),
-            parse_reason: Some(format!(
-                "Recovered unknown header '{}' from parse error node",
-                label
-            )),
-            suggested_fix: Some(
-                "Use a standard CHAT header, or keep this as legacy metadata".to_string(),
-            ),
-        },
-        span,
-    ));
-    true
-}
-
-/// Return whether `label` is a known CHAT header key.
-fn is_known_header_label(label: &str) -> bool {
-    matches!(
-        label.to_ascii_lowercase().as_str(),
-        "utf8"
-            | "begin"
-            | "end"
-            | "new episode"
-            | "languages"
-            | "comment"
-            | "participants"
-            | "id"
-            | "pid"
-            | "date"
-            | "media"
-            | "number"
-            | "recording quality"
-            | "transcription"
-            | "situation"
-            | "types"
-            | "tape location"
-            | "time duration"
-            | "time start"
-            | "birth of"
-            | "birthplace of"
-            | "l1 of"
-            | "font"
-            | "window"
-            | "color words"
-            | "bck"
-            | "bg"
-            | "eg"
-            | "g"
-            | "t"
-            | "location"
-            | "room layout"
-            | "transcriber"
-            | "videos"
-            | "options"
-            | "warning"
-            | "activities"
-            | "blank"
-            | "page"
-    )
-}
-
-/// Report malformed/orphaned top-level dependent tiers and taint the prior utterance if present.
-pub(super) fn report_top_level_dependent_tier_error(
-    bound: SourceSlice<'_, '_>,
-    lines: &mut [Line],
-    errors: &impl ErrorSink,
-) -> bool {
-    let error_node = bound.raw_node();
-    let input = bound.source();
-    let text = bound.text();
-
-    if !text.starts_with('%') {
-        return false;
-    }
-
-    // The first line: up to the first `\n`, its trailing carriage returns
-    // trimmed (`str::lines` strips one; nothing below reads past them), and
-    // the whole text when it has no line break.
-    let first_line = match text.split_once('\n') {
-        Some((first, _)) => first,
-        None => text,
-    }
-    .trim_end_matches('\r');
-    let mut has_preceding_utterance = false;
-    if let Some(utterance) = lines.iter_mut().rev().find_map(|line| match line {
-        Line::Utterance(utt) => Some(utt),
-        _ => None,
-    }) {
-        has_preceding_utterance = true;
-        match classify_percent_error_text(first_line) {
-            Some(tier) => utterance.mark_parse_taint(tier),
-            None => utterance.mark_all_dependent_alignment_taint(),
-        }
-    }
-
-    let (code, message, suggestion) = if !has_preceding_utterance {
-        (
-            ErrorCode::OrphanedDependentTier,
-            format!(
-                "Dependent tier appears before any main tier: {}",
-                first_line.trim_end()
-            ),
-            "Move this dependent tier directly below its parent main tier",
-        )
-    } else if !first_line.contains(":\t") {
-        (
-            ErrorCode::MalformedTierHeader,
-            format!("Malformed dependent tier header: {}", first_line.trim_end()),
-            "Use dependent tier syntax %tier:\\tcontent",
-        )
-    } else if first_line.contains("|||") {
-        (
-            ErrorCode::InvalidDependentTier,
-            format!("Invalid dependent tier content: {}", first_line.trim_end()),
-            "Provide valid tier content for the declared dependent tier type",
-        )
-    } else if first_line.starts_with("%mor:")
-        || first_line.starts_with("%gra:")
-        || first_line.starts_with("%pho:")
-        || first_line.starts_with("%sin:")
-    {
-        (
-            ErrorCode::TierValidationError,
-            format!(
-                "Tier validation error: could not fully parse dependent tier '{}'",
-                first_line.trim_end()
-            ),
-            "Fix tier-internal format, check tokenization, pipe delimiters, and required fields",
-        )
-    } else {
-        (
-            ErrorCode::InvalidDependentTier,
-            format!(
-                "Could not fully parse dependent tier: {}",
-                first_line.trim_end()
-            ),
-            "Check dependent tier syntax (%tier:\\tcontent) and tier-specific format",
-        )
-    };
-
-    errors.report(
-        ParseError::new(
-            code,
-            Severity::Error,
-            SourceLocation::from_offsets(error_node.start_byte(), error_node.end_byte()),
-            ErrorContext::new(input, error_node.start_byte()..error_node.end_byte(), text),
-            message,
-        )
-        .with_suggestion(suggestion),
-    );
-
-    true
-}
 
 /// Parse all lines from `input` and stream diagnostics to `errors`.
 pub(super) fn parse_lines(
@@ -272,6 +57,23 @@ pub(super) fn parse_lines_with_old_tree(
     old_tree: Option<&tree_sitter::Tree>,
     errors: &impl ErrorSink,
 ) -> (Vec<Line>, Option<tree_sitter::Tree>) {
+    let (lines, parsed) = parse_lines_with_source(parser, input, old_tree, errors);
+    (
+        lines,
+        parsed.map(crate::generated_traversal::ParsedSource::into_tree),
+    )
+}
+
+/// Retain the producing source capability instead of detaching its raw tree.
+pub(super) fn parse_lines_with_source<'source>(
+    parser: &TreeSitterParser,
+    input: &'source str,
+    old_tree: Option<&tree_sitter::Tree>,
+    errors: &impl ErrorSink,
+) -> (
+    Vec<Line>,
+    Option<crate::generated_traversal::ParsedSource<'source>>,
+) {
     debug!("Parsing CHAT file ({} bytes)", input.len());
 
     // The shared producer checks coordinate capacity and binds the exact
@@ -291,7 +93,7 @@ pub(super) fn parse_lines_with_old_tree(
     let root = match DocumentRoot::classify(&tree) {
         Ok(root) => root,
         Err(error) => {
-            crate::parser::typed_cst::report_source_binding_error(
+            crate::parser::typed_cst::report_cst_failure(
                 tree.root_node(),
                 tree.source(),
                 error,
@@ -341,10 +143,9 @@ pub(super) fn parse_lines_with_old_tree(
     // migration). The hand-walked `match child.kind()` dispatch over
     // `full_document` children was replaced by `DocumentLowering`, which drives
     // the generated `extract_full_document` and processes each `NodeSlot` slot
-    // exhaustively. The model and recovery diagnostics are preserved exactly: a
-    // document-level ERROR routes through the same dependent-tier / recovery /
-    // analyze path, and each present `line` is dispatched to the unchanged inner
-    // hand-walk. `DocumentLowering` borrows the Tee'd sink so its emissions are
+    // exhaustively. Document-level ERROR nodes are reported without constructing
+    // headers or tiers from their text. Present lines retain normal lowering.
+    // `DocumentLowering` borrows the Tee'd sink so its emissions are
     // recorded for the backstop's span-dedup below.
     // A recovered document lowers exactly like a complete one: the ERROR
     // standing in for a `full_document` carries the same children, so a missing
@@ -353,7 +154,7 @@ pub(super) fn parse_lines_with_old_tree(
     // nothing document-shaped in it at all; the recovery backstop below still
     // runs over the node, and the "no valid lines recovered" path still reports
     // it.
-    let lines = DocumentLowering::lower(parser, root, errors);
+    let lines = DocumentLowering::lower(root, errors);
 
     // When the root IS an ERROR node and the loop couldn't recover any valid
     // lines, the file is completely unparsable.  Report this so the strict caller
@@ -412,5 +213,5 @@ pub(super) fn parse_lines_with_old_tree(
 
     info!("Parsed {} lines", lines.len());
 
-    (lines, Some(tree.into_tree()))
+    (lines, Some(tree))
 }

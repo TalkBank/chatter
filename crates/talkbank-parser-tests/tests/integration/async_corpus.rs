@@ -3,10 +3,44 @@
 
 use talkbank_model::model::{FileStem, SemanticEq, TranscriptName};
 use talkbank_model::validation::{AsyncValidationError, validate_async};
-use talkbank_model::{ErrorCollector, NullErrorSink};
+use talkbank_model::{ErrorCollector, ErrorSink, NullErrorSink, ParseError};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{repo_paths::workspace_root, test_error::strict_parse};
 use talkbank_spec_vocabulary::validation_manifest::{FixtureTranscriptName, ValidationManifest};
+
+/// An external consumer can fail independently of the transcript's validity.
+struct PanickingDiagnosticConsumer;
+
+impl ErrorSink for PanickingDiagnosticConsumer {
+    fn report(&self, _error: ParseError) {
+        panic!("injected diagnostic consumer failure");
+    }
+}
+
+#[tokio::test]
+async fn spec_async_consumer_failure_is_a_task_failure_not_a_validation_result() {
+    let source = std::fs::read_to_string(
+        workspace_root()
+            .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E501_3.cha"),
+    )
+    .expect("canonical duplicate language header");
+    let parser = TreeSitterParser::new().expect("parser");
+    let file = strict_parse(parser.parse_chat_file(&source)).expect("cleanly parsed spec input");
+
+    // Neither API may mistake an interrupted diagnostic stream for completed
+    // validation. In particular, the admission API must never yield a proof.
+    let admission = validate_async(file.clone(), PanickingDiagnosticConsumer, None).await;
+    assert!(matches!(admission, Err(AsyncValidationError::Join(error)) if error.is_panic()));
+
+    let streamed = talkbank_model::validation::validate_with_rules_async(
+        file,
+        talkbank_model::validation::RuleSelection::new(),
+        PanickingDiagnosticConsumer,
+        None,
+    )
+    .await;
+    assert!(matches!(streamed, Err(AsyncValidationError::Join(error)) if error.is_panic()));
+}
 
 #[tokio::test]
 async fn spec_async_admission_preserves_sync_proofs_and_refusals() {

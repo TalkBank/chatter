@@ -64,6 +64,49 @@ pub fn contains_digits(text: &str) -> bool {
     text.chars().any(|c| c.is_ascii_digit())
 }
 
+/// A language's admitted role in the ordered declaration list.
+/// Alternate carries the actual borrowed declaration, never an invented code.
+pub(crate) enum ShortcutLanguage<'a> {
+    Alternate(&'a LanguageCode),
+    MissingAlternate,
+    Tertiary,
+    Undeclared,
+}
+
+impl<'a> ShortcutLanguage<'a> {
+    pub(crate) fn classify(current: &LanguageCode, declared: &'a [LanguageCode]) -> Self {
+        let Some((primary, rest)) = declared.split_first() else {
+            return Self::Undeclared;
+        };
+        if current.as_str() == primary.as_str() {
+            return match rest.first() {
+                Some(secondary) => Self::Alternate(secondary),
+                None => Self::MissingAlternate,
+            };
+        }
+        let Some((secondary, rest)) = rest.split_first() else {
+            return Self::Undeclared;
+        };
+        if current.as_str() == secondary.as_str() {
+            Self::Alternate(primary)
+        } else if rest
+            .iter()
+            .any(|language| language.as_str() == current.as_str())
+        {
+            Self::Tertiary
+        } else {
+            Self::Undeclared
+        }
+    }
+
+    pub(crate) fn alternate(self) -> Option<LanguageCode> {
+        match self {
+            Self::Alternate(language) => Some(language.clone()),
+            Self::MissingAlternate | Self::Tertiary | Self::Undeclared => None,
+        }
+    }
+}
+
 /// File-level constant data shared across all validation contexts via `Arc`.
 ///
 /// These fields are set once per file (from headers) and never change during
@@ -311,28 +354,7 @@ impl ValidationContext {
     ///
     /// This implements the canonical other-language resolution logic.
     pub fn get_other_language(&self, current_lang: &LanguageCode) -> Option<LanguageCode> {
-        if self.shared.declared_languages.is_empty() {
-            return None;
-        }
-
-        let primary = &self.shared.declared_languages[0];
-        let secondary = self.shared.declared_languages.get(1);
-
-        if current_lang.as_str() == primary.as_str() {
-            // In primary → switch to secondary (may be None if only one language)
-            secondary.cloned()
-        } else if let Some(sec) = secondary {
-            if current_lang.as_str() == sec.as_str() {
-                // In secondary → switch to primary
-                Some(primary.clone())
-            } else {
-                // In tertiary language or unlisted language → can't use @s
-                None
-            }
-        } else {
-            // In tertiary language or unlisted language → can't use @s
-            None
-        }
+        ShortcutLanguage::classify(current_lang, &self.shared.declared_languages).alternate()
     }
 
     /// Returns whether a language is tertiary in the declared-language order.
@@ -340,14 +362,9 @@ impl ValidationContext {
     /// Tertiary languages cannot use the bare `@s` shortcut and must be named
     /// explicitly (`@s:code`) to avoid ambiguous fallback behavior.
     pub fn is_tertiary_language(&self, lang: &LanguageCode) -> bool {
-        match self
-            .shared
-            .declared_languages
-            .iter()
-            .position(|l| l.as_str() == lang.as_str())
-        {
-            Some(pos) => pos >= 2,
-            None => false,
-        }
+        matches!(
+            ShortcutLanguage::classify(lang, &self.shared.declared_languages),
+            ShortcutLanguage::Tertiary
+        )
     }
 }

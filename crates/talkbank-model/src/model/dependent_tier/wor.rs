@@ -144,7 +144,8 @@ impl WorItem {
 /// **What this means**:
 /// - Main-tier words remain the only lexical authority
 /// - `%wor` text can refuse reuse but cannot supply replacement lexical data
-/// - Current `cleaned_text` output is a named canonical convention
+/// - Newly generated tiers use the named `cleaned_text` convention
+/// - Serialization preserves parsed word structure; it does not regenerate it
 /// - Timing itself comes only from `inline_bullet`
 ///
 /// See: `book/src/architecture/wor-timing.md` for comprehensive analysis.
@@ -318,7 +319,10 @@ impl crate::model::WriteChat for WorTier {
             }
             match item {
                 WorItem::Word(word) => {
-                    w.write_str(word.cleaned_text())?;
+                    // Generation already constructs canonical display words.
+                    // A parsed tier can retain shortening, compound and marker
+                    // structure; serializing it must not flatten that evidence.
+                    word.write_chat(w)?;
                     if let Some(ref bullet) = word.inline_bullet {
                         w.write_char(' ')?;
                         bullet.write_chat(w)?;

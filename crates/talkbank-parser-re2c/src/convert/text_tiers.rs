@@ -191,7 +191,7 @@ impl LoweredGra {
     ///
     /// The one route for a caller that HAS an utterance, which is every caller
     /// that lowers a whole file.
-    pub fn into_tier(self, health: &mut ParseHealthState) -> GraTier {
+    pub fn into_tier(self, health: &mut ParseHealth) -> GraTier {
         match self.recovered {
             Recovered::Nothing => {}
             Recovered::ADroppedRelation => health.taint(ParseHealthTier::Gra),

@@ -128,23 +128,28 @@ fn generate_enum_span_shift(data: &syn::DataEnum) -> TokenStream {
                         .unnamed
                         .iter()
                         .enumerate()
-                        .map(|(i, _)| syn::Ident::new(&format!("field{}", i), variant.ident.span()))
-                        .collect();
-                    let shifts: Vec<_> = fields
-                        .unnamed
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, f)| !has_span_shift_skip_attribute(f))
-                        .map(|(i, _)| {
-                            let ident =
-                                syn::Ident::new(&format!("field{}", i), variant.ident.span());
-                            quote! {
-                                #ident.shift_spans_after(offset, delta);
+                        .map(|(i, field)| {
+                            if has_span_shift_skip_attribute(field) {
+                                None
+                            } else {
+                                Some(syn::Ident::new(
+                                    &format!("field{}", i),
+                                    variant.ident.span(),
+                                ))
                             }
                         })
                         .collect();
+                    let patterns = bindings.iter().map(|binding| match binding {
+                        Some(ident) => quote! { #ident },
+                        None => quote! { _ },
+                    });
+                    let shifts = bindings.iter().flatten().map(|ident| {
+                        quote! {
+                            #ident.shift_spans_after(offset, delta);
+                        }
+                    });
                     quote! {
-                        Self::#name( #(#bindings),* ) => { #(#shifts)* }
+                        Self::#name( #(#patterns),* ) => { #(#shifts)* }
                     }
                 }
                 Fields::Unit => quote! {

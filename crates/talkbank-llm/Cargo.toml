@@ -9,8 +9,8 @@ homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "OpenAI-compatible HTTP JudgmentProvider for talkbank-transform (the only network-dependent crate in the toolchain)"
-# Outside the foundation publication set; its support contract is not finalized.
-publish = false
+readme = "README.md"
+# Runtime dependency of the registry-installable CLI.
 
 [lib]
 # No doc examples, and rustdoc charges a full compile per crate whether or not
@@ -37,7 +37,7 @@ httpmock = "0.8.3"
 serde_json = { workspace = true }
 # The integration tests construct a JudgmentRequest, whose `anchor` field is a
 # talkbank_model::SpeakerCode, so the test crate names talkbank-model directly.
-talkbank-model = { workspace = true }
+talkbank-model = { path = "../talkbank-model" }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

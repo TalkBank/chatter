@@ -3,7 +3,7 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::generated_traversal::{AsRawNode, KindSlot, NamedKind, NoChild};
+use crate::generated_traversal::{AsRawNode, NamedKind, SelectedKindSlot};
 use crate::parser::tree_parsing::bullet_content::{BulletTextNode, parse_bullet_content};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
@@ -88,10 +88,15 @@ fn tier_label(kind: &str) -> &str {
 /// Surface displaced children before lowering, preserving the recovery backstop.
 fn parse_text_tier_content<'tree, 'source, Tier, Body>(
     tier_node: Node<'tree>,
-    body: crate::generated_traversal::SourceField<'_, 'tree, 'source, KindSlot<'tree, Body>>,
+    body: crate::generated_traversal::SourceField<
+        '_,
+        'tree,
+        'source,
+        SelectedKindSlot<'tree, Body>,
+    >,
     unexpected: &[Node<'tree>],
     errors: &impl ErrorSink,
-) -> BulletContent
+) -> Result<BulletContent, crate::CstFailure>
 where
     Tier: TextTierBody,
     Body: crate::generated_traversal::SourceBoundKind<'tree>,
@@ -104,19 +109,12 @@ where
     use crate::generated_traversal::SourceSlotView;
     match body.view() {
         SourceSlotView::Present(text) | SourceSlotView::Missing(text) => {
-            match crate::parser::typed_cst::read_source_field(text, errors) {
-                Some(text) => parse_bullet_content(text.into(), errors),
-                None => BulletContent::empty(),
-            }
+            parse_bullet_content(text.read()?.into(), errors)
         }
         SourceSlotView::Error(node) => {
             errors.report(unexpected_node_error(node.raw_node(), source, Tier::KIND));
             report_missing_text_content::<Tier>(tier_node, source, errors);
-            BulletContent::empty()
-        }
-        SourceSlotView::Absent(NoChild) => {
-            report_missing_text_content::<Tier>(tier_node, source, errors);
-            BulletContent::empty()
+            Ok(BulletContent::empty())
         }
     }
 }
@@ -146,11 +144,11 @@ pub(crate) fn parse_optional_text_tier_content<'tree, 'source, Tier, Body>(
         '_,
         'tree,
         'source,
-        Option<KindSlot<'tree, Body>>,
+        Option<SelectedKindSlot<'tree, Body>>,
     >,
     unexpected: &[Node<'tree>],
     errors: &impl ErrorSink,
-) -> BulletContent
+) -> Result<BulletContent, crate::CstFailure>
 where
     Tier: TextTierBody + crate::generated_traversal::SourceBoundKind<'tree>,
     Body: crate::generated_traversal::SourceBoundKind<'tree>,
@@ -166,7 +164,7 @@ where
         Some(slot) => parse_text_tier_content::<Tier, Body>(tier_node, slot, unexpected, errors),
         None => {
             surface_displaced(unexpected, Tier::KIND, source, errors);
-            BulletContent::empty()
+            Ok(BulletContent::empty())
         }
     }
 }

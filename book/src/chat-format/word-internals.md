@@ -1,7 +1,7 @@
 # The CHAT Word
 
 **Status:** Current
-**Last modified:** 2026-07-15 15:53 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 "Word" is the most complex and most misunderstood concept in CHAT. This
 chapter documents what a word actually is, how the grammar parses it, and
@@ -167,8 +167,7 @@ is the canonical typed representation:
 pub struct Word {
     pub span: Span,
     pub word_id: Option<SmolStr>,
-    pub(crate) raw_text: SmolStr,
-    pub content: WordContents,
+    content: WordContents,
     pub category: Option<WordCategory>,
     pub form_type: Option<FormType>,
     pub lang: Option<WordLanguageMarker>,
@@ -179,11 +178,13 @@ pub struct Word {
 
 Key fields:
 
-- **`raw_text`**: the exact text from the input, including all markers.
-  Used for roundtrip serialization.
+- **`raw_text()`**: a derived spelling, including typed markers, also emitted
+  as the JSON `raw_text` field. It is not stored independently and is not an
+  exact source slice. See the [computed-field contract](../chatter/integrating/json-output.md#computed-fields).
 - **`content`**: a `WordContents` (SmallVec-backed sequence of `WordContent`
   elements). This is the structured decomposition. Most words have 1-2
-  elements; SmallVec avoids heap allocation for the common case.
+  elements; SmallVec avoids heap allocation for the common case. Access it with
+  `content()` and typed mutation methods, which invalidate cached cleaned text.
 - **`category`**: optional prefix (`Omission`, `CAOmission`, `Filler`,
   `Nonword`, `PhonologicalFragment`).
 - **`form_type`**: optional `@` suffix (`@c` child-invented, `@d` dialect,

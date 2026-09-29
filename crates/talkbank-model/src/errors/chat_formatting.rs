@@ -126,7 +126,9 @@ impl<'a> ChatTextProcessor<'a> {
 pub struct PlainDisplayResult {
     /// Formatted text with tabs expanded, bullets rendered, markers removed
     text: String,
-    /// Sorted list of `(original_byte_offset, display_byte_offset)` breakpoints.
+    /// Sorted post-origin `(original_byte_offset, display_byte_offset)` breakpoints.
+    /// The origin is always `(0, 0)` by construction, not a stored sentinel;
+    /// an empty table is the identity mapping.
     /// Use [`Self::map_offset`] to look up a display position.
     offset_map: Vec<(usize, usize)>,
 }
@@ -136,7 +138,7 @@ impl PlainDisplayResult {
     pub(crate) fn unformatted(text: &str) -> Self {
         Self {
             text: text.to_owned(),
-            offset_map: vec![(0, 0)],
+            offset_map: Vec::new(),
         }
     }
 
@@ -159,7 +161,7 @@ impl PlainDisplayResult {
             .binary_search_by_key(&original, |&(orig, _)| orig)
         {
             Ok(i) => self.offset_map[i].1,
-            Err(0) => 0,
+            Err(0) => original,
             Err(i) => {
                 // Interpolate linearly between breakpoints.
                 let (prev_orig, prev_disp) = self.offset_map[i - 1];
@@ -172,6 +174,16 @@ impl PlainDisplayResult {
     /// A collapsed span highlights the next complete character when available;
     /// empty text and end-of-text locations remain zero-width insertion points.
     pub fn map_span(&self, start: usize, end: usize) -> (usize, usize) {
+        // The final event records source EOF. With no events, this is an
+        // identity map and the owned display supplies the same extent.
+        // Bound source coordinates before interpolation, not after arithmetic
+        // on an arbitrary caller-supplied usize.
+        let source_end = self
+            .offset_map
+            .last()
+            .map_or(self.text.len(), |&(original, _)| original);
+        let start = start.min(source_end);
+        let end = end.min(source_end);
         let ds = self
             .text
             .floor_char_boundary(self.map_offset(start).min(self.text.len()));
@@ -198,9 +210,6 @@ pub fn process_for_plain_display_mapped(text: &str) -> PlainDisplayResult {
     let mut display = String::with_capacity(text.len() * 2);
     let mut offset_map: Vec<(usize, usize)> = Vec::new();
 
-    // Record initial position
-    offset_map.push((0, 0));
-
     while let Some(event) = processor.next_event() {
         let char_pos = processor.char_pos();
         let display_pos = processor.display_pos();
@@ -224,8 +233,8 @@ pub fn process_for_plain_display_mapped(text: &str) -> PlainDisplayResult {
         offset_map.push((char_pos, display_pos));
     }
 
-    // Deduplicate consecutive entries with same original offset (keep last)
-    offset_map.dedup_by_key(|entry| entry.0);
+    // Every event consumes at least one source byte, so these post-origin
+    // positions are strictly increasing without a deduplication pass.
 
     PlainDisplayResult {
         text: display,

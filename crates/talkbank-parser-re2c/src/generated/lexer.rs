@@ -15,13 +15,13 @@ const YYC_SPEAKER: usize = 791;
 const YYC_TIER_AFTER_LABEL: usize = 814;
 const YYC_TIER_SEP: usize = 838;
 const YYC_MAIN_CONTENT: usize = 862;
-const YYC_COM_CONTENT: usize = 1772;
-const YYC_GRA_CONTENT: usize = 1854;
-const YYC_MOR_CONTENT: usize = 1916;
-const YYC_TIER_CONTENT: usize = 2000;
-const YYC_USER_TIER_CONTENT: usize = 2073;
-const YYC_PHO_CONTENT: usize = 2146;
-const YYC_SIN_CONTENT: usize = 2182;
+const YYC_COM_CONTENT: usize = 1764;
+const YYC_GRA_CONTENT: usize = 1846;
+const YYC_MOR_CONTENT: usize = 1908;
+const YYC_TIER_CONTENT: usize = 1992;
+const YYC_USER_TIER_CONTENT: usize = 2065;
+const YYC_PHO_CONTENT: usize = 2138;
+const YYC_SIN_CONTENT: usize = 2174;
 
 
 use tracing::{debug, instrument};
@@ -14856,7 +14856,6 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     0x3A => {
-                        self.yyt2 = self.cursor;
                         self.cursor += 1;
                         yystate = 1017;
                         continue 'yyl;
@@ -15563,107 +15562,107 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     28 => {
-                        yystate = 1284;
+                        yystate = 1277;
                         continue 'yyl;
                     }
                     29 => {
-                        yystate = 1294;
+                        yystate = 1287;
                         continue 'yyl;
                     }
                     30 => {
-                        yystate = 1296;
+                        yystate = 1289;
                         continue 'yyl;
                     }
                     31 => {
-                        yystate = 1298;
+                        yystate = 1291;
                         continue 'yyl;
                     }
                     32 => {
-                        yystate = 1300;
+                        yystate = 1293;
                         continue 'yyl;
                     }
                     33 => {
-                        yystate = 1303;
+                        yystate = 1296;
                         continue 'yyl;
                     }
                     34 => {
-                        yystate = 1307;
+                        yystate = 1300;
                         continue 'yyl;
                     }
                     35 => {
-                        yystate = 1309;
+                        yystate = 1302;
                         continue 'yyl;
                     }
                     36 => {
-                        yystate = 1313;
+                        yystate = 1306;
                         continue 'yyl;
                     }
                     37 => {
-                        yystate = 1315;
+                        yystate = 1308;
                         continue 'yyl;
                     }
                     38 => {
-                        yystate = 1317;
+                        yystate = 1310;
                         continue 'yyl;
                     }
                     39 => {
-                        yystate = 1320;
+                        yystate = 1313;
                         continue 'yyl;
                     }
                     40 => {
-                        yystate = 1322;
+                        yystate = 1315;
                         continue 'yyl;
                     }
                     41 => {
-                        yystate = 1324;
+                        yystate = 1317;
                         continue 'yyl;
                     }
                     42 => {
-                        yystate = 1328;
+                        yystate = 1321;
                         continue 'yyl;
                     }
                     43 => {
-                        yystate = 1331;
+                        yystate = 1324;
                         continue 'yyl;
                     }
                     44 => {
-                        yystate = 1333;
+                        yystate = 1326;
                         continue 'yyl;
                     }
                     45 => {
-                        yystate = 1335;
+                        yystate = 1328;
                         continue 'yyl;
                     }
                     46 => {
-                        yystate = 1337;
+                        yystate = 1330;
                         continue 'yyl;
                     }
                     47 => {
-                        yystate = 1339;
+                        yystate = 1332;
                         continue 'yyl;
                     }
                     48 => {
-                        yystate = 1341;
+                        yystate = 1334;
                         continue 'yyl;
                     }
                     49 => {
-                        yystate = 1343;
+                        yystate = 1336;
                         continue 'yyl;
                     }
                     50 => {
-                        yystate = 1345;
+                        yystate = 1338;
                         continue 'yyl;
                     }
                     51 => {
-                        yystate = 1347;
+                        yystate = 1340;
                         continue 'yyl;
                     }
                     52 => {
-                        yystate = 1349;
+                        yystate = 1342;
                         continue 'yyl;
                     }
                     53 => {
-                        yystate = 1351;
+                        yystate = 1344;
                         continue 'yyl;
                     }
                     54 => {
@@ -15694,7 +15693,7 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     57 => {
-                        yystate = 1562;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                     58 => {
@@ -18752,85 +18751,26 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1017 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5A |
-                    0x5C |
-                    0x5E ..= 0x7F => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1248;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1230;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1249;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1250;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1251;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1252;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1253;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1254;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
+            1017 => { emit!(ReplacementBegin); },
             1018 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 1255;
+                        yystate = 1248;
                         continue 'yyl;
                     }
                     0x31 ..= 0x39 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1256;
+                        yystate = 1249;
                         continue 'yyl;
                     }
                     0x5D => {
                         self.yyt1 = self.cursor;
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1257;
+                        yystate = 1250;
                         continue 'yyl;
                     }
                     _ => {
@@ -18844,17 +18784,17 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 1258;
+                        yystate = 1251;
                         continue 'yyl;
                     }
                     0x21 => {
                         self.cursor += 1;
-                        yystate = 1259;
+                        yystate = 1252;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 1260;
+                        yystate = 1253;
                         continue 'yyl;
                     }
                     _ => {
@@ -18868,20 +18808,20 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 1261;
+                        yystate = 1254;
                         continue 'yyl;
                     }
                     0x31 ..= 0x39 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1262;
+                        yystate = 1255;
                         continue 'yyl;
                     }
                     0x5D => {
                         self.yyt1 = self.cursor;
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1263;
+                        yystate = 1256;
                         continue 'yyl;
                     }
                     _ => {
@@ -18895,7 +18835,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1264;
+                        yystate = 1257;
                         continue 'yyl;
                     }
                     _ => {
@@ -18909,7 +18849,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1265;
+                        yystate = 1258;
                         continue 'yyl;
                     }
                     _ => {
@@ -18923,12 +18863,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 1266;
+                        yystate = 1259;
                         continue 'yyl;
                     }
                     0x63 => {
                         self.cursor += 1;
-                        yystate = 1267;
+                        yystate = 1260;
                         continue 'yyl;
                     }
                     _ => {
@@ -18942,7 +18882,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1268;
+                        yystate = 1261;
                         continue 'yyl;
                     }
                     _ => {
@@ -19121,7 +19061,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1269;
+                        yystate = 1262;
                         continue 'yyl;
                     }
                     _ => {
@@ -19135,12 +19075,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1270;
+                        yystate = 1263;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1271;
+                        yystate = 1264;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -19154,52 +19094,52 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1272;
+                        yystate = 1265;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1273;
+                        yystate = 1266;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1274;
+                        yystate = 1267;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1275;
+                        yystate = 1268;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1276;
+                        yystate = 1269;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1277;
+                        yystate = 1270;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1278;
+                        yystate = 1271;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1279;
+                        yystate = 1272;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1280;
+                        yystate = 1273;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1281;
+                        yystate = 1274;
                         continue 'yyl;
                     }
                     _ => {
@@ -19213,7 +19153,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1282;
+                        yystate = 1275;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
@@ -19465,7 +19405,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xA9 => {
                         self.cursor += 1;
-                        yystate = 1283;
+                        yystate = 1276;
                         continue 'yyl;
                     }
                     _ => {
@@ -19488,42 +19428,42 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1285;
+                        yystate = 1278;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1286;
+                        yystate = 1279;
                         continue 'yyl;
                     }
                     0x9C => {
                         self.cursor += 1;
-                        yystate = 1287;
+                        yystate = 1280;
                         continue 'yyl;
                     }
                     0x9D => {
                         self.cursor += 1;
-                        yystate = 1288;
+                        yystate = 1281;
                         continue 'yyl;
                     }
                     0x9E => {
                         self.cursor += 1;
-                        yystate = 1289;
+                        yystate = 1282;
                         continue 'yyl;
                     }
                     0xA1 => {
                         self.cursor += 1;
-                        yystate = 1290;
+                        yystate = 1283;
                         continue 'yyl;
                     }
                     0xB9 => {
                         self.cursor += 1;
-                        yystate = 1291;
+                        yystate = 1284;
                         continue 'yyl;
                     }
                     0xBA => {
                         self.cursor += 1;
-                        yystate = 1292;
+                        yystate = 1285;
                         continue 'yyl;
                     }
                     _ => {
@@ -19545,17 +19485,17 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1293;
+                        yystate = 1286;
                         continue 'yyl;
                     }
                     0x8E => {
                         self.cursor += 1;
-                        yystate = 1295;
+                        yystate = 1288;
                         continue 'yyl;
                     }
                     0x91 => {
                         self.cursor += 1;
-                        yystate = 1297;
+                        yystate = 1290;
                         continue 'yyl;
                     }
                     _ => {
@@ -19578,37 +19518,37 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x91 => {
                         self.cursor += 1;
-                        yystate = 1299;
+                        yystate = 1292;
                         continue 'yyl;
                     }
                     0x92 => {
                         self.cursor += 1;
-                        yystate = 1301;
+                        yystate = 1294;
                         continue 'yyl;
                     }
                     0x93 => {
                         self.cursor += 1;
-                        yystate = 1302;
+                        yystate = 1295;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1304;
+                        yystate = 1297;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1305;
+                        yystate = 1298;
                         continue 'yyl;
                     }
                     0xAB => {
                         self.cursor += 1;
-                        yystate = 1306;
+                        yystate = 1299;
                         continue 'yyl;
                     }
                     0xBB => {
                         self.cursor += 1;
-                        yystate = 1308;
+                        yystate = 1301;
                         continue 'yyl;
                     }
                     _ => {
@@ -19628,12 +19568,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1310;
+                        yystate = 1303;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1311;
+                        yystate = 1304;
                         continue 'yyl;
                     }
                     _ => {
@@ -19658,37 +19598,37 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1312;
+                        yystate = 1305;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1314;
+                        yystate = 1307;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1316;
+                        yystate = 1309;
                         continue 'yyl;
                     }
                     0x9E => {
                         self.cursor += 1;
-                        yystate = 1318;
+                        yystate = 1311;
                         continue 'yyl;
                     }
                     0xAC => {
                         self.cursor += 1;
-                        yystate = 1319;
+                        yystate = 1312;
                         continue 'yyl;
                     }
                     0xAE => {
                         self.cursor += 1;
-                        yystate = 1321;
+                        yystate = 1314;
                         continue 'yyl;
                     }
                     0xBE => {
                         self.cursor += 1;
-                        yystate = 1323;
+                        yystate = 1316;
                         continue 'yyl;
                     }
                     _ => {
@@ -19710,22 +19650,22 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1325;
+                        yystate = 1318;
                         continue 'yyl;
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 1326;
+                        yystate = 1319;
                         continue 'yyl;
                     }
                     0xA0 => {
                         self.cursor += 1;
-                        yystate = 1327;
+                        yystate = 1320;
                         continue 'yyl;
                     }
                     0xA1 => {
                         self.cursor += 1;
-                        yystate = 1329;
+                        yystate = 1322;
                         continue 'yyl;
                     }
                     _ => {
@@ -19745,22 +19685,22 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1330;
+                        yystate = 1323;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1332;
+                        yystate = 1325;
                         continue 'yyl;
                     }
                     0x8A => {
                         self.cursor += 1;
-                        yystate = 1334;
+                        yystate = 1327;
                         continue 'yyl;
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 1336;
+                        yystate = 1329;
                         continue 'yyl;
                     }
                     _ => {
@@ -19781,12 +19721,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1338;
+                        yystate = 1331;
                         continue 'yyl;
                     }
                     0x94 => {
                         self.cursor += 1;
-                        yystate = 1340;
+                        yystate = 1333;
                         continue 'yyl;
                     }
                     _ => {
@@ -19806,7 +19746,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1342;
+                        yystate = 1335;
                         continue 'yyl;
                     }
                     _ => {
@@ -19826,7 +19766,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBA => {
                         self.cursor += 1;
-                        yystate = 1344;
+                        yystate = 1337;
                         continue 'yyl;
                     }
                     _ => {
@@ -19846,7 +19786,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 1346;
+                        yystate = 1339;
                         continue 'yyl;
                     }
                     _ => {
@@ -19866,12 +19806,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1348;
+                        yystate = 1341;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1350;
+                        yystate = 1343;
                         continue 'yyl;
                     }
                     _ => {
@@ -19891,12 +19831,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x94 => {
                         self.cursor += 1;
-                        yystate = 1352;
+                        yystate = 1345;
                         continue 'yyl;
                     }
                     0x95 => {
                         self.cursor += 1;
-                        yystate = 1353;
+                        yystate = 1346;
                         continue 'yyl;
                     }
                     _ => {
@@ -19910,7 +19850,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x01 => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -20073,7 +20013,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xA7 |
                     0xB0 => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -20129,7 +20069,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xAB => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -20163,7 +20103,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1355;
+                        yystate = 1348;
                         continue 'yyl;
                     }
                     _ => {
@@ -20177,12 +20117,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1356;
+                        yystate = 1349;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1357;
+                        yystate = 1350;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -20196,52 +20136,52 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1358;
+                        yystate = 1351;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1359;
+                        yystate = 1352;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1360;
+                        yystate = 1353;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1361;
+                        yystate = 1354;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1362;
+                        yystate = 1355;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1363;
+                        yystate = 1356;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1364;
+                        yystate = 1357;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1365;
+                        yystate = 1358;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1366;
+                        yystate = 1359;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1367;
+                        yystate = 1360;
                         continue 'yyl;
                     }
                     _ => {
@@ -20255,7 +20195,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1368;
+                        yystate = 1361;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
@@ -20521,7 +20461,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1369;
+                        yystate = 1362;
                         continue 'yyl;
                     }
                     _ => {
@@ -20535,12 +20475,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1370;
+                        yystate = 1363;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1371;
+                        yystate = 1364;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -20554,52 +20494,52 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1372;
+                        yystate = 1365;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1373;
+                        yystate = 1366;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1374;
+                        yystate = 1367;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1375;
+                        yystate = 1368;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1376;
+                        yystate = 1369;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1377;
+                        yystate = 1370;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1378;
+                        yystate = 1371;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1379;
+                        yystate = 1372;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1380;
+                        yystate = 1373;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1381;
+                        yystate = 1374;
                         continue 'yyl;
                     }
                     _ => {
@@ -20613,7 +20553,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1382;
+                        yystate = 1375;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
@@ -20736,7 +20676,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1383;
+                        yystate = 1376;
                         continue 'yyl;
                     }
                     _ => {
@@ -20750,12 +20690,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1356;
+                        yystate = 1349;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1384;
+                        yystate = 1377;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -20769,52 +20709,52 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1385;
+                        yystate = 1378;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1359;
+                        yystate = 1352;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1386;
+                        yystate = 1379;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1387;
+                        yystate = 1380;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1388;
+                        yystate = 1381;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1389;
+                        yystate = 1382;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1390;
+                        yystate = 1383;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1391;
+                        yystate = 1384;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1392;
+                        yystate = 1385;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1393;
+                        yystate = 1386;
                         continue 'yyl;
                     }
                     _ => {
@@ -20831,7 +20771,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1394;
+                        yystate = 1387;
                         continue 'yyl;
                     }
                     _ => {
@@ -20930,7 +20870,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1395;
+                        yystate = 1388;
                         continue 'yyl;
                     }
                     0x40 => {
@@ -20957,7 +20897,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt5 = self.cursor;
                         self.yyt6 = NONE;
                         self.cursor += 1;
-                        yystate = 1396;
+                        yystate = 1389;
                         continue 'yyl;
                     }
                     0x2D |
@@ -20975,13 +20915,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1397;
+                        yystate = 1390;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt5 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1398;
+                        yystate = 1391;
                         continue 'yyl;
                     }
                     _ => {
@@ -21006,7 +20946,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt5 = self.cursor;
                         self.yyt6 = NONE;
                         self.cursor += 1;
-                        yystate = 1396;
+                        yystate = 1389;
                         continue 'yyl;
                     }
                     0x2D |
@@ -21025,13 +20965,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1397;
+                        yystate = 1390;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt5 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1398;
+                        yystate = 1391;
                         continue 'yyl;
                     }
                     0x70 => {
@@ -21061,7 +21001,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt5 = self.cursor;
                         self.yyt6 = NONE;
                         self.cursor += 1;
-                        yystate = 1396;
+                        yystate = 1389;
                         continue 'yyl;
                     }
                     0x2D |
@@ -21080,13 +21020,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1397;
+                        yystate = 1390;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt5 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1398;
+                        yystate = 1391;
                         continue 'yyl;
                     }
                     0x73 => {
@@ -21134,12 +21074,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1399;
+                        yystate = 1392;
                         continue 'yyl;
                     }
                     0x61 => {
                         self.cursor += 1;
-                        yystate = 1400;
+                        yystate = 1393;
                         continue 'yyl;
                     }
                     0x69 |
@@ -21471,7 +21411,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1401;
+                        yystate = 1394;
                         continue 'yyl;
                     }
                     _ => {
@@ -21496,7 +21436,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1402;
+                        yystate = 1395;
                         continue 'yyl;
                     }
                     _ => {
@@ -21510,7 +21450,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x01 => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -21526,7 +21466,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x02 => {
                         self.cursor += 1;
-                        yystate = 1404;
+                        yystate = 1397;
                         continue 'yyl;
                     }
                     0x05 ..= 0x06 |
@@ -21553,7 +21493,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = NONE;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1405;
+                        yystate = 1398;
                         continue 'yyl;
                     }
                     0x28 => {
@@ -21563,14 +21503,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1406;
+                        yystate = 1399;
                         continue 'yyl;
                     }
                     0x3A |
                     0x5E |
                     0x7E => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     0x40 => {
@@ -21578,12 +21518,12 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt3 = NONE;
                         self.yyt6 = NONE;
                         self.cursor += 1;
-                        yystate = 1408;
+                        yystate = 1401;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1409;
+                        yystate = 1402;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
@@ -21600,7 +21540,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1410;
+                        yystate = 1403;
                         continue 'yyl;
                     }
                     0xE0 => {
@@ -21610,12 +21550,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1411;
+                        yystate = 1404;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1412;
+                        yystate = 1405;
                         continue 'yyl;
                     }
                     0xE3 => {
@@ -21694,69 +21634,69 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7C |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1414;
+                        yystate = 1407;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
                     0xCC ..= 0xCD |
                     0xCF ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1415;
+                        yystate = 1408;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.cursor += 1;
-                        yystate = 1416;
+                        yystate = 1409;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1417;
+                        yystate = 1410;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1418;
+                        yystate = 1411;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1419;
+                        yystate = 1412;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1420;
+                        yystate = 1413;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.cursor += 1;
-                        yystate = 1421;
+                        yystate = 1414;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1422;
+                        yystate = 1415;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1423;
+                        yystate = 1416;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1424;
+                        yystate = 1417;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1425;
+                        yystate = 1418;
                         continue 'yyl;
                     }
                     _ => {
@@ -21778,7 +21718,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xA7 |
                     0xB0 => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -21814,7 +21754,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x88 |
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -21834,7 +21774,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xAB => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -21868,7 +21808,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1426;
+                        yystate = 1419;
                         continue 'yyl;
                     }
                     _ => {
@@ -21882,12 +21822,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1427;
+                        yystate = 1420;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1428;
+                        yystate = 1421;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -21901,52 +21841,52 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1429;
+                        yystate = 1422;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1430;
+                        yystate = 1423;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1431;
+                        yystate = 1424;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1432;
+                        yystate = 1425;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1433;
+                        yystate = 1426;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1434;
+                        yystate = 1427;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1435;
+                        yystate = 1428;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1436;
+                        yystate = 1429;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1437;
+                        yystate = 1430;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1438;
+                        yystate = 1431;
                         continue 'yyl;
                     }
                     _ => {
@@ -21960,7 +21900,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1439;
+                        yystate = 1432;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
@@ -22210,7 +22150,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1440;
+                        yystate = 1433;
                         continue 'yyl;
                     }
                     _ => {
@@ -22224,12 +22164,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1441;
+                        yystate = 1434;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1442;
+                        yystate = 1435;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -22243,52 +22183,52 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1443;
+                        yystate = 1436;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1444;
+                        yystate = 1437;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1445;
+                        yystate = 1438;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1446;
+                        yystate = 1439;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1447;
+                        yystate = 1440;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1448;
+                        yystate = 1441;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1449;
+                        yystate = 1442;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1450;
+                        yystate = 1443;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1451;
+                        yystate = 1444;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1452;
+                        yystate = 1445;
                         continue 'yyl;
                     }
                     _ => {
@@ -22302,7 +22242,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1453;
+                        yystate = 1446;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
@@ -22377,7 +22317,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x3D => {
                         self.cursor += 1;
-                        yystate = 1454;
+                        yystate = 1447;
                         continue 'yyl;
                     }
                     _ => {
@@ -22391,7 +22331,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x3D => {
                         self.cursor += 1;
-                        yystate = 1455;
+                        yystate = 1448;
                         continue 'yyl;
                     }
                     _ => {
@@ -22405,7 +22345,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x3D => {
                         self.cursor += 1;
-                        yystate = 1456;
+                        yystate = 1449;
                         continue 'yyl;
                     }
                     _ => {
@@ -22419,7 +22359,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x3D => {
                         self.cursor += 1;
-                        yystate = 1457;
+                        yystate = 1450;
                         continue 'yyl;
                     }
                     _ => {
@@ -22522,12 +22462,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x29 => {
                         self.cursor += 1;
-                        yystate = 1458;
+                        yystate = 1451;
                         continue 'yyl;
                     }
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1459;
+                        yystate = 1452;
                         continue 'yyl;
                     }
                     _ => {
@@ -22553,7 +22493,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x29 => {
                         self.cursor += 1;
-                        yystate = 1460;
+                        yystate = 1453;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
@@ -22604,7 +22544,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1461;
+                        yystate = 1454;
                         continue 'yyl;
                     }
                     _ => {
@@ -22932,7 +22872,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1462;
+                        yystate = 1455;
                         continue 'yyl;
                     }
                     _ => {
@@ -22946,12 +22886,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1463;
+                        yystate = 1456;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 1464;
+                        yystate = 1457;
                         continue 'yyl;
                     }
                     _ => {
@@ -22966,12 +22906,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1465;
+                        yystate = 1458;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 1466;
+                        yystate = 1459;
                         continue 'yyl;
                     }
                     _ => {
@@ -22986,12 +22926,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1467;
+                        yystate = 1460;
                         continue 'yyl;
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 1468;
+                        yystate = 1461;
                         continue 'yyl;
                     }
                     _ => {
@@ -23121,7 +23061,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt5 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1469;
+                        yystate = 1462;
                         continue 'yyl;
                     }
                     _ => {
@@ -23431,31 +23371,31 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7A => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1470;
+                        yystate = 1463;
                         continue 'yyl;
                     }
                     0x66 => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1471;
+                        yystate = 1464;
                         continue 'yyl;
                     }
                     0x6C => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1472;
+                        yystate = 1465;
                         continue 'yyl;
                     }
                     0x73 => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1473;
+                        yystate = 1466;
                         continue 'yyl;
                     }
                     0x77 => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1474;
+                        yystate = 1467;
                         continue 'yyl;
                     }
                     _ => {
@@ -23521,7 +23461,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1475;
+                        yystate = 1468;
                         continue 'yyl;
                     }
                     _ => {
@@ -23540,7 +23480,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1476;
+                        yystate = 1469;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -23554,7 +23494,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1477;
+                        yystate = 1470;
                         continue 'yyl;
                     }
                     0x87 => {
@@ -23564,42 +23504,42 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1478;
+                        yystate = 1471;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1479;
+                        yystate = 1472;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1480;
+                        yystate = 1473;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1481;
+                        yystate = 1474;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1482;
+                        yystate = 1475;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1483;
+                        yystate = 1476;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1484;
+                        yystate = 1477;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1485;
+                        yystate = 1478;
                         continue 'yyl;
                     }
                     _ => {
@@ -23787,7 +23727,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1486;
+                        yystate = 1479;
                         continue 'yyl;
                     }
                     _ => {
@@ -23801,12 +23741,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1487;
+                        yystate = 1480;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1488;
+                        yystate = 1481;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -23820,52 +23760,52 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1489;
+                        yystate = 1482;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1490;
+                        yystate = 1483;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1491;
+                        yystate = 1484;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1492;
+                        yystate = 1485;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1493;
+                        yystate = 1486;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1494;
+                        yystate = 1487;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1495;
+                        yystate = 1488;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1496;
+                        yystate = 1489;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1497;
+                        yystate = 1490;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1498;
+                        yystate = 1491;
                         continue 'yyl;
                     }
                     _ => {
@@ -23879,7 +23819,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1499;
+                        yystate = 1492;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
@@ -24248,7 +24188,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1500;
+                        yystate = 1493;
                         continue 'yyl;
                     }
                     _ => {
@@ -24263,7 +24203,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1501;
+                        yystate = 1494;
                         continue 'yyl;
                     }
                     _ => {
@@ -24297,7 +24237,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1502;
+                        yystate = 1495;
                         continue 'yyl;
                     }
                     _ => {
@@ -24316,7 +24256,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7F => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1503;
+                        yystate = 1496;
                         continue 'yyl;
                     }
                     0x5D => {
@@ -24327,37 +24267,37 @@ impl<'a> Iterator for Lexer<'a> {
                     0xC2 ..= 0xDF => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1504;
+                        yystate = 1497;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1505;
+                        yystate = 1498;
                         continue 'yyl;
                     }
                     0xE1 ..= 0xEF => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1506;
+                        yystate = 1499;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1507;
+                        yystate = 1500;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1508;
+                        yystate = 1501;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1509;
+                        yystate = 1502;
                         continue 'yyl;
                     }
                     _ => {
@@ -24573,6 +24513,65 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7F => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
+                        yystate = 1503;
+                        continue 'yyl;
+                    }
+                    0x5D => {
+                        self.cursor += 1;
+                        yystate = 1230;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1504;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1505;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1506;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1507;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1508;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1509;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1244 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x5C |
+                    0x5E ..= 0x7F => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
                         yystate = 1510;
                         continue 'yyl;
                     }
@@ -24623,71 +24622,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1244 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
-                    0x5E ..= 0x7F => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1517;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1230;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1518;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1519;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1520;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1521;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1522;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1523;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
             1245 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1524;
+                        yystate = 1517;
                         continue 'yyl;
                     }
                     _ => {
@@ -24701,12 +24641,12 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 1525;
+                        yystate = 1518;
                         continue 'yyl;
                     }
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1526;
+                        yystate = 1519;
                         continue 'yyl;
                     }
                     _ => {
@@ -24719,52 +24659,28 @@ impl<'a> Iterator for Lexer<'a> {
             1248 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5A |
-                    0x5C |
-                    0x5E ..= 0x7F => {
+                    0x20 => {
+                        self.yyt1 = self.cursor;
+                        self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1248;
+                        yystate = 1520;
                         continue 'yyl;
                     }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1527;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
+                    0x31 ..= 0x39 => {
+                        self.yyt3 = self.cursor;
                         self.cursor += 1;
                         yystate = 1249;
                         continue 'yyl;
                     }
-                    0xE0 => {
+                    0x5D => {
+                        self.yyt1 = self.cursor;
+                        self.yyt3 = self.cursor;
                         self.cursor += 1;
                         yystate = 1250;
                         continue 'yyl;
                     }
-                    0xE1 ..= 0xEF => {
-                        self.cursor += 1;
-                        yystate = 1251;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.cursor += 1;
-                        yystate = 1252;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.cursor += 1;
-                        yystate = 1253;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.cursor += 1;
-                        yystate = 1254;
-                        continue 'yyl;
-                    }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
@@ -24772,37 +24688,80 @@ impl<'a> Iterator for Lexer<'a> {
             1249 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x20 => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1248;
+                        yystate = 1520;
+                        continue 'yyl;
+                    }
+                    0x5D => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1250;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
             }
             1250 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1249;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
+                self.t1 = self.yyt3;
+                self.t2 = self.yyt1;
+                { emit_t1t2!(OverlapPrecedes); }
             }
             1251 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x5C |
+                    0x5E ..= 0x7F => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1249;
+                        yystate = 1521;
+                        continue 'yyl;
+                    }
+                    0x5D => {
+                        self.cursor += 1;
+                        yystate = 1230;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1522;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1523;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1524;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1525;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1526;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1527;
                         continue 'yyl;
                     }
                     _ => {
@@ -24814,13 +24773,13 @@ impl<'a> Iterator for Lexer<'a> {
             1252 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x90 ..= 0xBF => {
+                    0x20 => {
                         self.cursor += 1;
-                        yystate = 1251;
+                        yystate = 1528;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
@@ -24828,13 +24787,13 @@ impl<'a> Iterator for Lexer<'a> {
             1253 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x20 => {
                         self.cursor += 1;
-                        yystate = 1251;
+                        yystate = 1529;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
@@ -24842,13 +24801,28 @@ impl<'a> Iterator for Lexer<'a> {
             1254 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x8F => {
+                    0x20 => {
+                        self.yyt1 = self.cursor;
+                        self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1251;
+                        yystate = 1530;
+                        continue 'yyl;
+                    }
+                    0x31 ..= 0x39 => {
+                        self.yyt3 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1255;
+                        continue 'yyl;
+                    }
+                    0x5D => {
+                        self.yyt1 = self.cursor;
+                        self.yyt3 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1256;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
@@ -24858,22 +24832,14 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x20 => {
                         self.yyt1 = self.cursor;
-                        self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1528;
-                        continue 'yyl;
-                    }
-                    0x31 ..= 0x39 => {
-                        self.yyt3 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1256;
+                        yystate = 1530;
                         continue 'yyl;
                     }
                     0x5D => {
                         self.yyt1 = self.cursor;
-                        self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1257;
+                        yystate = 1256;
                         continue 'yyl;
                     }
                     _ => {
@@ -24883,18 +24849,22 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1256 => {
+                self.t1 = self.yyt3;
+                self.t2 = self.yyt1;
+                { emit_t1t2!(OverlapFollows); }
+            }
+            1257 => { emit!(ScopedUncertain); },
+            1258 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x20 => {
-                        self.yyt1 = self.cursor;
+                    0x3A => {
                         self.cursor += 1;
-                        yystate = 1528;
+                        yystate = 1531;
                         continue 'yyl;
                     }
                     0x5D => {
-                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1257;
+                        yystate = 1532;
                         continue 'yyl;
                     }
                     _ => {
@@ -24903,12 +24873,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1257 => {
-                self.t1 = self.yyt3;
-                self.t2 = self.yyt1;
-                { emit_t1t2!(OverlapPrecedes); }
-            }
-            1258 => {
+            1259 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
@@ -24917,7 +24882,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7F => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1529;
+                        yystate = 1533;
                         continue 'yyl;
                     }
                     0x5D => {
@@ -24928,37 +24893,37 @@ impl<'a> Iterator for Lexer<'a> {
                     0xC2 ..= 0xDF => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1530;
+                        yystate = 1534;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1531;
+                        yystate = 1535;
                         continue 'yyl;
                     }
                     0xE1 ..= 0xEF => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1532;
+                        yystate = 1536;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1533;
+                        yystate = 1537;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1534;
+                        yystate = 1538;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1535;
+                        yystate = 1539;
                         continue 'yyl;
                     }
                     _ => {
@@ -24967,98 +24932,9 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1259 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x20 => {
-                        self.cursor += 1;
-                        yystate = 1536;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1010;
-                        continue 'yyl;
-                    }
-                }
-            }
             1260 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x20 => {
-                        self.cursor += 1;
-                        yystate = 1537;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1010;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1261 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x20 => {
-                        self.yyt1 = self.cursor;
-                        self.yyt3 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1538;
-                        continue 'yyl;
-                    }
-                    0x31 ..= 0x39 => {
-                        self.yyt3 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1262;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.yyt1 = self.cursor;
-                        self.yyt3 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1263;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1010;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1262 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x20 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1538;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1263;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1010;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1263 => {
-                self.t1 = self.yyt3;
-                self.t2 = self.yyt1;
-                { emit_t1t2!(OverlapFollows); }
-            }
-            1264 => { emit!(ScopedUncertain); },
-            1265 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x3A => {
-                        self.cursor += 1;
-                        yystate = 1539;
-                        continue 'yyl;
-                    }
                     0x5D => {
                         self.cursor += 1;
                         yystate = 1540;
@@ -25070,81 +24946,8 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1266 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
-                    0x5E ..= 0x7F => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1541;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1230;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1542;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1543;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1544;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1545;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1546;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1547;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1267 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1548;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1010;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1268 => { emit!(ExcludeMarker); },
-            1269 => {
+            1261 => { emit!(ExcludeMarker); },
+            1262 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
@@ -25159,7 +24962,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1270 => {
+            1263 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
@@ -25177,7 +24980,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1271 => {
+            1264 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -25194,7 +24997,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1272 => {
+            1265 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -25212,7 +25015,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1273 => {
+            1266 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
@@ -25227,7 +25030,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1274 => {
+            1267 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -25247,7 +25050,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1275 => {
+            1268 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -25264,7 +25067,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1276 => {
+            1269 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -25279,7 +25082,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1277 => {
+            1270 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
@@ -25295,7 +25098,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1278 => {
+            1271 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
@@ -25310,7 +25113,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1279 => {
+            1272 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
@@ -25325,7 +25128,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1280 => {
+            1273 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
@@ -25340,7 +25143,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1281 => {
+            1274 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -25355,7 +25158,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1282 => {
+            1275 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
@@ -25370,7 +25173,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1283 => {
+            1276 => {
                 yyaccept = 28;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -25421,21 +25224,21 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1284;
+                        yystate = 1277;
                         continue 'yyl;
                     }
                 }
             }
-            1284 => { emit!(CaLaughInWord); },
-            1285 => { emit!(IllegalCurlyQuote); },
-            1286 => { emit!(IllegalCurlyQuote); },
-            1287 => { emit!(LeftDoubleQuote); },
-            1288 => { emit!(RightDoubleQuote); },
-            1289 => { emit!(TagMarker); },
-            1290 => { emit!(VocativeMarker); },
-            1291 => { emit!(PhoGroupBegin); },
-            1292 => { emit!(PhoGroupEnd); },
-            1293 => {
+            1277 => { emit!(CaLaughInWord); },
+            1278 => { emit!(IllegalCurlyQuote); },
+            1279 => { emit!(IllegalCurlyQuote); },
+            1280 => { emit!(LeftDoubleQuote); },
+            1281 => { emit!(RightDoubleQuote); },
+            1282 => { emit!(TagMarker); },
+            1283 => { emit!(VocativeMarker); },
+            1284 => { emit!(PhoGroupBegin); },
+            1285 => { emit!(PhoGroupEnd); },
+            1286 => {
                 yyaccept = 29;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -25486,14 +25289,186 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1294;
+                        yystate = 1287;
                         continue 'yyl;
                     }
                 }
             }
-            1294 => { emit!(CaUnsure); },
-            1295 => {
+            1287 => { emit!(CaUnsure); },
+            1288 => {
                 yyaccept = 30;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x02 => {
+                        self.cursor += 1;
+                        yystate = 1063;
+                        continue 'yyl;
+                    }
+                    0x05 ..= 0x06 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x1F |
+                    0x23 |
+                    0x27 ..= 0x28 |
+                    0x2D |
+                    0x2F |
+                    0x31 ..= 0x39 |
+                    0x3D |
+                    0x41 ..= 0x5A |
+                    0x5F ..= 0x7A |
+                    0x7C |
+                    0x7F |
+                    0xC3 ..= 0xCD |
+                    0xCF ..= 0xE0 |
+                    0xE3 ..= 0xF4 => {
+                        yystate = 1065;
+                        continue 'yyl;
+                    }
+                    0xC2 => {
+                        self.cursor += 1;
+                        yystate = 1066;
+                        continue 'yyl;
+                    }
+                    0xCE => {
+                        self.cursor += 1;
+                        yystate = 1069;
+                        continue 'yyl;
+                    }
+                    0xE1 => {
+                        self.cursor += 1;
+                        yystate = 1071;
+                        continue 'yyl;
+                    }
+                    0xE2 => {
+                        self.cursor += 1;
+                        yystate = 1072;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1289;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1289 => { emit!(CaCreaky); },
+            1290 => {
+                yyaccept = 31;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x02 => {
+                        self.cursor += 1;
+                        yystate = 1063;
+                        continue 'yyl;
+                    }
+                    0x05 ..= 0x06 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x1F |
+                    0x23 |
+                    0x27 ..= 0x28 |
+                    0x2D |
+                    0x2F |
+                    0x31 ..= 0x39 |
+                    0x3D |
+                    0x41 ..= 0x5A |
+                    0x5F ..= 0x7A |
+                    0x7C |
+                    0x7F |
+                    0xC3 ..= 0xCD |
+                    0xCF ..= 0xE0 |
+                    0xE3 ..= 0xF4 => {
+                        yystate = 1065;
+                        continue 'yyl;
+                    }
+                    0xC2 => {
+                        self.cursor += 1;
+                        yystate = 1066;
+                        continue 'yyl;
+                    }
+                    0xCE => {
+                        self.cursor += 1;
+                        yystate = 1069;
+                        continue 'yyl;
+                    }
+                    0xE1 => {
+                        self.cursor += 1;
+                        yystate = 1071;
+                        continue 'yyl;
+                    }
+                    0xE2 => {
+                        self.cursor += 1;
+                        yystate = 1072;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1291;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1291 => { emit!(CaHardening); },
+            1292 => {
+                yyaccept = 32;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x02 => {
+                        self.cursor += 1;
+                        yystate = 1063;
+                        continue 'yyl;
+                    }
+                    0x05 ..= 0x06 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x1F |
+                    0x23 |
+                    0x27 ..= 0x28 |
+                    0x2D |
+                    0x2F |
+                    0x31 ..= 0x39 |
+                    0x3D |
+                    0x41 ..= 0x5A |
+                    0x5F ..= 0x7A |
+                    0x7C |
+                    0x7F |
+                    0xC3 ..= 0xCD |
+                    0xCF ..= 0xE0 |
+                    0xE3 ..= 0xF4 => {
+                        yystate = 1065;
+                        continue 'yyl;
+                    }
+                    0xC2 => {
+                        self.cursor += 1;
+                        yystate = 1066;
+                        continue 'yyl;
+                    }
+                    0xCE => {
+                        self.cursor += 1;
+                        yystate = 1069;
+                        continue 'yyl;
+                    }
+                    0xE1 => {
+                        self.cursor += 1;
+                        yystate = 1071;
+                        continue 'yyl;
+                    }
+                    0xE2 => {
+                        self.cursor += 1;
+                        yystate = 1072;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1293;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1293 => { emit!(CaPitchUp); },
+            1294 => { emit!(LevelPitch); },
+            1295 => {
+                yyaccept = 33;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
@@ -25548,66 +25523,11 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1296 => { emit!(CaCreaky); },
-            1297 => {
-                yyaccept = 31;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x02 => {
-                        self.cursor += 1;
-                        yystate = 1063;
-                        continue 'yyl;
-                    }
-                    0x05 ..= 0x06 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x1F |
-                    0x23 |
-                    0x27 ..= 0x28 |
-                    0x2D |
-                    0x2F |
-                    0x31 ..= 0x39 |
-                    0x3D |
-                    0x41 ..= 0x5A |
-                    0x5F ..= 0x7A |
-                    0x7C |
-                    0x7F |
-                    0xC3 ..= 0xCD |
-                    0xCF ..= 0xE0 |
-                    0xE3 ..= 0xF4 => {
-                        yystate = 1065;
-                        continue 'yyl;
-                    }
-                    0xC2 => {
-                        self.cursor += 1;
-                        yystate = 1066;
-                        continue 'yyl;
-                    }
-                    0xCE => {
-                        self.cursor += 1;
-                        yystate = 1069;
-                        continue 'yyl;
-                    }
-                    0xE1 => {
-                        self.cursor += 1;
-                        yystate = 1071;
-                        continue 'yyl;
-                    }
-                    0xE2 => {
-                        self.cursor += 1;
-                        yystate = 1072;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1298;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1298 => { emit!(CaHardening); },
+            1296 => { emit!(CaPitchDown); },
+            1297 => { emit!(RisingToMid); },
+            1298 => { emit!(FallingToMid); },
             1299 => {
-                yyaccept = 32;
+                yyaccept = 34;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
@@ -25662,125 +25582,8 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1300 => { emit!(CaPitchUp); },
-            1301 => { emit!(LevelPitch); },
-            1302 => {
-                yyaccept = 33;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x02 => {
-                        self.cursor += 1;
-                        yystate = 1063;
-                        continue 'yyl;
-                    }
-                    0x05 ..= 0x06 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x1F |
-                    0x23 |
-                    0x27 ..= 0x28 |
-                    0x2D |
-                    0x2F |
-                    0x31 ..= 0x39 |
-                    0x3D |
-                    0x41 ..= 0x5A |
-                    0x5F ..= 0x7A |
-                    0x7C |
-                    0x7F |
-                    0xC3 ..= 0xCD |
-                    0xCF ..= 0xE0 |
-                    0xE3 ..= 0xF4 => {
-                        yystate = 1065;
-                        continue 'yyl;
-                    }
-                    0xC2 => {
-                        self.cursor += 1;
-                        yystate = 1066;
-                        continue 'yyl;
-                    }
-                    0xCE => {
-                        self.cursor += 1;
-                        yystate = 1069;
-                        continue 'yyl;
-                    }
-                    0xE1 => {
-                        self.cursor += 1;
-                        yystate = 1071;
-                        continue 'yyl;
-                    }
-                    0xE2 => {
-                        self.cursor += 1;
-                        yystate = 1072;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1303;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1303 => { emit!(CaPitchDown); },
-            1304 => { emit!(RisingToMid); },
-            1305 => { emit!(FallingToMid); },
-            1306 => {
-                yyaccept = 34;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x02 => {
-                        self.cursor += 1;
-                        yystate = 1063;
-                        continue 'yyl;
-                    }
-                    0x05 ..= 0x06 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x1F |
-                    0x23 |
-                    0x27 ..= 0x28 |
-                    0x2D |
-                    0x2F |
-                    0x31 ..= 0x39 |
-                    0x3D |
-                    0x41 ..= 0x5A |
-                    0x5F ..= 0x7A |
-                    0x7C |
-                    0x7F |
-                    0xC3 ..= 0xCD |
-                    0xCF ..= 0xE0 |
-                    0xE3 ..= 0xF4 => {
-                        yystate = 1065;
-                        continue 'yyl;
-                    }
-                    0xC2 => {
-                        self.cursor += 1;
-                        yystate = 1066;
-                        continue 'yyl;
-                    }
-                    0xCE => {
-                        self.cursor += 1;
-                        yystate = 1069;
-                        continue 'yyl;
-                    }
-                    0xE1 => {
-                        self.cursor += 1;
-                        yystate = 1071;
-                        continue 'yyl;
-                    }
-                    0xE2 => {
-                        self.cursor += 1;
-                        yystate = 1072;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1307;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1307 => { emit!(CaSegmentRepetition); },
-            1308 => {
+            1300 => { emit!(CaSegmentRepetition); },
+            1301 => {
                 yyaccept = 35;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -25831,16 +25634,188 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1309;
+                        yystate = 1302;
                         continue 'yyl;
                     }
                 }
             }
-            1309 => { emit!(CaPitchReset); },
-            1310 => { emit!(RisingToHigh); },
-            1311 => { emit!(FallingToLow); },
-            1312 => {
+            1302 => { emit!(CaPitchReset); },
+            1303 => { emit!(RisingToHigh); },
+            1304 => { emit!(FallingToLow); },
+            1305 => {
                 yyaccept = 36;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x02 => {
+                        self.cursor += 1;
+                        yystate = 1063;
+                        continue 'yyl;
+                    }
+                    0x05 ..= 0x06 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x1F |
+                    0x23 |
+                    0x27 ..= 0x28 |
+                    0x2D |
+                    0x2F |
+                    0x31 ..= 0x39 |
+                    0x3D |
+                    0x41 ..= 0x5A |
+                    0x5F ..= 0x7A |
+                    0x7C |
+                    0x7F |
+                    0xC3 ..= 0xCD |
+                    0xCF ..= 0xE0 |
+                    0xE3 ..= 0xF4 => {
+                        yystate = 1065;
+                        continue 'yyl;
+                    }
+                    0xC2 => {
+                        self.cursor += 1;
+                        yystate = 1066;
+                        continue 'yyl;
+                    }
+                    0xCE => {
+                        self.cursor += 1;
+                        yystate = 1069;
+                        continue 'yyl;
+                    }
+                    0xE1 => {
+                        self.cursor += 1;
+                        yystate = 1071;
+                        continue 'yyl;
+                    }
+                    0xE2 => {
+                        self.cursor += 1;
+                        yystate = 1072;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1306;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1306 => { emit!(CaFaster); },
+            1307 => {
+                yyaccept = 37;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x02 => {
+                        self.cursor += 1;
+                        yystate = 1063;
+                        continue 'yyl;
+                    }
+                    0x05 ..= 0x06 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x1F |
+                    0x23 |
+                    0x27 ..= 0x28 |
+                    0x2D |
+                    0x2F |
+                    0x31 ..= 0x39 |
+                    0x3D |
+                    0x41 ..= 0x5A |
+                    0x5F ..= 0x7A |
+                    0x7C |
+                    0x7F |
+                    0xC3 ..= 0xCD |
+                    0xCF ..= 0xE0 |
+                    0xE3 ..= 0xF4 => {
+                        yystate = 1065;
+                        continue 'yyl;
+                    }
+                    0xC2 => {
+                        self.cursor += 1;
+                        yystate = 1066;
+                        continue 'yyl;
+                    }
+                    0xCE => {
+                        self.cursor += 1;
+                        yystate = 1069;
+                        continue 'yyl;
+                    }
+                    0xE1 => {
+                        self.cursor += 1;
+                        yystate = 1071;
+                        continue 'yyl;
+                    }
+                    0xE2 => {
+                        self.cursor += 1;
+                        yystate = 1072;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1308;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1308 => { emit!(CaSlower); },
+            1309 => {
+                yyaccept = 38;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x02 => {
+                        self.cursor += 1;
+                        yystate = 1063;
+                        continue 'yyl;
+                    }
+                    0x05 ..= 0x06 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x1F |
+                    0x23 |
+                    0x27 ..= 0x28 |
+                    0x2D |
+                    0x2F |
+                    0x31 ..= 0x39 |
+                    0x3D |
+                    0x41 ..= 0x5A |
+                    0x5F ..= 0x7A |
+                    0x7C |
+                    0x7F |
+                    0xC3 ..= 0xCD |
+                    0xCF ..= 0xE0 |
+                    0xE3 ..= 0xF4 => {
+                        yystate = 1065;
+                        continue 'yyl;
+                    }
+                    0xC2 => {
+                        self.cursor += 1;
+                        yystate = 1066;
+                        continue 'yyl;
+                    }
+                    0xCE => {
+                        self.cursor += 1;
+                        yystate = 1069;
+                        continue 'yyl;
+                    }
+                    0xE1 => {
+                        self.cursor += 1;
+                        yystate = 1071;
+                        continue 'yyl;
+                    }
+                    0xE2 => {
+                        self.cursor += 1;
+                        yystate = 1072;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1310;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1310 => { emit!(CaInhalation); },
+            1311 => { emit!(UnmarkedEnding); },
+            1312 => {
+                yyaccept = 39;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
@@ -25895,9 +25870,9 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1313 => { emit!(CaFaster); },
+            1313 => { emit!(CaWhisper); },
             1314 => {
-                yyaccept = 37;
+                yyaccept = 40;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
@@ -25952,9 +25927,9 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1315 => { emit!(CaSlower); },
+            1315 => { emit!(CaSinging); },
             1316 => {
-                yyaccept = 38;
+                yyaccept = 41;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
@@ -26009,182 +25984,10 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1317 => { emit!(CaInhalation); },
-            1318 => { emit!(UnmarkedEnding); },
-            1319 => {
-                yyaccept = 39;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x02 => {
-                        self.cursor += 1;
-                        yystate = 1063;
-                        continue 'yyl;
-                    }
-                    0x05 ..= 0x06 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x1F |
-                    0x23 |
-                    0x27 ..= 0x28 |
-                    0x2D |
-                    0x2F |
-                    0x31 ..= 0x39 |
-                    0x3D |
-                    0x41 ..= 0x5A |
-                    0x5F ..= 0x7A |
-                    0x7C |
-                    0x7F |
-                    0xC3 ..= 0xCD |
-                    0xCF ..= 0xE0 |
-                    0xE3 ..= 0xF4 => {
-                        yystate = 1065;
-                        continue 'yyl;
-                    }
-                    0xC2 => {
-                        self.cursor += 1;
-                        yystate = 1066;
-                        continue 'yyl;
-                    }
-                    0xCE => {
-                        self.cursor += 1;
-                        yystate = 1069;
-                        continue 'yyl;
-                    }
-                    0xE1 => {
-                        self.cursor += 1;
-                        yystate = 1071;
-                        continue 'yyl;
-                    }
-                    0xE2 => {
-                        self.cursor += 1;
-                        yystate = 1072;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1320;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1320 => { emit!(CaWhisper); },
-            1321 => {
-                yyaccept = 40;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x02 => {
-                        self.cursor += 1;
-                        yystate = 1063;
-                        continue 'yyl;
-                    }
-                    0x05 ..= 0x06 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x1F |
-                    0x23 |
-                    0x27 ..= 0x28 |
-                    0x2D |
-                    0x2F |
-                    0x31 ..= 0x39 |
-                    0x3D |
-                    0x41 ..= 0x5A |
-                    0x5F ..= 0x7A |
-                    0x7C |
-                    0x7F |
-                    0xC3 ..= 0xCD |
-                    0xCF ..= 0xE0 |
-                    0xE3 ..= 0xF4 => {
-                        yystate = 1065;
-                        continue 'yyl;
-                    }
-                    0xC2 => {
-                        self.cursor += 1;
-                        yystate = 1066;
-                        continue 'yyl;
-                    }
-                    0xCE => {
-                        self.cursor += 1;
-                        yystate = 1069;
-                        continue 'yyl;
-                    }
-                    0xE1 => {
-                        self.cursor += 1;
-                        yystate = 1071;
-                        continue 'yyl;
-                    }
-                    0xE2 => {
-                        self.cursor += 1;
-                        yystate = 1072;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1322;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1322 => { emit!(CaSinging); },
-            1323 => {
-                yyaccept = 41;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x02 => {
-                        self.cursor += 1;
-                        yystate = 1063;
-                        continue 'yyl;
-                    }
-                    0x05 ..= 0x06 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x1F |
-                    0x23 |
-                    0x27 ..= 0x28 |
-                    0x2D |
-                    0x2F |
-                    0x31 ..= 0x39 |
-                    0x3D |
-                    0x41 ..= 0x5A |
-                    0x5F ..= 0x7A |
-                    0x7C |
-                    0x7F |
-                    0xC3 ..= 0xCD |
-                    0xCF ..= 0xE0 |
-                    0xE3 ..= 0xF4 => {
-                        yystate = 1065;
-                        continue 'yyl;
-                    }
-                    0xC2 => {
-                        self.cursor += 1;
-                        yystate = 1066;
-                        continue 'yyl;
-                    }
-                    0xCE => {
-                        self.cursor += 1;
-                        yystate = 1069;
-                        continue 'yyl;
-                    }
-                    0xE1 => {
-                        self.cursor += 1;
-                        yystate = 1071;
-                        continue 'yyl;
-                    }
-                    0xE2 => {
-                        self.cursor += 1;
-                        yystate = 1072;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1324;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1324 => { emit!(CaConstriction); },
-            1325 => { emit!(CaNoBreak); },
-            1326 => { emit!(CaTechnicalBreak); },
-            1327 => {
+            1317 => { emit!(CaConstriction); },
+            1318 => { emit!(CaNoBreak); },
+            1319 => { emit!(CaTechnicalBreak); },
+            1320 => {
                 yyaccept = 42;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26235,14 +26038,14 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1328;
+                        yystate = 1321;
                         continue 'yyl;
                     }
                 }
             }
-            1328 => { emit!(CaBlockedSegments); },
-            1329 => { emit!(UptakeSymbol); },
-            1330 => {
+            1321 => { emit!(CaBlockedSegments); },
+            1322 => { emit!(UptakeSymbol); },
+            1323 => {
                 yyaccept = 43;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26273,7 +26076,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x31 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1549;
+                        yystate = 1541;
                         continue 'yyl;
                     }
                     0xC2 => {
@@ -26297,13 +26100,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1331;
+                        yystate = 1324;
                         continue 'yyl;
                     }
                 }
             }
-            1331 => { emit!(OverlapTopBegin); },
-            1332 => {
+            1324 => { emit!(OverlapTopBegin); },
+            1325 => {
                 yyaccept = 44;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26334,7 +26137,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x31 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1550;
+                        yystate = 1542;
                         continue 'yyl;
                     }
                     0xC2 => {
@@ -26358,13 +26161,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1333;
+                        yystate = 1326;
                         continue 'yyl;
                     }
                 }
             }
-            1333 => { emit!(OverlapTopEnd); },
-            1334 => {
+            1326 => { emit!(OverlapTopEnd); },
+            1327 => {
                 yyaccept = 45;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26395,7 +26198,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x31 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1551;
+                        yystate = 1543;
                         continue 'yyl;
                     }
                     0xC2 => {
@@ -26419,13 +26222,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1335;
+                        yystate = 1328;
                         continue 'yyl;
                     }
                 }
             }
-            1335 => { emit!(OverlapBottomBegin); },
-            1336 => {
+            1328 => { emit!(OverlapBottomBegin); },
+            1329 => {
                 yyaccept = 46;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26456,7 +26259,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x31 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1552;
+                        yystate = 1544;
                         continue 'yyl;
                     }
                     0xC2 => {
@@ -26480,13 +26283,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1337;
+                        yystate = 1330;
                         continue 'yyl;
                     }
                 }
             }
-            1337 => { emit!(OverlapBottomEnd); },
-            1338 => {
+            1330 => { emit!(OverlapBottomEnd); },
+            1331 => {
                 yyaccept = 47;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26537,13 +26340,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1339;
+                        yystate = 1332;
                         continue 'yyl;
                     }
                 }
             }
-            1339 => { emit!(CaLowPitch); },
-            1340 => {
+            1332 => { emit!(CaLowPitch); },
+            1333 => {
                 yyaccept = 48;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26594,13 +26397,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1341;
+                        yystate = 1334;
                         continue 'yyl;
                     }
                 }
             }
-            1341 => { emit!(CaHighPitch); },
-            1342 => {
+            1334 => { emit!(CaHighPitch); },
+            1335 => {
                 yyaccept = 49;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26651,13 +26454,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1343;
+                        yystate = 1336;
                         continue 'yyl;
                     }
                 }
             }
-            1343 => { emit!(CaLouder); },
-            1344 => {
+            1336 => { emit!(CaLouder); },
+            1337 => {
                 yyaccept = 50;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26708,13 +26511,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1345;
+                        yystate = 1338;
                         continue 'yyl;
                     }
                 }
             }
-            1345 => { emit!(CaSmileVoice); },
-            1346 => {
+            1338 => { emit!(CaSmileVoice); },
+            1339 => {
                 yyaccept = 51;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26765,13 +26568,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1347;
+                        yystate = 1340;
                         continue 'yyl;
                     }
                 }
             }
-            1347 => { emit!(CaBreathyVoice); },
-            1348 => {
+            1340 => { emit!(CaBreathyVoice); },
+            1341 => {
                 yyaccept = 52;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26822,13 +26625,13 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1349;
+                        yystate = 1342;
                         continue 'yyl;
                     }
                 }
             }
-            1349 => { emit!(CaSuddenStop); },
-            1350 => {
+            1342 => { emit!(CaSuddenStop); },
+            1343 => {
                 yyaccept = 53;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -26879,15 +26682,15 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1351;
+                        yystate = 1344;
                         continue 'yyl;
                     }
                 }
             }
-            1351 => { emit!(CaHurriedStart); },
-            1352 => { emit!(SinGroupBegin); },
-            1353 => { emit!(SinGroupEnd); },
-            1354 => {
+            1344 => { emit!(CaHurriedStart); },
+            1345 => { emit!(SinGroupBegin); },
+            1346 => { emit!(SinGroupEnd); },
+            1347 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
@@ -26986,7 +26789,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1355 => {
+            1348 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
@@ -26997,7 +26800,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xA9 => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27006,7 +26809,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1356 => {
+            1349 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
@@ -27024,7 +26827,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1357 => {
+            1350 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -27039,7 +26842,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x8E |
                     0x91 => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27048,7 +26851,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1358 => {
+            1351 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -27065,7 +26868,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xAB |
                     0xBB => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27074,7 +26877,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1359 => {
+            1352 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
@@ -27089,7 +26892,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1360 => {
+            1353 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -27109,7 +26912,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xAE |
                     0xBE => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27118,7 +26921,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1361 => {
+            1354 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -27131,7 +26934,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xA0 => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27140,7 +26943,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1362 => {
+            1355 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -27151,7 +26954,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x88 ..= 0x8B => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27160,7 +26963,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1363 => {
+            1356 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
@@ -27173,7 +26976,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x81 |
                     0x94 => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27182,7 +26985,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1364 => {
+            1357 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
@@ -27193,7 +26996,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27202,7 +27005,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1365 => {
+            1358 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
@@ -27213,7 +27016,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBA => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27222,7 +27025,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1366 => {
+            1359 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
@@ -27233,7 +27036,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27242,7 +27045,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1367 => {
+            1360 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -27253,7 +27056,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 ..= 0x87 => {
                         self.cursor += 1;
-                        yystate = 1354;
+                        yystate = 1347;
                         continue 'yyl;
                     }
                     _ => {
@@ -27262,7 +27065,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1368 => {
+            1361 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
@@ -27277,7 +27080,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1369 => {
+            1362 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
@@ -27292,7 +27095,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1370 => {
+            1363 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
@@ -27310,7 +27113,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1371 => {
+            1364 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -27327,7 +27130,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1372 => {
+            1365 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -27345,11 +27148,124 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1373 => {
+            1366 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
                     0x99 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1079;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1367 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0x98 |
+                    0x9A ..= 0x9D |
+                    0x9F ..= 0xAB |
+                    0xAD |
+                    0xAF ..= 0xBD |
+                    0xBF => {
+                        self.cursor += 1;
+                        yystate = 1079;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1368 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8A |
+                    0x8C ..= 0x9F |
+                    0xA2 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1079;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1369 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x87 |
+                    0x8C ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1079;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1370 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 |
+                    0x82 ..= 0x93 |
+                    0x95 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1079;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1371 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x88 |
+                    0x8A ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1079;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1372 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xB9 |
+                    0xBB ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1079;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1373 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8A |
+                    0x8C ..= 0xBF => {
                         self.cursor += 1;
                         yystate = 1079;
                         continue 'yyl;
@@ -27364,119 +27280,6 @@ impl<'a> Iterator for Lexer<'a> {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
-                    0x88 ..= 0x98 |
-                    0x9A ..= 0x9D |
-                    0x9F ..= 0xAB |
-                    0xAD |
-                    0xAF ..= 0xBD |
-                    0xBF => {
-                        self.cursor += 1;
-                        yystate = 1079;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1375 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8A |
-                    0x8C ..= 0x9F |
-                    0xA2 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1079;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1376 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x87 |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1079;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1377 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 |
-                    0x82 ..= 0x93 |
-                    0x95 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1079;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1378 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x88 |
-                    0x8A ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1079;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1379 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xB9 |
-                    0xBB ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1079;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1380 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8A |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1079;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1381 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x85 |
                     0x88 ..= 0xBF => {
                         self.cursor += 1;
                         yystate = 1079;
@@ -27488,7 +27291,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1382 => {
+            1375 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
@@ -27503,7 +27306,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1383 => {
+            1376 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
@@ -27523,7 +27326,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1384 => {
+            1377 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -27547,7 +27350,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1385 => {
+            1378 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -27573,7 +27376,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1386 => {
+            1379 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -27602,7 +27405,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1387 => {
+            1380 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -27624,7 +27427,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1388 => {
+            1381 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -27644,7 +27447,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1389 => {
+            1382 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
@@ -27666,7 +27469,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1390 => {
+            1383 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
@@ -27686,7 +27489,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1391 => {
+            1384 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
@@ -27706,7 +27509,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1392 => {
+            1385 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
@@ -27726,7 +27529,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1393 => {
+            1386 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -27746,14 +27549,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1394 => {
+            1387 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1394;
+                        yystate = 1387;
                         continue 'yyl;
                     }
                     _ => {
@@ -27763,7 +27566,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1395 => {
+            1388 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
@@ -27771,7 +27574,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1553;
+                        yystate = 1545;
                         continue 'yyl;
                     }
                     _ => {
@@ -27780,7 +27583,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1396 => {
+            1389 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
@@ -27788,7 +27591,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1554;
+                        yystate = 1546;
                         continue 'yyl;
                     }
                     _ => {
@@ -27797,7 +27600,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1397 => {
+            1390 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
@@ -27805,7 +27608,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1555;
+                        yystate = 1547;
                         continue 'yyl;
                     }
                     _ => {
@@ -27814,14 +27617,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1398 => {
+            1391 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1556;
+                        yystate = 1548;
                         continue 'yyl;
                     }
                     _ => {
@@ -27830,13 +27633,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1399 => {
+            1392 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1557;
+                        yystate = 1549;
                         continue 'yyl;
                     }
                     _ => {
@@ -27845,7 +27648,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1400 => {
+            1393 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -27861,24 +27664,24 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1401 => {
+            1394 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1558;
+                        yystate = 1550;
                         continue 'yyl;
                     }
                     0x2D => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1559;
+                        yystate = 1551;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1401;
+                        yystate = 1394;
                         continue 'yyl;
                     }
                     _ => {
@@ -27887,13 +27690,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1402 => {
+            1395 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1560;
+                        yystate = 1552;
                         continue 'yyl;
                     }
                     0x05 ..= 0x06 |
@@ -27912,19 +27715,19 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7F => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     0x28 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1563;
+                        yystate = 1555;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1564;
+                        yystate = 1556;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
@@ -27932,67 +27735,67 @@ impl<'a> Iterator for Lexer<'a> {
                     0xCF ..= 0xDF => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1565;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1566;
+                        yystate = 1558;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1567;
+                        yystate = 1559;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1568;
+                        yystate = 1560;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1569;
+                        yystate = 1561;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1570;
+                        yystate = 1562;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1571;
+                        yystate = 1563;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1572;
+                        yystate = 1564;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1573;
+                        yystate = 1565;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1574;
+                        yystate = 1566;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1575;
+                        yystate = 1567;
                         continue 'yyl;
                     }
                     _ => {
@@ -28001,7 +27804,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1403 => {
+            1396 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
@@ -28100,12 +27903,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1404 => {
+            1397 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x02 => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -28114,7 +27917,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1405 => {
+            1398 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
@@ -28122,7 +27925,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt5 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1576;
+                        yystate = 1568;
                         continue 'yyl;
                     }
                     _ => {
@@ -28131,12 +27934,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1406 => {
+            1399 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
-                        yystate = 1404;
+                        yystate = 1397;
                         continue 'yyl;
                     }
                     0x05 ..= 0x06 |
@@ -28164,19 +27967,19 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1406;
+                        yystate = 1399;
                         continue 'yyl;
                     }
                     0x3A |
                     0x5E |
                     0x7E => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1409;
+                        yystate = 1402;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
@@ -28193,7 +27996,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1410;
+                        yystate = 1403;
                         continue 'yyl;
                     }
                     0xE0 => {
@@ -28203,12 +28006,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1411;
+                        yystate = 1404;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1412;
+                        yystate = 1405;
                         continue 'yyl;
                     }
                     0xE3 => {
@@ -28242,14 +28045,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1407 => {
+            1400 => {
                 yyaccept = 26;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
-                        yystate = 1404;
+                        yystate = 1397;
                         continue 'yyl;
                     }
                     0x05 ..= 0x06 |
@@ -28277,7 +28080,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = NONE;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1405;
+                        yystate = 1398;
                         continue 'yyl;
                     }
                     0x28 => {
@@ -28287,14 +28090,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1406;
+                        yystate = 1399;
                         continue 'yyl;
                     }
                     0x3A |
                     0x5E |
                     0x7E => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     0x40 => {
@@ -28302,12 +28105,12 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt3 = NONE;
                         self.yyt6 = NONE;
                         self.cursor += 1;
-                        yystate = 1408;
+                        yystate = 1401;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1409;
+                        yystate = 1402;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
@@ -28324,7 +28127,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1410;
+                        yystate = 1403;
                         continue 'yyl;
                     }
                     0xE0 => {
@@ -28334,12 +28137,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1411;
+                        yystate = 1404;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1412;
+                        yystate = 1405;
                         continue 'yyl;
                     }
                     0xE3 => {
@@ -28380,7 +28183,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1408 => {
+            1401 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -28432,31 +28235,31 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7A => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1577;
+                        yystate = 1569;
                         continue 'yyl;
                     }
                     0x66 => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1578;
+                        yystate = 1570;
                         continue 'yyl;
                     }
                     0x6C => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1579;
+                        yystate = 1571;
                         continue 'yyl;
                     }
                     0x73 => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1580;
+                        yystate = 1572;
                         continue 'yyl;
                     }
                     0x77 => {
                         self.yyt7 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1581;
+                        yystate = 1573;
                         continue 'yyl;
                     }
                     _ => {
@@ -28469,7 +28272,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1409 => {
+            1402 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
@@ -28482,7 +28285,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xA7 |
                     0xB0 => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -28491,7 +28294,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1410 => {
+            1403 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
@@ -28502,7 +28305,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xAB => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -28511,7 +28314,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1411 => {
+            1404 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
@@ -28522,7 +28325,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1582;
+                        yystate = 1574;
                         continue 'yyl;
                     }
                     _ => {
@@ -28531,17 +28334,17 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1412 => {
+            1405 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1427;
+                        yystate = 1420;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1583;
+                        yystate = 1575;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -28555,52 +28358,52 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1584;
+                        yystate = 1576;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1430;
+                        yystate = 1423;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1585;
+                        yystate = 1577;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1586;
+                        yystate = 1578;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1587;
+                        yystate = 1579;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1588;
+                        yystate = 1580;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1589;
+                        yystate = 1581;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1590;
+                        yystate = 1582;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1591;
+                        yystate = 1583;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1592;
+                        yystate = 1584;
                         continue 'yyl;
                     }
                     _ => {
@@ -28609,7 +28412,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1413 => {
+            1406 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
@@ -28626,74 +28429,247 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7C |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     0x29 => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1414;
+                        yystate = 1407;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
                     0xCC ..= 0xCD |
                     0xCF ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1415;
+                        yystate = 1408;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.cursor += 1;
-                        yystate = 1416;
+                        yystate = 1409;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1417;
+                        yystate = 1410;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1418;
+                        yystate = 1411;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1419;
+                        yystate = 1412;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1420;
+                        yystate = 1413;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.cursor += 1;
-                        yystate = 1421;
+                        yystate = 1414;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1422;
+                        yystate = 1415;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1423;
+                        yystate = 1416;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1424;
+                        yystate = 1417;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1425;
+                        yystate = 1418;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1407 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xA6 |
+                    0xA8 ..= 0xAF |
+                    0xB1 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1406;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1408 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1406;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1409 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8B |
+                    0x8D ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1406;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1410 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xAA |
+                    0xAC ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1406;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1411 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1408;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1412 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBB |
+                    0xBD ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1408;
+                        continue 'yyl;
+                    }
+                    0xBC => {
+                        self.cursor += 1;
+                        yystate = 1585;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1413 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 => {
+                        self.cursor += 1;
+                        yystate = 1586;
+                        continue 'yyl;
+                    }
+                    0x81 => {
+                        self.cursor += 1;
+                        yystate = 1587;
+                        continue 'yyl;
+                    }
+                    0x82 ..= 0x85 |
+                    0x8A ..= 0x8B |
+                    0x8D ..= 0x95 |
+                    0x9A ..= 0xA3 |
+                    0xA5 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1408;
+                        continue 'yyl;
+                    }
+                    0x86 => {
+                        self.cursor += 1;
+                        yystate = 1588;
+                        continue 'yyl;
+                    }
+                    0x87 => {
+                        self.cursor += 1;
+                        yystate = 1589;
+                        continue 'yyl;
+                    }
+                    0x88 => {
+                        self.cursor += 1;
+                        yystate = 1590;
+                        continue 'yyl;
+                    }
+                    0x89 => {
+                        self.cursor += 1;
+                        yystate = 1591;
+                        continue 'yyl;
+                    }
+                    0x8C => {
+                        self.cursor += 1;
+                        yystate = 1592;
+                        continue 'yyl;
+                    }
+                    0x96 => {
+                        self.cursor += 1;
+                        yystate = 1593;
+                        continue 'yyl;
+                    }
+                    0x97 => {
+                        self.cursor += 1;
+                        yystate = 1594;
+                        continue 'yyl;
+                    }
+                    0x98 => {
+                        self.cursor += 1;
+                        yystate = 1595;
+                        continue 'yyl;
+                    }
+                    0x99 => {
+                        self.cursor += 1;
+                        yystate = 1596;
+                        continue 'yyl;
+                    }
+                    0xA4 => {
+                        self.cursor += 1;
+                        yystate = 1597;
                         continue 'yyl;
                     }
                     _ => {
@@ -28705,11 +28681,14 @@ impl<'a> Iterator for Lexer<'a> {
             1414 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xA6 |
-                    0xA8 ..= 0xAF |
-                    0xB1 ..= 0xBF => {
+                    0x80 => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1598;
+                        continue 'yyl;
+                    }
+                    0x81 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1408;
                         continue 'yyl;
                     }
                     _ => {
@@ -28723,7 +28702,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1408;
                         continue 'yyl;
                     }
                     _ => {
@@ -28735,11 +28714,9 @@ impl<'a> Iterator for Lexer<'a> {
             1416 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8B |
-                    0x8D ..= 0xBF => {
+                    0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1415;
                         continue 'yyl;
                     }
                     _ => {
@@ -28751,10 +28728,9 @@ impl<'a> Iterator for Lexer<'a> {
             1417 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xAA |
-                    0xAC ..= 0xBF => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1415;
                         continue 'yyl;
                     }
                     _ => {
@@ -28766,7 +28742,7 @@ impl<'a> Iterator for Lexer<'a> {
             1418 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0xA0 ..= 0xBF => {
+                    0x80 ..= 0x8F => {
                         self.cursor += 1;
                         yystate = 1415;
                         continue 'yyl;
@@ -28780,15 +28756,15 @@ impl<'a> Iterator for Lexer<'a> {
             1419 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBB |
-                    0xBD ..= 0xBF => {
+                    0x80 ..= 0xA8 |
+                    0xAA ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1415;
+                        yystate = 1125;
                         continue 'yyl;
                     }
-                    0xBC => {
+                    0xA9 => {
                         self.cursor += 1;
-                        yystate = 1593;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -28798,179 +28774,6 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1420 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 => {
-                        self.cursor += 1;
-                        yystate = 1594;
-                        continue 'yyl;
-                    }
-                    0x81 => {
-                        self.cursor += 1;
-                        yystate = 1595;
-                        continue 'yyl;
-                    }
-                    0x82 ..= 0x85 |
-                    0x8A ..= 0x8B |
-                    0x8D ..= 0x95 |
-                    0x9A ..= 0xA3 |
-                    0xA5 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1415;
-                        continue 'yyl;
-                    }
-                    0x86 => {
-                        self.cursor += 1;
-                        yystate = 1596;
-                        continue 'yyl;
-                    }
-                    0x87 => {
-                        self.cursor += 1;
-                        yystate = 1597;
-                        continue 'yyl;
-                    }
-                    0x88 => {
-                        self.cursor += 1;
-                        yystate = 1598;
-                        continue 'yyl;
-                    }
-                    0x89 => {
-                        self.cursor += 1;
-                        yystate = 1599;
-                        continue 'yyl;
-                    }
-                    0x8C => {
-                        self.cursor += 1;
-                        yystate = 1600;
-                        continue 'yyl;
-                    }
-                    0x96 => {
-                        self.cursor += 1;
-                        yystate = 1601;
-                        continue 'yyl;
-                    }
-                    0x97 => {
-                        self.cursor += 1;
-                        yystate = 1602;
-                        continue 'yyl;
-                    }
-                    0x98 => {
-                        self.cursor += 1;
-                        yystate = 1603;
-                        continue 'yyl;
-                    }
-                    0x99 => {
-                        self.cursor += 1;
-                        yystate = 1604;
-                        continue 'yyl;
-                    }
-                    0xA4 => {
-                        self.cursor += 1;
-                        yystate = 1605;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1421 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 => {
-                        self.cursor += 1;
-                        yystate = 1606;
-                        continue 'yyl;
-                    }
-                    0x81 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1415;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1422 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1415;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1423 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1422;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1424 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1422;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1425 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 1422;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1426 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xA8 |
-                    0xAA ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1125;
-                        continue 'yyl;
-                    }
-                    0xA9 => {
-                        self.cursor += 1;
-                        yystate = 1403;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1427 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
@@ -28988,7 +28791,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1428 => {
+            1421 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -29003,7 +28806,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x8E |
                     0x91 => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29012,7 +28815,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1429 => {
+            1422 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -29029,7 +28832,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xAB |
                     0xBB => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29038,7 +28841,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1430 => {
+            1423 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
@@ -29053,7 +28856,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1431 => {
+            1424 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -29073,7 +28876,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xAE |
                     0xBE => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29082,7 +28885,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1432 => {
+            1425 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -29095,7 +28898,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xA0 => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29104,7 +28907,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1433 => {
+            1426 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -29115,7 +28918,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x88 ..= 0x8B => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29124,7 +28927,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1434 => {
+            1427 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
@@ -29137,7 +28940,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x81 |
                     0x94 => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29146,7 +28949,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1435 => {
+            1428 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
@@ -29157,7 +28960,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29166,7 +28969,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1436 => {
+            1429 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
@@ -29177,7 +28980,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xBA => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29186,7 +28989,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1437 => {
+            1430 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
@@ -29197,7 +29000,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29206,7 +29009,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1438 => {
+            1431 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -29217,7 +29020,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x86 ..= 0x87 => {
                         self.cursor += 1;
-                        yystate = 1403;
+                        yystate = 1396;
                         continue 'yyl;
                     }
                     _ => {
@@ -29226,7 +29029,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1439 => {
+            1432 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
@@ -29241,7 +29044,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1440 => {
+            1433 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
@@ -29256,7 +29059,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1441 => {
+            1434 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x9B |
@@ -29273,7 +29076,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1442 => {
+            1435 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -29290,7 +29093,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1443 => {
+            1436 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -29308,7 +29111,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1444 => {
+            1437 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
@@ -29323,7 +29126,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1445 => {
+            1438 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -29343,7 +29146,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1446 => {
+            1439 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -29360,7 +29163,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1447 => {
+            1440 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -29375,7 +29178,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1448 => {
+            1441 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
@@ -29391,7 +29194,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1449 => {
+            1442 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
@@ -29406,7 +29209,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1450 => {
+            1443 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
@@ -29421,7 +29224,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1451 => {
+            1444 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
@@ -29436,7 +29239,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1452 => {
+            1445 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -29451,7 +29254,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1453 => {
+            1446 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
@@ -29466,7 +29269,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1454 => {
+            1447 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
@@ -29477,7 +29280,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1607;
+                        yystate = 1599;
                         continue 'yyl;
                     }
                     _ => {
@@ -29486,7 +29289,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1455 => {
+            1448 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
@@ -29497,7 +29300,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1609;
+                        yystate = 1601;
                         continue 'yyl;
                     }
                     _ => {
@@ -29506,7 +29309,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1456 => {
+            1449 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
@@ -29517,7 +29320,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1611;
+                        yystate = 1603;
                         continue 'yyl;
                     }
                     _ => {
@@ -29526,7 +29329,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1457 => {
+            1450 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x25 |
@@ -29537,7 +29340,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1613;
+                        yystate = 1605;
                         continue 'yyl;
                     }
                     _ => {
@@ -29546,17 +29349,17 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1458 => { let end = self.cursor;
+            1451 => { let end = self.cursor;
             let pause = crate::token::PauseLexeme::from_lexed(&yyinput[start..end], start, end);
             return Some((Token::PauseMedium(pause), start..end)); },
-            1459 => {
+            1452 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x29 => {
                         self.cursor += 1;
-                        yystate = 1615;
+                        yystate = 1607;
                         continue 'yyl;
                     }
                     _ => {
@@ -29565,7 +29368,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1460 => {
+            1453 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
@@ -29573,7 +29376,7 @@ impl<'a> Iterator for Lexer<'a> {
             let pause = crate::token::PauseLexeme::from_lexed(&yyinput[self.t1..self.t2], start, end);
             return Some((Token::PauseTimed(pause), start..end)); }
             }
-            1461 => {
+            1454 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -29596,7 +29399,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1461;
+                        yystate = 1454;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
@@ -29635,21 +29438,21 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1462 => { emit!(QuotedNewLine); },
-            1463 => { emit!(TrailingOff); },
-            1464 => { emit!(TrailingOffQuestion); },
-            1465 => { emit!(SelfInterruption); },
-            1466 => { emit!(SelfInterruptedQuestion); },
-            1467 => { emit!(CaNoBreakLinker); },
-            1468 => { emit!(CaTechnicalBreakLinker); },
-            1469 => {
+            1455 => { emit!(QuotedNewLine); },
+            1456 => { emit!(TrailingOff); },
+            1457 => { emit!(TrailingOffQuestion); },
+            1458 => { emit!(SelfInterruption); },
+            1459 => { emit!(SelfInterruptedQuestion); },
+            1460 => { emit!(CaNoBreakLinker); },
+            1461 => { emit!(CaTechnicalBreakLinker); },
+            1462 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1469;
+                        yystate = 1462;
                         continue 'yyl;
                     }
                     _ => {
@@ -29659,7 +29462,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1470 => {
+            1463 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -29669,7 +29472,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1616;
+                        yystate = 1608;
                         continue 'yyl;
                     }
                     0x2D |
@@ -29687,13 +29490,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1617;
+                        yystate = 1609;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1618;
+                        yystate = 1610;
                         continue 'yyl;
                     }
                     _ => {
@@ -29708,7 +29511,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1471 => {
+            1464 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -29718,7 +29521,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1616;
+                        yystate = 1608;
                         continue 'yyl;
                     }
                     0x2D |
@@ -29737,18 +29540,18 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1617;
+                        yystate = 1609;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1618;
+                        yystate = 1610;
                         continue 'yyl;
                     }
                     0x70 => {
                         self.cursor += 1;
-                        yystate = 1470;
+                        yystate = 1463;
                         continue 'yyl;
                     }
                     _ => {
@@ -29763,7 +29566,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1472 => {
+            1465 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -29773,7 +29576,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1616;
+                        yystate = 1608;
                         continue 'yyl;
                     }
                     0x2D |
@@ -29792,18 +29595,18 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1617;
+                        yystate = 1609;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1618;
+                        yystate = 1610;
                         continue 'yyl;
                     }
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1470;
+                        yystate = 1463;
                         continue 'yyl;
                     }
                     _ => {
@@ -29818,7 +29621,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1473 => {
+            1466 => {
                 yyaccept = 55;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -29846,18 +29649,18 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1619;
+                        yystate = 1611;
                         continue 'yyl;
                     }
                     0x61 => {
                         self.cursor += 1;
-                        yystate = 1620;
+                        yystate = 1612;
                         continue 'yyl;
                     }
                     0x69 |
                     0x6C => {
                         self.cursor += 1;
-                        yystate = 1470;
+                        yystate = 1463;
                         continue 'yyl;
                     }
                     _ => {
@@ -29870,14 +29673,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1474 => {
+            1467 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
-                        yystate = 1470;
+                        yystate = 1463;
                         continue 'yyl;
                     }
                     _ => {
@@ -29886,7 +29689,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1475 => {
+            1468 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
@@ -29906,7 +29709,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1476 => {
+            1469 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -29930,7 +29733,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1477 => {
+            1470 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -29956,7 +29759,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1478 => {
+            1471 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -29985,7 +29788,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1479 => {
+            1472 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -30007,7 +29810,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1480 => {
+            1473 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -30027,7 +29830,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1481 => {
+            1474 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
@@ -30049,7 +29852,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1482 => {
+            1475 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
@@ -30069,7 +29872,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1483 => {
+            1476 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
@@ -30089,7 +29892,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1484 => {
+            1477 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
@@ -30109,7 +29912,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1485 => {
+            1478 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -30129,7 +29932,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1486 => {
+            1479 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
@@ -30144,7 +29947,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1487 => {
+            1480 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x97 |
@@ -30162,7 +29965,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1488 => {
+            1481 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -30179,7 +29982,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1489 => {
+            1482 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -30197,7 +30000,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1490 => {
+            1483 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x96 |
@@ -30212,7 +30015,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1491 => {
+            1484 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -30232,7 +30035,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1492 => {
+            1485 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -30249,7 +30052,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1493 => {
+            1486 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -30264,7 +30067,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1494 => {
+            1487 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
@@ -30280,7 +30083,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1495 => {
+            1488 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x88 |
@@ -30295,7 +30098,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1496 => {
+            1489 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xB9 |
@@ -30310,7 +30113,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1497 => {
+            1490 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8A |
@@ -30325,7 +30128,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1498 => {
+            1491 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -30340,7 +30143,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1499 => {
+            1492 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
@@ -30355,7 +30158,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1500 => {
+            1493 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
@@ -30363,7 +30166,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1500;
+                        yystate = 1493;
                         continue 'yyl;
                     }
                     _ => {
@@ -30372,12 +30175,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1501 => {
+            1494 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1621;
+                        yystate = 1613;
                         continue 'yyl;
                     }
                     _ => {
@@ -30386,7 +30189,143 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1502 => { emit!(ScopedContrastiveStressing); },
+            1495 => { emit!(ScopedContrastiveStressing); },
+            1496 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x5C |
+                    0x5E ..= 0x7F => {
+                        self.cursor += 1;
+                        yystate = 1496;
+                        continue 'yyl;
+                    }
+                    0x5D => {
+                        self.cursor += 1;
+                        yystate = 1614;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.cursor += 1;
+                        yystate = 1497;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.cursor += 1;
+                        yystate = 1498;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.cursor += 1;
+                        yystate = 1499;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.cursor += 1;
+                        yystate = 1500;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.cursor += 1;
+                        yystate = 1501;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.cursor += 1;
+                        yystate = 1502;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1497 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1496;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1498 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1497;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1499 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1497;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1500 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1499;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1501 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1499;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1502 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 1499;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
             1503 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
@@ -30400,7 +30339,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1622;
+                        yystate = 1615;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
@@ -30536,7 +30475,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1623;
+                        yystate = 1616;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
@@ -30659,96 +30598,32 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1517 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
-                    0x5E ..= 0x7F => {
-                        self.cursor += 1;
-                        yystate = 1517;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1624;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.cursor += 1;
-                        yystate = 1518;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.cursor += 1;
-                        yystate = 1519;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.cursor += 1;
-                        yystate = 1520;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.cursor += 1;
-                        yystate = 1521;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.cursor += 1;
-                        yystate = 1522;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.cursor += 1;
-                        yystate = 1523;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
+            1517 => { emit!(RetraceReformulation); },
             1518 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x5D => {
                         self.cursor += 1;
-                        yystate = 1517;
+                        yystate = 1617;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
             }
-            1519 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1518;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
+            1519 => { emit!(RetraceComplete); },
             1520 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x5D => {
                         self.cursor += 1;
-                        yystate = 1518;
+                        yystate = 1250;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
@@ -30756,9 +30631,47 @@ impl<'a> Iterator for Lexer<'a> {
             1521 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x90 ..= 0xBF => {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x5C |
+                    0x5E ..= 0x7F => {
                         self.cursor += 1;
-                        yystate = 1520;
+                        yystate = 1521;
+                        continue 'yyl;
+                    }
+                    0x5D => {
+                        self.cursor += 1;
+                        yystate = 1618;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.cursor += 1;
+                        yystate = 1522;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.cursor += 1;
+                        yystate = 1523;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.cursor += 1;
+                        yystate = 1524;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.cursor += 1;
+                        yystate = 1525;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.cursor += 1;
+                        yystate = 1526;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.cursor += 1;
+                        yystate = 1527;
                         continue 'yyl;
                     }
                     _ => {
@@ -30772,7 +30685,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1520;
+                        yystate = 1521;
                         continue 'yyl;
                     }
                     _ => {
@@ -30784,9 +30697,9 @@ impl<'a> Iterator for Lexer<'a> {
             1523 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x8F => {
+                    0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1520;
+                        yystate = 1522;
                         continue 'yyl;
                     }
                     _ => {
@@ -30795,38 +30708,117 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1524 => { emit!(RetraceReformulation); },
+            1524 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1522;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
             1525 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1524;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1526 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1524;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1527 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 1524;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1528 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x5C |
+                    0x5E ..= 0x7F => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1619;
+                        continue 'yyl;
+                    }
                     0x5D => {
+                        self.cursor += 1;
+                        yystate = 1230;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1620;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1621;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1622;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1623;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1624;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
                         yystate = 1625;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1010;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1526 => { emit!(RetraceComplete); },
-            1527 => {
-                self.t1 = self.yyt1;
-                self.t2 = self.cursor;
-                self.t2 = (self.t2 as isize + -1) as usize;
-                { emit_t1t2!(Replacement); }
-            }
-            1528 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1257;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1010;
+                        yystate = 919;
                         continue 'yyl;
                     }
                 }
@@ -30838,43 +30830,50 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0B ..= 0x0C |
                     0x0E ..= 0x5C |
                     0x5E ..= 0x7F => {
-                        self.cursor += 1;
-                        yystate = 1529;
-                        continue 'yyl;
-                    }
-                    0x5D => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
                         yystate = 1626;
                         continue 'yyl;
                     }
-                    0xC2 ..= 0xDF => {
+                    0x5D => {
                         self.cursor += 1;
-                        yystate = 1530;
+                        yystate = 1230;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1627;
                         continue 'yyl;
                     }
                     0xE0 => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1531;
+                        yystate = 1628;
                         continue 'yyl;
                     }
                     0xE1 ..= 0xEF => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1532;
+                        yystate = 1629;
                         continue 'yyl;
                     }
                     0xF0 => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1533;
+                        yystate = 1630;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1534;
+                        yystate = 1631;
                         continue 'yyl;
                     }
                     0xF4 => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1535;
+                        yystate = 1632;
                         continue 'yyl;
                     }
                     _ => {
@@ -30886,13 +30885,13 @@ impl<'a> Iterator for Lexer<'a> {
             1530 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x5D => {
                         self.cursor += 1;
-                        yystate = 1529;
+                        yystate = 1256;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
@@ -30900,37 +30899,63 @@ impl<'a> Iterator for Lexer<'a> {
             1531 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0xA0 ..= 0xBF => {
+                    0x61 ..= 0x7A => {
+                        self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1530;
+                        yystate = 1633;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1010;
                         continue 'yyl;
                     }
                 }
             }
-            1532 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1530;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
+            1532 => { emit!(CodeSwitchShortcut); },
             1533 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x90 ..= 0xBF => {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x5C |
+                    0x5E ..= 0x7F => {
                         self.cursor += 1;
-                        yystate = 1532;
+                        yystate = 1533;
+                        continue 'yyl;
+                    }
+                    0x5D => {
+                        self.cursor += 1;
+                        yystate = 1634;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.cursor += 1;
+                        yystate = 1534;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.cursor += 1;
+                        yystate = 1535;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.cursor += 1;
+                        yystate = 1536;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.cursor += 1;
+                        yystate = 1537;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.cursor += 1;
+                        yystate = 1538;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.cursor += 1;
+                        yystate = 1539;
                         continue 'yyl;
                     }
                     _ => {
@@ -30944,7 +30969,7 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1532;
+                        yystate = 1533;
                         continue 'yyl;
                     }
                     _ => {
@@ -30956,9 +30981,9 @@ impl<'a> Iterator for Lexer<'a> {
             1535 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x8F => {
+                    0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1532;
+                        yystate = 1534;
                         continue 'yyl;
                     }
                     _ => {
@@ -30970,54 +30995,9 @@ impl<'a> Iterator for Lexer<'a> {
             1536 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
-                    0x5E ..= 0x7F => {
-                        self.yyt1 = self.cursor;
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1627;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1230;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1628;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1629;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1630;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1631;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1632;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1633;
+                        yystate = 1534;
                         continue 'yyl;
                     }
                     _ => {
@@ -31029,54 +31009,9 @@ impl<'a> Iterator for Lexer<'a> {
             1537 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
-                    0x5E ..= 0x7F => {
-                        self.yyt1 = self.cursor;
+                    0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1634;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1230;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1635;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1636;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1637;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1638;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1639;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1640;
+                        yystate = 1536;
                         continue 'yyl;
                     }
                     _ => {
@@ -31088,13 +31023,13 @@ impl<'a> Iterator for Lexer<'a> {
             1538 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x5D => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1263;
+                        yystate = 1536;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1010;
+                        yystate = 919;
                         continue 'yyl;
                     }
                 }
@@ -31102,147 +31037,9 @@ impl<'a> Iterator for Lexer<'a> {
             1539 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x61 ..= 0x7A => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1641;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1010;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1540 => { emit!(CodeSwitchShortcut); },
-            1541 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
-                    0x5E ..= 0x7F => {
-                        self.cursor += 1;
-                        yystate = 1541;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1642;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.cursor += 1;
-                        yystate = 1542;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.cursor += 1;
-                        yystate = 1543;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.cursor += 1;
-                        yystate = 1544;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.cursor += 1;
-                        yystate = 1545;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.cursor += 1;
-                        yystate = 1546;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.cursor += 1;
-                        yystate = 1547;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1542 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1541;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1543 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1542;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1544 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1542;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1545 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1544;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1546 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1544;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1547 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 1544;
+                        yystate = 1536;
                         continue 'yyl;
                     }
                     _ => {
@@ -31251,8 +31048,8 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1548 => { emit!(CaContinuationMarker); },
-            1549 => {
+            1540 => { emit!(CaContinuationMarker); },
+            1541 => {
                 yyaccept = 43;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -31277,12 +31074,12 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1331;
+                        yystate = 1324;
                         continue 'yyl;
                     }
                 }
             }
-            1550 => {
+            1542 => {
                 yyaccept = 44;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -31307,12 +31104,12 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1333;
+                        yystate = 1326;
                         continue 'yyl;
                     }
                 }
             }
-            1551 => {
+            1543 => {
                 yyaccept = 45;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -31337,12 +31134,12 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1335;
+                        yystate = 1328;
                         continue 'yyl;
                     }
                 }
             }
-            1552 => {
+            1544 => {
                 yyaccept = 46;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -31367,12 +31164,12 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1337;
+                        yystate = 1330;
                         continue 'yyl;
                     }
                 }
             }
-            1553 => {
+            1545 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -31394,7 +31191,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1553;
+                        yystate = 1545;
                         continue 'yyl;
                     }
                     0x40 => {
@@ -31411,14 +31208,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1554 => {
+            1546 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1554;
+                        yystate = 1546;
                         continue 'yyl;
                     }
                     _ => {
@@ -31429,7 +31226,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1555 => {
+            1547 => {
                 yyaccept = 24;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -31439,7 +31236,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt5 = self.cursor;
                         self.yyt6 = NONE;
                         self.cursor += 1;
-                        yystate = 1396;
+                        yystate = 1389;
                         continue 'yyl;
                     }
                     0x2D |
@@ -31453,13 +31250,13 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1555;
+                        yystate = 1547;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt5 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1398;
+                        yystate = 1391;
                         continue 'yyl;
                     }
                     _ => {
@@ -31474,7 +31271,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1556 => {
+            1548 => {
                 yyaccept = 56;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -31483,7 +31280,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt3 = self.cursor;
                         self.yyt6 = NONE;
                         self.cursor += 1;
-                        yystate = 1396;
+                        yystate = 1389;
                         continue 'yyl;
                     }
                     0x2D |
@@ -31497,7 +31294,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1643;
+                        yystate = 1635;
                         continue 'yyl;
                     }
                     _ => {
@@ -31511,12 +31308,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1557 => {
+            1549 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1644;
+                        yystate = 1636;
                         continue 'yyl;
                     }
                     _ => {
@@ -31525,7 +31322,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1558 => {
+            1550 => {
                 self.t1 = self.yyt1;
                 self.t3 = self.yyt2;
                 self.t4 = self.yyt3;
@@ -31540,12 +31337,12 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            1559 => {
+            1551 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
-                        yystate = 1558;
+                        yystate = 1550;
                         continue 'yyl;
                     }
                     _ => {
@@ -31554,12 +31351,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1560 => {
+            1552 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 => {
                         self.cursor += 1;
-                        yystate = 1645;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -31568,14 +31365,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1561 => {
+            1553 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
-                        yystate = 1646;
+                        yystate = 1638;
                         continue 'yyl;
                     }
                     0x05 ..= 0x06 |
@@ -31592,105 +31389,105 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7C |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x28 => {
                         self.cursor += 1;
-                        yystate = 1563;
+                        yystate = 1555;
                         continue 'yyl;
                     }
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1648;
+                        yystate = 1640;
                         continue 'yyl;
                     }
                     0x3A |
                     0x5E |
                     0x7E => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.cursor += 1;
-                        yystate = 1650;
+                        yystate = 1642;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1651;
+                        yystate = 1643;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
                     0xCC ..= 0xCD |
                     0xCF ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1565;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.cursor += 1;
-                        yystate = 1566;
+                        yystate = 1558;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1652;
+                        yystate = 1644;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1568;
+                        yystate = 1560;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1653;
+                        yystate = 1645;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1654;
+                        yystate = 1646;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.cursor += 1;
-                        yystate = 1571;
+                        yystate = 1563;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1572;
+                        yystate = 1564;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1573;
+                        yystate = 1565;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1574;
+                        yystate = 1566;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1575;
+                        yystate = 1567;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                 }
             }
-            1562 => {
+            1554 => {
                 self.t1 = self.yyt1;
                 self.t3 = self.yyt2;
                 self.t2 = self.yyt2;
@@ -31703,7 +31500,7 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            1563 => {
+            1555 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
@@ -31721,69 +31518,278 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7C |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1656;
+                        yystate = 1648;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
                     0xCC ..= 0xCD |
                     0xCF ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1657;
+                        yystate = 1649;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.cursor += 1;
-                        yystate = 1658;
+                        yystate = 1650;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1659;
+                        yystate = 1651;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1660;
+                        yystate = 1652;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1661;
+                        yystate = 1653;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1662;
+                        yystate = 1654;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.cursor += 1;
-                        yystate = 1663;
+                        yystate = 1655;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1664;
+                        yystate = 1656;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1665;
+                        yystate = 1657;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1666;
+                        yystate = 1658;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
+                        yystate = 1659;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1556 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xA6 |
+                    0xA8 ..= 0xAF |
+                    0xB1 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0xA7 |
+                    0xB0 => {
+                        self.cursor += 1;
+                        yystate = 1637;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1557 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1558 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8B |
+                    0x8D ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x88 |
+                    0x8C => {
+                        self.cursor += 1;
+                        yystate = 1641;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1559 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xAA |
+                    0xAC ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0xAB => {
+                        self.cursor += 1;
+                        yystate = 1637;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1560 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1557;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1561 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBB |
+                    0xBD ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1557;
+                        continue 'yyl;
+                    }
+                    0xBC => {
+                        self.cursor += 1;
+                        yystate = 1660;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1562 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 => {
+                        self.cursor += 1;
+                        yystate = 1661;
+                        continue 'yyl;
+                    }
+                    0x81 => {
+                        self.cursor += 1;
+                        yystate = 1662;
+                        continue 'yyl;
+                    }
+                    0x82 ..= 0x85 |
+                    0x8A ..= 0x8B |
+                    0x8D ..= 0x95 |
+                    0x9A ..= 0xA3 |
+                    0xA5 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1557;
+                        continue 'yyl;
+                    }
+                    0x86 => {
+                        self.cursor += 1;
+                        yystate = 1663;
+                        continue 'yyl;
+                    }
+                    0x87 => {
+                        self.cursor += 1;
+                        yystate = 1664;
+                        continue 'yyl;
+                    }
+                    0x88 => {
+                        self.cursor += 1;
+                        yystate = 1665;
+                        continue 'yyl;
+                    }
+                    0x89 => {
+                        self.cursor += 1;
+                        yystate = 1666;
+                        continue 'yyl;
+                    }
+                    0x8C => {
+                        self.cursor += 1;
                         yystate = 1667;
+                        continue 'yyl;
+                    }
+                    0x96 => {
+                        self.cursor += 1;
+                        yystate = 1668;
+                        continue 'yyl;
+                    }
+                    0x97 => {
+                        self.cursor += 1;
+                        yystate = 1669;
+                        continue 'yyl;
+                    }
+                    0x98 => {
+                        self.cursor += 1;
+                        yystate = 1670;
+                        continue 'yyl;
+                    }
+                    0x99 => {
+                        self.cursor += 1;
+                        yystate = 1671;
+                        continue 'yyl;
+                    }
+                    0xA4 => {
+                        self.cursor += 1;
+                        yystate = 1672;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1563 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 => {
+                        self.cursor += 1;
+                        yystate = 1673;
+                        continue 'yyl;
+                    }
+                    0x81 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     _ => {
@@ -31795,17 +31801,9 @@ impl<'a> Iterator for Lexer<'a> {
             1564 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xA6 |
-                    0xA8 ..= 0xAF |
-                    0xB1 ..= 0xBF => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0xA7 |
-                    0xB0 => {
-                        self.cursor += 1;
-                        yystate = 1645;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     _ => {
@@ -31817,9 +31815,9 @@ impl<'a> Iterator for Lexer<'a> {
             1565 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1564;
                         continue 'yyl;
                     }
                     _ => {
@@ -31831,17 +31829,9 @@ impl<'a> Iterator for Lexer<'a> {
             1566 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8B |
-                    0x8D ..= 0xBF => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x88 |
-                    0x8C => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1564;
                         continue 'yyl;
                     }
                     _ => {
@@ -31853,15 +31843,9 @@ impl<'a> Iterator for Lexer<'a> {
             1567 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xAA |
-                    0xAC ..= 0xBF => {
+                    0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0xAB => {
-                        self.cursor += 1;
-                        yystate = 1645;
+                        yystate = 1564;
                         continue 'yyl;
                     }
                     _ => {
@@ -31873,198 +31857,11 @@ impl<'a> Iterator for Lexer<'a> {
             1568 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1565;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1569 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBB |
-                    0xBD ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1565;
-                        continue 'yyl;
-                    }
-                    0xBC => {
-                        self.cursor += 1;
-                        yystate = 1668;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1570 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 => {
-                        self.cursor += 1;
-                        yystate = 1669;
-                        continue 'yyl;
-                    }
-                    0x81 => {
-                        self.cursor += 1;
-                        yystate = 1670;
-                        continue 'yyl;
-                    }
-                    0x82 ..= 0x85 |
-                    0x8A ..= 0x8B |
-                    0x8D ..= 0x95 |
-                    0x9A ..= 0xA3 |
-                    0xA5 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1565;
-                        continue 'yyl;
-                    }
-                    0x86 => {
-                        self.cursor += 1;
-                        yystate = 1671;
-                        continue 'yyl;
-                    }
-                    0x87 => {
-                        self.cursor += 1;
-                        yystate = 1672;
-                        continue 'yyl;
-                    }
-                    0x88 => {
-                        self.cursor += 1;
-                        yystate = 1673;
-                        continue 'yyl;
-                    }
-                    0x89 => {
-                        self.cursor += 1;
-                        yystate = 1674;
-                        continue 'yyl;
-                    }
-                    0x8C => {
-                        self.cursor += 1;
-                        yystate = 1675;
-                        continue 'yyl;
-                    }
-                    0x96 => {
-                        self.cursor += 1;
-                        yystate = 1676;
-                        continue 'yyl;
-                    }
-                    0x97 => {
-                        self.cursor += 1;
-                        yystate = 1677;
-                        continue 'yyl;
-                    }
-                    0x98 => {
-                        self.cursor += 1;
-                        yystate = 1678;
-                        continue 'yyl;
-                    }
-                    0x99 => {
-                        self.cursor += 1;
-                        yystate = 1679;
-                        continue 'yyl;
-                    }
-                    0xA4 => {
-                        self.cursor += 1;
-                        yystate = 1680;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1571 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 => {
-                        self.cursor += 1;
-                        yystate = 1681;
-                        continue 'yyl;
-                    }
-                    0x81 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1565;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1572 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1565;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1573 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1572;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1574 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1572;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1575 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 1572;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1576 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
                     0x3A |
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1576;
+                        yystate = 1568;
                         continue 'yyl;
                     }
                     _ => {
@@ -32074,7 +31871,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1577 => {
+            1569 => {
                 yyaccept = 58;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -32084,7 +31881,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1682;
+                        yystate = 1674;
                         continue 'yyl;
                     }
                     0x2D |
@@ -32102,13 +31899,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1683;
+                        yystate = 1675;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1684;
+                        yystate = 1676;
                         continue 'yyl;
                     }
                     _ => {
@@ -32123,7 +31920,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1578 => {
+            1570 => {
                 yyaccept = 58;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -32133,7 +31930,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1682;
+                        yystate = 1674;
                         continue 'yyl;
                     }
                     0x2D |
@@ -32152,18 +31949,18 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1683;
+                        yystate = 1675;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1684;
+                        yystate = 1676;
                         continue 'yyl;
                     }
                     0x70 => {
                         self.cursor += 1;
-                        yystate = 1577;
+                        yystate = 1569;
                         continue 'yyl;
                     }
                     _ => {
@@ -32178,7 +31975,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1579 => {
+            1571 => {
                 yyaccept = 58;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -32188,7 +31985,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1682;
+                        yystate = 1674;
                         continue 'yyl;
                     }
                     0x2D |
@@ -32207,18 +32004,18 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1683;
+                        yystate = 1675;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1684;
+                        yystate = 1676;
                         continue 'yyl;
                     }
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1577;
+                        yystate = 1569;
                         continue 'yyl;
                     }
                     _ => {
@@ -32233,7 +32030,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1580 => {
+            1572 => {
                 yyaccept = 59;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -32242,7 +32039,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt4 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1405;
+                        yystate = 1398;
                         continue 'yyl;
                     }
                     0x2D => {
@@ -32261,18 +32058,18 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1685;
+                        yystate = 1677;
                         continue 'yyl;
                     }
                     0x61 => {
                         self.cursor += 1;
-                        yystate = 1686;
+                        yystate = 1678;
                         continue 'yyl;
                     }
                     0x69 |
                     0x6C => {
                         self.cursor += 1;
-                        yystate = 1577;
+                        yystate = 1569;
                         continue 'yyl;
                     }
                     _ => {
@@ -32285,14 +32082,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1581 => {
+            1573 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x70 => {
                         self.cursor += 1;
-                        yystate = 1577;
+                        yystate = 1569;
                         continue 'yyl;
                     }
                     _ => {
@@ -32301,7 +32098,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1582 => {
+            1574 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA8 |
@@ -32312,7 +32109,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xA9 => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -32321,7 +32118,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1583 => {
+            1575 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x86 |
@@ -32336,7 +32133,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x8E |
                     0x91 => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -32345,7 +32142,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1584 => {
+            1576 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x90 |
@@ -32362,7 +32159,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xAB |
                     0xBB => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -32371,7 +32168,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1585 => {
+            1577 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x85 |
@@ -32391,7 +32188,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0xAE |
                     0xBE => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -32400,7 +32197,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1586 => {
+            1578 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -32413,7 +32210,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0xA0 => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -32422,7 +32219,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1587 => {
+            1579 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
@@ -32433,7 +32230,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x88 ..= 0x8B => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
                         continue 'yyl;
                     }
                     _ => {
@@ -32442,7 +32239,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1588 => {
+            1580 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 |
@@ -32455,7 +32252,155 @@ impl<'a> Iterator for Lexer<'a> {
                     0x81 |
                     0x94 => {
                         self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1400;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1581 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x88 |
+                    0x8A ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1125;
+                        continue 'yyl;
+                    }
+                    0x89 => {
+                        self.cursor += 1;
+                        yystate = 1400;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1582 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xB9 |
+                    0xBB ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1125;
+                        continue 'yyl;
+                    }
+                    0xBA => {
+                        self.cursor += 1;
+                        yystate = 1400;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1583 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8A |
+                    0x8C ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1125;
+                        continue 'yyl;
+                    }
+                    0x8B => {
+                        self.cursor += 1;
+                        yystate = 1400;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1584 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1125;
+                        continue 'yyl;
+                    }
+                    0x86 ..= 0x87 => {
+                        self.cursor += 1;
+                        yystate = 1400;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1585 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xA8 |
+                    0xAA ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1406;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1586 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x97 |
+                    0x9A ..= 0x9B |
+                    0x9F ..= 0xA0 |
+                    0xA2 ..= 0xB8 |
+                    0xBB ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1406;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1587 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x86 |
+                    0x88 ..= 0x8D |
+                    0x8F ..= 0x90 |
+                    0x92 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1406;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1588 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x90 |
+                    0x94 ..= 0x96 |
+                    0x99 ..= 0xAA |
+                    0xAC ..= 0xBA |
+                    0xBC ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32467,15 +32412,10 @@ impl<'a> Iterator for Lexer<'a> {
             1589 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x88 |
-                    0x8A ..= 0xBF => {
+                    0x80 ..= 0x96 |
+                    0x99 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1125;
-                        continue 'yyl;
-                    }
-                    0x89 => {
-                        self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32487,15 +32427,15 @@ impl<'a> Iterator for Lexer<'a> {
             1590 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xB9 |
-                    0xBB ..= 0xBF => {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0x98 |
+                    0x9A ..= 0x9D |
+                    0x9F ..= 0xAB |
+                    0xAD |
+                    0xAF ..= 0xBD |
+                    0xBF => {
                         self.cursor += 1;
-                        yystate = 1125;
-                        continue 'yyl;
-                    }
-                    0xBA => {
-                        self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32507,15 +32447,12 @@ impl<'a> Iterator for Lexer<'a> {
             1591 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x8A |
-                    0x8C ..= 0xBF => {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8A |
+                    0x8C ..= 0x9F |
+                    0xA2 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1125;
-                        continue 'yyl;
-                    }
-                    0x8B => {
-                        self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32527,15 +32464,10 @@ impl<'a> Iterator for Lexer<'a> {
             1592 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0xBF => {
+                    0x80 ..= 0x87 |
+                    0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1125;
-                        continue 'yyl;
-                    }
-                    0x86 ..= 0x87 => {
-                        self.cursor += 1;
-                        yystate = 1407;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32547,10 +32479,11 @@ impl<'a> Iterator for Lexer<'a> {
             1593 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xA8 |
-                    0xAA ..= 0xBF => {
+                    0x80 |
+                    0x82 ..= 0x93 |
+                    0x95 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32562,13 +32495,10 @@ impl<'a> Iterator for Lexer<'a> {
             1594 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x97 |
-                    0x9A ..= 0x9B |
-                    0x9F ..= 0xA0 |
-                    0xA2 ..= 0xB8 |
-                    0xBB ..= 0xBF => {
+                    0x80 ..= 0x88 |
+                    0x8A ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32580,12 +32510,10 @@ impl<'a> Iterator for Lexer<'a> {
             1595 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x86 |
-                    0x88 ..= 0x8D |
-                    0x8F ..= 0x90 |
-                    0x92 ..= 0xBF => {
+                    0x80 ..= 0xB9 |
+                    0xBB ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32597,13 +32525,10 @@ impl<'a> Iterator for Lexer<'a> {
             1596 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x90 |
-                    0x94 ..= 0x96 |
-                    0x99 ..= 0xAA |
-                    0xAC ..= 0xBA |
-                    0xBC ..= 0xBF => {
+                    0x80 ..= 0x8A |
+                    0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32615,10 +32540,10 @@ impl<'a> Iterator for Lexer<'a> {
             1597 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x96 |
-                    0x99 ..= 0xBF => {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32630,15 +32555,10 @@ impl<'a> Iterator for Lexer<'a> {
             1598 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0x98 |
-                    0x9A ..= 0x9D |
-                    0x9F ..= 0xAB |
-                    0xAD |
-                    0xAF ..= 0xBD |
-                    0xBF => {
+                    0x80 ..= 0x93 |
+                    0x96 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1406;
                         continue 'yyl;
                     }
                     _ => {
@@ -32650,227 +32570,104 @@ impl<'a> Iterator for Lexer<'a> {
             1599 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8A |
-                    0x8C ..= 0x9F |
-                    0xA2 ..= 0xBF => {
+                    0x25 |
+                    0x2D |
+                    0x30 ..= 0x39 |
+                    0x40 ..= 0x5A |
+                    0x5F |
+                    0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1599;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1600;
                         continue 'yyl;
                     }
                 }
             }
             1600 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x87 |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1413;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
+                self.t1 = self.yyt1;
+                { emit_t1!(LongFeatureBegin); }
             }
             1601 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 |
-                    0x82 ..= 0x93 |
-                    0x95 ..= 0xBF => {
+                    0x25 |
+                    0x2D |
+                    0x30 ..= 0x39 |
+                    0x40 ..= 0x5A |
+                    0x5F |
+                    0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1601;
+                        continue 'yyl;
+                    }
+                    0x7D => {
+                        self.cursor += 1;
+                        yystate = 1679;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1602;
                         continue 'yyl;
                     }
                 }
             }
             1602 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x88 |
-                    0x8A ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1413;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
+                self.t1 = self.yyt1;
+                { emit_t1!(NonvocalBegin); }
             }
             1603 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xB9 |
-                    0xBB ..= 0xBF => {
+                    0x25 |
+                    0x2D |
+                    0x30 ..= 0x39 |
+                    0x40 ..= 0x5A |
+                    0x5F |
+                    0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1603;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1604;
                         continue 'yyl;
                     }
                 }
             }
             1604 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8A |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1413;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
+                self.t1 = self.yyt1;
+                { emit_t1!(LongFeatureEnd); }
             }
             1605 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0xBF => {
+                    0x25 |
+                    0x2D |
+                    0x30 ..= 0x39 |
+                    0x40 ..= 0x5A |
+                    0x5F |
+                    0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1413;
+                        yystate = 1605;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 919;
+                        yystate = 1606;
                         continue 'yyl;
                     }
                 }
             }
             1606 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x93 |
-                    0x96 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1413;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1607 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x25 |
-                    0x2D |
-                    0x30 ..= 0x39 |
-                    0x40 ..= 0x5A |
-                    0x5F |
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1607;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1608;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1608 => {
-                self.t1 = self.yyt1;
-                { emit_t1!(LongFeatureBegin); }
-            }
-            1609 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x25 |
-                    0x2D |
-                    0x30 ..= 0x39 |
-                    0x40 ..= 0x5A |
-                    0x5F |
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1609;
-                        continue 'yyl;
-                    }
-                    0x7D => {
-                        self.cursor += 1;
-                        yystate = 1687;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1610;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1610 => {
-                self.t1 = self.yyt1;
-                { emit_t1!(NonvocalBegin); }
-            }
-            1611 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x25 |
-                    0x2D |
-                    0x30 ..= 0x39 |
-                    0x40 ..= 0x5A |
-                    0x5F |
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1611;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1612;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1612 => {
-                self.t1 = self.yyt1;
-                { emit_t1!(LongFeatureEnd); }
-            }
-            1613 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x25 |
-                    0x2D |
-                    0x30 ..= 0x39 |
-                    0x40 ..= 0x5A |
-                    0x5F |
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1613;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1614;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1614 => {
                 self.t1 = self.yyt1;
                 { emit_t1!(NonvocalEnd); }
             }
-            1615 => { let end = self.cursor;
+            1607 => { let end = self.cursor;
             let pause = crate::token::PauseLexeme::from_lexed(&yyinput[start..end], start, end);
             return Some((Token::PauseLong(pause), start..end)); },
-            1616 => {
+            1608 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
@@ -32878,7 +32675,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt5 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1688;
+                        yystate = 1680;
                         continue 'yyl;
                     }
                     _ => {
@@ -32887,7 +32684,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1617 => {
+            1609 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
@@ -32895,7 +32692,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1689;
+                        yystate = 1681;
                         continue 'yyl;
                     }
                     _ => {
@@ -32904,14 +32701,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1618 => {
+            1610 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1690;
+                        yystate = 1682;
                         continue 'yyl;
                     }
                     _ => {
@@ -32920,13 +32717,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1619 => {
+            1611 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.yyt8 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1691;
+                        yystate = 1683;
                         continue 'yyl;
                     }
                     _ => {
@@ -32935,14 +32732,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1620 => {
+            1612 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1470;
+                        yystate = 1463;
                         continue 'yyl;
                     }
                     _ => {
@@ -32951,7 +32748,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1621 => {
+            1613 => {
                 yyaccept = 60;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -32959,12 +32756,12 @@ impl<'a> Iterator for Lexer<'a> {
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1692;
+                        yystate = 1684;
                         continue 'yyl;
                     }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1693;
+                        yystate = 1685;
                         continue 'yyl;
                     }
                     _ => {
@@ -32973,13 +32770,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1622 => {
+            1614 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
                 { emit_t1t2!(PercentAnnotation); }
             }
-            1623 => {
+            1615 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
@@ -32990,20 +32787,20 @@ impl<'a> Iterator for Lexer<'a> {
             return Some((Token::Postcode(postcode), start..end));
         }
             }
-            1624 => {
+            1616 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
                 { emit_t1t2!(Langcode); }
             }
-            1625 => { emit!(RetraceMultiple); },
-            1626 => {
+            1617 => { emit!(RetraceMultiple); },
+            1618 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
                 { emit_t1t2!(ExplanationAnnotation); }
             }
-            1627 => {
+            1619 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x09 |
@@ -33011,42 +32808,192 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x5C |
                     0x5E ..= 0x7F => {
                         self.cursor += 1;
-                        yystate = 1627;
+                        yystate = 1619;
                         continue 'yyl;
                     }
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1694;
+                        yystate = 1686;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1628;
+                        yystate = 1620;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1629;
+                        yystate = 1621;
                         continue 'yyl;
                     }
                     0xE1 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1630;
+                        yystate = 1622;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1631;
+                        yystate = 1623;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1632;
+                        yystate = 1624;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1633;
+                        yystate = 1625;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1620 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1619;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1621 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1620;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1622 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1620;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1623 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1622;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1624 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1622;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1625 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 1622;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1626 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x5C |
+                    0x5E ..= 0x7F => {
+                        self.cursor += 1;
+                        yystate = 1626;
+                        continue 'yyl;
+                    }
+                    0x5D => {
+                        self.cursor += 1;
+                        yystate = 1687;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.cursor += 1;
+                        yystate = 1627;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.cursor += 1;
+                        yystate = 1628;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.cursor += 1;
+                        yystate = 1629;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.cursor += 1;
+                        yystate = 1630;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.cursor += 1;
+                        yystate = 1631;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.cursor += 1;
+                        yystate = 1632;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1627 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1626;
                         continue 'yyl;
                     }
                     _ => {
@@ -33058,7 +33005,7 @@ impl<'a> Iterator for Lexer<'a> {
             1628 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0xA0 ..= 0xBF => {
                         self.cursor += 1;
                         yystate = 1627;
                         continue 'yyl;
@@ -33072,9 +33019,9 @@ impl<'a> Iterator for Lexer<'a> {
             1629 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0xA0 ..= 0xBF => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1628;
+                        yystate = 1627;
                         continue 'yyl;
                     }
                     _ => {
@@ -33086,9 +33033,9 @@ impl<'a> Iterator for Lexer<'a> {
             1630 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1628;
+                        yystate = 1629;
                         continue 'yyl;
                     }
                     _ => {
@@ -33100,9 +33047,9 @@ impl<'a> Iterator for Lexer<'a> {
             1631 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x90 ..= 0xBF => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1630;
+                        yystate = 1629;
                         continue 'yyl;
                     }
                     _ => {
@@ -33114,9 +33061,9 @@ impl<'a> Iterator for Lexer<'a> {
             1632 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 1630;
+                        yystate = 1629;
                         continue 'yyl;
                     }
                     _ => {
@@ -33128,159 +33075,9 @@ impl<'a> Iterator for Lexer<'a> {
             1633 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 1630;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1634 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x5C |
-                    0x5E ..= 0x7F => {
-                        self.cursor += 1;
-                        yystate = 1634;
-                        continue 'yyl;
-                    }
-                    0x5D => {
-                        self.cursor += 1;
-                        yystate = 1695;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.cursor += 1;
-                        yystate = 1635;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.cursor += 1;
-                        yystate = 1636;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.cursor += 1;
-                        yystate = 1637;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.cursor += 1;
-                        yystate = 1638;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.cursor += 1;
-                        yystate = 1639;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.cursor += 1;
-                        yystate = 1640;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1635 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1634;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1636 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1635;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1637 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1635;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1638 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1637;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1639 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1637;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1640 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 1637;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1641 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1696;
+                        yystate = 1688;
                         continue 'yyl;
                     }
                     _ => {
@@ -33289,13 +33086,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1642 => {
+            1634 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
                 { emit_t1t2!(Freecode); }
             }
-            1643 => {
+            1635 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -33303,7 +33100,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1697;
+                        yystate = 1689;
                         continue 'yyl;
                     }
                     _ => {
@@ -33312,7 +33109,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1644 => {
+            1636 => {
                 yyaccept = 61;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -33326,7 +33123,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1698;
+                        yystate = 1690;
                         continue 'yyl;
                     }
                     0x2D |
@@ -33338,7 +33135,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1699;
+                        yystate = 1691;
                         continue 'yyl;
                     }
                     _ => {
@@ -33350,12 +33147,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1645 => {
+            1637 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
-                        yystate = 1560;
+                        yystate = 1552;
                         continue 'yyl;
                     }
                     0x05 ..= 0x06 |
@@ -33373,74 +33170,74 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7C |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     0x28 => {
                         self.cursor += 1;
-                        yystate = 1563;
+                        yystate = 1555;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1564;
+                        yystate = 1556;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
                     0xCC ..= 0xCD |
                     0xCF ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1565;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.cursor += 1;
-                        yystate = 1566;
+                        yystate = 1558;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1567;
+                        yystate = 1559;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1568;
+                        yystate = 1560;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1569;
+                        yystate = 1561;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1570;
+                        yystate = 1562;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.cursor += 1;
-                        yystate = 1571;
+                        yystate = 1563;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1572;
+                        yystate = 1564;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1573;
+                        yystate = 1565;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1574;
+                        yystate = 1566;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1575;
+                        yystate = 1567;
                         continue 'yyl;
                     }
                     _ => {
@@ -33449,12 +33246,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1646 => {
+            1638 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x02 => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     _ => {
@@ -33463,14 +33260,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1647 => {
+            1639 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1700;
+                        yystate = 1692;
                         continue 'yyl;
                     }
                     _ => {
@@ -33479,12 +33276,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1648 => {
+            1640 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
-                        yystate = 1646;
+                        yystate = 1638;
                         continue 'yyl;
                     }
                     0x05 ..= 0x06 |
@@ -33502,86 +33299,86 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7C |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     0x28 => {
                         self.cursor += 1;
-                        yystate = 1563;
+                        yystate = 1555;
                         continue 'yyl;
                     }
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1648;
+                        yystate = 1640;
                         continue 'yyl;
                     }
                     0x3A |
                     0x5E |
                     0x7E => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1651;
+                        yystate = 1643;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
                     0xCC ..= 0xCD |
                     0xCF ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1565;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.cursor += 1;
-                        yystate = 1566;
+                        yystate = 1558;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1652;
+                        yystate = 1644;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1568;
+                        yystate = 1560;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1653;
+                        yystate = 1645;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1654;
+                        yystate = 1646;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.cursor += 1;
-                        yystate = 1571;
+                        yystate = 1563;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1572;
+                        yystate = 1564;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1573;
+                        yystate = 1565;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1574;
+                        yystate = 1566;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1575;
+                        yystate = 1567;
                         continue 'yyl;
                     }
                     _ => {
@@ -33590,14 +33387,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1649 => {
+            1641 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x02 => {
                         self.cursor += 1;
-                        yystate = 1646;
+                        yystate = 1638;
                         continue 'yyl;
                     }
                     0x05 ..= 0x06 |
@@ -33615,105 +33412,105 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7C |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x28 => {
                         self.cursor += 1;
-                        yystate = 1563;
+                        yystate = 1555;
                         continue 'yyl;
                     }
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1648;
+                        yystate = 1640;
                         continue 'yyl;
                     }
                     0x3A |
                     0x5E |
                     0x7E => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.cursor += 1;
-                        yystate = 1650;
+                        yystate = 1642;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1651;
+                        yystate = 1643;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
                     0xCC ..= 0xCD |
                     0xCF ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1565;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.cursor += 1;
-                        yystate = 1566;
+                        yystate = 1558;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1652;
+                        yystate = 1644;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1568;
+                        yystate = 1560;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1653;
+                        yystate = 1645;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1654;
+                        yystate = 1646;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.cursor += 1;
-                        yystate = 1571;
+                        yystate = 1563;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1572;
+                        yystate = 1564;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1573;
+                        yystate = 1565;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1574;
+                        yystate = 1566;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1575;
+                        yystate = 1567;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                 }
             }
-            1650 => {
+            1642 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x62 ..= 0x64 |
@@ -33725,27 +33522,27 @@ impl<'a> Iterator for Lexer<'a> {
                     0x78 |
                     0x7A => {
                         self.cursor += 1;
-                        yystate = 1701;
+                        yystate = 1693;
                         continue 'yyl;
                     }
                     0x66 => {
                         self.cursor += 1;
-                        yystate = 1702;
+                        yystate = 1694;
                         continue 'yyl;
                     }
                     0x6C => {
                         self.cursor += 1;
-                        yystate = 1703;
+                        yystate = 1695;
                         continue 'yyl;
                     }
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1704;
+                        yystate = 1696;
                         continue 'yyl;
                     }
                     0x77 => {
                         self.cursor += 1;
-                        yystate = 1705;
+                        yystate = 1697;
                         continue 'yyl;
                     }
                     _ => {
@@ -33754,20 +33551,20 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1651 => {
+            1643 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xA6 |
                     0xA8 ..= 0xAF |
                     0xB1 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     0xA7 |
                     0xB0 => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     _ => {
@@ -33776,18 +33573,18 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1652 => {
+            1644 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xAA |
                     0xAC ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     0xAB => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     _ => {
@@ -33796,18 +33593,18 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1653 => {
+            1645 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBB |
                     0xBD ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1565;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     0xBC => {
                         self.cursor += 1;
-                        yystate = 1706;
+                        yystate = 1698;
                         continue 'yyl;
                     }
                     _ => {
@@ -33816,17 +33613,17 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1654 => {
+            1646 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1669;
+                        yystate = 1661;
                         continue 'yyl;
                     }
                     0x81 => {
                         self.cursor += 1;
-                        yystate = 1707;
+                        yystate = 1699;
                         continue 'yyl;
                     }
                     0x82 ..= 0x85 |
@@ -33835,57 +33632,57 @@ impl<'a> Iterator for Lexer<'a> {
                     0x9A ..= 0xA3 |
                     0xA5 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1565;
+                        yystate = 1557;
                         continue 'yyl;
                     }
                     0x86 => {
                         self.cursor += 1;
-                        yystate = 1708;
+                        yystate = 1700;
                         continue 'yyl;
                     }
                     0x87 => {
                         self.cursor += 1;
-                        yystate = 1672;
+                        yystate = 1664;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1709;
+                        yystate = 1701;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1710;
+                        yystate = 1702;
                         continue 'yyl;
                     }
                     0x8C => {
                         self.cursor += 1;
-                        yystate = 1711;
+                        yystate = 1703;
                         continue 'yyl;
                     }
                     0x96 => {
                         self.cursor += 1;
-                        yystate = 1712;
+                        yystate = 1704;
                         continue 'yyl;
                     }
                     0x97 => {
                         self.cursor += 1;
-                        yystate = 1713;
+                        yystate = 1705;
                         continue 'yyl;
                     }
                     0x98 => {
                         self.cursor += 1;
-                        yystate = 1714;
+                        yystate = 1706;
                         continue 'yyl;
                     }
                     0x99 => {
                         self.cursor += 1;
-                        yystate = 1715;
+                        yystate = 1707;
                         continue 'yyl;
                     }
                     0xA4 => {
                         self.cursor += 1;
-                        yystate = 1716;
+                        yystate = 1708;
                         continue 'yyl;
                     }
                     _ => {
@@ -33894,7 +33691,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1655 => {
+            1647 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x05 ..= 0x06 |
@@ -33911,74 +33708,266 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7C |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     0x29 => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     0xC2 => {
                         self.cursor += 1;
-                        yystate = 1656;
+                        yystate = 1648;
                         continue 'yyl;
                     }
                     0xC3 ..= 0xCA |
                     0xCC ..= 0xCD |
                     0xCF ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1657;
+                        yystate = 1649;
                         continue 'yyl;
                     }
                     0xCB => {
                         self.cursor += 1;
-                        yystate = 1658;
+                        yystate = 1650;
                         continue 'yyl;
                     }
                     0xCE => {
                         self.cursor += 1;
-                        yystate = 1659;
+                        yystate = 1651;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1660;
+                        yystate = 1652;
                         continue 'yyl;
                     }
                     0xE1 => {
                         self.cursor += 1;
-                        yystate = 1661;
+                        yystate = 1653;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1662;
+                        yystate = 1654;
                         continue 'yyl;
                     }
                     0xE3 => {
                         self.cursor += 1;
-                        yystate = 1663;
+                        yystate = 1655;
                         continue 'yyl;
                     }
                     0xE4 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1664;
+                        yystate = 1656;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1665;
+                        yystate = 1657;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1666;
+                        yystate = 1658;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1667;
+                        yystate = 1659;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1648 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xA6 |
+                    0xA8 ..= 0xAF |
+                    0xB1 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1647;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1649 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1647;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1650 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8B |
+                    0x8D ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1647;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1651 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xAA |
+                    0xAC ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1647;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1652 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1649;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1653 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBB |
+                    0xBD ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1649;
+                        continue 'yyl;
+                    }
+                    0xBC => {
+                        self.cursor += 1;
+                        yystate = 1709;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1654 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 => {
+                        self.cursor += 1;
+                        yystate = 1710;
+                        continue 'yyl;
+                    }
+                    0x81 => {
+                        self.cursor += 1;
+                        yystate = 1711;
+                        continue 'yyl;
+                    }
+                    0x82 ..= 0x85 |
+                    0x8A ..= 0x8B |
+                    0x8D ..= 0x95 |
+                    0x9A ..= 0xA3 |
+                    0xA5 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1649;
+                        continue 'yyl;
+                    }
+                    0x86 => {
+                        self.cursor += 1;
+                        yystate = 1712;
+                        continue 'yyl;
+                    }
+                    0x87 => {
+                        self.cursor += 1;
+                        yystate = 1713;
+                        continue 'yyl;
+                    }
+                    0x88 => {
+                        self.cursor += 1;
+                        yystate = 1714;
+                        continue 'yyl;
+                    }
+                    0x89 => {
+                        self.cursor += 1;
+                        yystate = 1715;
+                        continue 'yyl;
+                    }
+                    0x8C => {
+                        self.cursor += 1;
+                        yystate = 1716;
+                        continue 'yyl;
+                    }
+                    0x96 => {
+                        self.cursor += 1;
+                        yystate = 1717;
+                        continue 'yyl;
+                    }
+                    0x97 => {
+                        self.cursor += 1;
+                        yystate = 1718;
+                        continue 'yyl;
+                    }
+                    0x98 => {
+                        self.cursor += 1;
+                        yystate = 1719;
+                        continue 'yyl;
+                    }
+                    0x99 => {
+                        self.cursor += 1;
+                        yystate = 1720;
+                        continue 'yyl;
+                    }
+                    0xA4 => {
+                        self.cursor += 1;
+                        yystate = 1721;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1655 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 => {
+                        self.cursor += 1;
+                        yystate = 1722;
+                        continue 'yyl;
+                    }
+                    0x81 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1649;
                         continue 'yyl;
                     }
                     _ => {
@@ -33990,11 +33979,9 @@ impl<'a> Iterator for Lexer<'a> {
             1656 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xA6 |
-                    0xA8 ..= 0xAF |
-                    0xB1 ..= 0xBF => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1649;
                         continue 'yyl;
                     }
                     _ => {
@@ -34006,9 +33993,9 @@ impl<'a> Iterator for Lexer<'a> {
             1657 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1656;
                         continue 'yyl;
                     }
                     _ => {
@@ -34020,11 +34007,9 @@ impl<'a> Iterator for Lexer<'a> {
             1658 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8B |
-                    0x8D ..= 0xBF => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1656;
                         continue 'yyl;
                     }
                     _ => {
@@ -34036,10 +34021,9 @@ impl<'a> Iterator for Lexer<'a> {
             1659 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xAA |
-                    0xAC ..= 0xBF => {
+                    0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1656;
                         continue 'yyl;
                     }
                     _ => {
@@ -34051,9 +34035,15 @@ impl<'a> Iterator for Lexer<'a> {
             1660 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0xA0 ..= 0xBF => {
+                    0x80 ..= 0xA8 |
+                    0xAA ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1657;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0xA9 => {
+                        self.cursor += 1;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34065,15 +34055,13 @@ impl<'a> Iterator for Lexer<'a> {
             1661 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBB |
-                    0xBD ..= 0xBF => {
+                    0x80 ..= 0x97 |
+                    0x9A ..= 0x9B |
+                    0x9F ..= 0xA0 |
+                    0xA2 ..= 0xB8 |
+                    0xBB ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1657;
-                        continue 'yyl;
-                    }
-                    0xBC => {
-                        self.cursor += 1;
-                        yystate = 1717;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     _ => {
@@ -34085,73 +34073,19 @@ impl<'a> Iterator for Lexer<'a> {
             1662 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 => {
+                    0x80 ..= 0x86 |
+                    0x88 ..= 0x8D |
+                    0x8F ..= 0x90 |
+                    0x92 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1718;
+                        yystate = 1553;
                         continue 'yyl;
                     }
-                    0x81 => {
+                    0x87 |
+                    0x8E |
+                    0x91 => {
                         self.cursor += 1;
-                        yystate = 1719;
-                        continue 'yyl;
-                    }
-                    0x82 ..= 0x85 |
-                    0x8A ..= 0x8B |
-                    0x8D ..= 0x95 |
-                    0x9A ..= 0xA3 |
-                    0xA5 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1657;
-                        continue 'yyl;
-                    }
-                    0x86 => {
-                        self.cursor += 1;
-                        yystate = 1720;
-                        continue 'yyl;
-                    }
-                    0x87 => {
-                        self.cursor += 1;
-                        yystate = 1721;
-                        continue 'yyl;
-                    }
-                    0x88 => {
-                        self.cursor += 1;
-                        yystate = 1722;
-                        continue 'yyl;
-                    }
-                    0x89 => {
-                        self.cursor += 1;
-                        yystate = 1723;
-                        continue 'yyl;
-                    }
-                    0x8C => {
-                        self.cursor += 1;
-                        yystate = 1724;
-                        continue 'yyl;
-                    }
-                    0x96 => {
-                        self.cursor += 1;
-                        yystate = 1725;
-                        continue 'yyl;
-                    }
-                    0x97 => {
-                        self.cursor += 1;
-                        yystate = 1726;
-                        continue 'yyl;
-                    }
-                    0x98 => {
-                        self.cursor += 1;
-                        yystate = 1727;
-                        continue 'yyl;
-                    }
-                    0x99 => {
-                        self.cursor += 1;
-                        yystate = 1728;
-                        continue 'yyl;
-                    }
-                    0xA4 => {
-                        self.cursor += 1;
-                        yystate = 1729;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34163,14 +34097,21 @@ impl<'a> Iterator for Lexer<'a> {
             1663 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 => {
+                    0x80 ..= 0x90 |
+                    0x94 ..= 0x96 |
+                    0x99 ..= 0xAA |
+                    0xAC ..= 0xBA |
+                    0xBC ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1730;
+                        yystate = 1553;
                         continue 'yyl;
                     }
-                    0x81 ..= 0xBF => {
+                    0x91 |
+                    0x93 |
+                    0xAB |
+                    0xBB => {
                         self.cursor += 1;
-                        yystate = 1657;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34182,9 +34123,10 @@ impl<'a> Iterator for Lexer<'a> {
             1664 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x80 ..= 0x96 |
+                    0x99 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1657;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     _ => {
@@ -34196,9 +34138,24 @@ impl<'a> Iterator for Lexer<'a> {
             1665 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x90 ..= 0xBF => {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0x98 |
+                    0x9A ..= 0x9D |
+                    0x9F ..= 0xAB |
+                    0xAD |
+                    0xAF ..= 0xBD |
+                    0xBF => {
                         self.cursor += 1;
-                        yystate = 1664;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x86 ..= 0x87 |
+                    0x99 |
+                    0xAC |
+                    0xAE |
+                    0xBE => {
+                        self.cursor += 1;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34210,9 +34167,17 @@ impl<'a> Iterator for Lexer<'a> {
             1666 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8A |
+                    0x8C ..= 0x9F |
+                    0xA2 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1664;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0xA0 => {
+                        self.cursor += 1;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34224,9 +34189,15 @@ impl<'a> Iterator for Lexer<'a> {
             1667 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x8F => {
+                    0x80 ..= 0x87 |
+                    0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1664;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x88 ..= 0x8B => {
+                        self.cursor += 1;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34238,15 +34209,17 @@ impl<'a> Iterator for Lexer<'a> {
             1668 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xA8 |
-                    0xAA ..= 0xBF => {
+                    0x80 |
+                    0x82 ..= 0x93 |
+                    0x95 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
-                    0xA9 => {
+                    0x81 |
+                    0x94 => {
                         self.cursor += 1;
-                        yystate = 1645;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34258,13 +34231,15 @@ impl<'a> Iterator for Lexer<'a> {
             1669 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x97 |
-                    0x9A ..= 0x9B |
-                    0x9F ..= 0xA0 |
-                    0xA2 ..= 0xB8 |
-                    0xBB ..= 0xBF => {
+                    0x80 ..= 0x88 |
+                    0x8A ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x89 => {
+                        self.cursor += 1;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34276,19 +34251,15 @@ impl<'a> Iterator for Lexer<'a> {
             1670 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x86 |
-                    0x88 ..= 0x8D |
-                    0x8F ..= 0x90 |
-                    0x92 ..= 0xBF => {
+                    0x80 ..= 0xB9 |
+                    0xBB ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
-                    0x87 |
-                    0x8E |
-                    0x91 => {
+                    0xBA => {
                         self.cursor += 1;
-                        yystate = 1645;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34300,21 +34271,15 @@ impl<'a> Iterator for Lexer<'a> {
             1671 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x90 |
-                    0x94 ..= 0x96 |
-                    0x99 ..= 0xAA |
-                    0xAC ..= 0xBA |
-                    0xBC ..= 0xBF => {
+                    0x80 ..= 0x8A |
+                    0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
-                    0x91 |
-                    0x93 |
-                    0xAB |
-                    0xBB => {
+                    0x8B => {
                         self.cursor += 1;
-                        yystate = 1645;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34326,10 +34291,15 @@ impl<'a> Iterator for Lexer<'a> {
             1672 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x96 |
-                    0x99 ..= 0xBF => {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x86 ..= 0x87 => {
+                        self.cursor += 1;
+                        yystate = 1637;
                         continue 'yyl;
                     }
                     _ => {
@@ -34341,24 +34311,10 @@ impl<'a> Iterator for Lexer<'a> {
             1673 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0x98 |
-                    0x9A ..= 0x9D |
-                    0x9F ..= 0xAB |
-                    0xAD |
-                    0xAF ..= 0xBD |
-                    0xBF => {
+                    0x80 ..= 0x93 |
+                    0x96 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x86 ..= 0x87 |
-                    0x99 |
-                    0xAC |
-                    0xAE |
-                    0xBE => {
-                        self.cursor += 1;
-                        yystate = 1645;
+                        yystate = 1553;
                         continue 'yyl;
                     }
                     _ => {
@@ -34370,17 +34326,12 @@ impl<'a> Iterator for Lexer<'a> {
             1674 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8A |
-                    0x8C ..= 0x9F |
-                    0xA2 ..= 0xBF => {
+                    0x3A |
+                    0x41 ..= 0x5A |
+                    0x61 ..= 0x7A => {
+                        self.yyt5 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0xA0 => {
-                        self.cursor += 1;
-                        yystate = 1645;
+                        yystate = 1723;
                         continue 'yyl;
                     }
                     _ => {
@@ -34392,166 +34343,12 @@ impl<'a> Iterator for Lexer<'a> {
             1675 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x88 ..= 0x8B => {
-                        self.cursor += 1;
-                        yystate = 1645;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1676 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 |
-                    0x82 ..= 0x93 |
-                    0x95 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x81 |
-                    0x94 => {
-                        self.cursor += 1;
-                        yystate = 1645;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1677 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x88 |
-                    0x8A ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x89 => {
-                        self.cursor += 1;
-                        yystate = 1645;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1678 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xB9 |
-                    0xBB ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0xBA => {
-                        self.cursor += 1;
-                        yystate = 1645;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1679 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8A |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x8B => {
-                        self.cursor += 1;
-                        yystate = 1645;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1680 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x86 ..= 0x87 => {
-                        self.cursor += 1;
-                        yystate = 1645;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1681 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x93 |
-                    0x96 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1682 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x3A |
-                    0x41 ..= 0x5A |
-                    0x61 ..= 0x7A => {
-                        self.yyt5 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1731;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1683 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A |
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1732;
+                        yystate = 1724;
                         continue 'yyl;
                     }
                     _ => {
@@ -34560,14 +34357,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1684 => {
+            1676 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1733;
+                        yystate = 1725;
                         continue 'yyl;
                     }
                     _ => {
@@ -34576,13 +34373,13 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1685 => {
+            1677 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.yyt8 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1734;
+                        yystate = 1726;
                         continue 'yyl;
                     }
                     _ => {
@@ -34591,14 +34388,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1686 => {
+            1678 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1577;
+                        yystate = 1569;
                         continue 'yyl;
                     }
                     _ => {
@@ -34607,20 +34404,20 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1687 => {
+            1679 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
                 { emit_t1t2!(NonvocalSimple); }
             }
-            1688 => {
+            1680 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1688;
+                        yystate = 1680;
                         continue 'yyl;
                     }
                     _ => {
@@ -34631,7 +34428,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1689 => {
+            1681 => {
                 yyaccept = 54;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -34641,7 +34438,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1616;
+                        yystate = 1608;
                         continue 'yyl;
                     }
                     0x2D |
@@ -34655,13 +34452,13 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1689;
+                        yystate = 1681;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1618;
+                        yystate = 1610;
                         continue 'yyl;
                     }
                     _ => {
@@ -34676,7 +34473,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1690 => {
+            1682 => {
                 yyaccept = 62;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -34685,7 +34482,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt4 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1616;
+                        yystate = 1608;
                         continue 'yyl;
                     }
                     0x2D |
@@ -34699,7 +34496,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1735;
+                        yystate = 1727;
                         continue 'yyl;
                     }
                     _ => {
@@ -34713,12 +34510,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1691 => {
+            1683 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1736;
+                        yystate = 1728;
                         continue 'yyl;
                     }
                     _ => {
@@ -34727,12 +34524,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1692 => {
+            1684 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1501;
+                        yystate = 1494;
                         continue 'yyl;
                     }
                     _ => {
@@ -34741,7 +34538,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1693 => {
+            1685 => {
                 yyaccept = 60;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -34749,7 +34546,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1692;
+                        yystate = 1684;
                         continue 'yyl;
                     }
                     _ => {
@@ -34758,29 +34555,29 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1694 => {
+            1686 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
                 { emit_t1t2!(ParaAnnotation); }
             }
-            1695 => {
+            1687 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
                 { emit_t1t2!(AltAnnotation); }
             }
-            1696 => {
+            1688 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1737;
+                        yystate = 1729;
                         continue 'yyl;
                     }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1738;
+                        yystate = 1730;
                         continue 'yyl;
                     }
                     _ => {
@@ -34789,14 +34586,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1697 => {
+            1689 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1739;
+                        yystate = 1731;
                         continue 'yyl;
                     }
                     _ => {
@@ -34805,12 +34602,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1698 => {
+            1690 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1740;
+                        yystate = 1732;
                         continue 'yyl;
                     }
                     _ => {
@@ -34819,7 +34616,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1699 => {
+            1691 => {
                 yyaccept = 61;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -34833,7 +34630,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1698;
+                        yystate = 1690;
                         continue 'yyl;
                     }
                     0x2D |
@@ -34853,138 +34650,315 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1700 => {
+            1692 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A |
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1700;
+                        yystate = 1692;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                 }
             }
-            1701 => {
+            1693 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1741;
+                        yystate = 1733;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.cursor += 1;
-                        yystate = 1742;
+                        yystate = 1734;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                 }
             }
-            1702 => {
+            1694 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1741;
+                        yystate = 1733;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.cursor += 1;
-                        yystate = 1742;
+                        yystate = 1734;
                         continue 'yyl;
                     }
                     0x70 => {
                         self.cursor += 1;
-                        yystate = 1701;
+                        yystate = 1693;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                 }
             }
-            1703 => {
+            1695 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1741;
+                        yystate = 1733;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.cursor += 1;
-                        yystate = 1742;
+                        yystate = 1734;
                         continue 'yyl;
                     }
                     0x73 => {
                         self.cursor += 1;
-                        yystate = 1701;
+                        yystate = 1693;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                 }
             }
-            1704 => {
+            1696 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1743;
+                        yystate = 1735;
                         continue 'yyl;
                     }
                     0x61 => {
                         self.cursor += 1;
-                        yystate = 1744;
+                        yystate = 1736;
                         continue 'yyl;
                     }
                     0x69 |
                     0x6C => {
                         self.cursor += 1;
-                        yystate = 1701;
+                        yystate = 1693;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1697 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x70 => {
+                        self.cursor += 1;
+                        yystate = 1693;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1698 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xA8 |
+                    0xAA ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0xA9 => {
+                        self.cursor += 1;
+                        yystate = 1641;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1699 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x86 |
+                    0x88 ..= 0x8D |
+                    0x8F ..= 0x90 |
+                    0x92 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x87 |
+                    0x8E |
+                    0x91 => {
+                        self.cursor += 1;
+                        yystate = 1641;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1700 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x90 |
+                    0x94 ..= 0x96 |
+                    0x99 ..= 0xAA |
+                    0xAC ..= 0xBA |
+                    0xBC ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x91 |
+                    0x93 |
+                    0xAB |
+                    0xBB => {
+                        self.cursor += 1;
+                        yystate = 1641;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1701 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0x98 |
+                    0x9A ..= 0x9D |
+                    0x9F ..= 0xAB |
+                    0xAD |
+                    0xAF ..= 0xBD |
+                    0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x86 ..= 0x87 |
+                    0x99 |
+                    0xAC |
+                    0xAE |
+                    0xBE => {
+                        self.cursor += 1;
+                        yystate = 1641;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1702 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8A |
+                    0x8C ..= 0x9F |
+                    0xA2 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0xA0 => {
+                        self.cursor += 1;
+                        yystate = 1641;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1703 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x87 |
+                    0x8C ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x88 ..= 0x8B => {
+                        self.cursor += 1;
+                        yystate = 1641;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1704 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 |
+                    0x82 ..= 0x93 |
+                    0x95 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x81 |
+                    0x94 => {
+                        self.cursor += 1;
+                        yystate = 1641;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
                         continue 'yyl;
                     }
                 }
@@ -34992,9 +34966,15 @@ impl<'a> Iterator for Lexer<'a> {
             1705 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x70 => {
+                    0x80 ..= 0x88 |
+                    0x8A ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1701;
+                        yystate = 1553;
+                        continue 'yyl;
+                    }
+                    0x89 => {
+                        self.cursor += 1;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     _ => {
@@ -35006,15 +34986,15 @@ impl<'a> Iterator for Lexer<'a> {
             1706 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xA8 |
-                    0xAA ..= 0xBF => {
+                    0x80 ..= 0xB9 |
+                    0xBB ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
-                    0xA9 => {
+                    0xBA => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     _ => {
@@ -35026,19 +35006,15 @@ impl<'a> Iterator for Lexer<'a> {
             1707 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x86 |
-                    0x88 ..= 0x8D |
-                    0x8F ..= 0x90 |
-                    0x92 ..= 0xBF => {
+                    0x80 ..= 0x8A |
+                    0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
-                    0x87 |
-                    0x8E |
-                    0x91 => {
+                    0x8B => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     _ => {
@@ -35050,21 +35026,15 @@ impl<'a> Iterator for Lexer<'a> {
             1708 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x90 |
-                    0x94 ..= 0x96 |
-                    0x99 ..= 0xAA |
-                    0xAC ..= 0xBA |
-                    0xBC ..= 0xBF => {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
+                        yystate = 1553;
                         continue 'yyl;
                     }
-                    0x91 |
-                    0x93 |
-                    0xAB |
-                    0xBB => {
+                    0x86 ..= 0x87 => {
                         self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1641;
                         continue 'yyl;
                     }
                     _ => {
@@ -35076,24 +35046,10 @@ impl<'a> Iterator for Lexer<'a> {
             1709 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0x98 |
-                    0x9A ..= 0x9D |
-                    0x9F ..= 0xAB |
-                    0xAD |
-                    0xAF ..= 0xBD |
-                    0xBF => {
+                    0x80 ..= 0xA8 |
+                    0xAA ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x86 ..= 0x87 |
-                    0x99 |
-                    0xAC |
-                    0xAE |
-                    0xBE => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35105,17 +35061,13 @@ impl<'a> Iterator for Lexer<'a> {
             1710 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8A |
-                    0x8C ..= 0x9F |
-                    0xA2 ..= 0xBF => {
+                    0x80 ..= 0x97 |
+                    0x9A ..= 0x9B |
+                    0x9F ..= 0xA0 |
+                    0xA2 ..= 0xB8 |
+                    0xBB ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0xA0 => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35127,15 +35079,12 @@ impl<'a> Iterator for Lexer<'a> {
             1711 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x8C ..= 0xBF => {
+                    0x80 ..= 0x86 |
+                    0x88 ..= 0x8D |
+                    0x8F ..= 0x90 |
+                    0x92 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x88 ..= 0x8B => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35147,17 +35096,13 @@ impl<'a> Iterator for Lexer<'a> {
             1712 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 |
-                    0x82 ..= 0x93 |
-                    0x95 ..= 0xBF => {
+                    0x80 ..= 0x90 |
+                    0x94 ..= 0x96 |
+                    0x99 ..= 0xAA |
+                    0xAC ..= 0xBA |
+                    0xBC ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x81 |
-                    0x94 => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35169,15 +35114,10 @@ impl<'a> Iterator for Lexer<'a> {
             1713 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x88 |
-                    0x8A ..= 0xBF => {
+                    0x80 ..= 0x96 |
+                    0x99 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x89 => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35189,15 +35129,15 @@ impl<'a> Iterator for Lexer<'a> {
             1714 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xB9 |
-                    0xBB ..= 0xBF => {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0x98 |
+                    0x9A ..= 0x9D |
+                    0x9F ..= 0xAB |
+                    0xAD |
+                    0xAF ..= 0xBD |
+                    0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0xBA => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35209,15 +35149,12 @@ impl<'a> Iterator for Lexer<'a> {
             1715 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x8A |
-                    0x8C ..= 0xBF => {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8A |
+                    0x8C ..= 0x9F |
+                    0xA2 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x8B => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35229,15 +35166,10 @@ impl<'a> Iterator for Lexer<'a> {
             1716 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0xBF => {
+                    0x80 ..= 0x87 |
+                    0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1561;
-                        continue 'yyl;
-                    }
-                    0x86 ..= 0x87 => {
-                        self.cursor += 1;
-                        yystate = 1649;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35249,10 +35181,11 @@ impl<'a> Iterator for Lexer<'a> {
             1717 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xA8 |
-                    0xAA ..= 0xBF => {
+                    0x80 |
+                    0x82 ..= 0x93 |
+                    0x95 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35264,13 +35197,10 @@ impl<'a> Iterator for Lexer<'a> {
             1718 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x97 |
-                    0x9A ..= 0x9B |
-                    0x9F ..= 0xA0 |
-                    0xA2 ..= 0xB8 |
-                    0xBB ..= 0xBF => {
+                    0x80 ..= 0x88 |
+                    0x8A ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35282,12 +35212,10 @@ impl<'a> Iterator for Lexer<'a> {
             1719 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x86 |
-                    0x88 ..= 0x8D |
-                    0x8F ..= 0x90 |
-                    0x92 ..= 0xBF => {
+                    0x80 ..= 0xB9 |
+                    0xBB ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35299,13 +35227,10 @@ impl<'a> Iterator for Lexer<'a> {
             1720 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x90 |
-                    0x94 ..= 0x96 |
-                    0x99 ..= 0xAA |
-                    0xAC ..= 0xBA |
-                    0xBC ..= 0xBF => {
+                    0x80 ..= 0x8A |
+                    0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35317,10 +35242,10 @@ impl<'a> Iterator for Lexer<'a> {
             1721 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x96 |
-                    0x99 ..= 0xBF => {
+                    0x80 ..= 0x85 |
+                    0x88 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35332,15 +35257,10 @@ impl<'a> Iterator for Lexer<'a> {
             1722 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0x98 |
-                    0x9A ..= 0x9D |
-                    0x9F ..= 0xAB |
-                    0xAD |
-                    0xAF ..= 0xBD |
-                    0xBF => {
+                    0x80 ..= 0x93 |
+                    0x96 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1655;
+                        yystate = 1647;
                         continue 'yyl;
                     }
                     _ => {
@@ -35352,134 +35272,11 @@ impl<'a> Iterator for Lexer<'a> {
             1723 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8A |
-                    0x8C ..= 0x9F |
-                    0xA2 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1655;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1724 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x87 |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1655;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1725 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 |
-                    0x82 ..= 0x93 |
-                    0x95 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1655;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1726 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x88 |
-                    0x8A ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1655;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1727 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xB9 |
-                    0xBB ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1655;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1728 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8A |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1655;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1729 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x85 |
-                    0x88 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1655;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1730 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x93 |
-                    0x96 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1655;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1731 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
                     0x3A |
                     0x41 ..= 0x5A |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1731;
+                        yystate = 1723;
                         continue 'yyl;
                     }
                     _ => {
@@ -35490,7 +35287,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1732 => {
+            1724 => {
                 yyaccept = 58;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -35500,7 +35297,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt6 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1682;
+                        yystate = 1674;
                         continue 'yyl;
                     }
                     0x2D |
@@ -35514,13 +35311,13 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1732;
+                        yystate = 1724;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.yyt6 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1684;
+                        yystate = 1676;
                         continue 'yyl;
                     }
                     _ => {
@@ -35535,7 +35332,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1733 => {
+            1725 => {
                 yyaccept = 63;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -35544,7 +35341,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt4 = self.cursor;
                         self.yyt8 = NONE;
                         self.cursor += 1;
-                        yystate = 1682;
+                        yystate = 1674;
                         continue 'yyl;
                     }
                     0x2D |
@@ -35558,7 +35355,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1745;
+                        yystate = 1737;
                         continue 'yyl;
                     }
                     _ => {
@@ -35572,12 +35369,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1734 => {
+            1726 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1746;
+                        yystate = 1738;
                         continue 'yyl;
                     }
                     _ => {
@@ -35586,7 +35383,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1735 => {
+            1727 => {
                 yyaccept = 23;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -35594,7 +35391,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt8 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1747;
+                        yystate = 1739;
                         continue 'yyl;
                     }
                     _ => {
@@ -35603,7 +35400,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1736 => {
+            1728 => {
                 yyaccept = 64;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -35617,7 +35414,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1748;
+                        yystate = 1740;
                         continue 'yyl;
                     }
                     0x2D |
@@ -35629,7 +35426,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1749;
+                        yystate = 1741;
                         continue 'yyl;
                     }
                     _ => {
@@ -35641,23 +35438,23 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1737 => {
+            1729 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -1) as usize;
                 { emit_t1t2!(CodeSwitchExplicit); }
             }
-            1738 => {
+            1730 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1737;
+                        yystate = 1729;
                         continue 'yyl;
                     }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1750;
+                        yystate = 1742;
                         continue 'yyl;
                     }
                     _ => {
@@ -35666,7 +35463,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1739 => {
+            1731 => {
                 yyaccept = 65;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -35674,14 +35471,14 @@ impl<'a> Iterator for Lexer<'a> {
                     0x24 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1396;
+                        yystate = 1389;
                         continue 'yyl;
                     }
                     0x26 |
                     0x2B => {
                         self.yyt2 = self.yyt7;
                         self.cursor += 1;
-                        yystate = 1698;
+                        yystate = 1690;
                         continue 'yyl;
                     }
                     0x2D |
@@ -35694,7 +35491,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1751;
+                        yystate = 1743;
                         continue 'yyl;
                     }
                     _ => {
@@ -35703,6 +35500,150 @@ impl<'a> Iterator for Lexer<'a> {
                         self.yyt4 = NONE;
                         self.yyt7 = NONE;
                         yystate = 868;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1732 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1744;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1733 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x30 ..= 0x39 |
+                    0x41 ..= 0x5A |
+                    0x5F |
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1745;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1734 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x73 => {
+                        self.cursor += 1;
+                        yystate = 1746;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1735 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1747;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1736 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x73 => {
+                        self.cursor += 1;
+                        yystate = 1693;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1737 => {
+                yyaccept = 23;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.yyt8 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1748;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1100;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1738 => {
+                yyaccept = 66;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.yyt4 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1398;
+                        continue 'yyl;
+                    }
+                    0x26 |
+                    0x2B => {
+                        self.cursor += 1;
+                        yystate = 1749;
+                        continue 'yyl;
+                    }
+                    0x2D |
+                    0x30 ..= 0x3A |
+                    0x40 ..= 0x5A |
+                    0x5F => {
+                        yystate = 1098;
+                        continue 'yyl;
+                    }
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1750;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        self.yyt4 = self.cursor;
+                        self.yyt5 = NONE;
+                        self.yyt7 = NONE;
+                        yystate = 1126;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1739 => {
+                yyaccept = 23;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1751;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1100;
                         continue 'yyl;
                     }
                 }
@@ -35722,150 +35663,6 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             1741 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 |
-                    0x41 ..= 0x5A |
-                    0x5F |
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1753;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1742 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x73 => {
-                        self.cursor += 1;
-                        yystate = 1754;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1743 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1755;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1744 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x73 => {
-                        self.cursor += 1;
-                        yystate = 1701;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1745 => {
-                yyaccept = 23;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.yyt8 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1756;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1100;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1746 => {
-                yyaccept = 66;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.yyt4 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1405;
-                        continue 'yyl;
-                    }
-                    0x26 |
-                    0x2B => {
-                        self.cursor += 1;
-                        yystate = 1757;
-                        continue 'yyl;
-                    }
-                    0x2D |
-                    0x30 ..= 0x3A |
-                    0x40 ..= 0x5A |
-                    0x5F => {
-                        yystate = 1098;
-                        continue 'yyl;
-                    }
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1758;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        self.yyt4 = self.cursor;
-                        self.yyt5 = NONE;
-                        self.yyt7 = NONE;
-                        yystate = 1126;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1747 => {
-                yyaccept = 23;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1759;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1100;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1748 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1760;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1749 => {
                 yyaccept = 64;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -35879,7 +35676,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1748;
+                        yystate = 1740;
                         continue 'yyl;
                     }
                     0x2D |
@@ -35899,12 +35696,12 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1750 => {
+            1742 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x5D => {
                         self.cursor += 1;
-                        yystate = 1737;
+                        yystate = 1729;
                         continue 'yyl;
                     }
                     _ => {
@@ -35913,7 +35710,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1751 => {
+            1743 => {
                 yyaccept = 65;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -35921,14 +35718,14 @@ impl<'a> Iterator for Lexer<'a> {
                     0x24 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1396;
+                        yystate = 1389;
                         continue 'yyl;
                     }
                     0x26 |
                     0x2B => {
                         self.yyt2 = self.yyt7;
                         self.cursor += 1;
-                        yystate = 1698;
+                        yystate = 1690;
                         continue 'yyl;
                     }
                     0x2D |
@@ -35950,7 +35747,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1752 => {
+            1744 => {
                 yyaccept = 61;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -35964,12 +35761,12 @@ impl<'a> Iterator for Lexer<'a> {
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1698;
+                        yystate = 1690;
                         continue 'yyl;
                     }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1761;
+                        yystate = 1753;
                         continue 'yyl;
                     }
                     _ => {
@@ -35981,14 +35778,14 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1753 => {
+            1745 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 |
@@ -35996,16 +35793,196 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1753;
+                        yystate = 1745;
                         continue 'yyl;
                     }
                     0x40 => {
                         self.cursor += 1;
-                        yystate = 1742;
+                        yystate = 1734;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1746 => {
+                yyaccept = 57;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.cursor += 1;
+                        yystate = 1639;
+                        continue 'yyl;
+                    }
+                    0x3A => {
+                        self.cursor += 1;
+                        yystate = 1735;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1554;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1747 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1754;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1748 => {
+                yyaccept = 23;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1755;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1100;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1749 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1756;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1750 => {
+                yyaccept = 66;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.yyt4 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1398;
+                        continue 'yyl;
+                    }
+                    0x26 |
+                    0x2B => {
+                        self.cursor += 1;
+                        yystate = 1749;
+                        continue 'yyl;
+                    }
+                    0x2D |
+                    0x30 ..= 0x3A |
+                    0x40 ..= 0x5A |
+                    0x5F |
+                    0x61 ..= 0x7A => {
+                        yystate = 1098;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        self.yyt4 = self.cursor;
+                        self.yyt5 = NONE;
+                        self.yyt7 = NONE;
+                        yystate = 1126;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1751 => {
+                yyaccept = 67;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.yyt4 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1608;
+                        continue 'yyl;
+                    }
+                    0x26 |
+                    0x2B => {
+                        self.yyt3 = self.yyt7;
+                        self.cursor += 1;
+                        yystate = 1740;
+                        continue 'yyl;
+                    }
+                    0x2D |
+                    0x30 ..= 0x3A |
+                    0x40 ..= 0x5A |
+                    0x5F => {
+                        self.cursor += 1;
+                        yystate = 1099;
+                        continue 'yyl;
+                    }
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1757;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        self.yyt3 = self.yyt7;
+                        self.yyt4 = self.cursor;
+                        self.yyt5 = NONE;
+                        self.yyt7 = NONE;
+                        yystate = 986;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1752 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1758;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1753 => {
+                yyaccept = 61;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.yyt3 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 920;
+                        continue 'yyl;
+                    }
+                    0x26 |
+                    0x2B => {
+                        self.cursor += 1;
+                        yystate = 1690;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        self.yyt3 = self.cursor;
+                        self.yyt4 = NONE;
+                        self.yyt7 = NONE;
+                        yystate = 868;
                         continue 'yyl;
                     }
                 }
@@ -36017,114 +35994,42 @@ impl<'a> Iterator for Lexer<'a> {
                 match yych {
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
-                        continue 'yyl;
-                    }
-                    0x3A => {
-                        self.cursor += 1;
-                        yystate = 1743;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1562;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1755 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1762;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1756 => {
-                yyaccept = 23;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1763;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1100;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1757 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1764;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1758 => {
-                yyaccept = 66;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.yyt4 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1405;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1757;
+                        yystate = 1735;
                         continue 'yyl;
                     }
-                    0x2D |
-                    0x30 ..= 0x3A |
-                    0x40 ..= 0x5A |
-                    0x5F |
                     0x61 ..= 0x7A => {
-                        yystate = 1098;
+                        self.cursor += 1;
+                        yystate = 1759;
                         continue 'yyl;
                     }
                     _ => {
-                        self.yyt4 = self.cursor;
-                        self.yyt5 = NONE;
-                        self.yyt7 = NONE;
-                        yystate = 1126;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                 }
             }
-            1759 => {
-                yyaccept = 67;
+            1755 => {
+                yyaccept = 68;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1616;
+                        yystate = 1674;
                         continue 'yyl;
                     }
                     0x26 |
                     0x2B => {
                         self.yyt3 = self.yyt7;
                         self.cursor += 1;
-                        yystate = 1748;
+                        yystate = 1749;
                         continue 'yyl;
                     }
                     0x2D |
@@ -36137,7 +36042,58 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1765;
+                        yystate = 1760;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        self.yyt3 = self.yyt7;
+                        self.yyt4 = self.cursor;
+                        self.yyt5 = NONE;
+                        self.yyt7 = NONE;
+                        yystate = 1126;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1756 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1761;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 919;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1757 => {
+                yyaccept = 67;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.yyt4 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1608;
+                        continue 'yyl;
+                    }
+                    0x26 |
+                    0x2B => {
+                        self.yyt3 = self.yyt7;
+                        self.cursor += 1;
+                        yystate = 1740;
+                        continue 'yyl;
+                    }
+                    0x2D |
+                    0x30 ..= 0x3A |
+                    0x40 ..= 0x5A |
+                    0x5F |
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1099;
                         continue 'yyl;
                     }
                     _ => {
@@ -36150,74 +36106,60 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1760 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1766;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1761 => {
-                yyaccept = 61;
+            1758 => {
+                yyaccept = 64;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
-                        self.yyt3 = self.cursor;
+                        self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 920;
+                        yystate = 1192;
                         continue 'yyl;
                     }
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1698;
+                        yystate = 1740;
+                        continue 'yyl;
+                    }
+                    0x61 ..= 0x7A => {
+                        self.cursor += 1;
+                        yystate = 1762;
                         continue 'yyl;
                     }
                     _ => {
-                        self.yyt3 = self.cursor;
-                        self.yyt4 = NONE;
+                        self.yyt4 = self.cursor;
+                        self.yyt5 = NONE;
                         self.yyt7 = NONE;
-                        yystate = 868;
+                        yystate = 986;
                         continue 'yyl;
                     }
                 }
             }
-            1762 => {
+            1759 => {
                 yyaccept = 57;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x24 => {
                         self.cursor += 1;
-                        yystate = 1647;
+                        yystate = 1639;
                         continue 'yyl;
                     }
                     0x26 |
                     0x2B => {
                         self.cursor += 1;
-                        yystate = 1743;
-                        continue 'yyl;
-                    }
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1767;
+                        yystate = 1735;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1562;
+                        yystate = 1554;
                         continue 'yyl;
                     }
                 }
             }
-            1763 => {
+            1760 => {
                 yyaccept = 68;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -36225,31 +36167,110 @@ impl<'a> Iterator for Lexer<'a> {
                     0x24 => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1682;
+                        yystate = 1674;
                         continue 'yyl;
                     }
                     0x26 |
                     0x2B => {
                         self.yyt3 = self.yyt7;
                         self.cursor += 1;
-                        yystate = 1757;
+                        yystate = 1749;
                         continue 'yyl;
                     }
                     0x2D |
                     0x30 ..= 0x3A |
                     0x40 ..= 0x5A |
-                    0x5F => {
+                    0x5F |
+                    0x61 ..= 0x7A => {
                         self.cursor += 1;
                         yystate = 1099;
                         continue 'yyl;
                     }
+                    _ => {
+                        self.yyt3 = self.yyt7;
+                        self.yyt4 = self.cursor;
+                        self.yyt5 = NONE;
+                        self.yyt7 = NONE;
+                        yystate = 1126;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1761 => {
+                yyaccept = 66;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.yyt4 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1398;
+                        continue 'yyl;
+                    }
+                    0x26 |
+                    0x2B => {
+                        self.cursor += 1;
+                        yystate = 1749;
+                        continue 'yyl;
+                    }
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1768;
+                        yystate = 1763;
                         continue 'yyl;
                     }
                     _ => {
-                        self.yyt3 = self.yyt7;
+                        self.yyt4 = self.cursor;
+                        self.yyt5 = NONE;
+                        self.yyt7 = NONE;
+                        yystate = 1126;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1762 => {
+                yyaccept = 64;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.yyt4 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1192;
+                        continue 'yyl;
+                    }
+                    0x26 |
+                    0x2B => {
+                        self.cursor += 1;
+                        yystate = 1740;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        self.yyt4 = self.cursor;
+                        self.yyt5 = NONE;
+                        self.yyt7 = NONE;
+                        yystate = 986;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1763 => {
+                yyaccept = 66;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x24 => {
+                        self.yyt4 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1398;
+                        continue 'yyl;
+                    }
+                    0x26 |
+                    0x2B => {
+                        self.cursor += 1;
+                        yystate = 1749;
+                        continue 'yyl;
+                    }
+                    _ => {
                         self.yyt4 = self.cursor;
                         self.yyt5 = NONE;
                         self.yyt7 = NONE;
@@ -36260,234 +36281,10 @@ impl<'a> Iterator for Lexer<'a> {
             }
             1764 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1769;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 919;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1765 => {
-                yyaccept = 67;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.yyt4 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1616;
-                        continue 'yyl;
-                    }
-                    0x26 |
-                    0x2B => {
-                        self.yyt3 = self.yyt7;
-                        self.cursor += 1;
-                        yystate = 1748;
-                        continue 'yyl;
-                    }
-                    0x2D |
-                    0x30 ..= 0x3A |
-                    0x40 ..= 0x5A |
-                    0x5F |
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1099;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        self.yyt3 = self.yyt7;
-                        self.yyt4 = self.cursor;
-                        self.yyt5 = NONE;
-                        self.yyt7 = NONE;
-                        yystate = 986;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1766 => {
-                yyaccept = 64;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.yyt4 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1192;
-                        continue 'yyl;
-                    }
-                    0x26 |
-                    0x2B => {
-                        self.cursor += 1;
-                        yystate = 1748;
-                        continue 'yyl;
-                    }
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1770;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        self.yyt4 = self.cursor;
-                        self.yyt5 = NONE;
-                        self.yyt7 = NONE;
-                        yystate = 986;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1767 => {
-                yyaccept = 57;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.cursor += 1;
-                        yystate = 1647;
-                        continue 'yyl;
-                    }
-                    0x26 |
-                    0x2B => {
-                        self.cursor += 1;
-                        yystate = 1743;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1562;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1768 => {
-                yyaccept = 68;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.yyt4 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1682;
-                        continue 'yyl;
-                    }
-                    0x26 |
-                    0x2B => {
-                        self.yyt3 = self.yyt7;
-                        self.cursor += 1;
-                        yystate = 1757;
-                        continue 'yyl;
-                    }
-                    0x2D |
-                    0x30 ..= 0x3A |
-                    0x40 ..= 0x5A |
-                    0x5F |
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1099;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        self.yyt3 = self.yyt7;
-                        self.yyt4 = self.cursor;
-                        self.yyt5 = NONE;
-                        self.yyt7 = NONE;
-                        yystate = 1126;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1769 => {
-                yyaccept = 66;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.yyt4 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1405;
-                        continue 'yyl;
-                    }
-                    0x26 |
-                    0x2B => {
-                        self.cursor += 1;
-                        yystate = 1757;
-                        continue 'yyl;
-                    }
-                    0x61 ..= 0x7A => {
-                        self.cursor += 1;
-                        yystate = 1771;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        self.yyt4 = self.cursor;
-                        self.yyt5 = NONE;
-                        self.yyt7 = NONE;
-                        yystate = 1126;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1770 => {
-                yyaccept = 64;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.yyt4 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1192;
-                        continue 'yyl;
-                    }
-                    0x26 |
-                    0x2B => {
-                        self.cursor += 1;
-                        yystate = 1748;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        self.yyt4 = self.cursor;
-                        self.yyt5 = NONE;
-                        self.yyt7 = NONE;
-                        yystate = 986;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1771 => {
-                yyaccept = 66;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x24 => {
-                        self.yyt4 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1405;
-                        continue 'yyl;
-                    }
-                    0x26 |
-                    0x2B => {
-                        self.cursor += 1;
-                        yystate = 1757;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        self.yyt4 = self.cursor;
-                        self.yyt5 = NONE;
-                        self.yyt7 = NONE;
-                        yystate = 1126;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1772 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
-                        yystate = 1773;
+                        yystate = 1765;
                         continue 'yyl;
                     }
                     0x01 ..= 0x09 |
@@ -36498,193 +36295,64 @@ impl<'a> Iterator for Lexer<'a> {
                     0x2C ..= 0x2D |
                     0x2F ..= 0x3E |
                     0x40 ..= 0x7F => {
-                        yystate = 1774;
+                        yystate = 1766;
                         continue 'yyl;
                     }
                     0x0A => {
-                        yystate = 1777;
+                        yystate = 1769;
                         continue 'yyl;
                     }
                     0x0D => {
-                        yystate = 1779;
+                        yystate = 1771;
                         continue 'yyl;
                     }
                     0x15 => {
-                        yystate = 1780;
+                        yystate = 1772;
                         continue 'yyl;
                     }
                     0x21 => {
-                        yystate = 1782;
+                        yystate = 1774;
                         continue 'yyl;
                     }
                     0x2B => {
-                        yystate = 1784;
+                        yystate = 1776;
                         continue 'yyl;
                     }
                     0x2E => {
-                        yystate = 1785;
+                        yystate = 1777;
                         continue 'yyl;
                     }
                     0x3F => {
-                        yystate = 1787;
+                        yystate = 1779;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
-                        yystate = 1791;
+                        yystate = 1783;
                         continue 'yyl;
                     }
                     0xE0 => {
-                        yystate = 1792;
+                        yystate = 1784;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
-                        yystate = 1793;
+                        yystate = 1785;
                         continue 'yyl;
                     }
                     0xE2 => {
-                        yystate = 1794;
+                        yystate = 1786;
                         continue 'yyl;
                     }
                     0xF0 => {
-                        yystate = 1795;
+                        yystate = 1787;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
-                        yystate = 1796;
+                        yystate = 1788;
                         continue 'yyl;
                     }
                     0xF4 => {
-                        yystate = 1797;
-                        continue 'yyl;
-                    }
-                    _ => {
                         yystate = 1789;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1773 => {
-            return None;
-        },
-            1774 => {
-                yyaccept = 0;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 1775;
-                continue 'yyl;
-            }
-            1775 => {
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x7F => {
-                        self.cursor += 1;
-                        yystate = 1774;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.cursor += 1;
-                        yystate = 1798;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.cursor += 1;
-                        yystate = 1800;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.cursor += 1;
-                        yystate = 1801;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.cursor += 1;
-                        yystate = 1802;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.cursor += 1;
-                        yystate = 1803;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.cursor += 1;
-                        yystate = 1804;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1776;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1776 => {
-            emit!(TextSegment);
-        },
-            1777 => {
-                yyaccept = 1;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x09 ..= 0x0A |
-                    0x0D => {
-                        yystate = 1808;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1778;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1778 => {
-                self.condition = YYC_INITIAL;
-                {
-            emit!(Newline);
-        }
-            }
-            1779 => {
-                yyaccept = 1;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x09 => {
-                        self.cursor += 1;
-                        yystate = 1805;
-                        continue 'yyl;
-                    }
-                    0x0A => {
-                        self.cursor += 1;
-                        yystate = 1777;
-                        continue 'yyl;
-                    }
-                    0x0D => {
-                        self.cursor += 1;
-                        yystate = 1807;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1778;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1780 => {
-                yyaccept = 2;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x25 => {
-                        self.cursor += 1;
-                        yystate = 1809;
-                        continue 'yyl;
-                    }
-                    0x30 ..= 0x39 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1810;
                         continue 'yyl;
                     }
                     _ => {
@@ -36693,8 +36361,137 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1781 => { emit!(ErrorInTierContent); },
-            1782 => {
+            1765 => {
+            return None;
+        },
+            1766 => {
+                yyaccept = 0;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                yystate = 1767;
+                continue 'yyl;
+            }
+            1767 => {
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x7F => {
+                        self.cursor += 1;
+                        yystate = 1766;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.cursor += 1;
+                        yystate = 1790;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.cursor += 1;
+                        yystate = 1792;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.cursor += 1;
+                        yystate = 1793;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.cursor += 1;
+                        yystate = 1794;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.cursor += 1;
+                        yystate = 1795;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.cursor += 1;
+                        yystate = 1796;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1768;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1768 => {
+            emit!(TextSegment);
+        },
+            1769 => {
+                yyaccept = 1;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x09 ..= 0x0A |
+                    0x0D => {
+                        yystate = 1800;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1770;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1770 => {
+                self.condition = YYC_INITIAL;
+                {
+            emit!(Newline);
+        }
+            }
+            1771 => {
+                yyaccept = 1;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x09 => {
+                        self.cursor += 1;
+                        yystate = 1797;
+                        continue 'yyl;
+                    }
+                    0x0A => {
+                        self.cursor += 1;
+                        yystate = 1769;
+                        continue 'yyl;
+                    }
+                    0x0D => {
+                        self.cursor += 1;
+                        yystate = 1799;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1770;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1772 => {
+                yyaccept = 2;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x25 => {
+                        self.cursor += 1;
+                        yystate = 1801;
+                        continue 'yyl;
+                    }
+                    0x30 ..= 0x39 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1802;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1773;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1773 => { emit!(ErrorInTierContent); },
+            1774 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -36704,31 +36501,470 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1783;
+                        yystate = 1775;
                         continue 'yyl;
                     }
                 }
             }
-            1783 => { emit!(Exclamation); },
-            1784 => {
+            1775 => { emit!(Exclamation); },
+            1776 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
-                        yystate = 1811;
+                        yystate = 1803;
                         continue 'yyl;
                     }
                     0x22 => {
                         self.cursor += 1;
+                        yystate = 1804;
+                        continue 'yyl;
+                    }
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1805;
+                        continue 'yyl;
+                    }
+                    0x2F => {
+                        self.cursor += 1;
+                        yystate = 1807;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1767;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1777 => {
+                yyaccept = 4;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x7F |
+                    0xC2 ..= 0xF4 => {
+                        yystate = 1767;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1778;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1778 => { emit!(Period); },
+            1779 => {
+                yyaccept = 5;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x7F |
+                    0xC2 ..= 0xF4 => {
+                        yystate = 1767;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1780;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1780 => { emit!(Question); },
+            1781 => {
+                yystate = 1782;
+                continue 'yyl;
+            }
+            1782 => {
+            emit!(ErrorUnrecognized);
+        },
+            1783 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1766;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1782;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1784 => {
+                yyaccept = 6;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1790;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1782;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1785 => {
+                yyaccept = 6;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1790;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1782;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1786 => {
+                yyaccept = 6;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x88 |
+                    0x8A ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1790;
+                        continue 'yyl;
+                    }
+                    0x89 => {
+                        self.cursor += 1;
+                        yystate = 1808;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1782;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1787 => {
+                yyaccept = 6;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1793;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1782;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1788 => {
+                yyaccept = 6;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1793;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1782;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1789 => {
+                yyaccept = 6;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 1793;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1782;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1790 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1766;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1791 => {
+                self.cursor = self.marker;
+                match yyaccept {
+                    0 => {
+                        yystate = 1768;
+                        continue 'yyl;
+                    }
+                    1 => {
+                        yystate = 1770;
+                        continue 'yyl;
+                    }
+                    2 => {
+                        yystate = 1773;
+                        continue 'yyl;
+                    }
+                    3 => {
+                        yystate = 1775;
+                        continue 'yyl;
+                    }
+                    4 => {
+                        yystate = 1778;
+                        continue 'yyl;
+                    }
+                    5 => {
+                        yystate = 1780;
+                        continue 'yyl;
+                    }
+                    6 => {
+                        yystate = 1782;
+                        continue 'yyl;
+                    }
+                    7 => {
+                        yystate = 1806;
+                        continue 'yyl;
+                    }
+                    8 => {
                         yystate = 1812;
                         continue 'yyl;
                     }
+                    9 => {
+                        yystate = 1814;
+                        continue 'yyl;
+                    }
+                    10 => {
+                        yystate = 1818;
+                        continue 'yyl;
+                    }
+                    11 => {
+                        yystate = 1821;
+                        continue 'yyl;
+                    }
+                    12 => {
+                        yystate = 1823;
+                        continue 'yyl;
+                    }
+                    13 => {
+                        yystate = 1825;
+                        continue 'yyl;
+                    }
+                    14 => {
+                        yystate = 1829;
+                        continue 'yyl;
+                    }
+                    15 => {
+                        yystate = 1831;
+                        continue 'yyl;
+                    }
+                    16 => {
+                        yystate = 1833;
+                        continue 'yyl;
+                    }
+                    17 => {
+                        yystate = 1835;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1837;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1792 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1790;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1793 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1790;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1794 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1793;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1795 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1793;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1796 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 1793;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1797 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x20 => {
+                        self.cursor += 1;
+                        yystate = 1797;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1798;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1798 => {
+            emit!(Continuation);
+        },
+            1799 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                yystate = 1800;
+                continue 'yyl;
+            }
+            1800 => {
+                match yych {
+                    0x09 => {
+                        self.cursor += 1;
+                        yystate = 1797;
+                        continue 'yyl;
+                    }
+                    0x0A |
+                    0x0D => {
+                        self.cursor += 1;
+                        yystate = 1799;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1801 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x70 => {
+                        self.cursor += 1;
+                        yystate = 1809;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1802 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x30 ..= 0x39 => {
+                        self.cursor += 1;
+                        yystate = 1802;
+                        continue 'yyl;
+                    }
+                    0x5F => {
+                        self.cursor += 1;
+                        yystate = 1810;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1791;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1803 => {
+                yyaccept = 0;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x3F => {
+                        self.cursor += 1;
+                        yystate = 1811;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1767;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1804 => {
+                yyaccept = 0;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
                     0x2E => {
                         self.cursor += 1;
                         yystate = 1813;
@@ -36740,451 +36976,12 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1775;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1785 => {
-                yyaccept = 4;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x7F |
-                    0xC2 ..= 0xF4 => {
-                        yystate = 1775;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1786;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1786 => { emit!(Period); },
-            1787 => {
-                yyaccept = 5;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x7F |
-                    0xC2 ..= 0xF4 => {
-                        yystate = 1775;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1788;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1788 => { emit!(Question); },
-            1789 => {
-                yystate = 1790;
-                continue 'yyl;
-            }
-            1790 => {
-            emit!(ErrorUnrecognized);
-        },
-            1791 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1774;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1790;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1792 => {
-                yyaccept = 6;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1798;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1790;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1793 => {
-                yyaccept = 6;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1798;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1790;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1794 => {
-                yyaccept = 6;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x88 |
-                    0x8A ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1798;
-                        continue 'yyl;
-                    }
-                    0x89 => {
-                        self.cursor += 1;
-                        yystate = 1816;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1790;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1795 => {
-                yyaccept = 6;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1801;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1790;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1796 => {
-                yyaccept = 6;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1801;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1790;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1797 => {
-                yyaccept = 6;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 1801;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1790;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1798 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1774;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1799 => {
-                self.cursor = self.marker;
-                match yyaccept {
-                    0 => {
-                        yystate = 1776;
-                        continue 'yyl;
-                    }
-                    1 => {
-                        yystate = 1778;
-                        continue 'yyl;
-                    }
-                    2 => {
-                        yystate = 1781;
-                        continue 'yyl;
-                    }
-                    3 => {
-                        yystate = 1783;
-                        continue 'yyl;
-                    }
-                    4 => {
-                        yystate = 1786;
-                        continue 'yyl;
-                    }
-                    5 => {
-                        yystate = 1788;
-                        continue 'yyl;
-                    }
-                    6 => {
-                        yystate = 1790;
-                        continue 'yyl;
-                    }
-                    7 => {
-                        yystate = 1814;
-                        continue 'yyl;
-                    }
-                    8 => {
-                        yystate = 1820;
-                        continue 'yyl;
-                    }
-                    9 => {
-                        yystate = 1822;
-                        continue 'yyl;
-                    }
-                    10 => {
-                        yystate = 1826;
-                        continue 'yyl;
-                    }
-                    11 => {
-                        yystate = 1829;
-                        continue 'yyl;
-                    }
-                    12 => {
-                        yystate = 1831;
-                        continue 'yyl;
-                    }
-                    13 => {
-                        yystate = 1833;
-                        continue 'yyl;
-                    }
-                    14 => {
-                        yystate = 1837;
-                        continue 'yyl;
-                    }
-                    15 => {
-                        yystate = 1839;
-                        continue 'yyl;
-                    }
-                    16 => {
-                        yystate = 1841;
-                        continue 'yyl;
-                    }
-                    17 => {
-                        yystate = 1843;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1845;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1800 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1798;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1801 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1798;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1802 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1801;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1803 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1801;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1804 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 1801;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                 }
             }
             1805 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x20 => {
-                        self.cursor += 1;
-                        yystate = 1805;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1806;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1806 => {
-            emit!(Continuation);
-        },
-            1807 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 1808;
-                continue 'yyl;
-            }
-            1808 => {
-                match yych {
-                    0x09 => {
-                        self.cursor += 1;
-                        yystate = 1805;
-                        continue 'yyl;
-                    }
-                    0x0A |
-                    0x0D => {
-                        self.cursor += 1;
-                        yystate = 1807;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1809 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x70 => {
-                        self.cursor += 1;
-                        yystate = 1817;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1810 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 => {
-                        self.cursor += 1;
-                        yystate = 1810;
-                        continue 'yyl;
-                    }
-                    0x5F => {
-                        self.cursor += 1;
-                        yystate = 1818;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1799;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1811 => {
-                yyaccept = 0;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x3F => {
-                        self.cursor += 1;
-                        yystate = 1819;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1775;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1812 => {
-                yyaccept = 0;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1821;
-                        continue 'yyl;
-                    }
-                    0x2F => {
-                        self.cursor += 1;
-                        yystate = 1823;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1775;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1813 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37195,103 +36992,103 @@ impl<'a> Iterator for Lexer<'a> {
                     0x16 ..= 0x2D |
                     0x2F ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1824;
+                        yystate = 1816;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1814;
+                        yystate = 1806;
                         continue 'yyl;
                     }
                 }
             }
-            1814 => { emit!(BreakForCoding); },
-            1815 => {
+            1806 => { emit!(BreakForCoding); },
+            1807 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1825;
+                        yystate = 1817;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 1827;
+                        yystate = 1819;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 1828;
+                        yystate = 1820;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                 }
             }
-            1816 => {
+            1808 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
                     0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1774;
+                        yystate = 1766;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 1830;
+                        yystate = 1822;
                         continue 'yyl;
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 1832;
+                        yystate = 1824;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1817 => {
+            1809 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x69 => {
                         self.cursor += 1;
-                        yystate = 1834;
+                        yystate = 1826;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1818 => {
+            1810 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1835;
+                        yystate = 1827;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1819 => {
+            1811 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37301,17 +37098,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1820;
+                        yystate = 1812;
                         continue 'yyl;
                     }
                 }
             }
-            1820 => { emit!(BrokenQuestion); },
-            1821 => {
+            1812 => { emit!(BrokenQuestion); },
+            1813 => {
                 yyaccept = 9;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37321,54 +37118,54 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1822;
+                        yystate = 1814;
                         continue 'yyl;
                     }
                 }
             }
-            1822 => { emit!(QuotedPeriodSimple); },
-            1823 => {
+            1814 => { emit!(QuotedPeriodSimple); },
+            1815 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1836;
+                        yystate = 1828;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                 }
             }
-            1824 => {
+            1816 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1838;
+                        yystate = 1830;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 1840;
+                        yystate = 1832;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                 }
             }
-            1825 => {
+            1817 => {
                 yyaccept = 10;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37378,38 +37175,38 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1826;
+                        yystate = 1818;
                         continue 'yyl;
                     }
                 }
             }
-            1826 => { emit!(Interruption); },
-            1827 => {
+            1818 => { emit!(Interruption); },
+            1819 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1842;
+                        yystate = 1834;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 1844;
+                        yystate = 1836;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                 }
             }
-            1828 => {
+            1820 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37419,17 +37216,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1829;
+                        yystate = 1821;
                         continue 'yyl;
                     }
                 }
             }
-            1829 => { emit!(InterruptedQuestion); },
-            1830 => {
+            1821 => { emit!(InterruptedQuestion); },
+            1822 => {
                 yyaccept = 12;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37439,17 +37236,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1831;
+                        yystate = 1823;
                         continue 'yyl;
                     }
                 }
             }
-            1831 => { emit!(CaNoBreak); },
-            1832 => {
+            1823 => { emit!(CaNoBreak); },
+            1824 => {
                 yyaccept = 13;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37459,57 +37256,57 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1833;
+                        yystate = 1825;
                         continue 'yyl;
                     }
                 }
             }
-            1833 => { emit!(CaTechnicalBreak); },
-            1834 => {
+            1825 => { emit!(CaTechnicalBreak); },
+            1826 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x63 => {
                         self.cursor += 1;
-                        yystate = 1846;
+                        yystate = 1838;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1835 => {
+            1827 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1847;
+                        yystate = 1839;
                         continue 'yyl;
                     }
                     0x2D => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1848;
+                        yystate = 1840;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1835;
+                        yystate = 1827;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1836 => {
+            1828 => {
                 yyaccept = 14;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37519,17 +37316,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1837;
+                        yystate = 1829;
                         continue 'yyl;
                     }
                 }
             }
-            1837 => { emit!(QuotedNewLine); },
-            1838 => {
+            1829 => { emit!(QuotedNewLine); },
+            1830 => {
                 yyaccept = 15;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37539,17 +37336,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1839;
+                        yystate = 1831;
                         continue 'yyl;
                     }
                 }
             }
-            1839 => { emit!(TrailingOff); },
-            1840 => {
+            1831 => { emit!(TrailingOff); },
+            1832 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37559,17 +37356,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1841;
+                        yystate = 1833;
                         continue 'yyl;
                     }
                 }
             }
-            1841 => { emit!(TrailingOffQuestion); },
-            1842 => {
+            1833 => { emit!(TrailingOffQuestion); },
+            1834 => {
                 yyaccept = 17;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37579,17 +37376,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1843;
+                        yystate = 1835;
                         continue 'yyl;
                     }
                 }
             }
-            1843 => { emit!(SelfInterruption); },
-            1844 => {
+            1835 => { emit!(SelfInterruption); },
+            1836 => {
                 yyaccept = 18;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37599,31 +37396,31 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1775;
+                        yystate = 1767;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1845;
+                        yystate = 1837;
                         continue 'yyl;
                     }
                 }
             }
-            1845 => { emit!(SelfInterruptedQuestion); },
-            1846 => {
+            1837 => { emit!(SelfInterruptedQuestion); },
+            1838 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3A => {
                         self.cursor += 1;
-                        yystate = 1849;
+                        yystate = 1841;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1847 => {
+            1839 => {
                 self.t1 = self.yyt1;
                 self.t3 = self.yyt2;
                 self.t4 = self.yyt3;
@@ -37638,35 +37435,35 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            1848 => {
+            1840 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
-                        yystate = 1847;
+                        yystate = 1839;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1849 => {
+            1841 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x22 => {
                         self.cursor += 1;
-                        yystate = 1850;
+                        yystate = 1842;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1850 => {
+            1842 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 |
@@ -37674,21 +37471,21 @@ impl<'a> Iterator for Lexer<'a> {
                     0x61 ..= 0x7A => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1851;
+                        yystate = 1843;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1851 => {
+            1843 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x22 => {
                         self.cursor += 1;
-                        yystate = 1852;
+                        yystate = 1844;
                         continue 'yyl;
                     }
                     0x27 |
@@ -37697,30 +37494,30 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 1851;
+                        yystate = 1843;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1852 => {
+            1844 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
-                        yystate = 1853;
+                        yystate = 1845;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1799;
+                        yystate = 1791;
                         continue 'yyl;
                     }
                 }
             }
-            1853 => {
+            1845 => {
                 self.t1 = self.yyt1;
                 self.t2 = self.cursor;
                 self.t2 = (self.t2 as isize + -2) as usize;
@@ -37728,12 +37525,12 @@ impl<'a> Iterator for Lexer<'a> {
             emit_t1t2!(InlinePic);
         }
             }
-            1854 => {
+            1846 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
-                        yystate = 1855;
+                        yystate = 1847;
                         continue 'yyl;
                     }
                     0x01 ..= 0x09 |
@@ -37745,137 +37542,137 @@ impl<'a> Iterator for Lexer<'a> {
                     0x2F |
                     0x3A ..= 0x3E |
                     0x40 ..= 0x7F => {
-                        yystate = 1856;
+                        yystate = 1848;
                         continue 'yyl;
                     }
                     0x0A => {
-                        yystate = 1858;
+                        yystate = 1850;
                         continue 'yyl;
                     }
                     0x0D => {
-                        yystate = 1860;
+                        yystate = 1852;
                         continue 'yyl;
                     }
                     0x15 => {
-                        yystate = 1861;
+                        yystate = 1853;
                         continue 'yyl;
                     }
                     0x20 => {
-                        yystate = 1862;
+                        yystate = 1854;
                         continue 'yyl;
                     }
                     0x21 => {
-                        yystate = 1864;
+                        yystate = 1856;
                         continue 'yyl;
                     }
                     0x2B => {
-                        yystate = 1865;
+                        yystate = 1857;
                         continue 'yyl;
                     }
                     0x2E => {
-                        yystate = 1866;
+                        yystate = 1858;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
-                        yystate = 1867;
+                        yystate = 1859;
                         continue 'yyl;
                     }
                     0x3F => {
-                        yystate = 1868;
+                        yystate = 1860;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
-                        yystate = 1871;
+                        yystate = 1863;
                         continue 'yyl;
                     }
                     0xE0 => {
-                        yystate = 1872;
+                        yystate = 1864;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
-                        yystate = 1873;
+                        yystate = 1865;
                         continue 'yyl;
                     }
                     0xE2 => {
-                        yystate = 1874;
+                        yystate = 1866;
                         continue 'yyl;
                     }
                     0xF0 => {
-                        yystate = 1875;
+                        yystate = 1867;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
-                        yystate = 1876;
+                        yystate = 1868;
                         continue 'yyl;
                     }
                     0xF4 => {
-                        yystate = 1877;
+                        yystate = 1869;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1869;
+                        yystate = 1861;
                         continue 'yyl;
                     }
                 }
             }
-            1855 => {
+            1847 => {
             return None;
         },
-            1856 => {
-                yystate = 1857;
+            1848 => {
+                yystate = 1849;
                 continue 'yyl;
             }
-            1857 => { emit!(ErrorInGraContent); },
-            1858 => {
+            1849 => { emit!(ErrorInGraContent); },
+            1850 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 ..= 0x0A |
                     0x0D => {
-                        yystate = 1881;
+                        yystate = 1873;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1859;
+                        yystate = 1851;
                         continue 'yyl;
                     }
                 }
             }
-            1859 => {
+            1851 => {
                 self.condition = YYC_INITIAL;
                 {
             emit!(Newline);
         }
             }
-            1860 => {
+            1852 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
-                        yystate = 1878;
+                        yystate = 1870;
                         continue 'yyl;
                     }
                     0x0A => {
                         self.cursor += 1;
-                        yystate = 1858;
+                        yystate = 1850;
                         continue 'yyl;
                     }
                     0x0D => {
                         self.cursor += 1;
-                        yystate = 1880;
+                        yystate = 1872;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1859;
+                        yystate = 1851;
                         continue 'yyl;
                     }
                 }
             }
-            1861 => {
+            1853 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -37883,139 +37680,139 @@ impl<'a> Iterator for Lexer<'a> {
                     0x30 ..= 0x39 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1883;
+                        yystate = 1875;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1857;
+                        yystate = 1849;
                         continue 'yyl;
                     }
                 }
             }
-            1862 => {
+            1854 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 1862;
+                        yystate = 1854;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1863;
+                        yystate = 1855;
                         continue 'yyl;
                     }
                 }
             }
-            1863 => { emit!(Whitespace); },
-            1864 => { emit!(Exclamation); },
-            1865 => {
+            1855 => { emit!(Whitespace); },
+            1856 => { emit!(Exclamation); },
+            1857 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
-                        yystate = 1884;
+                        yystate = 1876;
                         continue 'yyl;
                     }
                     0x22 => {
                         self.cursor += 1;
-                        yystate = 1885;
+                        yystate = 1877;
                         continue 'yyl;
                     }
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1886;
+                        yystate = 1878;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 1888;
+                        yystate = 1880;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1857;
+                        yystate = 1849;
                         continue 'yyl;
                     }
                 }
             }
-            1866 => { emit!(Period); },
-            1867 => {
+            1858 => { emit!(Period); },
+            1859 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1889;
+                        yystate = 1881;
                         continue 'yyl;
                     }
                     0x7C => {
                         self.cursor += 1;
-                        yystate = 1890;
+                        yystate = 1882;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1857;
+                        yystate = 1849;
                         continue 'yyl;
                     }
                 }
             }
-            1868 => { emit!(Question); },
-            1869 => {
-                yystate = 1870;
+            1860 => { emit!(Question); },
+            1861 => {
+                yystate = 1862;
                 continue 'yyl;
             }
-            1870 => {
+            1862 => {
             emit!(ErrorUnrecognized);
         },
-            1871 => {
+            1863 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1856;
+                        yystate = 1848;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1870;
+                        yystate = 1862;
                         continue 'yyl;
                     }
                 }
             }
-            1872 => {
+            1864 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1891;
+                        yystate = 1883;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1870;
+                        yystate = 1862;
                         continue 'yyl;
                     }
                 }
             }
-            1873 => {
+            1865 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1891;
+                        yystate = 1883;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1870;
+                        yystate = 1862;
                         continue 'yyl;
                     }
                 }
             }
-            1874 => {
+            1866 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -38023,74 +37820,122 @@ impl<'a> Iterator for Lexer<'a> {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1891;
+                        yystate = 1883;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1892;
+                        yystate = 1884;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1870;
+                        yystate = 1862;
                         continue 'yyl;
                     }
                 }
             }
-            1875 => {
+            1867 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1893;
+                        yystate = 1885;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1870;
+                        yystate = 1862;
                         continue 'yyl;
                     }
                 }
             }
-            1876 => {
+            1868 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1893;
+                        yystate = 1885;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1870;
+                        yystate = 1862;
                         continue 'yyl;
                     }
                 }
             }
-            1877 => {
+            1869 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 1893;
+                        yystate = 1885;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1870;
+                        yystate = 1862;
                         continue 'yyl;
                     }
                 }
             }
-            1878 => {
+            1870 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 1878;
+                        yystate = 1870;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1871;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1871 => {
+            emit!(Continuation);
+        },
+            1872 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                yystate = 1873;
+                continue 'yyl;
+            }
+            1873 => {
+                match yych {
+                    0x09 => {
+                        self.cursor += 1;
+                        yystate = 1870;
+                        continue 'yyl;
+                    }
+                    0x0A |
+                    0x0D => {
+                        self.cursor += 1;
+                        yystate = 1872;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1874;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1874 => {
+                self.cursor = self.marker;
+                match yyaccept {
+                    0 => {
+                        yystate = 1851;
+                        continue 'yyl;
+                    }
+                    1 => {
+                        yystate = 1849;
+                        continue 'yyl;
+                    }
+                    2 => {
+                        yystate = 1862;
                         continue 'yyl;
                     }
                     _ => {
@@ -38099,50 +37944,129 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            1879 => {
-            emit!(Continuation);
-        },
-            1880 => {
+            1875 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 1881;
-                continue 'yyl;
-            }
-            1881 => {
                 match yych {
-                    0x09 => {
+                    0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1878;
+                        yystate = 1875;
                         continue 'yyl;
                     }
-                    0x0A |
-                    0x0D => {
+                    0x5F => {
                         self.cursor += 1;
-                        yystate = 1880;
+                        yystate = 1886;
                         continue 'yyl;
                     }
                     _ => {
+                        yystate = 1874;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1876 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x3F => {
+                        self.cursor += 1;
+                        yystate = 1887;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1874;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1877 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1888;
+                        continue 'yyl;
+                    }
+                    0x2F => {
+                        self.cursor += 1;
+                        yystate = 1889;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1874;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1878 => {
+                yyaccept = 3;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1890;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1879;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1879 => { emit!(BreakForCoding); },
+            1880 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1891;
+                        continue 'yyl;
+                    }
+                    0x2F => {
+                        self.cursor += 1;
+                        yystate = 1892;
+                        continue 'yyl;
+                    }
+                    0x3F => {
+                        self.cursor += 1;
+                        yystate = 1893;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1874;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1881 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x30 ..= 0x39 => {
+                        self.cursor += 1;
+                        yystate = 1881;
+                        continue 'yyl;
+                    }
+                    0x7C => {
+                        self.cursor += 1;
                         yystate = 1882;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
             }
             1882 => {
-                self.cursor = self.marker;
-                match yyaccept {
-                    0 => {
-                        yystate = 1859;
-                        continue 'yyl;
-                    }
-                    1 => {
-                        yystate = 1857;
-                        continue 'yyl;
-                    }
-                    2 => {
-                        yystate = 1870;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x30 ..= 0x39 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1894;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1887;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
@@ -38150,18 +38074,13 @@ impl<'a> Iterator for Lexer<'a> {
             1883 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x30 ..= 0x39 => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1883;
-                        continue 'yyl;
-                    }
-                    0x5F => {
-                        self.cursor += 1;
-                        yystate = 1894;
+                        yystate = 1848;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
@@ -38169,13 +38088,25 @@ impl<'a> Iterator for Lexer<'a> {
             1884 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x3F => {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8A |
+                    0x8C ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1848;
+                        continue 'yyl;
+                    }
+                    0x88 => {
                         self.cursor += 1;
                         yystate = 1895;
                         continue 'yyl;
                     }
+                    0x8B => {
+                        self.cursor += 1;
+                        yystate = 1896;
+                        continue 'yyl;
+                    }
                     _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
@@ -38183,25 +38114,35 @@ impl<'a> Iterator for Lexer<'a> {
             1885 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x2E => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1896;
-                        continue 'yyl;
-                    }
-                    0x2F => {
-                        self.cursor += 1;
-                        yystate = 1897;
+                        yystate = 1883;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
             }
             1886 => {
-                yyaccept = 3;
-                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x30 ..= 0x39 => {
+                        self.yyt2 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1897;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1874;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1887 => { emit!(BrokenQuestion); },
+            1888 => { emit!(QuotedPeriodSimple); },
+            1889 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
@@ -38210,51 +38151,7 @@ impl<'a> Iterator for Lexer<'a> {
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1887;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1887 => { emit!(BreakForCoding); },
-            1888 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1899;
-                        continue 'yyl;
-                    }
-                    0x2F => {
-                        self.cursor += 1;
-                        yystate = 1900;
-                        continue 'yyl;
-                    }
-                    0x3F => {
-                        self.cursor += 1;
-                        yystate = 1901;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1889 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 => {
-                        self.cursor += 1;
-                        yystate = 1889;
-                        continue 'yyl;
-                    }
-                    0x7C => {
-                        self.cursor += 1;
-                        yystate = 1890;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
@@ -38262,211 +38159,111 @@ impl<'a> Iterator for Lexer<'a> {
             1890 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x30 ..= 0x39 => {
-                        self.yyt1 = self.cursor;
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1899;
+                        continue 'yyl;
+                    }
+                    0x3F => {
+                        self.cursor += 1;
+                        yystate = 1900;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1874;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1891 => { emit!(Interruption); },
+            1892 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1901;
+                        continue 'yyl;
+                    }
+                    0x3F => {
                         self.cursor += 1;
                         yystate = 1902;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
             }
-            1891 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1856;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1892 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8A |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1856;
-                        continue 'yyl;
-                    }
-                    0x88 => {
-                        self.cursor += 1;
-                        yystate = 1903;
-                        continue 'yyl;
-                    }
-                    0x8B => {
-                        self.cursor += 1;
-                        yystate = 1904;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1893 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1891;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
-                        continue 'yyl;
-                    }
-                }
-            }
+            1893 => { emit!(InterruptedQuestion); },
             1894 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
-                        self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1905;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1895 => { emit!(BrokenQuestion); },
-            1896 => { emit!(QuotedPeriodSimple); },
-            1897 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1906;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1898 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1907;
-                        continue 'yyl;
-                    }
-                    0x3F => {
-                        self.cursor += 1;
-                        yystate = 1908;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1899 => { emit!(Interruption); },
-            1900 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1909;
-                        continue 'yyl;
-                    }
-                    0x3F => {
-                        self.cursor += 1;
-                        yystate = 1910;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1882;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1901 => { emit!(InterruptedQuestion); },
-            1902 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 => {
-                        self.cursor += 1;
-                        yystate = 1902;
+                        yystate = 1894;
                         continue 'yyl;
                     }
                     0x7C => {
                         self.cursor += 1;
-                        yystate = 1911;
+                        yystate = 1903;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
             }
-            1903 => { emit!(CaNoBreak); },
-            1904 => { emit!(CaTechnicalBreak); },
-            1905 => {
+            1895 => { emit!(CaNoBreak); },
+            1896 => { emit!(CaTechnicalBreak); },
+            1897 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1912;
+                        yystate = 1904;
                         continue 'yyl;
                     }
                     0x2D => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1913;
+                        yystate = 1905;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1905;
+                        yystate = 1897;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
             }
-            1906 => { emit!(QuotedNewLine); },
-            1907 => { emit!(TrailingOff); },
-            1908 => { emit!(TrailingOffQuestion); },
-            1909 => { emit!(SelfInterruption); },
-            1910 => { emit!(SelfInterruptedQuestion); },
-            1911 => {
+            1898 => { emit!(QuotedNewLine); },
+            1899 => { emit!(TrailingOff); },
+            1900 => { emit!(TrailingOffQuestion); },
+            1901 => { emit!(SelfInterruption); },
+            1902 => { emit!(SelfInterruptedQuestion); },
+            1903 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x41 ..= 0x5A => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1914;
+                        yystate = 1906;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
             }
-            1912 => {
+            1904 => {
                 self.t1 = self.yyt1;
                 self.t3 = self.yyt2;
                 self.t4 = self.yyt3;
@@ -38481,37 +38278,37 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            1913 => {
+            1905 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
-                        yystate = 1912;
+                        yystate = 1904;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1882;
+                        yystate = 1874;
                         continue 'yyl;
                     }
                 }
             }
-            1914 => {
+            1906 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2D |
                     0x30 ..= 0x39 |
                     0x41 ..= 0x5A => {
                         self.cursor += 1;
-                        yystate = 1914;
+                        yystate = 1906;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1915;
+                        yystate = 1907;
                         continue 'yyl;
                     }
                 }
             }
-            1915 => {
+            1907 => {
                 self.t2 = self.yyt1;
                 self.t4 = self.yyt2;
                 self.t1 = self.yyt1;
@@ -38527,12 +38324,12 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            1916 => {
+            1908 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
-                        yystate = 1917;
+                        yystate = 1909;
                         continue 'yyl;
                     }
                     0x01 ..= 0x08 |
@@ -38548,7 +38345,7 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7B |
                     0x7D |
                     0x7F => {
-                        yystate = 1918;
+                        yystate = 1910;
                         continue 'yyl;
                     }
                     0x09 |
@@ -38560,84 +38357,84 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5B |
                     0x5D |
                     0x7C => {
-                        yystate = 1920;
+                        yystate = 1912;
                         continue 'yyl;
                     }
                     0x0A => {
-                        yystate = 1921;
+                        yystate = 1913;
                         continue 'yyl;
                     }
                     0x0D => {
-                        yystate = 1923;
+                        yystate = 1915;
                         continue 'yyl;
                     }
                     0x15 => {
-                        yystate = 1924;
+                        yystate = 1916;
                         continue 'yyl;
                     }
                     0x20 => {
-                        yystate = 1925;
+                        yystate = 1917;
                         continue 'yyl;
                     }
                     0x21 => {
-                        yystate = 1927;
+                        yystate = 1919;
                         continue 'yyl;
                     }
                     0x2B => {
-                        yystate = 1928;
+                        yystate = 1920;
                         continue 'yyl;
                     }
                     0x2E => {
-                        yystate = 1929;
+                        yystate = 1921;
                         continue 'yyl;
                     }
                     0x3F => {
-                        yystate = 1930;
+                        yystate = 1922;
                         continue 'yyl;
                     }
                     0x7E => {
-                        yystate = 1931;
+                        yystate = 1923;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
-                        yystate = 1934;
+                        yystate = 1926;
                         continue 'yyl;
                     }
                     0xE0 => {
-                        yystate = 1935;
+                        yystate = 1927;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
-                        yystate = 1936;
+                        yystate = 1928;
                         continue 'yyl;
                     }
                     0xE2 => {
-                        yystate = 1937;
+                        yystate = 1929;
                         continue 'yyl;
                     }
                     0xF0 => {
-                        yystate = 1938;
+                        yystate = 1930;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
-                        yystate = 1939;
+                        yystate = 1931;
                         continue 'yyl;
                     }
                     0xF4 => {
-                        yystate = 1940;
+                        yystate = 1932;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1932;
+                        yystate = 1924;
                         continue 'yyl;
                     }
                 }
             }
-            1917 => {
+            1909 => {
             return None;
         },
-            1918 => {
+            1910 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -38654,69 +38451,69 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7D |
                     0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1942;
+                        yystate = 1934;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1919;
+                        yystate = 1911;
                         continue 'yyl;
                     }
                 }
             }
-            1919 => { emit!(ErrorInMorContent); },
-            1920 => {
-                yystate = 1919;
+            1911 => { emit!(ErrorInMorContent); },
+            1912 => {
+                yystate = 1911;
                 continue 'yyl;
             }
-            1921 => {
+            1913 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 ..= 0x0A |
                     0x0D => {
-                        yystate = 1955;
+                        yystate = 1947;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1922;
+                        yystate = 1914;
                         continue 'yyl;
                     }
                 }
             }
-            1922 => {
+            1914 => {
                 self.condition = YYC_INITIAL;
                 {
             emit!(Newline);
         }
             }
-            1923 => {
+            1915 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
-                        yystate = 1952;
+                        yystate = 1944;
                         continue 'yyl;
                     }
                     0x0A => {
                         self.cursor += 1;
-                        yystate = 1921;
+                        yystate = 1913;
                         continue 'yyl;
                     }
                     0x0D => {
                         self.cursor += 1;
-                        yystate = 1954;
+                        yystate = 1946;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1922;
+                        yystate = 1914;
                         continue 'yyl;
                     }
                 }
             }
-            1924 => {
+            1916 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -38734,205 +38531,205 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7D |
                     0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1942;
+                        yystate = 1934;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
                         self.yyt1 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1956;
+                        yystate = 1948;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1919;
+                        yystate = 1911;
                         continue 'yyl;
                     }
                 }
             }
-            1925 => {
+            1917 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 1925;
+                        yystate = 1917;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1926;
+                        yystate = 1918;
                         continue 'yyl;
                     }
                 }
             }
-            1926 => { emit!(Whitespace); },
-            1927 => { emit!(Exclamation); },
-            1928 => {
+            1918 => { emit!(Whitespace); },
+            1919 => { emit!(Exclamation); },
+            1920 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
-                        yystate = 1957;
+                        yystate = 1949;
                         continue 'yyl;
                     }
                     0x22 => {
                         self.cursor += 1;
-                        yystate = 1958;
+                        yystate = 1950;
                         continue 'yyl;
                     }
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 1959;
+                        yystate = 1951;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 1961;
+                        yystate = 1953;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1919;
+                        yystate = 1911;
                         continue 'yyl;
                     }
                 }
             }
-            1929 => { emit!(Period); },
-            1930 => { emit!(Question); },
-            1931 => { emit!(MorTilde); },
-            1932 => {
-                yystate = 1933;
+            1921 => { emit!(Period); },
+            1922 => { emit!(Question); },
+            1923 => { emit!(MorTilde); },
+            1924 => {
+                yystate = 1925;
                 continue 'yyl;
             }
-            1933 => {
+            1925 => {
             emit!(ErrorUnrecognized);
         },
-            1934 => {
+            1926 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1918;
+                        yystate = 1910;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1933;
+                        yystate = 1925;
                         continue 'yyl;
                     }
                 }
             }
-            1935 => {
+            1927 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1962;
+                        yystate = 1954;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1933;
+                        yystate = 1925;
                         continue 'yyl;
                     }
                 }
             }
-            1936 => {
+            1928 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1962;
+                        yystate = 1954;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1933;
+                        yystate = 1925;
                         continue 'yyl;
                     }
                 }
             }
-            1937 => {
+            1929 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1963;
+                        yystate = 1955;
                         continue 'yyl;
                     }
                     0x81 ..= 0x88 |
                     0x8A ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1962;
+                        yystate = 1954;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 1964;
+                        yystate = 1956;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1933;
+                        yystate = 1925;
                         continue 'yyl;
                     }
                 }
             }
-            1938 => {
+            1930 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1965;
+                        yystate = 1957;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1933;
+                        yystate = 1925;
                         continue 'yyl;
                     }
                 }
             }
-            1939 => {
+            1931 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1965;
+                        yystate = 1957;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1933;
+                        yystate = 1925;
                         continue 'yyl;
                     }
                 }
             }
-            1940 => {
+            1932 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 1965;
+                        yystate = 1957;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1933;
+                        yystate = 1925;
                         continue 'yyl;
                     }
                 }
             }
-            1941 => {
+            1933 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 1942;
+                yystate = 1934;
                 continue 'yyl;
             }
-            1942 => {
+            1934 => {
                 match yych {
                     0x01 ..= 0x08 |
                     0x0B ..= 0x0C |
@@ -38947,94 +38744,94 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7D |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1941;
+                        yystate = 1933;
                         continue 'yyl;
                     }
                     0x7C => {
                         self.cursor += 1;
-                        yystate = 1944;
+                        yystate = 1936;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1945;
+                        yystate = 1937;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1946;
+                        yystate = 1938;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1947;
+                        yystate = 1939;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1948;
+                        yystate = 1940;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1949;
+                        yystate = 1941;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1950;
+                        yystate = 1942;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1951;
-                        continue 'yyl;
-                    }
-                    _ => {
                         yystate = 1943;
                         continue 'yyl;
                     }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
                 }
             }
-            1943 => {
+            1935 => {
                 self.cursor = self.marker;
                 match yyaccept {
                     0 => {
-                        yystate = 1919;
+                        yystate = 1911;
                         continue 'yyl;
                     }
                     1 => {
-                        yystate = 1922;
+                        yystate = 1914;
                         continue 'yyl;
                     }
                     2 => {
-                        yystate = 1933;
+                        yystate = 1925;
                         continue 'yyl;
                     }
                     3 => {
-                        yystate = 1960;
+                        yystate = 1952;
                         continue 'yyl;
                     }
                     4 => {
-                        yystate = 1967;
+                        yystate = 1959;
                         continue 'yyl;
                     }
                     5 => {
-                        yystate = 1985;
+                        yystate = 1977;
                         continue 'yyl;
                     }
                     6 => {
-                        yystate = 1987;
+                        yystate = 1979;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1997;
+                        yystate = 1989;
                         continue 'yyl;
                     }
                 }
             }
-            1944 => {
+            1936 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
@@ -39052,203 +38849,203 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7F => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1966;
+                        yystate = 1958;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1968;
+                        yystate = 1960;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1969;
+                        yystate = 1961;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1970;
+                        yystate = 1962;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1971;
+                        yystate = 1963;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1972;
+                        yystate = 1964;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1973;
+                        yystate = 1965;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.yyt4 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1974;
+                        yystate = 1966;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1937 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1933;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1938 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1937;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1939 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1937;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1940 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 => {
+                        self.cursor += 1;
+                        yystate = 1967;
+                        continue 'yyl;
+                    }
+                    0x81 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1937;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1941 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1939;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1942 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1939;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1943 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 1939;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1944 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x20 => {
+                        self.cursor += 1;
+                        yystate = 1944;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1945;
                         continue 'yyl;
                     }
                 }
             }
             1945 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1941;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1946 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1945;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1947 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1945;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1948 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 => {
-                        self.cursor += 1;
-                        yystate = 1975;
-                        continue 'yyl;
-                    }
-                    0x81 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1945;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1949 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1947;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1950 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1947;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1951 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 1947;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1952 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x20 => {
-                        self.cursor += 1;
-                        yystate = 1952;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1953;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1953 => {
             emit!(Continuation);
         },
-            1954 => {
+            1946 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 1955;
+                yystate = 1947;
                 continue 'yyl;
             }
-            1955 => {
+            1947 => {
                 match yych {
                     0x09 => {
                         self.cursor += 1;
-                        yystate = 1952;
+                        yystate = 1944;
                         continue 'yyl;
                     }
                     0x0A |
                     0x0D => {
                         self.cursor += 1;
-                        yystate = 1954;
+                        yystate = 1946;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1956 => {
+            1948 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
@@ -39266,62 +39063,196 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7D |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1941;
+                        yystate = 1933;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1956;
+                        yystate = 1948;
                         continue 'yyl;
                     }
                     0x5F => {
                         self.cursor += 1;
-                        yystate = 1976;
+                        yystate = 1968;
                         continue 'yyl;
                     }
                     0x7C => {
                         self.cursor += 1;
-                        yystate = 1944;
+                        yystate = 1936;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1945;
+                        yystate = 1937;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1946;
+                        yystate = 1938;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1947;
+                        yystate = 1939;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1948;
+                        yystate = 1940;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1949;
+                        yystate = 1941;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1950;
+                        yystate = 1942;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1951;
+                        yystate = 1943;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1949 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x3F => {
+                        self.cursor += 1;
+                        yystate = 1969;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1950 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1970;
+                        continue 'yyl;
+                    }
+                    0x2F => {
+                        self.cursor += 1;
+                        yystate = 1971;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1951 => {
+                yyaccept = 3;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1972;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1952;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1952 => { emit!(BreakForCoding); },
+            1953 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1973;
+                        continue 'yyl;
+                    }
+                    0x2F => {
+                        self.cursor += 1;
+                        yystate = 1974;
+                        continue 'yyl;
+                    }
+                    0x3F => {
+                        self.cursor += 1;
+                        yystate = 1975;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1954 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1910;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1955 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x9B |
+                    0x9E ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1910;
+                        continue 'yyl;
+                    }
+                    0x9C ..= 0x9D => {
+                        self.cursor += 1;
+                        yystate = 1912;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1956 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x87 |
+                    0x89 ..= 0x8A |
+                    0x8C ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1910;
+                        continue 'yyl;
+                    }
+                    0x88 => {
+                        self.cursor += 1;
+                        yystate = 1976;
+                        continue 'yyl;
+                    }
+                    0x8B => {
+                        self.cursor += 1;
+                        yystate = 1978;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
@@ -39329,152 +39260,18 @@ impl<'a> Iterator for Lexer<'a> {
             1957 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x3F => {
+                    0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1977;
+                        yystate = 1954;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
             1958 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1978;
-                        continue 'yyl;
-                    }
-                    0x2F => {
-                        self.cursor += 1;
-                        yystate = 1979;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1959 => {
-                yyaccept = 3;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1980;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1960;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1960 => { emit!(BreakForCoding); },
-            1961 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1981;
-                        continue 'yyl;
-                    }
-                    0x2F => {
-                        self.cursor += 1;
-                        yystate = 1982;
-                        continue 'yyl;
-                    }
-                    0x3F => {
-                        self.cursor += 1;
-                        yystate = 1983;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1962 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1918;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1963 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x9B |
-                    0x9E ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1918;
-                        continue 'yyl;
-                    }
-                    0x9C ..= 0x9D => {
-                        self.cursor += 1;
-                        yystate = 1920;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1964 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x87 |
-                    0x89 ..= 0x8A |
-                    0x8C ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1918;
-                        continue 'yyl;
-                    }
-                    0x88 => {
-                        self.cursor += 1;
-                        yystate = 1984;
-                        continue 'yyl;
-                    }
-                    0x8B => {
-                        self.cursor += 1;
-                        yystate = 1986;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1965 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1962;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1966 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -39489,51 +39286,51 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7D |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1966;
+                        yystate = 1958;
                         continue 'yyl;
                     }
                     0x2D => {
                         self.cursor += 1;
-                        yystate = 1988;
+                        yystate = 1980;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1968;
+                        yystate = 1960;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1969;
+                        yystate = 1961;
                         continue 'yyl;
                     }
                     0xE1 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1970;
+                        yystate = 1962;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1972;
+                        yystate = 1964;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1973;
+                        yystate = 1965;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1974;
+                        yystate = 1966;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1967;
+                        yystate = 1959;
                         continue 'yyl;
                     }
                 }
             }
-            1967 => {
+            1959 => {
                 self.t2 = self.yyt4;
                 self.t1 = self.yyt4;
                 self.t1 = (self.t1 as isize + -1) as usize;
@@ -39545,63 +39342,151 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            1968 => {
+            1960 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1966;
+                        yystate = 1958;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1969 => {
+            1961 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1968;
+                        yystate = 1960;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1970 => {
+            1962 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1968;
+                        yystate = 1960;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1971 => {
+            1963 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 1989;
+                        yystate = 1981;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1968;
+                        yystate = 1960;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1964 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1962;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1965 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1962;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1966 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 1962;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1967 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x9B |
+                    0x9E ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1933;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1968 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x30 ..= 0x39 => {
+                        self.yyt2 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 1982;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1934;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1969 => { emit!(BrokenQuestion); },
+            1970 => { emit!(QuotedPeriodSimple); },
+            1971 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x2E => {
+                        self.cursor += 1;
+                        yystate = 1983;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
@@ -39609,132 +39494,44 @@ impl<'a> Iterator for Lexer<'a> {
             1972 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x90 ..= 0xBF => {
+                    0x2E => {
                         self.cursor += 1;
-                        yystate = 1970;
+                        yystate = 1984;
+                        continue 'yyl;
+                    }
+                    0x3F => {
+                        self.cursor += 1;
+                        yystate = 1985;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1973 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1970;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
+            1973 => { emit!(Interruption); },
             1974 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0x8F => {
+                    0x2E => {
                         self.cursor += 1;
-                        yystate = 1970;
+                        yystate = 1986;
+                        continue 'yyl;
+                    }
+                    0x3F => {
+                        self.cursor += 1;
+                        yystate = 1987;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1975 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x9B |
-                    0x9E ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 1941;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
+            1975 => { emit!(InterruptedQuestion); },
             1976 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 => {
-                        self.yyt2 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 1990;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1942;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1977 => { emit!(BrokenQuestion); },
-            1978 => { emit!(QuotedPeriodSimple); },
-            1979 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1991;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1980 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1992;
-                        continue 'yyl;
-                    }
-                    0x3F => {
-                        self.cursor += 1;
-                        yystate = 1993;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1981 => { emit!(Interruption); },
-            1982 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x2E => {
-                        self.cursor += 1;
-                        yystate = 1994;
-                        continue 'yyl;
-                    }
-                    0x3F => {
-                        self.cursor += 1;
-                        yystate = 1995;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 1943;
-                        continue 'yyl;
-                    }
-                }
-            }
-            1983 => { emit!(InterruptedQuestion); },
-            1984 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -39751,17 +39548,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7D |
                     0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1942;
+                        yystate = 1934;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1985;
+                        yystate = 1977;
                         continue 'yyl;
                     }
                 }
             }
-            1985 => { emit!(CaNoBreak); },
-            1986 => {
+            1977 => { emit!(CaNoBreak); },
+            1978 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -39778,17 +39575,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7D |
                     0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1942;
+                        yystate = 1934;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1987;
+                        yystate = 1979;
                         continue 'yyl;
                     }
                 }
             }
-            1987 => { emit!(CaTechnicalBreak); },
-            1988 => {
+            1979 => { emit!(CaTechnicalBreak); },
+            1980 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
@@ -39801,61 +39598,61 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7D |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1966;
+                        yystate = 1958;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1968;
+                        yystate = 1960;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1969;
+                        yystate = 1961;
                         continue 'yyl;
                     }
                     0xE1 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1970;
+                        yystate = 1962;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1972;
+                        yystate = 1964;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1973;
+                        yystate = 1965;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1974;
+                        yystate = 1966;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1989 => {
+            1981 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x9B |
                     0x9E ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 1966;
+                        yystate = 1958;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1990 => {
+            1982 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x01 ..= 0x08 |
@@ -39873,79 +39670,79 @@ impl<'a> Iterator for Lexer<'a> {
                     0x7D |
                     0x7F => {
                         self.cursor += 1;
-                        yystate = 1941;
+                        yystate = 1933;
                         continue 'yyl;
                     }
                     0x15 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1996;
+                        yystate = 1988;
                         continue 'yyl;
                     }
                     0x2D => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 1998;
+                        yystate = 1990;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 1990;
+                        yystate = 1982;
                         continue 'yyl;
                     }
                     0x7C => {
                         self.cursor += 1;
-                        yystate = 1944;
+                        yystate = 1936;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
                         self.cursor += 1;
-                        yystate = 1945;
+                        yystate = 1937;
                         continue 'yyl;
                     }
                     0xE0 => {
                         self.cursor += 1;
-                        yystate = 1946;
+                        yystate = 1938;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
                         self.cursor += 1;
-                        yystate = 1947;
+                        yystate = 1939;
                         continue 'yyl;
                     }
                     0xE2 => {
                         self.cursor += 1;
-                        yystate = 1948;
+                        yystate = 1940;
                         continue 'yyl;
                     }
                     0xF0 => {
                         self.cursor += 1;
-                        yystate = 1949;
+                        yystate = 1941;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
                         self.cursor += 1;
-                        yystate = 1950;
+                        yystate = 1942;
                         continue 'yyl;
                     }
                     0xF4 => {
                         self.cursor += 1;
-                        yystate = 1951;
+                        yystate = 1943;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1991 => { emit!(QuotedNewLine); },
-            1992 => { emit!(TrailingOff); },
-            1993 => { emit!(TrailingOffQuestion); },
-            1994 => { emit!(SelfInterruption); },
-            1995 => { emit!(SelfInterruptedQuestion); },
-            1996 => {
+            1983 => { emit!(QuotedNewLine); },
+            1984 => { emit!(TrailingOff); },
+            1985 => { emit!(TrailingOffQuestion); },
+            1986 => { emit!(SelfInterruption); },
+            1987 => { emit!(SelfInterruptedQuestion); },
+            1988 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -39962,16 +39759,16 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5E ..= 0x7D |
                     0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 1942;
+                        yystate = 1934;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1997;
+                        yystate = 1989;
                         continue 'yyl;
                     }
                 }
             }
-            1997 => {
+            1989 => {
                 self.t1 = self.yyt1;
                 self.t3 = self.yyt2;
                 self.t4 = self.yyt3;
@@ -39986,30 +39783,30 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            1998 => {
+            1990 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
-                        yystate = 1999;
+                        yystate = 1991;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 1943;
+                        yystate = 1935;
                         continue 'yyl;
                     }
                 }
             }
-            1999 => {
-                yystate = 1997;
+            1991 => {
+                yystate = 1989;
                 continue 'yyl;
             }
-            2000 => {
+            1992 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
-                        yystate = 2001;
+                        yystate = 1993;
                         continue 'yyl;
                     }
                     0x01 ..= 0x09 |
@@ -40020,188 +39817,64 @@ impl<'a> Iterator for Lexer<'a> {
                     0x2C ..= 0x2D |
                     0x2F ..= 0x3E |
                     0x40 ..= 0x7F => {
-                        yystate = 2002;
+                        yystate = 1994;
                         continue 'yyl;
                     }
                     0x0A => {
-                        yystate = 2005;
+                        yystate = 1997;
                         continue 'yyl;
                     }
                     0x0D => {
-                        yystate = 2007;
+                        yystate = 1999;
                         continue 'yyl;
                     }
                     0x15 => {
-                        yystate = 2008;
+                        yystate = 2000;
                         continue 'yyl;
                     }
                     0x21 => {
-                        yystate = 2010;
+                        yystate = 2002;
                         continue 'yyl;
                     }
                     0x2B => {
-                        yystate = 2012;
+                        yystate = 2004;
                         continue 'yyl;
                     }
                     0x2E => {
-                        yystate = 2013;
+                        yystate = 2005;
                         continue 'yyl;
                     }
                     0x3F => {
-                        yystate = 2015;
+                        yystate = 2007;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
-                        yystate = 2019;
+                        yystate = 2011;
                         continue 'yyl;
                     }
                     0xE0 => {
-                        yystate = 2020;
+                        yystate = 2012;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
-                        yystate = 2021;
+                        yystate = 2013;
                         continue 'yyl;
                     }
                     0xE2 => {
-                        yystate = 2022;
+                        yystate = 2014;
                         continue 'yyl;
                     }
                     0xF0 => {
-                        yystate = 2023;
+                        yystate = 2015;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
-                        yystate = 2024;
+                        yystate = 2016;
                         continue 'yyl;
                     }
                     0xF4 => {
-                        yystate = 2025;
-                        continue 'yyl;
-                    }
-                    _ => {
                         yystate = 2017;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2001 => {
-            return None;
-        },
-            2002 => {
-                yyaccept = 0;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 2003;
-                continue 'yyl;
-            }
-            2003 => {
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x7F => {
-                        self.cursor += 1;
-                        yystate = 2002;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.cursor += 1;
-                        yystate = 2026;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.cursor += 1;
-                        yystate = 2028;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.cursor += 1;
-                        yystate = 2029;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.cursor += 1;
-                        yystate = 2030;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.cursor += 1;
-                        yystate = 2031;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.cursor += 1;
-                        yystate = 2032;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2004;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2004 => {
-            emit!(TextSegment);
-        },
-            2005 => {
-                yyaccept = 1;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x09 ..= 0x0A |
-                    0x0D => {
-                        yystate = 2036;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2006;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2006 => {
-                self.condition = YYC_INITIAL;
-                {
-            emit!(Newline);
-        }
-            }
-            2007 => {
-                yyaccept = 1;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x09 => {
-                        self.cursor += 1;
-                        yystate = 2033;
-                        continue 'yyl;
-                    }
-                    0x0A => {
-                        self.cursor += 1;
-                        yystate = 2005;
-                        continue 'yyl;
-                    }
-                    0x0D => {
-                        self.cursor += 1;
-                        yystate = 2035;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2006;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2008 => {
-                yyaccept = 2;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 2037;
                         continue 'yyl;
                     }
                     _ => {
@@ -40210,8 +39883,132 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            2009 => { emit!(ErrorInTierContent); },
-            2010 => {
+            1993 => {
+            return None;
+        },
+            1994 => {
+                yyaccept = 0;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                yystate = 1995;
+                continue 'yyl;
+            }
+            1995 => {
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x7F => {
+                        self.cursor += 1;
+                        yystate = 1994;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.cursor += 1;
+                        yystate = 2018;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.cursor += 1;
+                        yystate = 2020;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.cursor += 1;
+                        yystate = 2021;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.cursor += 1;
+                        yystate = 2022;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.cursor += 1;
+                        yystate = 2023;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.cursor += 1;
+                        yystate = 2024;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1996;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1996 => {
+            emit!(TextSegment);
+        },
+            1997 => {
+                yyaccept = 1;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x09 ..= 0x0A |
+                    0x0D => {
+                        yystate = 2028;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1998;
+                        continue 'yyl;
+                    }
+                }
+            }
+            1998 => {
+                self.condition = YYC_INITIAL;
+                {
+            emit!(Newline);
+        }
+            }
+            1999 => {
+                yyaccept = 1;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x09 => {
+                        self.cursor += 1;
+                        yystate = 2025;
+                        continue 'yyl;
+                    }
+                    0x0A => {
+                        self.cursor += 1;
+                        yystate = 1997;
+                        continue 'yyl;
+                    }
+                    0x0D => {
+                        self.cursor += 1;
+                        yystate = 2027;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 1998;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2000 => {
+                yyaccept = 2;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x30 ..= 0x39 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 2029;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2001;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2001 => { emit!(ErrorInTierContent); },
+            2002 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40221,48 +40018,48 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2011;
+                        yystate = 2003;
                         continue 'yyl;
                     }
                 }
             }
-            2011 => { emit!(Exclamation); },
-            2012 => {
+            2003 => { emit!(Exclamation); },
+            2004 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
-                        yystate = 2038;
+                        yystate = 2030;
                         continue 'yyl;
                     }
                     0x22 => {
                         self.cursor += 1;
-                        yystate = 2039;
+                        yystate = 2031;
                         continue 'yyl;
                     }
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2040;
+                        yystate = 2032;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 2042;
+                        yystate = 2034;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                 }
             }
-            2013 => {
+            2005 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40272,17 +40069,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2014;
+                        yystate = 2006;
                         continue 'yyl;
                     }
                 }
             }
-            2014 => { emit!(Period); },
-            2015 => {
+            2006 => { emit!(Period); },
+            2007 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40292,70 +40089,70 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2016;
+                        yystate = 2008;
                         continue 'yyl;
                     }
                 }
             }
-            2016 => { emit!(Question); },
-            2017 => {
-                yystate = 2018;
+            2008 => { emit!(Question); },
+            2009 => {
+                yystate = 2010;
                 continue 'yyl;
             }
-            2018 => {
+            2010 => {
             emit!(ErrorUnrecognized);
         },
-            2019 => {
+            2011 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2002;
+                        yystate = 1994;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2018;
+                        yystate = 2010;
                         continue 'yyl;
                     }
                 }
             }
-            2020 => {
+            2012 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2026;
+                        yystate = 2018;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2018;
+                        yystate = 2010;
                         continue 'yyl;
                     }
                 }
             }
-            2021 => {
+            2013 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2026;
+                        yystate = 2018;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2018;
+                        yystate = 2010;
                         continue 'yyl;
                     }
                 }
             }
-            2022 => {
+            2014 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40363,173 +40160,270 @@ impl<'a> Iterator for Lexer<'a> {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2026;
+                        yystate = 2018;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 2043;
+                        yystate = 2035;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2018;
+                        yystate = 2010;
                         continue 'yyl;
                     }
                 }
             }
-            2023 => {
+            2015 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2029;
+                        yystate = 2021;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2018;
+                        yystate = 2010;
                         continue 'yyl;
                     }
                 }
             }
-            2024 => {
+            2016 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2029;
+                        yystate = 2021;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2018;
+                        yystate = 2010;
                         continue 'yyl;
                     }
                 }
             }
-            2025 => {
+            2017 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 2029;
+                        yystate = 2021;
                         continue 'yyl;
                     }
                     _ => {
+                        yystate = 2010;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2018 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 1994;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2019;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2019 => {
+                self.cursor = self.marker;
+                match yyaccept {
+                    0 => {
+                        yystate = 1996;
+                        continue 'yyl;
+                    }
+                    1 => {
+                        yystate = 1998;
+                        continue 'yyl;
+                    }
+                    2 => {
+                        yystate = 2001;
+                        continue 'yyl;
+                    }
+                    3 => {
+                        yystate = 2003;
+                        continue 'yyl;
+                    }
+                    4 => {
+                        yystate = 2006;
+                        continue 'yyl;
+                    }
+                    5 => {
+                        yystate = 2008;
+                        continue 'yyl;
+                    }
+                    6 => {
+                        yystate = 2010;
+                        continue 'yyl;
+                    }
+                    7 => {
+                        yystate = 2033;
+                        continue 'yyl;
+                    }
+                    8 => {
+                        yystate = 2038;
+                        continue 'yyl;
+                    }
+                    9 => {
+                        yystate = 2040;
+                        continue 'yyl;
+                    }
+                    10 => {
+                        yystate = 2044;
+                        continue 'yyl;
+                    }
+                    11 => {
+                        yystate = 2047;
+                        continue 'yyl;
+                    }
+                    12 => {
+                        yystate = 2049;
+                        continue 'yyl;
+                    }
+                    13 => {
+                        yystate = 2051;
+                        continue 'yyl;
+                    }
+                    14 => {
+                        yystate = 2054;
+                        continue 'yyl;
+                    }
+                    15 => {
+                        yystate = 2056;
+                        continue 'yyl;
+                    }
+                    16 => {
+                        yystate = 2058;
+                        continue 'yyl;
+                    }
+                    17 => {
+                        yystate = 2060;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2062;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2020 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
                         yystate = 2018;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2019;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2021 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2018;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2019;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2022 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2021;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2019;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2023 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2021;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2019;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2024 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 2021;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2019;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2025 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x20 => {
+                        self.cursor += 1;
+                        yystate = 2025;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2026;
                         continue 'yyl;
                     }
                 }
             }
             2026 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2002;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2027;
-                        continue 'yyl;
-                    }
-                }
-            }
+            emit!(Continuation);
+        },
             2027 => {
-                self.cursor = self.marker;
-                match yyaccept {
-                    0 => {
-                        yystate = 2004;
-                        continue 'yyl;
-                    }
-                    1 => {
-                        yystate = 2006;
-                        continue 'yyl;
-                    }
-                    2 => {
-                        yystate = 2009;
-                        continue 'yyl;
-                    }
-                    3 => {
-                        yystate = 2011;
-                        continue 'yyl;
-                    }
-                    4 => {
-                        yystate = 2014;
-                        continue 'yyl;
-                    }
-                    5 => {
-                        yystate = 2016;
-                        continue 'yyl;
-                    }
-                    6 => {
-                        yystate = 2018;
-                        continue 'yyl;
-                    }
-                    7 => {
-                        yystate = 2041;
-                        continue 'yyl;
-                    }
-                    8 => {
-                        yystate = 2046;
-                        continue 'yyl;
-                    }
-                    9 => {
-                        yystate = 2048;
-                        continue 'yyl;
-                    }
-                    10 => {
-                        yystate = 2052;
-                        continue 'yyl;
-                    }
-                    11 => {
-                        yystate = 2055;
-                        continue 'yyl;
-                    }
-                    12 => {
-                        yystate = 2057;
-                        continue 'yyl;
-                    }
-                    13 => {
-                        yystate = 2059;
-                        continue 'yyl;
-                    }
-                    14 => {
-                        yystate = 2062;
-                        continue 'yyl;
-                    }
-                    15 => {
-                        yystate = 2064;
-                        continue 'yyl;
-                    }
-                    16 => {
-                        yystate = 2066;
-                        continue 'yyl;
-                    }
-                    17 => {
-                        yystate = 2068;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2070;
-                        continue 'yyl;
-                    }
-                }
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                yystate = 2028;
+                continue 'yyl;
             }
             2028 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0xA0 ..= 0xBF => {
+                    0x09 => {
                         self.cursor += 1;
-                        yystate = 2026;
+                        yystate = 2025;
+                        continue 'yyl;
+                    }
+                    0x0A |
+                    0x0D => {
+                        self.cursor += 1;
+                        yystate = 2027;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2027;
+                        yystate = 2019;
                         continue 'yyl;
                     }
                 }
@@ -40537,157 +40431,60 @@ impl<'a> Iterator for Lexer<'a> {
             2029 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 2026;
+                        yystate = 2029;
+                        continue 'yyl;
+                    }
+                    0x5F => {
+                        self.cursor += 1;
+                        yystate = 2036;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2027;
+                        yystate = 2019;
                         continue 'yyl;
                     }
                 }
             }
             2030 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2029;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2027;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2031 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2029;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2027;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2032 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 2029;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2027;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2033 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x20 => {
-                        self.cursor += 1;
-                        yystate = 2033;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2034;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2034 => {
-            emit!(Continuation);
-        },
-            2035 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 2036;
-                continue 'yyl;
-            }
-            2036 => {
-                match yych {
-                    0x09 => {
-                        self.cursor += 1;
-                        yystate = 2033;
-                        continue 'yyl;
-                    }
-                    0x0A |
-                    0x0D => {
-                        self.cursor += 1;
-                        yystate = 2035;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2027;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2037 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 => {
-                        self.cursor += 1;
-                        yystate = 2037;
-                        continue 'yyl;
-                    }
-                    0x5F => {
-                        self.cursor += 1;
-                        yystate = 2044;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2027;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2038 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 2045;
+                        yystate = 2037;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                 }
             }
-            2039 => {
+            2031 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2047;
+                        yystate = 2039;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 2049;
+                        yystate = 2041;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                 }
             }
-            2040 => {
+            2032 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40698,89 +40495,89 @@ impl<'a> Iterator for Lexer<'a> {
                     0x16 ..= 0x2D |
                     0x2F ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2050;
+                        yystate = 2042;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2041;
+                        yystate = 2033;
                         continue 'yyl;
                     }
                 }
             }
-            2041 => { emit!(BreakForCoding); },
-            2042 => {
+            2033 => { emit!(BreakForCoding); },
+            2034 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2051;
+                        yystate = 2043;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 2053;
+                        yystate = 2045;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 2054;
+                        yystate = 2046;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                 }
             }
-            2043 => {
+            2035 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
                     0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2002;
+                        yystate = 1994;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 2056;
+                        yystate = 2048;
                         continue 'yyl;
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 2058;
+                        yystate = 2050;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2027;
+                        yystate = 2019;
                         continue 'yyl;
                     }
                 }
             }
-            2044 => {
+            2036 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 2060;
+                        yystate = 2052;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2027;
+                        yystate = 2019;
                         continue 'yyl;
                     }
                 }
             }
-            2045 => {
+            2037 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40790,17 +40587,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2046;
+                        yystate = 2038;
                         continue 'yyl;
                     }
                 }
             }
-            2046 => { emit!(BrokenQuestion); },
-            2047 => {
+            2038 => { emit!(BrokenQuestion); },
+            2039 => {
                 yyaccept = 9;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40810,54 +40607,54 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2048;
+                        yystate = 2040;
                         continue 'yyl;
                     }
                 }
             }
-            2048 => { emit!(QuotedPeriodSimple); },
-            2049 => {
+            2040 => { emit!(QuotedPeriodSimple); },
+            2041 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2061;
+                        yystate = 2053;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                 }
             }
-            2050 => {
+            2042 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2063;
+                        yystate = 2055;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 2065;
+                        yystate = 2057;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                 }
             }
-            2051 => {
+            2043 => {
                 yyaccept = 10;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40867,38 +40664,38 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2052;
+                        yystate = 2044;
                         continue 'yyl;
                     }
                 }
             }
-            2052 => { emit!(Interruption); },
-            2053 => {
+            2044 => { emit!(Interruption); },
+            2045 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2067;
+                        yystate = 2059;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 2069;
+                        yystate = 2061;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                 }
             }
-            2054 => {
+            2046 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40908,17 +40705,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2055;
+                        yystate = 2047;
                         continue 'yyl;
                     }
                 }
             }
-            2055 => { emit!(InterruptedQuestion); },
-            2056 => {
+            2047 => { emit!(InterruptedQuestion); },
+            2048 => {
                 yyaccept = 12;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40928,17 +40725,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2057;
+                        yystate = 2049;
                         continue 'yyl;
                     }
                 }
             }
-            2057 => { emit!(CaNoBreak); },
-            2058 => {
+            2049 => { emit!(CaNoBreak); },
+            2050 => {
                 yyaccept = 13;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40948,43 +40745,43 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2059;
+                        yystate = 2051;
                         continue 'yyl;
                     }
                 }
             }
-            2059 => { emit!(CaTechnicalBreak); },
-            2060 => {
+            2051 => { emit!(CaTechnicalBreak); },
+            2052 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 2071;
+                        yystate = 2063;
                         continue 'yyl;
                     }
                     0x2D => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 2072;
+                        yystate = 2064;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 2060;
+                        yystate = 2052;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2027;
+                        yystate = 2019;
                         continue 'yyl;
                     }
                 }
             }
-            2061 => {
+            2053 => {
                 yyaccept = 14;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -40994,17 +40791,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2062;
+                        yystate = 2054;
                         continue 'yyl;
                     }
                 }
             }
-            2062 => { emit!(QuotedNewLine); },
-            2063 => {
+            2054 => { emit!(QuotedNewLine); },
+            2055 => {
                 yyaccept = 15;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41014,17 +40811,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2064;
+                        yystate = 2056;
                         continue 'yyl;
                     }
                 }
             }
-            2064 => { emit!(TrailingOff); },
-            2065 => {
+            2056 => { emit!(TrailingOff); },
+            2057 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41034,17 +40831,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2066;
+                        yystate = 2058;
                         continue 'yyl;
                     }
                 }
             }
-            2066 => { emit!(TrailingOffQuestion); },
-            2067 => {
+            2058 => { emit!(TrailingOffQuestion); },
+            2059 => {
                 yyaccept = 17;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41054,17 +40851,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2068;
+                        yystate = 2060;
                         continue 'yyl;
                     }
                 }
             }
-            2068 => { emit!(SelfInterruption); },
-            2069 => {
+            2060 => { emit!(SelfInterruption); },
+            2061 => {
                 yyaccept = 18;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41074,17 +40871,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2003;
+                        yystate = 1995;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2070;
+                        yystate = 2062;
                         continue 'yyl;
                     }
                 }
             }
-            2070 => { emit!(SelfInterruptedQuestion); },
-            2071 => {
+            2062 => { emit!(SelfInterruptedQuestion); },
+            2063 => {
                 self.t1 = self.yyt1;
                 self.t3 = self.yyt2;
                 self.t4 = self.yyt3;
@@ -41099,26 +40896,26 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            2072 => {
+            2064 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
-                        yystate = 2071;
+                        yystate = 2063;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2027;
+                        yystate = 2019;
                         continue 'yyl;
                     }
                 }
             }
-            2073 => {
+            2065 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
-                        yystate = 2074;
+                        yystate = 2066;
                         continue 'yyl;
                     }
                     0x01 ..= 0x09 |
@@ -41129,188 +40926,64 @@ impl<'a> Iterator for Lexer<'a> {
                     0x2C ..= 0x2D |
                     0x2F ..= 0x3E |
                     0x40 ..= 0x7F => {
-                        yystate = 2075;
+                        yystate = 2067;
                         continue 'yyl;
                     }
                     0x0A => {
-                        yystate = 2078;
+                        yystate = 2070;
                         continue 'yyl;
                     }
                     0x0D => {
-                        yystate = 2080;
+                        yystate = 2072;
                         continue 'yyl;
                     }
                     0x15 => {
-                        yystate = 2081;
+                        yystate = 2073;
                         continue 'yyl;
                     }
                     0x21 => {
-                        yystate = 2083;
+                        yystate = 2075;
                         continue 'yyl;
                     }
                     0x2B => {
-                        yystate = 2085;
+                        yystate = 2077;
                         continue 'yyl;
                     }
                     0x2E => {
-                        yystate = 2086;
+                        yystate = 2078;
                         continue 'yyl;
                     }
                     0x3F => {
-                        yystate = 2088;
+                        yystate = 2080;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
-                        yystate = 2092;
+                        yystate = 2084;
                         continue 'yyl;
                     }
                     0xE0 => {
-                        yystate = 2093;
+                        yystate = 2085;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
-                        yystate = 2094;
+                        yystate = 2086;
                         continue 'yyl;
                     }
                     0xE2 => {
-                        yystate = 2095;
+                        yystate = 2087;
                         continue 'yyl;
                     }
                     0xF0 => {
-                        yystate = 2096;
+                        yystate = 2088;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
-                        yystate = 2097;
+                        yystate = 2089;
                         continue 'yyl;
                     }
                     0xF4 => {
-                        yystate = 2098;
-                        continue 'yyl;
-                    }
-                    _ => {
                         yystate = 2090;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2074 => {
-            return None;
-        },
-            2075 => {
-                yyaccept = 0;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 2076;
-                continue 'yyl;
-            }
-            2076 => {
-                match yych {
-                    0x01 ..= 0x09 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x7F => {
-                        self.cursor += 1;
-                        yystate = 2075;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        self.cursor += 1;
-                        yystate = 2099;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        self.cursor += 1;
-                        yystate = 2101;
-                        continue 'yyl;
-                    }
-                    0xE1 ..= 0xEF => {
-                        self.cursor += 1;
-                        yystate = 2102;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        self.cursor += 1;
-                        yystate = 2103;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        self.cursor += 1;
-                        yystate = 2104;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        self.cursor += 1;
-                        yystate = 2105;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2077;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2077 => {
-            emit!(TextSegment);
-        },
-            2078 => {
-                yyaccept = 1;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x09 ..= 0x0A |
-                    0x0D => {
-                        yystate = 2109;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2079;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2079 => {
-                self.condition = YYC_INITIAL;
-                {
-            emit!(Newline);
-        }
-            }
-            2080 => {
-                yyaccept = 1;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x09 => {
-                        self.cursor += 1;
-                        yystate = 2106;
-                        continue 'yyl;
-                    }
-                    0x0A => {
-                        self.cursor += 1;
-                        yystate = 2078;
-                        continue 'yyl;
-                    }
-                    0x0D => {
-                        self.cursor += 1;
-                        yystate = 2108;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2079;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2081 => {
-                yyaccept = 2;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 => {
-                        self.yyt1 = self.cursor;
-                        self.cursor += 1;
-                        yystate = 2110;
                         continue 'yyl;
                     }
                     _ => {
@@ -41319,8 +40992,132 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            2082 => { emit!(ErrorInTierContent); },
-            2083 => {
+            2066 => {
+            return None;
+        },
+            2067 => {
+                yyaccept = 0;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                yystate = 2068;
+                continue 'yyl;
+            }
+            2068 => {
+                match yych {
+                    0x01 ..= 0x09 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x7F => {
+                        self.cursor += 1;
+                        yystate = 2067;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.cursor += 1;
+                        yystate = 2091;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.cursor += 1;
+                        yystate = 2093;
+                        continue 'yyl;
+                    }
+                    0xE1 ..= 0xEF => {
+                        self.cursor += 1;
+                        yystate = 2094;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.cursor += 1;
+                        yystate = 2095;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.cursor += 1;
+                        yystate = 2096;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.cursor += 1;
+                        yystate = 2097;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2069;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2069 => {
+            emit!(TextSegment);
+        },
+            2070 => {
+                yyaccept = 1;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x09 ..= 0x0A |
+                    0x0D => {
+                        yystate = 2101;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2071;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2071 => {
+                self.condition = YYC_INITIAL;
+                {
+            emit!(Newline);
+        }
+            }
+            2072 => {
+                yyaccept = 1;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x09 => {
+                        self.cursor += 1;
+                        yystate = 2098;
+                        continue 'yyl;
+                    }
+                    0x0A => {
+                        self.cursor += 1;
+                        yystate = 2070;
+                        continue 'yyl;
+                    }
+                    0x0D => {
+                        self.cursor += 1;
+                        yystate = 2100;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2071;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2073 => {
+                yyaccept = 2;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x30 ..= 0x39 => {
+                        self.yyt1 = self.cursor;
+                        self.cursor += 1;
+                        yystate = 2102;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2074;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2074 => { emit!(ErrorInTierContent); },
+            2075 => {
                 yyaccept = 3;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41330,48 +41127,48 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2084;
+                        yystate = 2076;
                         continue 'yyl;
                     }
                 }
             }
-            2084 => { emit!(Exclamation); },
-            2085 => {
+            2076 => { emit!(Exclamation); },
+            2077 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x21 => {
                         self.cursor += 1;
-                        yystate = 2111;
+                        yystate = 2103;
                         continue 'yyl;
                     }
                     0x22 => {
                         self.cursor += 1;
-                        yystate = 2112;
+                        yystate = 2104;
                         continue 'yyl;
                     }
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2113;
+                        yystate = 2105;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 2115;
+                        yystate = 2107;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                 }
             }
-            2086 => {
+            2078 => {
                 yyaccept = 4;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41381,17 +41178,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2087;
+                        yystate = 2079;
                         continue 'yyl;
                     }
                 }
             }
-            2087 => { emit!(Period); },
-            2088 => {
+            2079 => { emit!(Period); },
+            2080 => {
                 yyaccept = 5;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41401,70 +41198,70 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2089;
+                        yystate = 2081;
                         continue 'yyl;
                     }
                 }
             }
-            2089 => { emit!(Question); },
-            2090 => {
-                yystate = 2091;
+            2081 => { emit!(Question); },
+            2082 => {
+                yystate = 2083;
                 continue 'yyl;
             }
-            2091 => {
+            2083 => {
             emit!(ErrorUnrecognized);
         },
-            2092 => {
+            2084 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2075;
+                        yystate = 2067;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2091;
+                        yystate = 2083;
                         continue 'yyl;
                     }
                 }
             }
-            2093 => {
+            2085 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2099;
+                        yystate = 2091;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2091;
+                        yystate = 2083;
                         continue 'yyl;
                     }
                 }
             }
-            2094 => {
+            2086 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2099;
+                        yystate = 2091;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2091;
+                        yystate = 2083;
                         continue 'yyl;
                     }
                 }
             }
-            2095 => {
+            2087 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41472,173 +41269,270 @@ impl<'a> Iterator for Lexer<'a> {
                     0x80 ..= 0x88 |
                     0x8A ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2099;
+                        yystate = 2091;
                         continue 'yyl;
                     }
                     0x89 => {
                         self.cursor += 1;
-                        yystate = 2116;
+                        yystate = 2108;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2091;
+                        yystate = 2083;
                         continue 'yyl;
                     }
                 }
             }
-            2096 => {
+            2088 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2102;
+                        yystate = 2094;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2091;
+                        yystate = 2083;
                         continue 'yyl;
                     }
                 }
             }
-            2097 => {
+            2089 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2102;
+                        yystate = 2094;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2091;
+                        yystate = 2083;
                         continue 'yyl;
                     }
                 }
             }
-            2098 => {
+            2090 => {
                 yyaccept = 6;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 2102;
+                        yystate = 2094;
                         continue 'yyl;
                     }
                     _ => {
+                        yystate = 2083;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2091 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2067;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2092;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2092 => {
+                self.cursor = self.marker;
+                match yyaccept {
+                    0 => {
+                        yystate = 2069;
+                        continue 'yyl;
+                    }
+                    1 => {
+                        yystate = 2071;
+                        continue 'yyl;
+                    }
+                    2 => {
+                        yystate = 2074;
+                        continue 'yyl;
+                    }
+                    3 => {
+                        yystate = 2076;
+                        continue 'yyl;
+                    }
+                    4 => {
+                        yystate = 2079;
+                        continue 'yyl;
+                    }
+                    5 => {
+                        yystate = 2081;
+                        continue 'yyl;
+                    }
+                    6 => {
+                        yystate = 2083;
+                        continue 'yyl;
+                    }
+                    7 => {
+                        yystate = 2106;
+                        continue 'yyl;
+                    }
+                    8 => {
+                        yystate = 2111;
+                        continue 'yyl;
+                    }
+                    9 => {
+                        yystate = 2113;
+                        continue 'yyl;
+                    }
+                    10 => {
+                        yystate = 2117;
+                        continue 'yyl;
+                    }
+                    11 => {
+                        yystate = 2120;
+                        continue 'yyl;
+                    }
+                    12 => {
+                        yystate = 2122;
+                        continue 'yyl;
+                    }
+                    13 => {
+                        yystate = 2124;
+                        continue 'yyl;
+                    }
+                    14 => {
+                        yystate = 2127;
+                        continue 'yyl;
+                    }
+                    15 => {
+                        yystate = 2129;
+                        continue 'yyl;
+                    }
+                    16 => {
+                        yystate = 2131;
+                        continue 'yyl;
+                    }
+                    17 => {
+                        yystate = 2133;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2135;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2093 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
                         yystate = 2091;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2092;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2094 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2091;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2092;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2095 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2094;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2092;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2096 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2094;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2092;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2097 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 2094;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2092;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2098 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x20 => {
+                        self.cursor += 1;
+                        yystate = 2098;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2099;
                         continue 'yyl;
                     }
                 }
             }
             2099 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2075;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2100;
-                        continue 'yyl;
-                    }
-                }
-            }
+            emit!(Continuation);
+        },
             2100 => {
-                self.cursor = self.marker;
-                match yyaccept {
-                    0 => {
-                        yystate = 2077;
-                        continue 'yyl;
-                    }
-                    1 => {
-                        yystate = 2079;
-                        continue 'yyl;
-                    }
-                    2 => {
-                        yystate = 2082;
-                        continue 'yyl;
-                    }
-                    3 => {
-                        yystate = 2084;
-                        continue 'yyl;
-                    }
-                    4 => {
-                        yystate = 2087;
-                        continue 'yyl;
-                    }
-                    5 => {
-                        yystate = 2089;
-                        continue 'yyl;
-                    }
-                    6 => {
-                        yystate = 2091;
-                        continue 'yyl;
-                    }
-                    7 => {
-                        yystate = 2114;
-                        continue 'yyl;
-                    }
-                    8 => {
-                        yystate = 2119;
-                        continue 'yyl;
-                    }
-                    9 => {
-                        yystate = 2121;
-                        continue 'yyl;
-                    }
-                    10 => {
-                        yystate = 2125;
-                        continue 'yyl;
-                    }
-                    11 => {
-                        yystate = 2128;
-                        continue 'yyl;
-                    }
-                    12 => {
-                        yystate = 2130;
-                        continue 'yyl;
-                    }
-                    13 => {
-                        yystate = 2132;
-                        continue 'yyl;
-                    }
-                    14 => {
-                        yystate = 2135;
-                        continue 'yyl;
-                    }
-                    15 => {
-                        yystate = 2137;
-                        continue 'yyl;
-                    }
-                    16 => {
-                        yystate = 2139;
-                        continue 'yyl;
-                    }
-                    17 => {
-                        yystate = 2141;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2143;
-                        continue 'yyl;
-                    }
-                }
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                yystate = 2101;
+                continue 'yyl;
             }
             2101 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0xA0 ..= 0xBF => {
+                    0x09 => {
                         self.cursor += 1;
-                        yystate = 2099;
+                        yystate = 2098;
+                        continue 'yyl;
+                    }
+                    0x0A |
+                    0x0D => {
+                        self.cursor += 1;
+                        yystate = 2100;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2100;
+                        yystate = 2092;
                         continue 'yyl;
                     }
                 }
@@ -41646,157 +41540,60 @@ impl<'a> Iterator for Lexer<'a> {
             2102 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 2099;
+                        yystate = 2102;
+                        continue 'yyl;
+                    }
+                    0x5F => {
+                        self.cursor += 1;
+                        yystate = 2109;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2100;
+                        yystate = 2092;
                         continue 'yyl;
                     }
                 }
             }
             2103 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x90 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2102;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2100;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2104 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2102;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2100;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2105 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 2102;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2100;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2106 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x20 => {
-                        self.cursor += 1;
-                        yystate = 2106;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2107;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2107 => {
-            emit!(Continuation);
-        },
-            2108 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 2109;
-                continue 'yyl;
-            }
-            2109 => {
-                match yych {
-                    0x09 => {
-                        self.cursor += 1;
-                        yystate = 2106;
-                        continue 'yyl;
-                    }
-                    0x0A |
-                    0x0D => {
-                        self.cursor += 1;
-                        yystate = 2108;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2100;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2110 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x30 ..= 0x39 => {
-                        self.cursor += 1;
-                        yystate = 2110;
-                        continue 'yyl;
-                    }
-                    0x5F => {
-                        self.cursor += 1;
-                        yystate = 2117;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2100;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2111 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 2118;
+                        yystate = 2110;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                 }
             }
-            2112 => {
+            2104 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2120;
+                        yystate = 2112;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 2122;
+                        yystate = 2114;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                 }
             }
-            2113 => {
+            2105 => {
                 yyaccept = 7;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41807,89 +41604,89 @@ impl<'a> Iterator for Lexer<'a> {
                     0x16 ..= 0x2D |
                     0x2F ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2123;
+                        yystate = 2115;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2114;
+                        yystate = 2106;
                         continue 'yyl;
                     }
                 }
             }
-            2114 => { emit!(BreakForCoding); },
-            2115 => {
+            2106 => { emit!(BreakForCoding); },
+            2107 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2124;
+                        yystate = 2116;
                         continue 'yyl;
                     }
                     0x2F => {
                         self.cursor += 1;
-                        yystate = 2126;
+                        yystate = 2118;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 2127;
+                        yystate = 2119;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                 }
             }
-            2116 => {
+            2108 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x87 |
                     0x89 ..= 0x8A |
                     0x8C ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2075;
+                        yystate = 2067;
                         continue 'yyl;
                     }
                     0x88 => {
                         self.cursor += 1;
-                        yystate = 2129;
+                        yystate = 2121;
                         continue 'yyl;
                     }
                     0x8B => {
                         self.cursor += 1;
-                        yystate = 2131;
+                        yystate = 2123;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2100;
+                        yystate = 2092;
                         continue 'yyl;
                     }
                 }
             }
-            2117 => {
+            2109 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x30 ..= 0x39 => {
                         self.yyt2 = self.cursor;
                         self.cursor += 1;
-                        yystate = 2133;
+                        yystate = 2125;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2100;
+                        yystate = 2092;
                         continue 'yyl;
                     }
                 }
             }
-            2118 => {
+            2110 => {
                 yyaccept = 8;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41899,17 +41696,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2119;
+                        yystate = 2111;
                         continue 'yyl;
                     }
                 }
             }
-            2119 => { emit!(BrokenQuestion); },
-            2120 => {
+            2111 => { emit!(BrokenQuestion); },
+            2112 => {
                 yyaccept = 9;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41919,54 +41716,54 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2121;
+                        yystate = 2113;
                         continue 'yyl;
                     }
                 }
             }
-            2121 => { emit!(QuotedPeriodSimple); },
-            2122 => {
+            2113 => { emit!(QuotedPeriodSimple); },
+            2114 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2134;
+                        yystate = 2126;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                 }
             }
-            2123 => {
+            2115 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2136;
+                        yystate = 2128;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 2138;
+                        yystate = 2130;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                 }
             }
-            2124 => {
+            2116 => {
                 yyaccept = 10;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -41976,38 +41773,38 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2125;
+                        yystate = 2117;
                         continue 'yyl;
                     }
                 }
             }
-            2125 => { emit!(Interruption); },
-            2126 => {
+            2117 => { emit!(Interruption); },
+            2118 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2E => {
                         self.cursor += 1;
-                        yystate = 2140;
+                        yystate = 2132;
                         continue 'yyl;
                     }
                     0x3F => {
                         self.cursor += 1;
-                        yystate = 2142;
+                        yystate = 2134;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                 }
             }
-            2127 => {
+            2119 => {
                 yyaccept = 11;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -42017,17 +41814,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2128;
+                        yystate = 2120;
                         continue 'yyl;
                     }
                 }
             }
-            2128 => { emit!(InterruptedQuestion); },
-            2129 => {
+            2120 => { emit!(InterruptedQuestion); },
+            2121 => {
                 yyaccept = 12;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -42037,17 +41834,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2130;
+                        yystate = 2122;
                         continue 'yyl;
                     }
                 }
             }
-            2130 => { emit!(CaNoBreak); },
-            2131 => {
+            2122 => { emit!(CaNoBreak); },
+            2123 => {
                 yyaccept = 13;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -42057,43 +41854,43 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2132;
+                        yystate = 2124;
                         continue 'yyl;
                     }
                 }
             }
-            2132 => { emit!(CaTechnicalBreak); },
-            2133 => {
+            2124 => { emit!(CaTechnicalBreak); },
+            2125 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 2144;
+                        yystate = 2136;
                         continue 'yyl;
                     }
                     0x2D => {
                         self.yyt3 = self.cursor;
                         self.cursor += 1;
-                        yystate = 2145;
+                        yystate = 2137;
                         continue 'yyl;
                     }
                     0x30 ..= 0x39 => {
                         self.cursor += 1;
-                        yystate = 2133;
+                        yystate = 2125;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2100;
+                        yystate = 2092;
                         continue 'yyl;
                     }
                 }
             }
-            2134 => {
+            2126 => {
                 yyaccept = 14;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -42103,17 +41900,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2135;
+                        yystate = 2127;
                         continue 'yyl;
                     }
                 }
             }
-            2135 => { emit!(QuotedNewLine); },
-            2136 => {
+            2127 => { emit!(QuotedNewLine); },
+            2128 => {
                 yyaccept = 15;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -42123,17 +41920,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2137;
+                        yystate = 2129;
                         continue 'yyl;
                     }
                 }
             }
-            2137 => { emit!(TrailingOff); },
-            2138 => {
+            2129 => { emit!(TrailingOff); },
+            2130 => {
                 yyaccept = 16;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -42143,17 +41940,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2139;
+                        yystate = 2131;
                         continue 'yyl;
                     }
                 }
             }
-            2139 => { emit!(TrailingOffQuestion); },
-            2140 => {
+            2131 => { emit!(TrailingOffQuestion); },
+            2132 => {
                 yyaccept = 17;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -42163,17 +41960,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2141;
+                        yystate = 2133;
                         continue 'yyl;
                     }
                 }
             }
-            2141 => { emit!(SelfInterruption); },
-            2142 => {
+            2133 => { emit!(SelfInterruption); },
+            2134 => {
                 yyaccept = 18;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
@@ -42183,17 +41980,17 @@ impl<'a> Iterator for Lexer<'a> {
                     0x0E ..= 0x14 |
                     0x16 ..= 0x7F |
                     0xC2 ..= 0xF4 => {
-                        yystate = 2076;
+                        yystate = 2068;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2143;
+                        yystate = 2135;
                         continue 'yyl;
                     }
                 }
             }
-            2143 => { emit!(SelfInterruptedQuestion); },
-            2144 => {
+            2135 => { emit!(SelfInterruptedQuestion); },
+            2136 => {
                 self.t1 = self.yyt1;
                 self.t3 = self.yyt2;
                 self.t4 = self.yyt3;
@@ -42208,26 +42005,26 @@ impl<'a> Iterator for Lexer<'a> {
             }, start..end));
         }
             }
-            2145 => {
+            2137 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x15 => {
                         self.cursor += 1;
-                        yystate = 2144;
+                        yystate = 2136;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2100;
+                        yystate = 2092;
                         continue 'yyl;
                     }
                 }
             }
-            2146 => {
+            2138 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
-                        yystate = 2147;
+                        yystate = 2139;
                         continue 'yyl;
                     }
                     0x01 ..= 0x08 |
@@ -42236,117 +42033,57 @@ impl<'a> Iterator for Lexer<'a> {
                     0x16 ..= 0x1F |
                     0x21 ..= 0x2A |
                     0x2C ..= 0x7F => {
-                        yystate = 2148;
+                        yystate = 2140;
                         continue 'yyl;
                     }
                     0x09 |
                     0x15 => {
-                        yystate = 2150;
+                        yystate = 2142;
                         continue 'yyl;
                     }
                     0x0A => {
-                        yystate = 2151;
+                        yystate = 2143;
                         continue 'yyl;
                     }
                     0x0D => {
-                        yystate = 2153;
+                        yystate = 2145;
                         continue 'yyl;
                     }
                     0x20 => {
-                        yystate = 2154;
+                        yystate = 2146;
                         continue 'yyl;
                     }
                     0x2B => {
-                        yystate = 2156;
-                        continue 'yyl;
-                    }
-                    0xC2 ..= 0xDF => {
-                        yystate = 2159;
-                        continue 'yyl;
-                    }
-                    0xE0 => {
-                        yystate = 2160;
-                        continue 'yyl;
-                    }
-                    0xE1 |
-                    0xE3 ..= 0xEF => {
-                        yystate = 2161;
-                        continue 'yyl;
-                    }
-                    0xE2 => {
-                        yystate = 2162;
-                        continue 'yyl;
-                    }
-                    0xF0 => {
-                        yystate = 2163;
-                        continue 'yyl;
-                    }
-                    0xF1 ..= 0xF3 => {
-                        yystate = 2164;
-                        continue 'yyl;
-                    }
-                    0xF4 => {
-                        yystate = 2165;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2157;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2147 => {
-            return None;
-        },
-            2148 => {
-                yyaccept = 0;
-                self.marker = self.cursor;
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x01 ..= 0x08 |
-                    0x0B ..= 0x0C |
-                    0x0E ..= 0x14 |
-                    0x16 ..= 0x1F |
-                    0x21 ..= 0x2A |
-                    0x2C ..= 0x7F => {
-                        self.cursor += 1;
                         yystate = 2148;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
-                        self.cursor += 1;
-                        yystate = 2166;
+                        yystate = 2151;
                         continue 'yyl;
                     }
                     0xE0 => {
-                        self.cursor += 1;
-                        yystate = 2168;
+                        yystate = 2152;
                         continue 'yyl;
                     }
                     0xE1 |
                     0xE3 ..= 0xEF => {
-                        self.cursor += 1;
-                        yystate = 2169;
+                        yystate = 2153;
                         continue 'yyl;
                     }
                     0xE2 => {
-                        self.cursor += 1;
-                        yystate = 2170;
+                        yystate = 2154;
                         continue 'yyl;
                     }
                     0xF0 => {
-                        self.cursor += 1;
-                        yystate = 2171;
+                        yystate = 2155;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
-                        self.cursor += 1;
-                        yystate = 2172;
+                        yystate = 2156;
                         continue 'yyl;
                     }
                     0xF4 => {
-                        self.cursor += 1;
-                        yystate = 2173;
+                        yystate = 2157;
                         continue 'yyl;
                     }
                     _ => {
@@ -42355,192 +42092,372 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
             }
-            2149 => {
+            2139 => {
+            return None;
+        },
+            2140 => {
+                yyaccept = 0;
+                self.marker = self.cursor;
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x01 ..= 0x08 |
+                    0x0B ..= 0x0C |
+                    0x0E ..= 0x14 |
+                    0x16 ..= 0x1F |
+                    0x21 ..= 0x2A |
+                    0x2C ..= 0x7F => {
+                        self.cursor += 1;
+                        yystate = 2140;
+                        continue 'yyl;
+                    }
+                    0xC2 ..= 0xDF => {
+                        self.cursor += 1;
+                        yystate = 2158;
+                        continue 'yyl;
+                    }
+                    0xE0 => {
+                        self.cursor += 1;
+                        yystate = 2160;
+                        continue 'yyl;
+                    }
+                    0xE1 |
+                    0xE3 ..= 0xEF => {
+                        self.cursor += 1;
+                        yystate = 2161;
+                        continue 'yyl;
+                    }
+                    0xE2 => {
+                        self.cursor += 1;
+                        yystate = 2162;
+                        continue 'yyl;
+                    }
+                    0xF0 => {
+                        self.cursor += 1;
+                        yystate = 2163;
+                        continue 'yyl;
+                    }
+                    0xF1 ..= 0xF3 => {
+                        self.cursor += 1;
+                        yystate = 2164;
+                        continue 'yyl;
+                    }
+                    0xF4 => {
+                        self.cursor += 1;
+                        yystate = 2165;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2141;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2141 => {
             emit!(PhoWord);
         },
-            2150 => { emit!(ErrorInPhoContent); },
-            2151 => {
+            2142 => { emit!(ErrorInPhoContent); },
+            2143 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 ..= 0x0A |
                     0x0D => {
-                        yystate = 2177;
+                        yystate = 2169;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2152;
+                        yystate = 2144;
                         continue 'yyl;
                     }
                 }
             }
-            2152 => {
+            2144 => {
                 self.condition = YYC_INITIAL;
                 {
             emit!(Newline);
         }
             }
-            2153 => {
+            2145 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
-                        yystate = 2174;
+                        yystate = 2166;
                         continue 'yyl;
                     }
                     0x0A => {
                         self.cursor += 1;
-                        yystate = 2151;
+                        yystate = 2143;
                         continue 'yyl;
                     }
                     0x0D => {
                         self.cursor += 1;
-                        yystate = 2176;
+                        yystate = 2168;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2152;
+                        yystate = 2144;
                         continue 'yyl;
                     }
                 }
             }
-            2154 => {
+            2146 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 2154;
+                        yystate = 2146;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2155;
+                        yystate = 2147;
                         continue 'yyl;
                     }
                 }
             }
-            2155 => { emit!(Whitespace); },
-            2156 => { emit!(PhoPlus); },
-            2157 => {
-                yystate = 2158;
+            2147 => { emit!(Whitespace); },
+            2148 => { emit!(PhoPlus); },
+            2149 => {
+                yystate = 2150;
                 continue 'yyl;
             }
-            2158 => {
+            2150 => {
             emit!(ErrorUnrecognized);
         },
-            2159 => {
+            2151 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2148;
+                        yystate = 2140;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2158;
+                        yystate = 2150;
                         continue 'yyl;
                     }
                 }
             }
-            2160 => {
+            2152 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2166;
+                        yystate = 2158;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2158;
+                        yystate = 2150;
                         continue 'yyl;
                     }
                 }
             }
-            2161 => {
+            2153 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2166;
+                        yystate = 2158;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2158;
+                        yystate = 2150;
                         continue 'yyl;
                     }
                 }
             }
-            2162 => {
+            2154 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 2178;
+                        yystate = 2170;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2166;
+                        yystate = 2158;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2158;
+                        yystate = 2150;
                         continue 'yyl;
                     }
                 }
             }
-            2163 => {
+            2155 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2169;
+                        yystate = 2161;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2158;
+                        yystate = 2150;
                         continue 'yyl;
                     }
                 }
             }
-            2164 => {
+            2156 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2169;
+                        yystate = 2161;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2158;
+                        yystate = 2150;
                         continue 'yyl;
                     }
                 }
             }
-            2165 => {
+            2157 => {
                 yyaccept = 2;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 2169;
+                        yystate = 2161;
                         continue 'yyl;
                     }
                     _ => {
+                        yystate = 2150;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2158 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2140;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2159;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2159 => {
+                self.cursor = self.marker;
+                match yyaccept {
+                    0 => {
+                        yystate = 2141;
+                        continue 'yyl;
+                    }
+                    1 => {
+                        yystate = 2144;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2150;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2160 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0xA0 ..= 0xBF => {
+                        self.cursor += 1;
                         yystate = 2158;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2159;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2161 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2158;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2159;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2162 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 => {
+                        self.cursor += 1;
+                        yystate = 2171;
+                        continue 'yyl;
+                    }
+                    0x81 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2158;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2159;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2163 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x90 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2161;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2159;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2164 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0xBF => {
+                        self.cursor += 1;
+                        yystate = 2161;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2159;
+                        continue 'yyl;
+                    }
+                }
+            }
+            2165 => {
+                yych = buffer.get(self.cursor).copied().unwrap_or(0);
+                match yych {
+                    0x80 ..= 0x8F => {
+                        self.cursor += 1;
+                        yystate = 2161;
+                        continue 'yyl;
+                    }
+                    _ => {
+                        yystate = 2159;
                         continue 'yyl;
                     }
                 }
@@ -42548,9 +42465,9 @@ impl<'a> Iterator for Lexer<'a> {
             2166 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x20 => {
                         self.cursor += 1;
-                        yystate = 2148;
+                        yystate = 2166;
                         continue 'yyl;
                     }
                     _ => {
@@ -42560,46 +42477,28 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             2167 => {
-                self.cursor = self.marker;
-                match yyaccept {
-                    0 => {
-                        yystate = 2149;
-                        continue 'yyl;
-                    }
-                    1 => {
-                        yystate = 2152;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2158;
-                        continue 'yyl;
-                    }
-                }
-            }
+            emit!(Continuation);
+        },
             2168 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0xA0 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2166;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2167;
-                        continue 'yyl;
-                    }
-                }
+                yystate = 2169;
+                continue 'yyl;
             }
             2169 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 ..= 0xBF => {
+                    0x09 => {
                         self.cursor += 1;
                         yystate = 2166;
                         continue 'yyl;
                     }
+                    0x0A |
+                    0x0D => {
+                        self.cursor += 1;
+                        yystate = 2168;
+                        continue 'yyl;
+                    }
                     _ => {
-                        yystate = 2167;
+                        yystate = 2159;
                         continue 'yyl;
                     }
                 }
@@ -42607,18 +42506,24 @@ impl<'a> Iterator for Lexer<'a> {
             2170 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x80 => {
+                    0x80 ..= 0xB8 |
+                    0xBB ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2179;
+                        yystate = 2140;
                         continue 'yyl;
                     }
-                    0x81 ..= 0xBF => {
+                    0xB9 => {
                         self.cursor += 1;
-                        yystate = 2166;
+                        yystate = 2172;
+                        continue 'yyl;
+                    }
+                    0xBA => {
+                        self.cursor += 1;
+                        yystate = 2173;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2167;
+                        yystate = 2159;
                         continue 'yyl;
                     }
                 }
@@ -42626,134 +42531,26 @@ impl<'a> Iterator for Lexer<'a> {
             2171 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
-                    0x90 ..= 0xBF => {
+                    0x80 ..= 0xB8 |
+                    0xBB ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2169;
+                        yystate = 2140;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2167;
+                        yystate = 2159;
                         continue 'yyl;
                     }
                 }
             }
-            2172 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2169;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2167;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2173 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0x8F => {
-                        self.cursor += 1;
-                        yystate = 2169;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2167;
-                        continue 'yyl;
-                    }
-                }
-            }
+            2172 => { emit!(PhoGroupBegin); },
+            2173 => { emit!(PhoGroupEnd); },
             2174 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x20 => {
-                        self.cursor += 1;
-                        yystate = 2174;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2175;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2175 => {
-            emit!(Continuation);
-        },
-            2176 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 2177;
-                continue 'yyl;
-            }
-            2177 => {
-                match yych {
-                    0x09 => {
-                        self.cursor += 1;
-                        yystate = 2174;
-                        continue 'yyl;
-                    }
-                    0x0A |
-                    0x0D => {
-                        self.cursor += 1;
-                        yystate = 2176;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2167;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2178 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xB8 |
-                    0xBB ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2148;
-                        continue 'yyl;
-                    }
-                    0xB9 => {
-                        self.cursor += 1;
-                        yystate = 2180;
-                        continue 'yyl;
-                    }
-                    0xBA => {
-                        self.cursor += 1;
-                        yystate = 2181;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2167;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2179 => {
-                yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                match yych {
-                    0x80 ..= 0xB8 |
-                    0xBB ..= 0xBF => {
-                        self.cursor += 1;
-                        yystate = 2148;
-                        continue 'yyl;
-                    }
-                    _ => {
-                        yystate = 2167;
-                        continue 'yyl;
-                    }
-                }
-            }
-            2180 => { emit!(PhoGroupBegin); },
-            2181 => { emit!(PhoGroupEnd); },
-            2182 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 self.cursor += 1;
                 match yych {
                     0x00 => {
-                        yystate = 2183;
+                        yystate = 2175;
                         continue 'yyl;
                     }
                     0x01 ..= 0x09 |
@@ -42765,19 +42562,19 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5B ..= 0x5E |
                     0x60 |
                     0x7B ..= 0x7F => {
-                        yystate = 2184;
+                        yystate = 2176;
                         continue 'yyl;
                     }
                     0x0A => {
-                        yystate = 2185;
+                        yystate = 2177;
                         continue 'yyl;
                     }
                     0x0D => {
-                        yystate = 2187;
+                        yystate = 2179;
                         continue 'yyl;
                     }
                     0x20 => {
-                        yystate = 2188;
+                        yystate = 2180;
                         continue 'yyl;
                     }
                     0x2D |
@@ -42785,112 +42582,112 @@ impl<'a> Iterator for Lexer<'a> {
                     0x41 ..= 0x5A |
                     0x5F |
                     0x61 ..= 0x7A => {
-                        yystate = 2190;
+                        yystate = 2182;
                         continue 'yyl;
                     }
                     0xC2 ..= 0xDF => {
-                        yystate = 2194;
+                        yystate = 2186;
                         continue 'yyl;
                     }
                     0xE0 => {
-                        yystate = 2195;
+                        yystate = 2187;
                         continue 'yyl;
                     }
                     0xE1 ..= 0xE2 |
                     0xE4 ..= 0xEF => {
-                        yystate = 2196;
+                        yystate = 2188;
                         continue 'yyl;
                     }
                     0xE3 => {
-                        yystate = 2197;
+                        yystate = 2189;
                         continue 'yyl;
                     }
                     0xF0 => {
-                        yystate = 2198;
+                        yystate = 2190;
                         continue 'yyl;
                     }
                     0xF1 ..= 0xF3 => {
-                        yystate = 2199;
+                        yystate = 2191;
                         continue 'yyl;
                     }
                     0xF4 => {
-                        yystate = 2200;
+                        yystate = 2192;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2192;
+                        yystate = 2184;
                         continue 'yyl;
                     }
                 }
             }
-            2183 => {
+            2175 => {
             return None;
         },
-            2184 => { emit!(ErrorInSinContent); },
-            2185 => {
+            2176 => { emit!(ErrorInSinContent); },
+            2177 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 ..= 0x0A |
                     0x0D => {
-                        yystate = 2204;
+                        yystate = 2196;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2186;
+                        yystate = 2178;
                         continue 'yyl;
                     }
                 }
             }
-            2186 => {
+            2178 => {
                 self.condition = YYC_INITIAL;
                 {
             emit!(Newline);
         }
             }
-            2187 => {
+            2179 => {
                 yyaccept = 0;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x09 => {
                         self.cursor += 1;
-                        yystate = 2201;
+                        yystate = 2193;
                         continue 'yyl;
                     }
                     0x0A => {
                         self.cursor += 1;
-                        yystate = 2185;
+                        yystate = 2177;
                         continue 'yyl;
                     }
                     0x0D => {
                         self.cursor += 1;
-                        yystate = 2203;
+                        yystate = 2195;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2186;
+                        yystate = 2178;
                         continue 'yyl;
                     }
                 }
             }
-            2188 => {
+            2180 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 2188;
+                        yystate = 2180;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2189;
+                        yystate = 2181;
                         continue 'yyl;
                     }
                 }
             }
-            2189 => { emit!(Whitespace); },
-            2190 => {
+            2181 => { emit!(Whitespace); },
+            2182 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x2D |
@@ -42899,246 +42696,246 @@ impl<'a> Iterator for Lexer<'a> {
                     0x5F |
                     0x61 ..= 0x7A => {
                         self.cursor += 1;
-                        yystate = 2190;
+                        yystate = 2182;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2191;
+                        yystate = 2183;
                         continue 'yyl;
                     }
                 }
             }
-            2191 => {
+            2183 => {
             emit!(SinWord);
         },
-            2192 => {
-                yystate = 2193;
+            2184 => {
+                yystate = 2185;
                 continue 'yyl;
             }
-            2193 => {
+            2185 => {
             emit!(ErrorUnrecognized);
         },
-            2194 => {
+            2186 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2184;
+                        yystate = 2176;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2193;
+                        yystate = 2185;
                         continue 'yyl;
                     }
                 }
             }
-            2195 => {
+            2187 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0xA0 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2206;
+                        yystate = 2198;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2193;
+                        yystate = 2185;
                         continue 'yyl;
                     }
                 }
             }
-            2196 => {
+            2188 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2206;
+                        yystate = 2198;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2193;
+                        yystate = 2185;
                         continue 'yyl;
                     }
                 }
             }
-            2197 => {
+            2189 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 => {
                         self.cursor += 1;
-                        yystate = 2207;
+                        yystate = 2199;
                         continue 'yyl;
                     }
                     0x81 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2206;
+                        yystate = 2198;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2193;
+                        yystate = 2185;
                         continue 'yyl;
                     }
                 }
             }
-            2198 => {
+            2190 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x90 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2208;
+                        yystate = 2200;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2193;
+                        yystate = 2185;
                         continue 'yyl;
                     }
                 }
             }
-            2199 => {
+            2191 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2208;
+                        yystate = 2200;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2193;
+                        yystate = 2185;
                         continue 'yyl;
                     }
                 }
             }
-            2200 => {
+            2192 => {
                 yyaccept = 1;
                 self.marker = self.cursor;
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x8F => {
                         self.cursor += 1;
-                        yystate = 2208;
+                        yystate = 2200;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2193;
+                        yystate = 2185;
                         continue 'yyl;
                     }
                 }
             }
-            2201 => {
+            2193 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x20 => {
                         self.cursor += 1;
-                        yystate = 2201;
+                        yystate = 2193;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2202;
+                        yystate = 2194;
                         continue 'yyl;
                     }
                 }
             }
-            2202 => {
+            2194 => {
             emit!(Continuation);
         },
-            2203 => {
+            2195 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
-                yystate = 2204;
+                yystate = 2196;
                 continue 'yyl;
             }
-            2204 => {
+            2196 => {
                 match yych {
                     0x09 => {
                         self.cursor += 1;
-                        yystate = 2201;
+                        yystate = 2193;
                         continue 'yyl;
                     }
                     0x0A |
                     0x0D => {
                         self.cursor += 1;
-                        yystate = 2203;
+                        yystate = 2195;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2205;
+                        yystate = 2197;
                         continue 'yyl;
                     }
                 }
             }
-            2205 => {
+            2197 => {
                 self.cursor = self.marker;
                 if yyaccept == 0 {
-                    yystate = 2186;
+                    yystate = 2178;
                     continue 'yyl;
                 } else {
-                    yystate = 2193;
+                    yystate = 2185;
                     continue 'yyl;
                 }
             }
-            2206 => {
+            2198 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2184;
+                        yystate = 2176;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2205;
+                        yystate = 2197;
                         continue 'yyl;
                     }
                 }
             }
-            2207 => {
+            2199 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0x93 |
                     0x96 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2184;
+                        yystate = 2176;
                         continue 'yyl;
                     }
                     0x94 => {
                         self.cursor += 1;
-                        yystate = 2209;
+                        yystate = 2201;
                         continue 'yyl;
                     }
                     0x95 => {
                         self.cursor += 1;
-                        yystate = 2210;
+                        yystate = 2202;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2205;
+                        yystate = 2197;
                         continue 'yyl;
                     }
                 }
             }
-            2208 => {
+            2200 => {
                 yych = buffer.get(self.cursor).copied().unwrap_or(0);
                 match yych {
                     0x80 ..= 0xBF => {
                         self.cursor += 1;
-                        yystate = 2206;
+                        yystate = 2198;
                         continue 'yyl;
                     }
                     _ => {
-                        yystate = 2205;
+                        yystate = 2197;
                         continue 'yyl;
                     }
                 }
             }
-            2209 => { emit!(SinGroupBegin); },
-            2210 => { emit!(SinGroupEnd); },
+            2201 => { emit!(SinGroupBegin); },
+            2202 => { emit!(SinGroupEnd); },
             _ => panic!("internal lexer error"),
         }
     }

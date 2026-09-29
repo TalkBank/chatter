@@ -19,7 +19,7 @@ chat = '''
 [[example]]
 title = 'Retired count and omitted terminator'
 level = 'utterance'
-claim = 'violates'
+claim = { subsumed_by = 'E316' }
 notes = 'This deliberately combines retired repetition notation with a missing terminator; it is not claimed to be a single-fault mutation.'
 chat = '''
 @UTF8
@@ -34,7 +34,7 @@ chat = '''
 [[example]]
 title = 'Retired count without spoken material or a terminator'
 level = 'utterance'
-claim = 'violates'
+claim = { subsumed_by = 'E316' }
 notes = 'Delete the remaining spoken word from example 2; the count alone does not establish spoken content.'
 chat = '''
 @UTF8
@@ -63,6 +63,6 @@ both faults to exercise recovery, not to redefine either rule.
 
 ## Expected Behavior
 
-The invalid examples report E375 for retired repetition notation. Other
+The invalid examples report E316 for grammar recovery around retired repetition notation. Other
 missing-structure diagnostics may coexist; recovered output is not a valid
 replacement for the original transcript.

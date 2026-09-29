@@ -43,8 +43,12 @@ tree-sitter-talkbank = { workspace = true }
 walkdir = { workspace = true } #unified
 
 [dev-dependencies]
+jsonschema = { workspace = true }
+schemars = { workspace = true }
+crossbeam-channel = { workspace = true }
+miette = { workspace = true }
 talkbank-cache = { workspace = true }
-talkbank-model = { workspace = true, features = ["async"] }
+talkbank-model = { workspace = true, features = ["async", "channels"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 insta = { workspace = true, features = ["json"] }
 # The independent backend, DIRECTLY: one word-validation message (E232) is

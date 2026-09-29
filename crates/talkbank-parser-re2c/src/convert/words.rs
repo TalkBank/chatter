@@ -164,7 +164,7 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>
     };
 
     let cleaned_for_model = if cleaned.is_empty() { raw } else { &cleaned };
-    let mut word = Word::new_unchecked(raw, cleaned_for_model)
+    let mut word = Word::new_unchecked(cleaned_for_model)
         .with_content(WordContents::new(content_items.into_iter().collect()));
 
     // Category from typed enum, no token scanning

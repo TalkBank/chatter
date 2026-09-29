@@ -1,6 +1,6 @@
 # Design reference
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 Read the sections relevant to your task. [AGENTS.md](../../AGENTS.md)
 is the canonical policy entry point and resolves workflow conflicts here.
@@ -9,6 +9,23 @@ verify current source and live artifacts before relying on them. Inline
 repository paths are relative to the repository root unless stated otherwise.
 
 ## Type-oriented design is mandatory
+
+### Architecture-native recovery and diagnostics
+
+Error recovery and reporting must be idiomatic to the tree-sitter and typed-AST
+architecture. Derive findings from CST kinds, source-bound recovery evidence
+and context supplied by the owning traversal. Do not reconstruct a parallel
+parser from raw line prefixes or token heuristics merely to reproduce another
+validator's diagnostics. Lexical checks and inspection of genuinely unparsed
+input need an explicit boundary justification and must retain their source
+association; they must not invent structure or certainty.
+
+Specific, actionable messages are valuable when the available evidence proves
+the narrower fault. Otherwise retain an honest broader diagnostic. Grammar
+rejection or a producer-enforced invariant may subsume another validator's
+check; matching its diagnostic code, stage, count or wording is not a goal.
+
+### Type-oriented implementation
 
 **Every change makes illegal states unrepresentable and makes transitions
 between well-defined states explicit.** It governs new code, old code, and

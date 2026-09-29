@@ -28,10 +28,12 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    SourceBound, UtteranceChild1Choice, UtteranceChild1ChoiceBoundView, extract_act_dependent_tier,
-    extract_add_dependent_tier, extract_cod_dependent_tier, extract_com_dependent_tier,
-    extract_exp_dependent_tier, extract_gpx_dependent_tier, extract_int_dependent_tier,
-    extract_sit_dependent_tier, extract_spa_dependent_tier,
+    AdmittedUtteranceChild1Choice as UtteranceChild1Choice,
+    AdmittedUtteranceChild1ChoiceBoundView as UtteranceChild1ChoiceBoundView, AsRawNode,
+    SourceBound, extract_act_dependent_tier, extract_add_dependent_tier,
+    extract_cod_dependent_tier, extract_com_dependent_tier, extract_exp_dependent_tier,
+    extract_gpx_dependent_tier, extract_int_dependent_tier, extract_sit_dependent_tier,
+    extract_spa_dependent_tier,
 };
 use crate::model::Utterance;
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
@@ -62,212 +64,211 @@ pub(crate) fn parse_and_attach_dependent_tier<'tree>(
     let input = choice.source();
     // Selecting a concrete variant preserves the choice's admitted range.
     // Leaf adapters still receive the same owner's source during migration.
-    match choice.view() {
-        // Structured tiers with dedicated parsers + `has_error` gating.
-        C::MorDependentTier(n) => {
-            let n = n.node();
-            parsed::attach_mor(n, &mut utterance, input, errors);
+    let reconstructed = (|| -> Result<(), crate::CstFailure> {
+        match choice.view() {
+            // Structured tiers with dedicated parsers + `has_error` gating.
+            C::MorDependentTier(n) => {
+                parsed::attach_mor(n, &mut utterance, errors);
+            }
+            C::GraDependentTier(n) => {
+                parsed::attach_gra(n, &mut utterance, errors);
+            }
+            C::PhoDependentTier(n) => {
+                parsed::attach_pho(n, &mut utterance, errors);
+            }
+            C::ModDependentTier(n) => {
+                parsed::attach_mod(n, &mut utterance, errors);
+            }
+            C::SinDependentTier(n) => {
+                parsed::attach_sin(n, &mut utterance, errors);
+            }
+            C::WorDependentTier(n) => {
+                parsed::attach_wor(n, &mut utterance, errors);
+            }
+            // Bullet/text tiers: parse directly, no `has_error` gate (unchanged).
+            C::ComDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_com_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_com_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Com(tier),
+                        separator,
+                    ));
+            }
+            C::ExpDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_exp_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_exp_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Exp(tier),
+                        separator,
+                    ));
+            }
+            C::AddDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_add_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_add_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Add(tier),
+                        separator,
+                    ));
+            }
+            C::SpaDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_spa_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_spa_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Spa(tier),
+                        separator,
+                    ));
+            }
+            C::SitDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_sit_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_sit_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Sit(tier),
+                        separator,
+                    ));
+            }
+            C::IntDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_int_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_int_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Int(tier),
+                        separator,
+                    ));
+            }
+            C::GpxDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_gpx_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_gpx_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Gpx(tier),
+                        separator,
+                    ));
+            }
+            C::CodDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_cod_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_cod_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Cod(tier),
+                        separator,
+                    ));
+            }
+            C::ActDependentTier(n) => {
+                let separator = super::helpers::dependent_tier_separator(
+                    extract_act_dependent_tier(n.node())?.child_1.slot(),
+                )?;
+                let tier = parse_act_tier(n, errors)?;
+                utterance
+                    .dependent_tiers
+                    .push(DependentTierEntry::with_separator(
+                        DependentTier::Act(tier),
+                        separator,
+                    ));
+            }
+            // Raw text tiers: the `raw` applier keyed on the concrete kind CONST
+            // taken from the typed variant (not `node.kind()`).
+            C::OrtDependentTier(n) => {
+                let n = n.node();
+                raw::apply_ort(&mut utterance, n, input, errors);
+            }
+            C::EngDependentTier(n) => {
+                let n = n.node();
+                raw::apply_eng(&mut utterance, n, input, errors);
+            }
+            C::GlsDependentTier(n) => {
+                let n = n.node();
+                raw::apply_gls(&mut utterance, n, input, errors);
+            }
+            C::AltDependentTier(n) => {
+                let n = n.node();
+                raw::apply_alt(&mut utterance, n, input, errors);
+            }
+            C::CohDependentTier(n) => {
+                let n = n.node();
+                raw::apply_coh(&mut utterance, n, input, errors);
+            }
+            C::DefDependentTier(n) => {
+                let n = n.node();
+                raw::apply_def(&mut utterance, n, input, errors);
+            }
+            C::ErrDependentTier(n) => {
+                let n = n.node();
+                raw::apply_err(&mut utterance, n, input, errors);
+            }
+            C::FacDependentTier(n) => {
+                let n = n.node();
+                raw::apply_fac(&mut utterance, n, input, errors);
+            }
+            C::FloDependentTier(n) => {
+                let n = n.node();
+                raw::apply_flo(&mut utterance, n, input, errors);
+            }
+            C::ParDependentTier(n) => {
+                let n = n.node();
+                raw::apply_par(&mut utterance, n, input, errors);
+            }
+            C::TimDependentTier(n) => {
+                let n = n.node();
+                raw::apply_tim(&mut utterance, n, input, errors);
+            }
+            C::ModsylDependentTier(n) => {
+                let n = n.node();
+                raw::apply_modsyl(&mut utterance, n, input, errors);
+            }
+            C::PhosylDependentTier(n) => {
+                let n = n.node();
+                raw::apply_phosyl(&mut utterance, n, input, errors);
+            }
+            C::PhoalnDependentTier(n) => {
+                let n = n.node();
+                raw::apply_phoaln(&mut utterance, n, input, errors);
+            }
+            C::XphointDependentTier(n) => {
+                let n = n.node();
+                raw::apply_xphoint(&mut utterance, n, input, errors);
+            }
+            // User-defined `%x*` and unsupported catch-all tiers.
+            C::XDependentTier(n) => {
+                user_defined::apply_x_tier(&mut utterance, n, errors);
+            }
+            C::UnsupportedDependentTier(n) => {
+                user_defined::apply_unsupported_tier(&mut utterance, n, errors);
+            }
         }
-        C::GraDependentTier(n) => {
-            let n = n.node();
-            parsed::attach_gra(n, &mut utterance, input, errors);
-        }
-        C::PhoDependentTier(n) => {
-            let n = n.node();
-            parsed::attach_pho(n, &mut utterance, input, errors);
-        }
-        C::ModDependentTier(n) => {
-            let n = n.node();
-            parsed::attach_mod(n, &mut utterance, input, errors);
-        }
-        C::SinDependentTier(n) => {
-            let n = n.node();
-            parsed::attach_sin(n, &mut utterance, input, errors);
-        }
-        C::WorDependentTier(n) => {
-            let n = n.node();
-            parsed::attach_wor(n, &mut utterance, input, errors);
-        }
-        // Bullet/text tiers: parse directly, no `has_error` gate (unchanged).
-        C::ComDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_com_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_com_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Com(tier),
-                    separator,
-                ));
-        }
-        C::ExpDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_exp_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_exp_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Exp(tier),
-                    separator,
-                ));
-        }
-        C::AddDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_add_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_add_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Add(tier),
-                    separator,
-                ));
-        }
-        C::SpaDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_spa_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_spa_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Spa(tier),
-                    separator,
-                ));
-        }
-        C::SitDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_sit_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_sit_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Sit(tier),
-                    separator,
-                ));
-        }
-        C::IntDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_int_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_int_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Int(tier),
-                    separator,
-                ));
-        }
-        C::GpxDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_gpx_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_gpx_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Gpx(tier),
-                    separator,
-                ));
-        }
-        C::CodDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_cod_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_cod_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Cod(tier),
-                    separator,
-                ));
-        }
-        C::ActDependentTier(n) => {
-            let separator = super::helpers::dependent_tier_separator(
-                extract_act_dependent_tier(n.node()).child_1.slot(),
-            );
-            let tier = parse_act_tier(n, errors);
-            utterance
-                .dependent_tiers
-                .push(DependentTierEntry::with_separator(
-                    DependentTier::Act(tier),
-                    separator,
-                ));
-        }
-        // Raw text tiers: the `raw` applier keyed on the concrete kind CONST
-        // taken from the typed variant (not `node.kind()`).
-        C::OrtDependentTier(n) => {
-            let n = n.node();
-            raw::apply_ort(&mut utterance, n, input, errors);
-        }
-        C::EngDependentTier(n) => {
-            let n = n.node();
-            raw::apply_eng(&mut utterance, n, input, errors);
-        }
-        C::GlsDependentTier(n) => {
-            let n = n.node();
-            raw::apply_gls(&mut utterance, n, input, errors);
-        }
-        C::AltDependentTier(n) => {
-            let n = n.node();
-            raw::apply_alt(&mut utterance, n, input, errors);
-        }
-        C::CohDependentTier(n) => {
-            let n = n.node();
-            raw::apply_coh(&mut utterance, n, input, errors);
-        }
-        C::DefDependentTier(n) => {
-            let n = n.node();
-            raw::apply_def(&mut utterance, n, input, errors);
-        }
-        C::ErrDependentTier(n) => {
-            let n = n.node();
-            raw::apply_err(&mut utterance, n, input, errors);
-        }
-        C::FacDependentTier(n) => {
-            let n = n.node();
-            raw::apply_fac(&mut utterance, n, input, errors);
-        }
-        C::FloDependentTier(n) => {
-            let n = n.node();
-            raw::apply_flo(&mut utterance, n, input, errors);
-        }
-        C::ParDependentTier(n) => {
-            let n = n.node();
-            raw::apply_par(&mut utterance, n, input, errors);
-        }
-        C::TimDependentTier(n) => {
-            let n = n.node();
-            raw::apply_tim(&mut utterance, n, input, errors);
-        }
-        C::ModsylDependentTier(n) => {
-            let n = n.node();
-            raw::apply_modsyl(&mut utterance, n, input, errors);
-        }
-        C::PhosylDependentTier(n) => {
-            let n = n.node();
-            raw::apply_phosyl(&mut utterance, n, input, errors);
-        }
-        C::PhoalnDependentTier(n) => {
-            let n = n.node();
-            raw::apply_phoaln(&mut utterance, n, input, errors);
-        }
-        C::XphointDependentTier(n) => {
-            let n = n.node();
-            raw::apply_xphoint(&mut utterance, n, input, errors);
-        }
-        // User-defined `%x*` and unsupported catch-all tiers.
-        C::XDependentTier(n) => {
-            user_defined::apply_x_tier(&mut utterance, n, errors);
-        }
-        C::UnsupportedDependentTier(n) => {
-            let n = n.node();
-            user_defined::apply_unsupported_tier(&mut utterance, n, input, errors);
-        }
-    }
 
+        Ok(())
+    })();
+    if let Err(fault) = reconstructed {
+        crate::parser::typed_cst::report_cst_failure(choice.raw_node(), input, fault, errors);
+    }
     utterance
 }

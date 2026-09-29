@@ -14,7 +14,7 @@ const {
   finishedRunSummary,
 } = require("../../.test-dist/src/hooks/validationState.js");
 
-// A valid `ValidationStats` literal (9 fields, `src/protocol/validation.ts`).
+// A valid `ValidationStats` literal, matching `src/protocol/validation.ts`.
 // `cacheHitRate` is NOT one of them; this test file is untyped `.cjs`, so an
 // invented field survives silently unless every literal is built here.
 function stats(overrides = {}) {
@@ -25,6 +25,7 @@ function stats(overrides = {}) {
     cacheHits: 0,
     cacheMisses: 2,
     parseErrors: 0,
+    internalFailures: 0,
     roundtripPassed: 0,
     roundtripFailed: 0,
     cancelled: false,
@@ -36,6 +37,7 @@ test("terminal failures without diagnostics remain visible problems", () => {
   for (const status of [
     { type: "readError", message: "permission denied" },
     { type: "parseError", message: "parser unavailable" },
+    { type: "internalFailure", message: "CHAT validity was not determined" },
     { type: "roundtripFailed", reason: "model changed", cacheHit: false },
     { type: "invalid", errorCount: 2, cacheHit: true },
   ]) {
@@ -61,6 +63,7 @@ test("only completed valid files without diagnostics have a valid outcome", () =
 test("finished summaries cannot certify failed, cancelled or empty populations", () => {
   for (const overrides of [
     { validFiles: 1, parseErrors: 1 },
+    { validFiles: 1, internalFailures: 1 },
     { validFiles: 1, invalidFiles: 1 },
     { roundtripFailed: 1 },
     { cancelled: true },

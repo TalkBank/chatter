@@ -22,7 +22,6 @@ expression: "(main, errors.into_vec())"
                                     end: 11,
                                 },
                                 word_id: None,
-                                raw_text: "hello",
                                 content: WordContents(
                                     [
                                         Text(

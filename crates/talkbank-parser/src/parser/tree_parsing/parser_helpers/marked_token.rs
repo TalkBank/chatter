@@ -5,18 +5,19 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Words>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#User_Defined_Tiers>
 
+use super::extract_utf8_text;
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::parser::typed_cst::{NodeTextError, admit_node_text};
+use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 /// The text of a grammar token past the marker its rule begins with.
 ///
 /// The grammar guarantees the marker (`$` on a `pos_tag`, `@` on a
 /// `form_marker`, `@s` on a `word_lang_suffix`, `%x` on an `x_tier_prefix`,
-/// `%` on an `unsupported_tier_prefix`), so a token without it, or one
-/// that is not UTF-8, does not fit its own grammar: that is the traversal's
-/// failure, reported as such (E330, naming the token as `what` calls it)
-/// and read as nothing, never read around. Until 2026-09-09 each site stripped
+/// `%` on an `unsupported_tier_prefix`). An unreadable source association is
+/// an internal failure (E001); a readable token without the expected marker
+/// retains the structural recovery diagnostic (E330). Neither is read around.
+/// Until 2026-09-09 each site stripped
 /// its marker behind a fallback (`strip_prefix(..).unwrap_or(text)`, or
 /// `unwrap_or("")`), so a bare payload read as a declared one and a token
 /// that was not an `@s` suffix at all became the bare `@s` shortcut.
@@ -36,23 +37,8 @@ pub(crate) fn after_marker<'a>(
             message,
         )
     };
-    let text = match admit_node_text(node, source) {
-        Ok(text) => text,
-        Err(NodeTextError::OutsideSource) => {
-            errors.report(fault(format!(
-                "{what} node range is outside the supplied source"
-            )));
-            return None;
-        }
-        Err(NodeTextError::InvalidUtf8(error)) => {
-            errors.report(
-                fault(format!("{what} is not valid UTF-8: {error}")).with_suggestion(
-                    "The source file may contain invalid UTF-8 sequences. Ensure the file is \
-                     properly encoded as UTF-8.",
-                ),
-            );
-            return None;
-        }
+    let ParseOutcome::Parsed(text) = extract_utf8_text(node, source, errors, what) else {
+        return None;
     };
     let Some(rest) = text.strip_prefix(marker) else {
         errors.report(fault(format!("{what} does not begin with '{marker}'")));
@@ -101,21 +87,25 @@ mod tests {
             let foreign_utf8 = "é".repeat(source.len());
             let mut wrong_marker = source.to_owned();
             wrong_marker.replace_range(node.byte_range(), "!wp");
-            for (input, message) in [
-                ("", "outside the supplied source"),
-                (foreign_utf8.as_str(), "not valid UTF-8"),
-                (wrong_marker.as_str(), "does not begin with '@'"),
+            for (input, expected) in [
+                ("", ErrorCode::InternalError),
+                (foreign_utf8.as_str(), ErrorCode::InternalError),
+                (wrong_marker.as_str(), ErrorCode::TreeParsingError),
             ] {
                 let errors = ErrorCollector::new();
                 assert!(after_marker(node, "@", "Form marker", input, &errors).is_none());
                 let diagnostics = errors.into_vec();
                 assert_eq!(diagnostics.len(), 1);
-                assert_eq!(diagnostics[0].code, ErrorCode::TreeParsingError);
+                assert_eq!(diagnostics[0].code, expected);
                 assert_eq!(
                     diagnostics[0].location.span,
                     Span::from_usize(node.start_byte(), node.end_byte())
                 );
-                assert!(diagnostics[0].message.contains(message));
+                if expected == ErrorCode::InternalError {
+                    assert!(talkbank_model::CompletedDiagnostics::admit(diagnostics).is_err());
+                } else {
+                    assert!(diagnostics[0].message.contains("does not begin with '@'"));
+                }
             }
         }
         assert!(checked > 0, "fixture must supply the word-play marker");

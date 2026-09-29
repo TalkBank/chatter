@@ -1,0 +1,19 @@
+@UTF8
+@Begin
+@Languages:	yue
+@Participants:	CHI Target_Child
+@ID:	yue|corpus|CHI|||||Target_Child|||
+@Comment:	Authored traditional-script number controls, not a production transcription.
+@Comment:	Written controls for E220_bare_numerals in matching order; these test script selection, not spoken pronunciation.
+@Comment:	Constructs: Traditional characters, tens, internal zeros, four-digit groups, skipped groups.
+*CHI:	一 .
+*CHI:	十 .
+*CHI:	十二 .
+*CHI:	二十一 .
+*CHI:	一百零一 .
+*CHI:	一千零一 .
+*CHI:	一萬 .
+*CHI:	一萬零一 .
+*CHI:	一億零一 .
+*CHI:	一億零一萬零一 .
+@End

@@ -51,29 +51,20 @@
 //!
 //! # Example
 //!
-//! ```ignore
-//! use talkbank_model::{MainTier, MorTier, Terminator, UtteranceContent, Word};
-//! use talkbank_model::Span;
-//! use talkbank_parser::parse_mor_tier;
+//! Given typed main and MOR tiers, inspect the alignment result. Parsing belongs
+//! to `talkbank-parser`, not this model crate; callers must also respect the
+//! utterance's parse-health before relying on cross-tier alignment.
+//!
+//! ```
+//! use talkbank_model::{MainTier, MorTier};
 //! use talkbank_model::alignment::align_main_to_mor;
+//! # fn inspect(main: &MainTier, mor: &MorTier) {
 //!
-//! let main = MainTier::new(
-//!     "CHI",
-//!     vec![
-//!         UtteranceContent::Word(Word::simple("hello")),
-//!         UtteranceContent::Word(Word::simple("world")),
-//!     ],
-//!     Terminator::Period { span: Span::DUMMY },
-//! );
-//!
-//! let mor = match parse_mor_tier("v|hello n|world .") {
-//!     Ok(mor) => mor,
-//!     Err(_) => return,
-//! };
-//!
-//! let alignment = align_main_to_mor(&main, &mor);
-//! assert_eq!(alignment.pairs.len(), 3); // 2 words + 1 terminator
-//! assert!(alignment.errors.is_empty());
+//! let alignment = align_main_to_mor(main, mor);
+//! for error in &alignment.errors {
+//!     eprintln!("{error:?}");
+//! }
+//! # }
 //! ```
 //!
 //! # Implementation Notes

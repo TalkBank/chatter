@@ -22,12 +22,20 @@
 //! - [`BatchSafety::Mechanical`]: one right answer, no semantic judgment.
 //!   Safe for a bare `--apply` to write unattended.
 //! - [`BatchSafety::Semantic`]: deterministic, but consequential enough
-//!   (deletes content, fabricates a placeholder, changes what a speaker
+//!   (deletes content or changes what a speaker
 //!   said) that a batch run should require the caller to name the code.
 //! - [`BatchSafety::Ambiguous`]: several valid answers exist and no
 //!   evidence in the file picks one. Never batch-applied; only reported.
 //!
+//! Missing participant, role and language facts have no catalog proposal:
+//! E308/E504/E507 require actual user-supplied values, not placeholders.
+//!
 //! # Porting from the LSP catalog: verified, not copied
+//!
+//! The observations below record the original porting rationale, not today's
+//! diagnostic reachability. The current E301/E501/E507 specs assign their
+//! malformed-header/speaker specimens to E316 grammar rejection; the catalog
+//! refuses those specimens rather than inventing the historical diagnostics.
 //!
 //! [`catalog_fix`] is not a mechanical port of
 //! `crates/talkbank-lsp/src/backend/features/code_action_fixes.rs`. Every
@@ -105,7 +113,8 @@
 //! rather than guessing when it does not. E241 is the entry that shows what
 //! that check should look like: it asks the model's vocabulary owner whether
 //! the span reads as a misspelled marker, rather than comparing it to a
-//! literal, which is what the rest of this catalog still does. `source` is threaded into [`catalog_fix`]
+//! literal, which is what the rest of this catalog still does. The retained
+//! parse capability supplies source to [`catalog_fix`]
 //! for exactly this: a diagnostic's span is trusted data about WHERE, never
 //! about WHAT is there.
 //!
@@ -123,15 +132,16 @@
 //!
 //! [`crate::splice::admit_edits`] admits an edit only when
 //! `ChatFile::utterance_containing` finds an enclosing utterance whose
-//! parse health is `Clean`. E501, E502, E503, E504, E506, E507 are all
-//! header-region diagnostics: their fixes land before the first utterance
-//! (or, for E501, on a duplicated `@Begin`), so `utterance_containing`
+//! parse health is `Clean`. E501, E502 and E503 proposals target headers
+//! outside utterances, so `utterance_containing`
 //! will never find an enclosing utterance for them and `admit_edits` will
 //! always report `SkipReason::OutsideAnyUtterance`. That is a real,
 //! documented limitation for those entries. W109 has a separate, narrow
 //! capability: its catalog resolves a filename token from a recovery-free,
 //! source-bound generated media header. Only that token is admitted outside
 //! utterances; no generic header-edit bypass is exposed.
+//! E501 additionally requires proven identical source-bound declarations;
+//! conflicting information is never a mechanical deletion proposal.
 
 use talkbank_model::model::content::word::MarkerSpelling;
 use talkbank_model::{ErrorCode, ParseError, Span};
@@ -183,7 +193,10 @@ pub struct CatalogFix {
 
 /// Resolve the catalog fix for one diagnostic, if the code has an entry.
 ///
-/// `source` is the full text `error` was diagnosed against. It is used both
+/// `parsed` retains the exact text and CST from the caller's original parse.
+/// No catalog entry reparses that text. The caller must supply a diagnostic
+/// from that same input; this capability binds the CST to its text, not an
+/// independently supplied diagnostic to its producer. The source is used both
 /// to compute edits that need surrounding context (inserting into an
 /// existing header line, deleting a whole line rather than a bare span) and
 /// to verify a span actually contains what a fix assumes before trusting
@@ -192,23 +205,40 @@ pub struct CatalogFix {
 /// Every arm is explicit. A code with no entry, whether never considered or
 /// deliberately excluded (see the module docs), falls through to `None`;
 /// nothing here invents a default fix for a code it does not recognize.
-pub fn catalog_fix(error: &ParseError, source: &str) -> Option<CatalogFix> {
+///
+/// An independent string cannot substitute for the parse capability:
+///
+/// ```compile_fail
+/// use talkbank_model::ParseError;
+/// use talkbank_transform::splice::catalog_fix;
+/// fn disconnected(error: &ParseError, source: &str) {
+///     let _ = catalog_fix(error, source);
+/// }
+/// ```
+pub fn catalog_fix(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    let source = parsed.source();
     match error.code {
-        ErrorCode::IllegalUntranscribed => e241_illegal_untranscribed(error, source),
-        ErrorCode::ConsecutiveStressMarkers => e244_consecutive_stress_markers(error, source),
-        ErrorCode::ConsecutiveCommas => e258_consecutive_commas(error, source),
-        ErrorCode::CommaAfterNonSpokenContent => e259_comma_after_non_spoken_content(error, source),
-        ErrorCode::MissingTerminator => e305_missing_terminator(error, source),
-        ErrorCode::EmptyUtterance => e306_empty_utterance(error, source),
-        ErrorCode::UndeclaredSpeaker => e308_undeclared_speaker(error, source),
-        ErrorCode::DuplicateHeader => e501_duplicate_header(error, source),
+        ErrorCode::IllegalUntranscribed => e241_illegal_untranscribed(error, parsed),
+        ErrorCode::ConsecutiveStressMarkers => e244_consecutive_stress_markers(error, parsed),
+        ErrorCode::ConsecutiveCommas => e258_consecutive_commas(error, parsed),
+        ErrorCode::CommaAfterNonSpokenContent => e259_comma_after_non_spoken_content(error, parsed),
+        ErrorCode::MissingTerminator => e305_missing_terminator(error, parsed),
+        ErrorCode::EmptyUtterance => e306_empty_utterance(error, parsed),
+        ErrorCode::DuplicateHeader => e501_duplicate_header(error, parsed),
         ErrorCode::MissingEndHeader => e502_missing_end_header(error, source),
         ErrorCode::MissingUTF8Header => e503_missing_utf8_header(error),
-        ErrorCode::MissingRequiredHeader => e504_missing_required_header(error, source),
-        ErrorCode::EmptyLanguagesHeader => e507_empty_languages_header(error, source),
-        ErrorCode::GraWithoutMor => e604_gra_without_mor(error, source),
-        ErrorCode::SpaceInsideAngleGroup => e750_space_inside_angle_group(error, source),
-        ErrorCode::MediaFilenameNonCanonicalUnicode => w109_media_name(error, source),
+        ErrorCode::GraWithoutMor => e604_gra_without_mor(error, parsed),
+        ErrorCode::SpaceInsideAngleGroup => e750_space_inside_angle_group(error, parsed),
+        ErrorCode::MediaFilenameNonCanonicalUnicode => w109_media_name(error, parsed),
+
+        // Missing participant/language facts require user-supplied values.
+        // A diagnostic code or message cannot establish a role or language.
+        ErrorCode::UndeclaredSpeaker
+        | ErrorCode::MissingRequiredHeader
+        | ErrorCode::EmptyLanguagesHeader => None,
 
         // E301: seed source aliased this to E305's terminator fix, but the
         // real diagnostic is "Empty speaker code", unrelated to terminators
@@ -242,88 +272,66 @@ pub fn catalog_fix(error: &ParseError, source: &str) -> Option<CatalogFix> {
     }
 }
 
-/// The full line containing byte `offset`, including its trailing `\n` when
-/// the line has one.
-///
-/// Used to delete or locate whole header/tier/utterance lines, which are
-/// often wider than the span a diagnostic anchors to (a diagnostic may
-/// point at one offending token inside a line that should be removed in
-/// full). Returns `None` rather than panicking when `offset` is out of
-/// bounds or not a character boundary, which should not happen for a span
-/// that came from real parsing, but this module never trusts that without
-/// checking.
-fn line_span_at(source: &str, offset: u32) -> Option<Span> {
-    let offset = offset as usize;
-    if offset > source.len() || !source.is_char_boundary(offset) {
-        return None;
-    }
-    let start = source[..offset].rfind('\n').map_or(0, |i| i + 1);
-    let end = source[offset..]
-        .find('\n')
-        .map_or(source.len(), |i| offset + i + 1);
-    Some(Span::from_usize(start, end))
-}
-
-/// Normalize only the generated CST's filename token in a clean media header.
-/// URL tokens and already-canonical names never produce edits.
-fn w109_media_name(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    use talkbank_parser::generated_traversal::{AsRawNode, MediaHeaderNode, SourceSlotView};
-    use unicode_normalization::UnicodeNormalization;
-    let parser = talkbank_parser::TreeSitterParser::new().ok()?;
-    let parsed = parser.parse_source_incremental(source, None).ok()?;
-    let span = error.location.span;
+/// Locate a typed enclosing node without reconstructing CHAT from source text.
+fn enclosing_node<'tree, 'source, T>(
+    parsed: &'tree talkbank_parser::generated_traversal::ParsedSource<'source>,
+    span: Span,
+) -> Option<talkbank_parser::generated_traversal::SourceBound<'tree, 'source, T>>
+where
+    T: talkbank_parser::generated_traversal::SourceBoundKind<'tree>
+        + talkbank_parser::generated_traversal::FromNodeKind<'tree>,
+{
     let mut node = parsed
         .root_node()
         .descendant_for_byte_range(span.start as usize, span.end as usize)?;
     loop {
-        if let Some(header) = parsed.bind(node).ok()?.typed::<MediaHeaderNode>() {
-            if header.raw_node().has_error() {
-                return None;
-            }
-            let fields = header.extract();
-            let SourceSlotView::Present(contents) = fields.field_child_2().slot().view() else {
-                return None;
-            };
-            let contents = contents.read().ok()?;
-            let fields = contents.extract();
-            let SourceSlotView::Present(filename) = fields.field_child_0().slot().view() else {
-                return None;
-            };
-            let filename = filename.read().ok()?;
-            let text = filename.text();
-            if talkbank_model::model::MediaFilename::parse(text)
-                .ok()?
-                .is_remote_url()
-            {
-                return None;
-            }
-            let canonical: String = text.nfc().collect();
-            if canonical == text {
-                return None;
-            }
-            let range = filename.raw_node().byte_range();
-            let edit = SpliceEdit::new_header_token(
-                EditTarget::Replace(Span::from_usize(range.start, range.end)),
-                Replacement::new(canonical),
-                error.code,
-            );
-            return Some(single_edit_fix(BatchSafety::Mechanical, edit));
+        if let Some(typed) = parsed.bind(node).ok()?.typed::<T>() {
+            return Some(typed);
         }
         node = node.parent()?;
     }
 }
 
-/// The byte span of the first line in `source` starting with `prefix`,
-/// including its trailing `\n` when present.
-fn find_line(source: &str, prefix: &str) -> Option<Span> {
-    let mut offset = 0usize;
-    for line in source.split_inclusive('\n') {
-        if line.starts_with(prefix) {
-            return Some(Span::from_usize(offset, offset + line.len()));
-        }
-        offset += line.len();
+/// Normalize only the generated CST's filename token in a clean media header.
+/// URL tokens and already-canonical names never produce edits.
+fn w109_media_name(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{AsRawNode, MediaHeaderNode, SourceSlotView};
+    use unicode_normalization::UnicodeNormalization;
+    let header = enclosing_node::<MediaHeaderNode>(parsed, error.location.span)?;
+    if header.raw_node().has_error() {
+        return None;
     }
-    None
+    let fields = header.extract().ok()?;
+    let SourceSlotView::Present(contents) = fields.field_child_2().slot().view() else {
+        return None;
+    };
+    let contents = contents.read().ok()?;
+    let fields = contents.extract().ok()?;
+    let SourceSlotView::Present(filename) = fields.field_child_0().slot().view() else {
+        return None;
+    };
+    let filename = filename.read().ok()?;
+    let text = filename.text();
+    if talkbank_model::model::MediaFilename::parse(text)
+        .ok()?
+        .is_remote_url()
+    {
+        return None;
+    }
+    let canonical: String = text.nfc().collect();
+    if canonical == text {
+        return None;
+    }
+    let range = filename.raw_node().byte_range();
+    let edit = SpliceEdit::new_header_token(
+        EditTarget::Replace(Span::from_usize(range.start, range.end)),
+        Replacement::new(canonical),
+        error.code,
+    );
+    Some(single_edit_fix(BatchSafety::Mechanical, edit))
 }
 
 /// A single-edit [`CatalogFix`], the common shape for every deterministic
@@ -335,28 +343,21 @@ fn single_edit_fix(safety: BatchSafety, edit: SpliceEdit) -> CatalogFix {
     }
 }
 
-/// E241 `IllegalUntranscribed`: a marker written wrongly has exactly one right
-/// spelling, so the repair is the canonical form of whichever marker it is.
-///
-/// # Why this asks the model instead of comparing to a literal
-///
-/// It used to read `if source.get(span.to_range())? != "xx" { return None }`
-/// and splice in `"xxx"`, which is a fourth hand-written copy of a vocabulary
-/// that has three members and six or more wrong spellings. E241 fires on all of
-/// them; this could repair one. `chatter fix` therefore reported nothing to do
-/// on a file whose only fault was `YYY`, while `chatter validate` on the same
-/// file said exactly what was wrong and what it should be.
-///
-/// [`MarkerSpelling::of`] is the owner of that question, so this stays correct
-/// when the vocabulary changes rather than becoming the next copy to drift.
-fn e241_illegal_untranscribed(error: &ParseError, source: &str) -> Option<CatalogFix> {
+/// E241 replaces a complete source-bound word only when the model-owned
+/// [`MarkerSpelling::of`] classifies its spelling as a misspelled marker.
+/// Do not duplicate that vocabulary or erase omission/shortening notation.
+fn e241_illegal_untranscribed(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{AsRawNode, StandaloneWordNode};
     let span = error.location.span;
-    // `None` when the span does not read as a misspelled marker ON ITS OWN, so
-    // no edit is certainly right and the fix declines rather than guessing. The
-    // real case is an omitted word (`0xx`), where the diagnostic is computed
-    // from the cleaned text while the span also covers the `0` prefix:
-    // replacing the whole span would silently delete the omission.
-    let intended = MarkerSpelling::of(source.get(span.to_range())?).misspelled()?;
+    let word = enclosing_node::<StandaloneWordNode>(parsed, span)?;
+    if word.raw_node().byte_range() != span.to_range() || word.raw_node().has_error() {
+        return None;
+    }
+    // The token itself must be a marker, not merely its cleaned spelling.
+    let intended = MarkerSpelling::of(word.text()).misspelled()?;
     let edit = SpliceEdit::new(
         EditTarget::Replace(span),
         Replacement::new(intended.canonical()),
@@ -365,60 +366,122 @@ fn e241_illegal_untranscribed(error: &ParseError, source: &str) -> Option<Catalo
     Some(single_edit_fix(BatchSafety::Mechanical, edit))
 }
 
-/// E244 `ConsecutiveStressMarkers`: collapse a run of consecutive primary
+/// E244 `ConsecutiveStressMarkers`: collapse runs of consecutive primary
 /// stress marks (`ˈ`, U+02C8) to one, without touching the word content the
 /// diagnostic span also covers (see the module-level doc for why the naive
 /// whole-span replace this was ported from is unsafe).
-fn e244_consecutive_stress_markers(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    const STRESS_MARK: char = '\u{02C8}';
-
-    let span = error.location.span;
-    let text = source.get(span.to_range())?;
-    let run_start_byte = text.find(STRESS_MARK)?;
-    let run_len: usize = text[run_start_byte..]
-        .chars()
-        .take_while(|&c| c == STRESS_MARK)
-        .map(char::len_utf8)
-        .sum();
-    // A single mark is not "consecutive"; require at least two to collapse.
-    if run_len < STRESS_MARK.len_utf8() * 2 {
+fn e244_consecutive_stress_markers(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{
+        AsRawNode, SourceBound, StandaloneWordNode, StressMarkerNode,
+    };
+    // Only a checked primary token can become the previous primary witness.
+    struct PrimaryStress<'tree, 'source>(SourceBound<'tree, 'source, StressMarkerNode<'tree>>);
+    let word = enclosing_node::<StandaloneWordNode>(parsed, error.location.span)?;
+    if word.raw_node().has_error() {
         return None;
     }
-    let run_start = span.start + run_start_byte as u32;
-    let run_end = run_start + run_len as u32;
-    let edit = SpliceEdit::new(
-        EditTarget::Replace(Span::new(run_start, run_end)),
-        Replacement::new(STRESS_MARK.to_string()),
-        EditProvenance::Diagnostic(error.code),
-    );
-    Some(single_edit_fix(BatchSafety::Mechanical, edit))
+    let mut previous: Option<PrimaryStress<'_, '_>> = None;
+    let mut edits = Vec::new();
+    for node in word.source_slice().descendants() {
+        let Some(mark) = node.ok()?.typed::<StressMarkerNode>() else {
+            continue;
+        };
+        if mark.text() != "ˈ" {
+            previous = None;
+            continue;
+        }
+        let current = PrimaryStress(mark);
+        if let Some(previous) = previous.as_ref()
+            && previous.0.raw_node().end_byte() == current.0.raw_node().start_byte()
+        {
+            edits.push(SpliceEdit::new(
+                EditTarget::Replace(Span::from_usize(
+                    current.0.raw_node().start_byte(),
+                    current.0.raw_node().end_byte(),
+                )),
+                Replacement::new(""),
+                EditProvenance::Diagnostic(error.code),
+            ));
+        }
+        previous = Some(current);
+    }
+    (!edits.is_empty()).then_some(CatalogFix {
+        safety: BatchSafety::Mechanical,
+        kind: FixKind::Deterministic(edits),
+    })
 }
 
 /// E258 `ConsecutiveCommas`: the diagnostic span covers exactly one of the
 /// pair; deleting it collapses `",,"` to `","`.
-fn e258_consecutive_commas(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    let span = error.location.span;
-    if source.get(span.to_range())? != "," {
+fn e258_consecutive_commas(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{AsRawNode, TierBodyNode};
+    let comma = diagnostic_comma(parsed, error.location.span)?;
+    let body = enclosing_node::<TierBodyNode>(parsed, error.location.span)?;
+    if body.raw_node().has_error() {
         return None;
     }
     let edit = SpliceEdit::new(
-        EditTarget::Replace(span),
+        EditTarget::Replace(Span::from_usize(
+            comma.raw_node().start_byte(),
+            comma.raw_node().end_byte(),
+        )),
         Replacement::new(""),
         EditProvenance::Diagnostic(error.code),
     );
     Some(single_edit_fix(BatchSafety::Mechanical, edit))
 }
 
+/// Admit only a complete grammar comma at the diagnostic's exact source range.
+fn diagnostic_comma<'tree, 'source>(
+    parsed: &'tree talkbank_parser::generated_traversal::ParsedSource<'source>,
+    span: Span,
+) -> Option<
+    talkbank_parser::generated_traversal::SourceBound<
+        'tree,
+        'source,
+        talkbank_parser::generated_traversal::CommaNode<'tree>,
+    >,
+> {
+    use talkbank_parser::generated_traversal::{AsRawNode, CommaNode};
+    let comma = enclosing_node::<CommaNode>(parsed, span)?;
+    (comma.raw_node().byte_range() == span.to_range()).then_some(comma)
+}
+
 /// E259 `CommaAfterNonSpokenContent`: delete the comma that has no
 /// preceding spoken word to attach to. Semantic, not mechanical: unlike
 /// E258's redundant comma, this comma is the ONLY one at its position, so
 /// deleting it is a real content change rather than de-duplication.
-fn e259_comma_after_non_spoken_content(error: &ParseError, source: &str) -> Option<CatalogFix> {
+fn e259_comma_after_non_spoken_content(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{AsRawNode, TierBodyNode, WhitespacesNode};
     let span = error.location.span;
-    if source.get(span.to_range())? != "," {
+    let comma = diagnostic_comma(parsed, span)?;
+    let body = enclosing_node::<TierBodyNode>(parsed, span)?;
+    if body.raw_node().has_error() {
         return None;
     }
-    let delete_span = widen_tier_initial_comma_deletion(source, span);
+    let mut delete_span = span;
+    if comma.raw_node().start_byte() == body.raw_node().start_byte() {
+        // Only a body-initial comma owns the following separator: deleting it
+        // alone would introduce leading whitespace. Interior commas retain it.
+        for node in body.source_slice().descendants() {
+            if let Some(space) = node.ok()?.typed::<WhitespacesNode>()
+                && space.raw_node().start_byte() == comma.raw_node().end_byte()
+            {
+                delete_span =
+                    Span::from_usize(comma.raw_node().start_byte(), space.raw_node().end_byte());
+                break;
+            }
+        }
+    }
     let edit = SpliceEdit::new(
         EditTarget::Replace(delete_span),
         Replacement::new(""),
@@ -427,53 +490,28 @@ fn e259_comma_after_non_spoken_content(error: &ParseError, source: &str) -> Opti
     Some(single_edit_fix(BatchSafety::Semantic, edit))
 }
 
-/// Widen a tier-initial comma's deletion span to also consume the one
-/// space that follows it.
-///
-/// A comma directly preceded by the tab that opens the main tier (nothing
-/// between them) IS the tier's first character. Deleting only that comma
-/// leaves the space after it as a new leading space on the tier, which
-/// chatter's own validator (E758 `LeadingSpaceOnMainTier`) correctly
-/// rejects: `"*CHI:\t, xx .\n"` naively becomes `"*CHI:\t xx .\n"`, trading
-/// one invalidity for another. (Found 2026-07-31 by `chatter fix`'s own
-/// post-splice re-parse check in `crates/chatter/src/commands/fix.rs`,
-/// exactly the class of bug that check exists to catch.)
-///
-/// A comma glued to PRECEDING word content instead (`"www, the rest"`, the
-/// shape this diagnostic actually fires on most often: real speech attaches
-/// a comma directly to the word before it) needs no widening: deleting just
-/// the comma already leaves exactly one separating space between the words
-/// on either side, so widening there would instead glue them together.
-fn widen_tier_initial_comma_deletion(source: &str, span: Span) -> Span {
-    let bytes = source.as_bytes();
-    let tier_initial = span.start > 0 && bytes.get(span.start as usize - 1) == Some(&b'\t');
-    let followed_by_space = bytes.get(span.end as usize) == Some(&b' ');
-    if tier_initial && followed_by_space {
-        Span::new(span.start, span.end + 1)
-    } else {
-        span
-    }
-}
-
 /// E305 `MissingTerminator`: fires both for a main-tier utterance and a
 /// `%mor` tier missing its own terminator; either way there are three
 /// equally valid answers (`.`, `?`, `!`) and no evidence in the file picks
 /// one, so this is never a single deterministic fix.
 ///
-/// The diagnostic's span covers the WHOLE physical line, trailing `\n`
-/// included (verified: for `*CHI:\thi\n`, `location.span` is exactly
-/// `13..22`, the newline at byte 21 included). Inserting at the raw
-/// `span.end` would land the terminator on the NEXT line, ahead of
-/// whatever follows, rather than after `hi`. When the spanned text ends
-/// with `\n`, this inserts just before it instead.
-fn e305_missing_terminator(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    let span = error.location.span;
-    let text = source.get(span.to_range())?;
-    let insert_at = if text.ends_with('\n') {
-        span.end - 1
-    } else {
-        span.end
+/// Main tiers insert before the grammar-owned ending (including final codes);
+/// MOR inserts before its terminal newline. Neither splits CRLF or guesses
+/// structure from diagnostic text. Recovered tiers decline a proposal.
+fn e305_missing_terminator(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{
+        AsRawNode, MainTierNode, MorDependentTierNode, NewlineNode, UtteranceEndNode,
     };
+    let anchor = if let Some(main) = enclosing_node::<MainTierNode>(parsed, error.location.span) {
+        terminal_descendant::<UtteranceEndNode>(main.source_slice())?.source_slice()
+    } else {
+        let mor = enclosing_node::<MorDependentTierNode>(parsed, error.location.span)?;
+        terminal_descendant::<NewlineNode>(mor.source_slice())?.source_slice()
+    };
+    let insert_at = u32::try_from(anchor.raw_node().start_byte()).ok()?;
     let alternatives = [
         (".", "Add '.' (declarative/default)"),
         ("?", "Add '?' (question)"),
@@ -495,71 +533,116 @@ fn e305_missing_terminator(error: &ParseError, source: &str) -> Option<CatalogFi
     })
 }
 
-/// E306 `EmptyUtterance`: delete the whole main-tier line once confirmed to
-/// actually be one (`*`-prefixed). Semantic: this removes content, even
-/// though the content removed is, by definition, meaningless.
-fn e306_empty_utterance(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    let line = line_span_at(source, error.location.span.start)?;
-    let text = source.get(line.to_range())?;
-    if !text.starts_with('*') {
+/// Admit a unique typed descendant ending at its clean carrier's boundary.
+fn terminal_descendant<'tree, 'source, T>(
+    tier: talkbank_parser::generated_traversal::SourceSlice<'tree, 'source>,
+) -> Option<talkbank_parser::generated_traversal::SourceBound<'tree, 'source, T>>
+where
+    T: talkbank_parser::generated_traversal::SourceBoundKind<'tree>
+        + talkbank_parser::generated_traversal::FromNodeKind<'tree>,
+{
+    use talkbank_parser::generated_traversal::AsRawNode;
+    if tier.raw_node().has_error() {
         return None;
     }
+    let mut terminal = None;
+    for node in tier.descendants() {
+        if let Some(anchor) = node.ok()?.typed::<T>()
+            && anchor.raw_node().end_byte() == tier.raw_node().end_byte()
+        {
+            if terminal.is_some() {
+                return None;
+            }
+            terminal = Some(anchor);
+        }
+    }
+    terminal
+}
+
+/// E306: delete a complete, clean main-tier-only utterance. Dependent tiers
+/// must never be orphaned, reassigned or discarded by this semantic proposal.
+fn e306_empty_utterance(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{AsRawNode, MainTierNode, UtteranceNode};
+    let main = enclosing_node::<MainTierNode>(parsed, error.location.span)?;
+    let owner = enclosing_node::<UtteranceNode>(parsed, error.location.span)?;
+    if owner.raw_node().has_error() || owner.raw_node().byte_range() != main.raw_node().byte_range()
+    {
+        return None;
+    }
+    let range = main.raw_node().byte_range();
     let edit = SpliceEdit::new(
-        EditTarget::Replace(line),
+        EditTarget::Replace(Span::from_usize(range.start, range.end)),
         Replacement::new(""),
         EditProvenance::Diagnostic(error.code),
     );
     Some(single_edit_fix(BatchSafety::Semantic, edit))
 }
 
-/// E308 `UndeclaredSpeaker`: append the speaker code the diagnostic span
-/// already names to the `@Participants` header line. Derived from the
-/// span's own text rather than parsing it back out of the message string
-/// (the seed source's approach), since the span is already exactly the
-/// speaker code. Semantic: adds a real participant with a fabricated role
-/// name ("Participant"), which needs a human to confirm.
-fn e308_undeclared_speaker(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    let span = error.location.span;
-    let speaker = source.get(span.to_range())?;
-    if speaker.is_empty() || !speaker.chars().all(|c| c.is_ascii_alphanumeric()) {
-        return None;
+/// Evidence that the selected complete header repeats earlier identical text,
+/// and no declaration of the same grammar variant conflicts with it.
+struct IdenticalHeaderDuplicate<'tree, 'source>(
+    talkbank_parser::generated_traversal::SourceBound<
+        'tree,
+        'source,
+        talkbank_parser::generated_traversal::HeaderChoice<'tree>,
+    >,
+);
+
+impl<'tree, 'source> IdenticalHeaderDuplicate<'tree, 'source> {
+    fn admit(
+        parsed: &'tree talkbank_parser::generated_traversal::ParsedSource<'source>,
+        span: Span,
+    ) -> Option<Self> {
+        use talkbank_parser::generated_traversal::{AsRawNode, HeaderChoice};
+        let root = parsed.root_node();
+        if root.has_error() {
+            return None;
+        }
+        let target = enclosing_node::<HeaderChoice>(parsed, span)?;
+        let kind = std::mem::discriminant(&target.view());
+        let mut earlier = false;
+        for node in parsed.bind(root).ok()?.descendants() {
+            let Some(header) = node.ok()?.typed::<HeaderChoice>() else {
+                continue;
+            };
+            if std::mem::discriminant(&header.view()) != kind {
+                continue;
+            }
+            // Exact source equality is deliberately conservative: a whitespace
+            // difference is not proof of interchangeable declarations.
+            if header.text() != target.text() {
+                return None;
+            }
+            earlier |= header.raw_node().end_byte() <= target.raw_node().start_byte();
+        }
+        earlier.then_some(Self(target))
     }
-    let line = find_line(source, "@Participants:")?;
-    let line_text = source.get(line.to_range())?;
-    let insert_at = if line_text.ends_with('\n') {
-        line.end - 1
-    } else {
-        line.end
-    };
-    let edit = SpliceEdit::new(
-        EditTarget::InsertAt(insert_at),
-        Replacement::new(format!(", {speaker} Participant")),
-        EditProvenance::Diagnostic(error.code),
-    );
-    Some(single_edit_fix(BatchSafety::Semantic, edit))
+
+    fn into_fix(self, code: ErrorCode) -> CatalogFix {
+        use talkbank_parser::generated_traversal::AsRawNode;
+        let range = self.0.raw_node().byte_range();
+        single_edit_fix(
+            BatchSafety::Mechanical,
+            SpliceEdit::new(
+                EditTarget::Replace(Span::from_usize(range.start, range.end)),
+                Replacement::new(""),
+                EditProvenance::Diagnostic(code),
+            ),
+        )
+    }
 }
 
-/// E501 `DuplicateHeader`: delete the flagged (later) duplicate line
-/// wholesale. Mechanical: the diagnostic already identifies exactly which
-/// occurrence is the redundant one; keeping the first and removing the
-/// rest loses nothing.
-///
-/// Header-scoped, so `chatter fix` cannot apply it today: see "Header-scoped
-/// codes need a recovery-free parse, not utterance gating" in the module
-/// docs above. The edit built here is correct; it is always reported as
-/// skipped with `SkipReason::OutsideAnyUtterance`, never written.
-fn e501_duplicate_header(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    let line = line_span_at(source, error.location.span.start)?;
-    let text = source.get(line.to_range())?;
-    if !text.trim_end_matches('\n').starts_with('@') {
-        return None;
-    }
-    let edit = SpliceEdit::new(
-        EditTarget::Replace(line),
-        Replacement::new(""),
-        EditProvenance::Diagnostic(error.code),
-    );
-    Some(single_edit_fix(BatchSafety::Mechanical, edit))
+/// E501 proposes deleting only a proven identical, complete header.
+/// Conflicts and recovered structure refuse a proposal. Header edit admission
+/// still reports OutsideAnyUtterance; this proof does not bypass that boundary.
+fn e501_duplicate_header(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    Some(IdenticalHeaderDuplicate::admit(parsed, error.location.span)?.into_fix(error.code))
 }
 
 /// E502 `MissingEndHeader`: append `@End` at end of file, prefixing a
@@ -596,61 +679,30 @@ fn e503_missing_utf8_header(error: &ParseError) -> Option<CatalogFix> {
     Some(single_edit_fix(BatchSafety::Mechanical, edit))
 }
 
-/// E504 `MissingRequiredHeader`: one code covers several distinct missing
-/// headers (`@Languages`, `@Participants`, `@Begin`, ...), distinguished
-/// only by `error.message` text, since `ErrorCode` does not carry which
-/// header. Only the `@Participants` case gets a fix here (matching the
-/// seed source's own scoping): insert a placeholder participant line right
-/// after `@Begin`. Semantic: the participant name is fabricated, not
-/// derived from the file.
-///
-/// Header-scoped, so `chatter fix` cannot apply it today; see the note on
-/// `e501_duplicate_header` above.
-fn e504_missing_required_header(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    if !error.message.contains("@Participants") {
-        return None;
-    }
-    let begin_line = find_line(source, "@Begin")?;
-    let edit = SpliceEdit::new(
-        EditTarget::InsertAt(begin_line.end),
-        Replacement::new("@Participants:\tCHI Child\n"),
-        EditProvenance::Diagnostic(error.code),
-    );
-    Some(single_edit_fix(BatchSafety::Semantic, edit))
-}
-
-/// E507 `EmptyLanguagesHeader`: fill in `eng` as the language once
-/// confirmed the span is exactly the empty `@Languages:` header key.
-/// Semantic: `eng` is a guessed default, not read from the file.
-///
-/// Header-scoped, so `chatter fix` cannot apply it today; see the note on
-/// `e501_duplicate_header` above.
-fn e507_empty_languages_header(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    let span = error.location.span;
-    if source.get(span.to_range())? != "@Languages:" {
-        return None;
-    }
-    let edit = SpliceEdit::new(
-        EditTarget::Replace(span),
-        Replacement::new("@Languages:\teng"),
-        EditProvenance::Diagnostic(error.code),
-    );
-    Some(single_edit_fix(BatchSafety::Semantic, edit))
-}
-
 /// E604 `GraWithoutMor`: the diagnostic anchors to the main tier the
-/// orphaned `%gra` belongs to, not to the `%gra` line itself, so the fix
-/// looks at the line immediately following and deletes it only once
-/// confirmed to actually start with `%gra`. Semantic: removes a whole
-/// tier's content.
-fn e604_gra_without_mor(error: &ParseError, source: &str) -> Option<CatalogFix> {
-    let next_line = line_span_at(source, error.location.span.end)?;
-    let text = source.get(next_line.to_range())?;
-    if !text.starts_with("%gra") {
-        return None;
+/// orphaned `%gra` belongs to, not to the tier itself. Select one complete,
+/// recovery-free generated GRA tier within that typed utterance. Intervening
+/// tiers and continuation lines do not affect ownership. Multiple GRA tiers
+/// refuse selection rather than guessing. Semantic: removes tier content.
+fn e604_gra_without_mor(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{AsRawNode, GraDependentTierNode, UtteranceNode};
+    let utterance = enclosing_node::<UtteranceNode>(parsed, error.location.span)?;
+    let mut selected = None;
+    for child in utterance.descendants() {
+        if let Some(gra) = child.ok()?.typed::<GraDependentTierNode>() {
+            if gra.raw_node().has_error() || selected.is_some() {
+                return None;
+            }
+            selected = Some(gra);
+        }
     }
+    let gra = selected?;
+    let range = gra.raw_node().byte_range();
     let edit = SpliceEdit::new(
-        EditTarget::Replace(next_line),
+        EditTarget::Replace(Span::from_usize(range.start, range.end)),
         Replacement::new(""),
         EditProvenance::Diagnostic(error.code),
     );
@@ -661,16 +713,34 @@ fn e604_gra_without_mor(error: &ParseError, source: &str) -> Option<CatalogFix> 
 /// `<` or immediately before `>`. This is mechanical because delimiters must
 /// hug the same group content; deleting only that separator changes neither
 /// tokens nor group structure.
-fn e750_space_inside_angle_group(error: &ParseError, source: &str) -> Option<CatalogFix> {
+fn e750_space_inside_angle_group(
+    error: &ParseError,
+    parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
+) -> Option<CatalogFix> {
+    use talkbank_parser::generated_traversal::{
+        AsRawNode, GroupWithAnnotationsNode, SourceSlotView, WhitespacesNode,
+    };
     let span = error.location.span;
-    let whitespace = source.get(span.to_range())?;
-    if whitespace.is_empty() || !whitespace.bytes().all(|byte| byte == b' ') {
+    let whitespace = enclosing_node::<WhitespacesNode>(parsed, span)?;
+    if whitespace.raw_node().byte_range() != span.to_range()
+        || whitespace.text().is_empty()
+        || !whitespace.text().bytes().all(|byte| byte == b' ')
+    {
         return None;
     }
-    let bytes = source.as_bytes();
-    let follows_open = span.start > 0 && bytes.get(span.start as usize - 1) == Some(&b'<');
-    let precedes_close = bytes.get(span.end as usize) == Some(&b'>');
-    if !follows_open && !precedes_close {
+    let group = enclosing_node::<GroupWithAnnotationsNode>(parsed, span)?;
+    if group.raw_node().has_error() {
+        return None;
+    }
+    let fields = group.extract().ok()?;
+    let content = fields.field_content_2();
+    let SourceSlotView::Present(content) = content.slot().view() else {
+        return None;
+    };
+    let content = content.read().ok()?;
+    if whitespace.raw_node().start_byte() != content.raw_node().start_byte()
+        && whitespace.raw_node().end_byte() != content.raw_node().end_byte()
+    {
         return None;
     }
     let edit = SpliceEdit::new_recovery_repair(
@@ -694,12 +764,13 @@ mod tests {
         let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t< dog > [/] dog .\n@End\n";
         let parser = TreeSitterParser::new().expect("tree-sitter parser initializes");
         let errors = ErrorCollector::new();
-        let _file = parser.parse_chat_file_streaming(source, &errors);
+        let (_file, parsed) = parser.parse_chat_file_with_source(source, &errors);
+        let parsed = parsed.expect("source-bound parse");
         let diagnostics = errors.into_vec();
         let fixes = diagnostics
             .iter()
             .filter(|error| error.code.as_str() == "E750")
-            .map(|error| catalog_fix(error, source).expect("E750 has a catalog fix"))
+            .map(|error| catalog_fix(error, &parsed).expect("E750 has a catalog fix"))
             .collect::<Vec<_>>();
 
         assert_eq!(fixes.len(), 2);

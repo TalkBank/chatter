@@ -9,7 +9,6 @@ Ok(
             end: 7,
         },
         word_id: None,
-        raw_text: "hello@b",
         content: WordContents(
             [
                 Text(

@@ -17,5 +17,6 @@ mod english_cardinal;
 mod num2chinese;
 mod num2text;
 mod ordinal_year_eng;
+mod spanish_cardinal;
 
 pub use num2text::expand_number;

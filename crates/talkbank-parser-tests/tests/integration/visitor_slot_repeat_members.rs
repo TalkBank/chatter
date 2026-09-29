@@ -94,11 +94,11 @@ fn languages_contents_repeat_member_enumerates_every_code() {
     // nodes; we descend through the header to reach the real list.)
     walk_all(tree.root_node(), &mut |node| {
         if let Some(header_node) = LanguagesHeaderNode::from_node(node) {
-            let header = extract_languages_header(header_node);
+            let header = extract_languages_header(header_node).expect("producer reconstruction");
             let NodeSlot::Present(contents) = header.child_2.slot() else {
                 panic!("@Languages header must have a Present languages_contents child");
             };
-            let children = extract_languages_contents(*contents);
+            let children = extract_languages_contents(*contents).expect("producer reconstruction");
 
             // The FIRST language code is the single `child_0` slot.
             let first = children

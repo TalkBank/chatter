@@ -221,17 +221,13 @@ pub(crate) fn word_with_annotations_to_model(
     let word = word_from_parsed(w, source);
 
     // Check if there's a replacement annotation
-    let replacement_text = w
+    let parsed_replacement = w
         .annotations
         .iter()
-        .find_map(ast::ParsedAnnotation::replacement_text);
+        .find_map(ast::ParsedAnnotation::replacement);
 
-    if let Some(replacement_text) = replacement_text {
-        let replacement_words: Vec<Word> = replacement_text
-            .split_whitespace()
-            .map(parse_word_to_model)
-            .collect();
-        let replacement = Replacement::new(replacement_words);
+    if let Some(parsed_replacement) = parsed_replacement {
+        let replacement = replacement_to_model(parsed_replacement, source);
 
         let scoped = annotations_to_scoped(&w.annotations);
 
@@ -306,15 +302,16 @@ fn annotated_span(
     span
 }
 
-/// Parse a word string through the lexer+parser and convert to model Word.
-/// Used for replacement words which may have internal structure (compounds, etc.)
-pub(crate) fn parse_word_to_model(text: &str) -> Word {
-    if let Some(parsed) = crate::parser::parse_word(text) {
-        // The AST borrows this fragment, so spans are relative to `text`.
-        word_from_parsed(&parsed, SourceText::new(text))
-    } else {
-        Word::simple(text)
+/// Convert words already admitted by the grammar, retaining original source spans.
+fn replacement_to_model(
+    parsed: &ast::ReplacementParsed<'_>,
+    source: SourceText<'_>,
+) -> Replacement {
+    let mut replacement = Replacement::from_word(word_from_parsed(parsed.first(), source));
+    for word in parsed.rest() {
+        replacement.words.push(word_from_parsed(word, source));
     }
+    replacement
 }
 
 /// Convert a separator token to model Separator, at `span`.
@@ -445,17 +442,13 @@ pub(crate) fn content_item_to_bracketed(
     match item {
         ast::ContentItem::Word(w) => {
             let word = word_from_parsed(w, source);
-            let replacement_text = w
+            let parsed_replacement = w
                 .annotations
                 .iter()
-                .find_map(ast::ParsedAnnotation::replacement_text);
+                .find_map(ast::ParsedAnnotation::replacement);
 
-            if let Some(replacement_text) = replacement_text {
-                let replacement_words: Vec<Word> = replacement_text
-                    .split_whitespace()
-                    .map(parse_word_to_model)
-                    .collect();
-                let replacement = Replacement::new(replacement_words);
+            if let Some(parsed_replacement) = parsed_replacement {
+                let replacement = replacement_to_model(parsed_replacement, source);
                 let scoped = annotations_to_scoped(&w.annotations);
                 let replaced = ReplacedWord::new(word, replacement).with_scoped_annotations(scoped);
                 BracketedItem::ReplacedWord(Box::new(replaced))

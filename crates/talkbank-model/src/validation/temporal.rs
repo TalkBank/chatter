@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn fillers_count_as_transcribed_content() {
         let content = vec![UtteranceContent::Word(Box::new(
-            Word::new_unchecked("&-you_know", "you_know").with_category(WordCategory::Filler),
+            Word::new_unchecked("you_know").with_category(WordCategory::Filler),
         ))];
 
         assert!(has_transcribed_content(&content));
@@ -257,9 +257,7 @@ mod tests {
 
     #[test]
     fn untranscribed_only_content_has_no_lexical_transcription() {
-        let content = vec![UtteranceContent::Word(Box::new(Word::new_unchecked(
-            "xxx", "xxx",
-        )))];
+        let content = vec![UtteranceContent::Word(Box::new(Word::new_unchecked("xxx")))];
 
         assert!(!has_transcribed_content(&content));
     }

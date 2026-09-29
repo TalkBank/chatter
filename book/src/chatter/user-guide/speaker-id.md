@@ -1,7 +1,7 @@
 # Speaker-ID (`chatter speaker-id`)
 
 **Status:** Draft
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 13:54 EDT
 
 `chatter speaker-id` assigns CHAT-conformant speaker codes and role
 tags to a CHAT file whose speakers carry anonymous or placeholder
@@ -239,24 +239,30 @@ notes the operator added.
 ### Token cleaning
 
 Both the reference anchor's bag of words and each input speaker's
-bag of words are built by walking the typed CHAT AST and emitting
-content tokens. The cleaner strips:
+bag of words are built by walking the typed CHAT AST. Word leaves supply
+their model-owned `cleaned_text`; the matcher does not independently strip
+CHAT markup or run a parallel text parser. It trims each value, applies ASCII
+lowercasing, and retains only entirely ASCII-alphabetic tokens of at least
+two characters. Non-word items do not enter the bag.
 
-- NAK-delimited time bullets
-- bracket-annotated markup `[*]`, `[//]`, `[/]`, `[=! ...]`, etc.
-- angle-bracket retracing scope (`<...>`, unwrap, keep inner text)
-- terminator variants `+//.`, `+...`, `+/.`, `+!?`, etc.
-- filled-pause and phonological-fragment markers `&-...`, `&+...`
-- unintelligible placeholders `xxx`, `yyy`, `www`
-- zero-realization markers `0`
-- special-form suffixes (`word@l` → `word`)
-- CHAT compound underscores (`Valentine's_Day` → `Valentine s Day`)
-- punctuation, then lowercase, then filter to alpha-only tokens of
-  length ≥ 2
+Comma, tag-question and vocative separators contribute no tokens. The reference
+separator control checks exact support counts and verifies that a stricter
+confidence threshold refuses the same evidence without changing it.
 
-Both sides are cleaned identically so the comparison is
-apples-to-apples. This is the same cleaner specified in the
-reference corpus under `spec/constructs/speaker-id/token-cleaner/`.
+The current matcher also skips an entire `ReplacedWord` (`word [: replacement]`)
+node, including its original word. Unlike punctuation, that node does contain
+lexical content. This is an unresolved matching-policy limitation, not a claim
+that replaced speech contains no words; inspect the support counts when using
+replacement-annotated transcripts.
+
+The ASCII restriction is a limitation of the matcher, not a CHAT validity rule:
+accented and non-Latin words are excluded. For example, the Mandarin reference
+transcript yields no lexical information even when compared with itself, and
+the operation refuses with `low_confidence` / `no_information`; it must not
+promote the first speaker in document order into an accepted identity match.
+Mixed-language speech is scored only on the eligible tokens, so inspect the
+reported token counts rather than treating a high score as multilingual evidence.
+Both sides use the same policy, and identification does not rewrite the input.
 
 ### Multiset Jaccard
 
@@ -301,6 +307,15 @@ The outer outcome is `accepted`, `low_confidence`,
 Matched outcomes contain the lexical report; other outcomes cannot pretend to
 contain one. Input rejection records donor versus reference, the typed
 pipeline-failure category, and TalkBank diagnostic codes when available.
+
+Within `input_rejected`, `failure_kind: "incomplete_validation"` means missing
+or recovered parser provenance prevented complete validation. This differs from
+`"validation"` (the model failed validation) and `"internal_failure"` (the tool
+failed). Imported JSON may have unchanged model content but lack parser
+provenance, so an incomplete result can have an empty `diagnostic_codes` array.
+It still cannot supply a `match_report`. Consumers must handle this distinct
+category rather than treating every input rejection as invalid CHAT. The outer
+outcome and schema version remain unchanged.
 
 The option is intended for audit and calibration tooling. It does not change
 which speaker wins or the confidence threshold. Chatter stages the complete

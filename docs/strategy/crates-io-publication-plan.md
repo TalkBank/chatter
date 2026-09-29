@@ -1,6 +1,15 @@
-# crates.io Publication Plan (v1.0.0)
+# Historical crates.io Publication Planning
 
-**Last modified:** 2026-07-25 01:41 EDT
+**Status:** Historical evidence; superseded as execution guidance
+**Last modified:** 2026-09-28 20:59 EDT
+
+Use the maintained [Crates.io Publication chapter](../../book/src/contributing/crates-io-publication.md)
+for package scope, ordering, hold-backs and verification limits. This July record
+does not establish current readiness. Its package list omits later build-support
+requirements, and its versions and completed-check claims are dated evidence.
+Do not execute its publish-day sequence or treat its open items as a live queue.
+The 1.0 support contract still requires explicit maintainer decisions; a passing
+metadata check alone does not establish registry or release readiness.
 
 Worked plan for publishing chatter's library crates to crates.io,
 simultaneous with the v1.0.0 release (release-board precondition P2).

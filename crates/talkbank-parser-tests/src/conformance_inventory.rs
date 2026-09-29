@@ -29,7 +29,7 @@
 //!    `pub struct XxxChildren<'tree>`, positional fields in declaration order
 //!    (the `trailing_extras` and `unexpected` sink fields are not inspected and
 //!    are excluded).
-//! 4. **Dispatch fn**: one match arm per `extract_<snake>` free function whose
+//! 4. **Dispatch fn**: one match arm per public `extract_<snake>` free function whose
 //!    `<snake>` is a `"named": true` node kind, keyed on the node kind. The arm
 //!    form follows the function's first parameter type: a typed wrapper
 //!    (`extract_x(classify::<XxxNode>(node))`) or a bare `tree_sitter::Node`
@@ -233,12 +233,19 @@ enum ExtractArg {
     TypedWrapper(String),
 }
 
+/// Whether the producer returns a carrier directly or admits reconstruction.
+enum ExtractReturn {
+    Direct,
+    Fallible,
+}
+
 /// One dispatchable `extract_<snake>` free function.
 struct ExtractFn {
     /// The `extract_` suffix; equal to the node kind (the match-arm key).
     snake: String,
     /// The argument-passing shape.
     arg: ExtractArg,
+    result: ExtractReturn,
 }
 
 /// One `grammar/src/node-types.json` entry (only the fields we need).
@@ -314,12 +321,26 @@ pub fn generate_inventory_source(
                 }
             }
             Item::Fn(item_fn) => {
+                // Private proof-carrying helpers are not raw-node entrypoints.
+                // Visibility, not a suffix convention, defines that boundary.
+                if !matches!(item_fn.vis, syn::Visibility::Public(_)) {
+                    continue;
+                }
                 let fn_name = item_fn.sig.ident.to_string();
                 if let Some(snake) = fn_name.strip_prefix("extract_") {
                     let arg = classify_extract_arg(snake, item_fn)?;
                     extracts.push(ExtractFn {
                         snake: snake.to_owned(),
                         arg,
+                        result: match &item_fn.sig.output {
+                            syn::ReturnType::Type(_, ty)
+                                if matches!(ty.as_ref(), Type::Path(path)
+                                    if path.path.segments.last().is_some_and(|s| s.ident == "Result")) =>
+                            {
+                                ExtractReturn::Fallible
+                            }
+                            _ => ExtractReturn::Direct,
+                        },
                     });
                 }
             }
@@ -478,6 +499,7 @@ fn render_source(
     // 4. Dispatch fn.
     out.push('\n');
     out.push_str(DISPATCH_DOC);
+    out.push_str("// Conformance assertions must fail the test on producer faults.\n#[allow(clippy::expect_used)]\n");
     out.push_str(
         "pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {\n    match node.kind() {\n",
     );
@@ -502,6 +524,10 @@ fn render_source(
                 out.push_str(wrapper);
                 out.push_str(">(node))");
             }
+        }
+        if matches!(extract.result, ExtractReturn::Fallible) {
+            // A producer fault must fail conformance, never silently drop a node.
+            out.push_str(".expect(\"generated reconstruction must preserve its selected plan\")");
         }
         out.push_str(".inspect(\"");
         out.push_str(&extract.snake);
@@ -584,4 +610,20 @@ fn crate_dir() -> PathBuf {
 /// The repository root (two levels up from this crate).
 fn repo_root() -> PathBuf {
     crate_dir().join("..").join("..")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn inventory_dispatch_respects_extractor_visibility() {
+        let private = "fn extract_proof(parent: AdmittedParent) {}";
+        assert!(super::generate_inventory_source(private, "[]").is_ok());
+        let restricted = "pub(crate) fn extract_proof(parent: AdmittedParent) {}";
+        assert!(super::generate_inventory_source(restricted, "[]").is_ok());
+        let public = "pub fn extract_proof(parent: AdmittedParent) {}";
+        assert!(matches!(
+            super::generate_inventory_source(public, "[]"),
+            Err(super::InventoryGenError::ExtractUnexpectedParam { .. })
+        ));
+    }
 }

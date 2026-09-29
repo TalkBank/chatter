@@ -9,7 +9,6 @@ Some(
             end: 107,
         },
         word_id: None,
-        raw_text: "hello@s",
         content: WordContents(
             [
                 Text(

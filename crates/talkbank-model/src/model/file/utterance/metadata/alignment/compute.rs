@@ -76,7 +76,7 @@ impl Utterance {
 
         let units = AlignmentUnits::from_utterance(self, context);
         let mut metadata = AlignmentSet::new(units);
-        let health = self.parse_health;
+        let health = self.parse_health();
 
         if let Some(mor) = self.mor_tier() {
             if health.can_align_main_to_mor() {

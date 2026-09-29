@@ -1,7 +1,7 @@
 # `%wor` Timing Semantics
 
 **Status:** Current
-**Last modified:** 2026-08-30 15:23 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 ## Purpose
 
@@ -13,6 +13,14 @@ The main tier owns lexical identity. `%wor` contributes an optional inline
 media bullet for each selected position. The visible word printed on `%wor` is
 display material and optional corroborating evidence. It can prevent stale
 timing reuse, but it never supplies lexical identity.
+
+Generation and serialization are different operations. Newly generated `%wor`
+words use the named cleaned-text display convention. Serializing an already
+parsed tier preserves its typed word structure, including shortening, compounds
+and markers, then writes its timing bullet. It must not silently regenerate a
+parsed display token from cleaned text. The selective-name and pseudonymizer
+source/expected references exercise this distinction through fragment,
+round-trip, normalization and downstream transform contracts.
 
 Actual timing presence is a separate typed question from correspondence.
 `WorTier::timing_evidence()` returns `Absent` or a `RecordedWorTiming` carrying
@@ -70,6 +78,8 @@ Each corroborated slot has:
 
 - a borrowed typed main-tier `Word` and its `cleaned_text`, which remain the
   only lexical identity;
+- the exact corroborating `%wor` `Word`, exposed by `wor_word()` for
+  source-bound display-token updates that preserve timing and metadata;
 - `Timed(WorRecordedInterval)` when the corresponding `%wor` entry has an
   inline bullet;
 - `Unaligned` when the entry exists but has no inline bullet.
@@ -79,6 +89,13 @@ canonical display token. It cannot establish immutable common origin: repeated
 tokens can be exchanged invisibly, and CHAT does not carry a generation
 identifier. The state is therefore named `Corroborated`, not `Aligned` or
 `Proven`.
+
+Selective transforms must finish corroboration before proposing `%wor`
+changes. They derive replacement display text from the selected main-tier
+word, not a second name search over `%wor`. Count drift or lexical drift
+requires an explicit refusal/review path, not an independently guessed pairing.
+The `tiers/wor-drift.cha` reference file witnesses both count-drift directions
+and same-count lexical drift; these are stale sidecars in otherwise valid CHAT.
 
 ## Temporal sequence transition
 

@@ -21,6 +21,7 @@ pub mod content;
 pub mod form;
 /// Language override markers (`@s`, `@s:code`).
 pub mod language;
+mod lexical;
 /// Untranscribed word status (`xxx`, `yyy`, `www`).
 pub mod untranscribed;
 /// [`WordContents`], ordered sequence of content elements.
@@ -41,6 +42,7 @@ pub use content::{
 };
 pub use form::{FormMarkerPayload, FormType, UndeclaredFormMarker};
 pub use language::WordLanguageMarker;
+pub use lexical::{LexicalContribution, WordLexicalPart, WordLexicalParts};
 pub use untranscribed::{MarkerSpelling, UntranscribedStatus};
 pub use word_contents::WordContents;
 pub use word_type::Word;

@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@Comment:	Authored control: paired gem labels with differently wrapped Unicode text.
+@Bg:	morning
+	café
+	play
+*CHI:	hello .
+@Eg:	morning café
+	play
+@End

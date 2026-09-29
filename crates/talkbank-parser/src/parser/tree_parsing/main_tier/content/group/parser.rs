@@ -10,7 +10,7 @@ use crate::error::{
 };
 use crate::generated_traversal::{
     AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsChildren,
-    GroupWithAnnotationsNode, NoChild, NodeSlot, SlotView, extract_group_with_annotations,
+    GroupWithAnnotationsNode, NoChild, NodeSlot, SlotView, SourceBound,
 };
 use crate::model::{BracketedContent, Group, UtteranceContent};
 use talkbank_model::ParseOutcome;
@@ -82,13 +82,22 @@ fn report_edge_whitespace(contents: &ContentsChildren<'_>, source: &str, errors:
 /// `AnnotatedGroup`. A group with no items is rejected. Until 2026-09-08
 /// this walked the children by index and `node.kind()`, with a reporter per
 /// position that only an ERROR at that position ever reached.
-pub(crate) fn parse_group_content(
-    typed: GroupWithAnnotationsNode<'_>,
-    source: &str,
+pub(crate) fn parse_group_content<'tree>(
+    typed: SourceBound<'tree, '_, GroupWithAnnotationsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
-    let children = extract_group_with_annotations(typed);
+    let source = typed.source();
+    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| typed.extract_admitted(grammar)),
+        typed.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
+    let children = associated.children();
 
     expect_delimiter(children.child_0.slot(), |bad| {
         report_tree_shape(
@@ -102,7 +111,7 @@ pub(crate) fn parse_group_content(
         );
     });
 
-    let group_items = match contents_of(children.content_2.slot(), |bad| {
+    let group_items = match contents_of(associated.field_content_2().slot(), errors, |bad| {
         report_tree_shape(
             bad,
             format!(
@@ -114,8 +123,8 @@ pub(crate) fn parse_group_content(
         );
     }) {
         Some(contents) => {
-            report_edge_whitespace(&contents, source, errors);
-            parse_group_contents(&contents, source, errors)
+            report_edge_whitespace(contents.children(), source, errors);
+            parse_group_contents(&contents, errors)
         }
         None => Vec::new(),
     };
@@ -132,12 +141,20 @@ pub(crate) fn parse_group_content(
         );
     });
 
-    // The annotations are required by the grammar. A MISSING placeholder
-    // has no annotations in it and is the backstop's to report; an ERROR or
-    // displaced node there is the group losing its shape.
+    // The composite annotations are required and cannot be Missing under the
+    // compiled grammar proof. Error and absence still mean unusable content.
     let markers = match children.annotations.slot().view() {
-        SlotView::Present(annotations) => parse_scoped_annotations(*annotations, source, errors),
-        SlotView::Missing(_) | SlotView::Absent(NoChild) => Vec::new(),
+        SlotView::Present(annotations) => match crate::parser::typed_cst::report_reconstruction(
+            parse_scoped_annotations(*annotations, source, errors),
+            annotations.raw_node(),
+            source,
+            errors,
+        ) {
+            Ok(markers) => markers,
+            Err(_) => return ParseOutcome::Rejected,
+        },
+        SlotView::Absent(NoChild) => Vec::new(),
+        SlotView::Missing(never) => match never {},
         SlotView::Error(bad) => {
             report_tree_shape(
                 bad,
@@ -154,7 +171,7 @@ pub(crate) fn parse_group_content(
     // Group contents belong to the main-tier body even when recovery places
     // their ERROR beside the contents slot. The sealed carrier retains that
     // ownership instead of sending the same word fault to a generic reporter.
-    surface_main_tier_sink(&children, source, errors);
+    surface_main_tier_sink(children, source, errors);
 
     if group_items.is_empty() {
         return ParseOutcome::rejected();

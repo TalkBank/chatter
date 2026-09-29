@@ -1,7 +1,7 @@
 # Developer Verification Checks
 
 **Status:** Current
-**Last modified:** 2026-09-10 00:45 EDT
+**Last modified:** 2026-09-28 20:08 EDT
 
 What to run locally, and what each thing costs. The commands are `just`
 recipes; `just --list` shows them all.
@@ -154,6 +154,28 @@ and it takes under a second.
 ```bash
 just doc-dates     # a `Last modified` header older than the file fails
 ```
+
+## Dependency updates
+
+Review Rust and JavaScript desktop dependency changes together with both
+lockfiles. For schema-validation or compiler-helper updates, exercise the
+reference corpus and JSON contracts:
+
+```bash
+cargo test --locked -p talkbank-parser-tests --test integration -- transform_corpus::json_contracts reference_corpus_parses
+```
+
+For desktop dependency updates, run `npm ci`, `npm run test:unit`, and
+`npm run build` from `apps/chatter-desktop`, plus the native bridge tests
+from the workspace root:
+
+```bash
+cargo test --locked -p chatter-desktop --test validation_bridge
+```
+
+These are focused compatibility checks, not release acceptance: they do not
+certify signed installers, updater delivery, or native behavior on every target
+platform. A manifest-only update does not require grammar regeneration.
 
 ## Regeneration
 

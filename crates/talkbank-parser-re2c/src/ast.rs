@@ -12,8 +12,8 @@ pub use rejected_tier::RejectedMorTier;
 mod word;
 pub use word::{
     CaDelimiterKind, CaElementKind, OverlapKind, ParsedAnnotation, ParsedLangSuffix,
-    ScopedAnnotationParsed, ScopedOverlapIndex, StressKind, WordBodyItem, WordCategory,
-    WordWithAnnotations,
+    ReplacementParsed, ScopedAnnotationParsed, ScopedOverlapIndex, StressKind, WordBodyItem,
+    WordCategory, WordWithAnnotations,
 };
 
 /// A parsed main tier: *SPEAKER:\t tier_body

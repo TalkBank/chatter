@@ -1,7 +1,7 @@
 # Alignment
 
 **Status:** Current
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** 2026-09-28 16:31 EDT
 
 Alignment in the toolchain operates at two structural layers, plus a
 separate overlap-marker pass. Tier alignment is structural (counting and
@@ -40,6 +40,24 @@ The overlap-marker position walk in `alignment/helpers/overlap.rs` is on
 the shared walker at the `%wor` domain, the projection's own leaf set.
 `PositionalDomain` converts into `TierDomain` infallibly; the reverse is a
 `TryFrom` that refuses `Wor`.
+
+Internally, the shared positional traversal carries a static domain through
+both top-level and bracketed content. Its emitted payload is domain-indexed:
+`%pho` positions can contain a word, a phonological group, or a pause, never a
+sign group or action. `%mor` has no atomic-group payload; `%sin` can carry sign
+groups and top-level actions. These are producer guarantees, not filters in a
+phonology-specific second walk. Runtime-domain public APIs dispatch to this
+same traversal; their signatures and alignment policies are unchanged.
+Leaf admission emits the domain-typed position directly to the sink. The shared
+walk does not receive an optional payload and re-test admission at each leaf;
+only the policy owner decides whether a separator, pause or action contributes.
+
+The measuring-group policy selects its atomic payload before constructing a
+position. Mutable word traversal asks that same policy for the decision without
+an AST payload, while immutable word traversal projects its answer to entered
+content. Neither owns a second domain table. Existing spec/reference contracts
+cover the container/domain matrix, grouped diagnostic presentation and shared
+phonology indices; type-level exclusions do not replace those policy tests.
 
 The same utterance produces different counts per membership domain:
 
@@ -190,6 +208,26 @@ Dependent-tier taint blocks only that tier. Phon tier-to-tier checks
 have their own gates (`can_align_modsyl_to_mod`,
 `can_align_phosyl_to_pho`, `can_align_phoaln`).
 
+`ParseHealthState::Unknown`, including after JSON import, cannot authorize any
+alignment. Adding one tier's taint or all dependent-tier taint preserves
+`Unknown`: evidence of damage cannot establish that the remaining tiers were
+parsed cleanly. Tainting an already parser-backed state only withdraws trust;
+it never enables an alignment that was previously unavailable.
+
+Explicit [checked construction](chat-model/chat-model.md#constructing-rather-than-parsing)
+is a separate admission path for assembled typed documents. Its `Constructed`
+state permits alignment checking but does not claim parser provenance or source
+span authority. Adding recovery taint withdraws construction admission entirely;
+it must never turn construction into partially clean parser evidence.
+
+The canonical provenance workflow checks single-tier, dependent-only and
+whole-utterance trust withdrawal against parsed spec/reference models. Broad
+recovery must discard cached pairs and WOR timings, retain the semantic content
+and tier presence, and produce stable diagnostics on repeated recomputation.
+Dependent-only recovery leaves main-tier provenance clean; whole-utterance
+recovery warns about both damaged alignment sides. These are public API recovery
+transitions, not claims that the clean seed files contain those parse errors.
+
 ## Word Extraction
 
 `extract_words()` (in `crates/talkbank-transform/src/extract.rs`) uses
@@ -220,6 +258,14 @@ projection's slot indices (a visitor API with no caller, and two private
 walkers of the file's own, went on 2026-09-08).
 
 ### `extract_overlap_info`, region-based
+
+The marker stream owns pairing state: opening boundaries, available closing
+boundaries, and consumed closing boundaries are distinct variants. Pairing
+consumes only a later closing boundary of the same kind and index; there is no
+parallel bitmap whose state can drift from the markers. Unmatched openings and
+closings remain explicit in the result. Opening regions retain source order,
+followed by orphaned closing regions in source order. This is positional
+analysis, not a validity claim or an observed acoustic onset time.
 
 Pairs markers by (kind, index) into `OverlapRegion` structs. Each
 region represents a matched ⌈...⌉ or ⌊...⌋ pair. Index-aware:

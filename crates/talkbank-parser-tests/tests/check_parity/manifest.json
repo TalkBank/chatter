@@ -1,1602 +1,1607 @@
 {
- "entries": [
-  {
-   "check_code": 1,
-   "check_message": "Expected characters are: @ or %% or *.",
-   "fixture": "CHECK_001_bad_initial_character.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "First substantive byte is an invalid top-level line start (`x`) before an otherwise ordinary CHAT file. CLAN emits CHECK 1; chatter rejects the bad line start with E316."
-  },
-  {
-   "check_code": 2,
-   "check_message": "Missing ':' character and argument.",
-   "fixture": "CHECK_002_missing_main_tier_colon.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A complete CHAT preamble is followed by a main tier whose speaker code is not terminated by a colon. CLAN emits CHECK 2; chatter rejects the malformed line with E316."
-  },
-  {
-   "check_code": 3,
-   "check_message": "Missing either TAB or SPACE character.",
-   "fixture": "CHECK_003_no_space_after_colon.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "The character after the speaker-tier colon must be whitespace (check.cpp ~1756: !isSpace after check_FoundText); the fixture writes `*CHI:hello .` with no tab. CLAN emits CHECK 3; chatter rejects the line as unparsable content (E316)."
-  },
-  {
-   "check_code": 4,
-   "check_message": "Found a space character instead of TAB character after Tier name",
-   "fixture": "CHECK_004_space_after_tier.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A space instead of a TAB after the speaker code (*CHI: hi). CLAN 4; chatter requires the tab in-grammar and surfaces the recovery node as E316."
-  },
-  {
-   "check_code": 5,
-   "check_message": "Illegal colon on a header that takes no colon (@Begin).",
-   "fixture": "CHECK_005_begin_illegal_colon.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "`@Begin:` (a stray colon on the no-colon @Begin header) parses as a valid @Begin followed by a stray `:` ERROR node. The streaming lowering silently dropped that nested ERROR node, so chatter accepted the file (Valid:1) while CLAN rejects it (codes 5 and 6). A whole-tree recovery-node backstop in parse_lines_with_old_tree now surfaces any surviving ERROR node as E316 UnparsableContent (recovery is not validity); the AST is still produced. CLAN CHECK 5 (co-emitted with 6)."
-  },
-  {
-   "check_code": 6,
-   "check_message": "@Begin header missing or malformed.",
-   "fixture": "CHECK_006_begin_malformed.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "`@Begins` (a misspelled @Begin) parses as @Begin plus a trailing `s` ERROR node that the streaming lowering silently dropped. The whole-tree recovery-node backstop now surfaces it as E316. CLAN rejects it (codes 6 and 17). CLAN CHECK 6 (co-emitted with 17)."
-  },
-  {
-   "check_code": 7,
-   "check_message": "\"@End\" is missing at the end of the file.",
-   "fixture": "CHECK_007_missing_end.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E502"
-   ],
-   "note": "File has no @End header at all. CLAN 7 (@End missing at end of file); chatter E502 MissingEndHeader."
-  },
-  {
-   "check_code": 8,
-   "check_message": "Expected characters are: @ %% * TAB.",
-   "fixture": "CHECK_008_bad_line_start.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E326"
-   ],
-   "note": "A body line that does not begin with @, %, * or TAB (free text). CLAN 8 (expected @ %% * TAB); chatter E326 surfaces the unparsable main-tier start."
-  },
-  {
-   "check_code": 9,
-   "check_message": "Tier name is longer than 1024.",
-   "fixture": "CHECK_009_tier_name_too_long.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E307",
-    "E308",
-    "E522"
-   ],
-   "note": "Speaker/tier name before the colon exceeds SPEAKERLEN=1024 characters (check.cpp:2395, first pass). chatter rejects via undeclared-speaker (E522/E308/W108) and speaker-ID-length E307 (max 7 chars), not via a dedicated raw length cap; CHECK aborts first pass (second pass not attempted)."
-  },
-  {
-   "check_code": 10,
-   "check_message": "Tier text is longer than %ld.",
-   "status": "divergence",
-   "note": "UTTLINELEN buffer bound (18000): a logical tier whose text across continuation lines exceeds 18000 chars draws check_err(10) in the check_OverAll char scan (check.cpp 2403). A SINGLE physical line over 18000 instead hits the earlier hard-exit guard (check.cpp 2329, 'Speaker turn is longer then', cutt_exit(1), no (NN) code), so the fixture splits ~20k chars over tab continuation lines. Adjudication: the limit is a fixed C buffer size, an implementation artifact, not CHAT semantics; chatter has no tier-length limit by design (long tiers are valid and supported; stack-safety hardened 2026-07-14) and intentionally accepts.",
-   "fixture": "CHECK_010_tier_text_too_long.cha",
-   "expected_chatter_codes": []
-  },
-  {
-   "check_code": 11,
-   "check_message": "Symbol is not declared in the depfile.",
-   "fixture": "CHECK_011_undeclared_symbol_pct_fac.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts. FACET SPLIT (2026-07-24): CHECK 11's EMPTY-symbol facet (a %mor item with an empty POS, `|we`) now has the dedicated chatter code E760 (spec E760.md), grounded as parity; the general undeclared-symbol-membership facet remains this documented divergence."
-  },
-  {
-   "check_code": 12,
-   "check_message": "Missing speaker name and/or role.",
-   "fixture": "CHECK_012_missing_speaker_in_id.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E511",
-    "E523"
-   ],
-   "note": "An @ID tier whose 3rd field (speaker code) or 8th field (role) is empty (check.cpp:5060/5084). E511 'ID header speaker field cannot be empty' is the direct equivalent. CLAN also emits 142 on the same fixture."
-  },
-  {
-   "check_code": 13,
-   "check_message": "Duplicate speaker declaration.",
-   "fixture": "CHECK_013_duplicate_speaker.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E549"
-   ],
-   "note": "Same speaker declared twice in @Participants. chatter E549 DuplicateSpeakerDeclaration."
-  },
-  {
-   "check_code": 13,
-   "check_message": "Duplicate speaker declaration.",
-   "fixture": "CHECK_013_duplicate_id.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E549"
-   ],
-   "note": "Two @ID lines naming the same speaker (CHI). Distinct from the @Participants-duplicate variant (CHECK_013_duplicate_speaker.cha): CLAN 13 fires for duplicate @ID lines too, which chatter previously missed. Now E549 via check_duplicate_id_headers. CLAN CHECK 13."
-  },
-  {
-   "check_code": 14,
-   "check_message": "Spaces before tier code.",
-   "fixture": "CHECK_014_spaces_before_tier.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E326"
-   ],
-   "note": "Leading spaces before the *tier code. CLAN 14 (also 4); chatter E326."
-  },
-  {
-   "check_code": 15,
-   "check_message": "Illegal role. Please see \"depfile.cut\" for list of roles.",
-   "fixture": "CHECK_015_illegal_role.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E532"
-   ],
-   "note": "An @ID tier whose role field does not match any role listed in the depfile @Participants template (check.cpp:5087). E532 'Invalid participant role' is the direct equivalent. CLAN also emits 142 on the same fixture."
-  },
-  {
-   "check_code": 16,
-   "check_message": "Illegal use of extended characters in speaker names.",
-   "fixture": "CHECK_016_extended_chars_speaker_code.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E307"
-   ],
-   "note": "A speaker CODE containing non-printable-ASCII in @Participants (cnt==0 field scan, chars outside 33..126; check.cpp 2084-2086). Emits via the check_trans_err MACRO (check.cpp 74-79), invisible to the literal check_err(N,) counter. Empirically grounded: real CLAN emits (16) on this fixture. Non-ASCII speaker IDs are invalid by the 2026-09-23 maintainer ruling. Chatter now reports syntax code E307 through the shared speaker assessment, not the unrelated E522 participant-join code; header recovery can emit additional diagnostics."
-  },
-  {
-   "check_code": 17,
-   "check_message": "Tier is not declared in depfile file.",
-   "fixture": "CHECK_017_undeclared_dep_tier.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E605"
-   ],
-   "note": "Undeclared dependent tier %zzz: (neither %x* nor a chatter-supported standard tier). chatter rejects it via E605 UnsupportedDependentTier (Error severity). The supported set deliberately excludes the legacy %grt/%tra/%trn/%umor tiers retired with the UD-%mor consolidation, so chatter is intentionally stricter than CLAN there (documented divergence). %x* is always valid. CLAN CHECK 17."
-  },
-  {
-   "check_code": 18,
-   "check_message": "Speaker @ID is not specified in a participants list.",
-   "fixture": "CHECK_018_id_speaker_not_in_participants.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E522",
-    "E523"
-   ],
-   "note": "An @ID tier whose speaker code is not declared on the @Participants tier (check.cpp:5062). E523 '@ID header for X but speaker not in @Participants' is the direct equivalent. Note CLAN prints the literal tier name '@ID' in the message (quirk of check_mess case 18 printing utterance->speaker)."
-  },
-  {
-   "check_code": 19,
-   "check_message": "Or a SPACE should be added after it.",
-   "fixture": "CHECK_019_code_glued_to_word.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E757"
-   ],
-   "note": "A token (here the retrace code '[/]') is immediately followed by a non-space, non-delimiter character with no space between (check.cpp:4590/4592); also fires for a time bullet glued to a word. Full CLAN message is two lines: 'Illegal use of delimiter in a word.' + 'Or a SPACE should be added after it.(19)'. chatter accepts '[/]x' glued (exit 0). Grounded also with a bullet glued to a word (u019d.cha). CLOSED 2026-07-16: E757 (CodeGluedToFollowingContent), span-adjacency on the retrace span which now covers the marker brackets. Wild-data impact: zero kept files."
-  },
-  {
-   "check_code": 20,
-   "check_message": "Undeclared suffix in depfile.",
-   "fixture": "CHECK_020_undeclared_suffix_compound.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
-  },
-  {
-   "check_code": 21,
-   "check_message": "Utterance delimiter expected.",
-   "fixture": "CHECK_021_missing_terminator.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E305"
-   ],
-   "note": "A main tier with text but no utterance terminator (check.cpp:4921; tier UTD==1, no delimiter found). E305 is chatter's missing-terminator error."
-  },
-  {
-   "check_code": 22,
-   "check_message": "Unmatched [ found on the tier.",
-   "fixture": "CHECK_022_unclosed_replacement.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E311"
-   ],
-   "note": "An unclosed replacement scope: `dog [: cat` opens `[:` with no closing `]`. CLAN 22 (unmatched [) (also 11/48/106); chatter rejects with E311. A stray `[`+space alone is CLAN 48, not 22; the bracket must open a real scope to be 'unmatched'."
-  },
-  {
-   "check_code": 23,
-   "check_message": "Unmatched ] found on the tier.",
-   "fixture": "CHECK_023_unmatched_close_bracket.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E375"
-   ],
-   "note": "Unmatched ] on a main tier. CLAN 23; chatter rejects via E375 (content-annotation parse error)."
-  },
-  {
-   "check_code": 24,
-   "check_message": "Unmatched < found on the tier.",
-   "fixture": "CHECK_024_unmatched_lt.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Unmatched < on a main tier (open angle, no close). CLAN 24 (also 160); chatter surfaces the recovery node as E316. NOTE: earlier wrongly recorded as not-firing; that was a one-off CLAN depfile-load miss, the helper now guards against it."
-  },
-  {
-   "check_code": 25,
-   "check_message": "Unmatched > found on the tier.",
-   "fixture": "CHECK_025_unmatched_gt.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Unmatched > on a main tier. CLAN 25; chatter surfaces the tree-sitter recovery node as E316 UnparsableContent."
-  },
-  {
-   "check_code": 26,
-   "check_message": "Unmatched { found on the tier.",
-   "fixture": "CHECK_026_unmatched_open_brace.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Unmatched { on a main tier. CLAN 26 (also 11, 48); chatter E316."
-  },
-  {
-   "check_code": 27,
-   "check_message": "Unmatched } found on the tier.",
-   "fixture": "CHECK_027_unmatched_close_brace.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Unmatched } on a main tier. CLAN 27 (also 48); chatter surfaces the recovery node as E316 UnparsableContent."
-  },
-  {
-   "check_code": 28,
-   "check_message": "Unmatched ( found on the tier.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out since 11-02-98 (check.cpp 4992, inside the dated comment block); unix and GUI builds alike can never emit it. Unbalanced parentheses surface through other codes today."
-  },
-  {
-   "check_code": 29,
-   "check_message": "Unmatched ) found on the tier.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out since 11-02-98 (check.cpp 4993, same comment block as CHECK 28); never emitted by any current build."
-  },
-  {
-   "check_code": 30,
-   "check_message": "Text is illegal.",
-   "status": "no_obligation",
-   "no_obligation_reason": "unreachable_in_file_mode",
-   "note": "Compiled but unreachable in file mode: firing requires check_MatchTierName to return a colon-less declared header (ts->col FALSE) for a line that ALSO carries trailing text, but the match (check.cpp 1706, partcmp pattern mode) compares the WHOLE trimmed line against the declared name, so any trailing text makes the lookup fail first (empirically: '@Blank extra', '@New Episode extra', and tab-separated variants all emit (17) tier-not-declared, plus (132) for the tab forms, never (30)). No stock-depfile colon-less header contains a pattern wildcard that could match a longer line."
-  },
-  {
-   "check_code": 31,
-   "check_message": "Missing text after the colon.",
-   "fixture": "CHECK_031_missing_text_after_colon.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E756"
-   ],
-   "note": "A declared tier with a colon but no text after it (check.cpp:1748); '@' headers are exempt ('to always allow empty header tiers'), so the fixture uses an empty dependent tier '%fac:'. chatter answers E756 'Empty dependent tier', which states the rule CHECK 31 is about. It used to answer E330 plus E342: an auto-generated stub with no description, plus a generic tree-sitter recovery diagnostic, because the model could not represent an empty tier and the line failed to parse. The 2026-08-15 maintainer ruling widened E756 to every free-text tier rather than writing E330's spec, so the verdict here is unchanged (parity) and only the code chatter names for it moved. An empty '*CHI:' main tier instead yields CLAN (21)+(70), not (31). 2026-09-08: whitespace-only content is E756 on every free-text tier now, matching check_FoundText (check.cpp:1639), which skips ASCII space, tab and newline before looking for text; %com and %add had counted whitespace as content. Two deliberate divergences, chatter stricter in both: CHECK exempts user-defined %x tiers from 31 and chatter reports them; chatter's whitespace is Unicode whitespace, so a payload of non-breaking spaces alone is E756 while CHECK (verified 2026-09-08) reports nothing."
-  },
-  {
-   "check_code": 32,
-   "check_message": "Code is not declared in depfile.",
-   "fixture": "CHECK_032_undeclared_dollar_code.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
-  },
-  {
-   "check_code": 33,
-   "check_message": "Either illegal date or time or symbol is not declared in depfile.",
-   "status": "no_obligation",
-   "no_obligation_reason": "unreachable_in_file_mode",
-   "note": "Compiled but unreachable with the stock depfile: check_matchplate returns 33 only when a tier's declared pattern list mixes an @d/@t date-time pattern with OTHER patterns after it and the value fails everything (check.cpp 1543); when the date-time pattern is last, the specific codes 34/35 return instead. Every stock depfile @d/@t list is date-time-only (@Date, @Birth of #, @Time Duration, %tim), so failures yield (34)/(35), never (33): empirically @Date/@Birth/@ID garbage all emit (34). Reachable only via a custom user depadd."
-  },
-  {
-   "check_code": 34,
-   "check_message": "Illegal date representation.",
-   "fixture": "CHECK_034_bad_date.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E518"
-   ],
-   "note": "@Date is not a valid date ('notadate'). CLAN 34 (illegal date representation); chatter E518 InvalidDateFormat."
-  },
-  {
-   "check_code": 35,
-   "check_message": "Illegal time representation.",
-   "fixture": "CHECK_035_time_duration_out_of_range.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E540"
-   ],
-   "note": "@Time Duration 99:99:99 is shape-valid (HH:MM:SS) but out of clock range. chatter previously validated the shape only; now TimeDurationValue::has_out_of_range_component flags components outside hours 0-23 / minutes,seconds 0-59 and emits E540. CLAN range rule grounded empirically: 25:00:00, 99:30:00, 12:60:00, 12:00:60 all CLAN 35; 23:59:59 OK. CLAN CHECK 35."
-  },
-  {
-   "check_code": 36,
-   "check_message": "Utterance delimiter must be at the end of the utterance.",
-   "fixture": "CHECK_036_delimiter_not_at_end.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Utterance-delimiter followed by more material on the main tier (check.cpp:4394/4396; DelFound set, then a non-bullet, non-[ token appears). E316 (unparsable/misplaced content) rejects the same shape."
-  },
-  {
-   "check_code": 37,
-   "check_message": "Undeclared prefix.",
-   "fixture": "CHECK_037_undeclared_prefix.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E763"
-   ],
-   "note": "INCIDENTAL parity since 2026-07-27, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 37 is a depfile-membership check, a token undeclared in a corpus depfile is not universally invalid CHAT, and chatter never validates external-config membership. What changed is this FIXTURE. Its word `a+un#go` carries a word-internal prefix marker in an English utterance, and E763 rejects the marker in any language that does not use it (heb, ara). Same verdict as CHECK on this input, different and independent grounds. A depfile-undeclared prefix in Hebrew or Arabic would still be accepted, which is the divergence the 2026-07-12 ruling protects."
-  },
-  {
-   "check_code": 38,
-   "check_message": "Numbers should be written out in words.",
-   "fixture": "CHECK_038_digits_in_utterance.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E220"
-   ],
-   "note": "A word starting with a digit on a main tier (excluding '0'-forms) that matches no depfile number pattern (check.cpp:4811 via check_matchnumber). E220 is chatter's digits-in-word error. CLAN also emits (47) on the same fixture."
-  },
-  {
-   "check_code": 39,
-   "check_message": "Code tier must NOT follow header tier.",
-   "status": "no_obligation",
-   "no_obligation_reason": "no_emission_path",
-   "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24 covering check_err, the check_trans_err macro, and helper return-code channels); only the case-39 printer in the check_mess table exists. Tier-ordering violations surface through other codes today."
-  },
-  {
-   "check_code": 40,
-   "check_message": "Duplicate code tiers per one main tier are NOT allowed.",
-   "status": "no_obligation",
-   "no_obligation_reason": "no_emission_path",
-   "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24, same method as code 39). chatter models per-tier duplication rules on its own terms where they make sense."
-  },
-  {
-   "check_code": 41,
-   "check_message": "Parentheses around words are illegal.",
-   "status": "no_obligation",
-   "no_obligation_reason": "no_emission_path",
-   "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24). Parenthesis misuse surfaces via codes 55/111 (grounded elsewhere in this manifest); modern CHAT parenthetical shortenings are a parsed construct in chatter."
-  },
-  {
-   "check_code": 42,
-   "check_message": "Use either \"&\" or \"()\", but not both.",
-   "fixture": "CHECK_042_amp_and_parens.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E207"
-   ],
-   "note": "An '&'-initial filler word containing '(' (check.cpp:4824). CLAN also emits (65) and (11) on the fixture; chatter E207 rejects the '&ab(c)' form."
-  },
-  {
-   "check_code": 43,
-   "check_message": "The file must start with \"@Begin\" tier.",
-   "fixture": "CHECK_043_missing_begin.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E504"
-   ],
-   "note": "No @Begin header. chatter rejects with E504 (Missing required @Begin header in file preamble). Grounded vs real CLAN CHECK 43; audit name-matcher had marked it a gap."
-  },
-  {
-   "check_code": 44,
-   "check_message": "The file must end with \"@End\" tier.",
-   "fixture": "CHECK_044_content_after_end.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E502"
-   ],
-   "note": "Speaker content after the @End tier. CLAN 44 (file must end with @End); chatter flags E502 MissingEndHeader (and E501). Both reject the file."
-  },
-  {
-   "check_code": 45,
-   "check_message": "There were more @Bg than @Eg tiers found.",
-   "fixture": "CHECK_045_bg_without_eg.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E526"
-   ],
-   "note": "At end of file, one or more @Bg tiers were never closed by a matching @Eg (check.cpp:5758); CHECK lists the unmatched @Bg contents after the message. E526 is chatter's unmatched-@Bg error."
-  },
-  {
-   "check_code": 46,
-   "check_message": "This @Eg does not have matching @Bg.",
-   "fixture": "CHECK_046_eg_without_bg.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E527"
-   ],
-   "note": "An @Eg tier with no open @Bg carrying the same text (check.cpp:5391/5400). E527 is chatter's unmatched-@Eg error."
-  },
-  {
-   "check_code": 47,
-   "check_message": "Numbers are not allowed inside words.",
-   "fixture": "CHECK_047_number_in_word.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E220"
-   ],
-   "note": "A digit inside a word (he11o). CLAN 47 (numbers not allowed inside words); chatter E220. This fixture agrees, not every scoped-language case: E220 examples 7/8 retain a paired enclosing-language substitution. CHECK 21-Sep-2026 rejects both with 47, while Chatter accepts the zho-span control under its established governing-language policy and rejects the eng-span mutation. Direct mixed/ambiguous word markers in E220 examples 3-6 agree with CHECK."
-  },
-  {
-   "check_code": 48,
-   "check_message": "Illegal character(s) '|' found.",
-   "fixture": "CHECK_048_illegal_char_pipe.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E243"
-   ],
-   "note": "A standalone illegal character on a main tier; '|' between words reaches CHECK 48. The original bare-pipe acceptance gap was closed 2026-07-16 by E243. CLAN also emits 11 on that fixture. The separately grounded semicolon shape is covered by E769 specs: current HTML CHAT disallows main-tier semicolons, and CHECK 21-Sep-2026 rejects top-level, nested, and retraced cases with 48. Other CHECK-48 shapes remain adjudicated per-shape; this row is not a blanket claim for every call site."
-  },
-  {
-   "check_code": 49,
-   "check_message": "Upper case letters are not allowed inside a word.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out 2019-04-23 ('do not check for upper case letters', check.cpp 3447 inside that comment block); never emitted by current builds. chatter's own capitalization rules live in the validator, adjudicated separately."
-  },
-  {
-   "check_code": 50,
-   "check_message": "Redundant utterance delimiter.",
-   "fixture": "CHECK_050_redundant_delimiter.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A second utterance delimiter after one was already found on a main tier (check.cpp:4351/4354/4554). E316 rejects 'hello . .'."
-  },
-  {
-   "check_code": 51,
-   "check_message": "expected [ ]; < > should be followed by [ ]",
-   "fixture": "CHECK_051_angle_without_square.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E342"
-   ],
-   "note": "CLAN prints this message WITHOUT a (51) suffix (format string lacks (%d)); grounding matches by message text. A '<...>' angle group not followed by a '[...]' code, detected at end of tier or at the next word (check.cpp:4376/4568, anb flag from check_CheckBrakets). QUIRK: CLAN prints this message WITHOUT the numeric '(51)' suffix; check_mess case 51 (check.cpp) has no (%d) in its format string. Grounding is the verbatim unique message text. chatter names the same construct as a missing required element: the grammar requires a code after the group, tree-sitter inserts a MISSING placeholder for it, and the whole-tree pass reports E342. Until 2026-09-09 the annotation decoder read that placeholder's kind and built a Full retrace nobody wrote, and the validator then added E370 (a retrace with nothing after it) to a construct the file does not contain; the decoder skips MISSING nodes now, so the group stays bare and E342 is the whole verdict.",
-   "no_numeric_suffix": true
-  },
-  {
-   "check_code": 52,
-   "check_message": "Item '[//]' must be preceded by text.",
-   "fixture": "CHECK_052_retrace_without_text.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E759"
-   ],
-   "note": "A '[' code that requires preceding text ([//], [: ...], [/], [\"], [<]) appearing as the first item of an utterance (check.cpp:4859; word[1] in <,>,:,/,\"). PARITY CLOSED 2026-07-24: chatter now has the dedicated code E759 (AnnotationAtUtteranceStart, spec E759.md), replacing the former E375 scoped-annotation catch-all routing (and the still-earlier E747 mislabel)."
-  },
-  {
-   "check_code": 53,
-   "check_message": "Only one \"@Begin\" can be in a file.",
-   "fixture": "CHECK_053_duplicate_begin.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E501"
-   ],
-   "note": "Two @Begin headers. chatter rejects with E501 (Duplicate @Begin header). Behavioral grounding overturns the name-matcher audit, which marked this a gap."
-  },
-  {
-   "check_code": 54,
-   "check_message": "Only one \"@End\" can be in a file.",
-   "status": "no_obligation",
-   "no_obligation_reason": "unreachable_in_file_mode",
-   "note": "Compiled but unreachable in file mode: the duplicate-@End counter (check.cpp 2274, end > 1) sits AFTER the any-tier-after-@End check (check.cpp 2242), which emits (44) and breaks the scan the moment any speaker/header line follows @End, including a second @End. Empirically a duplicate @End yields (44) only. chatter rejects the construct with E501 (duplicate @End / content after @End).",
-   "fixture": "CHECK_054_duplicate_end.cha",
-   "expected_chatter_codes": [
-    "E501"
-   ]
-  },
-  {
-   "check_code": 55,
-   "check_message": "Unmatched ( found in the word.",
-   "fixture": "CHECK_055_unmatched_open_paren_word.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "More '(' than ')' inside a single word (check.cpp:4571, pb>lpb after word scan). chatter rejects 'ab(c d .' via unparsable-content/terminator errors. E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
-  },
-  {
-   "check_code": 56,
-   "check_message": "Unmatched ) found in the word.",
-   "fixture": "CHECK_056_unmatched_close_paren_word.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "More ')' than '(' inside a single word (check.cpp:4572, pb<lpb). chatter rejects 'ab)c d .' via unparsable-content/terminator errors. E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
-  },
-  {
-   "check_code": 57,
-   "check_message": "Please add space between word and pause symbol: '('.",
-   "fixture": "CHECK_057_pause_glued_to_word.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E751"
-   ],
-   "note": "Pause '(' opening directly at the end of a word (check.cpp 4437). GAP CLOSED 2026-07-09: model validation check_pause_glued_to_word (span adjacency, utterance/spacing.rs) + re2c word-then-pause token-window mirror. Spec: E751.md. CLAN also emits (48) on the same fixture; expected_chatter_codes are subset-asserted so E751 alone is the pinned signal. ADJUDICATED (maintainer decision, 2026-07-10): NOT a pause-spacing rule; in our AST '(.)' is not a legal shortening ('.' is not a word character), so word-glued '(.)' is a PARSE error in nature. Rejection kept; refactor queued to move the diagnostic from the validation layer to the parse layer."
-  },
-  {
-   "check_code": 58,
-   "check_message": "Tier name is longer than 8 characters.",
-   "status": "no_obligation",
-   "no_obligation_reason": "no_emission_path",
-   "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24). The 8-character tier-name limit is a retired-era constraint; chatter's tier-name rules are its own."
-  },
-  {
-   "check_code": 59,
-   "check_message": "",
-   "fixture": "CHECK_059_unclosed_bullet.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A time bullet (\\x15) opened but never closed before end of scan; hidenc stays TRUE at word end (check.cpp:4049/4797). Fixture: '%pho:\\thello \\x15123' with no closing \\x15. QUIRK: on the unix build CLAN prints the error banner with an EMPTY message line: check_mess case 59's printf is inside '#if _MAC_CODE/#elif _WIN32', so no (59) trailer and no message text ever appear. Grounded banner_only: run restricted to '+e59' (block prints) and cross-checked '+e1' (clean), re-confirmed 2026-07-09.",
-   "clan_flags": [
-    "+e59"
-   ],
-   "banner_only": true
-  },
-  {
-   "check_code": 60,
-   "check_message": "\"@ID:\" tier is missing in the file. Please run \"insert\" in Commands window on this data file.",
-   "fixture": "CHECK_060_missing_id.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E522"
-   ],
-   "note": "File has no @ID header. CLAN 60; chatter E522 (missing @ID header)."
-  },
-  {
-   "check_code": 61,
-   "check_message": "\"@Participants:\" tier is expected here.",
-   "fixture": "CHECK_061_missing_participants.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E504"
-   ],
-   "note": "No @Participants header. chatter rejects with E504 (Missing required @Participants header), plus E543/E522. Grounded vs real CLAN CHECK 61."
-  },
-  {
-   "check_code": 62,
-   "check_message": "Missing language information.",
-   "fixture": "CHECK_062_missing_language_in_id.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E510"
-   ],
-   "note": "An @ID tier with an empty language (first) field (check.cpp:5054; also 2536 for an empty 'word@s:' language marker and 5023). E510 is chatter's empty-@ID-language error. CLAN prints (62) twice on the fixture."
-  },
-  {
-   "check_code": 63,
-   "check_message": "Missing Corpus name.",
-   "fixture": "CHECK_063_empty_corpus.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E514"
-   ],
-   "note": "Empty corpus field (2nd) in @ID. chatter E514 EmptyIDCorpus. Root-caused: corpus was wrongly Option<CorpusName>; made it a required CorpusName like its siblings, the Validate trait flags empty. CLAN CHECK 63."
-  },
-  {
-   "check_code": 64,
-   "check_message": "Wrong gender information (Choose: female or male).",
-   "fixture": "CHECK_064_bad_gender.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E542"
-   ],
-   "note": "@ID sex field is neither 'male' nor 'female' ('x'). CLAN 64; chatter E542 UnsupportedSex. Requires CLAN's depfile loaded (auto-resolved from the lib dir)."
-  },
-  {
-   "check_code": 65,
-   "check_message": "Item '@' can not be followed by the next symbol.",
-   "fixture": "CHECK_065_trailing_at_sign.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E202"
-   ],
-   "note": "A special-form or morph marker followed by an illegal next symbol; 'hello@' with '@' at end of word (w[s+1]==EOS) hits check.cpp:3499-region (one of 31 sites). CLAN also emits (147) undeclared special form. This grounds only the trailing-@ shape of 65's 31 sites. chatter rejects via E202/E305. Expected codes refreshed 2026-07-30 (E202, E305 -> E202): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
-  },
-  {
-   "check_code": 66,
-   "check_message": "Or a SPACE should be added before it.",
-   "fixture": "CHECK_066_amp_inside_word.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E207"
-   ],
-   "note": "An '&' in the middle of a word followed by a letter (not in the allowed set -,',&,+,^,~,#,@,),\",_) (check.cpp:3232). Full CLAN message: 'Illegal character '&' in a word.' + 'Or a SPACE should be added before it.(66)'. E207 rejects 'ab&cd'. Sites 3311/3329 ()- and --shapes not separately grounded."
-  },
-  {
-   "check_code": 67,
-   "check_message": "Item '+' must be followed by text, \n preceded by SPACE or be removed.",
-   "fixture": "CHECK_067_trailing_plus.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E233"
-   ],
-   "note": "A word-final '+' (or '-') followed by end-of-word / certain punctuation must be followed by text (check.cpp 3319/3338; the CA-char site 3025 is inside #ifndef UNX). Grounded via 'hey+ .'; CLAN message spans two output lines, recorded with embedded newline."
-  },
-  {
-   "check_code": 68,
-   "check_message": "PARTICIPANTS TIER IS MISSING \"CHI Target_Child\".",
-   "fixture": "CHECK_068_no_target_child.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "DELIBERATE DIVERGENCE (maintainer decision, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open maintainer policy question). With the +g2 option (NAME_ROLE genopt, OFF by default), @Participants lacking a 'CHI Target_Child' entry triggers 68 unless '@Options: notarget' is present (check.cpp",
-   "clan_flags": [
-    "+g2"
-   ]
-  },
-  {
-   "check_code": 69,
-   "check_message": "The UTF8 header is missing. If you edit and save the file, it will be inserted.",
-   "fixture": "CHECK_069_missing_utf8.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E503"
-   ],
-   "note": "File has no @UTF8 header. CLAN 69; chatter E503 MissingUTF8Header."
-  },
-  {
-   "check_code": 70,
-   "check_message": "Expected either text or \"0\" on this tier.",
-   "fixture": "CHECK_070_no_text.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E253",
-    "E306",
-    "E342"
-   ],
-   "note": "A speaker tier containing no text word (only delimiters/pauses/brackets and not the '0' placeholder) at tier end (check.cpp 4984, isTextFound never set). Fixture '*CHI:\\t.'; chatter rejects with three codes including E306 (no meaningful content). SCOPE (2026-07-24, empirically verified live): CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances; both validators ACCEPT those shapes, so the old 'pause-only utterance' policy-gap framing was wrong."
-  },
-  {
-   "check_code": 70,
-   "check_message": "Expected either text or \"0\" on this tier.",
-   "fixture": "CHECK_070_annotation_only_utterance.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E375",
-    "E342"
-   ],
-   "note": "Utterance whose content is ONLY a scoped annotation ([=! laughs] .). Empirically grounded 2026-07-24: real CLAN emits (73)+(70); chatter rejects (E306 empty-utterance core, with E305/E342/E375 cascade). IMPORTANT adjudicated scope: CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances (both validators ACCEPT those; verified live), so the old 'pause-only utterance' framing of this gap was wrong. Expected codes refreshed 2026-07-30 (E306 -> E375, E305, E342): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected. E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
-  },
-  {
-   "check_code": 71,
-   "check_message": "Item '[/]' must be before pause (#).",
-   "fixture": "CHECK_071_retrace_after_pause.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E762"
-   ],
-   "note": "INCIDENTAL parity since 2026-07-27, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 71 enforces an ORDERING between [/] and the legacy # pause marker, a construct chatter does not have (chatter uses (.)/(..)/(...)), so chatter does not implement that ordering rule and never will. What changed is this FIXTURE. Its main tier is `he # [/] he .`, where the standalone # sits inside the retrace scope, and E762 rejects a word that is nothing but the prefix marker in any language. Same verdict as CHECK on this input, unrelated grounds. Note the fixture only started failing once word validation began recursing into retraces (chatter 3304799e); before that the # inside the retrace was never validated at all, which is why this row read as a clean divergence for months."
-  },
-  {
-   "check_code": 72,
-   "check_message": "Item '(.)' must precede the utterance delimiter or CA delimiter.",
-   "fixture": "CHECK_072_pause_after_delim.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A pause '(...)' or non-postcode '[...]' item appearing after the utterance delimiter (check.cpp 4740/4744). Fixture 'hey . (.)'; chatter rejects (unparsable content after terminator)."
-  },
-  {
-   "check_code": 73,
-   "check_message": "Item '[x 2]' must be preceded by text or '0'.",
-   "fixture": "CHECK_073_bracket_first.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E375"
-   ],
-   "note": "A bracketed code as the first item of a tier with nothing before it (also bullets not preceded by text; multiple sites: check.cpp 4045, 4781, 4861; CA sites 3030/3033 are #ifndef UNX). Fixture '[x 2] hey .'; chatter rejects it via E375 (scoped-annotation parse failure). CLAN additionally emits (11). (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.) Additional leading-bullet grounding is owned by spec/errors/E770.md: simple, retraced-group, linker-prefixed and repeated leading bullets report E770; explicit-zero, event, pause and preceding-group-material controls do not. CHECK 21-Sep-2026 corroborates these shapes. Parse-recovered main tiers retain their parse diagnostic rather than an E770 absence claim. This row's bracket fixture alone does not prove every CHECK 73 site: the separate empty inter-bullet scope and legacy multi-option policy remain unresolved."
-  },
-  {
-   "check_code": 74,
-   "check_message": "Only one tab after ':' is allowed.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Sole call site commented out on 2004-04-27 (check.cpp 1762, '// 2004-04-27 if (check_err(74,...))'): deliberately retired 22 years ago; no build can emit it. chatter's tier-separator rules (single :\\t) are enforced by the grammar."
-  },
-  {
-   "check_code": 75,
-   "check_message": "Item '[+ exc]' must follow after utterance delimiter.",
-   "fixture": "CHECK_075_postcode_before_delim.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E305",
-    "E316"
-   ],
-   "note": "A postcode '[+ ...]' occurring before the utterance delimiter (check.cpp 4747). Fixture 'hey [+ exc] .'; chatter rejects (postcode only legal after terminator)."
-  },
-  {
-   "check_code": 76,
-   "check_message": "Only one letter is allowed with '@l'.",
-   "fixture": "CHECK_076_multi_letter_at_l.cha",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "expected_chatter_codes": [],
-   "note": "An '@l' letter-marker word whose stem is more than one letter. RETIRED ON BOTH SIDES. CLAN retired error 76 on 2026-08-07 (\"CHECK: allow multiple characters before @l\"); check_isOneLetter and its call site sit inside a dated comment block, so no unix build emits it. chatter retired its own E754 on 2026-08-11, independently and for a stated reason: the rule counted CHARACTERS, a digraph is one letter written with two (Welsh 'll', Dutch 'ij'), so it reported a spurious error on valid CHAT and could not do better because it never saw the word's language. Both validators now accept the construct, so expected_chatter_codes is empty and the fixture pins that agreement."
-  },
-  {
-   "check_code": 77,
-   "check_message": "\"@Languages:\" tier is expected here.",
-   "fixture": "CHECK_077_missing_languages.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E504"
-   ],
-   "note": "File has no @Languages header. CLAN 77 (also 61); chatter E504 MissingRequiredHeader. chatter uses one generic missing-required-header code where CLAN has per-header codes; parity is on validity."
-  },
-  {
-   "check_code": 78,
-   "check_message": "Item '+' must be used at the beginning of tier.",
-   "fixture": "CHECK_078_pluscomma_mid.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E766"
-   ],
-   "note": "A special delimiter word '+,' '+\"' '+^' '+<' '++' (exactly two chars) appearing after the first word of the tier (check.cpp 4769). Fixture 'hey +, you .'; chatter rejects (unparsable ' +'). Expected codes refreshed 2026-07-30 (E316 -> E766): the misplaced-linker grammar change names this construct E766 (linker not utterance-initial), the direct counterpart of CHECK 78's message."
-  },
-  {
-   "check_code": 79,
-   "check_message": "Only one occurrence of | symbol per word is allowed.",
-   "fixture": "CHECK_079_mor_two_pipes.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E702"
-   ],
-   "note": "A %mor word with two | separators (n|dog|cat). CLAN 79 (only one | per word); chatter surfaces the malformed %mor item as E702 (E316 until 2026-09-08, when a recovery node below the tier's direct children was classified without the tier's name)."
-  },
-  {
-   "check_code": 80,
-   "check_message": "There must be at least one occurrence of '|'.",
-   "fixture": "CHECK_080_mor_no_pipe.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E702"
-   ],
-   "note": "A %mor word with no | separator (bare 'dog'). CLAN 80 (must be at least one |); chatter E702 (E316 beside it until 2026-09-08, from a second reporter that has been removed)."
-  },
-  {
-   "check_code": 81,
-   "check_message": "Bullet must follow utterance delimiter or be followed by end-of-line.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out 2025-07-04 (check.cpp 4791, dated comment block); bullet-placement validity is covered by the still-live bullet codes (73, 118 was also retired the same day)."
-  },
-  {
-   "check_code": 82,
-   "check_message": "BEG mark of bullet must be smaller than END mark.",
-   "fixture": "CHECK_082_end_before_beg.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E362"
-   ],
-   "note": "A media bullet whose END time is <= its BEG time (check.cpp 3879, new-format path with @Media header). Bullet \\x15500_100\\x15. Note @Media file name must match the .cha basename or CLAN adds (157) noise."
-  },
-  {
-   "check_code": 83,
-   "check_message": "Current BEG time is smaller than previous' tier BEG time",
-   "fixture": "CHECK_083_beg_backwards.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E362"
-   ],
-   "note": "A tier's first bullet BEG earlier than the previous tier's first-bullet BEG (check_tierBegTime), reachable only from the third bulleted tier on because tEndTime==0 skips the block on the first (check.cpp 3885/3890). Needs three tiers (1000_2000, 3000_4000, then 2500_2600): with only two, the tracking variable is still 0 and no error fires; a two-tier same-speaker attempt yields (133) instead. CLAN message has no trailing period."
-  },
-  {
-   "check_code": 84,
-   "check_message": "Current BEG time is smaller than previous' tier END time by 500 msec.",
-   "fixture": "CHECK_084_overlap.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "DELIBERATE DIVERGENCE (maintainer decision, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open maintainer policy question). With +c0 (checkBullets==1, OFF by default): current tier's bullet BEG earlier than previous tier's END (overlap) (check.cpp 3901). OPTION-GATED: emitted only under 'c",
-   "clan_flags": [
-    "+c0"
-   ]
-  },
-  {
-   "check_code": 85,
-   "check_message": "Gap found between current BEG time and previous' tier END time.",
-   "fixture": "CHECK_085_gap.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "DELIBERATE DIVERGENCE (maintainer decision, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open maintainer policy question). With +c0 (checkBullets==1, OFF by default): gap between current tier's bullet BEG and previous tier's END (check.cpp 3905). OPTION-GATED: emitted only under 'check +c",
-   "clan_flags": [
-    "+c0"
-   ]
-  },
-  {
-   "check_code": 86,
-   "check_message": "Illegal character. Please re-enter it using Unicode standard.",
-   "fixture": "CHECK_086_private_use_char.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E243"
-   ],
-   "note": "Shape-scoped parity: U+E000 inside a word produces CHECK 86 and E243. The rejected BMP policy exempts U+F170..U+F264 and U+FF01..U+FF5E; U+00B7 is allowed. This is not universal Unicode parity: the 21-Sep-2026 CHECK byte predicate also rejects U+10000, whereas Chatter deliberately preserves its scalar-based BMP boundary. E243_unicode_boundaries.md records accepted controls, both exemption endpoints, rejected neighbors and the supplementary-plane divergence."
-  },
-  {
-   "check_code": 87,
-   "check_message": "Malformed structure.",
-   "fixture": "CHECK_087_malformed_compound.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E702"
-   ],
-   "note": "A %mor/%xmor/%trn (or %cnl) word whose compound structure is malformed: a '+' not in canonical 'pfx|+a|b' shape drives numOfCompounds to -2 or 0 (check.cpp 3592/3646). Fixture '%mor: n|cat+n|fish .' (compound missing the '|+' marker after the head POS). chatter rejects: E702 on the item (E316 until 2026-09-08) and E600 at the tier."
-  },
-  {
-   "check_code": 88,
-   "check_message": "Illegal use of compounds and special form markers.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out since 2009-06-08 (check.cpp 3414, dated comment block); never emitted by current builds. chatter's compound/form-marker rules are adjudicated per live CHECK codes 65/66 instead."
-  },
-  {
-   "check_code": 89,
-   "check_message": "Missing or extra or wrong characters found in bullet.",
-   "fixture": "CHECK_089_bad_bullet_char.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316",
-    "E544"
-   ],
-   "note": "A new-format bullet whose content is not digits_digits (e.g. wrong separator) (check.cpp 3863, res==2 from check_getMediaTagInfo). Bullet \\x15100x200\\x15 with @Media header. chatter rejects."
-  },
-  {
-   "check_code": 90,
-   "check_message": "Illegal time representation inside a bullet.",
-   "fixture": "CHECK_090_leading_zero_time.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E748"
-   ],
-   "note": "A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \\x15012_200\\x15 with @Media header. GAP CLOSED 2026-07-09: chatter now emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748.md. A bare 0 stays legal. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Leading-zero bullet times are unambiguous; kept as an error by project policy: style violations are errors."
-  },
-  {
-   "check_code": 91,
-   "check_message": "Blank lines are not allowed.",
-   "fixture": "CHECK_091_blank_line.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E747"
-   ],
-   "note": "A blank line in the transcript (CLAN flags one between utterances AND between headers, verified). CLAN CHECK 91. ROOT CAUSE was STRUCTURAL: the grammar's `newline: /[\\r\\n]+/` fused an utterance's terminating newline with the blank line's newline, ERASING the blank line before any node could represent it. FIXED structurally, NOT by text-hacking: `newline` is now a single line break (`/\\r\\n|[\\r\\n]/`) and a `blank_line` CST node represents the blank line; the parser emits E747 BlankLineNotAllowed from that node (helpers.rs line dispatch), no source/line scan. Tree-sitter side complete; the re2c lexer reconciliation (un-fuse its `[\\r\\n]+`, detect consecutive Newline tokens, emit E747) is the tracked follow-up. chatter rejects via E747."
-  },
-  {
-   "check_code": 92,
-   "check_message": "Item ',' must be followed by space or end-of-line.",
-   "fixture": "CHECK_092_comma_no_space.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E749"
-   ],
-   "note": "Comma not followed by space or end-of-line on a speaker tier (check.cpp 4309-4320, with CA-mark exemptions). GAP CLOSED 2026-07-09: model validation check_comma_glued_to_next (span adjacency over walk_content; dummy spans skipped) plus a re2c token-stream mirror. Spec: E749.md. Narrowed to word-next: constructs placing their own character after the comma are exempt, matching CLAN. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Comma-glue is unambiguous under our grammar; kept as an error by project policy: style violations are errors."
-  },
-  {
-   "check_code": 93,
-   "check_message": "Item '[' must be preceded by SPACE.",
-   "fixture": "CHECK_093_bracket_no_space.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "'[' immediately preceded by '>' or ']' with no space (check.cpp 4469/4472; CA start-marks site 3179 is #ifndef UNX). Fixture '<hey>[/] hey .'; CLAN also emits (161). chatter rejects via E316. (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.)"
-  },
-  {
-   "check_code": 94,
-   "check_message": "Mismatch of speaker and %mor: utterance delimiters.",
-   "fixture": "CHECK_094_mor_delim_mismatch.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E716"
-   ],
-   "note": "%mor tier whose utterance delimiter differs from the speaker tier's recorded delimiter (check.cpp 4338 simple delimiters; 4522 '+...'-style). '*CHI: hey .' with '%mor: co|hey ?'. chatter rejects with the dedicated E716."
-  },
-  {
-   "check_code": 95,
-   "check_message": "Illegal use of capitalized words in compounds.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out (check.cpp 3300, undated comment block guarding check_err(95) behind the retired capWFound flag, itself part of the 2019-04-23 upper-case retirement); never emitted by current builds."
-  },
-  {
-   "check_code": 96,
-   "check_message": "Word color is now illegal.",
-   "status": "no_obligation",
-   "no_obligation_reason": "unreachable_in_file_mode",
-   "note": "Compiled but unreachable: the emit site (check.cpp 3462) is the @Languages branch of check_CheckWords, but @Languages values are validated by check_isLangMatch (check.cpp 2165), which deliberately SPLITS each token at '=' and validates only the language-code part, accepting the legacy word-color suffix; the word-level walker never visits @Languages in file mode. Empirically '@Languages: eng=blue' and 'eng, fra=blue' pass unix CHECK clean. chatter rejects the construct as malformed header content (E320), correctly stricter.",
-   "fixture": "CHECK_096_word_color_languages.cha",
-   "expected_chatter_codes": [
-    "E320"
-   ]
-  },
-  {
-   "check_code": 97,
-   "check_message": "Illegal character inside parentheses.",
-   "fixture": "CHECK_097_at_in_parens.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E203",
-    "E316"
-   ],
-   "note": "'@' encountered inside parentheses within a word on a speaker tier (check.cpp 3360, paransFound). Fixture 'c(a@b)t .'; CLAN also emits (147). chatter rejects."
-  },
-  {
-   "check_code": 98,
-   "check_message": "Space is not allow in media file name inside bullets.",
-   "fixture": "CHECK_098_space_in_name.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E360"
-   ],
-   "note": "An old-format bullet (no @Media header) '\\x15%snd:\"NAME\"_B_E\\x15' whose media file name contains a space (check.cpp 3923 via res==4; also reachable in the new-format path 3867). chatter rejects the old-style %snd bullet outright (E360), so anything CHECK flags inside it is also rejected; parity by strictness."
-  },
-  {
-   "check_code": 99,
-   "check_message": "Extension is not allow at the end of media file name.",
-   "fixture": "CHECK_099_extension_in_name.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E360"
-   ],
-   "note": "Media file name ending with an extension: in old-format bullets (check.cpp 3925 via res==5, used here), in new-format path (3869), or on the @Media header (5589). Grounded via old-format bullet '\\x15%snd:\"test.wav\"_100_200\\x15'; chatter rejects the %snd bullet (E360). The @Media-header variant of (99) was not separately grounded."
-  },
-  {
-   "check_code": 100,
-   "check_message": "Commas at the end of PARTICIPANTS tier are not allowed.",
-   "fixture": "CHECK_100_trailing_comma_participants.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E550"
-   ],
-   "note": "Trailing comma at end of @Participants. The grammar already surfaces the dangling comma as a tree-sitter ERROR node inside the participants header; the parser reports it as E550 TrailingCommaInParticipants (parse-stage diagnostic). CLAN CHECK 100."
-  },
-  {
-   "check_code": 101,
-   "check_message": "This item must be followed or preceded by text.",
-   "status": "no_obligation",
-   "no_obligation_reason": "gui_only",
-   "note": "GUI-only: the sole call site (check.cpp 3016) sits inside the #ifndef UNX CA-character region of check_CheckWords, so `unifdef -DUNX` blanks it and no unix binary contains it. DERIVABLE since 2026-08-11: the generator runs unifdef before scanning, so the reference reports zero live sites and this reason is checked rather than trusted.",
-   "fixture": "CHECK_101_ca_marker_no_stem.cha",
-   "expected_chatter_codes": [
-    "E316"
-   ]
-  },
-  {
-   "check_code": 102,
-   "check_message": "Italic markers are no longer legal in CHAT.",
-   "fixture": "CHECK_102_italics.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E315",
-    "E316"
-   ],
-   "note": "Any character carrying the italic text attribute, encoded in the file as ATTMARKER 0x02 + 0x03 (italic start) / 0x02 + 0x04 (italic end) (check.cpp: multiple is_italic() sites, e.g. 4289/4433). Fixture embeds raw bytes \\x02\\x03hey\\x02\\x04; CLAN emits (102) twice (once per attributed char run). chatter names each of the four control bytes as E315 (the lexical rule permits only the underline pairs 0x02 0x01 / 0x02 0x02) and the broken word as E316, so legacy attribute encoding cannot pass."
-  },
-  {
-   "check_code": 103,
-   "check_message": "Illegal use of both CA and IPA on \"@Options:\" tier.",
-   "fixture": "CHECK_103_ca_and_ipa.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E534"
-   ],
-   "note": "@Options header (which must immediately follow @Participants) listing both 'CA' and 'IPA' (check.cpp 5478/5537). First attempt placed @Options after @ID and got first-pass (125) instead; @Options must sit right after @Participants. CLAN also emits (11) because IPA is not in the depfile @Options template. chatter rejects with E534."
-  },
-  {
-   "check_code": 104,
-   "check_message": "Please select \"CAfont\" or \"Ascender Uni Duo\" font for CA file as per \"@Options:\" tier.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Both call sites commented out (check.cpp 5483/5542, inside comment blocks); the font-selection advice is GUI-editor-era and never emitted by current builds. Fonts are not a CHAT-validity property; chatter has no analogue by design."
-  },
-  {
-   "check_code": 105,
-   "check_message": "Please select \"Charis SIL\" font for IPA file as per \"@Options:\" tier.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Both call sites commented out (check.cpp 5487/5546, same comment blocks as CHECK 104); never emitted. Same adjudication as 104: font choice is not validity."
-  },
-  {
-   "check_code": 106,
-   "check_message": "A code must be entirely on one line.",
-   "fixture": "CHECK_106_code_spans_newline.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A scoped code split across a newline (`[% comment` then a continuation line `continued]`) leaves an ERROR node in the main-tier content that the streaming lowering did not scan. The whole-tree recovery-node backstop now surfaces it as E316. CLAN CHECK 106."
-  },
-  {
-   "check_code": 107,
-   "check_message": "Only single commas are allowed in tier.",
-   "fixture": "CHECK_107_triple_comma.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E258"
-   ],
-   "note": "Three or more consecutive commas on a speaker tier (check.cpp 4322; two commas give (156) instead). Fixture 'hey ,,, you .'; CLAN also emits (156). chatter rejects (E258 twice)."
-  },
-  {
-   "check_code": 108,
-   "check_message": "Postcodes must precede the final bullet.",
-   "fixture": "CHECK_108_postcode_after_bullet.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A postcode `[+ trn]` placed after the final time bullet leaves an ERROR node in the utterance that the streaming lowering did not scan. The whole-tree recovery-node backstop now surfaces it as E316. CLAN rejects it (codes 108 and 112). CLAN CHECK 108 (co-emitted with 112)."
-  },
-  {
-   "check_code": 109,
-   "check_message": "Postcodes are not allowed on dependent tiers.",
-   "fixture": "CHECK_109_postcode_on_deptier.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "A postcode-shaped token `[+ trn]` on a dependent tier (%com). CLAN CHECK 109 (\"Postcodes are not allowed on dependent tiers\", check_CheckWords, check.cpp:3471-3690) flags it on any non-%x dependent tier. chatter does not model postcodes on dependent tiers: ordinary dependent tiers like %com parse as TextTier with no Postcode AST node, so there is nothing typed to detect, and flagging it would require a banned raw-text scan. Empirically (2026-06-25) CLAN's own analysis tools do not choke on dependent-tier postcodes: FREQ and MLU exclude the `[+ ...]` token from counts exactly as on the main tier, KWAL displays the line; only CHECK flags it. CHECK 109 is a CLAN-internal pedantic check, not a CHAT-validity rule, so chatter deliberately diverges (accepts) per the parity mandate's 'unless CHECK is buggy / not a real validity rule' clause. Divergence (chatter intentionally looser), not a gap."
-  },
-  {
-   "check_code": 110,
-   "check_message": "No bullet found on this tier.",
-   "fixture": "CHECK_110_no_bullet.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "DELIBERATE DIVERGENCE (maintainer decision, 2026-07-08): this CHECK rule is option-gated (fires only under the non-default CLAN flags recorded in clan_flags), and default-mode CHECK accepts the fixture. Policy: option-gated CHECK rules do not bind parity; chatter intentionally accepts. Original grounding: OPTION-GATED (fires only under these CLAN flags; whether off-by-default CHECK rules bind parity is an open maintainer policy question). With +cN (checkBullets nonzero, OFF by default): a speaker tier containing no bullet at all (check.cpp 4915). OPTION-GATED: emitted only under 'check +c1' (or +c0); d",
-   "clan_flags": [
-    "+c1"
-   ]
-  },
-  {
-   "check_code": 111,
-   "check_message": "Illegal pause format. Pause has to have '.'",
-   "fixture": "CHECK_111_illegal_pause.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E209"
-   ],
-   "note": "An illegal pause format: `(5)` (digits with no dot) instead of (.)/(..)/(...)/(n.). CLAN 111 (pause must have '.'); chatter rejects with E209 (also E220)."
-  },
-  {
-   "check_code": 112,
-   "check_message": "Missing @Media: tier with media file name in headers section at the top of the file.",
-   "fixture": "CHECK_112_missing_media.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E752"
-   ],
-   "note": "A new-format digits_digits bullet in a file with NO @Media header (check.cpp 3927 via check_getOLDMediaTagInfo res==6). chatter accepts time bullets without an @Media header (exit 0). GAP: bullets should require an @Media header. Note the reference-table message has '%s' filled as '@Media:' in real output. CLOSED 2026-07-15 per the 2026-07-14 MEANINGFUL ruling: chatter rejects timing-without-@Media as E752 (inverse of E544); spec spec/errors/E752.md. 2026-09-08: chatter's timing-evidence union now includes bullets INSIDE an utterance, which CHECK 112 already counted (check_checkBulletsConsist is called from the main-tier walk); the E752 spec carries the example. CHECK never looks at %wor bullets; chatter does, deliberately stricter."
-  },
-  {
-   "check_code": 113,
-   "check_message": "Illegal keyword, use \"audio\", \"video\" or look in depfile.cut.",
-   "fixture": "CHECK_113_media_bad_keyword.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E536"
-   ],
-   "note": "A comma-separated field after the file name on @Media that is not a depfile-listed keyword (audio/video/unlinked/...). E536 is the same rule (Unsupported @Media status: 'junkword'). E531 is extra chatter strictness: media filename 'test' vs fixture file name."
-  },
-  {
-   "check_code": 114,
-   "check_message": "Add \"audio\", \"video\" or look in depfile.cut for more keywords after the media file name on @Media: tier.",
-   "fixture": "CHECK_114_media_no_keyword.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "@Media names a media file but lists neither 'audio' nor 'video'; CLAN emits (114) on the @Media line. FIXTURE REPAIRED 2026-07-09: the survey-batch copy was truncated mid-@Media-line (no utterance, no @End), so CLAN aborted first-pass with (7) and could never reach 114; the drift guard caught it. chatter rejects the keywordless @Media at parse time (E316 unparsable header line; an incidental E747 blank-line cascade fires on the newline the recovery leaves behind, deliberately not asserted)."
-  },
-  {
-   "check_code": 115,
-   "check_message": "Old bullets format found. Please run \"fixbullets\" program to fix this data.",
-   "fixture": "CHECK_115_old_bullet_format.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316",
-    "E544"
-   ],
-   "note": "With an @Media header present, a time bullet whose content starts with %s/%m, i.e. the old '%snd:\"file\"_beg_end' bullet format. Old-format bullet is unparsable to chatter (E316) and the file then has no timing info (E544). E531 is fixture-name noise."
-  },
-  {
-   "check_code": 116,
-   "check_message": "Specifying Font for individual lines is illegal. Please open this file and save it again.",
-   "fixture": "CHECK_116_fnt_code.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E375"
-   ],
-   "note": "A bracketed code matching pattern [%fnt: *:*] (per-line font specification) on a tier. chatter rejects via E375 (failed to parse percent_annotation token '[%fnt: ...'), a parse-level rejection of the same construct."
-  },
-  {
-   "check_code": 117,
-   "check_message": "This character must be used in pairs. See if any are unmatched.",
-   "fixture": "CHECK_117_unmatched_faster.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E230"
-   ],
-   "note": "A pairwise CA marker (faster U+2206, slower, creaky, whisper, left-arrow-circle U+21AB, etc.) occurring an odd number of times on a main tier. Dedicated chatter code: E230 'Unbalanced CA delimiter (Faster): missing closing delimiter'. CLAN tracks 15 pair-wise marker types; fixture uses faster U+2206. This fixture's parity does not imply identical replacement-scope behavior: E230 examples 2/3 retain Chatter's once-per-authored-marker pairing. CHECK 21-Sep-2026 scans replacement text twice in check_ParseWords (whole bracket token, then target-word re-entry), cancelling a single target marker and inverting the paired/unpaired verdicts. See E230's source-path analysis."
-  },
-  {
-   "check_code": 118,
-   "check_message": "Utterance delimiter must precede final bullet.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out 2025-07-04 (check.cpp 4623, dated comment block, retired together with 81); never emitted by current builds. Delimiter-before-bullet ordering remains covered by the live bullet/delimiter codes."
-  },
-  {
-   "check_code": 119,
-   "check_message": "Missing word after code.",
-   "fixture": "CHECK_119_dangling_retrace.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E370"
-   ],
-   "note": "Retrace marker [/] with nothing after it. chatter E370 StructuralOrderError."
-  },
-  {
-   "check_code": 120,
-   "check_message": "Please use three letter language code.",
-   "fixture": "CHECK_120_two_letter_lang.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E519"
-   ],
-   "note": "A 2-letter (or 2-letter plus dash subtag) language code where a 3-letter ISO-639 code is expected, on @Languages, the @ID language field, [- lng] precodes, or @s codes. Dedicated chatter code: E519 \"Language code 'en' should be 3 characters (got 2)\". Fixture uses en consistently on @Languages and @ID."
-  },
-  {
-   "check_code": 121,
-   "check_message": "Language code \"qqq\" not found in \"CLAN/lib/fixes/ISO-639.cut\" file.",
-   "fixture": "CHECK_121_unknown_lang.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E519"
-   ],
-   "note": "An UNASSIGNED three-letter code (qzz, outside the qaa-qtz private-use range) on @Languages/@ID. CLAN emits (121) from its legacy language table; chatter rejects via the full ISO 639-3 registry (E519, InvalidLanguageCode), the authoritative modern standard. PARITY per the 2026-07-14 ruling; fixture re-grounded 2026-07-15 from qqq to qzz because qqq is registry-VALID (private use), which the original fixture conflated; see the companion private-use divergence entry."
-  },
-  {
-   "check_code": 121,
-   "check_message": "Undefined language code on @ID or @Languages tier.",
-   "fixture": "CHECK_121_private_use_lang.cha",
-   "status": "divergence",
-   "expected_chatter_codes": [],
-   "note": "A PRIVATE-USE code (qqq, inside ISO 639-3's reserved qaa-qtz range) on @Languages/@ID. CLAN's fixed table lacks the private-use range and emits (121); the ISO 639-3 registry defines qaa-qtz as valid codes reserved for local use, so chatter accepts them: an intentional registry-grounded divergence, not a gap. Wild grounding 2026-07-15: no kept file uses a private-use code (typed scan of every data-json languages field), so the divergence is currently theoretical."
-  },
-  {
-   "check_code": 122,
-   "check_message": "Language on @ID tier is not defined on \"@Languages:\" header tier.",
-   "fixture": "CHECK_122_id_lang_not_declared.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E519"
-   ],
-   "note": "@ID declares language 'eng' that is not present in the @Languages header (which declares 'fra'). CLAN 122; chatter E519. NOTE: code 122 has n_call_sites=0 in the generated catalogue (emitted via an indirect call the literal check_err grep misses) but IS emittable: verified vs real file-mode CLAN. The 8-code 'dead' list therefore needs empirical re-verification."
-  },
-  {
-   "check_code": 123,
-   "check_message": "Illegal character '<space>' found in tier text. If it CA, then add \"@Options: CA\"",
-   "fixture": "CHECK_123_tab_space.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E758"
-   ],
-   "note": "In a non-CA file (no @Options: CA), the tab after the speaker colon is followed by a space (CA-style alignment). GAP: chatter accepts '*CHI:<tab><space>dog .'. Second call site (check.cpp:1673, space at i==1 after leading tab) is logically unreachable (outer guard requires uttline[0] != tab); the live site is 1669. CLOSED 2026-07-16: E758 (LeadingSpaceOnMainTier), speaker-span arithmetic, gated on !ca_mode (all 457 wild occurrences declare @Options: CA, confirming CHECK's exemption boundary)."
-  },
-  {
-   "check_code": 124,
-   "check_message": "Please remove \"unlinked\" from @Media header.",
-   "fixture": "CHECK_124_media_unlinked_with_bullet.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E552"
-   ],
-   "note": "@Media declares `unlinked` but the main tier has a time bullet, so the media is in fact linked. chatter now emits E552 MediaUnlinkedWithTiming via check_media_unlinked_has_no_timing, the inverse of the existing E544 (linkage without timing). Grounded empirically: unlinked+bullet -> CLAN 124; unlinked+no-bullet and linked+bullet -> no 124. CLAN CHECK 124."
-  },
-  {
-   "check_code": 125,
-   "check_message": "\"@Options\" header must immediately follow \"@Participants:\" header.",
-   "fixture": "CHECK_125_options_after_id.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E551"
-   ],
-   "note": "@Options placed after @ID instead of immediately after @Participants. chatter E551 OptionsHeaderOutOfOrder, mirroring the @ID rule (E548/CHECK 126). CLAN CHECK 125."
-  },
-  {
-   "check_code": 126,
-   "check_message": "\"@ID\" header must immediately follow \"@Participants:\" or \"@Options\" header.",
-   "fixture": "CHECK_126_id_header_out_of_order.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E548"
-   ],
-   "note": "A changeable header (@Comment) sits between @Participants and the @ID block."
-  },
-  {
-   "check_code": 127,
-   "check_message": "Header must follow \"@ID:\" or \"@Birth of\" or \"@Birthplace of\" or \"@L1 of\" header.",
-   "fixture": "CHECK_127_constant_header_out_of_order.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E547"
-   ],
-   "note": "A changeable header sits between the @ID block and @Birth of."
-  },
-  {
-   "check_code": 128,
-   "check_message": "Unmatched ‹ found on the tier.",
-   "fixture": "CHECK_128_unmatched_group_start.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Group-start marker U+2039 opened on a main tier and never closed (gm > 0 at end of tier). No dedicated code; unmatched opener makes the tier unparsable (E316)."
-  },
-  {
-   "check_code": 129,
-   "check_message": "Unmatched › found on the tier.",
-   "fixture": "CHECK_129_unmatched_group_end.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Group-end marker U+203A encountered with no open U+2039 (gm goes negative). Rejected at parse level: E316 unparsable content on the stray closer plus E305 missing terminator. Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
-  },
-  {
-   "check_code": 130,
-   "check_message": "Unmatched 〔 found on the tier.",
-   "fixture": "CHECK_130_unmatched_sign_group_start.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Sign-group-start marker U+3014 opened and never closed (sgm > 0 at end of tier). No dedicated code; rejected as unparsable (E316)."
-  },
-  {
-   "check_code": 131,
-   "check_message": "Unmatched 〕 found on the tier.",
-   "fixture": "CHECK_131_unmatched_sign_group_end.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "Sign-group-end marker U+3015 with no opener (sgm goes negative). Rejected at parse level (E316 + E305). Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
-  },
-  {
-   "check_code": 132,
-   "check_message": "Tabs should only be used to mark the beginning of lines.",
-   "fixture": "CHECK_132_tab_midline.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E370"
-   ],
-   "note": "A tab in the middle of a main tier. chatter rejects it (E370, unexpected tab). Grounded vs real CLAN CHECK 132."
-  },
-  {
-   "check_code": 133,
-   "check_message": "BEG time is smaller than same speaker's previous END time by 4000 msec.",
-   "fixture": "CHECK_133_overlap_same_speaker.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E704"
-   ],
-   "note": "With linked media, a bullet whose BEG time is more than 500 ms earlier than the same speaker's previous bullet END time. Dedicated chatter code: E704 'Speaker CHI overlaps with self: utterance 1 ends at 5000ms...'. E531 is fixture-name noise. CLAN threshold is >500ms (check.cpp:3892-3896); chatter's exact threshold not probed by this survey."
-  },
-  {
-   "check_code": 134,
-   "check_message": "Item 'unk|xxx' is illegal. Please run \"mor\" command on this data.",
-   "fixture": "CHECK_134_mor_unk_xxx.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E706"
-   ],
-   "note": "A %mor/%trn (or %cnl) item of the form unk|xxx, unk|yyy, or *|www (mor output for untranscribed material). chatter rejects via alignment (E706: main tier has 0 alignable items, %mor has 1) because xxx is not %mor-alignable; there is no dedicated unk|xxx rule. A hypothetical fixture where counts still align was not probed."
-  },
-  {
-   "check_code": 135,
-   "check_message": "Item 'xx' is illegal.",
-   "fixture": "CHECK_135_bare_xx.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E241"
-   ],
-   "note": "A main-tier word that is exactly 'xx' or 'yy' (case-insensitive); %cnl tiers also flag bare 'gen' and '^'. Dedicated chatter code: E241 '\"xx\" is not legal; did you mean to use \"xxx\"?'. Only the main-tier xx call site (check.cpp:3138) was grounded; the %cnl sites (3613, 3632) were not separately probed."
-  },
-  {
-   "check_code": 136,
-   "check_message": "Unmatched “ found on the tier.",
-   "fixture": "CHECK_136_unmatched_open_quote.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E242"
-   ],
-   "note": "Open curly quote U+201C on a tier with no matching close quote (qt > 0 at end of tier). Since 2026-09-01 E242 is decided from CST structure and names the unmatched OPEN quote too, where it used to surface only as unparsable E316 (the close-quote case, CHECK 137, was E242 already)."
-  },
-  {
-   "check_code": 137,
-   "check_message": "Unmatched ” found on the tier.",
-   "fixture": "CHECK_137_unmatched_close_quote.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E242"
-   ],
-   "note": "Close curly quote U+201D with no preceding open quote (qt goes negative). Dedicated chatter code: E242 'Unmatched curly quote ” found on the tier'. Expected codes refreshed 2026-07-30 (E242, E305 -> E242): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
-  },
-  {
-   "check_code": 138,
-   "check_message": "Special quote U2019 must be replaced by single quote (').",
-   "fixture": "CHECK_138_curly_u2019.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E256"
-   ],
-   "note": "A right single curly quote U+2019 inside a word. CLAN 138; chatter E256 IllegalCurlyQuote (both parsers reject U+2018/U+2019)."
-  },
-  {
-   "check_code": 139,
-   "check_message": "Special quote U2018 must be replaced by single quote (').",
-   "fixture": "CHECK_139_curly_u2018.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E256"
-   ],
-   "note": "A left single curly quote U+2018 at the start of a word. CLAN 139; chatter E256 IllegalCurlyQuote."
-  },
-  {
-   "check_code": 140,
-   "check_message": "Tier \"%MOR:\" does not link in size to its speaker tier.",
-   "fixture": "CHECK_140_mor_size_mismatch.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E705"
-   ],
-   "note": "%mor tier does not align item-for-item with its speaker tier (createMorUttline sets mor_link.error_found). Dedicated chatter code: E705 'Main tier has 2 alignable items, but %mor tier has 1 items'."
-  },
-  {
-   "check_code": 141,
-   "check_message": "'[: doggy]' must be preceded by only one word and nothing else.",
-   "fixture": "CHECK_141_replacement_after_group.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A [: text] replacement preceded by a group '>', another ']', nothing, a pause, or an &/+ form instead of exactly one plain word. chatter's grammar does not accept a replacement after a group, so it rejects at parse level (E316 on '<big dog> [: doggy]'); no dedicated code. Expected codes refreshed 2026-07-30 (E316, E747 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
-  },
-  {
-   "check_code": 142,
-   "check_message": "Speaker's role on @ID tier does not match role on @Participants: tier.",
-   "fixture": "CHECK_142_id_role_mismatch.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E532"
-   ],
-   "note": "The role field (field 8) of @ID differs from the role declared for that speaker on @Participants. Dedicated chatter code: E532 \"Speaker 'CHI' has role 'Mother' on @ID but 'Target_Child' on @Participants\"."
-  },
-  {
-   "check_code": 143,
-   "check_message": "The @ID line needs 10 fields.",
-   "fixture": "CHECK_143_id_field_count.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E342"
-   ],
-   "note": "@ID line whose pipe-separated field count is not exactly 10. chatter rejects via E342 (missing required 'pipe'), a parse-level equivalent."
-  },
-  {
-   "check_code": 144,
-   "check_message": "Either illegal SES field value or symbol is not declared in depfile.",
-   "fixture": "CHECK_144_bad_ses.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E546"
-   ],
-   "note": "@ID SES field is an undeclared value ('XYZ'). CLAN 144 (illegal SES / not declared in depfile); chatter E546 UnsupportedSesValue. The parity claim covers unknown tokens, not identical separator policy. CHECK's check_ses skips commas/whitespace and validates each remaining token against either vocabulary (check_matchplate/check_SES_item); it has no pair-completeness check. E546_vocabulary records acceptance of ',MC', 'White,' and comma-only input by CHECK 21-Sep-2026, versus Chatter's existing stricter complete-pair policy."
-  },
-  {
-   "check_code": 145,
-   "check_message": "This intonational marker should be outside paired markers.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out 2019-04-17 with the comment 'leave this to CHATTER' (check.cpp 4602): CLAN explicitly delegated this rule's future to this project. Never emitted by current builds. If the paired-marker interaction rule is wanted, it is a fresh chatter rule to design, not a parity obligation."
-  },
-  {
-   "check_code": 146,
-   "check_message": "The &= symbol must include some code after '=' character.",
-   "fixture": "CHECK_146_bare_amp_eq.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A main-tier word that is exactly '&=' with no code after the equals sign. Rejected at parse level: E316 'Unparsable content on main tier: &= '. Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
-  },
-  {
-   "check_code": 147,
-   "check_message": "Undeclared special form marker in depfile.",
-   "fixture": "CHECK_147_undeclared_form_marker.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E203"
-   ],
-   "note": "An undeclared special-form marker `foo@zzz`. CLAN CHECK 147. ROOT CAUSE was the parser conversion, NOT the grammar: the grammar intentionally consumes `@zzz` as one form_marker token (parse-don't-validate), but the conversion's `else if text.starts_with(\"@z\")` branch treated any `@z...` as the user-defined form, stripping `@z` and using the rest as a bare label without the required colon. Fixed by requiring the `@z:` colon (the only valid user-defined form is `@z:label`); `@zXXX` without the colon now falls through to the existing E203 InvalidFormType branch in both the tree-sitter and re2c conversions. chatter rejects it via E203."
-  },
-  {
-   "check_code": 148,
-   "check_message": "Space character is not allowed before comma(,) character on \"@Media:\" header.",
-   "fixture": "CHECK_148_media_space_before_comma.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E767"
-   ],
-   "note": "Space before the comma in @Media. Chatter now has its own named rule for it, E767, replacing the fallout it used to produce: the header failed to parse, so it fell back to E525 (unknown header type) about a header chatter had recognised, plus E330 (missing media_type) on a line visibly ending in `, audio`. The precise space-before-comma message is no longer a CLAN nicety chatter lacks; both validators reject, and both now say why."
-  },
-  {
-   "check_code": 149,
-   "check_message": "Illegal character '.' located between a word and [...] code.",
-   "fixture": "CHECK_149_char_before_code.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A skip character other than space/comma/'<'/'>'/newline (e.g. an utterance terminator '.') sitting between a word and a following [...] code. Fixture 'dog . [: doggy] .' also draws CLAN (50) extra-delimiter noise; chatter rejects the same configuration as unparsable (E316 on '[: ...')."
-  },
-  {
-   "check_code": 150,
-   "check_message": "Illegal item located between a word and [...] code.",
-   "fixture": "CHECK_150_paren_before_code.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E316"
-   ],
-   "note": "A ')' with no matching '(' in the non-skip material scanned back from a [...] code. chatter rejects 'dog) [/] dog' as unparsable (E316 on ') [/] dog'). E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
-  },
-  {
-   "check_code": 151,
-   "check_message": "This word has only repetition segments.",
-   "status": "no_obligation",
-   "no_obligation_reason": "unreachable_in_file_mode",
-   "note": "Compiled into the unix build but never reached. RECLASSIFIED 2026-08-11 from `gui_only`, which was wrong about the mechanism: the check_err(151,...) site is at check.cpp 2980, inside helper check_isThereStem, which ends before the #ifndef UNX region begins at 2991. The site therefore survives `unifdef -DUNX`. What the region excludes is the helper's ONLY caller, at 3013, so under -DUNX the function is compiled and never invoked. The earlier note's phrase \"the emit path sits behind the #ifndef UNX region\" was accurate as prose and wrong as a classification.",
-   "fixture": "CHECK_151_only_repetition_segments.cha",
-   "expected_chatter_codes": [
-    "E753"
-   ]
-  },
-  {
-   "check_code": 152,
-   "check_message": "Language is not defined on \"@Languages:\" header tier.",
-   "fixture": "CHECK_152_undeclared_precode_lang.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E755"
-   ],
-   "note": "A [- CODE] utterance precode whose language is absent from @Languages. CLAN emits (152) via the indirect check_isLangMatch(wh=152) call at check.cpp 4194/5501, which the reference JSON's literal check_err(N,) counter misses, so 152 was WRONGLY in the dead list until 2026-07-15 (the coverage tool auto-reclassifies once this entry exists). Adjudicated MEANINGFUL and closed as E755 per the @s-declaration ruling (docs design 2026-07-15, part 3): utterance-level presence is substantial and belongs in @Languages; wild grounding 0 of 7,167 precode-bearing files violate. Deliberate contrast: word-level @s:CODE carries NO declaration requirement (part 1 of the same ruling; the pre-2019 CHECK behavior and the retired E254 warning are explicitly NOT adopted: CLAN itself relaxed @s in 2019). SECOND FACET (2026-07-24): the other call site (check.cpp 5501) validates each token of an @New Language: header against CLAN's static language table; @New Language is extinct in the kept corpus (0 files, rg sweep), and chatter rejects the whole header as unknown (E525 + E316), strictly subsuming the language-table facet."
-  },
-  {
-   "check_code": 153,
-   "check_message": "Age's month or day are missing initial zero. Please run \"chstring +q +1\" command on this file to fix this error.",
-   "fixture": "CHECK_153_age_no_leading_zero.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E517"
-   ],
-   "note": "@ID age with a component missing its leading zero (2;6. instead of 2;06.). CLAN 153; chatter E517 InvalidAgeFormat."
-  },
-  {
-   "check_code": 154,
-   "check_message": "Please add \"unlinked\" to @Media header.",
-   "status": "no_obligation",
-   "no_obligation_reason": "commented_out",
-   "note": "Call site commented out after four days in service ('in 2018-10-03 out 2018-10-07', check.cpp 5752); never emitted by current builds. Media/bullet consistency is adjudicated under the live codes (112 ruling of 2026-07-14 covers the meaningful direction: bullets require @Media)."
-  },
-  {
-   "check_code": 155,
-   "check_message": "Please use \"0dog\" instead of \"(dog)\".",
-   "fixture": "CHECK_155_paren_word.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E209"
-   ],
-   "note": "A non-pause word fully wrapped in parentheses, '(word)', which should be written 0word (in a non-CA file). chatter rejects via E209 'Word has no spoken content' (a fully-parenthesized word has no spoken material); not a dedicated use-0word rule but the same construct is refused."
-  },
-  {
-   "check_code": 156,
-   "check_message": "Please replace ,, with F2-t („) character.",
-   "fixture": "CHECK_156_double_comma.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E258"
-   ],
-   "note": "A literal ',,' (exactly two commas) on a main tier where the tag marker U+201E is required. Dedicated chatter code: E258 'Consecutive commas in utterance'."
-  },
-  {
-   "check_code": 157,
-   "check_message": "Media file name has to match datafile name.",
-   "fixture": "CHECK_157_media_name_mismatch.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E531"
-   ],
-   "note": "@Media filename ('differentname') does not match the datafile basename. chatter HAS E531 MediaFilenameMismatch, but the check was DEAD via the CLI: the validation_runner passed `None` for the filename so it never ran (it only fired in the parity harness, which passes the stem, masking the gap). Fixed by threading the file stem through validate_single_file_streaming. CLAN exempts remote URL @Media (verified: `@Media: \"https://...\"` -> no 157), so E531 now exempts URLs too. CLAN CHECK 157."
-  },
-  {
-   "check_code": 158,
-   "check_message": "[: ...] has to have real word, not 0... or &... or xxx.",
-   "fixture": "CHECK_158_replacement_xxx.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E391"
-   ],
-   "note": "A [: replacement] whose content is 0..., xxx/xx, yyy/yy, or www/ww instead of a real word. Dedicated chatter code: E391 'Replacement word cannot be untranscribed (xxx, yyy, www)'."
-  },
-  {
-   "check_code": 159,
-   "check_message": "Pause markers should appear after retrace markers.",
-   "fixture": "CHECK_159_pause_before_retrace.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E375"
-   ],
-   "note": "A pause marker such as (.) immediately preceding a retrace marker [/], [//], [///], or [/-]. chatter rejects the configuration but via parse-level complaints (E375 bracket-annotation spacing at the '[' of [/], plus E305), not a dedicated pause-before-retrace rule; the merger may want a sharper probe of whether chatter has the ordering rule itself. Expected codes refreshed 2026-07-30 (E305, E375 -> E375): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
-  },
-  {
-   "check_code": 160,
-   "check_message": "Space character is not allowed after '<' or before '>' character.",
-   "fixture": "CHECK_160_space_in_angle.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E750"
-   ],
-   "note": "Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). GAP CLOSED 2026-07-09: the grammar models the tolerated whitespace as explicit optional CST nodes; the group parser now reports E750 at each (both sides) instead of silently dropping them (which also silently rewrote the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750.md. Main-tier groups covered; %wor angle groups not separately grounded. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error, no ambiguity whatsoever; legitimately caught as style discipline; kept as an error."
-  },
-  {
-   "check_code": 161,
-   "check_message": "Space character is required before \"[\" code item.",
-   "fixture": "CHECK_161_no_space_before_replacement.cha",
-   "status": "parity",
-   "expected_chatter_codes": [
-    "E375"
-   ],
-   "note": "A replacement `[: foo]` glued to a word with no preceding space (`word[: foo]`). Fixed at the GRAMMAR level: word_with_optional_annotations now REQUIRES `$.whitespaces` before the replacement (matching base_annotations, which already required it for scope codes like [?]/[/]), so the glued form is an ERROR node and the parser rejects it (E375 ContentAnnotationParseError). The spaced `word [: foo]` still validates clean. CLAN CHECK 161."
-  }
- ]
+  "policy": {
+    "user_summary": "Chatter aims to provide sensible, understandable CHAT validation, not to imitate every behavior of CLAN CHECK. Grammar rejection and typed-model invariants can satisfy the same requirement with different diagnostics. Deliberate, justified divergences are resolved decisions, not unfinished work.",
+    "scope": "Completion means every entry in this finite CHECK assessment inventory has been adjudicated. It does not certify every CHECK emission path, all possible CHAT input, 100% code coverage, or Chatter 1.0 readiness. The inventory is maintained against the committed CLAN source reference; it is not a claim about an unexamined upstream revision.",
+    "reopening": "Reopen an obligation only for a concrete, independently justified CHAT requirement and evidence that Chatter misses invalid input or rejects legitimate input. A different diagnostic code, wording, count, order or rejection stage is not a gap. Upstream changes prompt scoped source and intent review, not automatic imitation.",
+    "developer_contract": "Assess CHECK source and intent before adopting suspicious behavior. Keep recovery and reporting idiomatic to the tree-sitter CST and typed AST, with source-bound evidence and producer-owned context. Never add parallel parsers, reparsing or raw-text diagnostic classifiers to mimic CHECK. When available structural evidence cannot prove a narrower fault, report an honest broader error. Preserve invalid-input rejection and valid controls. Experimental re2c agreement is not a completion prerequisite."
+  },
+  "entries": [
+    {
+      "check_code": 1,
+      "check_message": "Expected characters are: @ or %% or *.",
+      "fixture": "CHECK_001_bad_initial_character.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "First substantive byte is an invalid top-level line start (`x`) before an otherwise ordinary CHAT file. CLAN emits CHECK 1; chatter rejects the bad line start with E316."
+    },
+    {
+      "check_code": 2,
+      "check_message": "Missing ':' character and argument.",
+      "fixture": "CHECK_002_missing_main_tier_colon.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A complete CHAT preamble is followed by a main tier whose speaker code is not terminated by a colon. CLAN emits CHECK 2; chatter rejects the malformed line with E316."
+    },
+    {
+      "check_code": 3,
+      "check_message": "Missing either TAB or SPACE character.",
+      "fixture": "CHECK_003_no_space_after_colon.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "The character after the speaker-tier colon must be whitespace (check.cpp ~1756: !isSpace after check_FoundText); the fixture writes `*CHI:hello .` with no tab. CLAN emits CHECK 3; chatter rejects the line as unparsable content (E316)."
+    },
+    {
+      "check_code": 4,
+      "check_message": "Found a space character instead of TAB character after Tier name",
+      "fixture": "CHECK_004_space_after_tier.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A space instead of a TAB after the speaker code (*CHI: hi). CLAN 4; chatter requires the tab in-grammar and surfaces the recovery node as E316."
+    },
+    {
+      "check_code": 5,
+      "check_message": "Illegal colon on a header that takes no colon (@Begin).",
+      "fixture": "CHECK_005_begin_illegal_colon.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "`@Begin:` (a stray colon on the no-colon @Begin header) parses as a valid @Begin followed by a stray `:` ERROR node. The streaming lowering silently dropped that nested ERROR node, so chatter accepted the file (Valid:1) while CLAN rejects it (codes 5 and 6). A whole-tree recovery-node backstop in parse_lines_with_old_tree now surfaces any surviving ERROR node as E316 UnparsableContent (recovery is not validity); the AST is still produced. CLAN CHECK 5 (co-emitted with 6)."
+    },
+    {
+      "check_code": 6,
+      "check_message": "@Begin header missing or malformed.",
+      "fixture": "CHECK_006_begin_malformed.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "`@Begins` (a misspelled @Begin) parses as @Begin plus a trailing `s` ERROR node that the streaming lowering silently dropped. The whole-tree recovery-node backstop now surfaces it as E316. CLAN rejects it (codes 6 and 17). CLAN CHECK 6 (co-emitted with 17)."
+    },
+    {
+      "check_code": 7,
+      "check_message": "\"@End\" is missing at the end of the file.",
+      "fixture": "CHECK_007_missing_end.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E502"
+      ],
+      "note": "File has no @End header at all. CLAN 7 (@End missing at end of file); chatter E502 MissingEndHeader."
+    },
+    {
+      "check_code": 8,
+      "check_message": "Expected characters are: @ %% * TAB.",
+      "fixture": "CHECK_008_bad_line_start.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E326"
+      ],
+      "note": "A body line that does not begin with @, %, * or TAB (free text). CLAN 8 (expected @ %% * TAB); chatter E326 surfaces the unparsable main-tier start."
+    },
+    {
+      "check_code": 9,
+      "check_message": "Tier name is longer than 1024.",
+      "fixture": "CHECK_009_tier_name_too_long.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E307",
+        "E308",
+        "E522"
+      ],
+      "note": "Speaker/tier name before the colon exceeds SPEAKERLEN=1024 characters (check.cpp:2395, first pass). chatter rejects via undeclared-speaker (E522/E308/W108) and speaker-ID-length E307 (max 7 chars), not via a dedicated raw length cap; CHECK aborts first pass (second pass not attempted)."
+    },
+    {
+      "check_code": 10,
+      "check_message": "Tier text is longer than %ld.",
+      "status": "divergence",
+      "note": "UTTLINELEN buffer bound (18000): a logical tier whose text across continuation lines exceeds 18000 chars draws check_err(10) in the check_OverAll char scan (check.cpp 2403). A SINGLE physical line over 18000 instead hits the earlier hard-exit guard (check.cpp 2329, 'Speaker turn is longer then', cutt_exit(1), no (NN) code), so the fixture splits ~20k chars over tab continuation lines. Adjudication: the limit is a fixed C buffer size, an implementation artifact, not CHAT semantics; chatter has no tier-length limit by design (long tiers are valid and supported; stack-safety hardened 2026-07-14) and intentionally accepts.",
+      "fixture": "CHECK_010_tier_text_too_long.cha",
+      "expected_chatter_codes": []
+    },
+    {
+      "check_code": 11,
+      "check_message": "Symbol is not declared in the depfile.",
+      "fixture": "CHECK_011_undeclared_symbol_pct_fac.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "External depfile membership is not a universal CHAT validity requirement. Empty POS fields are a separate structural fault, rejected by morphology recovery (E702; see the E760 examples)."
+    },
+    {
+      "check_code": 12,
+      "check_message": "Missing speaker name and/or role.",
+      "fixture": "CHECK_012_missing_speaker_in_id.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E511",
+        "E523"
+      ],
+      "note": "An @ID tier whose 3rd field (speaker code) or 8th field (role) is empty (check.cpp:5060/5084). E511 'ID header speaker field cannot be empty' is the direct equivalent. CLAN also emits 142 on the same fixture."
+    },
+    {
+      "check_code": 13,
+      "check_message": "Duplicate speaker declaration.",
+      "fixture": "CHECK_013_duplicate_speaker.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E549"
+      ],
+      "note": "Same speaker declared twice in @Participants. chatter E549 DuplicateSpeakerDeclaration."
+    },
+    {
+      "check_code": 13,
+      "check_message": "Duplicate speaker declaration.",
+      "fixture": "CHECK_013_duplicate_id.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E549"
+      ],
+      "note": "Two @ID lines naming the same speaker (CHI). Distinct from the @Participants-duplicate variant (CHECK_013_duplicate_speaker.cha): CLAN 13 fires for duplicate @ID lines too, which chatter previously missed. Now E549 via check_duplicate_id_headers. CLAN CHECK 13."
+    },
+    {
+      "check_code": 14,
+      "check_message": "Spaces before tier code.",
+      "fixture": "CHECK_014_spaces_before_tier.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E326"
+      ],
+      "note": "Leading spaces before the *tier code. CLAN 14 (also 4); chatter E326."
+    },
+    {
+      "check_code": 15,
+      "check_message": "Illegal role. Please see \"depfile.cut\" for list of roles.",
+      "fixture": "CHECK_015_illegal_role.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E532"
+      ],
+      "note": "An @ID tier whose role field does not match any role listed in the depfile @Participants template (check.cpp:5087). E532 'Invalid participant role' is the direct equivalent. CLAN also emits 142 on the same fixture."
+    },
+    {
+      "check_code": 16,
+      "check_message": "Illegal use of extended characters in speaker names.",
+      "fixture": "CHECK_016_extended_chars_speaker_code.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E307"
+      ],
+      "note": "A speaker CODE containing non-printable-ASCII in @Participants (cnt==0 field scan, chars outside 33..126; check.cpp 2084-2086). Emits via the check_trans_err MACRO (check.cpp 74-79), invisible to the literal check_err(N,) counter. Empirically grounded: real CLAN emits (16) on this fixture. Non-ASCII speaker IDs are invalid by the 2026-09-23 maintainer ruling. Chatter now reports syntax code E307 through the shared speaker assessment, not the unrelated E522 participant-join code; header recovery can emit additional diagnostics."
+    },
+    {
+      "check_code": 17,
+      "check_message": "Tier is not declared in depfile file.",
+      "fixture": "CHECK_017_undeclared_dep_tier.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E605"
+      ],
+      "note": "Undeclared dependent tier %zzz: (neither %x* nor a chatter-supported standard tier). chatter rejects it via E605 UnsupportedDependentTier (Error severity). The supported set deliberately excludes the legacy %grt/%tra/%trn/%umor tiers retired with the UD-%mor consolidation, so chatter is intentionally stricter than CLAN there (documented divergence). %x* is always valid. CLAN CHECK 17."
+    },
+    {
+      "check_code": 18,
+      "check_message": "Speaker @ID is not specified in a participants list.",
+      "fixture": "CHECK_018_id_speaker_not_in_participants.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E522",
+        "E523"
+      ],
+      "note": "An @ID tier whose speaker code is not declared on the @Participants tier (check.cpp:5062). E523 '@ID header for X but speaker not in @Participants' is the direct equivalent. Note CLAN prints the literal tier name '@ID' in the message (quirk of check_mess case 18 printing utterance->speaker)."
+    },
+    {
+      "check_code": 19,
+      "check_message": "Or a SPACE should be added after it.",
+      "fixture": "CHECK_019_code_glued_to_word.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E757"
+      ],
+      "note": "A token (here the retrace code '[/]') is immediately followed by a non-space, non-delimiter character with no space between (check.cpp:4590/4592); also fires for a time bullet glued to a word. Full CLAN message is two lines: 'Illegal use of delimiter in a word.' + 'Or a SPACE should be added after it.(19)'. chatter accepts '[/]x' glued (exit 0). Grounded also with a bullet glued to a word (u019d.cha). CLOSED 2026-07-16: E757 (CodeGluedToFollowingContent), span-adjacency on the retrace span which now covers the marker brackets. Wild-data impact: zero kept files."
+    },
+    {
+      "check_code": 20,
+      "check_message": "Undeclared suffix in depfile.",
+      "fixture": "CHECK_020_undeclared_suffix_compound.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
+    },
+    {
+      "check_code": 21,
+      "check_message": "Utterance delimiter expected.",
+      "fixture": "CHECK_021_missing_terminator.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E305"
+      ],
+      "note": "A main tier with text but no utterance terminator (check.cpp:4921; tier UTD==1, no delimiter found). E305 is chatter's missing-terminator error."
+    },
+    {
+      "check_code": 22,
+      "check_message": "Unmatched [ found on the tier.",
+      "fixture": "CHECK_022_unclosed_replacement.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "An unclosed replacement scope remains invalid. The grammar rejects the fixture with E316; no raw-text replacement scanner or dedicated E311 diagnostic is required. This witnesses the unclosed replacement shape, not every CHECK 22 emission site."
+    },
+    {
+      "check_code": 23,
+      "check_message": "Unmatched ] found on the tier.",
+      "fixture": "CHECK_023_unmatched_close_bracket.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Unmatched closing bracket is rejected by grammar recovery (E316); no bracket interpretation is reconstructed from recovery text."
+    },
+    {
+      "check_code": 24,
+      "check_message": "Unmatched < found on the tier.",
+      "fixture": "CHECK_024_unmatched_lt.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Unmatched < on a main tier (open angle, no close). CLAN 24 (also 160); chatter surfaces the recovery node as E316. NOTE: earlier wrongly recorded as not-firing; that was a one-off CLAN depfile-load miss, the helper now guards against it."
+    },
+    {
+      "check_code": 25,
+      "check_message": "Unmatched > found on the tier.",
+      "fixture": "CHECK_025_unmatched_gt.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Unmatched > on a main tier. CLAN 25; chatter surfaces the tree-sitter recovery node as E316 UnparsableContent."
+    },
+    {
+      "check_code": 26,
+      "check_message": "Unmatched { found on the tier.",
+      "fixture": "CHECK_026_unmatched_open_brace.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Unmatched { on a main tier. CLAN 26 (also 11, 48); chatter E316."
+    },
+    {
+      "check_code": 27,
+      "check_message": "Unmatched } found on the tier.",
+      "fixture": "CHECK_027_unmatched_close_brace.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Unmatched } on a main tier. CLAN 27 (also 48); chatter surfaces the recovery node as E316 UnparsableContent."
+    },
+    {
+      "check_code": 28,
+      "check_message": "Unmatched ( found on the tier.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out since 11-02-98 (check.cpp 4992, inside the dated comment block); unix and GUI builds alike can never emit it. Unbalanced parentheses surface through other codes today."
+    },
+    {
+      "check_code": 29,
+      "check_message": "Unmatched ) found on the tier.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out since 11-02-98 (check.cpp 4993, same comment block as CHECK 28); never emitted by any current build."
+    },
+    {
+      "check_code": 30,
+      "check_message": "Text is illegal.",
+      "status": "no_obligation",
+      "no_obligation_reason": "unreachable_in_file_mode",
+      "note": "Compiled but unreachable in file mode: firing requires check_MatchTierName to return a colon-less declared header (ts->col FALSE) for a line that ALSO carries trailing text, but the match (check.cpp 1706, partcmp pattern mode) compares the WHOLE trimmed line against the declared name, so any trailing text makes the lookup fail first (empirically: '@Blank extra', '@New Episode extra', and tab-separated variants all emit (17) tier-not-declared, plus (132) for the tab forms, never (30)). No stock-depfile colon-less header contains a pattern wildcard that could match a longer line."
+    },
+    {
+      "check_code": 31,
+      "check_message": "Missing text after the colon.",
+      "fixture": "CHECK_031_missing_text_after_colon.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E756"
+      ],
+      "note": "A declared tier with a colon but no text after it (check.cpp:1748); '@' headers are exempt ('to always allow empty header tiers'), so the fixture uses an empty dependent tier '%fac:'. chatter answers E756 'Empty dependent tier', which states the rule CHECK 31 is about. It used to answer E330 plus E342: an auto-generated stub with no description, plus a generic tree-sitter recovery diagnostic, because the model could not represent an empty tier and the line failed to parse. The 2026-08-15 maintainer ruling widened E756 to every free-text tier rather than writing E330's spec, so the verdict here is unchanged (parity) and only the code chatter names for it moved. An empty '*CHI:' main tier instead yields CLAN (21)+(70), not (31). 2026-09-08: whitespace-only content is E756 on every free-text tier now, matching check_FoundText (check.cpp:1639), which skips ASCII space, tab and newline before looking for text; %com and %add had counted whitespace as content. Two deliberate divergences, chatter stricter in both: CHECK exempts user-defined %x tiers from 31 and chatter reports them; chatter's whitespace is Unicode whitespace, so a payload of non-breaking spaces alone is E756 while CHECK (verified 2026-09-08) reports nothing."
+    },
+    {
+      "check_code": 32,
+      "check_message": "Code is not declared in depfile.",
+      "fixture": "CHECK_032_undeclared_dollar_code.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "Documented divergence (maintainer ruling, 2026-07-12): a depfile-membership check. A token undeclared in a corpus optional/global depfile is not universally invalid CHAT; chatter validates universal CHAT-format validity, never external-config membership (CHAT validity must never depend on any config file). chatter deliberately accepts."
+    },
+    {
+      "check_code": 33,
+      "check_message": "Either illegal date or time or symbol is not declared in depfile.",
+      "status": "no_obligation",
+      "no_obligation_reason": "unreachable_in_file_mode",
+      "note": "Compiled but unreachable with the stock depfile: check_matchplate returns 33 only when a tier's declared pattern list mixes an @d/@t date-time pattern with OTHER patterns after it and the value fails everything (check.cpp 1543); when the date-time pattern is last, the specific codes 34/35 return instead. Every stock depfile @d/@t list is date-time-only (@Date, @Birth of #, @Time Duration, %tim), so failures yield (34)/(35), never (33): empirically @Date/@Birth/@ID garbage all emit (34). Reachable only via a custom user depadd."
+    },
+    {
+      "check_code": 34,
+      "check_message": "Illegal date representation.",
+      "fixture": "CHECK_034_bad_date.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E518"
+      ],
+      "note": "@Date is not a valid date ('notadate'). CLAN 34 (illegal date representation); chatter E518 InvalidDateFormat."
+    },
+    {
+      "check_code": 35,
+      "check_message": "Illegal time representation.",
+      "fixture": "CHECK_035_time_duration_out_of_range.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E540"
+      ],
+      "note": "@Time Duration 99:99:99 is shape-valid (HH:MM:SS) but out of clock range. chatter previously validated the shape only; now TimeDurationValue::has_out_of_range_component flags components outside hours 0-23 / minutes,seconds 0-59 and emits E540. CLAN range rule grounded empirically: 25:00:00, 99:30:00, 12:60:00, 12:00:60 all CLAN 35; 23:59:59 OK. CLAN CHECK 35."
+    },
+    {
+      "check_code": 36,
+      "check_message": "Utterance delimiter must be at the end of the utterance.",
+      "fixture": "CHECK_036_delimiter_not_at_end.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Utterance-delimiter followed by more material on the main tier (check.cpp:4394/4396; DelFound set, then a non-bullet, non-[ token appears). E316 (unparsable/misplaced content) rejects the same shape."
+    },
+    {
+      "check_code": 37,
+      "check_message": "Undeclared prefix.",
+      "fixture": "CHECK_037_undeclared_prefix.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E763"
+      ],
+      "note": "INCIDENTAL parity since 2026-07-27, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 37 is a depfile-membership check, a token undeclared in a corpus depfile is not universally invalid CHAT, and chatter never validates external-config membership. What changed is this FIXTURE. Its word `a+un#go` carries a word-internal prefix marker in an English utterance, and E763 rejects the marker in any language that does not use it (heb, ara). Same verdict as CHECK on this input, different and independent grounds. A depfile-undeclared prefix in Hebrew or Arabic would still be accepted, which is the divergence the 2026-07-12 ruling protects."
+    },
+    {
+      "check_code": 38,
+      "check_message": "Numbers should be written out in words.",
+      "fixture": "CHECK_038_digits_in_utterance.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E220"
+      ],
+      "note": "A word starting with a digit on a main tier (excluding '0'-forms) that matches no depfile number pattern (check.cpp:4811 via check_matchnumber). E220 is chatter's digits-in-word error. CLAN also emits (47) on the same fixture."
+    },
+    {
+      "check_code": 39,
+      "check_message": "Code tier must NOT follow header tier.",
+      "status": "no_obligation",
+      "no_obligation_reason": "no_emission_path",
+      "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24 covering check_err, the check_trans_err macro, and helper return-code channels); only the case-39 printer in the check_mess table exists. Tier-ordering violations surface through other codes today."
+    },
+    {
+      "check_code": 40,
+      "check_message": "Duplicate code tiers per one main tier are NOT allowed.",
+      "status": "no_obligation",
+      "no_obligation_reason": "no_emission_path",
+      "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24, same method as code 39). chatter models per-tier duplication rules on its own terms where they make sense."
+    },
+    {
+      "check_code": 41,
+      "check_message": "Parentheses around words are illegal.",
+      "status": "no_obligation",
+      "no_obligation_reason": "no_emission_path",
+      "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24). Parenthesis misuse surfaces via codes 55/111 (grounded elsewhere in this manifest); modern CHAT parenthetical shortenings are a parsed construct in chatter."
+    },
+    {
+      "check_code": 42,
+      "check_message": "Use either \"&\" or \"()\", but not both.",
+      "fixture": "CHECK_042_amp_and_parens.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Malformed ampersand and parenthesis input is rejected by grammar recovery (E316), without reconstructing annotation syntax."
+    },
+    {
+      "check_code": 43,
+      "check_message": "The file must start with \"@Begin\" tier.",
+      "fixture": "CHECK_043_missing_begin.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E504"
+      ],
+      "note": "No @Begin header. chatter rejects with E504 (Missing required @Begin header in file preamble). Grounded vs real CLAN CHECK 43; audit name-matcher had marked it a gap."
+    },
+    {
+      "check_code": 44,
+      "check_message": "The file must end with \"@End\" tier.",
+      "fixture": "CHECK_044_content_after_end.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E502"
+      ],
+      "note": "Speaker content after the @End tier. CLAN 44 (file must end with @End); chatter flags E502 MissingEndHeader (and E501). Both reject the file."
+    },
+    {
+      "check_code": 45,
+      "check_message": "There were more @Bg than @Eg tiers found.",
+      "fixture": "CHECK_045_bg_without_eg.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E526"
+      ],
+      "note": "At end of file, one or more @Bg tiers were never closed by a matching @Eg (check.cpp:5758); CHECK lists the unmatched @Bg contents after the message. E526 is chatter's unmatched-@Bg error."
+    },
+    {
+      "check_code": 46,
+      "check_message": "This @Eg does not have matching @Bg.",
+      "fixture": "CHECK_046_eg_without_bg.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E527"
+      ],
+      "note": "An @Eg tier with no open @Bg carrying the same text (check.cpp:5391/5400). E527 is chatter's unmatched-@Eg error."
+    },
+    {
+      "check_code": 47,
+      "check_message": "Numbers are not allowed inside words.",
+      "fixture": "CHECK_047_number_in_word.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E220"
+      ],
+      "note": "A digit inside a word (he11o). CLAN 47 (numbers not allowed inside words); chatter E220. This fixture agrees, not every scoped-language case: E220 examples 7/8 retain a paired enclosing-language substitution. CHECK 21-Sep-2026 rejects both with 47, while Chatter accepts the zho-span control under its established governing-language policy and rejects the eng-span mutation. Direct mixed/ambiguous word markers in E220 examples 3-6 agree with CHECK."
+    },
+    {
+      "check_code": 48,
+      "check_message": "Illegal character(s) '|' found.",
+      "fixture": "CHECK_048_illegal_char_pipe.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E243"
+      ],
+      "note": "A standalone illegal character on a main tier; '|' between words reaches CHECK 48. The original bare-pipe acceptance gap was closed 2026-07-16 by E243. CLAN also emits 11 on that fixture. The separately grounded semicolon shape is covered by E769 specs: current HTML CHAT disallows main-tier semicolons, and CHECK 21-Sep-2026 rejects top-level, nested, and retraced cases with 48. Other CHECK-48 shapes remain adjudicated per-shape; this row is not a blanket claim for every call site."
+    },
+    {
+      "check_code": 49,
+      "check_message": "Upper case letters are not allowed inside a word.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out 2019-04-23 ('do not check for upper case letters', check.cpp 3447 inside that comment block); never emitted by current builds. chatter's own capitalization rules live in the validator, adjudicated separately."
+    },
+    {
+      "check_code": 50,
+      "check_message": "Redundant utterance delimiter.",
+      "fixture": "CHECK_050_redundant_delimiter.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A second utterance delimiter after one was already found on a main tier (check.cpp:4351/4354/4554). E316 rejects 'hello . .'."
+    },
+    {
+      "check_code": 51,
+      "check_message": "expected [ ]; < > should be followed by [ ]",
+      "fixture": "CHECK_051_angle_without_square.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E342"
+      ],
+      "note": "CLAN prints this message WITHOUT a (51) suffix (format string lacks (%d)); grounding matches by message text. A '<...>' angle group not followed by a '[...]' code, detected at end of tier or at the next word (check.cpp:4376/4568, anb flag from check_CheckBrakets). QUIRK: CLAN prints this message WITHOUT the numeric '(51)' suffix; check_mess case 51 (check.cpp) has no (%d) in its format string. Grounding is the verbatim unique message text. chatter names the same construct as a missing required element: the grammar requires a code after the group, tree-sitter inserts a MISSING placeholder for it, and the whole-tree pass reports E342. Until 2026-09-09 the annotation decoder read that placeholder's kind and built a Full retrace nobody wrote, and the validator then added E370 (a retrace with nothing after it) to a construct the file does not contain; the decoder skips MISSING nodes now, so the group stays bare and E342 is the whole verdict.",
+      "no_numeric_suffix": true
+    },
+    {
+      "check_code": 52,
+      "check_message": "Item '[//]' must be preceded by text.",
+      "fixture": "CHECK_052_retrace_without_text.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A postfix retrace has no preceding material. The grammar rejects it and source-bound recovery reports E316. Dedicated CHECK-style classification adds no validity enforcement."
+    },
+    {
+      "check_code": 53,
+      "check_message": "Only one \"@Begin\" can be in a file.",
+      "fixture": "CHECK_053_duplicate_begin.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "The duplicate-begin fixture is rejected by grammar recovery (E316); duplicate-header semantics remain on typed header validation."
+    },
+    {
+      "check_code": 54,
+      "check_message": "Only one \"@End\" can be in a file.",
+      "status": "no_obligation",
+      "no_obligation_reason": "unreachable_in_file_mode",
+      "note": "The duplicate-end fixture is rejected by grammar recovery (E316); a recovery prefix alone does not prove a second parsed end header.",
+      "fixture": "CHECK_054_duplicate_end.cha",
+      "expected_chatter_codes": [
+        "E316"
+      ]
+    },
+    {
+      "check_code": 55,
+      "check_message": "Unmatched ( found in the word.",
+      "fixture": "CHECK_055_unmatched_open_paren_word.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "More '(' than ')' inside a single word (check.cpp:4571, pb>lpb after word scan). chatter rejects 'ab(c d .' via unparsable-content/terminator errors. E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
+    },
+    {
+      "check_code": 56,
+      "check_message": "Unmatched ) found in the word.",
+      "fixture": "CHECK_056_unmatched_close_paren_word.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "More ')' than '(' inside a single word (check.cpp:4572, pb<lpb). chatter rejects 'ab)c d .' via unparsable-content/terminator errors. E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
+    },
+    {
+      "check_code": 57,
+      "check_message": "Please add space between word and pause symbol: '('.",
+      "fixture": "CHECK_057_pause_glued_to_word.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E751"
+      ],
+      "note": "The word-glued pause fixture is rejected with E751. The grammar retains a word and a separate pause; model validation check_pause_glued_to_word compares their source spans in the typed content walk (spec E751). This is structural evidence, not a scan or reparse of recovery text. The July 10 proposal to move the diagnostic to the parse stage is superseded by the architecture-native assessment contract: rejection stage and diagnostic identity are not parity obligations. CLAN also emitted 48 on the retained fixture; no new CLAN observation is claimed."
+    },
+    {
+      "check_code": 58,
+      "check_message": "Tier name is longer than 8 characters.",
+      "status": "no_obligation",
+      "no_obligation_reason": "no_emission_path",
+      "note": "No emission path anywhere in clan/ or lib/ (whole-source sweep 2026-07-24). The 8-character tier-name limit is a retired-era constraint; chatter's tier-name rules are its own."
+    },
+    {
+      "check_code": 59,
+      "check_message": "",
+      "fixture": "CHECK_059_unclosed_bullet.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A time bullet (\\x15) opened but never closed before end of scan; hidenc stays TRUE at word end (check.cpp:4049/4797). Fixture: '%pho:\\thello \\x15123' with no closing \\x15. QUIRK: on the unix build CLAN prints the error banner with an EMPTY message line: check_mess case 59's printf is inside '#if _MAC_CODE/#elif _WIN32', so no (59) trailer and no message text ever appear. Grounded banner_only: run restricted to '+e59' (block prints) and cross-checked '+e1' (clean), re-confirmed 2026-07-09.",
+      "clan_flags": [
+        "+e59"
+      ],
+      "banner_only": true
+    },
+    {
+      "check_code": 60,
+      "check_message": "\"@ID:\" tier is missing in the file. Please run \"insert\" in Commands window on this data file.",
+      "fixture": "CHECK_060_missing_id.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E522"
+      ],
+      "note": "File has no @ID header. CLAN 60; chatter E522 (missing @ID header)."
+    },
+    {
+      "check_code": 61,
+      "check_message": "\"@Participants:\" tier is expected here.",
+      "fixture": "CHECK_061_missing_participants.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E504"
+      ],
+      "note": "No @Participants header. chatter rejects with E504 (Missing required @Participants header), plus E543/E522. Grounded vs real CLAN CHECK 61."
+    },
+    {
+      "check_code": 62,
+      "check_message": "Missing language information.",
+      "fixture": "CHECK_062_missing_language_in_id.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E510"
+      ],
+      "note": "An @ID tier with an empty language (first) field (check.cpp:5054; also 2536 for an empty 'word@s:' language marker and 5023). E510 is chatter's empty-@ID-language error. CLAN prints (62) twice on the fixture."
+    },
+    {
+      "check_code": 63,
+      "check_message": "Missing Corpus name.",
+      "fixture": "CHECK_063_empty_corpus.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E514"
+      ],
+      "note": "Empty corpus field (2nd) in @ID. chatter E514 EmptyIDCorpus. Root-caused: corpus was wrongly `Option<CorpusName>`; made it a required CorpusName like its siblings, the Validate trait flags empty. CLAN CHECK 63."
+    },
+    {
+      "check_code": 64,
+      "check_message": "Wrong gender information (Choose: female or male).",
+      "fixture": "CHECK_064_bad_gender.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E542"
+      ],
+      "note": "@ID sex field is neither 'male' nor 'female' ('x'). CLAN 64; chatter E542 UnsupportedSex. Requires CLAN's depfile loaded (auto-resolved from the lib dir)."
+    },
+    {
+      "check_code": 65,
+      "check_message": "Item '@' can not be followed by the next symbol.",
+      "fixture": "CHECK_065_trailing_at_sign.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A trailing @ in hello@ remains rejected by grammar recovery with E316. This witnesses one of CHECK 65's 31 emission sites, not every special-form or morphology-marker case. E202 remains independently available at the model-validation boundary."
+    },
+    {
+      "check_code": 66,
+      "check_message": "Or a SPACE should be added before it.",
+      "fixture": "CHECK_066_amp_inside_word.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "The ampersand-inside-word fixture is rejected by grammar recovery (E316), without guessing a word annotation or repair."
+    },
+    {
+      "check_code": 67,
+      "check_message": "Item '+' must be followed by text, \n preceded by SPACE or be removed.",
+      "fixture": "CHECK_067_trailing_plus.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E233"
+      ],
+      "note": "A word-final '+' (or '-') followed by end-of-word / certain punctuation must be followed by text (check.cpp 3319/3338; the CA-char site 3025 is inside #ifndef UNX). Grounded via 'hey+ .'; CLAN message spans two output lines, recorded with embedded newline."
+    },
+    {
+      "check_code": 68,
+      "check_message": "PARTICIPANTS TIER IS MISSING \"CHI Target_Child\".",
+      "fixture": "CHECK_068_no_target_child.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "Deliberate divergence, resolved July 8: CHECK's non-default +g2 option requires a CHI Target_Child participant unless @Options: notarget is present. Default-mode CHECK accepts the retained fixture, and Chatter intentionally accepts it. This option-specific requirement is not a baseline CHAT obligation. The earlier open-policy question is resolved; clan_flags preserves the grounding configuration.",
+      "clan_flags": [
+        "+g2"
+      ]
+    },
+    {
+      "check_code": 69,
+      "check_message": "The UTF8 header is missing. If you edit and save the file, it will be inserted.",
+      "fixture": "CHECK_069_missing_utf8.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E503"
+      ],
+      "note": "File has no @UTF8 header. CLAN 69; chatter E503 MissingUTF8Header."
+    },
+    {
+      "check_code": 70,
+      "check_message": "Expected either text or \"0\" on this tier.",
+      "fixture": "CHECK_070_no_text.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E253",
+        "E306",
+        "E342"
+      ],
+      "note": "A speaker tier containing no text word (only delimiters/pauses/brackets and not the '0' placeholder) at tier end (check.cpp 4984, isTextFound never set). Fixture '*CHI:\\t.'; chatter rejects with three codes including E306 (no meaningful content). SCOPE (2026-07-24, empirically verified live): CLAN 70 does NOT fire on pause-only ((.) .) or event-only (&=laughs .) utterances; both validators ACCEPT those shapes, so the old 'pause-only utterance' policy-gap framing was wrong."
+    },
+    {
+      "check_code": 70,
+      "check_message": "Expected either text or \"0\" on this tier.",
+      "fixture": "CHECK_070_annotation_only_utterance.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316",
+        "E342"
+      ],
+      "note": "An annotation-only utterance ([=! laughs] .) remains rejected by structural recovery, E316 and E342. Historical CHECK grounding emitted 73 and 70. Pause-only and event-only utterances were separately accepted by both validators; this case does not establish their invalidity. No missing-terminator or missing-whitespace claim is inferred."
+    },
+    {
+      "check_code": 71,
+      "check_message": "Item '[/]' must be before pause (#).",
+      "fixture": "CHECK_071_retrace_after_pause.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E762"
+      ],
+      "note": "INCIDENTAL parity since 2026-07-27, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 71 enforces an ORDERING between [/] and the legacy # pause marker, a construct chatter does not have (chatter uses (.)/(..)/(...)), so chatter does not implement that ordering rule and never will. What changed is this FIXTURE. Its main tier is `he # [/] he .`, where the standalone # sits inside the retrace scope, and E762 rejects a word that is nothing but the prefix marker in any language. Same verdict as CHECK on this input, unrelated grounds. Note the fixture only started failing once word validation began recursing into retraces (chatter 3304799e); before that the # inside the retrace was never validated at all, which is why this row read as a clean divergence for months."
+    },
+    {
+      "check_code": 72,
+      "check_message": "Item '(.)' must precede the utterance delimiter or CA delimiter.",
+      "fixture": "CHECK_072_pause_after_delim.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A pause '(...)' or non-postcode '[...]' item appearing after the utterance delimiter (check.cpp 4740/4744). Fixture 'hey . (.)'; chatter rejects (unparsable content after terminator)."
+    },
+    {
+      "check_code": 73,
+      "check_message": "Item '[x 2]' must be preceded by text or '0'.",
+      "fixture": "CHECK_073_bracket_first.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A bracketed code as the first item of a tier with nothing before it (also bullets not preceded by text; multiple sites: check.cpp 4045, 4781, 4861; CA sites 3030/3033 are #ifndef UNX). Fixture '[x 2] hey .'; chatter rejects it via E316 (grammar recovery). CLAN additionally emits (11). (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.) Additional leading-bullet grounding is owned by spec/errors/E770.md: simple, retraced-group, linker-prefixed and repeated leading bullets report E770; explicit-zero, event, pause and preceding-group-material controls do not. CHECK 21-Sep-2026 corroborates these shapes. Parse-recovered main tiers retain their parse diagnostic rather than an E770 absence claim. This row's bracket fixture alone does not prove every CHECK 73 site: empty inter-bullet scope and legacy multi-option behavior are not adjudicated by this fixture. They remain outside this finite baseline, not demonstrated validation defects or queued diagnostic-emulation work. A concrete independently justified CHAT requirement is needed to open a new obligation."
+    },
+    {
+      "check_code": 74,
+      "check_message": "Only one tab after ':' is allowed.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Sole call site commented out on 2004-04-27 (check.cpp 1762, '// 2004-04-27 if (check_err(74,...))'): deliberately retired 22 years ago; no build can emit it. chatter's tier-separator rules (single :\\t) are enforced by the grammar."
+    },
+    {
+      "check_code": 75,
+      "check_message": "Item '[+ exc]' must follow after utterance delimiter.",
+      "fixture": "CHECK_075_postcode_before_delim.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E305",
+        "E316"
+      ],
+      "note": "A postcode '[+ ...]' occurring before the utterance delimiter (check.cpp 4747). Fixture 'hey [+ exc] .'; chatter rejects (postcode only legal after terminator)."
+    },
+    {
+      "check_code": 76,
+      "check_message": "Only one letter is allowed with '@l'.",
+      "fixture": "CHECK_076_multi_letter_at_l.cha",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "expected_chatter_codes": [],
+      "note": "An '@l' letter-marker word whose stem is more than one letter. RETIRED ON BOTH SIDES. CLAN retired error 76 on 2026-08-07 (\"CHECK: allow multiple characters before @l\"); check_isOneLetter and its call site sit inside a dated comment block, so no unix build emits it. chatter retired its own E754 on 2026-08-11, independently and for a stated reason: the rule counted CHARACTERS, a digraph is one letter written with two (Welsh 'll', Dutch 'ij'), so it reported a spurious error on valid CHAT and could not do better because it never saw the word's language. Both validators now accept the construct, so expected_chatter_codes is empty and the fixture pins that agreement."
+    },
+    {
+      "check_code": 77,
+      "check_message": "\"@Languages:\" tier is expected here.",
+      "fixture": "CHECK_077_missing_languages.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E504"
+      ],
+      "note": "File has no @Languages header. CLAN 77 (also 61); chatter E504 MissingRequiredHeader. chatter uses one generic missing-required-header code where CLAN has per-header codes; parity is on validity."
+    },
+    {
+      "check_code": 78,
+      "check_message": "Item '+' must be used at the beginning of tier.",
+      "fixture": "CHECK_078_pluscomma_mid.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E766"
+      ],
+      "note": "A special delimiter word '+,' '+\"' '+^' '+<' '++' (exactly two chars) appearing after the first word of the tier (check.cpp 4769). Fixture 'hey +, you .'; chatter rejects (unparsable ' +'). Expected codes refreshed 2026-07-30 (E316 -> E766): the misplaced-linker grammar change names this construct E766 (linker not utterance-initial), the direct counterpart of CHECK 78's message."
+    },
+    {
+      "check_code": 79,
+      "check_message": "Only one occurrence of | symbol per word is allowed.",
+      "fixture": "CHECK_079_mor_two_pipes.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E702"
+      ],
+      "note": "A %mor word with two | separators (n|dog|cat). CLAN 79 (only one | per word); chatter surfaces the malformed %mor item as E702 (E316 until 2026-09-08, when a recovery node below the tier's direct children was classified without the tier's name)."
+    },
+    {
+      "check_code": 80,
+      "check_message": "There must be at least one occurrence of '|'.",
+      "fixture": "CHECK_080_mor_no_pipe.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E702"
+      ],
+      "note": "A %mor word with no | separator (bare 'dog'). CLAN 80 (must be at least one |); chatter E702 (E316 beside it until 2026-09-08, from a second reporter that has been removed)."
+    },
+    {
+      "check_code": 81,
+      "check_message": "Bullet must follow utterance delimiter or be followed by end-of-line.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out 2025-07-04 (check.cpp 4791, dated comment block); bullet-placement validity is covered by the still-live bullet codes (73, 118 was also retired the same day)."
+    },
+    {
+      "check_code": 82,
+      "check_message": "BEG mark of bullet must be smaller than END mark.",
+      "fixture": "CHECK_082_end_before_beg.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E362"
+      ],
+      "note": "A media bullet whose END time is <= its BEG time (check.cpp 3879, new-format path with @Media header). Bullet \\x15500_100\\x15. Note @Media file name must match the .cha basename or CLAN adds (157) noise."
+    },
+    {
+      "check_code": 83,
+      "check_message": "Current BEG time is smaller than previous' tier BEG time",
+      "fixture": "CHECK_083_beg_backwards.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E362"
+      ],
+      "note": "A tier's first bullet BEG earlier than the previous tier's first-bullet BEG (check_tierBegTime), reachable only from the third bulleted tier on because tEndTime==0 skips the block on the first (check.cpp 3885/3890). Needs three tiers (1000_2000, 3000_4000, then 2500_2600): with only two, the tracking variable is still 0 and no error fires; a two-tier same-speaker attempt yields (133) instead. CLAN message has no trailing period."
+    },
+    {
+      "check_code": 84,
+      "check_message": "Current BEG time is smaller than previous' tier END time by 500 msec.",
+      "fixture": "CHECK_084_overlap.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "Deliberate divergence, resolved July 8: CHECK +c0 rejects a current tier's begin time before the previous tier's end (check.cpp:3901). Default-mode CHECK accepts the retained fixture, and Chatter intentionally permits conversational overlap. This cross-tier option-specific restriction does not replace Chatter's independent same-speaker timing rules. clan_flags preserves the grounding configuration.",
+      "clan_flags": [
+        "+c0"
+      ]
+    },
+    {
+      "check_code": 85,
+      "check_message": "Gap found between current BEG time and previous' tier END time.",
+      "fixture": "CHECK_085_gap.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "Deliberate divergence, resolved July 8: CHECK +c0 rejects a gap between successive tiers' bullets (check.cpp:3905). Default-mode CHECK accepts the retained fixture, and Chatter intentionally permits gaps. Requiring continuous coverage of the recording is not a baseline CHAT obligation. clan_flags preserves the grounding configuration.",
+      "clan_flags": [
+        "+c0"
+      ]
+    },
+    {
+      "check_code": 86,
+      "check_message": "Illegal character. Please re-enter it using Unicode standard.",
+      "fixture": "CHECK_086_private_use_char.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E243"
+      ],
+      "note": "Shape-scoped agreement: U+E000 inside a word produces CHECK 86 and E243. Chatter independently rejects Unicode private-use scalars and noncharacters in lexical words, including supplementary planes, with no CLAN-internal exemption. Ordinary assigned high-BMP characters and U+10000 are not rejected by this policy. The recorded 21-Sep-2026 CHECK U+10000 rejection remains an intentional divergence. Canonical E243_unicode_boundaries examples cover all noncharacters, private-use endpoints, former exemption endpoints and valid controls; this row does not claim universal Unicode parity or new CHECK observations."
+    },
+    {
+      "check_code": 87,
+      "check_message": "Malformed structure.",
+      "fixture": "CHECK_087_malformed_compound.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E702"
+      ],
+      "note": "A %mor/%xmor/%trn (or %cnl) word whose compound structure is malformed: a '+' not in canonical 'pfx|+a|b' shape drives numOfCompounds to -2 or 0 (check.cpp 3592/3646). Fixture '%mor: n|cat+n|fish .' (compound missing the '|+' marker after the head POS). chatter rejects: E702 on the item (E316 until 2026-09-08) and E600 at the tier."
+    },
+    {
+      "check_code": 88,
+      "check_message": "Illegal use of compounds and special form markers.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out since 2009-06-08 (check.cpp 3414, dated comment block); never emitted by current builds. chatter's compound/form-marker rules are adjudicated per live CHECK codes 65/66 instead."
+    },
+    {
+      "check_code": 89,
+      "check_message": "Missing or extra or wrong characters found in bullet.",
+      "fixture": "CHECK_089_bad_bullet_char.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316",
+        "E544"
+      ],
+      "note": "A new-format bullet whose content is not digits_digits (e.g. wrong separator) (check.cpp 3863, res==2 from check_getMediaTagInfo). Bullet \\x15100x200\\x15 with @Media header. chatter rejects."
+    },
+    {
+      "check_code": 90,
+      "check_message": "Illegal time representation inside a bullet.",
+      "fixture": "CHECK_090_leading_zero_time.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E748"
+      ],
+      "note": "A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \\x15012_200\\x15 with @Media header. GAP CLOSED 2026-07-09: chatter now emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748.md. A bare 0 stays legal. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Leading-zero bullet times are unambiguous; kept as an error by project policy: style violations are errors."
+    },
+    {
+      "check_code": 91,
+      "check_message": "Blank lines are not allowed.",
+      "fixture": "CHECK_091_blank_line.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E747"
+      ],
+      "note": "A blank line in the transcript (CLAN flags one between utterances AND between headers, verified). CLAN CHECK 91. ROOT CAUSE was STRUCTURAL: the grammar's `newline: /[\\r\\n]+/` fused an utterance's terminating newline with the blank line's newline, ERASING the blank line before any node could represent it. FIXED structurally, NOT by text-hacking: `newline` is now a single line break (`/\\r\\n|[\\r\\n]/`) and a `blank_line` CST node represents the blank line; the parser emits E747 BlankLineNotAllowed from that node (helpers.rs line dispatch), no source/line scan. Tree-sitter side complete; the re2c lexer reconciliation (un-fuse its `[\\r\\n]+`, detect consecutive Newline tokens, emit E747) is the tracked follow-up. chatter rejects via E747."
+    },
+    {
+      "check_code": 92,
+      "check_message": "Item ',' must be followed by space or end-of-line.",
+      "fixture": "CHECK_092_comma_no_space.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E749"
+      ],
+      "note": "Comma not followed by space or end-of-line on a speaker tier (check.cpp 4309-4320, with CA-mark exemptions). GAP CLOSED 2026-07-09: model validation check_comma_glued_to_next (span adjacency over walk_content; dummy spans skipped) plus a re2c token-stream mirror. Spec: E749.md. Narrowed to word-next: constructs placing their own character after the comma are exempt, matching CLAN. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Comma-glue is unambiguous under our grammar; kept as an error by project policy: style violations are errors."
+    },
+    {
+      "check_code": 93,
+      "check_message": "Item '[' must be preceded by SPACE.",
+      "fixture": "CHECK_093_bracket_no_space.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "'[' immediately preceded by '>' or ']' with no space (check.cpp 4469/4472; CA start-marks site 3179 is #ifndef UNX). Fixture `<hey>[/] hey .`; CLAN also emits (161). chatter rejects via E316. (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.)"
+    },
+    {
+      "check_code": 94,
+      "check_message": "Mismatch of speaker and %mor: utterance delimiters.",
+      "fixture": "CHECK_094_mor_delim_mismatch.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E716"
+      ],
+      "note": "%mor tier whose utterance delimiter differs from the speaker tier's recorded delimiter (check.cpp 4338 simple delimiters; 4522 '+...'-style). '*CHI: hey .' with '%mor: co|hey ?'. chatter rejects with the dedicated E716."
+    },
+    {
+      "check_code": 95,
+      "check_message": "Illegal use of capitalized words in compounds.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out (check.cpp 3300, undated comment block guarding check_err(95) behind the retired capWFound flag, itself part of the 2019-04-23 upper-case retirement); never emitted by current builds."
+    },
+    {
+      "check_code": 96,
+      "check_message": "Word color is now illegal.",
+      "status": "no_obligation",
+      "no_obligation_reason": "unreachable_in_file_mode",
+      "note": "Compiled but unreachable: the emit site (check.cpp 3462) is the @Languages branch of check_CheckWords, but @Languages values are validated by check_isLangMatch (check.cpp 2165), which deliberately SPLITS each token at '=' and validates only the language-code part, accepting the legacy word-color suffix; the word-level walker never visits @Languages in file mode. Empirically '@Languages: eng=blue' and 'eng, fra=blue' pass unix CHECK clean. chatter rejects the construct as malformed header content (E320), correctly stricter.",
+      "fixture": "CHECK_096_word_color_languages.cha",
+      "expected_chatter_codes": [
+        "E320"
+      ]
+    },
+    {
+      "check_code": 97,
+      "check_message": "Illegal character inside parentheses.",
+      "fixture": "CHECK_097_at_in_parens.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "'@' encountered inside parentheses within a word on a speaker tier (check.cpp 3360, paransFound). Fixture 'c(a@b)t .'; CLAN also emits (147). Chatter rejects the structural error with E316; recovery does not establish an independent form-marker node for E203."
+    },
+    {
+      "check_code": 98,
+      "check_message": "Space is not allow in media file name inside bullets.",
+      "fixture": "CHECK_098_space_in_name.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E360"
+      ],
+      "note": "An old-format bullet (no @Media header) '\\x15%snd:\"NAME\"_B_E\\x15' whose media file name contains a space (check.cpp 3923 via res==4; also reachable in the new-format path 3867). chatter rejects the old-style %snd bullet outright (E360), so anything CHECK flags inside it is also rejected; parity by strictness."
+    },
+    {
+      "check_code": 99,
+      "check_message": "Extension is not allow at the end of media file name.",
+      "fixture": "CHECK_099_extension_in_name.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E360"
+      ],
+      "note": "Media file name ending with an extension: in old-format bullets (check.cpp 3925 via res==5, used here), in new-format path (3869), or on the @Media header (5589). Grounded via old-format bullet '\\x15%snd:\"test.wav\"_100_200\\x15'; chatter rejects the %snd bullet (E360). The @Media-header variant of (99) was not separately grounded."
+    },
+    {
+      "check_code": 100,
+      "check_message": "Commas at the end of PARTICIPANTS tier are not allowed.",
+      "fixture": "CHECK_100_trailing_comma_participants.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E550"
+      ],
+      "note": "Trailing comma at end of @Participants. The grammar already surfaces the dangling comma as a tree-sitter ERROR node inside the participants header; the parser reports it as E550 TrailingCommaInParticipants (parse-stage diagnostic). CLAN CHECK 100."
+    },
+    {
+      "check_code": 101,
+      "check_message": "This item must be followed or preceded by text.",
+      "status": "no_obligation",
+      "no_obligation_reason": "gui_only",
+      "note": "GUI-only: the sole call site (check.cpp 3016) sits inside the #ifndef UNX CA-character region of check_CheckWords, so `unifdef -DUNX` blanks it and no unix binary contains it. DERIVABLE since 2026-08-11: the generator runs unifdef before scanning, so the reference reports zero live sites and this reason is checked rather than trusted.",
+      "fixture": "CHECK_101_ca_marker_no_stem.cha",
+      "expected_chatter_codes": [
+        "E316"
+      ]
+    },
+    {
+      "check_code": 102,
+      "check_message": "Italic markers are no longer legal in CHAT.",
+      "fixture": "CHECK_102_italics.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E315",
+        "E316"
+      ],
+      "note": "Any character carrying the italic text attribute, encoded in the file as ATTMARKER 0x02 + 0x03 (italic start) / 0x02 + 0x04 (italic end) (check.cpp: multiple is_italic() sites, e.g. 4289/4433). Fixture embeds raw bytes \\x02\\x03hey\\x02\\x04; CLAN emits (102) twice (once per attributed char run). chatter names each of the four control bytes as E315 (the lexical rule permits only the underline pairs 0x02 0x01 / 0x02 0x02) and the broken word as E316, so legacy attribute encoding cannot pass."
+    },
+    {
+      "check_code": 103,
+      "check_message": "Illegal use of both CA and IPA on \"@Options:\" tier.",
+      "fixture": "CHECK_103_ca_and_ipa.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E534"
+      ],
+      "note": "@Options header (which must immediately follow @Participants) listing both 'CA' and 'IPA' (check.cpp 5478/5537). First attempt placed @Options after @ID and got first-pass (125) instead; @Options must sit right after @Participants. CLAN also emits (11) because IPA is not in the depfile @Options template. chatter rejects with E534."
+    },
+    {
+      "check_code": 104,
+      "check_message": "Please select \"CAfont\" or \"Ascender Uni Duo\" font for CA file as per \"@Options:\" tier.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Both call sites commented out (check.cpp 5483/5542, inside comment blocks); the font-selection advice is GUI-editor-era and never emitted by current builds. Fonts are not a CHAT-validity property; chatter has no analogue by design."
+    },
+    {
+      "check_code": 105,
+      "check_message": "Please select \"Charis SIL\" font for IPA file as per \"@Options:\" tier.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Both call sites commented out (check.cpp 5487/5546, same comment blocks as CHECK 104); never emitted. Same adjudication as 104: font choice is not validity."
+    },
+    {
+      "check_code": 106,
+      "check_message": "A code must be entirely on one line.",
+      "fixture": "CHECK_106_code_spans_newline.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A scoped code split across a newline (`[% comment` then a continuation line `continued]`) leaves an ERROR node in the main-tier content that the streaming lowering did not scan. The whole-tree recovery-node backstop now surfaces it as E316. CLAN CHECK 106."
+    },
+    {
+      "check_code": 107,
+      "check_message": "Only single commas are allowed in tier.",
+      "fixture": "CHECK_107_triple_comma.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E258"
+      ],
+      "note": "Three or more consecutive commas on a speaker tier (check.cpp 4322; two commas give (156) instead). Fixture 'hey ,,, you .'; CLAN also emits (156). chatter rejects (E258 twice)."
+    },
+    {
+      "check_code": 108,
+      "check_message": "Postcodes must precede the final bullet.",
+      "fixture": "CHECK_108_postcode_after_bullet.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A postcode `[+ trn]` placed after the final time bullet leaves an ERROR node in the utterance that the streaming lowering did not scan. The whole-tree recovery-node backstop now surfaces it as E316. CLAN rejects it (codes 108 and 112). CLAN CHECK 108 (co-emitted with 112)."
+    },
+    {
+      "check_code": 109,
+      "check_message": "Postcodes are not allowed on dependent tiers.",
+      "fixture": "CHECK_109_postcode_on_deptier.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "A postcode-shaped token `[+ trn]` on a dependent tier (%com). CLAN CHECK 109 (\"Postcodes are not allowed on dependent tiers\", check_CheckWords, check.cpp:3471-3690) flags it on any non-%x dependent tier. chatter does not model postcodes on dependent tiers: ordinary dependent tiers like %com parse as TextTier with no Postcode AST node, so there is nothing typed to detect, and flagging it would require a banned raw-text scan. Empirically (2026-06-25) CLAN's own analysis tools do not choke on dependent-tier postcodes: FREQ and MLU exclude the `[+ ...]` token from counts exactly as on the main tier, KWAL displays the line; only CHECK flags it. CHECK 109 is a CLAN-internal pedantic check, not a CHAT-validity rule, so chatter deliberately diverges (accepts) per the parity mandate's 'unless CHECK is buggy / not a real validity rule' clause. Divergence (chatter intentionally looser), not a gap."
+    },
+    {
+      "check_code": 110,
+      "check_message": "No bullet found on this tier.",
+      "fixture": "CHECK_110_no_bullet.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "Deliberate divergence, resolved July 8: with non-default +cN, CHECK requires a bullet on every speaker tier (check.cpp:4915). Default-mode CHECK accepts the retained fixture, and Chatter intentionally accepts an untimed tier. Universal timing is not a baseline CHAT obligation. The retained observation uses +c1, recorded in clan_flags.",
+      "clan_flags": [
+        "+c1"
+      ]
+    },
+    {
+      "check_code": 111,
+      "check_message": "Illegal pause format. Pause has to have '.'",
+      "fixture": "CHECK_111_illegal_pause.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E209"
+      ],
+      "note": "An illegal pause format: `(5)` (digits with no dot) instead of (.)/(..)/(...)/(n.). CLAN 111 (pause must have '.'); chatter rejects with E209 (also E220)."
+    },
+    {
+      "check_code": 112,
+      "check_message": "Missing @Media: tier with media file name in headers section at the top of the file.",
+      "fixture": "CHECK_112_missing_media.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E752"
+      ],
+      "note": "Timing without an @Media header is rejected by E752 (spec E752). The original CLI acceptance defect was closed July 15 under the independently justified media-declaration rule. Since September 8 the timing-evidence union includes bullets inside utterances as well as terminal bullets. CHECK also counts inline bullets; Chatter additionally counts %wor timing. These differences do not create an obligation to copy CHECK's text scan."
+    },
+    {
+      "check_code": 113,
+      "check_message": "Illegal keyword, use \"audio\", \"video\" or look in depfile.cut.",
+      "fixture": "CHECK_113_media_bad_keyword.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E536"
+      ],
+      "note": "A comma-separated field after the file name on @Media that is not a depfile-listed keyword (audio/video/unlinked/...). E536 is the same rule (Unsupported @Media status: 'junkword'). E531 is extra chatter strictness: media filename 'test' vs fixture file name."
+    },
+    {
+      "check_code": 114,
+      "check_message": "Add \"audio\", \"video\" or look in depfile.cut for more keywords after the media file name on @Media: tier.",
+      "fixture": "CHECK_114_media_no_keyword.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "@Media names a media file but lists neither 'audio' nor 'video'; CLAN emits (114) on the @Media line. FIXTURE REPAIRED 2026-07-09: the survey-batch copy was truncated mid-@Media-line (no utterance, no @End), so CLAN aborted first-pass with (7) and could never reach 114; the drift guard caught it. chatter rejects the keywordless @Media at parse time (E316 unparsable header line; an incidental E747 blank-line cascade fires on the newline the recovery leaves behind, deliberately not asserted)."
+    },
+    {
+      "check_code": 115,
+      "check_message": "Old bullets format found. Please run \"fixbullets\" program to fix this data.",
+      "fixture": "CHECK_115_old_bullet_format.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316",
+        "E544"
+      ],
+      "note": "With an @Media header present, a time bullet whose content starts with %s/%m, i.e. the old '%snd:\"file\"_beg_end' bullet format. Old-format bullet is unparsable to chatter (E316) and the file then has no timing info (E544). E531 is fixture-name noise."
+    },
+    {
+      "check_code": 116,
+      "check_message": "Specifying Font for individual lines is illegal. Please open this file and save it again.",
+      "fixture": "CHECK_116_fnt_code.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A legacy per-line font directive is not a valid scoped comment. Grammar recovery rejects the fixture with E316; raw-text prefix classification is unnecessary."
+    },
+    {
+      "check_code": 117,
+      "check_message": "This character must be used in pairs. See if any are unmatched.",
+      "fixture": "CHECK_117_unmatched_faster.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E230"
+      ],
+      "note": "A pairwise CA marker (faster U+2206, slower, creaky, whisper, left-arrow-circle U+21AB, etc.) occurring an odd number of times on a main tier. Dedicated chatter code: E230 'Unbalanced CA delimiter (Faster): missing closing delimiter'. CLAN tracks 15 pair-wise marker types; fixture uses faster U+2206. This fixture's parity does not imply identical replacement-scope behavior: E230 examples 2/3 retain Chatter's once-per-authored-marker pairing. CHECK 21-Sep-2026 scans replacement text twice in check_ParseWords (whole bracket token, then target-word re-entry), cancelling a single target marker and inverting the paired/unpaired verdicts. See E230's source-path analysis."
+    },
+    {
+      "check_code": 118,
+      "check_message": "Utterance delimiter must precede final bullet.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out 2025-07-04 (check.cpp 4623, dated comment block, retired together with 81); never emitted by current builds. Delimiter-before-bullet ordering remains covered by the live bullet/delimiter codes."
+    },
+    {
+      "check_code": 119,
+      "check_message": "Missing word after code.",
+      "fixture": "CHECK_119_dangling_retrace.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E370"
+      ],
+      "note": "Retrace marker [/] with nothing after it. chatter E370 StructuralOrderError."
+    },
+    {
+      "check_code": 120,
+      "check_message": "Please use three letter language code.",
+      "fixture": "CHECK_120_two_letter_lang.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E519"
+      ],
+      "note": "A 2-letter (or 2-letter plus dash subtag) language code where a 3-letter ISO-639 code is expected, on @Languages, the @ID language field, [- lng] precodes, or @s codes. Dedicated chatter code: E519 \"Language code 'en' should be 3 characters (got 2)\". Fixture uses en consistently on @Languages and @ID."
+    },
+    {
+      "check_code": 121,
+      "check_message": "Language code \"qqq\" not found in \"CLAN/lib/fixes/ISO-639.cut\" file.",
+      "fixture": "CHECK_121_unknown_lang.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E519"
+      ],
+      "note": "An UNASSIGNED three-letter code (qzz, outside the qaa-qtz private-use range) on @Languages/@ID. CLAN emits (121) from its legacy language table; chatter rejects via the full ISO 639-3 registry (E519, InvalidLanguageCode), the authoritative modern standard. PARITY per the 2026-07-14 ruling; fixture re-grounded 2026-07-15 from qqq to qzz because qqq is registry-VALID (private use), which the original fixture conflated; see the companion private-use divergence entry."
+    },
+    {
+      "check_code": 121,
+      "check_message": "Undefined language code on @ID or @Languages tier.",
+      "fixture": "CHECK_121_private_use_lang.cha",
+      "status": "divergence",
+      "expected_chatter_codes": [],
+      "note": "A PRIVATE-USE code (qqq, inside ISO 639-3's reserved qaa-qtz range) on @Languages/@ID. CLAN's fixed table lacks the private-use range and emits (121); the ISO 639-3 registry defines qaa-qtz as valid codes reserved for local use, so chatter accepts them: an intentional registry-grounded divergence, not a gap. Wild grounding 2026-07-15: no kept file uses a private-use code (typed scan of every data-json languages field), so the divergence is currently theoretical."
+    },
+    {
+      "check_code": 122,
+      "check_message": "Language on @ID tier is not defined on \"@Languages:\" header tier.",
+      "fixture": "CHECK_122_id_lang_not_declared.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E519"
+      ],
+      "note": "@ID declares language 'eng' that is not present in the @Languages header (which declares 'fra'). CLAN 122; chatter E519. NOTE: code 122 has n_call_sites=0 in the generated catalogue (emitted via an indirect call the literal check_err grep misses) but IS emittable: verified vs real file-mode CLAN. The 8-code 'dead' list therefore needs empirical re-verification."
+    },
+    {
+      "check_code": 123,
+      "check_message": "Illegal character '<space>' found in tier text. If it CA, then add \"@Options: CA\"",
+      "fixture": "CHECK_123_tab_space.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E758"
+      ],
+      "note": "In a non-CA file, a space immediately after the speaker-prefix TAB is rejected by E758. The acceptance defect was closed July 16; @Options: CA permits alignment whitespace. The retained source analysis distinguishes the live check.cpp:1669 site from the unreachable 1673 branch. This row preserves that scoped decision, not a raw-text implementation requirement."
+    },
+    {
+      "check_code": 124,
+      "check_message": "Please remove \"unlinked\" from @Media header.",
+      "fixture": "CHECK_124_media_unlinked_with_bullet.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E552"
+      ],
+      "note": "@Media declares `unlinked` but the main tier has a time bullet, so the media is in fact linked. chatter now emits E552 MediaUnlinkedWithTiming via check_media_unlinked_has_no_timing, the inverse of the existing E544 (linkage without timing). Grounded empirically: unlinked+bullet -> CLAN 124; unlinked+no-bullet and linked+bullet -> no 124. CLAN CHECK 124."
+    },
+    {
+      "check_code": 125,
+      "check_message": "\"@Options\" header must immediately follow \"@Participants:\" header.",
+      "fixture": "CHECK_125_options_after_id.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E551"
+      ],
+      "note": "@Options placed after @ID instead of immediately after @Participants. chatter E551 OptionsHeaderOutOfOrder, mirroring the @ID rule (E548/CHECK 126). CLAN CHECK 125."
+    },
+    {
+      "check_code": 126,
+      "check_message": "\"@ID\" header must immediately follow \"@Participants:\" or \"@Options\" header.",
+      "fixture": "CHECK_126_id_header_out_of_order.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E548"
+      ],
+      "note": "A changeable header (@Comment) sits between @Participants and the @ID block."
+    },
+    {
+      "check_code": 127,
+      "check_message": "Header must follow \"@ID:\" or \"@Birth of\" or \"@Birthplace of\" or \"@L1 of\" header.",
+      "fixture": "CHECK_127_constant_header_out_of_order.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E547"
+      ],
+      "note": "A changeable header sits between the @ID block and @Birth of."
+    },
+    {
+      "check_code": 128,
+      "check_message": "Unmatched ‹ found on the tier.",
+      "fixture": "CHECK_128_unmatched_group_start.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Group-start marker U+2039 opened on a main tier and never closed (gm > 0 at end of tier). No dedicated code; unmatched opener makes the tier unparsable (E316)."
+    },
+    {
+      "check_code": 129,
+      "check_message": "Unmatched › found on the tier.",
+      "fixture": "CHECK_129_unmatched_group_end.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Group-end marker U+203A encountered with no open U+2039 (gm goes negative). Rejected at parse level: E316 unparsable content on the stray closer plus E305 missing terminator. Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
+    },
+    {
+      "check_code": 130,
+      "check_message": "Unmatched 〔 found on the tier.",
+      "fixture": "CHECK_130_unmatched_sign_group_start.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Sign-group-start marker U+3014 opened and never closed (sgm > 0 at end of tier). No dedicated code; rejected as unparsable (E316)."
+    },
+    {
+      "check_code": 131,
+      "check_message": "Unmatched 〕 found on the tier.",
+      "fixture": "CHECK_131_unmatched_sign_group_end.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "Sign-group-end marker U+3015 with no opener (sgm goes negative). Rejected at parse level (E316 + E305). Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
+    },
+    {
+      "check_code": 132,
+      "check_message": "Tabs should only be used to mark the beginning of lines.",
+      "fixture": "CHECK_132_tab_midline.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E370"
+      ],
+      "note": "A tab in the middle of a main tier. chatter rejects it (E370, unexpected tab). Grounded vs real CLAN CHECK 132."
+    },
+    {
+      "check_code": 133,
+      "check_message": "BEG time is smaller than same speaker's previous END time by 4000 msec.",
+      "fixture": "CHECK_133_overlap_same_speaker.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E704"
+      ],
+      "note": "With linked media, a bullet whose BEG time is more than 500 ms earlier than the same speaker's previous bullet END time. Dedicated chatter code: E704 'Speaker CHI overlaps with self: utterance 1 ends at 5000ms...'. E531 is fixture-name noise. CLAN threshold is >500ms (check.cpp:3892-3896); chatter's exact threshold not probed by this survey."
+    },
+    {
+      "check_code": 134,
+      "check_message": "Item 'unk|xxx' is illegal. Please run \"mor\" command on this data.",
+      "fixture": "CHECK_134_mor_unk_xxx.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E706"
+      ],
+      "note": "A %mor/%trn (or %cnl) item of the form unk|xxx, unk|yyy, or *|www (mor output for untranscribed material). chatter rejects via alignment (E706: main tier has 0 alignable items, %mor has 1) because xxx is not %mor-alignable; there is no dedicated unk|xxx rule. A hypothetical fixture where counts still align was not probed."
+    },
+    {
+      "check_code": 135,
+      "check_message": "Item 'xx' is illegal.",
+      "fixture": "CHECK_135_bare_xx.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E241"
+      ],
+      "note": "A main-tier word that is exactly 'xx' or 'yy' (case-insensitive); %cnl tiers also flag bare 'gen' and '^'. Dedicated chatter code: E241 '\"xx\" is not legal; did you mean to use \"xxx\"?'. Only the main-tier xx call site (check.cpp:3138) was grounded; the %cnl sites (3613, 3632) were not separately probed."
+    },
+    {
+      "check_code": 136,
+      "check_message": "Unmatched “ found on the tier.",
+      "fixture": "CHECK_136_unmatched_open_quote.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E242"
+      ],
+      "note": "Open curly quote U+201C on a tier with no matching close quote (qt > 0 at end of tier). Since 2026-09-01 E242 is decided from CST structure and names the unmatched OPEN quote too, where it used to surface only as unparsable E316 (the close-quote case, CHECK 137, was E242 already)."
+    },
+    {
+      "check_code": 137,
+      "check_message": "Unmatched ” found on the tier.",
+      "fixture": "CHECK_137_unmatched_close_quote.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E242"
+      ],
+      "note": "Close curly quote U+201D with no preceding open quote (qt goes negative). Dedicated chatter code: E242 'Unmatched curly quote ” found on the tier'. Expected codes refreshed 2026-07-30 (E242, E305 -> E242): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
+    },
+    {
+      "check_code": 138,
+      "check_message": "Special quote U2019 must be replaced by single quote (').",
+      "fixture": "CHECK_138_curly_u2019.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E256"
+      ],
+      "note": "A right single curly quote U+2019 inside a word. CLAN 138; chatter E256 IllegalCurlyQuote (both parsers reject U+2018/U+2019)."
+    },
+    {
+      "check_code": 139,
+      "check_message": "Special quote U2018 must be replaced by single quote (').",
+      "fixture": "CHECK_139_curly_u2018.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E256"
+      ],
+      "note": "A left single curly quote U+2018 at the start of a word. CLAN 139; chatter E256 IllegalCurlyQuote."
+    },
+    {
+      "check_code": 140,
+      "check_message": "Tier \"%MOR:\" does not link in size to its speaker tier.",
+      "fixture": "CHECK_140_mor_size_mismatch.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E705"
+      ],
+      "note": "%mor tier does not align item-for-item with its speaker tier (createMorUttline sets mor_link.error_found). Dedicated chatter code: E705 'Main tier has 2 alignable items, but %mor tier has 1 items'."
+    },
+    {
+      "check_code": 141,
+      "check_message": "'[: doggy]' must be preceded by only one word and nothing else.",
+      "fixture": "CHECK_141_replacement_after_group.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A [: text] replacement preceded by a group '>', another ']', nothing, a pause, or an &/+ form instead of exactly one plain word. chatter's grammar does not accept a replacement after a group, so it rejects at parse level (E316 on `<big dog> [: doggy]`); no dedicated code. Expected codes refreshed 2026-07-30 (E316, E747 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
+    },
+    {
+      "check_code": 142,
+      "check_message": "Speaker's role on @ID tier does not match role on @Participants: tier.",
+      "fixture": "CHECK_142_id_role_mismatch.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E532"
+      ],
+      "note": "The role field (field 8) of @ID differs from the role declared for that speaker on @Participants. Dedicated chatter code: E532 \"Speaker 'CHI' has role 'Mother' on @ID but 'Target_Child' on @Participants\"."
+    },
+    {
+      "check_code": 143,
+      "check_message": "The @ID line needs 10 fields.",
+      "fixture": "CHECK_143_id_field_count.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E342"
+      ],
+      "note": "@ID line whose pipe-separated field count is not exactly 10. chatter rejects via E342 (missing required 'pipe'), a parse-level equivalent."
+    },
+    {
+      "check_code": 144,
+      "check_message": "Either illegal SES field value or symbol is not declared in depfile.",
+      "fixture": "CHECK_144_bad_ses.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E546"
+      ],
+      "note": "@ID SES field is an undeclared value ('XYZ'). CLAN 144 (illegal SES / not declared in depfile); chatter E546 UnsupportedSesValue. The parity claim covers unknown tokens, not identical separator policy. CHECK's check_ses skips commas/whitespace and validates each remaining token against either vocabulary (check_matchplate/check_SES_item); it has no pair-completeness check. E546_vocabulary records acceptance of ',MC', 'White,' and comma-only input by CHECK 21-Sep-2026, versus Chatter's existing stricter complete-pair policy."
+    },
+    {
+      "check_code": 145,
+      "check_message": "This intonational marker should be outside paired markers.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out 2019-04-17 with the comment 'leave this to CHATTER' (check.cpp 4602): CLAN explicitly delegated this rule's future to this project. Never emitted by current builds. If the paired-marker interaction rule is wanted, it is a fresh chatter rule to design, not a parity obligation."
+    },
+    {
+      "check_code": 146,
+      "check_message": "The &= symbol must include some code after '=' character.",
+      "fixture": "CHECK_146_bare_amp_eq.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A main-tier word that is exactly '&=' with no code after the equals sign. Rejected at parse level: E316 'Unparsable content on main tier: &= '. Expected codes refreshed 2026-07-30 (E305, E316 -> E316): the 2026-07-29/30 stack (parse-taint cascade gate, finer recovery, specific codes) changed which codes fire; the fixture is still rejected."
+    },
+    {
+      "check_code": 147,
+      "check_message": "Undeclared special form marker in depfile.",
+      "fixture": "CHECK_147_undeclared_form_marker.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E203"
+      ],
+      "note": "An undeclared special-form marker `foo@zzz`. CLAN CHECK 147. ROOT CAUSE was the parser conversion, NOT the grammar: the grammar intentionally consumes `@zzz` as one form_marker token (parse-don't-validate), but the conversion's `else if text.starts_with(\"@z\")` branch treated any `@z...` as the user-defined form, stripping `@z` and using the rest as a bare label without the required colon. Fixed by requiring the `@z:` colon (the only valid user-defined form is `@z:label`); `@zXXX` without the colon now falls through to the existing E203 InvalidFormType branch in both the tree-sitter and re2c conversions. chatter rejects it via E203."
+    },
+    {
+      "check_code": 148,
+      "check_message": "Space character is not allowed before comma(,) character on \"@Media:\" header.",
+      "fixture": "CHECK_148_media_space_before_comma.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E767"
+      ],
+      "note": "Space before the comma in @Media. Chatter now has its own named rule for it, E767, replacing the fallout it used to produce: the header failed to parse, so it fell back to E525 (unknown header type) about a header chatter had recognised, plus E330 (missing media_type) on a line visibly ending in `, audio`. The precise space-before-comma message is no longer a CLAN nicety chatter lacks; both validators reject, and both now say why."
+    },
+    {
+      "check_code": 149,
+      "check_message": "Illegal character '.' located between a word and [...] code.",
+      "fixture": "CHECK_149_char_before_code.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A skip character other than space/comma/'<'/'>'/newline (e.g. an utterance terminator '.') sitting between a word and a following [...] code. Fixture 'dog . [: doggy] .' also draws CLAN (50) extra-delimiter noise; chatter rejects the same configuration as unparsable (E316 on '[: ...')."
+    },
+    {
+      "check_code": 150,
+      "check_message": "Illegal item located between a word and [...] code.",
+      "fixture": "CHECK_150_paren_before_code.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A ')' with no matching '(' in the non-skip material scanned back from a [...] code. chatter rejects 'dog) [/] dog' as unparsable (E316 on ') [/] dog'). E305 REMOVED 2026-08-11: it was a spurious \"missing terminator\" on a line that ends with one, caused by the lowering discarding the tier_body an ERROR node displaced. See docs/audits/2026-08-11-utterance-initial-annotation-adjudication.md."
+    },
+    {
+      "check_code": 151,
+      "check_message": "This word has only repetition segments.",
+      "status": "no_obligation",
+      "no_obligation_reason": "unreachable_in_file_mode",
+      "note": "Compiled into the unix build but never reached. RECLASSIFIED 2026-08-11 from `gui_only`, which was wrong about the mechanism: the check_err(151,...) site is at check.cpp 2980, inside helper check_isThereStem, which ends before the #ifndef UNX region begins at 2991. The site therefore survives `unifdef -DUNX`. What the region excludes is the helper's ONLY caller, at 3013, so under -DUNX the function is compiled and never invoked. The earlier note's phrase \"the emit path sits behind the #ifndef UNX region\" was accurate as prose and wrong as a classification.",
+      "fixture": "CHECK_151_only_repetition_segments.cha",
+      "expected_chatter_codes": [
+        "E753"
+      ]
+    },
+    {
+      "check_code": 152,
+      "check_message": "Language is not defined on \"@Languages:\" header tier.",
+      "fixture": "CHECK_152_undeclared_precode_lang.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E755"
+      ],
+      "note": "A [- CODE] utterance precode whose language is absent from @Languages. CLAN emits (152) via the indirect check_isLangMatch(wh=152) call at check.cpp 4194/5501, which the reference JSON's literal check_err(N,) counter misses, so 152 was WRONGLY in the dead list until 2026-07-15 (the coverage tool auto-reclassifies once this entry exists). Adjudicated MEANINGFUL and closed as E755 per the @s-declaration ruling (docs design 2026-07-15, part 3): utterance-level presence is substantial and belongs in @Languages; wild grounding 0 of 7,167 precode-bearing files violate. Deliberate contrast: word-level @s:CODE carries NO declaration requirement (part 1 of the same ruling; the pre-2019 CHECK behavior and the retired E254 warning are explicitly NOT adopted: CLAN itself relaxed @s in 2019). SECOND FACET (2026-07-24): the other call site (check.cpp 5501) validates each token of an @New Language: header against CLAN's static language table; @New Language is extinct in the kept corpus (0 files, rg sweep), and chatter rejects the whole header as unknown (E525 + E316), strictly subsuming the language-table facet."
+    },
+    {
+      "check_code": 153,
+      "check_message": "Age's month or day are missing initial zero. Please run \"chstring +q +1\" command on this file to fix this error.",
+      "fixture": "CHECK_153_age_no_leading_zero.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E517"
+      ],
+      "note": "@ID age with a component missing its leading zero (2;6. instead of 2;06.). CLAN 153; chatter E517 InvalidAgeFormat."
+    },
+    {
+      "check_code": 154,
+      "check_message": "Please add \"unlinked\" to @Media header.",
+      "status": "no_obligation",
+      "no_obligation_reason": "commented_out",
+      "note": "Call site commented out after four days in service ('in 2018-10-03 out 2018-10-07', check.cpp 5752); never emitted by current builds. Media/bullet consistency is adjudicated under the live codes (112 ruling of 2026-07-14 covers the meaningful direction: bullets require @Media)."
+    },
+    {
+      "check_code": 155,
+      "check_message": "Please use \"0dog\" instead of \"(dog)\".",
+      "fixture": "CHECK_155_paren_word.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E209"
+      ],
+      "note": "A non-pause word fully wrapped in parentheses, '(word)', which should be written 0word (in a non-CA file). chatter rejects via E209 'Word has no spoken content' (a fully-parenthesized word has no spoken material); not a dedicated use-0word rule but the same construct is refused."
+    },
+    {
+      "check_code": 156,
+      "check_message": "Please replace ,, with F2-t („) character.",
+      "fixture": "CHECK_156_double_comma.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E258"
+      ],
+      "note": "A literal ',,' (exactly two commas) on a main tier where the tag marker U+201E is required. Dedicated chatter code: E258 'Consecutive commas in utterance'."
+    },
+    {
+      "check_code": 157,
+      "check_message": "Media file name has to match datafile name.",
+      "fixture": "CHECK_157_media_name_mismatch.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E531"
+      ],
+      "note": "@Media filename ('differentname') does not match the datafile basename. chatter HAS E531 MediaFilenameMismatch, but the check was DEAD via the CLI: the validation_runner passed `None` for the filename so it never ran (it only fired in the parity harness, which passes the stem, masking the gap). Fixed by threading the file stem through validate_single_file_streaming. CLAN exempts remote URL @Media (verified: `@Media: \"https://...\"` -> no 157), so E531 now exempts URLs too. CLAN CHECK 157."
+    },
+    {
+      "check_code": 158,
+      "check_message": "[: ...] has to have real word, not 0... or &... or xxx.",
+      "fixture": "CHECK_158_replacement_xxx.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E391"
+      ],
+      "note": "A [: replacement] whose content is 0..., xxx/xx, yyy/yy, or www/ww instead of a real word. Dedicated chatter code: E391 'Replacement word cannot be untranscribed (xxx, yyy, www)'."
+    },
+    {
+      "check_code": 159,
+      "check_message": "Pause markers should appear after retrace markers.",
+      "fixture": "CHECK_159_pause_before_retrace.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "A pause before its retrace marker is rejected by the grammar with E316. Canonical E375 pause-order controls retain valid marker-before-pause forms. No dedicated pause-order diagnostic or inferred missing-space advice is required."
+    },
+    {
+      "check_code": 160,
+      "check_message": "Space character is not allowed after '<' or before '>' character.",
+      "fixture": "CHECK_160_space_in_angle.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E750"
+      ],
+      "note": "Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). GAP CLOSED 2026-07-09: the grammar models the tolerated whitespace as explicit optional CST nodes; the group parser now reports E750 at each (both sides) instead of silently dropping them (which also silently rewrote the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750.md. Main-tier groups covered; %wor angle groups not separately grounded. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error, no ambiguity whatsoever; legitimately caught as style discipline; kept as an error."
+    },
+    {
+      "check_code": 161,
+      "check_message": "Space character is required before \"[\" code item.",
+      "fixture": "CHECK_161_no_space_before_replacement.cha",
+      "status": "parity",
+      "expected_chatter_codes": [
+        "E316"
+      ],
+      "note": "The grammar requires whitespace before a replacement. The glued fixture is rejected by E316; the spaced form remains legal. No replacement parser is reconstructed from recovery text."
+    }
+  ]
 }

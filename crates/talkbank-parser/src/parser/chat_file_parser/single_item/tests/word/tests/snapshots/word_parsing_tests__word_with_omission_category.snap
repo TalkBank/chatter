@@ -9,7 +9,6 @@ Ok(
             end: 3,
         },
         word_id: None,
-        raw_text: "0is",
         content: WordContents(
             [
                 Text(

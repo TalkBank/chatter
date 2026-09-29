@@ -99,9 +99,9 @@ fn valid_utterances_with_dependent_tiers_parse_to_expected_model() {
         assert!(utt.mor_tier().is_some(), "%mor tier must be attached");
         assert!(utt.gra_tier().is_some(), "%gra tier must be attached");
         assert!(
-            matches!(utt.parse_health, ParseHealthState::Clean),
+            matches!(utt.parse_health(), ParseHealthState::Clean),
             "a valid utterance must have a clean parse-health, got: {:?}",
-            utt.parse_health
+            utt.parse_health()
         );
     }
 }
@@ -138,10 +138,10 @@ fn malformed_gra_emits_exact_diagnostic_and_taints_only_gra() {
 
     // Parse-health: the dependent-tier branch taints ONLY the Gra alignment
     // domain; the main tier stays clean.
-    let ParseHealthState::Tainted(health) = &utt.parse_health else {
+    let ParseHealthState::Tainted(health) = &utt.parse_health() else {
         panic!(
             "malformed %gra must taint parse-health, got: {:?}",
-            utt.parse_health
+            utt.parse_health()
         );
     };
     assert!(

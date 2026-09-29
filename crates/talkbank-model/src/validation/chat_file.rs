@@ -1,16 +1,8 @@
 //! ChatFile validation entry points.
 //!
-//! Validation is performed via methods on `ChatFile`:
-//!
-//! ```ignore
-//! use talkbank_model::{ChatFile, ErrorCollector};
-//!
-//! let errors = ErrorCollector::new();
-//! chat_file.validate(&errors);
-//! let error_vec = errors.into_vec();
-//! ```
-//!
-//! See `ChatFile::validate()` and `ChatFile::validate_with_alignment()` for details.
+//! Validation is performed via methods on [`crate::ChatFile`]. See
+//! [`crate::ChatFile::validate`] for the compiler-checked streaming example and
+//! [`crate::ChatFile::validate_with_alignment`] for alignment-aware validation.
 //!
 //! References:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>

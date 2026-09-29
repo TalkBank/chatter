@@ -8,12 +8,11 @@
 //! input.
 //!
 //! Authoritative design: `book/src/architecture/adjudication-workflow.md`.
-//! Currently supports the `speaker-id-low-confidence` adjudication
-//! kind with `AcceptSuggested` decisions. Other kinds and decision
-//! variants are scaffolded by the enum shapes but not yet
-//! implemented.
+//! Speaker suggestions and sanity-scan corrections accept or override mappings;
+//! parent-role lookups accept an explicit role choice. Incompatible decisions
+//! refuse without consuming the pending entry or its successors.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -22,7 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::speaker_id::{
     DecisionEngine, InsertedRoleSpec, JudgmentProvenance, MergeOverride, OverrideFile,
-    SpeakerAction,
+    SpeakerAction, SpeakerIdError,
 };
 
 /// Errors arising from the adjudication core.
@@ -55,6 +54,17 @@ pub enum AdjudicationError {
         pending: AdjudicationKind,
         /// A short description of the decision shape supplied.
         decision: String,
+    },
+
+    /// The decision cannot be converted to the mapping consumed downstream.
+    /// No override is recorded and the request remains pending.
+    #[error("invalid decision mapping for session {session_id:?}: {source}")]
+    InvalidDecisionMapping {
+        /// Session whose proposed override failed mapping admission.
+        session_id: String,
+        /// The mapping owner's specific refusal, preserving its typed cause.
+        #[source]
+        source: SpeakerIdError,
     },
 
     /// I/O error reading or writing one of the adjudication files
@@ -572,7 +582,8 @@ impl AdjudicationOutcome {
 ///
 /// Stops at the first unrecoverable error (mismatched kind,
 /// exhausted prompter, etc.); already-applied decisions remain in
-/// the override file so a re-run can pick up where this one left off.
+/// the in-memory override document so a re-run can pick up where this one left
+/// off. This function does not persist either document to disk.
 pub fn run_adjudication(
     pending: &mut PendingAdjudications,
     overrides: &mut OverrideFile,
@@ -580,25 +591,53 @@ pub fn run_adjudication(
     operator: String,
 ) -> Result<AdjudicationOutcome, AdjudicationError> {
     let mut resolved: Vec<String> = Vec::new();
-    let mut remaining: Vec<PendingEntry> = Vec::new();
-    // Process in document order; clone into the working vec so we
-    // can rebuild `pending.entries` from `remaining` after the loop.
-    let drained: Vec<PendingEntry> = std::mem::take(&mut pending.entries);
-    for entry in drained {
-        let decision = prompter.ask(&entry)?;
-        match apply_decision(&entry, &decision, &operator, overrides) {
-            Ok(()) => resolved.push(entry.session_id.clone()),
-            Err(e) => {
-                // Restore the not-yet-processed entry plus the
-                // failing one so re-running picks up state cleanly.
-                remaining.push(entry);
-                pending.entries.append(&mut remaining);
-                return Err(e);
-            }
+    let mut run = PendingRun::new(&mut pending.entries);
+    while let Some(session) = run.resolve_next(overrides, prompter, &operator)? {
+        resolved.push(session);
+    }
+    Ok(AdjudicationOutcome { resolved })
+}
+
+/// Own uncommitted entries until a successful decision advances the queue.
+/// The destination remains borrowed for the run, and every exit restores the
+/// untouched suffix. Neither prompting nor decision validation can consume it.
+struct PendingRun<'a> {
+    destination: &'a mut Vec<PendingEntry>,
+    uncommitted: VecDeque<PendingEntry>,
+}
+
+impl<'a> PendingRun<'a> {
+    fn new(destination: &'a mut Vec<PendingEntry>) -> Self {
+        let uncommitted = std::mem::take(destination).into();
+        Self {
+            destination,
+            uncommitted,
         }
     }
-    pending.entries = remaining;
-    Ok(AdjudicationOutcome { resolved })
+
+    /// The sole queue-advance transition: an applied override yields a resolved
+    /// session; either refusal leaves the front entry and all successors owned.
+    fn resolve_next(
+        &mut self,
+        overrides: &mut OverrideFile,
+        prompter: &mut dyn Prompter,
+        operator: &str,
+    ) -> Result<Option<String>, AdjudicationError> {
+        let Some(entry) = self.uncommitted.front() else {
+            return Ok(None);
+        };
+        let decision = prompter.ask(entry)?;
+        apply_decision(entry, &decision, operator, overrides)?;
+        let session = entry.session_id.clone();
+        self.uncommitted.pop_front();
+        Ok(Some(session))
+    }
+}
+
+impl Drop for PendingRun<'_> {
+    fn drop(&mut self) {
+        *self.destination = std::mem::take(&mut self.uncommitted).into();
+    }
 }
 
 /// Apply one operator decision to the override file. Dispatches on
@@ -700,8 +739,32 @@ fn apply_decision(
             });
         }
     };
-    overrides.upsert(entry.session_id.clone(), merge_override);
+    PreparedDecision::admit(entry.session_id.clone(), merge_override)?.commit(overrides);
     Ok(())
+}
+
+/// A decision whose rename actions all have the role data required by the
+/// mapping consumer. This is conversion readiness, not full CHAT validity.
+/// The private payload cannot be changed between admission and commit.
+struct PreparedDecision {
+    session_id: String,
+    record: MergeOverride,
+}
+
+impl PreparedDecision {
+    fn admit(session_id: String, record: MergeOverride) -> Result<Self, AdjudicationError> {
+        record
+            .to_mapping_spec()
+            .map_err(|source| AdjudicationError::InvalidDecisionMapping {
+                session_id: session_id.clone(),
+                source,
+            })?;
+        Ok(Self { session_id, record })
+    }
+
+    fn commit(self, overrides: &mut OverrideFile) {
+        overrides.upsert(self.session_id, self.record);
+    }
 }
 
 #[cfg(test)]

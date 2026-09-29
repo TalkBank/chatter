@@ -95,7 +95,8 @@ fn extract_line_classifies_header_and_utterance() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc));
+    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc))
+        .expect("producer reconstruction");
 
     // child_3 is the `repeat(line)` slot: `Vec<Positioned<NodeSlot<LineNode>>>`.
     let mut header_lines = 0usize;
@@ -114,7 +115,7 @@ fn extract_line_classifies_header_and_utterance() {
         );
 
         // The Task-B2 target call: classify the line's content by TYPE.
-        let line_children = extract_line(line_node);
+        let line_children = extract_line(line_node).expect("producer reconstruction");
         match &line_children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(_)) => header_lines += 1,
             NodeSlot::Present(LineChoice::Utterance(_)) => utterance_lines += 1,

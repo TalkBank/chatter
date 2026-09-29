@@ -9,7 +9,6 @@ Ok(
             end: 4,
         },
         word_id: None,
-        raw_text: "&+fr",
         content: WordContents(
             [
                 Text(

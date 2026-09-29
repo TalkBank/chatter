@@ -224,7 +224,7 @@ fn flagged_draft_order_preserves_sources_and_comments_but_not_contradictions() {
         assert!(row.semantic_eq(original));
     }
     let text = merged.report(|_, _| {}).file().to_chat_string();
-    assert!(text.contains("REVIEW GENERATED: Ambiguous cross-source ordering"));
+    assert!(!text.contains("REVIEW GENERATED: Ambiguous cross-source ordering"));
     assert!(text.contains("%com:\tnoted as fluency-relevant sample"));
     assert!(matches!(
         merge_chat_files_with_donor_selection(&reference.clone(), &draft, &retain, &[]),

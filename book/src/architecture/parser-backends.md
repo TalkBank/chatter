@@ -1,14 +1,15 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-07 06:57 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
-trait and produce identical `ChatFile` model types.
+trait and produce the same `ChatFile` model type, not necessarily identical
+values or recovery results.
 
 The `--parser` flag selects the backend at the CLI boundary; everything
-downstream consumes the identical `ChatFile` output, so the choice is
-invisible past the dispatch point:
+downstream consumes the shared model API. Backend differences remain observable
+in supported input, diagnostics and recovery:
 
 ```mermaid
 flowchart TD
@@ -17,7 +18,7 @@ flowchart TD
     ts["TreeSitterParser\n(talkbank-parser:\nGLR, incremental)"]
     re2c["Re2cParser\n(talkbank-parser-re2c:\nre2c DFA + chumsky)"]
     trait["ChatParser trait\n(talkbank-model\nparser_api/chat_parser.rs)"]
-    model["ChatFile\n(talkbank-model:\nSemanticEq-identical\nfor both backends)"]
+    model["ChatFile\n(shared model type;\nbackend-specific recovery)"]
 
     cli --> sel
     sel -->|"tree-sitter (default)"| ts
@@ -33,6 +34,60 @@ wrap a `ChatParser` implementor, so the validation runner never branches on
 backend again.
 
 ## The shared `ChatParser` trait
+
+### Backend compatibility mandate
+
+This section is the authoritative policy for re2c/tree-sitter compatibility.
+Backend measurements and regression baselines record evidence; they do not
+override this contract.
+
+Both implementations must pursue the same independently justified CHAT syntax,
+meaning and validity rules **idiomatically within their own architectures**.
+Neither parser is an oracle for the other. For supported valid input, the goal
+is semantic agreement in the shared model, not identical internal representation.
+
+For developers, these are mandatory constraints:
+
+- Use re2c lexer states, rich tokens, parser-owned recovery and typed,
+  source-bound evidence. Use typestate, ownership and validated constructors
+  to preserve admission and recovery distinctions.
+- Do not emulate tree-sitter's CST, MISSING nodes, recovery traversal or
+  recovered model shape merely to satisfy an equality test. Do not add a
+  parallel parser, reparse reconstructed text, or scan raw input after parsing
+  to manufacture another backend's diagnostics.
+- Report the fault the available evidence supports, at a truthful source
+  location. Preserve useful content where sound, but never fabricate valid
+  structure, discard faults silently, or treat a recovered result as valid.
+  A broader honest diagnostic is preferable to invented specificity.
+- Adjudicate differences as a genuine semantic defect, an acceptable
+  architectural difference, or an explicitly unsupported experimental feature.
+  Retain valid controls and invalid-input rejection tests. Do not weaken a
+  CHAT rule or change a baseline solely to make a comparison pass.
+- Exact diagnostic codes, wording, counts, ordering, rejection stage and
+  recovery output are **not cross-backend requirements**. Fix an inaccurate
+  diagnostic for its user impact, not because the other backend differs.
+
+For users switching `--parser`:
+
+| Aspect | What to expect |
+|---|---|
+| Supported valid CHAT | The intended meaning and shared-model semantics should agree. A disagreement needs investigation. |
+| Invalid input | Diagnostic detail, number, order and highlighted recovery region may differ; identical error reports are not promised. |
+| Recovered content | Partial models and retained fragments may differ. Recovery is not validity and is not a portable data-repair contract. |
+| Experimental limitations | re2c is incomplete and may reject supported CHAT or miss invalid input. A clean re2c result is not a substitute for default tree-sitter validation. |
+
+Use the default tree-sitter backend for production validity decisions and the
+LSP. Consumers must not depend on cross-backend diagnostic identity or
+interchangeable recovered output. Report concrete validity or semantic
+disagreements with a minimal input and parser version; a diagnostic difference
+alone does not establish a bug.
+
+Before 1.0, re2c improvements are welcome when justified and affordable, but
+remain lowest priority. Full backend equivalence is not a release prerequisite;
+re2c may remain explicitly experimental and incomplete. This does not waive
+truthful diagnostics or the prohibition on architecture-distorting workarounds.
+
+### API shape
 
 Both backends implement `talkbank_model::ChatParser` directly (the
 tree-sitter impl landed 2026-07-24 in
@@ -68,6 +123,14 @@ Two notes on the trait's shape:
 
 ## TreeSitterParser (default)
 
+For isolated words, `parse_word_with_context` (or the inherent
+`parse_word_fragment_with_context`) applies the enclosing document's effective
+`@Options: CA` to the admitted typed word. A standalone parenthesized word then
+has the same CA-omission interpretation as whole-document parsing; mixed lexical
+shortenings remain shortenings. This transition preserves raw spelling and
+source coordinates and does not retry rejected input. The context-free word API
+does not infer file options: callers that know them should supply the context.
+
 - **Crate:** `talkbank-parser`
 - **Technology:** [tree-sitter](https://tree-sitter.github.io/) GLR parser
 - **Grammar:** `grammar/grammar.js` → generated C parser
@@ -82,7 +145,7 @@ Used by the LSP, the default CLI, and all production validation.
 - **Crate:** `talkbank-parser-re2c`
 - **Technology:** [re2c](https://re2c.org/) DFA lexer + [chumsky](https://docs.rs/chumsky/1.0.0-alpha.8) parser combinators
 - **Grammar:** Translated from `grammar.js` rules → re2c conditions + chumsky combinators
-- **Strengths:** 4-8x faster, `Send + Sync`, zero constructor cost, specification oracle
+- **Strengths:** 4-8x faster, `Send + Sync`, zero constructor cost, independent experimental implementation
 - **Weaknesses:** No incremental reparsing, incomplete diagnostic parity, and
   **it is not ready to judge CHAT validity** (see below)
 
@@ -225,8 +288,10 @@ to lose the same information.
 
 ### Remaining parity limits
 
-The current finite spec-parity corpus has no silent re2c case, but a clean
-`--parser re2c` run is not a general validity guarantee. Backend disagreements
+The [dated re2c measurements](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-parser-re2c/docs/parity-report.md)
+include known silent invalid cases; do not treat older zero-silence results as
+current guarantees. A clean `--parser re2c` run is not a general validity
+guarantee. Backend disagreements
 remain in diagnostic specificity, extra or missing diagnostics, and source
 locations. The current per-case authority is
 `tests/integration/error_parity/baseline.rs`; run its gate for derived counts.
@@ -243,7 +308,7 @@ other recovery paths and remaining dummy diagnostic locations still need review.
 # Default: tree-sitter
 chatter validate corpus/
 
-# Use re2c for faster batch validation
+# Opt into the experimental re2c backend
 chatter validate --parser re2c corpus/
 
 # Roundtrip with re2c
@@ -296,7 +361,7 @@ Run benchmarks: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`
 | Batch validation (>100 files) | tree-sitter | re2c is faster but is not a validity authority |
 | CI validation | tree-sitter | "both correct" was the claim; it is not currently true |
 | Error diagnostics (user-facing) | tree-sitter | More specific E3xx codes |
-| Parser parity testing | Both | Re2c is the specification oracle |
+| Parser comparison testing | Both | Disagreements require adjudication against the specs; neither backend is an oracle |
 | Profiling / benchmarking | re2c | DFA lexer gives a performance floor |
 
 ## Shared Model Infrastructure

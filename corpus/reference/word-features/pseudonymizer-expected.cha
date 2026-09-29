@@ -1,0 +1,12 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI PersonA Child
+@ID:	eng|sample|CHI|2;00.|female|House PersonA||Child||PersonA|
+@Comment:	PersonA and rose’s book.
+*CHI:	PersonA PersonA .
+%mor:	propn|PersonA  propn|PersonA .
+%wor:	PersonA PersonA .
+*CHI:	PersonA+bud .
+%wor:	PersonA+bud .
+@End

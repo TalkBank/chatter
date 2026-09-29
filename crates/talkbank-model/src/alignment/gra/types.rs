@@ -54,7 +54,8 @@ impl GraAlignment {
 
     /// Returns `true` when no alignment diagnostics were emitted.
     ///
-    /// A `true` value implies every row in `pairs` is a complete one-to-one mapping.
+    /// This is not a row-completeness certificate: callers may populate the
+    /// public accumulator independently of the alignment producer.
     pub fn is_error_free(&self) -> bool {
         self.errors.is_empty()
     }

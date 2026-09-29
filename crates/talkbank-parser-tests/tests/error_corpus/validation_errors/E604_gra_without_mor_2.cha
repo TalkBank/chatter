@@ -1,0 +1,10 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|corpus|CHI|||||Target_Child|||
+*CHI:	hello world .
+%com:	keep this comment
+%gra:	1|2|NSUBJ
+	2|0|ROOT
+@End

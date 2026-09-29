@@ -214,9 +214,10 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
                 let has_vacant_sibling = tops.iter().enumerate().any(|(oti, other_top)| {
                     oti != ti
                         && other_top.speaker == top.speaker
+                        // The candidate top already precedes the bottom.
+                        // Sharing its utterance proves that for this sibling.
                         && other_top.utterance_index == top.utterance_index
                         && other_top.region.index == top.region.index
-                        && other_top.utterance_index <= bottom.utterance_index
                         && !top_to_bottoms[oti]
                             .iter()
                             .any(|b| b.speaker == bottom.speaker)

@@ -76,8 +76,8 @@ pub(super) fn parse_linkers(
     typed: LinkersNode<'_>,
     source: &str,
     errors: &impl ErrorSink,
-) -> Vec<Linker> {
-    let children = extract_linkers(typed);
+) -> Result<Vec<Linker>, crate::generated_traversal::ReconstructionFault> {
+    let children = extract_linkers(typed)?;
     let mut linkers = SourceOrderedLinkers(Vec::new());
 
     // First and repeated groups have distinct generated carrier types but the
@@ -97,7 +97,7 @@ pub(super) fn parse_linkers(
                     }
                 }
                 SlotView::Error(node) => report_unexpected(node, source, errors),
-                SlotView::Absent(NoChild) => {}
+                SlotView::Absent(_) => {}
             }
         };
     }
@@ -108,7 +108,7 @@ pub(super) fn parse_linkers(
     for node in &children.unexpected {
         push_displaced(*node, source, errors, &mut linkers);
     }
-    linkers.finish()
+    Ok(linkers.finish())
 }
 
 fn push_linker<'tree, T: LinkerToken<'tree>>(

@@ -205,6 +205,14 @@ impl RecordedSpeakerIdentificationAttempt {
         error: &PipelineError,
     ) -> Self {
         let (failure_kind, diagnostic_codes) = match error {
+            PipelineError::InternalFailure(failure) => (
+                RecordedInputFailureKind::InternalFailure,
+                failure
+                    .diagnostics()
+                    .iter()
+                    .map(|error| error.code.to_string())
+                    .collect(),
+            ),
             PipelineError::Io(_) => (RecordedInputFailureKind::Io, Vec::new()),
             PipelineError::ParserCreation(_) => {
                 (RecordedInputFailureKind::ParserCreation, Vec::new())
@@ -222,7 +230,7 @@ impl RecordedSpeakerIdentificationAttempt {
                 errors.iter().map(|error| error.code.to_string()).collect(),
             ),
             PipelineError::IncompleteValidation(failure) => (
-                RecordedInputFailureKind::Validation,
+                RecordedInputFailureKind::IncompleteValidation,
                 failure
                     .diagnostics()
                     .iter()
@@ -261,6 +269,8 @@ pub enum RecordedSpeakerIdentificationInput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RecordedInputFailureKind {
+    /// The tool failed without establishing input validity.
+    InternalFailure,
     /// An I/O operation inside the typed pipeline failed.
     Io,
     /// The selected parser backend could not be created.
@@ -269,6 +279,9 @@ pub enum RecordedInputFailureKind {
     Parse,
     /// The parsed CHAT model failed validation.
     Validation,
+    /// Missing or recovered parser provenance prevented complete validation.
+    /// This is not a determination that the CHAT model is invalid.
+    IncompleteValidation,
     /// An internal JSON serialization boundary failed.
     JsonSerialization,
     /// A rewrite-safety check found content that would be lost.
@@ -459,11 +472,10 @@ fn speaker_bag(chat: &ChatFile, speaker: &SpeakerCode) -> HashMap<String, u32> {
             && &u.main.speaker == speaker
         {
             walk_words(&u.main.content.content, None, &mut |item| {
-                if let WordItem::Word(w) = item {
-                    let token = clean_token(w.cleaned_text());
-                    if !token.is_empty() {
-                        *bag.entry(token).or_insert(0) += 1;
-                    }
+                if let WordItem::Word(w) = item
+                    && let Some(token) = clean_token(w.cleaned_text())
+                {
+                    *bag.entry(token).or_insert(0) += 1;
                 }
             });
         }
@@ -472,22 +484,22 @@ fn speaker_bag(chat: &ChatFile, speaker: &SpeakerCode) -> HashMap<String, u32> {
 }
 
 /// Normalize a raw word's cleaned text to a Jaccard-comparable token:
-/// lowercase, alphabetic-only, length ≥ 2. Returns the empty string
-/// when the token doesn't qualify (the caller skips empties).
+/// ASCII lowercase, alphabetic-only, length ≥ 2. Rejected words have no
+/// lexical token; absence is not represented by a fabricated empty string.
 ///
 /// This matches the Python prototype's `clean_text_for_matching`
 /// post-walk filter, relying on the AST's `cleaned_text` to have
 /// already stripped CHAT markup means the regex pipeline collapses to
 /// this one normalization step.
-fn clean_token(raw: &str) -> String {
+fn clean_token(raw: &str) -> Option<String> {
     let lowered = raw.trim().to_ascii_lowercase();
     if lowered.len() < 2 {
-        return String::new();
+        return None;
     }
     if !lowered.chars().all(|c| c.is_ascii_alphabetic()) {
-        return String::new();
+        return None;
     }
-    lowered
+    Some(lowered)
 }
 
 /// Reference-mode identification: pick the donor speaker whose token
@@ -509,12 +521,18 @@ pub fn identify_mapping(
     donor: &ChatFile,
     threshold: ConfidenceThreshold,
 ) -> Result<DonorMatchReport, SpeakerIdError> {
-    let ref_bag = speaker_bag(reference, anchor);
-    if ref_bag.is_empty() {
+    // Presence is structural evidence, not a property of the filtered token
+    // bag. A present speaker can have no eligible words; that yields the
+    // existing NoInformation margin rather than a false missing-speaker claim.
+    if !reference
+        .utterances()
+        .any(|utterance| &utterance.main.speaker == anchor)
+    {
         return Err(SpeakerIdError::ReferenceMissingAnchor {
             anchor: anchor.clone(),
         });
     }
+    let ref_bag = speaker_bag(reference, anchor);
 
     let donor_speakers = donor.unique_utterance_speakers();
     if donor_speakers.len() < MIN_DONOR_SPEAKERS {

@@ -30,7 +30,11 @@ fn rejected_morphology_retains_taint_and_reports_its_source_boundary() {
                 panic!("recovery must retain the main utterance");
             };
             let utterance = chat.utterances().next().unwrap();
-            assert!(utterance.parse_health.is_tier_tainted(ParseHealthTier::Mor));
+            assert!(
+                utterance
+                    .parse_health()
+                    .is_tier_tainted(ParseHealthTier::Mor)
+            );
             assert!(utterance.dependent_tiers.is_empty());
             let diagnostics = errors.into_vec();
             assert!(
@@ -62,7 +66,7 @@ fn rejected_morphology_retains_taint_and_reports_its_source_boundary() {
     };
     assert!(errors.into_vec().is_empty());
     assert_eq!(
-        actual.utterances().next().unwrap().parse_health,
+        actual.utterances().next().unwrap().parse_health(),
         ParseHealthState::Clean
     );
     let canonical = talkbank_parser::TreeSitterParser::new()

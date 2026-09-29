@@ -19,8 +19,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use talkbank_cache::{CacheOutcome, ValidationCache};
+use talkbank_model::Severity;
 use talkbank_model::{ChatFile, ChatParser, ErrorSink, ParseOutcome};
-use talkbank_model::{ParseError, Severity};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_re2c::Re2cParser;
 
@@ -33,6 +33,12 @@ pub(super) enum ParserDispatch {
     TreeSitter(TreeSitterParser),
     /// Re2c DFA parser (faster batch validation).
     Re2c(Re2cParser),
+    /// Inject a producer failure without inventing a malformed-CHAT fixture.
+    #[cfg(test)]
+    InternalFailure,
+    /// Consume one real parse, then inject a fault at the roundtrip boundary.
+    #[cfg(test)]
+    FailAfterInitial(std::cell::Cell<Option<TreeSitterParser>>),
 }
 
 impl ParserDispatch {
@@ -55,6 +61,21 @@ impl ParserDispatch {
         errors: &impl ErrorSink,
     ) -> ChatFile {
         match self {
+            #[cfg(test)]
+            Self::FailAfterInitial(first) => match first.take() {
+                Some(parser) => parser.parse_chat_file_streaming(input, errors),
+                None => Self::InternalFailure.parse_chat_file_streaming(input, errors),
+            },
+            #[cfg(test)]
+            Self::InternalFailure => {
+                errors.report(talkbank_model::ParseError::at_span(
+                    talkbank_model::ErrorCode::InternalError,
+                    Severity::Warning,
+                    talkbank_model::Span::new(0, 1),
+                    "injected producer fault",
+                ));
+                ChatFile::new(vec![])
+            }
             Self::TreeSitter(p) => p.parse_chat_file_streaming(input, errors),
             Self::Re2c(p) => match p.parse_chat_file(input, 0, errors) {
                 ParseOutcome::Parsed(cf) => cf,
@@ -83,6 +104,22 @@ pub(super) fn worker_loop<C>(
         }
     };
 
+    worker_loop_with_parser(work_rx, event_tx, cancel, cache, config, stats, parser);
+}
+
+/// The worker owns one initialized parser for its entire queue. The separate
+/// boundary also lets tests inject a tool fault into the real cache/event path.
+pub(super) fn worker_loop_with_parser<C>(
+    work_rx: Receiver<PathBuf>,
+    event_tx: Sender<ValidationEvent>,
+    cancel: Arc<CancelSignal>,
+    cache: Option<Arc<C>>,
+    config: ValidationConfig,
+    stats: Arc<ValidationStats>,
+    parser: ParserDispatch,
+) where
+    C: ValidationCache + Send + Sync,
+{
     let mut names = crate::paths::StoredNameResolver::default();
     loop {
         // Check for cancellation. Reads a LATCH, not the raw channel: polling
@@ -201,29 +238,56 @@ pub(super) fn worker_loop<C>(
                             message: e.to_string(),
                         };
 
-                        if let Err(_send_error) =
-                            event_tx.send(ValidationEvent::FileComplete(FileCompleteEvent {
-                                path: file_path.clone(),
-                                status: status.clone(),
-                            }))
-                        {
-                            tracing::warn!(file = ?file_path, "Failed to send FileComplete event: receiver dropped");
-                        }
-
                         update_stats(&stats, &status);
+                        // A closed result stream ends the worker on this path
+                        // too. The completed read failure is accounted for,
+                        // but no later file may begin after delivery fails.
+                        if event_tx
+                            .send(ValidationEvent::FileComplete(FileCompleteEvent {
+                                path: file_path,
+                                status,
+                            }))
+                            .is_err()
+                        {
+                            break;
+                        }
                         continue;
                     }
                 };
 
                 let source = Arc::<str>::from(content);
 
-                let (complete, chat_file) = validate_single_file_streaming(
+                let attempt = validate_single_file_streaming(
                     &stored,
                     config.check_alignment,
                     config.rules,
                     &parser,
                     source.as_ref(),
                 );
+                let (completed, chat_file) = match attempt {
+                    Ok(completed) => completed,
+                    Err(failure) => {
+                        let _ = event_tx.send(ValidationEvent::Errors(ErrorEvent {
+                            path: file_path.clone(),
+                            errors: failure.diagnostics().to_vec(),
+                            source: source.clone(),
+                        }));
+                        let status = FileStatus::InternalFailure { failure };
+                        update_stats(&stats, &status);
+                        if event_tx
+                            .send(ValidationEvent::FileComplete(FileCompleteEvent {
+                                path: file_path,
+                                status,
+                            }))
+                            .is_err()
+                        {
+                            break;
+                        }
+                        // No cache admission, presentation suppression, or roundtrip.
+                        continue;
+                    }
+                };
+                let complete = completed.into_diagnostics();
 
                 // THE CACHED FACT, derived from the COMPLETE diagnostic set and
                 // therefore true under every presentation policy: did this file
@@ -254,21 +318,6 @@ pub(super) fn worker_loop<C>(
 
                 let is_valid = error_count == 0;
 
-                if !shown.is_empty() {
-                    let _ = event_tx.send(ValidationEvent::Errors(ErrorEvent {
-                        path: file_path.clone(),
-                        errors: shown,
-                        source: source.clone(),
-                    }));
-                }
-                if config.cache.allows_writes()
-                    && let Some(cache_ref) = cache.as_ref()
-                    && let Err(e) =
-                        cache_ref.set(&file_path, config.check_alignment, validation_outcome)
-                {
-                    tracing::warn!(file = ?file_path, error = %e, "Failed to cache validation result");
-                }
-
                 let status = if is_valid {
                     // Validation passed. Run roundtrip if configured.
                     if config.roundtrip {
@@ -287,6 +336,28 @@ pub(super) fn worker_loop<C>(
                         cache_hit: false,
                     }
                 };
+
+                // Do not publish input findings from an attempt that later
+                // failed internally. Consumers may turn this event into an
+                // invalid-file record, contradicting the terminal failure.
+                if !matches!(status, FileStatus::InternalFailure { .. }) && !shown.is_empty() {
+                    let _ = event_tx.send(ValidationEvent::Errors(ErrorEvent {
+                        path: file_path.clone(),
+                        errors: shown,
+                        source: source.clone(),
+                    }));
+                }
+
+                // A producer fault during the optional reparse also prevents
+                // this run from publishing a completed validation cache entry.
+                if !matches!(status, FileStatus::InternalFailure { .. })
+                    && config.cache.allows_writes()
+                    && let Some(cache_ref) = cache.as_ref()
+                    && let Err(e) =
+                        cache_ref.set(&file_path, config.check_alignment, validation_outcome)
+                {
+                    tracing::warn!(file = ?file_path, error = %e, "Failed to cache validation result");
+                }
 
                 update_stats(&stats, &status);
 
@@ -350,7 +421,13 @@ where
         }
     }
 
-    let result = roundtrip::run_roundtrip(chat_file, parser);
+    let result = match roundtrip::run_roundtrip(chat_file, parser) {
+        Ok(result) => result,
+        // These spans belong to serialized roundtrip text, not the original
+        // source. Retain the fault in the terminal status without attributing
+        // it to the user's source through an Errors event.
+        Err(failure) => return FileStatus::InternalFailure { failure },
+    };
 
     // Cache the roundtrip result
     let roundtrip_outcome = match &result {
@@ -398,6 +475,10 @@ where
 /// Updates stats.
 pub(super) fn update_stats(stats: &Arc<ValidationStats>, status: &FileStatus) {
     match status {
+        FileStatus::InternalFailure { .. } => {
+            stats.record_internal_failure();
+            stats.record_cache_miss();
+        }
         FileStatus::Valid {
             cache_hit,
             roundtrip,
@@ -462,12 +543,15 @@ fn validate_single_file_streaming(
     rules: talkbank_model::RuleSelection,
     parser: &ParserDispatch,
     content: &str,
-) -> (Vec<ParseError>, ChatFile) {
+) -> Result<(talkbank_model::CompletedDiagnostics, ChatFile), talkbank_model::InternalFailure> {
     // Collect all diagnostics during validation (no streaming).
     let collector = talkbank_model::ErrorCollector::new();
 
     // Parse with error collection.
     let mut chat_file = parser.parse_chat_file_streaming(content, &collector);
+    let parsed = talkbank_model::CompletedDiagnostics::admit(collector.into_vec())?;
+    let collector = talkbank_model::ErrorCollector::new();
+    collector.report_all(parsed.into_diagnostics());
 
     // Disk validation requires a stored identity. Argument spellings and
     // anonymous contexts cannot enter this function; resolution failures were
@@ -480,5 +564,8 @@ fn validate_single_file_streaming(
         chat_file.validate_with_rules(rules, &collector, name);
     }
 
-    (collector.into_vec(), chat_file)
+    Ok((
+        talkbank_model::CompletedDiagnostics::admit(collector.into_vec())?,
+        chat_file,
+    ))
 }

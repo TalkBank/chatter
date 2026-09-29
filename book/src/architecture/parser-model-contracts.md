@@ -1,14 +1,14 @@
 # Parser, Model, and API Contracts
 
 **Status:** Current
-**Last updated:** 2026-06-21 21:33 EDT
+**Last updated:** 2026-09-28 20:59 EDT
 
 ## Single-handle parser API
 `talkbank-parser` provides `TreeSitterParser` as the canonical API
 handle for all parsing, full-file and fragment methods live directly
 on the struct. Callers create one instance and pass
 `&TreeSitterParser` everywhere. The alternate `talkbank-parser-re2c`
-is opt-in (specification oracle and high-throughput batch parsing)
+is opt-in and experimental (independent comparison and batch parsing)
 and produces the same `ChatFile` model.
 
 ## Contract for Batchalign

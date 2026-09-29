@@ -55,16 +55,16 @@ pub fn enhance_errors_with_index(errors: &mut [ParseError], index: &SourceIndex<
         let span_start = error.location.span.start as usize;
         let span_end = error.location.span.end as usize;
 
-        if span_start >= full_source.len() && has_content {
+        if span_start > full_source.len() {
             warn!(
                 span_start,
                 source_len = full_source.len(),
                 code = %error.code,
                 "Error span start exceeds source length; clamping to end"
             );
-            let clamped = full_source.len().saturating_sub(1) as u32;
-            error.location.span.start = clamped;
-            error.location.span.end = clamped;
+            // The source-bound EOF is a valid UTF-8 boundary. Its preceding
+            // byte need not be: a final scalar may occupy several bytes.
+            error.location.span = crate::Span::new(source_len, source_len);
         } else if span_end > full_source.len() {
             warn!(
                 span_end,
@@ -88,7 +88,9 @@ pub fn enhance_errors_with_index(errors: &mut [ParseError], index: &SourceIndex<
 
         // LineMap.line_col_of works on byte offsets, always succeeds, no
         // mid-character fallback needed (unlike line_index::try_line_col).
-        let clamped = |off: usize| off.min(full_source.len().saturating_sub(1));
+        // A zero-width EOF span belongs to this source index. Preserve its
+        // final-line position rather than moving it onto the previous byte.
+        let clamped = |off: usize| off.min(full_source.len());
 
         // Calculate line/column using binary search - O(log m)
         let (line_0, col_0) = line_map.line_col_of(clamped(span_start) as u32);
@@ -163,12 +165,9 @@ pub fn enhance_errors_with_index(errors: &mut [ParseError], index: &SourceIndex<
         ctx.source_text = mapped.into_text();
         ctx.span = crate::Span::from_usize(display_start, display_end);
 
-        // Always set line_offset for correct miette display
-        // Use the first line number in the context range
-        let first_line_number = first_line + 1;
-        if let Some(ctx) = &mut error.context {
-            ctx.line_offset = Some(first_line_number);
-        }
+        // The mutable context reference returned by get_or_insert_with is
+        // the presence proof; retain it through the complete display update.
+        ctx.line_offset = Some(first_line + 1);
     }
 }
 

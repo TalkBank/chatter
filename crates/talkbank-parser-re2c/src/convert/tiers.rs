@@ -95,7 +95,7 @@ pub fn utterance_to_model(
     // whose `try_from` failed, a `%wor` body that would not parse) was dropped
     // or shortened with nothing recording it, and every cross-tier check then
     // read our own recovery as a fault in the transcript.
-    let mut parse_health = talkbank_model::model::ParseHealthState::Clean;
+    let mut parse_health = talkbank_model::model::ParseHealth::untainted();
     let dep_tiers = u
         .dependent_tiers
         .iter()
@@ -104,18 +104,10 @@ pub fn utterance_to_model(
                 .map(|tier| DependentTierEntry::with_separator(tier, entry.separator))
         })
         .collect();
-    talkbank_model::model::Utterance {
-        preceding_headers: Default::default(),
-        main,
-        dependent_tiers: dep_tiers,
-        alignments: None,
-        alignment_diagnostics: Vec::new(),
-        // Every domain the lowering could not build as written, not just
-        // rejected morphology, which is all this used to say.
-        parse_health,
-        utterance_language: Default::default(),
-        language_metadata: Default::default(),
-    }
+    let mut utterance = talkbank_model::model::Utterance::new(main);
+    utterance.dependent_tiers = dep_tiers;
+    // Admit exactly the recovery state accumulated during this lowering pass.
+    parse_health.finish_utterance(utterance)
 }
 
 /// Convert a parsed dependent tier to model `DependentTier`, recording on
@@ -139,7 +131,7 @@ pub fn dependent_tier_to_model(
     tier: &ast::DependentTierParsed<'_>,
     source: SourceText<'_>,
     errors: &(impl ErrorSink + ?Sized),
-    health: &mut talkbank_model::model::ParseHealthState,
+    health: &mut talkbank_model::model::ParseHealth,
 ) -> Option<talkbank_model::model::DependentTier> {
     use talkbank_model::model::ParseHealthTier;
 

@@ -192,12 +192,14 @@ fn dependent_fragment_diagnostics_remove_only_the_real_wrapper() {
     let errors = errors.into_vec();
     let malformed = errors
         .iter()
-        .find(|e| e.code == talkbank_model::ErrorCode::MorItemEmptyPos)
-        .unwrap();
+        .find(|e| e.code == talkbank_model::ErrorCode::InvalidMorphologyFormat)
+        .expect("the typed MOR item retains E702 recovery");
     assert_eq!(
         malformed.location.span,
         talkbank_model::Span::from_usize(200, 203)
     );
+    // The typed MOR item establishes this domain and exact span. Its recovery
+    // text does not establish a narrower MorItemEmptyPos field diagnosis.
 }
 
 #[test]

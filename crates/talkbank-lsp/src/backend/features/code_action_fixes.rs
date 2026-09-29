@@ -34,10 +34,12 @@ pub(super) fn actions_for_diagnostic(
 
     match code {
         ErrorCode::MissingTerminator => missing_terminator_actions(uri, diagnostic),
-        ErrorCode::UndeclaredSpeaker => doc
-            .and_then(|text| undeclared_speaker_action(uri, diagnostic, text))
-            .into_iter()
-            .collect(),
+        // A diagnostic establishes missing facts, not values for those facts.
+        // Keep the same refusal policy as the shared fix catalog: no role,
+        // participant or language may be constructed from diagnostic prose.
+        ErrorCode::UndeclaredSpeaker
+        | ErrorCode::MissingRequiredHeader
+        | ErrorCode::EmptyLanguagesHeader => Vec::new(),
         ErrorCode::MissingEndHeader => doc
             .map(|text| insert_at_end(uri, text, "@End\n", "Insert '@End' at end of file"))
             .into_iter()
@@ -52,33 +54,11 @@ pub(super) fn actions_for_diagnostic(
             diagnostic,
             "Delete empty utterance",
         )],
-        ErrorCode::MissingRequiredHeader => {
-            if diagnostic.message.contains("Participants") {
-                doc.and_then(|text| {
-                    insert_after_utf8(
-                        uri,
-                        text,
-                        "@Participants:\tCHI Child\n",
-                        "Insert '@Participants:' after @Begin",
-                    )
-                })
-                .into_iter()
-                .collect()
-            } else {
-                Vec::new()
-            }
-        }
         ErrorCode::CommaAfterNonSpokenContent => vec![replace_diagnostic_range(
             uri,
             diagnostic,
             "",
             "Remove comma after non-spoken content",
-        )],
-        ErrorCode::EmptyLanguagesHeader => vec![replace_diagnostic_range(
-            uri,
-            diagnostic,
-            "@Languages:\teng",
-            "Insert language 'eng'",
         )],
         _ => Vec::new(),
     }
@@ -110,32 +90,6 @@ fn missing_terminator_actions(uri: &Url, diagnostic: &Diagnostic) -> Vec<CodeAct
     .collect()
 }
 
-fn undeclared_speaker_action(uri: &Url, diagnostic: &Diagnostic, doc: &str) -> Option<CodeAction> {
-    let speaker = speaker_code_from_message(&diagnostic.message)?;
-    let (line_idx, line_text) = doc
-        .lines()
-        .enumerate()
-        .find(|(_, line)| line.starts_with("@Participants:"))?;
-
-    Some(insert_at(
-        uri,
-        Position {
-            line: line_idx as u32,
-            character: crate::backend::utils::offset_to_position(line_text, line_text.len() as u32)
-                .character,
-        },
-        format!(", {speaker} Participant"),
-        format!("Add '{speaker}' to @Participants"),
-        Some(diagnostic),
-    ))
-}
-
-fn speaker_code_from_message(message: &str) -> Option<&str> {
-    let start = message.find("Speaker '")? + "Speaker '".len();
-    let end = start + message[start..].find('\'')?;
-    Some(&message[start..end])
-}
-
 fn insert_at_end(uri: &Url, doc: &str, text: &str, title: &str) -> CodeAction {
     let insert_text = if doc.ends_with('\n') {
         text.to_string()
@@ -163,24 +117,4 @@ fn insert_at_start(uri: &Url, text: &str, title: &str) -> CodeAction {
         title,
         None,
     )
-}
-
-fn insert_after_utf8(uri: &Url, doc: &str, text: &str, title: &str) -> Option<CodeAction> {
-    let insert_line = doc
-        .lines()
-        .enumerate()
-        .find(|(_, line)| line.starts_with("@UTF8"))
-        .map(|(index, _)| index as u32 + 1)
-        .unwrap_or(0);
-
-    Some(insert_at(
-        uri,
-        Position {
-            line: insert_line,
-            character: 0,
-        },
-        text,
-        title,
-        None,
-    ))
 }

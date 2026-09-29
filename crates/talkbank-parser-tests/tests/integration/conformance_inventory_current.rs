@@ -58,6 +58,21 @@ fn concrete_carriers_do_not_include_generic_source_wrappers() {
 }
 
 #[test]
+fn fallible_extraction_cannot_silently_skip_conformance() {
+    let source = r#"
+        pub fn extract_example(node: ExampleNode<'_>) -> Result<ExampleChildren<'_>, ReconstructionFault> {}
+        pub fn extract_choice(node: tree_sitter::Node<'_>) -> Choice<'_> {}
+    "#;
+    let inventory = generate_inventory_source(
+        source,
+        r#"[{"type":"example","named":true},{"type":"choice","named":true}]"#,
+    )
+    .unwrap();
+    assert!(inventory.contains("extract_example(classify::<ExampleNode>(node)).expect("));
+    assert!(inventory.contains("extract_choice(node).inspect("));
+}
+
+#[test]
 fn conformance_inventory_is_current() {
     let typed_src = std::fs::read_to_string(typed_traversal_path())
         .expect("generated_traversal.rs is readable");

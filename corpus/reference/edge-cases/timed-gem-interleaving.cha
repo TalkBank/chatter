@@ -1,0 +1,19 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|sample|CHI|||||Child|||
+@ID:	eng|sample|MOT|||||Mother|||
+@Media:	timed-gem-interleaving, audio
+@Comment:	Authored control for reconstructing timed speech and bounded gem order from speaker projections.
+@Comment:	Constructs: gem boundaries with timed neighbors, cross-speaker interval overlap, dependent tiers.
+*MOT:	ready . 0_5
+*CHI:	look . 10_20
+@Bg:	play
+*CHI:	here . 50_60
+%com:	inside the section
+*MOT:	yes . 55_65
+@Eg:	play
+*CHI:	done . 90_100
+*MOT:	good . 95_105
+@End

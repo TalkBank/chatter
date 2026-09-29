@@ -12,8 +12,10 @@
 use crate::api::fragment::WrappedFragment;
 use talkbank_model::ParseOutcome;
 use talkbank_model::dependent_tier::DependentTier;
-use talkbank_model::model::{ChatFile, Line};
-use talkbank_model::{ErrorCollector, ErrorSink, SpanShift, TeeErrorSink};
+use talkbank_model::model::Line;
+use talkbank_model::{
+    ErrorCode, ErrorCollector, ErrorSink, ParseError, Severity, Span, SpanShift, TeeErrorSink,
+};
 
 use crate::parser::TreeSitterParser;
 use crate::parser::chat_file_parser::{MINIMAL_CHAT_PREFIX, MINIMAL_CHAT_SUFFIX};
@@ -112,31 +114,10 @@ where
         }
     };
 
-    // Set up dual error handling
-    let tier_sink = ErrorCollector::new();
-    let adjusting_sink = fragment.error_sink(errors);
-    let tee = TeeErrorSink::new(&adjusting_sink, &tier_sink);
-
-    // Parse the wrapper
-    let chat_file = parser.parse_chat_file_streaming(fragment.source(), &tee);
-
-    // Check for errors
-    if !tier_sink.is_empty() {
-        return ParseOutcome::rejected();
+    match CompleteTierFragment::parse(parser, &fragment, errors) {
+        ParseOutcome::Parsed(tier) => tier.project(extractor),
+        ParseOutcome::Rejected => ParseOutcome::Rejected,
     }
-
-    // Extract the dependent tier from the parsed file
-    let Some(tier) = extract_first_dependent_tier(chat_file) else {
-        return ParseOutcome::rejected();
-    };
-
-    // Apply the extractor to get the specific tier type
-    let Some(extracted) = extractor(tier) else {
-        return ParseOutcome::rejected();
-    };
-
-    // Adjust spans from wrapper-relative to document-absolute
-    ParseOutcome::parsed(fragment.rebase(extracted))
 }
 
 /// Parse a generic dependent tier (where input includes the header).
@@ -175,33 +156,10 @@ pub(crate) fn wrapper_parse_generic_tier(
         }
     };
 
-    // Set up dual error handling
-    let tier_sink = ErrorCollector::new();
-    let adjusting_sink = fragment.error_sink(errors);
-    let tee = TeeErrorSink::new(&adjusting_sink, &tier_sink);
-
-    // Parse the wrapper
-    let chat_file = parser.parse_chat_file_streaming(fragment.source(), &tee);
-
-    // Check for errors
-    if !tier_sink.is_empty() {
-        return ParseOutcome::rejected();
+    match CompleteTierFragment::parse(parser, &fragment, errors) {
+        ParseOutcome::Parsed(tier) => tier.project(Some),
+        ParseOutcome::Rejected => ParseOutcome::Rejected,
     }
-
-    // Extract and return the first dependent tier
-    for line in chat_file.lines {
-        if let Line::Utterance(utterance) = line
-            && let Some(tier) = utterance
-                .dependent_tiers
-                .into_iter()
-                .next()
-                .map(|entry| entry.tier)
-        {
-            return ParseOutcome::parsed(fragment.rebase(tier));
-        }
-    }
-
-    ParseOutcome::rejected()
 }
 
 /// Strip at most one trailing line terminator (`\r\n` or `\n`) from a tier
@@ -222,21 +180,70 @@ fn strip_one_trailing_newline(input: &str) -> &str {
     }
 }
 
-/// Extract the first dependent tier from a parsed ChatFile.
-///
-/// Returns the first dependent tier found in the parsed file (there should
-/// only be one since we parse a minimal wrapper with a single tier).
-fn extract_first_dependent_tier(chat_file: ChatFile) -> Option<DependentTier> {
-    for line in chat_file.lines {
-        if let Line::Utterance(utterance) = line {
-            return utterance
-                .dependent_tiers
-                .into_iter()
-                .next()
-                .map(|entry| entry.tier);
+/// The single tier lowered from this wrapper, covering all caller content.
+/// Parsing constructs the source/model association; projection cannot replace it.
+struct CompleteTierFragment<'fragment, 'input> {
+    fragment: &'fragment WrappedFragment<'input>,
+    tier: DependentTier,
+}
+
+impl<'fragment, 'input> CompleteTierFragment<'fragment, 'input> {
+    fn parse(
+        parser: &TreeSitterParser,
+        fragment: &'fragment WrappedFragment<'input>,
+        errors: &impl ErrorSink,
+    ) -> ParseOutcome<Self> {
+        let collected = ErrorCollector::new();
+        let adjusting = fragment.error_sink(errors);
+        let tee = TeeErrorSink::new(&adjusting, &collected);
+        let file = parser.parse_chat_file_streaming(fragment.source(), &tee);
+        if !collected.is_empty() {
+            return ParseOutcome::Rejected;
+        }
+        let mut tiers = file
+            .lines
+            .into_iter()
+            .filter_map(|line| match line {
+                Line::Utterance(utterance) => Some(utterance.dependent_tiers),
+                Line::Header { .. } => None,
+            })
+            .flatten();
+        let Some(entry) = tiers.next() else {
+            return Self::refuse(fragment, &adjusting);
+        };
+        let span = entry.span();
+        if tiers.next().is_some()
+            || fragment
+                .require_complete_tier_input(span.start as usize..span.end as usize)
+                .is_err()
+        {
+            return Self::refuse(fragment, &adjusting);
+        }
+        ParseOutcome::Parsed(Self {
+            fragment,
+            tier: entry.tier,
+        })
+    }
+
+    fn refuse(fragment: &WrappedFragment<'_>, errors: &impl ErrorSink) -> ParseOutcome<Self> {
+        errors.report(ParseError::at_span(
+            ErrorCode::ParseFailed,
+            Severity::Error,
+            Span::from_usize(0, fragment.source().len()),
+            "Expected exactly one dependent tier covering the complete fragment",
+        ));
+        ParseOutcome::Rejected
+    }
+
+    fn project<T: SpanShift>(
+        self,
+        extractor: impl FnOnce(DependentTier) -> Option<T>,
+    ) -> ParseOutcome<T> {
+        match extractor(self.tier) {
+            Some(tier) => ParseOutcome::Parsed(self.fragment.rebase(tier)),
+            None => ParseOutcome::Rejected,
         }
     }
-    None
 }
 
 #[cfg(test)]

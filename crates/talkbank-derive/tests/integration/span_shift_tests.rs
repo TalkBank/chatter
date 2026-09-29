@@ -49,6 +49,51 @@ struct WithSkipped {
     frozen_span: Span,
 }
 
+/// Intentionally does not implement SpanShift: skipped fields are not inputs
+/// to recursive span movement, regardless of whether they contain a span.
+#[derive(Debug, Clone, PartialEq)]
+struct Frozen(Span);
+
+#[derive(Debug, Clone, PartialEq, SpanShift)]
+enum Positioned {
+    Empty,
+    Tuple(Span, #[span_shift(skip)] Frozen),
+    Named {
+        spans: Vec<Option<Span>>,
+        #[span_shift(skip)]
+        frozen: Frozen,
+    },
+}
+
+#[test]
+fn enum_shapes_shift_only_owned_positions_and_preserve_skipped_payloads() {
+    let frozen = Frozen(Span::new(30, 40));
+    let cases = [
+        (Positioned::Empty, Positioned::Empty),
+        (
+            Positioned::Tuple(Span::new(10, 20), frozen.clone()),
+            Positioned::Tuple(Span::new(15, 25), frozen.clone()),
+        ),
+        (
+            Positioned::Named {
+                spans: vec![None, Some(Span::new(2, 4)), Some(Span::new(10, 20))],
+                frozen: frozen.clone(),
+            },
+            Positioned::Named {
+                spans: vec![None, Some(Span::new(2, 4)), Some(Span::new(15, 25))],
+                frozen,
+            },
+        ),
+    ];
+    for (before, expected) in cases {
+        let mut actual = before.clone();
+        actual.shift_spans_after(10, 5);
+        assert_eq!(actual, expected);
+        actual.shift_spans_after(15, -5);
+        assert_eq!(actual, before);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Task 3: SpanShift tests (8 tests)
 // ---------------------------------------------------------------------------

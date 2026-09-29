@@ -10,6 +10,7 @@
 
 use indexmap::IndexMap;
 use smallvec::SmallVec;
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use crate::model::semantic_diff::{
@@ -46,6 +47,48 @@ impl<T: SemanticDiff> SemanticDiff for Option<T> {
 // Vec
 // =============================================================================
 
+/// Sequence storage does not change comparison policy. Borrowed slices bind
+/// element traversal and tail length to the same two containers.
+fn diff_sequence<T: SemanticDiff>(
+    left: &[T],
+    right: &[T],
+    path: &mut SemanticPath,
+    report: &mut SemanticDiffReport,
+    ctx: &mut SemanticDiffContext,
+) {
+    for (idx, (left, right)) in left.iter().zip(right).enumerate() {
+        if report.is_truncated() {
+            return;
+        }
+        path.push_index(idx);
+        left.semantic_diff_into(right, path, report, ctx);
+        path.pop();
+    }
+    if report.is_truncated() {
+        return;
+    }
+    // The ordering selects the shorter sequence's length, which is exactly
+    // the first unmatched index. Equal lengths have no tail to report.
+    let (index, kind, left_value, right_value) = match left.len().cmp(&right.len()) {
+        Ordering::Equal => return,
+        Ordering::Greater => (
+            right.len(),
+            SemanticDiffKind::ExtraKey,
+            format!("item at [{}]", right.len()),
+            "missing".to_owned(),
+        ),
+        Ordering::Less => (
+            left.len(),
+            SemanticDiffKind::MissingKey,
+            "missing".to_owned(),
+            format!("item at [{}]", left.len()),
+        ),
+    };
+    path.push_index(index);
+    report.push_with_context(path, kind, left_value, right_value, ctx);
+    path.pop();
+}
+
 impl<T: SemanticDiff> SemanticDiff for Vec<T> {
     /// Diffs vectors by shared prefix first, then reports extra/missing tail.
     ///
@@ -58,47 +101,7 @@ impl<T: SemanticDiff> SemanticDiff for Vec<T> {
         report: &mut SemanticDiffReport,
         ctx: &mut SemanticDiffContext,
     ) {
-        // First, diff shared elements to find actual type/value differences
-        let shared = self.len().min(other.len());
-        for (idx, (left, right)) in self.iter().zip(other.iter()).enumerate() {
-            if report.is_truncated() {
-                return;
-            }
-            path.push_index(idx);
-            left.semantic_diff_into(right, path, report, ctx);
-            path.pop();
-        }
-
-        // Stop only after an actual additional difference exhausted the report.
-        if report.is_truncated() {
-            return;
-        }
-
-        // Report the unmatched tail even if earlier values differed, provided
-        // the report still has room to inspect another difference.
-        if self.len() != other.len() {
-            // Report what's extra/missing at the divergence point
-            let diverge_idx = shared;
-            path.push_index(diverge_idx);
-            if self.len() > other.len() {
-                report.push_with_context(
-                    path,
-                    SemanticDiffKind::ExtraKey,
-                    format!("item at [{}]", diverge_idx),
-                    "missing",
-                    ctx,
-                );
-            } else {
-                report.push_with_context(
-                    path,
-                    SemanticDiffKind::MissingKey,
-                    "missing",
-                    format!("item at [{}]", diverge_idx),
-                    ctx,
-                );
-            }
-            path.pop();
-        }
+        diff_sequence(self.as_slice(), other.as_slice(), path, report, ctx);
     }
 }
 
@@ -118,45 +121,7 @@ where
         report: &mut SemanticDiffReport,
         ctx: &mut SemanticDiffContext,
     ) {
-        // First, diff shared elements to find actual type/value differences
-        let shared = self.len().min(other.len());
-        for (idx, (left, right)) in self.iter().zip(other.iter()).enumerate() {
-            if report.is_truncated() {
-                return;
-            }
-            path.push_index(idx);
-            left.semantic_diff_into(right, path, report, ctx);
-            path.pop();
-        }
-
-        // Stop only after an actual additional difference exhausted the report.
-        if report.is_truncated() {
-            return;
-        }
-
-        // Report the unmatched tail while traversal is not truncated.
-        if self.len() != other.len() {
-            let diverge_idx = shared;
-            path.push_index(diverge_idx);
-            if self.len() > other.len() {
-                report.push_with_context(
-                    path,
-                    SemanticDiffKind::ExtraKey,
-                    format!("item at [{}]", diverge_idx),
-                    "missing",
-                    ctx,
-                );
-            } else {
-                report.push_with_context(
-                    path,
-                    SemanticDiffKind::MissingKey,
-                    "missing",
-                    format!("item at [{}]", diverge_idx),
-                    ctx,
-                );
-            }
-            path.pop();
-        }
+        diff_sequence(self.as_slice(), other.as_slice(), path, report, ctx);
     }
 }
 

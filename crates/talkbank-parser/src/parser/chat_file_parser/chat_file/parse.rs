@@ -14,7 +14,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use super::ParseProduct;
-use super::helpers::parse_lines_with_old_tree;
+use super::helpers::{parse_lines_with_old_tree, parse_lines_with_source};
 use super::normalize::{headers_enable_ca_mode, normalize_ca_omissions};
 use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
@@ -53,8 +53,10 @@ impl TreeSitterParser {
     ///
     /// - `input`: The full CHAT file source text.
     /// - `old_tree`: An optional previously-parsed tree. When provided, tree-sitter
-    ///   reuses unchanged portions of the CST, making re-parsing after small edits
-    ///   significantly faster.
+    ///   reuses unchanged portions of the CST. The caller must first apply the
+    ///   complete source change through `Tree::edit`; a raw tree cannot prove
+    ///   that this happened. For editor model updates, prefer
+    ///   [`Self::parse_chat_file_revision`], which owns that transition.
     ///
     /// # Returns
     ///
@@ -156,6 +158,9 @@ impl TreeSitterParser {
     ///
     /// When an old tree is provided, tree-sitter can reuse unchanged portions
     /// of the parse tree, making re-parsing after small edits significantly faster.
+    /// The caller must apply the complete source change with `Tree::edit` first.
+    /// Prefer [`Self::parse_chat_file_revision`] when the parser should own the
+    /// source/tree relationship rather than trust an independently edited tree.
     ///
     /// Returns `(ParseResult<ChatFile>, Option<Tree>)` where the Tree can be
     /// cached and passed to future calls for incremental parsing.
@@ -218,9 +223,10 @@ impl TreeSitterParser {
     /// incremental reuse. Always returns a `(ChatFile, Option<Tree>)`, errors are
     /// streamed to the sink rather than causing an `Err` return.
     ///
-    /// This is the preferred method for LSP full-fallback parsing: it produces a
-    /// ChatFile even when errors exist, enabling features (hover, completion) and
-    /// preserving a baseline for incremental diffing on the next keystroke.
+    /// This raw-tree compatibility method requires the caller to apply every
+    /// intervening source edit to `old_tree`. The LSP instead uses
+    /// [`Self::parse_chat_file_revision`]: its opaque revision owns both source
+    /// and CST, derives the edit, and retains recovered models for editor use.
     #[tracing::instrument(skip(self, input, old_tree, errors), fields(input_size = input.len(), has_old_tree = old_tree.is_some()))]
     pub fn parse_chat_file_streaming_incremental(
         &self,
@@ -228,13 +234,38 @@ impl TreeSitterParser {
         old_tree: Option<&Tree>,
         errors: &impl ErrorSink,
     ) -> (ChatFile, Option<Tree>) {
+        let (file, parsed) = self.parse_chat_file_bound_incremental(input, old_tree, errors);
+        (file, parsed.map(ParsedSource::into_tree))
+    }
+
+    /// Parse once and retain the exact source-bound CST used to lower the model.
+    ///
+    /// This is a recovery-capable boundary, not a validity certificate. Callers
+    /// must inspect diagnostics and validate the model before transformation.
+    /// Source-bound generated traversal can locate fields without reparsing or
+    /// interpreting raw CHAT text. No independently supplied tree is accepted.
+    pub fn parse_chat_file_with_source<'source>(
+        &self,
+        input: &'source str,
+        errors: &impl ErrorSink,
+    ) -> (ChatFile, Option<ParsedSource<'source>>) {
+        talkbank_model::validation::report_control_characters(input, errors);
+        self.parse_chat_file_bound_incremental(input, None, errors)
+    }
+
+    fn parse_chat_file_bound_incremental<'source>(
+        &self,
+        input: &'source str,
+        old_tree: Option<&Tree>,
+        errors: &impl ErrorSink,
+    ) -> (ChatFile, Option<ParsedSource<'source>>) {
         debug!(
             "Parsing CHAT file streaming-incremental ({} bytes, old_tree: {})",
             input.len(),
             old_tree.is_some()
         );
 
-        let (mut lines, new_tree) = parse_lines_with_old_tree(self, input, old_tree, errors);
+        let (mut lines, new_tree) = parse_lines_with_source(self, input, old_tree, errors);
 
         let all_headers = collect_headers(&lines);
 

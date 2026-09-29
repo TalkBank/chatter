@@ -269,7 +269,7 @@ impl ChatFile {
         let mut errors = Vec::new();
 
         for utt in self.utterances() {
-            let health = utt.parse_health;
+            let health = utt.parse_health();
 
             // Main → %mor alignment
             if health.can_align_main_to_mor()
@@ -370,12 +370,15 @@ impl ChatFile {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use talkbank_model::{ChatFile, ErrorCollector, ErrorSink};
+    /// ```
+    /// use talkbank_model::{ChatFile, ErrorCollector};
+    /// use talkbank_model::model::{FileStem, TranscriptName};
+    /// # fn inspect(chat_file: &ChatFile) {
     ///
     /// let sink = ErrorCollector::new();
-    /// chat_file.validate(&sink, Some("myfile"));
+    /// chat_file.validate(&sink, TranscriptName::Named(FileStem::from_stem("myfile")));
     /// let errors = sink.into_vec();
+    /// # }
     /// ```
     #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
     pub fn validate(&self, errors: &impl crate::ErrorSink, name: TranscriptName<'_>) {
@@ -426,15 +429,18 @@ impl ChatFile {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
     /// use talkbank_model::{ChatFile, ErrorCollector, RuleSelection};
+    /// use talkbank_model::model::TranscriptName;
+    /// # fn inspect(chat_file: &ChatFile) {
     ///
     /// let errors = ErrorCollector::new();
     /// chat_file.validate_with_rules(
     ///     RuleSelection::new().with_strict_linkers(),
     ///     &errors,
-    ///     Some("myfile"),
+    ///     TranscriptName::Anonymous,
     /// );
+    /// # }
     /// ```
     #[tracing::instrument(skip(self, errors), fields(lines = self.lines.len()))]
     pub fn validate_with_rules(

@@ -34,7 +34,7 @@ fn extract_edit(actions: &[CodeActionOrCommand], uri: &Url) -> TextEdit {
 }
 
 #[test]
-fn test_fix_undeclared_speaker_adds_to_participants() {
+fn test_undeclared_speaker_requires_explicit_participant_facts() {
     let uri = Url::parse("file:///test.cha").unwrap();
     let doc = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI José Child\n*CHI:\thello .\n*FOO:\thi .\n@End\n";
     let diag = make_diagnostic(
@@ -45,11 +45,7 @@ fn test_fix_undeclared_speaker_adds_to_participants() {
         4,
     );
 
-    let actions = code_action(uri.clone(), vec![diag], Some(doc)).unwrap();
-    let edit = extract_edit(&actions, &uri);
-    assert_eq!(edit.new_text, ", FOO Participant");
-    assert_eq!(edit.range.start.line, 3);
-    assert_eq!(edit.range.start.character, 29);
+    assert!(code_action(uri, vec![diag], Some(doc)).is_none());
 }
 
 #[test]
@@ -105,13 +101,11 @@ fn test_fix_empty_utterance_deletes_line() {
 }
 
 #[test]
-fn test_fix_empty_languages_header() {
+fn test_empty_languages_requires_explicit_language_facts() {
     let uri = Url::parse("file:///test.cha").unwrap();
     let diag = make_diagnostic("E507", "Empty @Languages header", 3, 0, 11);
 
-    let actions = code_action(uri.clone(), vec![diag], None).unwrap();
-    let edit = extract_edit(&actions, &uri);
-    assert!(edit.new_text.contains("eng"));
+    assert!(code_action(uri, vec![diag], None).is_none());
 }
 
 #[test]
@@ -143,14 +137,12 @@ fn test_fix_comma_after_non_spoken_removes_it() {
 }
 
 #[test]
-fn test_fix_e504_participants_only() {
+fn test_missing_participants_requires_explicit_participant_facts() {
     let uri = Url::parse("file:///test.cha").unwrap();
     let doc = "@UTF8\n@Begin\n*CHI:\thello .\n@End\n";
     let diag = make_diagnostic("E504", "Missing required header: @Participants", 0, 0, 0);
 
-    let actions = code_action(uri.clone(), vec![diag], Some(doc)).unwrap();
-    let edit = extract_edit(&actions, &uri);
-    assert!(edit.new_text.contains("@Participants:"));
+    assert!(code_action(uri, vec![diag], Some(doc)).is_none());
 }
 
 #[test]

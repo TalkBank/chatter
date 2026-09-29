@@ -1,7 +1,7 @@
 {
   "name": "chatter-desktop",
   "private": true,
-  "version": "0.26.0",
+  "version": "0.27.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,10 +12,10 @@
     "test:unit": "node ./scripts/run-unit-tests.mjs"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-dialog": "^2.7.3",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.12.0",
+    "@tauri-apps/api": "^2.12.0",
+    "@tauri-apps/plugin-dialog": "^2.8.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -29,7 +29,7 @@
     "@wdio/mocha-framework": "^9.32.0",
     "@wdio/spec-reporter": "^9.32.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.1"
   },
   "overrides": {
     "serialize-javascript": ">=7.0.5"

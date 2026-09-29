@@ -238,7 +238,7 @@ impl<'a> SourceBoundDonorSelection<'a> {
     }
 
     /// Explicitly permit unresolved cross-source frontiers to serialize
-    /// reference-first with visible review comments and structured decisions.
+    /// reference-first with structured review records, never inserted comments.
     /// Known constraints, validity, source order and speech retention still apply.
     pub fn with_flagged_draft_order(mut self, reference: &'a ChatFile) -> Self {
         self.draft_reference = Some(reference);

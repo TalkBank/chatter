@@ -1,0 +1,20 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|sample|CHI|||||Child|||
+@ID:	eng|sample|MOT|||||Mother|||
+@Media:	timed-gem-pair-order, audio
+@Comment:	Authored control for ordering two independently retained paired gems from observed timing brackets.
+@Comment:	Constructs: disjoint labeled gems, cross-speaker interval overlap, timed section neighbors.
+*MOT:	here we go . 0_65
+*CHI:	look . 10_20
+@Bg:	child
+*CHI:	here . 30_40
+@Eg:	child
+*CHI:	done . 50_60
+@Bg:	adult
+*MOT:	yes . 70_80
+@Eg:	adult
+*MOT:	good . 90_100
+@End

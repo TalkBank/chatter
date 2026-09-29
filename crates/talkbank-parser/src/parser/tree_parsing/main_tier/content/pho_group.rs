@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 
 use crate::error::ErrorSink;
-use crate::generated_traversal::{MainPhoGroupNode, extract_main_pho_group};
+use crate::generated_traversal::{AsRawNode, MainPhoGroupNode, SourceBound};
 use crate::model::UtteranceContent;
 use talkbank_model::ParseOutcome;
 
@@ -21,12 +21,21 @@ use crate::parser::tree_parsing::parser_helpers::expect_delimiter;
 /// are structure, the contents go through the one shared walker, and a
 /// group with no items is rejected. Phonological groups carry no
 /// annotations.
-pub(crate) fn parse_pho_group_content(
-    typed: MainPhoGroupNode<'_>,
-    source: &str,
+pub(crate) fn parse_pho_group_content<'tree>(
+    typed: SourceBound<'tree, '_, MainPhoGroupNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let children = extract_main_pho_group(typed);
+    let source = typed.source();
+    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| typed.extract_admitted(grammar)),
+        typed.raw_node(),
+        source,
+        errors,
+    ) else {
+        return ParseOutcome::Rejected;
+    };
+    let children = associated.children();
 
     expect_delimiter(children.child_0.slot(), |bad| {
         report_tree_shape(
@@ -39,7 +48,7 @@ pub(crate) fn parse_pho_group_content(
             errors,
         );
     });
-    let group_items = match contents_of(children.child_1.slot(), |bad| {
+    let group_items = match contents_of(associated.field_child_1().slot(), errors, |bad| {
         report_tree_shape(
             bad,
             format!(
@@ -50,7 +59,7 @@ pub(crate) fn parse_pho_group_content(
             errors,
         );
     }) {
-        Some(contents) => parse_group_contents(&contents, source, errors),
+        Some(contents) => parse_group_contents(&contents, errors),
         None => Vec::new(),
     };
     expect_delimiter(children.child_2.slot(), |bad| {
@@ -64,7 +73,7 @@ pub(crate) fn parse_pho_group_content(
             errors,
         );
     });
-    surface_main_tier_sink(&children, source, errors);
+    surface_main_tier_sink(children, source, errors);
 
     if group_items.is_empty() {
         return ParseOutcome::rejected();

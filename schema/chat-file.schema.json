@@ -458,7 +458,7 @@
           ]
         },
         "raw_text": {
-          "description": "Raw text exactly as it appeared in the input, including all markers.",
+          "description": "Current CHAT spelling derived from structure, including all markers.",
           "type": "string"
         },
         "scoped_annotations": {
@@ -2209,7 +2209,7 @@
         },
         {
           "const": "E208",
-          "description": "Replacement annotation is empty.",
+          "description": "Replacement annotation is empty (deprecated: rejected during parsing).",
           "type": "string"
         },
         {
@@ -2394,17 +2394,17 @@
         },
         {
           "const": "E311",
-          "description": "Unexpected node type in the parse tree.\n\nNo longer planned as of 2026-08-11: an unclosed replacement bracket\n(`*CHI:\\t[: unclosed [* error] .`) reaches it and reports \"Unclosed\nreplacement bracket\". Its spec had stayed `not_implemented` on the\nstrength of a note saying tree-sitter recovery made it unreachable\nbecause E316 fired first, which the parser had since outgrown.",
+          "description": "Retired raw-text unclosed-replacement classification. Malformed source remains rejected by ordinary parser recovery; this code has no live producer.",
           "type": "string"
         },
         {
           "const": "E312",
-          "description": "Unclosed bracket in annotation or word content.",
+          "description": "Retired raw-text unclosed-bracket inference. Structural recovery still rejects malformed source.",
           "type": "string"
         },
         {
           "const": "E313",
-          "description": "Unclosed parenthesis in annotation or word content.",
+          "description": "Retired raw-text unclosed-parenthesis inference. Structural recovery still rejects malformed source.",
           "type": "string"
         },
         {
@@ -3229,12 +3229,12 @@
         },
         {
           "const": "E759",
-          "description": "Utterance content begins with a postfix annotation (retrace,\noverlap marker, replacement, or quotation code): the code scopes\nover PRECEDING material, and there is none, so the parse is\ngenuinely broken and the error analysis names it instead of\nfalling through to the E316 catch-all. Matches CLAN CHECK\nerror 52 (\"Item '%s' must be preceded by text.\").",
+          "description": "Postfix annotation without preceding material. The experimental re2c backend emits this dedicated diagnostic; tree-sitter rejects the construct through structural recovery (E375 or E316).",
           "type": "string"
         },
         {
           "const": "E760",
-          "description": "`%mor` item beginning with the `|` separator (`|we`): the\npart-of-speech field is empty, which is never meaningful %mor\ncontent. Modern reading of CLAN CHECK error 11 (\"Symbol is not\ndeclared in the depfile.\"): the invariant is a non-empty symbol\nbefore the pipe, not the legacy depfile mechanism.",
+          "description": "Morphology item with an empty part-of-speech field. The experimental re2c backend emits this dedicated diagnostic; tree-sitter reports morphology recovery (E702). External depfile membership is not a CHAT validity rule.",
           "type": "string"
         },
         {
@@ -4927,7 +4927,7 @@
       "description": "Result of aligning main tier words to %mor tier morphological items.",
       "properties": {
         "errors": {
-          "description": "Errors produced while checking `%mor` alignment invariants.\n\nIncludes count mismatches, terminator mismatches, and terminator\npresence/absence inconsistencies.",
+          "description": "Errors produced while checking `%mor` alignment invariants.\n\nIncludes count mismatches and terminator value mismatches.",
           "items": {
             "$ref": "#/$defs/ParseError"
           },
@@ -5604,11 +5604,11 @@
       "type": "array"
     },
     "Replacement": {
-      "description": "Replacement specification indicating the intended word(s).\n\nA replacement shows what should have been said instead of what was actually uttered.\nIn CHAT format, this is written as `[: intended_word]` after the actual word.\n\n# Structure\n\n- Can contain one or more words (though single word is most common)\n- Must be non-empty (validated during parsing)\n- Words in replacement follow normal word structure (can have form types, etc.)\n\n# Common Usage\n\nReplacements are typically used for:\n- **Phonological errors**: Sound substitutions or mispronunciations\n- **Morphological errors**: Incorrect inflections (e.g., \"goed\" → \"went\")\n- **Lexical errors**: Wrong word selection\n- **Target forms**: What the child was attempting to say\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n\n# Examples\n\n```\nuse talkbank_model::model::{Replacement, Word};\n\n// Single word replacement\nlet replacement = Replacement::from_word(\n    Word::simple(\"dog\")\n);\n\n// Multi-word replacement\nlet replacement = Replacement::new(vec![\n    Word::simple(\"went\"),\n    Word::simple(\"home\"),\n]);\n```",
+      "description": "Replacement specification indicating the intended word(s).\n\nA replacement shows what should have been said instead of what was actually uttered.\nIn CHAT format, this is written as `[: intended_word]` after the actual word.\n\n# Structure\n\n- Can contain one or more words (though single word is most common)\n- Must be non-empty (validated during parsing)\n- Words in replacement follow normal word structure (can have form types, etc.)\n\n# Common Usage\n\nReplacements are typically used for:\n- **Phonological errors**: Sound substitutions or mispronunciations\n- **Morphological errors**: Incorrect inflections (e.g., \"goed\" → \"went\")\n- **Lexical errors**: Wrong word selection\n- **Target forms**: What the child was attempting to say\n\n# CHAT Manual Reference\n\n- [Replacement Scope](https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope)\n\n# Examples\n\n```\nuse talkbank_model::model::{Replacement, Word};\n\n// Single word replacement\nlet replacement = Replacement::from_word(\n    Word::simple(\"dog\")\n);\n\n// Multi-word replacement\nlet replacement = Replacement::new(talkbank_model::model::annotation::ReplacementWords::new(vec![\n    Word::simple(\"went\"),\n    Word::simple(\"home\"),\n]).expect(\"nonempty words\"));\n```",
       "properties": {
         "words": {
           "$ref": "#/$defs/ReplacementWords",
-          "description": "The intended word(s).\n\nWhat should have been said instead of the actual utterance.\nMust contain at least one word (validated during parsing)."
+          "description": "The intended word(s).\n\nWhat should have been said instead of the actual utterance.\nNonempty by construction and JSON admission."
         }
       },
       "required": [
@@ -5621,6 +5621,7 @@
       "items": {
         "$ref": "#/$defs/Word"
       },
+      "minItems": 1,
       "type": "array"
     },
     "Retrace": {
@@ -7215,7 +7216,7 @@
       ]
     },
     "WorTier": {
-      "description": "Flat %wor tier: a list of `WorItem`s (words and separators) with a terminator.\n\nWords carry `inline_bullet` set to a `Bullet` if an inline bullet followed\nthem in the source, or `None` if not. `%wor` has no tier-level bullet:\ntiming belongs to individual word entries.\nSeparators are always untimed and not counted for alignment.\n\nThis model is intentionally simple. Unlike the main tier, %wor tiers\ndo not contain groups, annotations, events, or nested structures.\nUse `words()` to iterate only over `Word` items for alignment purposes.\n\n# Word Text Is Corroboration, Not Authority\n\nGeneration remains one-way:\n```text\nMain tier AST\n  ↓\ngenerate_wor_tier() copies {cleaned_text, inline_bullet}\n  ↓\nWorTier AST\n  ↓\nwrite_chat() serializes to CHAT format\n  ↓\n%wor: word 1000_1200 another 1200_1500 .\n      ^^^^ canonical display token\n           ^^^^^^^^^^^ REAL DATA (timing)\n```\n\nWhen we parse a CHAT file with %wor tiers back:\n1. Parser builds a `WorTier` AST and retains its display tokens\n2. Timing consumers bind the tier to a typed main-tier projection\n3. Count drift prevents positional comparison without invalidating CHAT\n4. Canonical token drift prevents positional timing recovery\n5. Only corroborated slots expose timing from `inline_bullet`\n\n**What this means**:\n- Main-tier words remain the only lexical authority\n- `%wor` text can refuse reuse but cannot supply replacement lexical data\n- Current `cleaned_text` output is a named canonical convention\n- Timing itself comes only from `inline_bullet`\n\nSee: `book/src/architecture/wor-timing.md` for comprehensive analysis.\n\n# References\n\n- [Word tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)\n- [Media bullets](https://talkbank.org/0info/manuals/CHAT.html#Bullets)",
+      "description": "Flat %wor tier: a list of `WorItem`s (words and separators) with a terminator.\n\nWords carry `inline_bullet` set to a `Bullet` if an inline bullet followed\nthem in the source, or `None` if not. `%wor` has no tier-level bullet:\ntiming belongs to individual word entries.\nSeparators are always untimed and not counted for alignment.\n\nThis model is intentionally simple. Unlike the main tier, %wor tiers\ndo not contain groups, annotations, events, or nested structures.\nUse `words()` to iterate only over `Word` items for alignment purposes.\n\n# Word Text Is Corroboration, Not Authority\n\nGeneration remains one-way:\n```text\nMain tier AST\n  ↓\ngenerate_wor_tier() copies {cleaned_text, inline_bullet}\n  ↓\nWorTier AST\n  ↓\nwrite_chat() serializes to CHAT format\n  ↓\n%wor: word 1000_1200 another 1200_1500 .\n      ^^^^ canonical display token\n           ^^^^^^^^^^^ REAL DATA (timing)\n```\n\nWhen we parse a CHAT file with %wor tiers back:\n1. Parser builds a `WorTier` AST and retains its display tokens\n2. Timing consumers bind the tier to a typed main-tier projection\n3. Count drift prevents positional comparison without invalidating CHAT\n4. Canonical token drift prevents positional timing recovery\n5. Only corroborated slots expose timing from `inline_bullet`\n\n**What this means**:\n- Main-tier words remain the only lexical authority\n- `%wor` text can refuse reuse but cannot supply replacement lexical data\n- Newly generated tiers use the named `cleaned_text` convention\n- Serialization preserves parsed word structure; it does not regenerate it\n- Timing itself comes only from `inline_bullet`\n\nSee: `book/src/architecture/wor-timing.md` for comprehensive analysis.\n\n# References\n\n- [Word tier](https://talkbank.org/0info/manuals/CHAT.html#Word_Tier)\n- [Media bullets](https://talkbank.org/0info/manuals/CHAT.html#Bullets)",
       "properties": {
         "items": {
           "description": "Flat list of items: words with timing and untimed tag-marker separators.",
@@ -7367,7 +7368,7 @@
           ]
         },
         "raw_text": {
-          "description": "Raw text exactly as it appeared in the input, including all markers.",
+          "description": "Current CHAT spelling derived from structure, including all markers.",
           "type": "string"
         },
         "untranscribed": {

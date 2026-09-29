@@ -83,7 +83,8 @@ fn full_document_enumerates_clean_line_repeat() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let children = extract_full_document(classify::<FullDocumentNode>(full_doc));
+    let children = extract_full_document(classify::<FullDocumentNode>(full_doc))
+        .expect("producer reconstruction");
 
     // begin_header (production index 2) and end_header (index 4) anchors must
     // classify as Present: before the fix the swallowed repeat misaligned them.
@@ -137,7 +138,8 @@ fn full_document_repeat_captures_error_line() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let children = extract_full_document(classify::<FullDocumentNode>(full_doc));
+    let children = extract_full_document(classify::<FullDocumentNode>(full_doc))
+        .expect("producer reconstruction");
 
     // The line repeat must contain at least one ERROR slot (the unparsable
     // bare `*CHI` line) AND at least one Present `line` slot (the

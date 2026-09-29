@@ -4,7 +4,7 @@
 //! optional `linkers`, the optional `langcode`, the required `contents`, and the
 //! required `utterance_end` as typed slots. This UNIFIES what used to be a
 //! separate body walk (linkers / langcode / contents) and a separate end re-walk
-//! (terminator / postcodes / bullet) into a single pass over [`TierBodyChildren`].
+//! (terminator / postcodes / bullet) into a single pass over [`AdmittedTierBodyChildren`].
 //! Each slot is matched EXHAUSTIVELY over [`NodeSlot`] so recovery nodes are
 //! handled explicitly rather than silently dropped, and the recovery diagnostics
 //! ("Malformed language code", "Missing terminator in tier_body", the tier-body
@@ -24,7 +24,8 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, KindSlotValue, NoChild, NodeSlot, SlotView, TierBodyChildren,
+    AdmittedTierBodyChildren, AsRawNode, NoChild, NodeSlot, SlotView, SourceBound, SourceSlotView,
+    TierBodyNode,
 };
 
 use super::super::super::content::{
@@ -37,30 +38,32 @@ use super::{TierBodyData, report_missing_child};
 
 /// Parse the typed `tier_body` slots into the unified [`TierBodyData`].
 ///
-/// `body` is the result of `extract_tier_body`: `linkers` (optional),
+/// The source-bound node owns the extraction, carrier coordinates, and text.
+/// Its children contain `linkers` (optional),
 /// `language_code` (the optional NESTED `[langcode, whitespaces]` group),
 /// `content_2` (the required `contents` block; field accessor `content()`),
 /// and `ending` (the required `utterance_end` block). The valid path emits no
 /// diagnostics; the remaining slot states reproduce the prior recovery behavior.
-pub(super) fn parse_tier_body(
-    body: &TierBodyChildren,
-    carrier: std::ops::Range<usize>,
-    source: &str,
+pub(super) fn parse_tier_body<'tree>(
+    typed: SourceBound<'tree, '_, TierBodyNode<'tree>>,
     original_input: &str,
     errors: &impl ErrorSink,
-) -> TierBodyData {
+) -> Result<TierBodyData, crate::CstFailure> {
+    let carrier = typed.raw_node().byte_range();
+    let source = typed.source();
+    let associated = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    let body = associated.children();
     // Linkers (optional). The slot is `Positioned<Option<NodeSlot<LinkersNode>>>`
     // (shape UNCHANGED from OLD: `linkers` is a single-symbol optional, no
     // interstitial whitespace to widen it into a group). Exhaustive over the
-    // outer `Option` and the inner 5-state `NodeSlot`: only `Present` contributes
+    // outer `Option` and the admitted inner slot: only `Present` contributes
     // (decoded by the shared linker parser); every other state maps to an empty
     // linker list, matching the pre-migration absent-linkers behavior with no new
     // diagnostic.
     let linkers = match body.linkers.slot().as_ref().map(NodeSlot::view) {
-        Some(SlotView::Present(linkers_node)) => parse_linkers(*linkers_node, source, errors),
-        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => {
-            Vec::new()
-        }
+        Some(SlotView::Present(linkers_node)) => parse_linkers(*linkers_node, source, errors)?,
+        Some(SlotView::Error(_)) | None => Vec::new(),
+        Some(SlotView::Missing(never)) => match never {},
     };
 
     // Optional language-switch token (the `[- code]` precode) plus its source
@@ -70,56 +73,42 @@ pub(super) fn parse_tier_body(
         span: language_code_span,
     } = parse_optional_langcode(body, source, errors);
 
-    // Content: the `contents` block. `Present` carries a typed `ContentsNode`;
-    // `Missing` retains that same typed identity as a placeholder
-    // (a MISSING node is childless, so the walk yields an empty vec), matching
-    // the old behavior of running the contents walk over whatever node sat at
-    // this position. The contents internals are migrated separately (this
-    // cluster's `contents.rs`, below).
-    let content = match body.content_2.slot().known_or_placeholder() {
-        KindSlotValue::Present(contents) | KindSlotValue::Placeholder(contents) => {
-            parse_main_tier_contents(contents, source, errors)
-        }
-        // Unreachable on valid input: a required slot recovers as Present/MISSING,
-        // never as an ERROR or a wrong kind. Surface the node (the whole-tree
+    // The admitted producer excludes Missing for the contents nonterminal,
+    // not ERROR, absence or failures reading its source-associated range.
+    let content = match associated.field_content_2().slot().view() {
+        SourceSlotView::Present(contents) => parse_main_tier_contents(contents.read()?, errors)?,
+        // Invalid input can leave ERROR at this position. Surface the node (the whole-tree
         // backstop also covers ERROR nodes) and yield empty content rather than
         // fabricating model values.
-        KindSlotValue::Error(node) => {
+        SourceSlotView::Error(node) => {
             errors.report(classify_main_tier_recovery(
-                node,
+                node.raw_node(),
                 source,
                 MainTierRegion::Body,
             ));
             Vec::new()
         }
-        KindSlotValue::Absent(NoChild) => Vec::new(),
+        SourceSlotView::Absent(NoChild) => Vec::new(),
+        SourceSlotView::Missing(never) => match never {},
     };
 
     // Ending: the `utterance_end` block (terminator, postcodes, trailing bullet).
-    // `Present`/`Missing` both descend through the visitor-driven
-    // `parse_utterance_end` decode (which itself calls `extract_utterance_end`
-    // and matches its five slots exhaustively), exactly as the old re-walk did
-    // when it found a (possibly MISSING) `utterance_end` child inside
-    // `tier_body`. A MISSING (childless) `utterance_end` yields no terminator
-    // and no error; the `MissingTerminator` (E305) diagnostic comes from
-    // validation, not here.
+    // Its own Missing state is producer-impossible; nested terminator recovery
+    // remains the responsibility of the ending parser and validation.
     let UtteranceEndTail {
         terminator,
         postcodes,
         bullet,
-    } = match body.ending.slot().known_or_placeholder() {
-        KindSlotValue::Present(ending) | KindSlotValue::Placeholder(ending) => {
-            parse_utterance_end(ending, source, errors)
-        }
-        // A stray ERROR node landed at the `utterance_end` slot position, or a
-        // MISSING placeholder of a kind `utterance_end` does not name. The
+    } = match associated.field_ending().slot().view() {
+        SourceSlotView::Present(ending) => parse_utterance_end(ending.read()?, errors)?,
+        // A stray ERROR node landed at the `utterance_end` slot position. The
         // previous tier-body walk surfaced such an ERROR via the shared
         // word-error analyzer (and then re-found the real `utterance_end`); route
         // it to the same analyzer here. No terminator is recovered; the whole-tree
         // backstop covers the surviving ERROR / MISSING nodes. Malformed-only path.
-        KindSlotValue::Error(error_node) => {
+        SourceSlotView::Error(error_node) => {
             errors.report(classify_main_tier_recovery(
-                error_node,
+                error_node.raw_node(),
                 source,
                 MainTierRegion::Body,
             ));
@@ -127,12 +116,11 @@ pub(super) fn parse_tier_body(
         }
         // No usable `utterance_end` at this position: the old end-parser reported
         // `MissingTerminator` "in tier_body" when no `utterance_end` child was
-        // found inside `tier_body`. Unreachable on valid input (the slot recovers
-        // as Present/MISSING): confirmed empirically (see the B3 report) for a
-        // terminator-less-but-otherwise-well-formed line, which still yields a
+        // found inside `tier_body`. A retained observation for a
+        // terminator-less-but-otherwise-well-formed line still yields a
         // `Present` `utterance_end` (its OWN inner terminator slot is merely
         // absent) rather than reaching this arm.
-        KindSlotValue::Absent(NoChild) => {
+        SourceSlotView::Absent(NoChild) => {
             report_missing_child(
                 carrier.clone(),
                 original_input,
@@ -142,6 +130,7 @@ pub(super) fn parse_tier_body(
             );
             UtteranceEndTail::default()
         }
+        SourceSlotView::Missing(never) => match never {},
     };
 
     // Surface the carrier's own `unexpected` sink (R2).
@@ -166,7 +155,7 @@ pub(super) fn parse_tier_body(
     // sink asks the classifier that matches the REGION.
     surface_main_tier_sink(body, source, errors);
 
-    TierBodyData {
+    Ok(TierBodyData {
         linkers,
         language_code,
         language_code_span,
@@ -174,7 +163,7 @@ pub(super) fn parse_tier_body(
         terminator,
         postcodes,
         bullet,
-    }
+    })
 }
 
 /// The outcome of decoding a tier's optional `[- code]` precode: the parsed
@@ -203,13 +192,13 @@ struct ParsedLangcode {
 /// level, map to no language code and no diagnostic, matching the
 /// pre-migration absent-langcode behavior.
 fn parse_optional_langcode(
-    body: &TierBodyChildren,
+    body: &AdmittedTierBodyChildren,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParsedLangcode {
     let group = match body.language_code.slot().as_ref().map(NodeSlot::view) {
         Some(SlotView::Present(group)) => group,
-        Some(SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild)) | None => {
+        Some(SlotView::Missing(_) | SlotView::Error(_)) | None => {
             return ParsedLangcode {
                 code: None,
                 span: None,
@@ -241,9 +230,20 @@ fn parse_optional_langcode(
     // String round-trip). Anything else falls through to the "Malformed
     // language code" diagnostic and no code, byte-identical to the prior
     // flag-then-check.
-    if let Ok(raw) = node.utf8_text(source.as_bytes())
-        && let Some(lc) = crate::tokens::parse_langcode_token(raw)
-    {
+    let talkbank_model::ParseOutcome::Parsed(raw) =
+        crate::parser::tree_parsing::parser_helpers::extract_utf8_text(
+            node,
+            source,
+            errors,
+            "language precode",
+        )
+    else {
+        return ParsedLangcode {
+            code: None,
+            span: Some(span),
+        };
+    };
+    if let Some(lc) = crate::tokens::parse_langcode_token(raw) {
         return ParsedLangcode {
             code: Some(lc),
             span: Some(span),

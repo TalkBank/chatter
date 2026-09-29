@@ -18,7 +18,7 @@
 
 use talkbank_derive::SemanticEq as DeriveSemanticEq;
 use talkbank_model::Span;
-use talkbank_model::model::SemanticEq;
+use talkbank_model::model::{SemanticDiff, SemanticEq};
 
 // ---------------------------------------------------------------------------
 // Test types
@@ -52,14 +52,17 @@ struct AllSkipped {
 
 /// Enum with unit, unnamed, and named variants.
 ///
-/// `Multiple` is constructed by no test today, but it covers the
-/// "multi-field unnamed variant" shape that the derive must handle without
-/// regressing, keep it as a derive-input shape, not a constructed value.
+/// The comparison matrix exercises every shape, including skipped metadata.
 #[derive(Debug, Clone, DeriveSemanticEq)]
 #[allow(dead_code)]
 enum Resolution {
     Single(String),
     Multiple(String, String),
+    Named {
+        value: String,
+        #[semantic_eq(skip)]
+        span: Span,
+    },
     Unknown,
 }
 
@@ -87,6 +90,98 @@ enum Color {
     Red,
     Green,
     Blue,
+}
+
+/// The two generated implementations must agree with an independent semantic
+/// partition, not merely agree with each other on a potentially wrong result.
+#[test]
+fn generated_equality_and_diff_agree_across_all_enum_shapes() {
+    let values = [
+        (Resolution::Single("a".into()), 0),
+        (Resolution::Single("b".into()), 1),
+        (Resolution::Multiple("a".into(), "b".into()), 2),
+        (Resolution::Multiple("a".into(), "c".into()), 3),
+        (Resolution::Unknown, 4),
+        (
+            Resolution::Named {
+                value: "a".into(),
+                span: Span::new(10, 12),
+            },
+            5,
+        ),
+        (
+            Resolution::Named {
+                value: "a".into(),
+                span: Span::new(20, 22),
+            },
+            5,
+        ),
+        (
+            Resolution::Named {
+                value: "b".into(),
+                span: Span::new(30, 32),
+            },
+            6,
+        ),
+    ];
+    for (left, left_key) in &values {
+        for (right, right_key) in &values {
+            let equal = left_key == right_key;
+            assert_eq!(left.semantic_eq(right), equal, "{left:?} / {right:?}");
+            let report = left.semantic_diff(right);
+            assert_eq!(report.is_empty(), equal, "{left:?} / {right:?}: {report}");
+            assert!(!report.is_truncated());
+        }
+    }
+    let report = values[5].0.semantic_diff(&values[7].0);
+    assert_eq!(report.differences().len(), 1);
+    assert_eq!(report.differences()[0].path, "value");
+    assert_eq!(report.differences()[0].span, Some(Span::new(10, 12)));
+}
+
+#[test]
+fn generated_struct_diffs_preserve_field_paths_and_skipped_metadata() {
+    let left = Word {
+        text: "one".into(),
+        category: 1,
+        span: Span::new(10, 13),
+    };
+    let right = Word {
+        text: "two".into(),
+        category: 2,
+        span: Span::new(20, 23),
+    };
+    let report = left.semantic_diff(&right);
+    let paths: Vec<_> = report
+        .differences()
+        .iter()
+        .map(|diff| diff.path.as_str())
+        .collect();
+    assert_eq!(paths, ["text", "category"]);
+    assert!(
+        report
+            .differences()
+            .iter()
+            .all(|diff| diff.span == Some(left.span))
+    );
+
+    let report = Pair("one".into(), 1).semantic_diff(&Pair("two".into(), 2));
+    let paths: Vec<_> = report
+        .differences()
+        .iter()
+        .map(|diff| diff.path.as_str())
+        .collect();
+    assert_eq!(paths, ["[0]", "[1]"]);
+    assert!(Empty.semantic_diff(&Empty).is_empty());
+    let left = AllSkipped {
+        span: Span::new(1, 2),
+        cache_key: 1,
+    };
+    let right = AllSkipped {
+        span: Span::new(3, 4),
+        cache_key: 2,
+    };
+    assert!(left.semantic_diff(&right).is_empty());
 }
 
 // ---------------------------------------------------------------------------

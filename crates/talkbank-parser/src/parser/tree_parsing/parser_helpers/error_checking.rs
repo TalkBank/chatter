@@ -7,18 +7,27 @@
 
 use crate::error::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    FromNodeKind, HeaderSepNode, NodeSlot, RecoveryNode, extract_header_sep,
+    AsRawNode, FromNodeKind, HeaderSepNode, NodeSlot, RecoveryNode, SourceBindingError,
+    SourceSlice, extract_header_sep,
 };
 use crate::node_types::{GRA_DEPENDENT_TIER, MOR_DEPENDENT_TIER, NEWLINE, PHO_DEPENDENT_TIER};
 use tree_sitter::Node;
 
-use super::error_analysis::analyze_dependent_tier_error_with_context;
+use super::error_analysis::analyze_readable_dependent_error;
+use crate::parser::tree_parsing::helpers::ReadableRecovery;
 
 /// Admit a header separator's generated MISSING-tab slot before diagnosing it.
 /// Other missing tokens remain the generic recovery backstop's responsibility.
 fn missing_header_tab_error(node: Node, source: &str) -> Option<ParseError> {
     let separator = HeaderSepNode::from_node(node.parent()?)?;
-    let children = extract_header_sep(separator);
+    let children = match extract_header_sep(separator) {
+        Ok(children) => children,
+        Err(fault) => {
+            return Some(crate::parser::typed_cst::cst_failure_diagnostic(
+                node, source, fault,
+            ));
+        }
+    };
     let NodeSlot::Missing(tab) = children.child_1.slot() else {
         return None;
     };
@@ -40,15 +49,17 @@ fn missing_header_tab_error(node: Node, source: &str) -> Option<ParseError> {
 
 /// Recursively walks a subtree and tracks tier context for better diagnostics.
 pub(crate) fn check_for_errors_recursive_with_context(
-    node: Node,
-    source: &str,
+    bound: SourceSlice<'_, '_>,
     errors: &mut Vec<ParseError>,
     tier_type: Option<&str>,
 ) {
+    let node = bound.raw_node();
+    let source = bound.source();
     // Check for ERROR nodes (tree-sitter couldn't parse this content)
     if node.is_error() {
-        errors.push(analyze_dependent_tier_error_with_context(
-            node, source, tier_type,
+        errors.push(analyze_readable_dependent_error(
+            ReadableRecovery::from_bound(bound),
+            tier_type,
         ));
         return;
     }
@@ -84,8 +95,13 @@ pub(crate) fn check_for_errors_recursive_with_context(
     };
 
     let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        check_for_errors_recursive_with_context(child, source, errors, new_tier_type);
+    for child in bound.children(&mut cursor) {
+        match child {
+            Ok(child) => check_for_errors_recursive_with_context(child, errors, new_tier_type),
+            Err(fault) => errors.push(crate::parser::typed_cst::cst_failure_diagnostic(
+                node, source, fault,
+            )),
+        }
     }
 }
 
@@ -144,15 +160,13 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
         // The node's text drives every classification below; a node whose
         // bytes are not UTF-8 is reported as that fact rather than classified
         // over an empty text the analyzer invented.
-        let text = match node.utf8_text(source.as_bytes()) {
-            Ok(text) => text,
-            Err(error) => {
-                out.push(ParseError::new(
-                    ErrorCode::TreeParsingError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(start, end),
-                    ErrorContext::new(source, start..end, ""),
-                    format!("UTF-8 decoding error in recovery node: {error}"),
+        let text = match source.get(node.byte_range()) {
+            Some(text) => text,
+            None => {
+                out.push(crate::parser::typed_cst::cst_failure_diagnostic(
+                    node,
+                    source,
+                    SourceBindingError::InvalidRange,
                 ));
                 return;
             }
@@ -165,69 +179,6 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
             None => text,
         }
         .trim();
-
-        // Dedicated-code classification before the generic E316 catch-all
-        // (same pure rules as the region analyzers; see
-        // `error_analysis::dedicated`).
-        //
-        // E760: the ERROR sits inside a `%mor` tier (typed ancestor check,
-        // or the whole line is the ERROR and carries the prefix) and holds
-        // an item with an empty part-of-speech field.
-        let in_mor_tier = {
-            let mut ancestor = node.parent();
-            let mut found = false;
-            while let Some(candidate) = ancestor {
-                if candidate.kind() == MOR_DEPENDENT_TIER {
-                    found = true;
-                    break;
-                }
-                ancestor = candidate.parent();
-            }
-            found || text.contains("%mor:")
-        };
-        if in_mor_tier
-            && let Some(item) = super::error_analysis::dedicated::mor_item_with_empty_pos(
-                text,
-                super::error_analysis::dedicated::at_item_boundary(source, start),
-            )
-        {
-            let range = item.range();
-            let (item_start, item_end) = (start + range.start, start + range.end);
-            let item = item.text();
-            out.push(
-                ParseError::new(
-                    ErrorCode::MorItemEmptyPos,
-                    Severity::Error,
-                    SourceLocation::from_offsets(item_start, item_end),
-                    ErrorContext::new(source, item_start..item_end, item),
-                    format!("MOR item '{item}' has an empty part-of-speech field"),
-                )
-                .with_suggestion(
-                    "Every %mor item is pos|stem with a non-empty part of speech before the \
-                     pipe (e.g., pro|we, v|go)",
-                ),
-            );
-            return;
-        }
-
-        // E759: the ERROR is a whole main-tier line whose content begins
-        // with a postfix annotation (CLAN CHECK 52); fragment-level leading
-        // annotations are classified positionally in the contents loop.
-        if text.starts_with('*')
-            && let Some(sep) = text.find(":\t")
-            && let Some(code_token) = super::error_analysis::dedicated::leading_postfix_annotation(
-                text[sep + 2..].trim_start(),
-            )
-        {
-            out.push(
-                super::error_analysis::dedicated::annotation_at_utterance_start(
-                    code_token,
-                    SourceLocation::from_offsets(start, end),
-                    ErrorContext::new(source, start..end, text),
-                ),
-            );
-            return;
-        }
 
         out.push(
             ParseError::new(

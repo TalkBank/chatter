@@ -14,19 +14,23 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#PID_Header>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{AsRawNode, PidHeaderNode, extract_pid_header};
-use crate::parser::tree_parsing::parser_helpers::{present, surface_displaced};
-use crate::parser::typed_cst::decode_present_child;
-use talkbank_model::ParseOutcome;
+use crate::generated_traversal::{AsRawNode, NoChild, PidHeaderNode, SourceBound, SourceSlotView};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::CstFailure;
 use talkbank_model::model::{Header, PidValue};
 
 /// Parse a `@PID` header into [`Header::Pid`].
 ///
 /// The value is the `free_text` slot's text as written; `PidValue` owns
 /// whatever validation the persistent identifier gets.
-pub fn parse_pid_header(typed: PidHeaderNode<'_>, source: &str, errors: &impl ErrorSink) -> Header {
+pub fn parse_pid_header<'tree>(
+    typed: SourceBound<'tree, '_, PidHeaderNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<Header, CstFailure> {
     let node = typed.raw_node();
-    let children = extract_pid_header(typed);
+    let source = typed.source();
+    let associated = typed.extract()?;
+    let children = associated.children();
     // The value: the `free_text` position's text, decoded, and NOT empty. A
     // line with nothing after the tab leaves the position present with
     // zero-width text (the placeholder tree-sitter inserts is elsewhere on
@@ -37,17 +41,19 @@ pub fn parse_pid_header(typed: PidHeaderNode<'_>, source: &str, errors: &impl Er
         Empty,
         Nothing,
     }
-    let held = match present(children.child_2.slot()) {
-        Some(free_text) => {
-            match decode_present_child(free_text, source, errors, "pid_value", |err| {
-                format!("Failed to extract PID value as UTF-8: {}", err)
-            }) {
-                ParseOutcome::Parsed(pid) if pid.is_empty() => Held::Empty,
-                ParseOutcome::Parsed(pid) => Held::Value(pid),
-                ParseOutcome::Rejected => Held::Nothing,
+    let held = match associated.field_child_2().slot().view() {
+        SourceSlotView::Present(free_text) => {
+            let value = free_text.read()?;
+            if value.text().is_empty() {
+                Held::Empty
+            } else {
+                Held::Value(value.text().to_owned())
             }
         }
-        None => Held::Nothing,
+        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
+            Held::Nothing
+        }
+        SourceSlotView::Unexpected(never) => match never {},
     };
     surface_displaced(&children.unexpected, "pid_header", source, errors);
     // An empty value lowers as unknown with no report of its own: the
@@ -78,7 +84,7 @@ pub fn parse_pid_header(typed: PidHeaderNode<'_>, source: &str, errors: &impl Er
             "Missing PID value in @PID header",
         );
     };
-    Header::Pid {
+    Ok(Header::Pid {
         pid: PidValue::new(pid),
-    }
+    })
 }

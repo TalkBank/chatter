@@ -9,6 +9,15 @@
 //!
 //! Add a test file by dropping it in this directory and declaring it below.
 
+// Test assertions deliberately panic on violated expectations; production
+// crates retain the workspace panic-family denial.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable
+)]
+
 mod alignment_location_from_source;
 mod alignment_units_from_source;
 mod async_corpus;

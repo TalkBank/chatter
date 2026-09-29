@@ -52,10 +52,8 @@ fn error_missing_form_type() -> Result<(), TestError> {
 }
 
 /// Verifies unknown form-type markers are rejected.
-/// NOTE: The structured word grammar accepts all @X form markers at parse time.
-/// Validation of form type values (e.g., rejecting @z) is a validation-layer concern.
+/// Undeclared markers are diagnosed during typed word lowering.
 #[test]
-#[ignore = "Form type validation moved to validation layer with structured word grammar"]
 fn error_invalid_form_type() -> Result<(), TestError> {
     for parser in parser_suite()? {
         let result = parser.parse_word("hello@z");

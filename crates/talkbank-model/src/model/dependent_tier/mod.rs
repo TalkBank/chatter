@@ -109,7 +109,7 @@ pub use pho::*;
 pub use phon::*;
 pub use sin::*;
 pub use text::*;
-pub use tim::TimTier;
+pub use tim::{TimSegment, TimTier};
 pub use types::{DependentTier, TextTier, UserDefinedDependentTier};
 pub use wor::*;
 

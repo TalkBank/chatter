@@ -146,10 +146,18 @@ fn a_replaced_words_unknown_annotation_is_reported_once() -> Result<(), TestErro
     for backend in BACKENDS {
         let output = harness.run_validate(&path, &["--parser", backend, "--force"])?;
         let rendered = combined_output(&output);
-        let count = rendered.matches("error[E207]").count();
+        // The primary grammar rejects the unknown marker structurally (E207
+        // spec, replacement variant). re2c retains its own E207 diagnostic.
+        let diagnostic = match *backend {
+            "tree-sitter" => "error[E316]",
+            "re2c" => "error[E207]",
+            _ => unreachable!("the backend deck is closed"),
+        };
+        assert!(!output.status.success(), "{rendered}");
+        let count = rendered.matches(diagnostic).count();
         assert_eq!(
             count, 1,
-            "{backend}: expected exactly one E207 for one unknown annotation, got {count}.\n{rendered}"
+            "{backend}: expected exactly one {diagnostic} for one unknown annotation, got {count}.\n{rendered}"
         );
     }
     Ok(())

@@ -32,6 +32,7 @@ pub mod json;
 pub mod list_checks;
 pub mod new_file;
 pub mod normalize;
+mod pseudonymize;
 pub mod rediarize;
 pub mod sanity_scan;
 pub mod schema;

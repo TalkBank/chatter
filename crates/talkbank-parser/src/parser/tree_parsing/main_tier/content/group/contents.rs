@@ -8,38 +8,45 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    ContentsChildren, ContentsNode, FromNodeKind, KindSlot, NoChild, SlotView, extract_contents,
+    AsRawNode, ContentsChildren, ContentsNode, NoChild, NonMissingKindSlot, SourceChildren,
+    SourceField, SourceSlotView,
 };
 use crate::model::{BracketedItem, UtteranceContent};
 use tree_sitter::Node;
 
-use crate::parser::tree_parsing::main_tier::structure::contents::{ContentsRegion, parse_contents};
+use crate::parser::tree_parsing::main_tier::structure::contents::parse_contents;
 
 /// The extracted children of a construct's `contents` slot, or nothing.
 ///
-/// Present is extracted. A MISSING `contents` is a zero-width placeholder
-/// with no children, and extracting it yields no items, which is what the
-/// old `kind()` walk did with it (a MISSING node carries the expected kind,
-/// so it passed the check and walked zero children); its absence is the
-/// whole-tree backstop's to report. An ERROR or displaced node at the
+/// Present is extracted. Compiled grammar admission proves that the composite
+/// `contents` node cannot itself be Missing; lexical recovery within it is
+/// still owned by the shared contents walker. An ERROR or displaced node at the
 /// position is the construct losing its shape there, which `on_bad` reports
 /// in the construct's own words, and Absent means the construct has no
 /// contents at all; both yield nothing, and the caller rejects an empty
 /// construct.
-pub(crate) fn contents_of<'tree>(
-    slot: &KindSlot<'tree, ContentsNode<'tree>>,
+pub(crate) fn contents_of<'tree, 'source>(
+    slot: SourceField<'_, 'tree, 'source, NonMissingKindSlot<'tree, ContentsNode<'tree>>>,
+    errors: &impl ErrorSink,
     on_bad: impl FnOnce(Node<'tree>),
-) -> Option<ContentsChildren<'tree>> {
+) -> Option<SourceChildren<'tree, 'source, ContentsChildren<'tree>>> {
     match slot.view() {
-        SlotView::Present(contents) => Some(extract_contents(*contents)),
-        SlotView::Missing(placeholder) => {
-            ContentsNode::from_node(placeholder).map(extract_contents)
+        SourceSlotView::Present(contents) => {
+            let bound = crate::parser::typed_cst::read_source_field(contents, errors)?;
+            crate::parser::typed_cst::report_reconstruction(
+                bound.extract(),
+                bound.raw_node(),
+                bound.source(),
+                errors,
+            )
+            .ok()
         }
-        SlotView::Error(bad) => {
-            on_bad(bad);
+        SourceSlotView::Error(bad) => {
+            on_bad(bad.raw_node());
             None
         }
-        SlotView::Absent(NoChild) => None,
+        SourceSlotView::Absent(NoChild) => None,
+        SourceSlotView::Missing(never) => match never {},
     }
 }
 
@@ -52,12 +59,11 @@ pub(crate) fn contents_of<'tree>(
 /// pho group and the sin group each walked `contents` with their own copy
 /// of a `node.kind()` match and a shared second dispatcher
 /// (`group/nested.rs`) beneath it.
-pub(crate) fn parse_group_contents(
-    contents: &ContentsChildren<'_>,
-    source: &str,
+pub(crate) fn parse_group_contents<'tree>(
+    contents: &SourceChildren<'tree, '_, ContentsChildren<'tree>>,
     errors: &impl ErrorSink,
 ) -> Vec<BracketedItem> {
-    parse_contents(contents, ContentsRegion::InsideBrackets, source, errors)
+    parse_contents(contents, errors)
         .into_iter()
         .map(convert_to_group_content)
         .collect()

@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-09-09 07:46 EDT
+**Last modified:** 2026-09-28 20:59 EDT
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -64,15 +64,21 @@ apostrophe instead. `chatter` flags the curly form wherever it appears in word
 content and points the diagnostic at the exact character. This mirrors CLAN
 CHECK errors 138 and 139.
 
-### E243: Private-use or non-standard Unicode in a word
+### E243: Private-use characters or noncharacters in a word
 
-A word may contain only standard Unicode. Characters from the Unicode Private
-Use Area and the other non-standard code points in the `U+E000`-`U+FFFF` block
-are rejected, including the replacement character `U+FFFD` that marks a botched
-text encoding. The most common cause is a file saved in the wrong encoding:
-re-save it as UTF-8 and replace any private-use or compatibility-area character
-with its standard Unicode equivalent. `chatter` points the diagnostic at the
-exact character. This mirrors CLAN CHECK error 86.
+Chatter rejects Unicode private-use scalars and noncharacters in lexical words,
+including supplementary planes. This is a transcription-interchange policy,
+not a claim that those scalars are invalid UTF-8. The diagnostic identifies the
+scalar, category and containing word. Use the intended standard transcription
+character; do not silently delete text or assume changing the encoding repairs it.
+
+Ordinary high-BMP and supplementary characters are not rejected by this rule,
+and CLAN's private-use markup has no exemption. Existing control-character and
+CHAT punctuation checks still apply. U+FFFD is not a noncharacter: this rule does
+not reject it, but its presence can indicate earlier loss during decoding.
+See the [Unicode FAQ](https://www.unicode.org/faq/private_use.html) for the
+categories and the [CHECK assessment](../../architecture/errors-and-validation/check-parity-audit.md)
+for the scope of the comparison.
 
 ### E304: Missing speaker code
 

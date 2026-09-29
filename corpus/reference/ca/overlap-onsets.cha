@@ -1,0 +1,21 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	SPK Speaker, LSN Adult
+@Options:	CA
+@ID:	eng|sample|SPK|||||Speaker|||
+@ID:	eng|sample|LSN|||||Adult|||
+@Media:	overlap-onsets, audio
+@Comment:	Authored controls for overlap positions and proportional onset estimates.
+@Comment:	Constructs: paired and cross-turn unpaired markers, pause-only scope, final onset, retraced replacement.
+*SPK:	hello world . 0_1000
+*SPK:	one two three ⌈ four five ⌉ . 1000_2000
+*LSN:	⌊ yes ⌋ . 1000_2000
+*SPK:	⌈ hello . 2000_3000
+*LSN:	⌊ yes . 2000_3000
+*SPK:	word ⌉ . 3000_4000
+*LSN:	word ⌋ . 3000_4000
+*SPK:	⌈ (.) ⌉ . 4000_5000
+*SPK:	word ⌈ . 5000_6000
+*LSN:	<⌈ doggie [: dog] ⌉> [/] yes . 6000_7000
+@End

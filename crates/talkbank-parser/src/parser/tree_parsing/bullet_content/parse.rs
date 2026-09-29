@@ -1,17 +1,16 @@
 //! Lowers generated bullet-text choices in source order, retaining recovery.
 use crate::error::ErrorSink;
+use crate::generated_traversal::{Absence, Never, NodeSlot};
 use crate::generated_traversal::{
-    AsRawNode, BulletNode, ChoiceSlot, ContinuationNode, InlinePicNode, KindSlot, NoChild,
-    Positioned, SourceBound, SourceBoundKind, SourceField, SourceSlotView, SpaceNode,
-    TextSegmentNode, TextWithBulletsAndPicsChild0Choice,
-    TextWithBulletsAndPicsChild0ChoiceSourceView, TextWithBulletsAndPicsChild1Choice,
-    TextWithBulletsAndPicsChild1ChoiceSourceView, TextWithBulletsChild0Choice,
-    TextWithBulletsChild0ChoiceSourceView, TextWithBulletsChild1Choice,
-    TextWithBulletsChild1ChoiceSourceView,
+    AsRawNode, BulletNode, ContinuationNode, InlinePicNode, KindSlot, Positioned, SourceBound,
+    SourceBoundKind, SourceField, SourceSlotView, SpaceNode, TextSegmentNode,
+    TextWithBulletsAndPicsChild0Choice, TextWithBulletsAndPicsChild0ChoiceSourceView,
+    TextWithBulletsAndPicsChild1Choice, TextWithBulletsAndPicsChild1ChoiceSourceView,
+    TextWithBulletsChild0Choice, TextWithBulletsChild0ChoiceSourceView,
+    TextWithBulletsChild1Choice, TextWithBulletsChild1ChoiceSourceView,
 };
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use crate::parser::typed_cst::{read_source_field, report_source_binding_error};
 use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{BulletContent, BulletContentSegment};
@@ -27,30 +26,30 @@ use super::{BulletTextNode, inline_bullet::parse_inline_bullet, inline_pic::pars
 pub fn parse_bullet_content(
     typed: BulletTextNode<'_, '_>,
     errors: &impl ErrorSink,
-) -> BulletContent {
+) -> Result<BulletContent, crate::CstFailure> {
     let mut sink = SegmentSink {
         errors,
         segments: SmallVec::new(),
     };
     match typed {
         BulletTextNode::Text(node) => {
-            let children = node.extract();
-            sink.choice(children.field_child_0().slot(), push_text_first);
+            let children = node.extract()?;
+            sink.choice(children.field_child_0().slot(), push_text_first)?;
             for item in children.field_child_1().slot().iter() {
-                sink.choice(item.slot(), push_text_repeat);
+                sink.choice(item.slot(), push_text_repeat)?;
             }
             sink.displaced(children.field_unexpected(), "text_with_bullets");
         }
         BulletTextNode::Pictures(node) => {
-            let children = node.extract();
-            sink.choice(children.field_child_0().slot(), push_pictures_first);
+            let children = node.extract()?;
+            sink.choice(children.field_child_0().slot(), push_pictures_first)?;
             for item in children.field_child_1().slot().iter() {
-                sink.choice(item.slot(), push_pictures_repeat);
+                sink.choice(item.slot(), push_pictures_repeat)?;
             }
             sink.displaced(children.field_unexpected(), "text_with_bullets_and_pics");
         }
     }
-    BulletContent::new(sink.segments.into_vec())
+    Ok(BulletContent::new(sink.segments.into_vec()))
 }
 
 /// Owns the source-order segment accumulation; no intermediate flattened AST.
@@ -67,10 +66,14 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
         }
     }
 
-    fn bullet<'tree>(&mut self, typed: SourceBound<'tree, '_, BulletNode<'tree>>) {
-        if let ParseOutcome::Parsed((start, end)) = parse_inline_bullet(typed, self.errors) {
+    fn bullet<'tree>(
+        &mut self,
+        typed: SourceBound<'tree, '_, BulletNode<'tree>>,
+    ) -> Result<(), crate::CstFailure> {
+        if let ParseOutcome::Parsed((start, end)) = parse_inline_bullet(typed, self.errors)? {
             self.segments.push(BulletContentSegment::bullet(start, end));
         }
+        Ok(())
     }
 
     fn picture<'tree>(&mut self, typed: SourceBound<'tree, '_, InlinePicNode<'tree>>) {
@@ -101,18 +104,15 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
 
     /// Missing leaves retain their expected kind. Preserve the old lowering of
     /// these placeholders; the whole-tree backstop still diagnoses recovery.
-    fn placeholder<'tree>(&mut self, field: SourceField<'_, 'tree, '_, Node<'tree>>) {
-        let node = match field.read_raw() {
-            Ok(node) => node,
-            Err(error) => {
-                report_source_binding_error(field.raw_node(), field.source(), error, self.errors);
-                return;
-            }
-        };
+    fn placeholder<'tree>(
+        &mut self,
+        field: SourceField<'_, 'tree, '_, Node<'tree>>,
+    ) -> Result<(), crate::CstFailure> {
+        let node = field.read_raw()?;
         if let Some(text) = node.typed::<TextSegmentNode>() {
             self.text(text);
         } else if let Some(bullet) = node.typed::<BulletNode>() {
-            self.bullet(bullet);
+            self.bullet(bullet)?;
         } else if let Some(picture) = node.typed::<InlinePicNode>() {
             self.picture(picture);
         } else if node.typed::<ContinuationNode>().is_some() {
@@ -120,35 +120,40 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
         } else if node.typed::<SpaceNode>().is_none() {
             self.unexpected(field);
         }
+        Ok(())
     }
 
-    fn choice<'value, 'tree: 'value, 'source, T: 'value>(
+    fn choice<'value, 'tree: 'value, 'source, T: 'value, A: Absence>(
         &mut self,
-        slot: SourceField<'value, 'tree, 'source, ChoiceSlot<'tree, T>>,
-        push: impl FnOnce(SourceField<'value, 'tree, 'source, T>, &mut Self),
-    ) {
+        slot: SourceField<'value, 'tree, 'source, NodeSlot<'tree, T, Node<'tree>, Never, A>>,
+        push: impl FnOnce(
+            SourceField<'value, 'tree, 'source, T>,
+            &mut Self,
+        ) -> Result<(), crate::CstFailure>,
+    ) -> Result<(), crate::CstFailure> {
         match slot.view() {
-            SourceSlotView::Present(choice) => push(choice, self),
-            SourceSlotView::Missing(node) => self.placeholder(node),
-            SourceSlotView::Error(node) | SourceSlotView::Unexpected(node) => self.unexpected(node),
-            SourceSlotView::Absent(NoChild) => {}
+            SourceSlotView::Present(choice) => push(choice, self)?,
+            SourceSlotView::Missing(node) => self.placeholder(node)?,
+            SourceSlotView::Error(node) => self.unexpected(node),
+            SourceSlotView::Unexpected(never) => match never {},
+            SourceSlotView::Absent(_) => {}
         }
+        Ok(())
     }
 
     fn leaf<'tree, 'source, T: SourceBoundKind<'tree>>(
         &mut self,
         slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
-        push: impl FnOnce(&mut Self, SourceBound<'tree, 'source, T>),
-    ) {
+        push: impl FnOnce(&mut Self, SourceBound<'tree, 'source, T>) -> Result<(), crate::CstFailure>,
+    ) -> Result<(), crate::CstFailure> {
         match slot.view() {
             SourceSlotView::Present(node) | SourceSlotView::Missing(node) => {
-                if let Some(node) = read_source_field(node, self.errors) {
-                    push(self, node);
-                }
+                push(self, node.read()?)?;
             }
             SourceSlotView::Error(node) => self.unexpected(node),
-            SourceSlotView::Absent(NoChild) => {}
+            SourceSlotView::Absent(_) => {}
         }
+        Ok(())
     }
 
     fn spaces<'tree>(
@@ -157,15 +162,18 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
             '_,
             'tree,
             '_,
-            Vec<Positioned<'tree, KindSlot<'tree, SpaceNode<'tree>>>>,
+            Vec<
+                Positioned<
+                    'tree,
+                    crate::generated_traversal::SelectedKindSlot<'tree, SpaceNode<'tree>>,
+                >,
+            >,
         >,
         unexpected: SourceField<'_, 'tree, '_, Vec<Node<'tree>>>,
     ) {
         for space in spaces.iter() {
             match space.slot().view() {
-                SourceSlotView::Present(_)
-                | SourceSlotView::Missing(_)
-                | SourceSlotView::Absent(NoChild) => {}
+                SourceSlotView::Present(_) | SourceSlotView::Missing(_) => {}
                 SourceSlotView::Error(node) => self.unexpected(node),
             }
         }
@@ -177,25 +185,27 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
 // their exhaustive alternatives identical without erasing either into raw nodes.
 macro_rules! text_choices {
     ($function:ident, $choice:ident, $view:ident $(, $picture:ident)?) => {
-        fn $function<'tree, E: ErrorSink>(choice: SourceField<'_, 'tree, '_, $choice<'tree>>, sink: &mut SegmentSink<'_, E>) {
+        fn $function<'tree, E: ErrorSink>(choice: SourceField<'_, 'tree, '_, $choice<'tree>>, sink: &mut SegmentSink<'_, E>) -> Result<(), crate::CstFailure> {
             match choice.view() {
                 $view::TextSegment(text) => {
-                    if let Some(text) = read_source_field(text, sink.errors) {
-                        sink.text(text);
-                    }
+                    sink.text(text.read()?);
                 }
                 $view::Bullet(group) => {
-                    sink.leaf(group.field_child_0().slot(), SegmentSink::bullet);
+                    sink.leaf(group.field_child_0().slot(), SegmentSink::bullet)?;
                     sink.spaces(group.field_child_1().slot(), group.field_unexpected());
                 }
                 $view::Continuation(_) => sink.segments.push(BulletContentSegment::continuation()),
                 $(
                     $view::$picture(group) => {
-                        sink.leaf(group.field_child_0().slot(), SegmentSink::picture);
+                        sink.leaf(group.field_child_0().slot(), |sink, picture| {
+                            sink.picture(picture);
+                            Ok(())
+                        })?;
                         sink.spaces(group.field_child_1().slot(), group.field_unexpected());
                     }
                 )?
             }
+            Ok(())
         }
     };
 }

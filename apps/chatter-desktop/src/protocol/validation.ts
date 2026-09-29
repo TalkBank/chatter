@@ -39,6 +39,7 @@ export type FileStatus =
   | { type: "invalid"; errorCount: number; cacheHit: boolean }
   | { type: "roundtripFailed"; cacheHit: boolean; reason: string }
   | { type: "parseError"; message: string }
+  | { type: "internalFailure"; message: string }
   | { type: "readError"; message: string };
 
 /** Mirrors Rust `FrontendStats` */
@@ -49,6 +50,7 @@ export interface ValidationStats {
   cacheHits: number;
   cacheMisses: number;
   parseErrors: number;
+  internalFailures: number;
   roundtripPassed: number;
   roundtripFailed: number;
   cancelled: boolean;

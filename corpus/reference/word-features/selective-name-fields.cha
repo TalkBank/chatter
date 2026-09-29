@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|sample|CHI|2;00.||||Child|||
+@Comment:	Lexical replacement must preserve lengthening and compound partners.
+*CHI:	Ro:se Rose+bud flower+Rose .
+%wor:	Ro:se Rose+bud flower+Rose .
+*CHI:	Rose+bud .
+%wor:	Rosebud .
+*CHI:	Rosebud .
+%wor:	Rose+bud .
+@End

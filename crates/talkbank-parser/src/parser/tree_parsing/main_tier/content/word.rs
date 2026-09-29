@@ -11,8 +11,7 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, NoChild, SlotView, WordWithOptionalAnnotationsNode,
-    extract_word_with_optional_annotations,
+    AsRawNode, NoChild, SourceBound, SourceSlotView, WordWithOptionalAnnotationsNode,
 };
 use crate::model::{ReplacedWord, UtteranceContent};
 use talkbank_model::ParseOutcome;
@@ -24,6 +23,7 @@ use super::marker_chain::fold_marker_chain;
 use super::report_tree_shape;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, surface_displaced};
+use crate::parser::typed_cst::read_source_field;
 
 /// Parse a `word_with_optional_annotations` node into `UtteranceContent`,
 /// over the generated typed traversal.
@@ -36,33 +36,37 @@ use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, sur
 /// marker actually arrives. Until 2026-09-09 this walked the children by
 /// index and `kind()` string with a catch-all for anything unnamed.
 ///
-/// A MISSING word is reported at its position (E342, as the positional
-/// check did) and builds nothing, so a placeholder never becomes a word;
-/// the replacement group is a sequence, never MISSING or displaced, and
-/// one that lost its shape to an ERROR is classified in context as the
-/// old catch-all classified it; a MISSING replacement or annotations node
-/// is reported (E342) where the old walk fed it to the sub-parser
-/// unguarded.
-pub(crate) fn parse_word_content(
-    typed: WordWithOptionalAnnotationsNode<'_>,
-    source: &str,
+/// Compiled grammar admission excludes Missing for the composite word,
+/// replacement and annotation slots, not lexical recovery inside them. Error,
+/// required absence and source-read refusal remain independently handled; an
+/// unusable word never becomes a fabricated model value.
+pub(crate) fn parse_word_content<'tree>(
+    typed: SourceBound<'tree, '_, WordWithOptionalAnnotationsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let node = typed.raw_node();
-    let children = extract_word_with_optional_annotations(typed);
-
-    let word = match expect_present(
-        children.word.slot(),
-        "word_with_optional_annotations",
+    let source = typed.source();
+    let node = typed.node().raw_node();
+    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| typed.extract_admitted(grammar)),
+        typed.raw_node(),
         source,
         errors,
-    ) {
-        SlotState::Present(word) => convert_word_node(*word, source, errors),
+    ) else {
+        return ParseOutcome::Rejected;
+    };
+    let children = associated.children();
+
+    let word = match associated.field_word().slot().view() {
+        SourceSlotView::Present(word) => match read_source_field(word, errors) {
+            Some(word) => convert_word_node(word, errors),
+            None => ParseOutcome::rejected(),
+        },
         // The word position is required; `Absent` means a well-formed node of
         // another kind stood where the word should be, which no recovery
         // node marks and the whole-tree pass cannot see, so the shape fault
         // is reported here, as the positional check reported it.
-        SlotState::Absent => {
+        SourceSlotView::Absent(NoChild) => {
             report_tree_shape(
                 node,
                 "Expected 'standalone_word' at the start of word_with_optional_annotations"
@@ -72,32 +76,49 @@ pub(crate) fn parse_word_content(
             );
             ParseOutcome::rejected()
         }
-        SlotState::Recovered => ParseOutcome::rejected(),
+        SourceSlotView::Missing(never) => match never {},
+        SourceSlotView::Error(bad) => {
+            errors.report(unexpected_node_error(
+                bad.raw_node(),
+                source,
+                "word_with_optional_annotations",
+            ));
+            ParseOutcome::rejected()
+        }
     };
 
-    let replacement = match children.child_1.slot() {
+    let replacement = match associated.field_child_1().slot().optional() {
         Some(group) => match group.view() {
-            SlotView::Present(group) => match expect_present(
-                group.replacement.slot(),
-                "word_with_optional_annotations",
-                source,
-                errors,
-            ) {
-                SlotState::Present(replacement) => parse_replacement(*replacement, source, errors),
-                SlotState::Absent | SlotState::Recovered => ParseOutcome::rejected(),
+            SourceSlotView::Present(group) => match group.field_replacement().slot().view() {
+                SourceSlotView::Present(replacement) => {
+                    match read_source_field(replacement, errors) {
+                        Some(replacement) => parse_replacement(replacement, errors),
+                        None => ParseOutcome::rejected(),
+                    }
+                }
+                SourceSlotView::Missing(never) => match never {},
+                SourceSlotView::Error(bad) => {
+                    errors.report(unexpected_node_error(
+                        bad.raw_node(),
+                        source,
+                        "word_with_optional_annotations",
+                    ));
+                    ParseOutcome::rejected()
+                }
+                SourceSlotView::Absent(NoChild) => ParseOutcome::rejected(),
             },
             // An ERROR where the group should be is classified in context, as
             // the old walk's catch-all classified it (a bare `[` is an
             // incomplete annotation, not generic unparsable content).
-            SlotView::Error(bad) => {
+            SourceSlotView::Error(bad) => {
                 errors.report(unexpected_node_error(
-                    bad,
+                    bad.raw_node(),
                     source,
                     "word_with_optional_annotations",
                 ));
                 ParseOutcome::rejected()
             }
-            SlotView::Absent(NoChild) => ParseOutcome::rejected(),
+            SourceSlotView::Absent(never) => match never {},
         },
         None => ParseOutcome::rejected(),
     };
@@ -110,7 +131,15 @@ pub(crate) fn parse_word_content(
         Some(slot) => {
             match expect_present(slot, "word_with_optional_annotations", source, errors) {
                 SlotState::Present(annotations) => {
-                    parse_scoped_annotations(*annotations, source, errors)
+                    match crate::parser::typed_cst::report_reconstruction(
+                        parse_scoped_annotations(*annotations, source, errors),
+                        annotations.raw_node(),
+                        source,
+                        errors,
+                    ) {
+                        Ok(markers) => markers,
+                        Err(_) => return ParseOutcome::Rejected,
+                    }
                 }
                 SlotState::Absent | SlotState::Recovered => Vec::new(),
             }

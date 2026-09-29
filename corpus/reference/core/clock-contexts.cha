@@ -1,0 +1,11 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|sample|CHI|2;00.||||Child|||
+@Time Start:	59:59
+@Time Duration:	17:30-18:00
+@Comment:	Duration endpoints use hours and minutes; start and timing values use minutes and seconds.
+*CHI:	hello .
+%tim:	59:59
+@End
