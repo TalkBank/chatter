@@ -248,9 +248,10 @@ mod tests {
 
     /// The JSON written for real cache reports, which only the cache crate
     /// can make: an in-memory cache has `null` directory, size and time; a
-    /// directory cache has all three; a directory whose file was removed has
-    /// a directory and `null` size and time; a directory with no database
-    /// says so and counts nothing.
+    /// directory cache has all three; a directory with no database says so
+    /// and counts nothing. Removing a database consumes its open handle;
+    /// fresh inspection admits the absent state, not a query through the
+    /// old handle. Missing-file metadata is tested in the cache crate.
     #[test]
     fn json_writes_absent_facts_as_null() {
         let json = |report: &Report<'_>| {
@@ -310,10 +311,19 @@ mod tests {
         );
         assert!(present["last_modified"].is_string());
 
+        // Consume the query capability before deleting its backing file.
+        // Ownership prevents using this handle after the state transition;
+        // only fresh inspection can admit the directory's new state.
+        drop(cache);
         std::fs::remove_file(talkbank_transform::cache_db_path(dir.path())).expect("remove");
-        let missing = json(&Report::Current(cache.stats().expect("stats")));
-        assert_eq!(missing["cache_dir"], serde_json::json!(dir.path()));
-        assert_eq!(missing["cache_size_bytes"], serde_json::Value::Null);
-        assert_eq!(missing["last_modified"], serde_json::Value::Null);
+        let CacheOnDisk::Absent(absent) =
+            CacheOnDisk::inspect_directory(dir.path().to_path_buf()).expect("inspect")
+        else {
+            panic!("the removed database must be admitted as absent");
+        };
+        assert_eq!(
+            json(&Report::Absent(&absent)),
+            serde_json::json!({ "database": "absent", "cache_dir": dir.path() })
+        );
     }
 }
