@@ -47,6 +47,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
       # The current stable release, as everywhere in this repo. The
       # rust-cache key changes with each new stable, so the first run after a
       # release builds cold on all three OSes: the same one cold build per
@@ -72,7 +77,7 @@ jobs:
 
       - name: cargo test --workspace
         timeout-minutes: 30
-        run: cargo test --workspace --tests --locked
+        run: just test-workspace
 
       - name: cargo test --doc --workspace
         run: cargo test --doc --workspace --locked

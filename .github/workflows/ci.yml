@@ -101,7 +101,7 @@ jobs:
       # hung process cannot outlive the job.
       - name: cargo test --workspace
         timeout-minutes: 30
-        run: cargo test --workspace --tests --locked
+        run: just test-workspace
 
       - name: cargo test --doc --workspace
         timeout-minutes: 15

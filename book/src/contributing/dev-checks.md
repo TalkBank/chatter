@@ -9,7 +9,7 @@ recipes; `just --list` shows them all.
 ## The inner loop
 
 ```bash
-just test          # cargo test --workspace --tests, about a minute
+just test          # workspace test binaries, complete failure inventory
 ```
 
 Narrower is better while iterating. Prefer the smallest thing that can fail:
@@ -24,6 +24,31 @@ everything `check` would, and the two are DIFFERENT cargo units: `check` emits
 only `.rmeta` while `test` emits full `.rlib` with codegen, so nothing is
 reused and alternating them recompiles the whole dependency graph twice. If a crate has no tests, run
 `cargo test -p <crate>` anyway; it compiles and reports zero tests.
+
+## Deterministic tests and native-platform feedback
+
+Express admission and lifecycle invariants through typestate, ownership and
+validated constructors first. Use pure tests for structural and policy logic,
+and deterministic doubles for clocks, services and scheduling. Keep spec and
+reference-corpus contracts at their real public boundaries. A double cannot
+establish a database driver's worker shutdown or an operating system's file
+locking behavior; retain thin, isolated native-platform tests for those facts.
+
+Use explicit barriers and acknowledgments rather than sleeps or scheduler luck.
+A deadline bounds execution; it is not the synchronization condition. Consume
+resource capabilities at lifecycle transitions, and await actual cleanup where
+the external API requires it. A passing retry does not resolve an observed
+failure.
+
+The shared workspace recipe and native CI use `--no-fail-fast`: all test
+binaries run, failures still fail the command, and the result is one repair
+inventory rather than successive first-failure discoveries. This flag does not
+retry tests or weaken assertions. CI and the gate share `just test-workspace`,
+which requires prerequisites rather than permitting inner-loop skips.
+A local gate verifies its own platform, not
+every supported operating system; use authorized incremental push/CI
+checkpoints before freezing a release candidate instead of treating release
+publication as the first cross-platform test.
 
 ## The git hooks, and what each refuses
 

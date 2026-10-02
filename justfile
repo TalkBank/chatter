@@ -51,10 +51,13 @@ build-release:
 # precisely the state the mechanism exists to forbid and which the recipe
 # comment then claimed was impossible.
 _test tier:
-    CHATTER_GATE_TIER={{ tier }} cargo test --workspace --tests --locked
+    CHATTER_GATE_TIER={{ tier }} cargo test --workspace --tests --locked --no-fail-fast
 
 # Run the full workspace test suite via cargo. The inner loop.
 test: (_test "inner-loop")
+
+# Native CI's compiled test targets, with strict prerequisite admission.
+test-workspace: (_test "pre-push")
 
 # The full TEST set: compiled tests, doctests, both workspaces, the UI suite.
 #
@@ -67,9 +70,9 @@ test: (_test "inner-loop")
 # ran the whole doctest suite twice over. Doctests are merged into one binary
 # per crate (edition 2024), so they are cheap to RUN; the cost is the rustdoc
 # compile, which is what the inner loop skips.
-# Depends on `_test` at the STRICT tier, not on `test`: this is what `gate`
+# Depends on `test-workspace` at the STRICT tier, not on `test`: this is what `gate`
 # runs, so an absent input must fail here rather than print a skip.
-test-all: (_test "pre-push") test-spec
+test-all: test-workspace test-spec
     cargo test --doc --workspace
     cargo test -p talkbank-derive --features ui-tests --tests ui_tests
 
@@ -357,6 +360,7 @@ install-hooks:
 
 # Assert CI and the gate cannot describe different checks.
 ci-gate-sync:
+    python3 scripts/test_check_ci_gate_sync.py
     python3 scripts/check_ci_gate_sync.py
 
 # THE ONE PRE-PUSH GATE. Static checks plus every test CI runs, one stamp.

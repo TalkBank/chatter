@@ -217,6 +217,12 @@ close another pool or process's handles or establish exclusive ownership of a
 filesystem path. Fresh inspection, not the closed handle, admits the resulting
 directory state; filesystem operations remain fallible.
 
+Schema inspection transfers an open capability only for a current schema.
+Older-schema observations and schema-read refusals await shutdown before
+returning, so an observation with no handle does not leave its inspection
+workers behind. Failed migration or validation-scope admission likewise closes
+the unretained pool before returning its error.
+
 `CachePool::new(identity)` returns `Result<CachePool, CacheError>`. Callers handle
 that result before wrapping a successful pool in `Arc`. The CLI keeps the concrete
 opening error until presentation. A failed cache open leaves validation active

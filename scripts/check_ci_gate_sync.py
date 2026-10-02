@@ -179,7 +179,9 @@ def gate_recipes() -> set[str]:
             continue
         seen.add(name)
         deps, body = bodies[name]
-        found.update(_JUST_CALL.findall(body))
+        called = _JUST_CALL.findall(body)
+        found.update(called)
+        stack.extend(called)
         for dep in deps:
             found.add(dep)
             stack.append(dep)

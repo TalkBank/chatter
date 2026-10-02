@@ -271,17 +271,21 @@ impl CachePool {
             Self::open_directory_storage(&cache_dir, WhenMissing::Create)?;
         let storage = CacheStorage::Directory(cache_dir);
 
-        // Run expired entry cleanup eagerly so DB is ready before worker threads start.
-        rt.block_on(Self::clean_expired(&pool))?;
-
-        // Then drop what no reader can bind. Both passes run here, before any
-        // worker thread starts, and they answer different questions: the one
-        // above deletes what is STALE, this one deletes what is UNREACHABLE.
-        let version_prune = rt.block_on(version_prune::prune_unreachable_versions(
-            &pool,
-            &storage,
-            identity.rules_version(),
-        ))?;
+        // Admit a validation scope only after both maintenance passes finish.
+        // A refused admission closes the unretained pool before returning.
+        let version_prune = match rt.block_on(async {
+            // Expiration removes STALE rows; reachability removes UNREACHABLE
+            // rows. Both run before validation workers start.
+            Self::clean_expired(&pool).await?;
+            version_prune::prune_unreachable_versions(&pool, &storage, identity.rules_version())
+                .await
+        }) {
+            Ok(version_prune) => version_prune,
+            Err(error) => {
+                rt.block_on(pool.close());
+                return Err(error);
+            }
+        };
 
         Ok(Self {
             pool,
@@ -443,12 +447,15 @@ impl<S> CachePool<S> {
             .await
             .map_err(|source| CacheError::InitDatabase { source })?;
 
-        sqlx::migrate!("./migrations")
-            .run(&pool)
-            .await
-            .map_err(CacheError::Migration)?;
-
-        Ok(pool)
+        match sqlx::migrate!("./migrations").run(&pool).await {
+            Ok(()) => Ok(pool),
+            Err(source) => {
+                // A failed migration transfers no open capability. Finish
+                // shutdown before releasing initialization ownership.
+                pool.close().await;
+                Err(CacheError::Migration(source))
+            }
+        }
     }
 
     /// True for the transient errors a concurrent FRESH-db open can raise: the
@@ -685,6 +692,27 @@ async fn connect_read_only(db_path: &Path) -> Result<Ledger, CacheError> {
         .connect_with(options)
         .await
         .map_err(|source| CacheError::InitDatabase { source })?;
+    // Only the current-schema admission may retain an open capability.
+    // Every non-retaining result waits for shutdown before leaving this
+    // boundary; dropping the pool alone leaves SQLite workers in flight.
+    let unretained = match inspect_schema(&pool, db_path).await {
+        Ok(InspectedSchema::Current) => return Ok(Ledger::Current(pool)),
+        Ok(InspectedSchema::Older) => Ok(()),
+        Err(error) => Err(error),
+    };
+    pool.close().await;
+    unretained.map(|()| Ledger::Older)
+}
+
+/// Schema evidence borrowed from a pool, not an open database capability.
+enum InspectedSchema {
+    Older,
+    Current,
+}
+
+/// Read schema evidence without deciding who retains the pool. The owning
+/// admission boundary must either transfer it or await its shutdown.
+async fn inspect_schema(pool: &SqlitePool, db_path: &Path) -> Result<InspectedSchema, CacheError> {
     let expected = sqlx::migrate!("./migrations")
         .iter()
         .map(|migration| migration.version)
@@ -695,21 +723,21 @@ async fn connect_read_only(db_path: &Path) -> Result<Ledger, CacheError> {
     let ledgers: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
     )
-    .fetch_one(&pool)
+    .fetch_one(pool)
     .await
     .map_err(database)?;
     let applied: Option<i64> = match ledgers {
         0 => None,
         _ => sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations WHERE success = 1")
-            .fetch_one(&pool)
+            .fetch_one(pool)
             .await
             .map_err(database)?,
     };
     // `None` on either side is "nothing applied" or "nothing known", which
     // compares below every version: an unmigrated database is older.
     match applied.cmp(&expected) {
-        std::cmp::Ordering::Equal => Ok(Ledger::Current(pool)),
-        std::cmp::Ordering::Less => Ok(Ledger::Older),
+        std::cmp::Ordering::Equal => Ok(InspectedSchema::Current),
+        std::cmp::Ordering::Less => Ok(InspectedSchema::Older),
         std::cmp::Ordering::Greater => Err(CacheError::SchemaNewer {
             path: db_path.display().to_string(),
         }),

@@ -18,6 +18,10 @@ command silently ignoring something; each such change is marked.
 
 ### Changed
 
+- Workspace tests and native-platform CI collect all failing test binaries
+  with `--no-fail-fast`. Failures still fail the command; no tests are retried
+  or ignored to obtain a passing result.
+
 - Cache handles offer `close(self)`, which consumes the query capability and
   waits for pooled connections and SQLite workers to shut down. Callers that
   remove an owned database can close every owned handle explicitly instead
@@ -25,6 +29,10 @@ command silently ignoring something; each such change is marked.
   both writer and inspector before deletion, then obtain `Absent` by fresh
   inspection; they no longer query an unlinked database or assume it can be
   removed while open on Windows.
+  Non-current schema inspection, ledger-read errors, failed migration and
+  refused validation-scope admission also await shutdown of unretained pools.
+  Observations without a query handle no longer leave inspection workers
+  holding a database file.
 
 - **Breaking (Rust API):** `RunEnding::Complete` requires producer-admitted
   `CompleteStats`; `Stopped` and `Incomplete` require `PartialStats`.

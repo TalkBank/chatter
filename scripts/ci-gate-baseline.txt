@@ -9,7 +9,6 @@ ci.yml:cargo fmt --all -- --check
 ci.yml:cargo fmt --manifest-path spec/Cargo.toml --all -- --check
 ci.yml:cargo test --doc --workspace --locked
 ci.yml:cargo test --manifest-path spec/Cargo.toml --workspace --locked
-ci.yml:cargo test --workspace --tests --locked
 ci.yml:cargo test -p talkbank-derive --features ui-tests --tests ui_tests --locked
 ci.yml:for query_file in queries/*.scm; do
 ci.yml:tree-sitter generate
@@ -17,4 +16,3 @@ ci.yml:version=$(node -p "require('./package.json').devDependencies['tree-sitter
 crates-io-foundation.yml:bash scripts/release/check-foundation-publication-readiness.sh
 cross-platform.yml:cargo build --workspace --all-targets --locked
 cross-platform.yml:cargo test --doc --workspace --locked
-cross-platform.yml:cargo test --workspace --tests --locked

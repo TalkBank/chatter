@@ -95,8 +95,12 @@ fn a_read_only_open_creates_and_migrates_nothing() {
 
     // A cache a writing run made is read.
     let made = dir.path().join("made");
-    drop(CachePool::with_directory(made.clone(), identity()).unwrap());
-    ReadOnlyCache::open_directory(made, identity()).expect("an existing cache opens");
+    CachePool::with_directory(made.clone(), identity())
+        .unwrap()
+        .close();
+    ReadOnlyCache::open_directory(made, identity())
+        .expect("an existing cache opens")
+        .close();
 }
 
 /// One look tells the three states of a cache directory apart and writes
@@ -124,19 +128,18 @@ fn an_inspection_tells_the_directory_states_apart_and_writes_nothing() {
     assert_eq!(std::fs::metadata(&database).unwrap().len(), 0, "migrated");
     let maintenance = found.migrate().unwrap();
     assert_eq!(maintenance.stats().unwrap().total_entries, 0);
-    drop(maintenance);
-    drop(current(&older));
+    maintenance.close();
+    current(&older).close();
 
     // A newer build's ledger: a migration version past every one this build
     // knows. Written through a migrated cache, then stamped one version on.
     let newer = dir.path().join("newer");
-    drop(
-        CachePool::with_directory(
-            newer.clone(),
-            CacheIdentity::new(RulesVersion::for_testing("newer"), ParserKind::TreeSitter),
-        )
-        .unwrap(),
-    );
+    CachePool::with_directory(
+        newer.clone(),
+        CacheIdentity::new(RulesVersion::for_testing("newer"), ParserKind::TreeSitter),
+    )
+    .unwrap()
+    .close();
     let database = talkbank_cache::cache_db_path(&newer);
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -156,9 +159,48 @@ fn an_inspection_tells_the_directory_states_apart_and_writes_nothing() {
             pool.close().await;
         });
     assert!(matches!(
-        CacheOnDisk::inspect_directory(newer),
+        CacheOnDisk::inspect_directory(newer.clone()),
         Err(CacheError::SchemaNewer { .. })
     ));
+    assert!(matches!(
+        CachePool::with_directory(
+            newer,
+            CacheIdentity::new(RulesVersion::for_testing("refused"), ParserKind::TreeSitter),
+        ),
+        Err(CacheError::Migration(_))
+    ));
+    // Refusal retains no query capability or pending inspection worker.
+    std::fs::remove_file(&database).unwrap();
+}
+
+/// A failed ledger query also completes inspection shutdown. This is an
+/// external resource contract: a mock cannot prove the OS releases the file.
+#[test]
+fn a_failed_ledger_read_releases_its_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = talkbank_cache::cache_db_path(dir.path());
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let options = sqlx::sqlite::SqliteConnectOptions::new()
+                .filename(&database)
+                .create_if_missing(true);
+            let pool = sqlx::SqlitePool::connect_with(options).await.unwrap();
+            // Deliberately malformed external schema: the ledger reader's
+            // query requires the missing `success` column.
+            sqlx::query("CREATE TABLE _sqlx_migrations (version INTEGER)")
+                .execute(&pool)
+                .await
+                .unwrap();
+            pool.close().await;
+        });
+    assert!(matches!(
+        CacheOnDisk::inspect_directory(dir.path().to_path_buf()),
+        Err(CacheError::Database { .. })
+    ));
+    std::fs::remove_file(&database).unwrap();
 }
 
 /// Maintenance acts only on the database the look found: one that vanished
