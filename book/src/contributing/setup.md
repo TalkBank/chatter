@@ -1,7 +1,7 @@
 # Setup
 
 **Status:** Current
-**Last modified:** 2026-08-30 15:08 EDT
+**Last modified:** {{git-dates:page}}
 
 Getting a working checkout, and what you need installed for each surface you
 might touch. What to RUN once you are set up is in
@@ -15,9 +15,10 @@ use Unix shell syntax; on Windows use PowerShell or Git Bash.
 **Always:**
 
 - **Rust** via [rustup](https://rustup.rs/). Do NOT install a version by hand:
-  `rust-toolchain.toml` pins the exact stable release and
-  rustup honours it automatically. The pin exists so a new stable's clippy
-  lints cannot turn every open PR red overnight.
+  `rust-toolchain.toml` selects the current stable release and its
+  components, and rustup honours it automatically. A new stable's clippy
+  lints are caught by the weekly `clippy-rolling.yml` run and fixed in a
+  focused commit.
 - **[just](https://github.com/casey/just)** for the repo's recipes. Not
   strictly required, but every command in the contributing docs is a `just`
   recipe, and the recipes are the single owner of how each check is invoked.
@@ -81,11 +82,10 @@ just --list
 That is the authoritative catalog and it is worth reading once end to end: it
 covers testing, both generators, the spec gates, formatting, the book, doc
 dates, the vendored lexer, coverage, and the release commands. This page
-deliberately does not reproduce it. It used to list eight recipes, and by the
-time anyone noticed there were thirty-one, so the copy was quietly telling
-contributors that `just test-spec`, `just spec-status`, `just form-markers-gen`,
-`just symbols-gen`, `just verify-vendored-lexer` and `just doc-dates` did not
-exist.
+deliberately does not reproduce it: a copy would drift and tell contributors
+that recipes such as `just test-spec`, `just spec-status`,
+`just form-markers-gen`, `just symbols-gen`, `just verify-vendored-lexer` and
+`just doc-dates` do not exist.
 
 Which recipes to run, when, and what each costs: [Developer Verification
 Checks](dev-checks.md).
@@ -100,13 +100,12 @@ just push          # runs `just gate`, then pushes
 machine, in one command. It takes 12-15 minutes. CI is a confirmation, never
 the thing that finds your bug for you.
 
-It used to be a list of commands on another page, and `just push` ran four fast
-checks under a comment claiming to be the full CI gate. A green `just test` was
-read as a green gate and CI went red. If you find yourself assembling the gate
-by hand from a list, that list is the bug.
+A green `just test` is not a green gate: the gate also runs doctests, the
+`spec/` workspace and the lints. If you find yourself assembling the gate by
+hand from a list, that list is the bug.
 
-There is no `make verify` and no Makefile. This page used to describe one as
-"not yet ported"; it was never coming, because the recipes replaced it.
+There is no `make verify` and no Makefile; the `just` recipes are the only
+entry points.
 
 ## Editor setup
 

@@ -1,6 +1,6 @@
 # Chatter agent guidance
 
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/AGENTS.md)
 
 Canonical guidance for all coding agents. Read applicable nested guidance and
 the task-relevant references below.
@@ -33,6 +33,10 @@ no repeated design approval is needed. Use types to express invariants and
 transitions. Validating constructors still need tests; keep policy, serialization
 and external-boundary tests. Remove only tests whose checks are truly redundant.
 Documentation/configuration edits receive proportional verification.
+Publication metadata is Git-derived, not a claim of content review. Use the
+book's page-date placeholder or a source-bound Git-history link; handwritten
+dates still require real `date` output on edits. See
+[documentation architecture](book/src/contributing/documentation-architecture.md).
 
 `just test` is the inner loop. Changes to grammar, spec, registries or generated
 inputs require `just regen`, then tests. Review the final diff for reuse,

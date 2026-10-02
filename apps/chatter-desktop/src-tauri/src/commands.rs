@@ -13,7 +13,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
-use crossbeam_channel::Sender;
 use dashmap::DashMap;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -21,12 +20,12 @@ use crate::errors::{
     ClanError, ExportError, InstallCliError, OpenExternalError, RevealError, ValidationStartError,
 };
 use crate::protocol::commands::{
-    ExportFormat, ExportResultsRequest, OpenInClanRequest, ParserKindRequest, ValidateRequest,
+    ExportFormat, ExportResultsRequest, OpenInClanRequest, ValidateRequest,
 };
 use crate::validation::{
     initialize_cache, initialize_cache_at, validate_target_streaming_with_config,
 };
-use talkbank_transform::validation_runner::ValidationConfig;
+use talkbank_transform::validation_runner::{ValidationConfig, ValidationRun};
 use talkbank_transform::{CacheIdentity, UnifiedCache};
 
 /// Shared state: cancel sender for the current validation run, and the
@@ -60,7 +59,7 @@ use talkbank_transform::{CacheIdentity, UnifiedCache};
 /// user just flipped a setting) pays that cost once and remembers the
 /// result for next time.
 pub struct ValidationState {
-    cancel_tx: ArcSwapOption<Sender<()>>,
+    canceller: ArcSwapOption<talkbank_transform::Canceller>,
     /// Explicit cache root for test isolation; `None` uses the platform
     /// default (or `TALKBANK_CHAT_CACHE_DIR`). See [`Self::new_at`].
     cache_dir: Option<PathBuf>,
@@ -70,7 +69,7 @@ pub struct ValidationState {
 impl ValidationState {
     pub fn new() -> Self {
         Self {
-            cancel_tx: ArcSwapOption::empty(),
+            canceller: ArcSwapOption::empty(),
             cache_dir: None,
             caches: DashMap::new(),
         }
@@ -82,7 +81,7 @@ impl ValidationState {
     /// other. Mirrors `validation::initialize_cache_at`.
     pub fn new_at(cache_dir: PathBuf) -> Self {
         Self {
-            cancel_tx: ArcSwapOption::empty(),
+            canceller: ArcSwapOption::empty(),
             cache_dir: Some(cache_dir),
             caches: DashMap::new(),
         }
@@ -94,10 +93,13 @@ impl ValidationState {
     /// stale-verdict shape one dimension over (a grammar change alters what
     /// parses, hence what validates, exactly like a rule-set or
     /// strict-linkers change does).
-    pub fn cache_for_config(&self, config: &ValidationConfig) -> Option<Arc<UnifiedCache>> {
+    pub fn cache_for_config(
+        &self,
+        config: &ValidationConfig,
+    ) -> Result<Arc<UnifiedCache>, talkbank_transform::CacheError> {
         let identity = config.cache_identity();
         if let Some(existing) = self.caches.get(&identity) {
-            return Some(Arc::clone(existing.value()));
+            return Ok(Arc::clone(existing.value()));
         }
 
         let opened = match &self.cache_dir {
@@ -110,7 +112,7 @@ impl ValidationState {
         // slot. No mutex is worth adding to prevent that harmless
         // duplication.
         self.caches.insert(identity, Arc::clone(&opened));
-        Some(opened)
+        Ok(opened)
     }
 }
 
@@ -139,24 +141,11 @@ impl Default for ValidationState {
 /// that a run always has an outcome, which is the property the UI's phase
 /// machine depends on and could not previously rely on.
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
 pub async fn validate(
     app: AppHandle,
     state: State<'_, ValidationState>,
-    path: String,
-    roundtrip: bool,
-    parser_kind: ParserKindRequest,
-    strict_linkers: bool,
-    jobs: Option<u32>,
+    request: ValidateRequest,
 ) -> Result<(), ValidationStartError> {
-    let request = ValidateRequest {
-        path,
-        roundtrip,
-        parser_kind,
-        strict_linkers,
-        jobs,
-    };
-
     // `AssertUnwindSafe` is sound here for the reason the wrapper exists: on a
     // panic this run is abandoned outright, so no caller observes the partially
     // updated state a panic might leave behind. The cancel slot is overwritten
@@ -204,12 +193,35 @@ fn start_validation(
     // selection, via the same seam `cache_for_config` composes the cache key
     // from (`RulesVersion::current_with_rule_selection`), not a single pool
     // opened once at app startup: see `ValidationState`'s docs for why.
-    let cache = state.cache_for_config(&config);
-    let (rx, cancel_tx) =
-        validate_target_streaming_with_config(request.path.into(), config, cache)?;
+    //
+    // The pool is bound to the configuration it was opened for, so the run
+    // cannot read another configuration's verdicts. A cache that will not open
+    // (or bind) is said to the user, before the run's own events, and the run
+    // goes on without it.
+    let bound = state
+        .cache_for_config(&config)
+        .map_err(|error| error.to_string())
+        .and_then(|cache| {
+            ValidationRun::new(
+                config.clone(),
+                talkbank_transform::RunCache::ReadWrite(cache),
+            )
+            .map_err(|mismatch| mismatch.to_string())
+        });
+    let run = match bound {
+        Ok(run) => run,
+        Err(reason) => {
+            let _ = app.emit(
+                crate::protocol::events::VALIDATION,
+                &crate::events::FrontendEvent::CacheUnavailable { reason },
+            );
+            ValidationRun::uncached(config)
+        }
+    };
+    let (rx, canceller) = validate_target_streaming_with_config(request.path.into(), &run)?;
 
-    // Atomically store the cancel sender (lock-free)
-    state.cancel_tx.store(Some(Arc::new(cancel_tx)));
+    // Atomically store the run's canceller (lock-free)
+    state.canceller.store(Some(Arc::new(canceller)));
 
     // Spawn a thread to forward events to the frontend
     let app_clone = app.clone();
@@ -231,13 +243,14 @@ fn start_validation(
 #[allow(clippy::result_unit_err)]
 #[tauri::command]
 pub async fn cancel_validation(state: State<'_, ValidationState>) -> Result<(), ()> {
-    // Atomically take the cancel sender (lock-free). Cancelling has no failure
+    // Atomically take the canceller (lock-free). Cancelling has no failure
     // mode: with no run in flight there is simply nothing to signal, and a
-    // receiver that has already hung up means the run ended on its own. The
-    // `Result` is retained only because Tauri requires it for a command taking
-    // borrowed `State`; `Err` is uninhabited in practice.
-    if let Some(tx) = state.cancel_tx.swap(None) {
-        let _ = tx.send(());
+    // run that already ended has nothing left to stop (`Canceller::cancel`
+    // is a no-op then). The `Result` is retained only because Tauri requires
+    // it for a command taking borrowed `State`; `Err` is uninhabited in
+    // practice.
+    if let Some(canceller) = state.canceller.swap(None) {
+        canceller.cancel();
     }
     Ok(())
 }
@@ -253,21 +266,12 @@ pub async fn check_clan_available() -> bool {
 /// Uses `resolve_clan_location` from `talkbank-model`, the same function the
 /// TUI uses. Resolves line/column from byte offset when not provided, adjusts
 /// for CLAN hidden headers.
+///
+/// Takes one `request`, the `OpenInClanRequest` the backend works from, as
+/// `validate` takes its `ValidateRequest`.
 #[tauri::command]
-pub async fn open_in_clan(
-    file: String,
-    line: i32,
-    col: i32,
-    byte_offset: u32,
-    msg: String,
-) -> Result<(), ClanError> {
-    open_in_clan_request(OpenInClanRequest {
-        file,
-        line,
-        col,
-        byte_offset,
-        msg,
-    })
+pub async fn open_in_clan(request: OpenInClanRequest) -> Result<(), ClanError> {
+    open_in_clan_request(request)
 }
 
 /// The exact CLAN coordinates + highlight message an Open-in-CLAN request
@@ -430,27 +434,23 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), RevealError> {
     Ok(())
 }
 
-/// Export validation results to a file.
+/// Export validation results to a file. Takes one `request`, the
+/// `ExportResultsRequest` the backend works from.
 #[tauri::command]
-pub async fn export_results(
-    results: String,
-    format: ExportFormat,
-    path: String,
-) -> Result<(), ExportError> {
-    export_results_request(ExportResultsRequest {
-        results,
-        format,
-        path,
-    })
+pub async fn export_results(request: ExportResultsRequest) -> Result<(), ExportError> {
+    export_results_request(request)
 }
 
-/// Typed admission for text export. Missing paths or rendered diagnostics are
-/// malformed input, not a reason to fabricate a question-mark placeholder.
+/// Typed admission for text export. Missing paths, labels or rendered
+/// diagnostics are malformed input, not a reason to fabricate a placeholder.
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct TextExportFile {
     path: String,
     errors: Vec<TextExportDiagnostic>,
-    status: Option<crate::events::FrontendFileStatus>,
+    /// The file's outcome as the app shows it (`fileStatusLabel`), so the
+    /// export says exactly what the screen said, from one owner.
+    status_label: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -468,36 +468,14 @@ pub fn export_results_request(request: ExportResultsRequest) -> Result<(), Expor
                 .map_err(|source| ExportError::MalformedResults { source })?
         }
         ExportFormat::Text => {
-            // Reuse the canonical miette-rendered text already computed once in
-            // `events.rs::to_frontend_event` (the same text the on-screen error
-            // panel shows), instead of hand-rebuilding a poorer one-line
-            // "path:line: code msg" form from raw JSON fields. Keeps exported
-            // text byte-identical to what the app displayed.
+            // The canonical miette-rendered text computed once in `events.rs`
+            // (the text the on-screen error panel shows) and the app's own
+            // status label, so exported text is what the app displayed.
             let parsed: Vec<TextExportFile> = serde_json::from_str(&request.results)
                 .map_err(|source| ExportError::MalformedResults { source })?;
             let mut lines = Vec::new();
             for file_entry in &parsed {
-                use crate::events::FrontendFileStatus;
-                let status = match &file_entry.status {
-                    None => "Validation pending".to_owned(),
-                    Some(FrontendFileStatus::Valid { .. }) => "Valid".to_owned(),
-                    Some(FrontendFileStatus::Invalid { error_count, .. }) => {
-                        format!("Validation failed ({error_count} diagnostics)")
-                    }
-                    Some(FrontendFileStatus::ReadError { message }) => {
-                        format!("Read error: {message}")
-                    }
-                    Some(FrontendFileStatus::ParseError { message }) => {
-                        format!("Parse error: {message}")
-                    }
-                    Some(FrontendFileStatus::InternalFailure { message }) => {
-                        format!("Internal failure: {message}")
-                    }
-                    Some(FrontendFileStatus::RoundtripFailed { reason, .. }) => {
-                        format!("Roundtrip failed: {reason}")
-                    }
-                };
-                lines.push(format!("{}\n{status}", file_entry.path));
+                lines.push(format!("{}\n{}", file_entry.path, file_entry.status_label));
                 for error in &file_entry.errors {
                     lines.push(error.rendered_text.clone());
                 }

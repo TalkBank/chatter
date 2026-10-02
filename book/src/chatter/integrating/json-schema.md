@@ -1,7 +1,7 @@
 # JSON Schema
 
 **Status:** Current
-**Last modified:** 2026-09-05 12:03 EDT
+**Last modified:** {{git-dates:page}}
 
 This repository generates JSON Schema from Rust-owned types with
 [schemars](https://docs.rs/schemars) for the `ChatFile` transcript model used
@@ -43,9 +43,10 @@ prints individual parse/validation diagnostics and exits unsuccessfully if
 any file fails, while retaining successfully converted siblings.
 
 Library callers that know the transcript name can use
-`chat_to_json_with_schema_policy` with `TranscriptName` and
-`JsonSchemaPolicy::{Validate, Skip}`. The policy selects serialization only;
-it cannot alter the parse options or discard the transcript name.
+`chat_to_json_with_schema_policy` with `TranscriptName`,
+`JsonLayout::{Pretty, Compact}` and `JsonSchemaPolicy::{Validate, Skip}`. The
+layout and the policy select serialization only; they cannot alter the parse
+options or discard the transcript name.
 
 Useful flags:
 
@@ -139,6 +140,7 @@ command without dumping the entire schema into the test log.
 The generator preserves schemars' Draft 2020-12 structure. In this dialect,
 [`$ref` permits sibling keywords](https://json-schema.org/draft/2020-12/json-schema-core#section-8.2.3.1),
 including the tag constraints for internally tagged enums. No `allOf` rewrite
-is required. The former recursive workaround also traversed literal `const`
-values and could change their meaning, so it has been removed. The generated
-schema regression verifies both the tag and the referenced payload constraints.
+is required: a rewrite that recursed through the schema would also traverse
+literal `const` values and could change their meaning, so the generator
+leaves the structure as emitted. The generated schema regression verifies
+both the tag and the referenced payload constraints.

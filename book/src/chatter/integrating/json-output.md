@@ -1,7 +1,7 @@
 # JSON Output Reference
 
 **Status:** Reference
-**Last updated:** 2026-09-28 20:59 EDT
+**Last updated:** {{git-dates:page}}
 
 This document describes the structure of JSON produced by `chatter to-json`.
 For the formal JSON Schema, see [JSON Schema](json-schema.md).
@@ -80,11 +80,11 @@ Rust callers use `Word::new(WordText)` for a nonempty plain-text model, then
 explicit typed builders for markers. Nonempty construction alone is not full
 CHAT admission. For external CHAT/ASR tokens, use `ChatParser::parse_word_fragment`
 and handle rejection explicitly instead of falling back to unchecked construction.
-The former independent raw/cleaned constructor arguments and `set_raw_text` are
-removed. `raw_text()` returns an owned string; use `WriteChat::write_chat` or
+There are no independent raw/cleaned constructor arguments and no `set_raw_text`.
+`raw_text()` returns an owned string; use `WriteChat::write_chat` or
 `Display` when streaming avoids an intermediate allocation. JSON serialization
-streams that display projection directly. The existing cleaned-text cache is
-still invalidated by content mutation; no raw-text cache can become stale after
+streams that display projection directly. The cleaned-text cache is
+invalidated by content mutation; no raw-text cache can become stale after
 public marker mutation.
 
 - **`cleaned_text`**: Concatenates `Text` and `Shortening` elements from `content`.
@@ -293,15 +293,13 @@ Three properties worth knowing before consuming it:
   Precedence is innermost-first: the word's own mark beats an enclosing span,
   which beats the utterance. The values are enumerated with a description each
   in `schema/chat-file.schema.json`, generated from the enum; they are
-  deliberately not copied here, because the copy that used to live in the
-  enum's own rustdoc went stale in the very commit that added the span values.
+  deliberately not copied here, because a copy would go stale.
 - **Position is the array subscript**, and nothing else. There is no index
   field: read it with the equivalent of `enumerate()`. In particular this
   order is **not** an alignment index. The tier domains disagree about what
   they count (`%mor` excludes retraces, `%pho` counts them), so correlating
   with `%mor` or `%gra` positions must go through `alignments`, not through
-  this order. A `word_index` field claiming otherwise existed until
-  2026-08-07 and was removed as derivable and misleading.
+  this order. There is no `word_index` field, because it would be derivable and misleading.
 
 ### Content Items
 

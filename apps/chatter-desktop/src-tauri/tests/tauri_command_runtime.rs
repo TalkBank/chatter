@@ -194,9 +194,11 @@ fn export_results_writes_inside_a_runtime() {
 
     let outcome = tauri::async_runtime::block_on(async {
         chatter_desktop_lib::commands::export_results(
-            "[]".to_string(),
-            chatter_desktop_lib::protocol::commands::ExportFormat::Json,
-            out.to_string_lossy().into_owned(),
+            chatter_desktop_lib::protocol::commands::ExportResultsRequest {
+                results: "[]".to_string(),
+                format: chatter_desktop_lib::protocol::commands::ExportFormat::Json,
+                path: out.to_string_lossy().into_owned(),
+            },
         )
         .await
     });
@@ -209,42 +211,41 @@ fn export_results_writes_inside_a_runtime() {
     let _ = std::fs::remove_file(&out);
 }
 
+/// The text export writes each file's label as the app showed it, failures
+/// without diagnostics included: the label has one owner, the frontend's
+/// `fileStatusLabel`.
 #[test]
-fn text_export_retains_failures_without_diagnostic_cards() {
+fn text_export_writes_each_files_label_as_shown() {
     let directory = tempfile::tempdir().expect("export test directory");
     let path = directory.path().join("failures.txt");
     let results = serde_json::json!([
-        {"path":"read.cha", "errors":[], "status":{"type":"readError", "message":"permission denied"}},
-        {"path":"parse.cha", "errors":[], "status":{"type":"parseError", "message":"parser failed"}},
-        {"path":"internal.cha", "errors":[], "status":{"type":"internalFailure", "message":"validity not determined"}},
-        {"path":"roundtrip.cha", "errors":[], "status":{"type":"roundtripFailed", "cacheHit":false, "reason":"model changed"}},
-        {"path":"invalid.cha", "errors":[], "status":{"type":"invalid", "cacheHit":true, "errorCount":2}},
-        {"path":"valid.cha", "errors":[], "status":{"type":"valid", "cacheHit":true}},
-        {"path":"pending.cha", "errors":[], "status":null}
+        {"path":"read.cha", "errors":[], "status":{"type":"readError", "message":"permission denied"},
+         "statusLabel":"Read error: permission denied"},
+        {"path":"pending.cha", "errors":[], "status":null, "statusLabel":"Validation pending"}
     ]);
-    tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(
+    tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(text_request(
         results.to_string(),
-        ExportFormat::Text,
-        path.to_string_lossy().into_owned(),
-    ))
+        &path,
+    )))
     .expect("text export");
     let text = std::fs::read_to_string(path).expect("exported results");
     for expected in [
-        "read.cha",
-        "permission denied",
-        "parse.cha",
-        "parser failed",
-        "internal.cha\nInternal failure: validity not determined",
-        "roundtrip.cha",
-        "model changed",
-        "invalid.cha",
-        "2",
-        "valid.cha",
-        "Valid",
-        "pending.cha",
-        "Validation pending",
+        "read.cha\nRead error: permission denied",
+        "pending.cha\nValidation pending",
     ] {
         assert!(text.contains(expected), "missing {expected:?} in {text:?}");
+    }
+}
+
+/// A text export request for `results`, written to `path`.
+fn text_request(
+    results: String,
+    path: &std::path::Path,
+) -> chatter_desktop_lib::protocol::commands::ExportResultsRequest {
+    chatter_desktop_lib::protocol::commands::ExportResultsRequest {
+        results,
+        format: ExportFormat::Text,
+        path: path.to_string_lossy().into_owned(),
     }
 }
 
@@ -255,14 +256,13 @@ fn text_export_preserves_rendering_and_refuses_malformed_input_before_writing() 
     let rendered = "W109: normalize name\n  │ media snippet\n  ╰─ advice\n";
     let results = serde_json::json!([{
         "path":"sample.cha", "errors":[{"renderedText":rendered}],
-        "status":{"type":"roundtripFailed", "cacheHit":false, "reason":"model changed"}
+        "status":{"type":"roundtripFailed", "cacheHit":false, "reason":"model changed"},
+        "statusLabel":"Roundtrip failed: model changed"
     }]);
     let export = |results: String| {
-        tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(
-            results,
-            ExportFormat::Text,
-            path.to_string_lossy().into_owned(),
-        ))
+        tauri::async_runtime::block_on(chatter_desktop_lib::commands::export_results(text_request(
+            results, &path,
+        )))
     };
     export(results.to_string()).expect("export rendered diagnostic and status");
     let original = std::fs::read_to_string(&path).expect("text export");
@@ -272,9 +272,9 @@ fn text_export_preserves_rendering_and_refuses_malformed_input_before_writing() 
     );
     assert!(original.contains("Roundtrip failed: model changed"));
     for malformed in [
-        serde_json::json!([{"errors":[], "status":null}]),
-        serde_json::json!([{"path":"bad.cha", "errors":[{}], "status":null}]),
-        serde_json::json!([{"path":"bad.cha", "errors":[], "status":{"type":"unknown"}}]),
+        serde_json::json!([{"errors":[], "status":null, "statusLabel":"Valid"}]),
+        serde_json::json!([{"path":"bad.cha", "errors":[{}], "status":null, "statusLabel":"Valid"}]),
+        serde_json::json!([{"path":"bad.cha", "errors":[], "status":null}]),
     ] {
         assert!(export(malformed.to_string()).is_err());
         assert_eq!(

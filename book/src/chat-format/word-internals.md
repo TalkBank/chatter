@@ -1,7 +1,7 @@
 # The CHAT Word
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 "Word" is the most complex and most misunderstood concept in CHAT. This
 chapter documents what a word actually is, how the grammar parses it, and
@@ -241,8 +241,8 @@ never contain structural markers. There is nothing to strip.
 
 ### `@u` phonetic forms are typed phonetic content
 
-A `@u` word is a phonetic transcription (historically UNIBET, now
-usually IPA) standing in a word slot: used when the orthographic word is
+A `@u` word is a phonetic transcription (UNIBET or, more
+usually, IPA) standing in a word slot: used when the orthographic word is
 unknown, unintelligible, or a paraphasia, frequently the spoken side of
 a `[: target]` replacement in aphasia data (`rɛmbə˞@u [: remember]`).
 Because its content obeys phonetic conventions rather than orthographic
@@ -418,16 +418,13 @@ by structure.
 Bracket annotations (`[= text]`, `[=! text]`, `[% text]`) use `prec(8)`
 prefix tokens to beat generic bracket handling.
 
-## Historical Context: The Coarsening and Its Reversal
+## Design: Structured Word Content
 
-### The original structured grammar (pre-coarsening)
-
-The original grammar (preserved in
-`grammar/docs/pre-coarsening-grammar.js.reference`) had all word-internal
-markers as children of `word_content`:
+`standalone_word` is a structured grammar, not an opaque token. Every
+word-internal marker is a separate child of `word_body`. A reference copy of this shape is kept in
+`grammar/docs/pre-coarsening-grammar.js.reference`:
 
 ```javascript
-// Pre-coarsening: every marker was a child of word_content
 word_content: $ => choice(
   $.word_segment,
   $.shortening,
@@ -444,37 +441,20 @@ word_content: $ => choice(
 ),
 ```
 
-### The coarsening decision
+The design decisions that follow from this:
 
-At one point, `standalone_word` was coarsened into an **opaque token** --
-a single DFA regex that consumed the entire word as one undifferentiated
-string. The rationale was:
+1. All marker characters are excluded from `word_segment`, using the symbol
+   registry as the single source of truth for the exclusion sets.
+2. Each marker type is a separate CST child in `word_body`, so editors get typed
+   nodes and validation finds structural markers without re-parsing.
+3. The `WordContent` enum in the Rust model is aligned 1:1 with the grammar
+   nodes, so `cleaned_text()` reads typed content rather than scanning for and
+   stripping marker characters.
+4. The `word_segment` purity invariant is a gate: a structural marker is never
+   consumed by `word_segment`.
 
-- Simpler grammar with fewer tree-sitter conflicts.
-- A Chumsky-based direct parser in Rust would re-parse the opaque token
-  into structured `WordContent` elements.
-
-This worked but had costs:
-
-- Two parsers (tree-sitter + Chumsky) with independent bugs.
-- Validation could not find structural markers without re-parsing.
-- Editors got one opaque node instead of typed children.
-- `cleaned_text()` had to scan for and strip marker characters.
-
-### The reversal (Chumsky elimination)
-
-When the Chumsky direct parser was eliminated (making tree-sitter the sole
-parser), the structured word grammar was restored. The key decisions:
-
-1. All marker characters were re-excluded from `word_segment` using the
-   symbol registry as the single source of truth.
-2. Each marker type became a separate CST child in `word_body`.
-3. The `WordContent` enum in the Rust model was aligned 1:1 with the
-   grammar nodes.
-4. The word_segment purity invariant was established as a TDD gate.
-
-The result is one parser, one source of truth for exclusions, and typed
-markers from grammar through model.
+The result is one parser, one source of truth for exclusions, and typed markers
+from grammar through model.
 
 ## Testing: The word_segment Purity Gate
 
@@ -495,11 +475,8 @@ appropriately:
 
 Underline and stress invariants are covered by corpus tests elsewhere
 in `grammar/test/corpus/` and by the parser-equivalence tests in
-`crates/talkbank-parser-tests/`. The historical
-`word_segment_purity.txt` consolidated 8 named tests in one file; it
-was retired in commit `fdceeac2` when the corresponding constructs
-were given their own per-construct test files (this is the new layout
-that the current spec generators produce from the spec sources).
+`crates/talkbank-parser-tests/`. Each construct has its own test file, as the
+spec generators produce from the spec sources.
 
 ### How to add a new purity-style test
 
@@ -528,10 +505,10 @@ If you add a new structural marker to the grammar:
 |---|---|
 | `grammar/grammar.js` | search for `standalone_word`, `word_body`, `word_segment`, `_word_marker` |
 | `grammar/src/generated_symbol_sets.js` | Character exclusion sets (generated, do not edit) |
-| `grammar/test/corpus/generated/word/*_in_word_lint.txt`, `lengthening*.txt`, `stacked_ca_markers.txt` | Per-construct purity-invariant gate tests (replaced the consolidated `word_segment_purity.txt` retired in `fdceeac2`) |
+| `grammar/test/corpus/generated/word/*_in_word_lint.txt`, `lengthening*.txt`, `stacked_ca_markers.txt` | Per-construct purity-invariant gate tests |
 | `grammar/docs/tokenization-rules.md` | The 6 tokenization ambiguities with full examples |
 | `grammar/docs/precedence-decisions.md` | Precedence proofs (zero, colon, purity invariant) |
-| `grammar/docs/pre-coarsening-grammar.js.reference` | Historical: the grammar before coarsening |
+| `grammar/docs/pre-coarsening-grammar.js.reference` | The structured word grammar shape in `word_content` form, kept as a reference |
 | `crates/talkbank-model/src/model/content/word/word_type.rs` | `Word` struct |
 | `crates/talkbank-model/src/model/content/word/content.rs` | `WordContent` enum (12 variants) |
 | `crates/talkbank-model/src/model/content/word/word_contents.rs` | `WordContents` (SmallVec-backed sequence) |

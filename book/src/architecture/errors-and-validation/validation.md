@@ -1,7 +1,7 @@
 # Validation
 
 **Status:** Current
-**Last modified:** 2026-08-30 13:21 EDT
+**Last modified:** {{git-dates:page}}
 
 Validation levels and the pre/post gates a pipeline can build on. For the
 error-code infrastructure (codes, sinks, severities, layers) see
@@ -104,8 +104,7 @@ does not duplicate them. Labels like `G0-G14` come from a predecessor workspace
 and name nothing here.
 
 The reference corpus is a synthesized regression signal, **not** a validity
-authority. This page used to call it "the sacred semantic target", which is
-precisely the framing that leads someone to weaken a validator so a fixture
+authority; treating it as one leads someone to weaken a validator so a fixture
 stays green. When a change makes a reference file fail, adjudicate the FILE.
 
 ## Known limitations
@@ -132,6 +131,4 @@ stays green. When a change makes a reference file fail, adjudicate the FILE.
 chatter contains no ML-pipeline code. Downstream consumers embed these crates
 and add their own gates, bug reporting and cache invalidation; how a given
 pipeline reports a validation failure, and where it writes it, is documented by
-that pipeline, not here. This page previously described one such consumer's
-server behaviour, PyO3 boundary types and on-disk report directory as though
-they were chatter's own.
+that pipeline, not here.

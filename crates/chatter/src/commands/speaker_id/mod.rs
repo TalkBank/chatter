@@ -271,6 +271,6 @@ pub fn run_speaker_id(args: SpeakerIdArgs<'_>) {
             }
             info!("wrote relabeled file: {}", path.display());
         }
-        None => print!("{relabeled}"),
+        None => out!("{relabeled}"),
     }
 }

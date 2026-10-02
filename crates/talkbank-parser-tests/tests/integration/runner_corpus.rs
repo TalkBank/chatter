@@ -8,49 +8,25 @@ mod cache_contracts;
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use talkbank_cache::{CacheError, CacheLookup, ContentHash};
 use talkbank_model::model::TranscriptName;
+use talkbank_model::validation::AlignmentValidation;
 use talkbank_model::{ErrorCollector, ParseError, Severity};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, repo_paths::workspace_root};
 use talkbank_transform::validation_runner::{
-    CacheMode, CacheOutcome, FileStatus, RoundtripVerdict, RunCoverage, ValidationCache,
-    ValidationConfig, ValidationEvent, validate_directory_streaming, validate_files_streaming,
+    CacheOutcome, FileStatus, RoundtripCheck, RoundtripVerdict, RunCache, RunEnding,
+    ValidationCache, ValidationConfig, ValidationEvent, validate_directory_streaming,
+    validate_files_streaming,
 };
 
-// No cache instance can exist: this workflow must perform actual file work.
-enum AbsentCache {}
-impl ValidationCache for AbsentCache {
-    fn get(&self, _: &Path, _: bool) -> Option<CacheOutcome> {
-        match *self {}
-    }
-    fn set(&self, _: &Path, _: bool, _: CacheOutcome) -> Result<(), String> {
-        match *self {}
-    }
-}
-
-enum PendingFile {
-    Diagnostics {
-        source: String,
-        errors: Vec<ParseError>,
-    },
-    Roundtrip,
-    Completion {
-        error_count: usize,
-        roundtrip: RoundtripVerdict,
-    },
-}
-
-impl PendingFile {
-    fn after_diagnostics(error_count: usize, roundtrip_requested: bool) -> Self {
-        if error_count == 0 && roundtrip_requested {
-            Self::Roundtrip
-        } else {
-            Self::Completion {
-                error_count,
-                roundtrip: RoundtripVerdict::NotRequested,
-            }
-        }
-    }
+/// What one reference file's result must say: its diagnostics (with the
+/// source they point into) and its verdict.
+struct ExpectedFile {
+    source: String,
+    errors: Vec<ParseError>,
+    error_count: usize,
+    roundtrip: RoundtripVerdict,
 }
 
 enum Workflow<'a> {
@@ -158,14 +134,12 @@ fn canonical_file_sibling_survives_unreadable_input() {
         .expect("remove only the test-owned empty reservation");
     assert!(!missing.exists());
     let config = ValidationConfig {
-        jobs: Some(1),
-        cache: CacheMode::Disabled,
+        jobs: Some(std::num::NonZeroUsize::MIN),
         ..Default::default()
     };
-    let (events, _cancel) = validate_files_streaming::<AbsentCache>(
+    let (events, _cancel) = validate_files_streaming(
         vec![missing.clone(), bad.clone(), good.clone()],
-        &config,
-        None,
+        &talkbank_transform::ValidationRun::uncached(config.clone()),
     );
     let mut pending =
         std::collections::BTreeSet::from([missing.clone(), bad.clone(), good.clone()]);
@@ -188,22 +162,20 @@ fn canonical_file_sibling_survives_unreadable_input() {
                     assert!(matches!(
                         event.status,
                         FileStatus::Valid {
-                            cache_hit: false,
                             roundtrip: RoundtripVerdict::NotRequested,
+                            ..
                         }
                     ));
                 }
             }
-            ValidationEvent::Finished(stats) => {
+            ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                let stats = stats.snapshot();
                 assert!(pending.is_empty());
-                assert_eq!(stats.coverage(), RunCoverage::Complete);
-                assert_eq!(stats.total_files, 3);
-                assert_eq!(stats.valid_files, 1);
+                assert_eq!(stats.total_files().get(), 3);
+                assert_eq!(stats.valid_files(), 1);
                 // Read failure is a failed file, not a parser diagnostic.
-                assert_eq!(stats.parse_errors, 0);
-                assert_eq!(stats.invalid_files, 2);
-                assert_eq!(stats.cache_hits, 0);
-                assert!(!stats.cancelled);
+                assert_eq!(stats.invalid_files(), 2);
+                assert_eq!(stats.cache_hits(), 0);
                 finished = true;
             }
             other => panic!("unexpected file-read-failure event: {other:?}"),
@@ -217,13 +189,12 @@ fn canonical_file_cache_replays_only_completed_validation_and_roundtrips() {
     use std::sync::Arc;
     use talkbank_cache::CachePool;
     struct Step {
-        roundtrip: bool,
-        cache_hit: bool,
+        roundtrip: RoundtripCheck,
+        cache: talkbank_transform::validation_runner::CacheUse,
         verdict: RoundtripVerdict,
     }
     let mut config = ValidationConfig {
-        jobs: Some(1),
-        cache: CacheMode::Enabled,
+        jobs: Some(std::num::NonZeroUsize::MIN),
         ..Default::default()
     };
     let cache =
@@ -231,70 +202,70 @@ fn canonical_file_cache_replays_only_completed_validation_and_roundtrips() {
     let path = workspace_root().join("corpus/reference/core/basic-conversation.cha");
     for step in [
         Step {
-            roundtrip: false,
-            cache_hit: false,
+            roundtrip: RoundtripCheck::Skip,
+            cache: talkbank_transform::validation_runner::CacheUse::Miss,
             verdict: RoundtripVerdict::NotRequested,
         },
         Step {
-            roundtrip: true,
-            cache_hit: false,
+            roundtrip: RoundtripCheck::Run,
+            cache: talkbank_transform::validation_runner::CacheUse::Miss,
             verdict: RoundtripVerdict::Passed,
         },
         Step {
-            roundtrip: true,
-            cache_hit: true,
+            roundtrip: RoundtripCheck::Run,
+            cache: talkbank_transform::validation_runner::CacheUse::Hit,
             verdict: RoundtripVerdict::Passed,
         },
         Step {
-            roundtrip: false,
-            cache_hit: true,
+            roundtrip: RoundtripCheck::Skip,
+            cache: talkbank_transform::validation_runner::CacheUse::Hit,
             verdict: RoundtripVerdict::NotRequested,
         },
     ] {
         config.roundtrip = step.roundtrip;
-        let (events, _cancel) =
-            validate_files_streaming(vec![path.clone()], &config, Some(cache.clone()));
+        let (events, _cancel) = validate_files_streaming(
+            vec![path.clone()],
+            &talkbank_transform::ValidationRun::new(
+                config.clone(),
+                RunCache::ReadWrite(cache.clone()),
+            )
+            .expect("a cache opened for this run's identity"),
+        );
         let mut completions = 0;
-        let mut roundtrips = 0;
         let mut finished = false;
         for event in events {
             assert!(!finished, "Finished is terminal");
             match event {
                 ValidationEvent::Discovering => {}
                 ValidationEvent::Started { total_files } => assert_eq!(total_files, 1),
-                ValidationEvent::Errors(errors) => {
-                    panic!("valid reference diagnostics: {errors:?}")
-                }
                 ValidationEvent::FileComplete(event) => {
                     assert_eq!(event.path, path);
-                    let FileStatus::Valid {
-                        cache_hit,
-                        roundtrip,
-                    } = event.status
-                    else {
+                    assert!(
+                        event.status.shown().is_none(),
+                        "valid reference diagnostics: {:?}",
+                        event.status
+                    );
+                    let FileStatus::Valid { roundtrip, .. } = event.status else {
                         panic!("reference must remain valid");
                     };
-                    assert_eq!(cache_hit, step.cache_hit);
+                    assert_eq!(event.cache, step.cache);
                     assert_eq!(roundtrip, step.verdict);
                     completions += 1;
                 }
-                ValidationEvent::RoundtripComplete(event) => {
-                    assert_eq!(event.path, path);
-                    assert!(event.passed && event.failure_reason.is_none() && event.diff.is_none());
-                    roundtrips += 1;
-                }
-                ValidationEvent::Finished(stats) => {
-                    assert_eq!(stats.coverage(), RunCoverage::Complete);
-                    assert_eq!(stats.total_files, 1);
-                    assert_eq!(stats.valid_files, 1);
+                ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                    let stats = stats.snapshot();
+                    assert_eq!(stats.total_files().get(), 1);
+                    assert_eq!(stats.valid_files(), 1);
+                    assert_eq!(stats.invalid_files() + stats.roundtrip_failed(), 0);
                     assert_eq!(
-                        stats.invalid_files + stats.parse_errors + stats.roundtrip_failed,
-                        0
+                        (stats.cache_hits(), stats.cache_misses()),
+                        match step.cache {
+                            talkbank_transform::validation_runner::CacheUse::Hit => (1, 0),
+                            talkbank_transform::validation_runner::CacheUse::Miss => (0, 1),
+                            talkbank_transform::validation_runner::CacheUse::NotConsulted => (0, 0),
+                        }
                     );
-                    assert_eq!(stats.cache_hits, usize::from(step.cache_hit));
-                    assert_eq!(stats.cache_misses, usize::from(!step.cache_hit));
-                    assert_eq!(stats.roundtrip_passed, usize::from(step.roundtrip));
-                    assert!(!stats.cancelled);
+                    assert_eq!(stats.roundtrip_passed(), roundtrips_of(step.roundtrip));
                     finished = true;
                 }
                 other => panic!("unexpected cache workflow event: {other:?}"),
@@ -302,7 +273,6 @@ fn canonical_file_cache_replays_only_completed_validation_and_roundtrips() {
         }
         assert!(finished);
         assert_eq!(completions, 1);
-        assert_eq!(roundtrips, usize::from(step.roundtrip));
     }
 }
 
@@ -318,8 +288,7 @@ fn alignment_spec_cache_does_not_promote_basic_validation() {
         BasicWarm,
     }
     let mut config = ValidationConfig {
-        jobs: Some(1),
-        cache: CacheMode::Enabled,
+        jobs: Some(std::num::NonZeroUsize::MIN),
         ..Default::default()
     };
     let cache = Arc::new(CachePool::in_memory(config.cache_identity()).expect("isolated cache"));
@@ -327,11 +296,19 @@ fn alignment_spec_cache_does_not_promote_basic_validation() {
         .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E714_4.cha");
     let source = std::fs::read_to_string(&path).expect("canonical grouped mismatch");
     for pass in [Pass::BasicCold, Pass::AlignmentRequired, Pass::BasicWarm] {
-        config.check_alignment = matches!(pass, Pass::AlignmentRequired);
+        config.alignment = match pass {
+            Pass::AlignmentRequired => AlignmentValidation::IncludeTierAlignment,
+            Pass::BasicCold | Pass::BasicWarm => AlignmentValidation::Structure,
+        };
         let expected_hit = matches!(pass, Pass::BasicWarm);
-        let (events, _cancel) =
-            validate_files_streaming(vec![path.clone()], &config, Some(cache.clone()));
-        let mut diagnostics = Vec::new();
+        let (events, _cancel) = validate_files_streaming(
+            vec![path.clone()],
+            &talkbank_transform::ValidationRun::new(
+                config.clone(),
+                RunCache::ReadWrite(cache.clone()),
+            )
+            .expect("a cache opened for this run's identity"),
+        );
         let mut completed = false;
         let mut finished = false;
         for event in events {
@@ -339,49 +316,61 @@ fn alignment_spec_cache_does_not_promote_basic_validation() {
             match event {
                 ValidationEvent::Discovering => {}
                 ValidationEvent::Started { total_files } => assert_eq!(total_files, 1),
-                ValidationEvent::Errors(event) => {
-                    assert!(!completed);
-                    assert_eq!(event.path, path);
-                    assert_eq!(event.source.as_ref(), source);
-                    diagnostics.extend(event.errors);
-                }
                 ValidationEvent::FileComplete(event) => {
                     assert!(!completed);
                     assert_eq!(event.path, path);
+                    let diagnostics = match event.status.shown() {
+                        Some(shown) => {
+                            assert_eq!(shown.source, source);
+                            shown.errors.to_vec()
+                        }
+                        None => Vec::new(),
+                    };
                     match pass {
                         Pass::AlignmentRequired => {
                             assert!(matches!(
                                 event.status,
-                                FileStatus::Invalid {
-                                    error_count: 1,
-                                    cache_hit: false
-                                }
+                                FileStatus::Invalid { ref diagnostics }
+                                    if diagnostics.error_count().get() == 1
                             ));
                             assert_eq!(diagnostics.len(), 1);
                             assert_eq!(diagnostics[0].code, ErrorCode::PhoCountMismatchTooFew);
                         }
                         Pass::BasicCold | Pass::BasicWarm => {
                             assert!(diagnostics.is_empty());
-                            assert!(matches!(event.status, FileStatus::Valid {
-                                cache_hit, roundtrip: RoundtripVerdict::NotRequested,
-                            } if cache_hit == expected_hit));
+                            assert!(matches!(
+                                event.status,
+                                FileStatus::Valid {
+                                    roundtrip: RoundtripVerdict::NotRequested,
+                                    ..
+                                }
+                            ));
+                            assert_eq!(
+                                matches!(
+                                    event.cache,
+                                    talkbank_transform::validation_runner::CacheUse::Hit
+                                ),
+                                expected_hit
+                            );
                         }
                     }
                     completed = true;
                 }
-                ValidationEvent::Finished(stats) => {
+                ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                    let stats = stats.snapshot();
                     assert!(completed);
-                    assert_eq!(stats.coverage(), RunCoverage::Complete);
-                    assert_eq!(stats.total_files, 1);
-                    assert_eq!(stats.invalid_files, usize::from(config.check_alignment));
-                    assert_eq!(stats.valid_files, usize::from(!config.check_alignment));
-                    assert_eq!(stats.cache_hits, usize::from(expected_hit));
-                    assert_eq!(stats.cache_misses, usize::from(!expected_hit));
+                    assert_eq!(stats.total_files().get(), 1);
                     assert_eq!(
-                        stats.parse_errors + stats.roundtrip_failed + stats.roundtrip_passed,
-                        0
+                        stats.invalid_files(),
+                        usize::from(config.alignment == AlignmentValidation::IncludeTierAlignment)
                     );
-                    assert!(!stats.cancelled);
+                    assert_eq!(
+                        stats.valid_files(),
+                        usize::from(config.alignment == AlignmentValidation::Structure)
+                    );
+                    assert_eq!(stats.cache_hits(), usize::from(expected_hit));
+                    assert_eq!(stats.cache_misses(), usize::from(!expected_hit));
+                    assert_eq!(stats.roundtrip_failed() + stats.roundtrip_passed(), 0);
                     finished = true;
                 }
                 other => panic!("unexpected alignment-policy event: {other:?}"),
@@ -397,73 +386,34 @@ fn alignment_spec_cache_does_not_promote_basic_validation() {
 
 #[test]
 fn reference_completion_survives_cache_write_failures() {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
+    use std::sync::Arc;
 
-    struct RefuseCacheWrites {
-        path: std::path::PathBuf,
-        validation: AtomicUsize,
-        roundtrip: AtomicUsize,
-    }
-    impl ValidationCache for RefuseCacheWrites {
-        fn get(&self, _: &Path, _: bool) -> Option<CacheOutcome> {
-            None
-        }
-        fn set(&self, path: &Path, alignment: bool, outcome: CacheOutcome) -> Result<(), String> {
-            assert_eq!(path, self.path);
-            assert!(alignment);
-            assert_eq!(outcome, CacheOutcome::Valid);
-            self.validation.fetch_add(1, Ordering::SeqCst);
-            Err("test cache refuses validation write".to_owned())
-        }
-        fn set_roundtrip(
-            &self,
-            path: &Path,
-            alignment: bool,
-            outcome: CacheOutcome,
-        ) -> Result<(), String> {
-            assert_eq!(path, self.path);
-            assert!(alignment);
-            assert_eq!(outcome, CacheOutcome::Valid);
-            self.roundtrip.fetch_add(1, Ordering::SeqCst);
-            Err("test cache refuses roundtrip write".to_owned())
-        }
-    }
     enum Phase {
-        Roundtrip,
         Completion,
         Finished,
         Closed,
     }
     let path = workspace_root().join("corpus/reference/core/basic-conversation.cha");
-    let cache = Arc::new(RefuseCacheWrites {
-        path: path.clone(),
-        validation: AtomicUsize::new(0),
-        roundtrip: AtomicUsize::new(0),
-    });
+    let cache = Arc::new(crate::cache_shim::RefusingCache::new(
+        crate::default_run_identity().clone(),
+    ));
     let config = ValidationConfig {
-        jobs: Some(1),
-        cache: CacheMode::Enabled,
-        roundtrip: true,
+        jobs: Some(std::num::NonZeroUsize::MIN),
+        roundtrip: RoundtripCheck::Run,
         ..Default::default()
     };
-    let (events, _cancel) =
-        validate_files_streaming(vec![path.clone()], &config, Some(cache.clone()));
-    let mut phase = Phase::Roundtrip;
+    let (events, _cancel) = validate_files_streaming(
+        vec![path.clone()],
+        &talkbank_transform::ValidationRun::new(config.clone(), RunCache::ReadWrite(cache.clone()))
+            .expect("a cache opened for this run's identity"),
+    );
+    let mut phase = Phase::Completion;
     for event in events {
         match event {
-            ValidationEvent::Discovering => assert!(matches!(phase, Phase::Roundtrip)),
+            ValidationEvent::Discovering => assert!(matches!(phase, Phase::Completion)),
             ValidationEvent::Started { total_files } => {
-                assert!(matches!(phase, Phase::Roundtrip));
+                assert!(matches!(phase, Phase::Completion));
                 assert_eq!(total_files, 1);
-            }
-            ValidationEvent::RoundtripComplete(event) => {
-                assert!(matches!(phase, Phase::Roundtrip));
-                assert_eq!(event.path, path);
-                assert!(event.passed && event.failure_reason.is_none() && event.diff.is_none());
-                phase = Phase::Completion;
             }
             ValidationEvent::FileComplete(event) => {
                 assert!(matches!(phase, Phase::Completion));
@@ -471,35 +421,45 @@ fn reference_completion_survives_cache_write_failures() {
                 assert!(matches!(
                     event.status,
                     FileStatus::Valid {
-                        cache_hit: false,
                         roundtrip: RoundtripVerdict::Passed,
+                        ..
                     }
                 ));
                 phase = Phase::Finished;
             }
-            ValidationEvent::Finished(stats) => {
+            ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                let stats = stats.snapshot();
                 assert!(matches!(phase, Phase::Finished));
-                assert_eq!(stats.coverage(), RunCoverage::Complete);
-                assert_eq!(stats.total_files, 1);
-                assert_eq!(stats.valid_files, 1);
-                assert_eq!(stats.roundtrip_passed, 1);
-                assert_eq!(stats.cache_misses, 1);
+                assert_eq!(stats.total_files().get(), 1);
+                assert_eq!(stats.valid_files(), 1);
+                assert_eq!(stats.roundtrip_passed(), 1);
+                assert_eq!(stats.cache_misses(), 1);
                 assert_eq!(
-                    stats.cache_hits
-                        + stats.invalid_files
-                        + stats.parse_errors
-                        + stats.roundtrip_failed,
+                    stats.cache_hits() + stats.invalid_files() + stats.roundtrip_failed(),
                     0
                 );
-                assert!(!stats.cancelled);
                 phase = Phase::Closed;
             }
             other => panic!("unexpected cache-failure event: {other:?}"),
         }
     }
     assert!(matches!(phase, Phase::Closed));
-    assert_eq!(cache.validation.load(Ordering::SeqCst), 1);
-    assert_eq!(cache.roundtrip.load(Ordering::SeqCst), 1);
+    use crate::cache_shim::Attempt;
+    assert_eq!(
+        cache.attempts(),
+        [
+            Attempt::Roundtrip(
+                path.clone(),
+                AlignmentValidation::IncludeTierAlignment,
+                talkbank_cache::RoundtripOutcome::Passed,
+            ),
+            Attempt::Validation(
+                path,
+                AlignmentValidation::IncludeTierAlignment,
+                CacheOutcome::Valid,
+            ),
+        ]
+    );
 }
 
 #[test]
@@ -517,25 +477,52 @@ fn reference_roundtrip_cache_survives_missing_validation_entry() {
         validation_attempts: AtomicUsize,
         roundtrip_writes: AtomicUsize,
     }
+    impl talkbank_cache::VerdictReader for RoundtripOnlyCache {
+        fn identity(&self) -> &talkbank_cache::CacheIdentity {
+            crate::default_run_identity()
+        }
+
+        fn get(
+            &self,
+            _: &talkbank_cache::ResolvedPath,
+            _: &ContentHash,
+            _: AlignmentValidation,
+        ) -> Result<CacheLookup<CacheOutcome>, CacheError> {
+            Ok(CacheLookup::Miss)
+        }
+
+        fn get_roundtrip(
+            &self,
+            path: &talkbank_cache::ResolvedPath,
+            content: &ContentHash,
+            alignment: AlignmentValidation,
+        ) -> Result<CacheLookup<talkbank_cache::RoundtripOutcome>, CacheError> {
+            talkbank_cache::VerdictReader::get_roundtrip(&self.store, path, content, alignment)
+        }
+    }
+
     impl ValidationCache for RoundtripOnlyCache {
-        fn get(&self, _: &Path, _: bool) -> Option<CacheOutcome> {
-            None
-        }
-        fn set(&self, _: &Path, _: bool, _: CacheOutcome) -> Result<(), String> {
+        fn set(
+            &self,
+            _: &talkbank_cache::ResolvedPath,
+            _: &ContentHash,
+            _: AlignmentValidation,
+            _: CacheOutcome,
+        ) -> Result<(), CacheError> {
             self.validation_attempts.fetch_add(1, Ordering::SeqCst);
-            Err("test validation cache write failure".to_owned())
-        }
-        fn get_roundtrip(&self, path: &Path, alignment: bool) -> Option<CacheOutcome> {
-            ValidationCache::get_roundtrip(&self.store, path, alignment)
+            Err(crate::cache_shim::refused(
+                "test validation cache write failure",
+            ))
         }
         fn set_roundtrip(
             &self,
-            path: &Path,
-            alignment: bool,
-            outcome: CacheOutcome,
-        ) -> Result<(), String> {
+            path: &talkbank_cache::ResolvedPath,
+            content: &ContentHash,
+            alignment: AlignmentValidation,
+            outcome: talkbank_cache::RoundtripOutcome,
+        ) -> Result<(), CacheError> {
             self.roundtrip_writes.fetch_add(1, Ordering::SeqCst);
-            ValidationCache::set_roundtrip(&self.store, path, alignment, outcome)
+            ValidationCache::set_roundtrip(&self.store, path, content, alignment, outcome)
         }
     }
     enum Pass {
@@ -543,9 +530,8 @@ fn reference_roundtrip_cache_survives_missing_validation_entry() {
         StoredRoundtrip,
     }
     let config = ValidationConfig {
-        jobs: Some(1),
-        cache: CacheMode::Enabled,
-        roundtrip: true,
+        jobs: Some(std::num::NonZeroUsize::MIN),
+        roundtrip: RoundtripCheck::Run,
         ..Default::default()
     };
     let cache = Arc::new(RoundtripOnlyCache {
@@ -556,9 +542,14 @@ fn reference_roundtrip_cache_survives_missing_validation_entry() {
     let path = workspace_root().join("corpus/reference/core/basic-conversation.cha");
     for pass in [Pass::Cold, Pass::StoredRoundtrip] {
         let expected_hit = matches!(pass, Pass::StoredRoundtrip);
-        let (events, _cancel) =
-            validate_files_streaming(vec![path.clone()], &config, Some(cache.clone()));
-        let mut roundtrips = 0;
+        let (events, _cancel) = validate_files_streaming(
+            vec![path.clone()],
+            &talkbank_transform::ValidationRun::new(
+                config.clone(),
+                RunCache::ReadWrite(cache.clone()),
+            )
+            .expect("a cache opened for this run's identity"),
+        );
         let mut completions = 0;
         let mut finished = false;
         for event in events {
@@ -566,33 +557,33 @@ fn reference_roundtrip_cache_survives_missing_validation_entry() {
             match event {
                 ValidationEvent::Discovering => {}
                 ValidationEvent::Started { total_files } => assert_eq!(total_files, 1),
-                ValidationEvent::RoundtripComplete(event) => {
-                    assert_eq!(completions, 0);
-                    assert_eq!(event.path, path);
-                    assert!(event.passed && event.failure_reason.is_none() && event.diff.is_none());
-                    roundtrips += 1;
-                }
                 ValidationEvent::FileComplete(event) => {
-                    assert_eq!(roundtrips, 1);
                     assert_eq!(event.path, path);
-                    assert!(matches!(event.status, FileStatus::Valid {
-                        cache_hit, roundtrip: RoundtripVerdict::Passed,
-                    } if cache_hit == expected_hit));
+                    assert!(matches!(
+                        event.status,
+                        FileStatus::Valid {
+                            roundtrip: RoundtripVerdict::Passed,
+                            ..
+                        }
+                    ));
+                    assert_eq!(
+                        matches!(
+                            event.cache,
+                            talkbank_transform::validation_runner::CacheUse::Hit
+                        ),
+                        expected_hit
+                    );
                     completions += 1;
                 }
-                ValidationEvent::Finished(stats) => {
+                ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                    let stats = stats.snapshot();
                     assert_eq!(completions, 1);
-                    assert_eq!(stats.coverage(), RunCoverage::Complete);
-                    assert_eq!(stats.total_files, 1);
-                    assert_eq!(stats.valid_files, 1);
-                    assert_eq!(stats.roundtrip_passed, 1);
-                    assert_eq!(stats.cache_hits, usize::from(expected_hit));
-                    assert_eq!(stats.cache_misses, usize::from(!expected_hit));
-                    assert_eq!(
-                        stats.invalid_files + stats.parse_errors + stats.roundtrip_failed,
-                        0
-                    );
-                    assert!(!stats.cancelled);
+                    assert_eq!(stats.total_files().get(), 1);
+                    assert_eq!(stats.valid_files(), 1);
+                    assert_eq!(stats.roundtrip_passed(), 1);
+                    assert_eq!(stats.cache_hits(), usize::from(expected_hit));
+                    assert_eq!(stats.cache_misses(), usize::from(!expected_hit));
+                    assert_eq!(stats.invalid_files() + stats.roundtrip_failed(), 0);
                     finished = true;
                 }
                 other => panic!("unexpected partial-cache event: {other:?}"),
@@ -622,17 +613,19 @@ fn discovered_reference_files_complete_requested_roundtrips() {
 }
 
 #[test]
-fn empty_reference_selection_completes_without_file_events() {
+fn empty_reference_selection_ends_nothing_found_without_file_events() {
     // An empty selection is a workflow boundary, not an invented CHAT file.
-    // Reuse the same event-state and accounting assertions as populated runs.
+    // Reuse the same event-state assertions as populated runs.
     check_run(&[], Workflow::FileValidation);
 }
 
 fn check_run(corpora: &[ChatCorpus], workflow: Workflow<'_>) {
     let config = ValidationConfig {
-        jobs: Some(2),
-        cache: CacheMode::Disabled,
-        roundtrip: matches!(workflow, Workflow::DirectoryRoundtrip(_)),
+        jobs: std::num::NonZeroUsize::new(2),
+        roundtrip: match workflow {
+            Workflow::DirectoryRoundtrip(_) => RoundtripCheck::Run,
+            Workflow::FileValidation => RoundtripCheck::Skip,
+        },
         ..Default::default()
     };
     let parser = TreeSitterParser::new().expect("parser");
@@ -647,35 +640,44 @@ fn check_run(corpora: &[ChatCorpus], workflow: Workflow<'_>) {
             TranscriptName::for_path(fixture.path()),
         );
         let errors = sink.into_vec();
-        if errors.iter().any(|error| error.severity == Severity::Error) {
+        let error_count = errors
+            .iter()
+            .filter(|error| error.severity == Severity::Error)
+            .count();
+        if error_count > 0 {
             expected_invalid += 1;
         }
-        let state = if errors.is_empty() {
-            PendingFile::after_diagnostics(0, config.roundtrip)
-        } else {
-            PendingFile::Diagnostics {
-                source: fixture.source().to_owned(),
-                errors,
-            }
+        let expected = ExpectedFile {
+            source: fixture.source().to_owned(),
+            errors,
+            error_count,
+            roundtrip: match (config.roundtrip, error_count) {
+                (RoundtripCheck::Run, 0) => RoundtripVerdict::Passed,
+                (RoundtripCheck::Run | RoundtripCheck::Skip, _) => RoundtripVerdict::NotRequested,
+            },
         };
-        assert!(pending.insert(fixture.path().to_owned(), state).is_none());
+        assert!(
+            pending
+                .insert(fixture.path().to_owned(), expected)
+                .is_none()
+        );
     }
     let total = pending.len();
-    if config.roundtrip {
+    if let RoundtripCheck::Run = config.roundtrip {
         assert!(
             total > expected_invalid,
             "reference workflow must actually run roundtrips"
         );
     }
     let (events, _cancel) = match workflow {
-        Workflow::FileValidation => validate_files_streaming::<AbsentCache>(
+        Workflow::FileValidation => validate_files_streaming(
             pending.keys().cloned().collect(),
-            &config,
-            None,
+            &talkbank_transform::ValidationRun::uncached(config.clone()),
         ),
-        Workflow::DirectoryRoundtrip(directory) => {
-            validate_directory_streaming::<AbsentCache>(directory, &config, None)
-        }
+        Workflow::DirectoryRoundtrip(directory) => validate_directory_streaming(
+            directory,
+            &talkbank_transform::ValidationRun::uncached(config.clone()),
+        ),
     };
     let mut phase = StreamPhase::Discovery;
     for event in events {
@@ -689,110 +691,83 @@ fn check_run(corpora: &[ChatCorpus], workflow: Workflow<'_>) {
                 assert_eq!(total_files, total);
                 phase = StreamPhase::Running;
             }
-            ValidationEvent::Errors(event) => {
-                assert!(matches!(phase, StreamPhase::Running));
-                let Some(PendingFile::Diagnostics { source, errors }) = pending.remove(&event.path)
-                else {
-                    panic!(
-                        "unexpected or duplicate diagnostic event: {}",
-                        event.path.display()
-                    );
-                };
-                assert_eq!(source.as_str(), event.source.as_ref());
-                assert_eq!(errors, event.errors, "{}", event.path.display());
-                let error_count = errors
-                    .iter()
-                    .filter(|error| error.severity == Severity::Error)
-                    .count();
-                pending.insert(
-                    event.path,
-                    PendingFile::after_diagnostics(error_count, config.roundtrip),
-                );
-            }
             ValidationEvent::FileComplete(event) => {
                 assert!(matches!(phase, StreamPhase::Running));
-                let Some(PendingFile::Completion {
-                    error_count,
-                    roundtrip: expected_roundtrip,
-                }) = pending.remove(&event.path)
-                else {
+                let Some(expected) = pending.remove(&event.path) else {
                     panic!(
-                        "missing diagnostics or duplicate completion: {}",
+                        "unexpected or duplicate completion: {}",
                         event.path.display()
                     );
                 };
-                match event.status {
-                    FileStatus::Valid {
-                        cache_hit: false,
-                        roundtrip,
-                    } => {
-                        assert_eq!(error_count, 0);
-                        assert_eq!(roundtrip, expected_roundtrip);
+                match event.status.shown() {
+                    Some(shown) => {
+                        assert_eq!(expected.source.as_str(), shown.source);
+                        assert_eq!(expected.errors, shown.errors, "{}", event.path.display());
                     }
-                    FileStatus::Invalid {
-                        error_count: actual,
-                        cache_hit: false,
-                    } => {
-                        assert!(error_count > 0);
-                        assert_eq!(actual, error_count);
+                    None => assert!(expected.errors.is_empty(), "{}", event.path.display()),
+                }
+                match event.status {
+                    FileStatus::Valid { roundtrip, .. } => {
+                        assert_eq!(expected.error_count, 0);
+                        assert_eq!(roundtrip, expected.roundtrip);
+                    }
+                    FileStatus::Invalid { diagnostics } => {
+                        assert_eq!(diagnostics.error_count().get(), expected.error_count);
                     }
                     other => panic!("unexpected file status: {} {other:?}", event.path.display()),
                 }
             }
-            ValidationEvent::Finished(stats) => {
+            ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                let stats = stats.snapshot();
                 assert!(matches!(phase, StreamPhase::Running));
                 assert!(
                     pending.is_empty(),
                     "terminal event must account for every file"
                 );
-                assert_eq!(stats.coverage(), RunCoverage::Complete);
-                assert_eq!(stats.total_files, total);
-                assert_eq!(stats.invalid_files, expected_invalid);
-                assert_eq!(stats.valid_files, total - expected_invalid);
-                assert_eq!(stats.cache_hits, 0);
-                assert_eq!(stats.cache_hit_rate(), 0.0);
-                assert_eq!(stats.cache_misses, total);
-                assert_eq!(stats.parse_errors, 0);
+                assert_eq!(stats.total_files().get(), total);
+                assert_eq!(stats.invalid_files(), expected_invalid);
+                assert_eq!(stats.valid_files(), total - expected_invalid);
+                // No cache: nothing consulted, so no hit, no miss, no rate.
+                assert_eq!(stats.cache_hits() + stats.cache_misses(), 0);
+                assert_eq!(stats.cache_hit_rate(), None);
                 assert_eq!(
-                    stats.roundtrip_passed,
-                    if config.roundtrip {
-                        total - expected_invalid
-                    } else {
-                        0
+                    stats.roundtrip_passed(),
+                    match config.roundtrip {
+                        RoundtripCheck::Run => total - expected_invalid,
+                        RoundtripCheck::Skip => 0,
                     }
                 );
-                assert_eq!(stats.roundtrip_failed, 0);
-                assert!(!stats.cancelled);
+                assert_eq!(stats.roundtrip_failed(), 0);
                 phase = StreamPhase::Finished;
             }
-            ValidationEvent::RoundtripComplete(event) => {
+            ValidationEvent::Finished(RunEnding::Stopped { stats, reason }) => panic!(
+                "stopped ({reason:?}) with {} left: {stats:?}",
+                stats.missing_files()
+            ),
+            ValidationEvent::Finished(RunEnding::Incomplete { stats, .. }) => {
+                panic!("lost {} files: {stats:?}", stats.missing_files())
+            }
+            ValidationEvent::Finished(RunEnding::Aborted(reason)) => {
+                panic!("runner aborted: {reason}")
+            }
+            // An empty selection ends here, and only an empty one.
+            ValidationEvent::Finished(RunEnding::NothingFound) => {
                 assert!(matches!(phase, StreamPhase::Running));
-                assert!(
-                    matches!(pending.remove(&event.path), Some(PendingFile::Roundtrip)),
-                    "unexpected roundtrip: {}",
-                    event.path.display()
-                );
-                assert!(
-                    event.passed,
-                    "reference serialization must be stable: {event:?}"
-                );
-                assert!(event.failure_reason.is_none() && event.diff.is_none());
-                pending.insert(
-                    event.path,
-                    PendingFile::Completion {
-                        error_count: 0,
-                        roundtrip: RoundtripVerdict::Passed,
-                    },
-                );
+                assert_eq!(total, 0, "a run over {total} files found nothing");
+                phase = StreamPhase::Finished;
             }
-            ValidationEvent::FinishedIncomplete { stats, lost_files } => {
-                panic!("lost {lost_files} files: {stats:?}")
-            }
-            ValidationEvent::Aborted(reason) => panic!("runner aborted: {reason}"),
         }
     }
     assert!(
         matches!(phase, StreamPhase::Finished),
         "channel closure alone is not completion"
     );
+}
+
+/// How many roundtrips a one-file run with this check performs.
+fn roundtrips_of(check: RoundtripCheck) -> usize {
+    match check {
+        RoundtripCheck::Run => 1,
+        RoundtripCheck::Skip => 0,
+    }
 }

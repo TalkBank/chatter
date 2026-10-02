@@ -38,11 +38,24 @@ use std::path::Path;
 /// A file name with its extension removed: the `foo` of `foo.cha`.
 ///
 /// This is what `@Media` must match, and it is a different kind of thing from
-/// a path: it has no directory part and no extension. Constructing one from a
-/// [`Path`] is the only conversion, and it is fallible, because a path can
-/// have no file name at all and a file name need not be UTF-8.
+/// a path: it has no directory part and no extension, and it is not empty.
+/// Both constructors check that, so no stem names a directory or nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileStem<'a>(&'a str);
+
+/// Why text is not a file stem.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum FileStemError {
+    /// A stem names something; the empty string names nothing.
+    #[error("a file stem cannot be empty")]
+    Empty,
+    /// A stem is one path component; this text has a path separator.
+    #[error("a file stem is one path component, but {stem:?} has a path separator")]
+    PathSeparator {
+        /// The text offered.
+        stem: String,
+    },
+}
 
 impl<'a> FileStem<'a> {
     /// The stem of `path`, or `None` when it has no file name or the name is
@@ -54,24 +67,61 @@ impl<'a> FileStem<'a> {
     /// `Option<&str>` parameter, so a non-UTF-8 name silently reverted to the
     /// no-name behaviour inside the site that had just been fixed to avoid it.
     pub fn from_path(path: &'a Path) -> Option<Self> {
-        path.file_stem().and_then(|stem| stem.to_str()).map(Self)
+        path.file_stem()
+            .and_then(|stem| stem.to_str())
+            .and_then(|stem| Self::from_stem(stem).ok())
     }
 
-    /// Treat text as a stem directly, for a transcript whose name is known
-    /// without a path on disk.
+    /// Text as a stem, for a transcript whose name is known without a path
+    /// on disk: refused when it is empty or has a path separator.
     ///
     /// NOT `from_str`: that name reads as `std::str::FromStr::from_str`, which
     /// this cannot be. The trait returns `Self` with no lifetime tied to its
     /// input, and this type BORROWS its stem, so implementing it is impossible
     /// rather than merely unimplemented. A name a reader can mistake for a
     /// trait method they can call generically is worse than a longer one.
-    pub fn from_stem(stem: &'a str) -> Self {
-        Self(stem)
+    pub fn from_stem(stem: &'a str) -> Result<Self, FileStemError> {
+        match stem {
+            "" => Err(FileStemError::Empty),
+            _ if stem.chars().any(std::path::is_separator) => Err(FileStemError::PathSeparator {
+                stem: stem.to_owned(),
+            }),
+            _ => Ok(Self(stem)),
+        }
     }
 
     /// Borrow the stem.
     pub fn as_str(&self) -> &'a str {
         self.0
+    }
+}
+
+/// A [`FileStem`] that owns its text, for a name that must outlive its
+/// source. Built only from a checked stem, so it holds the same guarantee.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedFileStem(String);
+
+impl OwnedFileStem {
+    /// The stem of `path`; see [`FileStem::from_path`].
+    pub fn from_path(path: &Path) -> Option<Self> {
+        FileStem::from_path(path).map(Self::from)
+    }
+
+    /// Text as a stem; see [`FileStem::from_stem`].
+    pub fn new(stem: &str) -> Result<Self, FileStemError> {
+        FileStem::from_stem(stem).map(Self::from)
+    }
+
+    /// The borrowed stem.
+    pub fn as_stem(&self) -> FileStem<'_> {
+        FileStem(&self.0)
+    }
+}
+
+impl From<FileStem<'_>> for OwnedFileStem {
+    /// Own a checked stem: no check is skipped, since the stem was checked.
+    fn from(stem: FileStem<'_>) -> Self {
+        Self(stem.0.to_owned())
     }
 }
 
@@ -99,11 +149,41 @@ impl<'a> TranscriptName<'a> {
         FileStem::from_path(path).map_or(Self::Anonymous, Self::Named)
     }
 
+    /// The same name, owning its stem.
+    pub fn to_owned_name(&self) -> OwnedTranscriptName {
+        match self {
+            Self::Named(stem) => OwnedTranscriptName::Named(OwnedFileStem::from(*stem)),
+            Self::Anonymous => OwnedTranscriptName::Anonymous,
+        }
+    }
+
     /// The stem, when there is one.
     pub fn stem(&self) -> Option<FileStem<'a>> {
         match self {
             Self::Named(stem) => Some(*stem),
             Self::Anonymous => None,
+        }
+    }
+}
+
+/// A [`TranscriptName`] that owns its stem, for a name that must outlive
+/// its caller (validation on another thread). The same choice, as variants,
+/// rather than an `Option<String>` whose `None` means "skip the name rules".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OwnedTranscriptName {
+    /// Named by this stem; rules about the name run.
+    Named(OwnedFileStem),
+    /// No name; rules about it do not run (see
+    /// [`TranscriptName::Anonymous`]).
+    Anonymous,
+}
+
+impl OwnedTranscriptName {
+    /// The borrowed name validation takes.
+    pub fn borrow(&self) -> TranscriptName<'_> {
+        match self {
+            Self::Named(stem) => TranscriptName::Named(stem.as_stem()),
+            Self::Anonymous => TranscriptName::Anonymous,
         }
     }
 }
@@ -129,6 +209,27 @@ mod tests {
         assert_eq!(
             TranscriptName::for_path(Path::new("/")),
             TranscriptName::Anonymous
+        );
+    }
+
+    /// A stem is one non-empty path component: text that is empty or has a
+    /// path separator is refused, so no stem names nothing or a directory.
+    #[test]
+    fn a_stem_is_one_non_empty_component() {
+        assert_eq!(FileStem::from_stem(""), Err(FileStemError::Empty));
+        assert_eq!(
+            FileStem::from_stem("corpus/foo"),
+            Err(FileStemError::PathSeparator {
+                stem: "corpus/foo".to_owned()
+            })
+        );
+        assert_eq!(
+            FileStem::from_stem("foo.bar").map(|stem| stem.as_str()),
+            Ok("foo.bar")
+        );
+        assert_eq!(
+            OwnedFileStem::new("foo").map(|stem| stem.as_stem().as_str().to_owned()),
+            Ok("foo".to_owned())
         );
     }
 }

@@ -6,8 +6,6 @@ use std::path::{Path, PathBuf};
 use talkbank_model::alignment::helpers::overlap_groups::analyze_file_overlaps;
 use talkbank_model::errors::NullErrorSink;
 
-use super::*;
-
 /// Run the overlap-audit debug command.
 pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
     let mut db_writer: Option<std::io::BufWriter<std::fs::File>> = database_path.map(|p| {
@@ -27,18 +25,12 @@ pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
     let mut total_consistent = 0;
     let mut files_with_overlaps = 0;
 
-    println!(
+    outln!(
         "file\tutterances\tgroups\tbottoms\torphan_tops\torphan_bottoms\ttimed\tconsistent\tquality"
     );
 
-    // The tree-sitter CHAT grammar is compiled into the binary and
-    // structurally validated by CI, so construction is infallible
-    // in practice (matches the pattern used in
-    // `crates/chatter/src/lib.rs` chat_parser()).
-    #[allow(clippy::expect_used)]
-    let parser = talkbank_parser::TreeSitterParser::new().expect("grammar loads");
-
-    for path in collect_cha_files(paths) {
+    let (files, parser) = super::transcripts_and_parser(paths);
+    for path in files {
         let source = match std::fs::read_to_string(&path) {
             Ok(s) => s,
             Err(e) => {
@@ -94,7 +86,7 @@ pub fn run_overlap_audit(paths: &[PathBuf], database_path: Option<&Path>) {
         };
 
         let filename = path.file_stem().unwrap_or_default().to_string_lossy();
-        println!(
+        outln!(
             "{filename}\t{utt_count}\t{}\t{}\t{}\t{}\t{timed}\t{consistent}\t{quality}",
             analysis.groups.len(),
             analysis.total_bottoms(),

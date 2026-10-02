@@ -35,10 +35,13 @@
 //! - [`ValidationCache`] is the trait for callers that want to abstract over the
 //!   caching backend
 //! - [`CacheOutcome`] is the pass/fail enum stored in the cache
-//! - [`CacheStats`] exposes coarse cache statistics for reporting and tests
+//! - [`CacheStats`] exposes coarse cache statistics for reporting and tests:
+//!   the entry count and a [`StorageStats`] (in memory, or a directory and its
+//!   [`DatabaseFile`])
 //!
 //! Validation constructors require a `CacheIdentity`. `MaintenanceCache` has no
-//! verdict methods and never performs validation-generation pruning.
+//! verdict methods and never performs validation-generation pruning; it is
+//! reached only from what [`CacheOnDisk::inspect`] found in the directory.
 //!
 //! # Common entry points
 //!
@@ -50,11 +53,18 @@
 //!
 //! ```rust
 //! use std::path::Path;
-//! use talkbank_cache::{CacheIdentity, CachePool, ParserKind, RulesVersion, ValidationCache};
+//! use talkbank_cache::{
+//!     CacheIdentity, CacheLookup, CachePool, ContentHash, ParserKind, ResolvedPath,
+//!     RulesVersion, VerdictReader,
+//! };
+//! use talkbank_model::validation::AlignmentValidation;
 //!
-//! let identity = CacheIdentity::new(RulesVersion::for_testing("example"), ParserKind::TreeSitter);
+//! let identity = CacheIdentity::new(RulesVersion::current(), ParserKind::TreeSitter);
 //! let cache = CachePool::in_memory(identity).expect("cache opens");
-//! assert_eq!(cache.get(Path::new("example.cha"), false), None);
+//! let content = ContentHash::of(b"@UTF8\n@Begin\n@End\n");
+//! let path = ResolvedPath::of_file(Path::new("example.cha")).expect("resolvable path");
+//! let lookup = cache.get(&path, &content, AlignmentValidation::Structure);
+//! assert_eq!(lookup.expect("lookup runs"), CacheLookup::Miss);
 //! ```
 //!
 //! # Related CHAT Manual Sections
@@ -85,13 +95,20 @@ mod validation_ops;
 mod cache_impl;
 
 // Re-export public API
-pub use cache_impl::{CachePool, MaintenanceCache, MaintenanceScope, ValidationScope};
+pub use cache_impl::{
+    CacheOnDisk, CachePool, InspectionCache, InspectionScope, MaintenanceCache, MaintenanceScope,
+    NoDatabase, OlderSchema, ReadOnlyCache, ReadOnlyScope, ValidationScope,
+};
 pub use cache_location::{CACHE_DIR_ENV, cache_db_path, default_cache_dir};
 pub use error::CacheError;
+pub use maintenance_ops::CacheScope;
 pub use rules_version::RulesVersion;
 pub use talkbank_model::ParserKind;
-pub use trait_def::{CacheOutcome, ValidationCache};
-pub use types::{CacheIdentity, CacheStats};
+pub use talkbank_model::{ResolvedDirectory, ResolvedPath, ResolvedPrefix};
+pub use trait_def::{
+    CacheLookup, CacheOutcome, ContentHash, RoundtripOutcome, ValidationCache, VerdictReader,
+};
+pub use types::{CacheIdentity, CacheStats, DatabaseFile, StorageStats};
 pub use version_prune::{SpaceReclaimed, VacuumSkipped, VersionPruneOutcome, VersionPruneReport};
 
 /// Backward-compatible alias. Prefer `CachePool` in new code.

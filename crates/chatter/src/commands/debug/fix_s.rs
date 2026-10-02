@@ -15,13 +15,7 @@ use super::*;
 /// skipped, so one bad file does not kill a multi-file run; see
 /// [`InPlace::open`] for what that covers.
 pub fn run_fix_s(paths: &[PathBuf]) {
-    let files = collect_cha_files(paths);
-    if files.is_empty() {
-        die("no .cha files found in the provided paths");
-    }
-
-    let parser = talkbank_parser::TreeSitterParser::new()
-        .unwrap_or_else(|e| die(&format!("parser initialization failed: {e:?}")));
+    let (files, parser) = super::transcripts_and_parser(paths);
     let mut rewritten_files = 0usize;
     let mut rewritten_utterances = 0usize;
     let mut appended_language_codes = 0usize;
@@ -46,9 +40,9 @@ pub fn run_fix_s(paths: &[PathBuf]) {
     }
 
     if rewritten_files == 0 {
-        println!("No fix-s rewrites or @Languages repairs needed.");
+        outln!("No fix-s rewrites or @Languages repairs needed.");
     } else {
-        println!(
+        outln!(
             "Rewrote {rewritten_files} file(s); updated {rewritten_utterances} utterance(s) and appended {appended_language_codes} @Languages code(s)."
         );
     }

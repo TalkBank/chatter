@@ -19,7 +19,7 @@ use talkbank_transform::json::{
     to_json_unvalidated, validate_json_string,
 };
 use talkbank_transform::{
-    PipelineError, chat_to_json, parse_and_validate, render_error_with_miette,
+    JsonLayout, PipelineError, chat_to_json, parse_and_validate, render_error_with_miette,
     render_error_with_miette_with_named_source, render_error_with_miette_with_source,
 };
 
@@ -93,7 +93,7 @@ fn to_json_unvalidated_skips_schema() -> Result<(), PipelineError> {
 fn validate_json_string_roundtrip() -> Result<(), PipelineError> {
     // Serialize then validate the resulting string
     let options = ParseValidateOptions::default();
-    let json = chat_to_json(VALID_CHAT, options, false)?;
+    let json = chat_to_json(VALID_CHAT, options, JsonLayout::Compact)?;
     // chat_to_json already validates, but we can also validate the string directly
     let result = validate_json_string(&json);
     assert!(
@@ -209,7 +209,7 @@ fn media_filename_from_json_is_reported() {
     let chat = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
         @ID:\teng|corpus|CHI|||||Child|||\n@Media:\trecording, audio\n\
         *CHI:\thello .\n@End\n";
-    let json = chat_to_json(chat, ParseValidateOptions::default(), false)
+    let json = chat_to_json(chat, ParseValidateOptions::default(), JsonLayout::Compact)
         .expect("valid CHAT converts to JSON");
 
     // Edit the JSON, not the CHAT: put the delimiter inside the filename, which

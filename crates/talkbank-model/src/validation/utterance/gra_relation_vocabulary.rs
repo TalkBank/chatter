@@ -108,6 +108,16 @@ fn split_label(label: &str) -> (&str, Option<&str>) {
     }
 }
 
+/// Whether `label` names the root: its head is `ROOT`, or the retired
+/// `INCROOT`, in any case and with any subtype. The coordinated splice uses it
+/// to refuse a root label for a span root that attaches under a host word.
+pub(crate) fn is_root_label(label: &str) -> bool {
+    let (head, _subtype) = split_label(label);
+    ["ROOT", "INCROOT"]
+        .iter()
+        .any(|root| root.eq_ignore_ascii_case(head))
+}
+
 /// Whether a head names one of the 37 UD universal relations.
 fn head_is_universal(head: &str) -> bool {
     UNIVERSAL_RELATIONS

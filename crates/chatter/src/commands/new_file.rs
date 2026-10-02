@@ -79,8 +79,7 @@ pub fn create_new_file(
         None => {
             // Print to stdout
             if let Err(e) = io::stdout().write_all(content.as_bytes()) {
-                eprintln!("Error writing to stdout: {}", e);
-                std::process::exit(1);
+                crate::stdout::closed(e)
             }
         }
     }

@@ -67,13 +67,13 @@ Fixture: `CHECK_004_space_after_tier.cha`. Chatter regression codes: E316.
 
 ### CHECK 5 — parity
 
-`@Begin:` (a stray colon on the no-colon @Begin header) parses as a valid @Begin followed by a stray `:` ERROR node. The streaming lowering silently dropped that nested ERROR node, so chatter accepted the file (Valid:1) while CLAN rejects it (codes 5 and 6). A whole-tree recovery-node backstop in parse_lines_with_old_tree now surfaces any surviving ERROR node as E316 UnparsableContent (recovery is not validity); the AST is still produced. CLAN CHECK 5 (co-emitted with 6).
+`@Begin:` (a stray colon on the no-colon @Begin header) parses as a valid @Begin followed by a stray `:` ERROR node. A whole-tree recovery-node backstop in parse_lines_with_old_tree surfaces any ERROR node that streaming lowering would drop as E316 UnparsableContent (recovery is not validity); the AST is still produced. CLAN rejects the file (codes 5 and 6), and so does chatter. CLAN CHECK 5 (co-emitted with 6).
 
 Fixture: `CHECK_005_begin_illegal_colon.cha`. Chatter regression codes: E316.
 
 ### CHECK 6 — parity
 
-`@Begins` (a misspelled @Begin) parses as @Begin plus a trailing `s` ERROR node that the streaming lowering silently dropped. The whole-tree recovery-node backstop now surfaces it as E316. CLAN rejects it (codes 6 and 17). CLAN CHECK 6 (co-emitted with 17).
+`@Begins` (a misspelled @Begin) parses as @Begin plus a trailing `s` ERROR node, which the whole-tree recovery-node backstop surfaces as E316. CLAN rejects it (codes 6 and 17). CLAN CHECK 6 (co-emitted with 17).
 
 Fixture: `CHECK_006_begin_malformed.cha`. Chatter regression codes: E316.
 
@@ -97,7 +97,7 @@ Fixture: `CHECK_009_tier_name_too_long.cha`. Chatter regression codes: E307, E30
 
 ### CHECK 10 — divergence
 
-UTTLINELEN buffer bound (18000): a logical tier whose text across continuation lines exceeds 18000 chars draws check_err(10) in the check_OverAll char scan (check.cpp 2403). A SINGLE physical line over 18000 instead hits the earlier hard-exit guard (check.cpp 2329, 'Speaker turn is longer then', cutt_exit(1), no (NN) code), so the fixture splits ~20k chars over tab continuation lines. Adjudication: the limit is a fixed C buffer size, an implementation artifact, not CHAT semantics; chatter has no tier-length limit by design (long tiers are valid and supported; stack-safety hardened 2026-07-14) and intentionally accepts.
+UTTLINELEN buffer bound (18000): a logical tier whose text across continuation lines exceeds 18000 chars draws check_err(10) in the check_OverAll char scan (check.cpp 2403). A SINGLE physical line over 18000 instead hits a separate hard-exit guard (check.cpp 2329, 'Speaker turn is longer then', cutt_exit(1), no (NN) code), so the fixture splits ~20k chars over tab continuation lines. Adjudication: the limit is a fixed C buffer size, an implementation artifact, not CHAT semantics; chatter has no tier-length limit by design (long tiers are valid and supported) and intentionally accepts.
 
 Fixture: `CHECK_010_tier_text_too_long.cha`. Chatter regression codes: none.
 
@@ -121,7 +121,7 @@ Fixture: `CHECK_013_duplicate_speaker.cha`. Chatter regression codes: E549.
 
 ### CHECK 13 — parity
 
-Two @ID lines naming the same speaker (CHI). Distinct from the @Participants-duplicate variant (CHECK_013_duplicate_speaker.cha): CLAN 13 fires for duplicate @ID lines too, which chatter previously missed. Now E549 via check_duplicate_id_headers. CLAN CHECK 13.
+Two @ID lines naming the same speaker (CHI). Distinct from the @Participants-duplicate variant (CHECK_013_duplicate_speaker.cha): CLAN 13 fires for duplicate @ID lines too; chatter reports E549 via check_duplicate_id_headers. CLAN CHECK 13.
 
 Fixture: `CHECK_013_duplicate_id.cha`. Chatter regression codes: E549.
 
@@ -139,7 +139,7 @@ Fixture: `CHECK_015_illegal_role.cha`. Chatter regression codes: E532.
 
 ### CHECK 16 — parity
 
-A speaker CODE containing non-printable-ASCII in @Participants (cnt==0 field scan, chars outside 33..126; check.cpp 2084-2086). Emits via the check_trans_err MACRO (check.cpp 74-79), invisible to the literal check_err(N,) counter. Empirically grounded: real CLAN emits (16) on this fixture. Non-ASCII speaker IDs are invalid by the 2026-09-23 maintainer ruling. Chatter now reports syntax code E307 through the shared speaker assessment, not the unrelated E522 participant-join code; header recovery can emit additional diagnostics.
+A speaker CODE containing non-printable-ASCII in @Participants (cnt==0 field scan, chars outside 33..126; check.cpp 2084-2086). Emits via the check_trans_err MACRO (check.cpp 74-79), invisible to the literal check_err(N,) counter. Empirically grounded: real CLAN emits (16) on this fixture. Non-ASCII speaker IDs are invalid by the 2026-09-23 maintainer ruling. Chatter reports syntax code E307 through the shared speaker assessment, not the unrelated E522 participant-join code; header recovery can emit additional diagnostics.
 
 Fixture: `CHECK_016_extended_chars_speaker_code.cha`. Chatter regression codes: E307.
 
@@ -157,7 +157,7 @@ Fixture: `CHECK_018_id_speaker_not_in_participants.cha`. Chatter regression code
 
 ### CHECK 19 — parity
 
-A token (here the retrace code '[/]') is immediately followed by a non-space, non-delimiter character with no space between (check.cpp:4590/4592); also fires for a time bullet glued to a word. Full CLAN message is two lines: 'Illegal use of delimiter in a word.' + 'Or a SPACE should be added after it.(19)'. chatter accepts '[/]x' glued (exit 0). Grounded also with a bullet glued to a word (u019d.cha). CLOSED 2026-07-16: E757 (CodeGluedToFollowingContent), span-adjacency on the retrace span which now covers the marker brackets. Wild-data impact: zero kept files.
+A token (here the retrace code '[/]') is immediately followed by a non-space, non-delimiter character with no space between (check.cpp:4590/4592); also fires for a time bullet glued to a word. Full CLAN message is two lines: 'Illegal use of delimiter in a word.' + 'Or a SPACE should be added after it.(19)'. Grounded also with a bullet glued to a word (u019d.cha). chatter rejects it with E757 (CodeGluedToFollowingContent), by span-adjacency on the retrace span, which covers the marker brackets. Wild-data impact: zero kept files.
 
 Fixture: `CHECK_019_code_glued_to_word.cha`. Chatter regression codes: E757.
 
@@ -187,7 +187,7 @@ Fixture: `CHECK_023_unmatched_close_bracket.cha`. Chatter regression codes: E316
 
 ### CHECK 24 — parity
 
-Unmatched < on a main tier (open angle, no close). CLAN 24 (also 160); chatter surfaces the recovery node as E316. NOTE: earlier wrongly recorded as not-firing; that was a one-off CLAN depfile-load miss, the helper now guards against it.
+Unmatched < on a main tier (open angle, no close). CLAN 24 (also 160); chatter surfaces the recovery node as E316. CLAN fires reliably here; the grounding helper guards against a depfile-load miss.
 
 Fixture: `CHECK_024_unmatched_lt.cha`. Chatter regression codes: E316.
 
@@ -229,7 +229,7 @@ Exclusion reason: `UnreachableInFileMode`.
 
 ### CHECK 31 — parity
 
-A declared tier with a colon but no text after it (check.cpp:1748); '@' headers are exempt ('to always allow empty header tiers'), so the fixture uses an empty dependent tier '%fac:'. chatter answers E756 'Empty dependent tier', which states the rule CHECK 31 is about. It used to answer E330 plus E342: an auto-generated stub with no description, plus a generic tree-sitter recovery diagnostic, because the model could not represent an empty tier and the line failed to parse. The 2026-08-15 maintainer ruling widened E756 to every free-text tier rather than writing E330's spec, so the verdict here is unchanged (parity) and only the code chatter names for it moved. An empty '*CHI:' main tier instead yields CLAN (21)+(70), not (31). 2026-09-08: whitespace-only content is E756 on every free-text tier now, matching check_FoundText (check.cpp:1639), which skips ASCII space, tab and newline before looking for text; %com and %add had counted whitespace as content. Two deliberate divergences, chatter stricter in both: CHECK exempts user-defined %x tiers from 31 and chatter reports them; chatter's whitespace is Unicode whitespace, so a payload of non-breaking spaces alone is E756 while CHECK (verified 2026-09-08) reports nothing.
+A declared tier with a colon but no text after it (check.cpp:1748); '@' headers are exempt ('to always allow empty header tiers'), so the fixture uses an empty dependent tier '%fac:'. chatter answers E756 'Empty dependent tier', which states the rule CHECK 31 is about. A 2026-08-15 maintainer ruling made E756 cover every free-text tier. An empty '*CHI:' main tier instead yields CLAN (21)+(70), not (31). Whitespace-only content is E756 on every free-text tier, matching check_FoundText (check.cpp:1639), which skips ASCII space, tab and newline before looking for text. Two deliberate divergences, chatter stricter in both: CHECK exempts user-defined %x tiers from 31 and chatter reports them; chatter's whitespace is Unicode whitespace, so a payload of non-breaking spaces alone is E756 while CHECK (verified 2026-09-08) reports nothing.
 
 Fixture: `CHECK_031_missing_text_after_colon.cha`. Chatter regression codes: E756.
 
@@ -253,7 +253,7 @@ Fixture: `CHECK_034_bad_date.cha`. Chatter regression codes: E518.
 
 ### CHECK 35 — parity
 
-@Time Duration 99:99:99 is shape-valid (HH:MM:SS) but out of clock range. chatter previously validated the shape only; now TimeDurationValue::has_out_of_range_component flags components outside hours 0-23 / minutes,seconds 0-59 and emits E540. CLAN range rule grounded empirically: 25:00:00, 99:30:00, 12:60:00, 12:00:60 all CLAN 35; 23:59:59 OK. CLAN CHECK 35.
+@Time Duration 99:99:99 is shape-valid (HH:MM:SS) but out of clock range. chatter validates the shape, and TimeDurationValue::has_out_of_range_component flags components outside hours 0-23 / minutes,seconds 0-59 and emits E540. CLAN range rule grounded empirically: 25:00:00, 99:30:00, 12:60:00, 12:00:60 all CLAN 35; 23:59:59 OK. CLAN CHECK 35.
 
 Fixture: `CHECK_035_time_duration_out_of_range.cha`. Chatter regression codes: E540.
 
@@ -265,7 +265,7 @@ Fixture: `CHECK_036_delimiter_not_at_end.cha`. Chatter regression codes: E316.
 
 ### CHECK 37 — parity
 
-INCIDENTAL parity since 2026-07-27, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 37 is a depfile-membership check, a token undeclared in a corpus depfile is not universally invalid CHAT, and chatter never validates external-config membership. What changed is this FIXTURE. Its word `a+un#go` carries a word-internal prefix marker in an English utterance, and E763 rejects the marker in any language that does not use it (heb, ara). Same verdict as CHECK on this input, different and independent grounds. A depfile-undeclared prefix in Hebrew or Arabic would still be accepted, which is the divergence the 2026-07-12 ruling protects.
+INCIDENTAL parity, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 37 is a depfile-membership check, a token undeclared in a corpus depfile is not universally invalid CHAT, and chatter never validates external-config membership. The parity comes from this FIXTURE. Its word `a+un#go` carries a word-internal prefix marker in an English utterance, and E763 rejects the marker in any language that does not use it (heb, ara). Same verdict as CHECK on this input, different and independent grounds. A depfile-undeclared prefix in Hebrew or Arabic would still be accepted, which is the divergence the 2026-07-12 ruling protects.
 
 Fixture: `CHECK_037_undeclared_prefix.cha`. Chatter regression codes: E763.
 
@@ -349,7 +349,7 @@ Fixture: `CHECK_050_redundant_delimiter.cha`. Chatter regression codes: E316.
 
 ### CHECK 51 — parity
 
-CLAN prints this message WITHOUT a (51) suffix (format string lacks (%d)); grounding matches by message text. A '<...>' angle group not followed by a '[...]' code, detected at end of tier or at the next word (check.cpp:4376/4568, anb flag from check_CheckBrakets). QUIRK: CLAN prints this message WITHOUT the numeric '(51)' suffix; check_mess case 51 (check.cpp) has no (%d) in its format string. Grounding is the verbatim unique message text. chatter names the same construct as a missing required element: the grammar requires a code after the group, tree-sitter inserts a MISSING placeholder for it, and the whole-tree pass reports E342. Until 2026-09-09 the annotation decoder read that placeholder's kind and built a Full retrace nobody wrote, and the validator then added E370 (a retrace with nothing after it) to a construct the file does not contain; the decoder skips MISSING nodes now, so the group stays bare and E342 is the whole verdict.
+CLAN prints this message WITHOUT a (51) suffix (format string lacks (%d)); grounding matches by message text. A '<...>' angle group not followed by a '[...]' code, detected at end of tier or at the next word (check.cpp:4376/4568, anb flag from check_CheckBrakets). QUIRK: CLAN prints this message WITHOUT the numeric '(51)' suffix; check_mess case 51 (check.cpp) has no (%d) in its format string. Grounding is the verbatim unique message text. chatter names the same construct as a missing required element: the grammar requires a code after the group, tree-sitter inserts a MISSING placeholder for it, and the whole-tree pass reports E342. The annotation decoder skips MISSING nodes, so the group stays bare and E342 is the whole verdict (a decoder that read the placeholder's kind would build a Full retrace nobody wrote and add E370 to a construct the file does not contain).
 
 Fixture: `CHECK_051_angle_without_square.cha`. Chatter regression codes: E342.
 
@@ -387,7 +387,7 @@ Fixture: `CHECK_056_unmatched_close_paren_word.cha`. Chatter regression codes: E
 
 ### CHECK 57 — parity
 
-The word-glued pause fixture is rejected with E751. The grammar retains a word and a separate pause; model validation check_pause_glued_to_word compares their source spans in the typed content walk (spec E751). This is structural evidence, not a scan or reparse of recovery text. The July 10 proposal to move the diagnostic to the parse stage is superseded by the architecture-native assessment contract: rejection stage and diagnostic identity are not parity obligations. CLAN also emitted 48 on the retained fixture; no new CLAN observation is claimed.
+The word-glued pause fixture is rejected with E751. The grammar retains a word and a separate pause; model validation check_pause_glued_to_word compares their source spans in the typed content walk (spec E751). This is structural evidence, not a scan or reparse of recovery text. Under the architecture-native assessment contract, rejection stage and diagnostic identity are not parity obligations. CLAN also emits 48 on the retained fixture; no new CLAN observation is claimed.
 
 Fixture: `CHECK_057_pause_glued_to_word.cha`. Chatter regression codes: E751.
 
@@ -423,7 +423,7 @@ Fixture: `CHECK_062_missing_language_in_id.cha`. Chatter regression codes: E510.
 
 ### CHECK 63 — parity
 
-Empty corpus field (2nd) in @ID. chatter E514 EmptyIDCorpus. Root-caused: corpus was wrongly `Option<CorpusName>`; made it a required CorpusName like its siblings, the Validate trait flags empty. CLAN CHECK 63.
+Empty corpus field (2nd) in @ID. chatter E514 EmptyIDCorpus. The corpus field is a required CorpusName like its siblings, and the Validate trait flags empty. CLAN CHECK 63.
 
 Fixture: `CHECK_063_empty_corpus.cha`. Chatter regression codes: E514.
 
@@ -453,7 +453,7 @@ Fixture: `CHECK_067_trailing_plus.cha`. Chatter regression codes: E233.
 
 ### CHECK 68 — divergence
 
-Deliberate divergence, resolved July 8: CHECK's non-default +g2 option requires a CHI Target_Child participant unless @Options: notarget is present. Default-mode CHECK accepts the retained fixture, and Chatter intentionally accepts it. This option-specific requirement is not a baseline CHAT obligation. The earlier open-policy question is resolved; clan_flags preserves the grounding configuration.
+Deliberate divergence, resolved July 8: CHECK's non-default +g2 option requires a CHI Target_Child participant unless @Options: notarget is present. Default-mode CHECK accepts the retained fixture, and Chatter intentionally accepts it. This option-specific requirement is not a baseline CHAT obligation. The open-policy question is resolved; clan_flags preserves the grounding configuration.
 
 Fixture: `CHECK_068_no_target_child.cha`. Chatter regression codes: none.
 
@@ -471,13 +471,13 @@ Fixture: `CHECK_070_no_text.cha`. Chatter regression codes: E253, E306, E342.
 
 ### CHECK 70 — parity
 
-An annotation-only utterance ([=! laughs] .) remains rejected by structural recovery, E316 and E342. Historical CHECK grounding emitted 73 and 70. Pause-only and event-only utterances were separately accepted by both validators; this case does not establish their invalidity. No missing-terminator or missing-whitespace claim is inferred.
+An annotation-only utterance ([=! laughs] .) is rejected by structural recovery, E316 and E342. CHECK grounding emits 73 and 70. Pause-only and event-only utterances were separately accepted by both validators; this case does not establish their invalidity. No missing-terminator or missing-whitespace claim is inferred.
 
 Fixture: `CHECK_070_annotation_only_utterance.cha`. Chatter regression codes: E316, E342.
 
 ### CHECK 71 — parity
 
-INCIDENTAL parity since 2026-07-27, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 71 enforces an ORDERING between [/] and the legacy # pause marker, a construct chatter does not have (chatter uses (.)/(..)/(...)), so chatter does not implement that ordering rule and never will. What changed is this FIXTURE. Its main tier is `he # [/] he .`, where the standalone # sits inside the retrace scope, and E762 rejects a word that is nothing but the prefix marker in any language. Same verdict as CHECK on this input, unrelated grounds. Note the fixture only started failing once word validation began recursing into retraces (chatter 3304799e); before that the # inside the retrace was never validated at all, which is why this row read as a clean divergence for months.
+INCIDENTAL parity, reached by chatter's own reasoning rather than CHECK's. The 2026-07-12 divergence ruling still governs the RULE: CHECK 71 enforces an ORDERING between [/] and the legacy # pause marker, a construct chatter does not have (chatter uses (.)/(..)/(...)), so chatter does not implement that ordering rule and never will. The parity comes from this FIXTURE. Its main tier is `he # [/] he .`, where the standalone # sits inside the retrace scope, and E762 rejects a word that is nothing but the prefix marker in any language. Same verdict as CHECK on this input, unrelated grounds. The fixture fails because word validation recurses into retraces and validates the # inside the retrace.
 
 Fixture: `CHECK_071_retrace_after_pause.cha`. Chatter regression codes: E762.
 
@@ -489,7 +489,7 @@ Fixture: `CHECK_072_pause_after_delim.cha`. Chatter regression codes: E316.
 
 ### CHECK 73 — parity
 
-A bracketed code as the first item of a tier with nothing before it (also bullets not preceded by text; multiple sites: check.cpp 4045, 4781, 4861; CA sites 3030/3033 are #ifndef UNX). Fixture '[x 2] hey .'; chatter rejects it via E316 (grammar recovery). CLAN additionally emits (11). (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.) Additional leading-bullet grounding is owned by spec/errors/E770.md: simple, retraced-group, linker-prefixed and repeated leading bullets report E770; explicit-zero, event, pause and preceding-group-material controls do not. CHECK 21-Sep-2026 corroborates these shapes. Parse-recovered main tiers retain their parse diagnostic rather than an E770 absence claim. This row's bracket fixture alone does not prove every CHECK 73 site: empty inter-bullet scope and legacy multi-option behavior are not adjudicated by this fixture. They remain outside this finite baseline, not demonstrated validation defects or queued diagnostic-emulation work. A concrete independently justified CHAT requirement is needed to open a new obligation.
+A bracketed code as the first item of a tier with nothing before it (also bullets not preceded by text; multiple sites: check.cpp 4045, 4781, 4861; CA sites 3030/3033 are #ifndef UNX). Fixture '[x 2] hey .'; chatter rejects it via E316 (grammar recovery). CLAN additionally emits (11). (E747 is BlankLineNotAllowed and is not the expectation here.) Additional leading-bullet grounding is owned by spec/errors/E770.md: simple, retraced-group, linker-prefixed and repeated leading bullets report E770; explicit-zero, event, pause and preceding-group-material controls do not. CHECK 21-Sep-2026 corroborates these shapes. Parse-recovered main tiers retain their parse diagnostic rather than an E770 absence claim. This row's bracket fixture alone does not prove every CHECK 73 site: empty inter-bullet scope and legacy multi-option behavior are not adjudicated by this fixture. They remain outside this finite baseline, not demonstrated validation defects or queued diagnostic-emulation work. A concrete independently justified CHAT requirement is needed to open a new obligation.
 
 Fixture: `CHECK_073_bracket_first.cha`. Chatter regression codes: E316.
 
@@ -507,7 +507,7 @@ Fixture: `CHECK_075_postcode_before_delim.cha`. Chatter regression codes: E305, 
 
 ### CHECK 76 — no_obligation
 
-An '@l' letter-marker word whose stem is more than one letter. RETIRED ON BOTH SIDES. CLAN retired error 76 on 2026-08-07 ("CHECK: allow multiple characters before @l"); check_isOneLetter and its call site sit inside a dated comment block, so no unix build emits it. chatter retired its own E754 on 2026-08-11, independently and for a stated reason: the rule counted CHARACTERS, a digraph is one letter written with two (Welsh 'll', Dutch 'ij'), so it reported a spurious error on valid CHAT and could not do better because it never saw the word's language. Both validators now accept the construct, so expected_chatter_codes is empty and the fixture pins that agreement.
+An '@l' letter-marker word whose stem is more than one letter. RETIRED ON BOTH SIDES. CLAN retired error 76 on 2026-08-07 ("CHECK: allow multiple characters before @l"); check_isOneLetter and its call site sit inside a dated comment block, so no unix build emits it. chatter retired its own E754 on 2026-08-11, independently and for a stated reason: the rule counted CHARACTERS, a digraph is one letter written with two (Welsh 'll', Dutch 'ij'), so it reported a spurious error on valid CHAT and could not do better because it never saw the word's language. Both validators accept the construct, so expected_chatter_codes is empty and the fixture pins that agreement.
 
 Fixture: `CHECK_076_multi_letter_at_l.cha`. Chatter regression codes: none.
 
@@ -527,13 +527,13 @@ Fixture: `CHECK_078_pluscomma_mid.cha`. Chatter regression codes: E766.
 
 ### CHECK 79 — parity
 
-A %mor word with two | separators (n|dog|cat). CLAN 79 (only one | per word); chatter surfaces the malformed %mor item as E702 (E316 until 2026-09-08, when a recovery node below the tier's direct children was classified without the tier's name).
+A %mor word with two | separators (n|dog|cat). CLAN 79 (only one | per word); chatter surfaces the malformed %mor item as E702 (a recovery node below the tier's direct children is classified with the tier's name).
 
 Fixture: `CHECK_079_mor_two_pipes.cha`. Chatter regression codes: E702.
 
 ### CHECK 80 — parity
 
-A %mor word with no | separator (bare 'dog'). CLAN 80 (must be at least one |); chatter E702 (E316 beside it until 2026-09-08, from a second reporter that has been removed).
+A %mor word with no | separator (bare 'dog'). CLAN 80 (must be at least one |); chatter E702.
 
 Fixture: `CHECK_080_mor_no_pipe.cha`. Chatter regression codes: E702.
 
@@ -575,7 +575,7 @@ Fixture: `CHECK_086_private_use_char.cha`. Chatter regression codes: E243.
 
 ### CHECK 87 — parity
 
-A %mor/%xmor/%trn (or %cnl) word whose compound structure is malformed: a '+' not in canonical 'pfx|+a|b' shape drives numOfCompounds to -2 or 0 (check.cpp 3592/3646). Fixture '%mor: n|cat+n|fish .' (compound missing the '|+' marker after the head POS). chatter rejects: E702 on the item (E316 until 2026-09-08) and E600 at the tier.
+A %mor/%xmor/%trn (or %cnl) word whose compound structure is malformed: a '+' not in canonical 'pfx|+a|b' shape drives numOfCompounds to -2 or 0 (check.cpp 3592/3646). Fixture '%mor: n|cat+n|fish .' (compound missing the '|+' marker after the head POS). chatter rejects: E702 on the item and E600 at the tier.
 
 Fixture: `CHECK_087_malformed_compound.cha`. Chatter regression codes: E702.
 
@@ -593,13 +593,13 @@ Fixture: `CHECK_089_bad_bullet_char.cha`. Chatter regression codes: E316, E544.
 
 ### CHECK 90 — parity
 
-A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \x15012_200\x15 with @Media header. GAP CLOSED 2026-07-09: chatter now emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748.md. A bare 0 stays legal. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Leading-zero bullet times are unambiguous; kept as an error by project policy: style violations are errors.
+A bullet time component written with a leading zero before another digit, e.g. 012 (check.cpp check_getMediaTagInfo res==3, call site 3865). Fixture: \x15012_200\x15 with @Media header. chatter emits E748 at parse time from the raw component text (both bullet paths in talkbank-parser media_bullet.rs; token scan in talkbank-parser-re2c file.rs). Spec: E748.md. A bare 0 stays legal. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error. Leading-zero bullet times are unambiguous; kept as an error by project policy: style violations are errors.
 
 Fixture: `CHECK_090_leading_zero_time.cha`. Chatter regression codes: E748.
 
 ### CHECK 91 — parity
 
-A blank line in the transcript (CLAN flags one between utterances AND between headers, verified). CLAN CHECK 91. ROOT CAUSE was STRUCTURAL: the grammar's `newline: /[\r\n]+/` fused an utterance's terminating newline with the blank line's newline, ERASING the blank line before any node could represent it. FIXED structurally, NOT by text-hacking: `newline` is now a single line break (`/\r\n|[\r\n]/`) and a `blank_line` CST node represents the blank line; the parser emits E747 BlankLineNotAllowed from that node (helpers.rs line dispatch), no source/line scan. Tree-sitter side complete; the re2c lexer reconciliation (un-fuse its `[\r\n]+`, detect consecutive Newline tokens, emit E747) is the tracked follow-up. chatter rejects via E747.
+A blank line in the transcript (CLAN flags one between utterances AND between headers, verified). CLAN CHECK 91. The grammar's `newline` is a single line break (`/\r\n|[\r\n]/`) and a `blank_line` CST node represents the blank line; the parser emits E747 BlankLineNotAllowed from that node (helpers.rs line dispatch), with no source or line scan. (A fused `newline: /[\r\n]+/` would erase the blank line before any node could represent it.) chatter rejects via E747.
 
 Fixture: `CHECK_091_blank_line.cha`. Chatter regression codes: E747.
 
@@ -611,7 +611,7 @@ Fixture: `CHECK_092_comma_no_space.cha`. Chatter regression codes: E749.
 
 ### CHECK 93 — parity
 
-'[' immediately preceded by '>' or ']' with no space (check.cpp 4469/4472; CA start-marks site 3179 is #ifndef UNX). Fixture `<hey>[/] hey .`; CLAN also emits (161). chatter rejects via E316. (The earlier E747 expectation was a mislabel: E747 is BlankLineNotAllowed.)
+'[' immediately preceded by '>' or ']' with no space (check.cpp 4469/4472; CA start-marks site 3179 is #ifndef UNX). Fixture `<hey>[/] hey .`; CLAN also emits (161). chatter rejects via E316. (E747 is BlankLineNotAllowed and is not the expectation here.)
 
 Fixture: `CHECK_093_bracket_no_space.cha`. Chatter regression codes: E316.
 
@@ -661,7 +661,7 @@ Fixture: `CHECK_100_trailing_comma_participants.cha`. Chatter regression codes: 
 
 ### CHECK 101 — no_obligation
 
-GUI-only: the sole call site (check.cpp 3016) sits inside the #ifndef UNX CA-character region of check_CheckWords, so `unifdef -DUNX` blanks it and no unix binary contains it. DERIVABLE since 2026-08-11: the generator runs unifdef before scanning, so the reference reports zero live sites and this reason is checked rather than trusted.
+GUI-only: the sole call site (check.cpp 3016) sits inside the #ifndef UNX CA-character region of check_CheckWords, so `unifdef -DUNX` blanks it and no unix binary contains it. DERIVABLE: the generator runs unifdef before scanning, so the reference reports zero live sites and this reason is checked rather than trusted.
 
 Fixture: `CHECK_101_ca_marker_no_stem.cha`. Chatter regression codes: E316.
 
@@ -693,7 +693,7 @@ Exclusion reason: `CommentedOut`.
 
 ### CHECK 106 — parity
 
-A scoped code split across a newline (`[% comment` then a continuation line `continued]`) leaves an ERROR node in the main-tier content that the streaming lowering did not scan. The whole-tree recovery-node backstop now surfaces it as E316. CLAN CHECK 106.
+A scoped code split across a newline (`[% comment` then a continuation line `continued]`) leaves an ERROR node in the main-tier content, which the whole-tree recovery-node backstop surfaces as E316. CLAN CHECK 106.
 
 Fixture: `CHECK_106_code_spans_newline.cha`. Chatter regression codes: E316.
 
@@ -705,7 +705,7 @@ Fixture: `CHECK_107_triple_comma.cha`. Chatter regression codes: E258.
 
 ### CHECK 108 — parity
 
-A postcode `[+ trn]` placed after the final time bullet leaves an ERROR node in the utterance that the streaming lowering did not scan. The whole-tree recovery-node backstop now surfaces it as E316. CLAN rejects it (codes 108 and 112). CLAN CHECK 108 (co-emitted with 112).
+A postcode `[+ trn]` placed after the final time bullet leaves an ERROR node in the utterance, which the whole-tree recovery-node backstop surfaces as E316. CLAN rejects it (codes 108 and 112). CLAN CHECK 108 (co-emitted with 112).
 
 Fixture: `CHECK_108_postcode_after_bullet.cha`. Chatter regression codes: E316.
 
@@ -807,7 +807,7 @@ Fixture: `CHECK_123_tab_space.cha`. Chatter regression codes: E758.
 
 ### CHECK 124 — parity
 
-@Media declares `unlinked` but the main tier has a time bullet, so the media is in fact linked. chatter now emits E552 MediaUnlinkedWithTiming via check_media_unlinked_has_no_timing, the inverse of the existing E544 (linkage without timing). Grounded empirically: unlinked+bullet -> CLAN 124; unlinked+no-bullet and linked+bullet -> no 124. CLAN CHECK 124.
+@Media declares `unlinked` but the main tier has a time bullet, so the media is in fact linked. chatter emits E552 MediaUnlinkedWithTiming via check_media_unlinked_has_no_timing, the inverse of the existing E544 (linkage without timing). Grounded empirically: unlinked+bullet -> CLAN 124; unlinked+no-bullet and linked+bullet -> no 124. CLAN CHECK 124.
 
 Fixture: `CHECK_124_media_unlinked_with_bullet.cha`. Chatter regression codes: E552.
 
@@ -879,7 +879,7 @@ Fixture: `CHECK_135_bare_xx.cha`. Chatter regression codes: E241.
 
 ### CHECK 136 — parity
 
-Open curly quote U+201C on a tier with no matching close quote (qt > 0 at end of tier). Since 2026-09-01 E242 is decided from CST structure and names the unmatched OPEN quote too, where it used to surface only as unparsable E316 (the close-quote case, CHECK 137, was E242 already).
+Open curly quote U+201C on a tier with no matching close quote (qt > 0 at end of tier). E242 is decided from CST structure and names the unmatched OPEN quote as well as the close-quote case (CHECK 137).
 
 Fixture: `CHECK_136_unmatched_open_quote.cha`. Chatter regression codes: E242.
 
@@ -945,13 +945,13 @@ Fixture: `CHECK_146_bare_amp_eq.cha`. Chatter regression codes: E316.
 
 ### CHECK 147 — parity
 
-An undeclared special-form marker `foo@zzz`. CLAN CHECK 147. ROOT CAUSE was the parser conversion, NOT the grammar: the grammar intentionally consumes `@zzz` as one form_marker token (parse-don't-validate), but the conversion's `else if text.starts_with("@z")` branch treated any `@z...` as the user-defined form, stripping `@z` and using the rest as a bare label without the required colon. Fixed by requiring the `@z:` colon (the only valid user-defined form is `@z:label`); `@zXXX` without the colon now falls through to the existing E203 InvalidFormType branch in both the tree-sitter and re2c conversions. chatter rejects it via E203.
+An undeclared special-form marker `foo@zzz`. CLAN CHECK 147. The grammar intentionally consumes `@zzz` as one form_marker token (parse-don't-validate), and the conversion requires the `@z:` colon (the only valid user-defined form is `@z:label`); `@zXXX` without the colon falls through to the E203 InvalidFormType branch in both the tree-sitter and re2c conversions. chatter rejects it via E203.
 
 Fixture: `CHECK_147_undeclared_form_marker.cha`. Chatter regression codes: E203.
 
 ### CHECK 148 — parity
 
-Space before the comma in @Media. Chatter now has its own named rule for it, E767, replacing the fallout it used to produce: the header failed to parse, so it fell back to E525 (unknown header type) about a header chatter had recognised, plus E330 (missing media_type) on a line visibly ending in `, audio`. The precise space-before-comma message is no longer a CLAN nicety chatter lacks; both validators reject, and both now say why.
+Space before the comma in @Media. Chatter has its own named rule for it, E767, so the header parses and the diagnostic names the space (a header that failed to parse would fall back to E525, unknown header type, about a header chatter had recognised, plus E330, missing media_type, on a line visibly ending in `, audio`). Both validators reject, and both say why.
 
 Fixture: `CHECK_148_media_space_before_comma.cha`. Chatter regression codes: E767.
 
@@ -969,7 +969,7 @@ Fixture: `CHECK_150_paren_before_code.cha`. Chatter regression codes: E316.
 
 ### CHECK 151 — no_obligation
 
-Compiled into the unix build but never reached. RECLASSIFIED 2026-08-11 from `gui_only`, which was wrong about the mechanism: the check_err(151,...) site is at check.cpp 2980, inside helper check_isThereStem, which ends before the #ifndef UNX region begins at 2991. The site therefore survives `unifdef -DUNX`. What the region excludes is the helper's ONLY caller, at 3013, so under -DUNX the function is compiled and never invoked. The earlier note's phrase "the emit path sits behind the #ifndef UNX region" was accurate as prose and wrong as a classification.
+Compiled into the unix build but never reached. Not `gui_only`: the check_err(151,...) site is at check.cpp 2980, inside helper check_isThereStem, which ends before the #ifndef UNX region begins at 2991. The site therefore survives `unifdef -DUNX`. What the region excludes is the helper's ONLY caller, at 3013, so under -DUNX the function is compiled and never invoked. The emit path does not sit behind the #ifndef UNX region; only the caller does.
 
 Fixture: `CHECK_151_only_repetition_segments.cha`. Chatter regression codes: E753.
 
@@ -977,7 +977,7 @@ Exclusion reason: `UnreachableInFileMode`.
 
 ### CHECK 152 — parity
 
-A [- CODE] utterance precode whose language is absent from @Languages. CLAN emits (152) via the indirect check_isLangMatch(wh=152) call at check.cpp 4194/5501, which the reference JSON's literal check_err(N,) counter misses, so 152 was WRONGLY in the dead list until 2026-07-15 (the coverage tool auto-reclassifies once this entry exists). Adjudicated MEANINGFUL and closed as E755 per the @s-declaration ruling (docs design 2026-07-15, part 3): utterance-level presence is substantial and belongs in @Languages; wild grounding 0 of 7,167 precode-bearing files violate. Deliberate contrast: word-level @s:CODE carries NO declaration requirement (part 1 of the same ruling; the pre-2019 CHECK behavior and the retired E254 warning are explicitly NOT adopted: CLAN itself relaxed @s in 2019). SECOND FACET (2026-07-24): the other call site (check.cpp 5501) validates each token of an @New Language: header against CLAN's static language table; @New Language is extinct in the kept corpus (0 files, rg sweep), and chatter rejects the whole header as unknown (E525 + E316), strictly subsuming the language-table facet.
+A [- CODE] utterance precode whose language is absent from @Languages. CLAN emits (152) via the indirect check_isLangMatch(wh=152) call at check.cpp 4194/5501, which the reference JSON's literal check_err(N,) counter misses, so 152 is not in the dead list (the coverage tool auto-reclassifies once this entry exists). Adjudicated MEANINGFUL and closed as E755 per the @s-declaration ruling (docs design 2026-07-15, part 3): utterance-level presence is substantial and belongs in @Languages; wild grounding 0 of 7,167 precode-bearing files violate. Deliberate contrast: word-level @s:CODE carries NO declaration requirement (part 1 of the same ruling; the pre-2019 CHECK behavior and the retired E254 warning are explicitly NOT adopted: CLAN itself relaxed @s in 2019). SECOND FACET (2026-07-24): the other call site (check.cpp 5501) validates each token of an @New Language: header against CLAN's static language table; @New Language is extinct in the kept corpus (0 files, rg sweep), and chatter rejects the whole header as unknown (E525 + E316), strictly subsuming the language-table facet.
 
 Fixture: `CHECK_152_undeclared_precode_lang.cha`. Chatter regression codes: E755.
 
@@ -1007,7 +1007,7 @@ Fixture: `CHECK_156_double_comma.cha`. Chatter regression codes: E258.
 
 ### CHECK 157 — parity
 
-@Media filename ('differentname') does not match the datafile basename. chatter HAS E531 MediaFilenameMismatch, but the check was DEAD via the CLI: the validation_runner passed `None` for the filename so it never ran (it only fired in the parity harness, which passes the stem, masking the gap). Fixed by threading the file stem through validate_single_file_streaming. CLAN exempts remote URL @Media (verified: `@Media: "https://..."` -> no 157), so E531 now exempts URLs too. CLAN CHECK 157.
+@Media filename ('differentname') does not match the datafile basename. chatter has E531 MediaFilenameMismatch, which runs through the CLI because the file stem is threaded through validate_single_file_streaming. CLAN exempts remote URL @Media (verified: `@Media: "https://..."` -> no 157), so E531 exempts URLs too. CLAN CHECK 157.
 
 Fixture: `CHECK_157_media_name_mismatch.cha`. Chatter regression codes: E531.
 
@@ -1025,7 +1025,7 @@ Fixture: `CHECK_159_pause_before_retrace.cha`. Chatter regression codes: E316.
 
 ### CHECK 160 — parity
 
-Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). GAP CLOSED 2026-07-09: the grammar models the tolerated whitespace as explicit optional CST nodes; the group parser now reports E750 at each (both sides) instead of silently dropping them (which also silently rewrote the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750.md. Main-tier groups covered; %wor angle groups not separately grounded. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error, no ambiguity whatsoever; legitimately caught as style discipline; kept as an error.
+Space directly after '<' or before '>' in an angle group (check.cpp 4300/4306, main + %wor tiers). The grammar models the tolerated whitespace as explicit optional CST nodes; the group parser reports E750 at each (both sides) rather than silently dropping them (which would also silently rewrite the text on normalize); re2c mirrors via LessThan/Whitespace/GreaterThan token windows. Spec: E750.md. Main-tier groups covered; %wor angle groups not separately grounded. ADJUDICATED (maintainer decision, 2026-07-10): STYLE error, no ambiguity whatsoever; legitimately caught as style discipline; kept as an error.
 
 Fixture: `CHECK_160_space_in_angle.cha`. Chatter regression codes: E750.
 

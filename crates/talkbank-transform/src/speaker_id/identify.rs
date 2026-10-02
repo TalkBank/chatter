@@ -204,46 +204,25 @@ impl RecordedSpeakerIdentificationAttempt {
         input: RecordedSpeakerIdentificationInput,
         error: &PipelineError,
     ) -> Self {
-        let (failure_kind, diagnostic_codes) = match error {
-            PipelineError::InternalFailure(failure) => (
-                RecordedInputFailureKind::InternalFailure,
-                failure
-                    .diagnostics()
-                    .iter()
-                    .map(|error| error.code.to_string())
-                    .collect(),
-            ),
-            PipelineError::Io(_) => (RecordedInputFailureKind::Io, Vec::new()),
-            PipelineError::ParserCreation(_) => {
-                (RecordedInputFailureKind::ParserCreation, Vec::new())
+        let failure_kind = match error {
+            PipelineError::InternalFailure(_) => RecordedInputFailureKind::InternalFailure,
+            PipelineError::Io(_) => RecordedInputFailureKind::Io,
+            PipelineError::ParserCreation(_) => RecordedInputFailureKind::ParserCreation,
+            PipelineError::Parse(_) => RecordedInputFailureKind::Parse,
+            PipelineError::Validation(_) => RecordedInputFailureKind::Validation,
+            PipelineError::IncompleteValidation(_) => {
+                RecordedInputFailureKind::IncompleteValidation
             }
-            PipelineError::Parse(errors) => (
-                RecordedInputFailureKind::Parse,
-                errors
-                    .errors
-                    .iter()
-                    .map(|error| error.code.to_string())
-                    .collect(),
-            ),
-            PipelineError::Validation(errors) => (
-                RecordedInputFailureKind::Validation,
-                errors.iter().map(|error| error.code.to_string()).collect(),
-            ),
-            PipelineError::IncompleteValidation(failure) => (
-                RecordedInputFailureKind::IncompleteValidation,
-                failure
-                    .diagnostics()
-                    .iter()
-                    .map(|error| error.code.to_string())
-                    .collect(),
-            ),
-            PipelineError::JsonSerialization(_) => {
-                (RecordedInputFailureKind::JsonSerialization, Vec::new())
-            }
-            PipelineError::DroppedContent(_) => {
-                (RecordedInputFailureKind::DroppedContent, Vec::new())
-            }
+            PipelineError::JsonSerialization(_) => RecordedInputFailureKind::JsonSerialization,
+            PipelineError::DroppedContent(_) => RecordedInputFailureKind::DroppedContent,
         };
+        // A failure without located diagnostics records no codes.
+        let diagnostic_codes = error.diagnostics().map_or_else(Vec::new, |diagnostics| {
+            diagnostics
+                .iter()
+                .map(|error| error.code.to_string())
+                .collect()
+        });
         Self {
             schema_version: 1,
             outcome: RecordedSpeakerIdentificationOutcome::InputRejected {

@@ -1,13 +1,11 @@
 # Wide Struct Audit
 
 **Status:** Current
-**Last modified:** 2026-09-09 08:49 EDT
+**Last modified:** {{git-dates:page}}
 
 A repository-wide audit rule for struct shape. Applies to the crates in
 `TalkBank/chatter` (model, parser, transform, CLI, CLAN, LSP, cache, and
-related tooling). The rule originated in the predecessor monorepo, but this
-page is scoped to the current repository rather than the old mixed
-CHAT+batchalign workspace.
+related tooling). This page is scoped to that repository.
 
 A struct with many fields is not automatically wrong. The smell is:
 
@@ -66,23 +64,30 @@ know the whole subsystem to use a subset of fields.
 
 ## Refactor Examples
 
-### `ValidateDirectoryOptions` (chatter), was a flat bag
+### `ValidateDirectoryOptions` (chatter)
 
-Used to be a flat bag of format, cache, traversal, roundtrip, parser, audit,
-and TUI flags. Now grouped by concern:
+Format, cache, roundtrip, parser, audit and TUI settings are grouped by
+concern rather than held as a flat bag:
 
 - `ValidationRules`
 - `ValidationExecution`
-- `ValidationTraversalMode`
-- `ValidationPresentation`
+- `ValidationPresentation` (one enum: `Streamed(Lines | Json | Audit)` or
+  `Tui`, resolved once from `--format`, `--quiet`, `--audit` and
+  `--tui-mode`; one value stands in for a format, a quiet flag, an interface
+  flag and an audit path, so no precedence between them is ever evaluated)
+- the resolved `--suppress` codes
+
+(There is no traversal-mode field: every invocation is an explicit file
+list, so no traversal choice exists to carry.)
 
 Shape this audit wants for policy-rich CLI boundaries: one small top-level
 struct with explicit sub-objects and enums rather than a dozen flat fields.
 
-### `ParseHealth` (talkbank-model), was a ten-boolean state vector
+### `ParseHealth` (talkbank-model)
 
-Now stores taint as a compact tier bitset keyed by `ParseHealthTier`, the
-shape this audit expects for fixed domain sets.
+Stores taint as a compact tier bitset keyed by `ParseHealthTier` (no
+per-tier boolean fields), the shape this audit expects for fixed domain
+sets.
 
 ```mermaid
 flowchart LR

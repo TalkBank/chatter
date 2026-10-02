@@ -1755,3 +1755,10 @@ variant = "MediaFilenameNonCanonicalUnicode"
 summary = "`@Media` filename and the file being parsed name the same media\n(Unicode-canonically, NFC-equal), but one or both spellings are not\nthemselves in NFC form (e.g. a decomposed accented letter: base letter\nplus combining mark, instead of the precomposed codepoint). Both\nspellings render identically and are not a real filename mismatch\n(see [`MediaFilenameMismatch`]), but TalkBank filenames and `@Media`\nnames are canonically UTF-8 NFC, so the non-conforming spelling should\nbe canonicalized.\n\n[`MediaFilenameMismatch`]: Self::MediaFilenameMismatch"
 kind = "Style"
 status = "implemented"
+
+[[code]]
+code = "W110"
+variant = "MediaFilenameCaseDiffers"
+summary = "`@Media` filename and the file being parsed are the same name except\nfor letter case (`Session.cha` declaring `@Media: session`). CHECK's own\ncomparison ignores case, so this is not the real filename mismatch that\n[`MediaFilenameMismatch`] reports, but a name that differs only in case\nresolves on a case-insensitive filesystem (macOS by default) and not on\na case-sensitive one, so a transcript that finds its media on one host\nloses it on another. TalkBank names must match exactly.\n\n[`MediaFilenameMismatch`]: Self::MediaFilenameMismatch"
+kind = "Style"
+status = "implemented"

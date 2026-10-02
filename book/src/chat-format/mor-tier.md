@@ -1,7 +1,7 @@
 # The %mor Tier: Morphological Analysis
 
 **Status:** Reference
-**Last updated:** 2026-05-11 20:35 EDT
+**Last updated:** {{git-dates:page}}
 
 The `%mor` (morphological) dependent tier provides word-by-word morphosyntactic annotation aligned with the main tier. Each main-tier word receives a morphological code specifying part of speech, lemma, and grammatical features.
 
@@ -25,7 +25,7 @@ Items are space-separated and terminate with a punctuation marker (`.`, `?`, `!`
 
 TalkBank's `%mor` tier uses a format inspired by [Universal Dependencies (UD)](https://universaldependencies.org/) but adapted to CHAT conventions. We call this the **UD MOR format** to distinguish it from the older CLAN-era MOR format.
 
-The UD MOR format was introduced via batchalign's Stanza-based morphosyntax pipeline. Stanza produces standard UD analysis (UPOS, lemma, morphological features, dependency relations), and the Rust mapping layer converts this to CHAT `%mor` and `%gra` tiers. The new format has been adopted for all new corpus annotation.
+The UD MOR format comes from batchalign's Stanza-based morphosyntax pipeline. Stanza produces standard UD analysis (UPOS, lemma, morphological features, dependency relations), and the Rust mapping layer converts this to CHAT `%mor` and `%gra` tiers. It is the format used for all new corpus annotation.
 
 ### Structure: Flat POS|lemma\[-Feature]*
 
@@ -108,7 +108,7 @@ This is the most significant divergence from UD, because:
 - **Collapsed person/number**: UD `Person=3|Number=Sing` becomes `-S3`, a combined code that cannot be mechanically decomposed back to its UD components.
 - **Feature ordering**: Features appear in a conventional order determined by the generation pipeline, not in UD's alphabetical order.
 
-**The data model now supports key=value features.** The `MorFeature` type has an optional `key` field, when present, the feature serializes as `Key=Value` (e.g., `-Number=Plur`); when absent, it serializes as just the value (e.g., `-Plur`). This is forward-compatible: existing flat features parse and serialize identically, and if batchalign's mapper begins emitting `Key=Value` features, they flow through the parser and model without any format changes.
+**The data model supports key=value features.** The `MorFeature` type has an optional `key` field, when present, the feature serializes as `Key=Value` (e.g., `-Number=Plur`); when absent, it serializes as just the value (e.g., `-Plur`). This is forward-compatible: existing flat features parse and serialize identically, and if batchalign's mapper begins emitting `Key=Value` features, they flow through the parser and model without any format changes.
 
 ### 3. Multi-Value Features: Commas Preserved
 
@@ -120,7 +120,7 @@ UD encodes multi-value features with commas: `PronType=Int,Rel` (the word is *bo
 
 This is treated as a single feature value `"Int,Rel"`. The grammar accepts commas within feature values, and the model stores them as-is. No decomposition occurs; the model faithfully records the string that appears in the `%mor` tier.
 
-> **Historical note**: Earlier documentation described a "comma-stripping" convention where `PronType=Int,Rel` became `-IntRel` (concatenated without separator). The current grammar and parser preserve the comma. Existing corpus data using the concatenated form (`-IntRel`) also parses correctly; it's simply treated as the flat value `"IntRel"`.
+Existing corpus data using a concatenated form (`PronType=Int,Rel` written as `-IntRel`) also parses correctly; it is simply treated as the flat value `"IntRel"`.
 
 ### 4. Dependency Relations Are Uppercase with Dash Subtypes
 
@@ -138,7 +138,7 @@ This is lossless; case and separator are trivially reversible.
 
 In UD, the root word has `head=0`. In `%gra`, two conventions coexist:
 
-- **UD convention**: `head=0` (e.g., `3|0|ROOT`), the standard we now emit
+- **UD convention**: `head=0` (e.g., `3|0|ROOT`), the standard emitted
 - **Legacy TalkBank convention**: `head=self` (e.g., `3|3|ROOT`), found in older corpus data
 
 The parser and validator accept both forms. New output uses `head=0`.
@@ -196,7 +196,7 @@ This is sometimes mistaken for a compound lemma marker, but commas in UD always 
 
 ### Future Direction
 
-The current handling of compound lemma boundaries is inconsistent across languages. A possible future improvement is a unified Unicode separator character that would normalize all compound/derivational boundary markers (`=`, `!`, `#`, and potentially `_`) into a single convention. This has not been implemented as of 2026-03-02 and requires a design decision on which character to use and whether to preserve the original markers in a structured field.
+The current handling of compound lemma boundaries is inconsistent across languages. A possible future improvement is a unified Unicode separator character that would normalize all compound/derivational boundary markers (`=`, `!`, `#`, and potentially `_`) into a single convention. This is not implemented and requires a design decision on which character to use and whether to preserve the original markers in a structured field.
 
 ## Data Model
 
@@ -414,9 +414,9 @@ Key differences from the UD MOR format:
 | **Morpheme segmentation** | Full segmentation (`v\|eat&PAST`) | Not used (features are abstract, not morphemic) |
 | **Translations** | `=` separator (`n\|perro=dog`) | Not present in base format (separate mechanism) |
 
-### What the Model Removed
+### Types the Model Does Not Have
 
-The UD MOR redesign (2026) removed the following types from the data model:
+The data model has none of the types that the CLAN-era MOR structure needed:
 
 - `MorSuffix`: suffix with type discriminant (`fusional`, `derivational`, etc.)
 - `MorCompound`: compound word with `+` separator
@@ -425,7 +425,7 @@ The UD MOR redesign (2026) removed the following types from the data model:
 - `AnnotatedChunk`: chunk with optional translation
 - `Chunk`: enum of word/compound/terminator
 
-These were replaced by the flat `MorWord { pos, lemma, features }` structure. The model went from ~12 types to 4 (`MorTier`, `Mor`, `MorWord`, `MorFeature`).
+The flat `MorWord { pos, lemma, features }` structure covers them. The model has 4 types: `MorTier`, `Mor`, `MorWord` and `MorFeature`.
 
 ### Backward Compatibility
 

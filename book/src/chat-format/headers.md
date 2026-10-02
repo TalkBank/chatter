@@ -1,7 +1,7 @@
 # Headers
 
 **Status:** Reference
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** {{git-dates:page}}
 
 Headers are lines beginning with `@` that provide metadata about the transcript. They appear between `@Begin` and the first utterance (though some headers like `@Comment` can appear anywhere).
 
@@ -127,8 +127,12 @@ Links the transcript to an audio or video file.
 @Media:	session01, audio
 ```
 
-When the transcript name is known, Chatter checks it against the media name
-(ignoring ASCII case). Different Unicode spellings of the same name, such as
+When the transcript name is known, Chatter checks it against the media name.
+A name that differs in more than ASCII letter case is E531. A name that
+differs only in letter case (`Session.cha` declaring `@Media: session`) is
+W110: CLAN's CHECK accepts it, but a case-sensitive filesystem will not find
+the recording, so the names must be made identical. Different Unicode
+spellings of the same name, such as
 composed and decomposed accents, produce W109 normalization advice rather than
 E531 filename mismatch. The warning identifies whether the media name, the
 transcript name, or both need normalization; validation does not rename files
@@ -142,6 +146,9 @@ To normalize only the `@Media` name, run
 and never renames the transcript. A remaining file-name warning requires a
 separate rename using a tool that preserves NFC (not Finder). Remote media URLs
 are opaque and exempt from both the comparison and this repair.
+
+[File Names and @Media](file-names.md) gathers these rules in one place: what
+must match, why a Mac hides the difference, and how to fix each diagnostic.
 
 ### @Transcriber / @Coder
 

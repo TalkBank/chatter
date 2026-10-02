@@ -26,6 +26,9 @@
 //! out) is what makes this structurally impossible now; these are regression
 //! guards over a context no signature can express, not the enforcement.
 
+#[path = "integration/shim.rs"]
+mod shim;
+
 use std::path::PathBuf;
 
 use talkbank_cache::UnifiedCache;
@@ -95,12 +98,20 @@ fn verdict_reads_and_writes_work_from_inside_a_runtime() {
     std::fs::write(&probe, "@UTF8\n@Begin\n@End\n").expect("write probe");
 
     inside_a_runtime("set_validation / get_validation", || {
-        cache
-            .set_validation(&probe, true, true)
-            .expect("set_validation inside a runtime");
+        shim::set_validation(
+            &cache,
+            &probe,
+            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+            talkbank_cache::CacheOutcome::Valid,
+        )
+        .expect("set_validation inside a runtime");
         assert_eq!(
-            cache.get_validation(&probe, true),
-            Some(true),
+            shim::get_validation(
+                &cache,
+                &probe,
+                talkbank_model::validation::AlignmentValidation::IncludeTierAlignment
+            ),
+            Some(talkbank_cache::CacheOutcome::Valid),
             "a verdict written from inside a runtime must read back"
         );
     });
@@ -122,12 +133,14 @@ fn every_maintenance_operation_works_from_inside_a_runtime() {
     });
     inside_a_runtime("clear_prefix", || {
         cache
-            .clear_prefix("/nothing/matches/this")
+            .clear(&talkbank_cache::CacheScope::Under(
+                shim::cached(std::path::Path::new("/nothing/matches/this")).into(),
+            ))
             .expect("clear_prefix inside a runtime");
     });
     inside_a_runtime("clear_paths", || {
         cache
-            .clear_paths(&[dir.join("absent.cha")])
+            .clear_paths(&[shim::cached(&dir.join("absent.cha"))])
             .expect("clear_paths inside a runtime");
     });
     inside_a_runtime("purge_nonexistent", || {
@@ -136,7 +149,9 @@ fn every_maintenance_operation_works_from_inside_a_runtime() {
             .expect("purge_nonexistent inside a runtime");
     });
     inside_a_runtime("clear_all", || {
-        cache.clear_all().expect("clear_all inside a runtime");
+        cache
+            .clear(&talkbank_cache::CacheScope::All)
+            .expect("clear_all inside a runtime");
     });
 
     let _ = std::fs::remove_dir_all(&dir);

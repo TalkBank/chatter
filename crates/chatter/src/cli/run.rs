@@ -1,24 +1,20 @@
 //! Command dispatch from parsed CLI arguments into command handlers.
 //!
 //! [`run`] is the single entry point after argument parsing. It resolves cross-cutting
-//! concerns, TUI auto-detection, tracing initialisation, color theme loading, then
-//! hands the parsed command to the feature-oriented CLI command services in
-//! [`crate::commands`].
+//! concerns (tracing initialisation, color theme loading), then hands the parsed
+//! command to the feature-oriented CLI command services in [`crate::commands`].
 //!
-//! TUI mode is enabled automatically when stdout is a TTY unless `--tui-mode disable`
-//! is passed. When active, tracing output is suppressed so it does not interleave with
-//! the interactive display.
+//! The TUI decision is not made here: `validate` decides it together with its
+//! output format, `--quiet` and `--audit` (`ValidationPresentation::resolve`).
+//! Tracing is off unless `-v` or `RUST_LOG` asks for it, so nothing interleaves
+//! with the interactive display by default.
 
 use crate::commands::{self, CommandContext};
 use crate::ui::Theme;
 
 /// Execute the CLI command
 pub fn run(cli: super::Cli) {
-    // Resolve TUI mode into a concrete decision
-    let should_use_tui = cli.tui_mode.should_use_tui();
-
-    // Detect if TUI mode is being used - disable logging if so to avoid cluttering the display
-    super::init_tracing(cli.verbose, &cli.log_format, should_use_tui);
+    super::init_tracing(cli.verbose, &cli.log_format);
 
     // Load color theme for TUI mode
     let theme = Theme::load(cli.theme);
@@ -26,7 +22,7 @@ pub fn run(cli: super::Cli) {
     commands::dispatch_command(
         cli.command,
         &CommandContext {
-            should_use_tui,
+            tui_mode: cli.tui_mode,
             theme,
         },
     );

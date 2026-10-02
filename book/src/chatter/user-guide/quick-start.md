@@ -1,7 +1,7 @@
 # Quick Start
 
 **Status:** Current
-**Last updated:** 2026-07-13 17:59 EDT
+**Last updated:** {{git-dates:page}}
 
 This page gets you from zero to productive with `chatter` in five minutes.
 [Install chatter first](installation.md) if you haven't already.
@@ -46,22 +46,27 @@ Every error code (`E305`, `E705`, etc.) is documented with fix guidance in the
 [validation error reference](validation-errors.md).
 
 Not every diagnostic is an error. Some codes are warnings: the file is valid
-CHAT, but something is worth flagging (for example `E254`, a word-level
-`@s:` language override that is not listed in `@Languages`). A file whose only
-diagnostics are warnings is reported as valid, and its heading reflects that:
+CHAT, but something is worth flagging (for example `W110`, an `@Media` name
+that differs from the transcript's own name only in letter case). A file
+whose only diagnostics are warnings is reported as valid, and its heading
+reflects that. For a `Session.cha` declaring `@Media: session, audio`:
 
 ```text
-⚠ Warnings in transcript.cha
+⚠ Warnings in ./Session.cha
 
-E254 (https://talkbank.org/errors/E254)
+W110 (https://talkbank.org/errors/W110)
 
-  ⚠ warning[E254]: Explicit word language 'spa' is not listed in @Languages
-   ╭─[input:6:15]
- 6 │ *CHI:   hello hola@s:spa .
-   ·               ─────┬────
-   ·                    ╰── here
+  ⚠ warning[W110]: Media filename 'session' differs from file name 'Session'
+  │ only in letter case. The names must match exactly: a case-insensitive
+  │ filesystem finds the recording either way, a case-sensitive one does not.
+  │ (line 6, column 1, bytes 101..124)
+   ╭─[input:6:1]
+ 6 │ @Media: session, audio
+   · ───────────┬──────────
+   ·            ╰── here
    ╰────
-  help: Add 'spa' to @Languages or confirm the word-level override is intentional
+  help: Make the names identical: update @Media to "@Media:	Session, audio" or
+        rename the transcript, and give the recording the same spelling.
 ```
 
 The summary still counts this file under `Valid`, and the exit code stays `0`.

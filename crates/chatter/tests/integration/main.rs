@@ -29,6 +29,7 @@ mod adjudication_tests;
 mod appledouble_tests;
 mod cache_env_tests;
 mod cache_tests;
+mod closed_stdout_tests;
 mod command_execution_tests;
 mod command_matrix_tests;
 mod command_surface_manifest;

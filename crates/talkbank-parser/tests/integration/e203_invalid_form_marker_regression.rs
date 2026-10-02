@@ -68,7 +68,7 @@ fn unknown_form_marker_emits_e203_not_e316() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         &input,
-        TranscriptName::Named(FileStem::from_stem("e203_regression")),
+        TranscriptName::Named(FileStem::from_stem("e203_regression").expect("a stem")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
@@ -90,7 +90,7 @@ fn valid_builtin_form_marker_not_flagged() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         &input,
-        TranscriptName::Named(FileStem::from_stem("e203_regression")),
+        TranscriptName::Named(FileStem::from_stem("e203_regression").expect("a stem")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
@@ -112,7 +112,7 @@ fn valid_language_suffix_not_flagged() {
 
     let diags = crate::common::parse_validate_and_collect_diagnostics(
         &input,
-        TranscriptName::Named(FileStem::from_stem("e203_regression")),
+        TranscriptName::Named(FileStem::from_stem("e203_regression").expect("a stem")),
     );
     let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 
@@ -229,7 +229,7 @@ fn a_word_with_two_at_suffixes_is_refused_once_and_named() {
 
         let diags = crate::common::parse_validate_and_collect_diagnostics(
             &input,
-            TranscriptName::Named(FileStem::from_stem("e203_regression")),
+            TranscriptName::Named(FileStem::from_stem("e203_regression").expect("a stem")),
         );
         let codes: Vec<&str> = diags.iter().map(|(c, _)| c.as_str()).collect();
 

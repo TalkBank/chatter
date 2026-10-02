@@ -18,11 +18,14 @@ use std::ops::Deref;
 use talkbank_derive::{SemanticEq, SpanShift};
 
 // Coordinated `%mor` / `%gra` mutation (the `splice_*coordinated` methods and
-// their `CoordinatedMutationError`) lives in a sibling submodule to keep this
-// file browseable; `CoordinatedMutationError` is re-exported so its path
-// (`mor::tier::CoordinatedMutationError`) is unchanged.
+// the types they take and return) lives in a sibling submodule to keep this
+// file browseable; the types are re-exported here (`mor::tier::...`) and
+// beside `MorTier` (`mor::...`).
 mod coordinated;
-pub use coordinated::CoordinatedMutationError;
+pub use coordinated::{
+    AttachmentRelation, BlockChunk, CoordinatedMutationError, HostRedirects, ItemTarget,
+    RootRelationUnderHost, SpanRoot, SplicedBlock, SplicedBlockError,
+};
 
 /// Type of morphological analysis tier.
 ///
@@ -654,9 +657,13 @@ mod tests {
         tier.splice_coordinated(
             &mut gra,
             0,
-            make_mor(make_word("noun", "woof")),
-            vec![GrammaticalRelation::new(1, 0, "NMOD")],
-            None,
+            SplicedBlock::new(
+                vec![make_mor(make_word("noun", "woof"))],
+                vec![GrammaticalRelation::new(1, 0, "NMOD")],
+            )
+            .expect("one-chunk block"),
+            SpanRoot::UtteranceRoot,
+            HostRedirects::ByItem,
         )
         .expect("splice_coordinated");
 
@@ -682,9 +689,13 @@ mod tests {
         tier.splice_range_coordinated(
             &mut gra,
             0..1,
-            vec![make_mor(make_word("noun", "new"))],
-            vec![GrammaticalRelation::new(1, 0, "NMOD")],
-            None,
+            SplicedBlock::new(
+                vec![make_mor(make_word("noun", "new"))],
+                vec![GrammaticalRelation::new(1, 0, "NMOD")],
+            )
+            .expect("one-chunk block"),
+            SpanRoot::UtteranceRoot,
+            HostRedirects::ByItem,
         )
         .expect("splice_range_coordinated");
 

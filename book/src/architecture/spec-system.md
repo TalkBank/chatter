@@ -1,7 +1,7 @@
 # Spec System
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 `spec/` is the source of truth for what CHAT is and for what chatter rejects.
 Tests, fixtures and error documentation are GENERATED from it. You change the
@@ -124,17 +124,11 @@ data maintainer can fix a file without reading the validator's source.
 
 ### `kind` and `status` are facts about a CODE, and live in the registry
 
-Until R1 (2026-08-26) every spec declared `kind` and `status`. Both are
-properties of the CODE, so each of a code's spec files carried a copy, and
-eleven codes have two or three files. Nothing made them agree; a generator
-checked, and refused to run on disagreement.
-
-They live in [`spec/codes/error-codes.toml`](#the-code-registry) now, one entry
-per code, and a spec reaches them through the code it names. Three things went
-with the move: the `spec_status` gate that reconciled `#[status(planned)]` on
-the enum against the specs in both directions, the `spec/errors <-> ErrorCode`
-divergence check the `DiagnosticKind` generator ran, and the per-code `kind`
-agreement loop beside it.
+Both are properties of the CODE, not of a document about it, so a code with
+several spec files has one `kind` and one `status`. They live in
+[`spec/codes/error-codes.toml`](#the-code-registry), one entry per code, and a
+spec reaches them through the code it names. Because there is one copy, there
+is nothing to reconcile: the enum's status and the specs cannot disagree.
 
 ## The code registry
 
@@ -162,31 +156,24 @@ specs about which checks run.
 The schema, with a reason per field, is
 `talkbank_spec_vocabulary::registry`. It refuses, at load: an unrecognised key,
 a code registered twice, two codes compiling to one Rust identifier, and a
-RETIRED number brought back. That last one was a twenty-line comment in the
-enum asking readers not to reuse `W210`, `W601`, `E754` and eight others; it
-is a load error now, and it names the retirement's own recorded reason.
+RETIRED number brought back; the load error names the retirement's own
+recorded reason. Reusing a retired number such as `W210`, `W601` or `E754` is
+therefore unrepresentable.
 
 What the registry deliberately does NOT own is whether a code is DOCUMENTED.
-That used to be entangled with the vocabulary question, since "this variant has
-no spec file" read as a divergence. It is a coverage question, and
-`error_code_specs` asks it as one.
+That is a coverage question, and `error_code_specs` asks it as one: a variant
+with no spec file is a coverage gap, not a vocabulary divergence.
 
-### There is no longer a rule about where a field sits
+### A field has no position
 
-This section used to say `Expected Error Codes` **must precede the fence**,
-because the loader read the content before the ```` ```chat ```` block and a
-spec that put the line below it declared nothing while reading, to a human, as
-fully specified. Two of E757's examples did exactly that, and the loader grew a
-guard that refused the placement.
-
-Phase 1b deleted the rule and the guard together: an example is one value that
-carries its own input, so there is no fence for a field to be on the wrong side
-of. It is recorded here because it is the clearest example in this system of a
+An example is one value that carries its own input and its own declared
+fields, so there is no fence for a field to be on the wrong side of, and no
+placement rule to remember. It is the clearest example in this system of a
 type removing a rule rather than a document restating one.
 
 ### Every example carries a CLAIM, and absences are assertable
 
-Since R2 (2026-08-21) each example declares one of:
+Each example declares one of:
 
 ```toml
 claim = 'violates'                         # the spec's code MUST appear
@@ -195,44 +182,37 @@ claim = { subsumed_by = 'E316' }           # E316 appears; this code does not
 claim = { subsumed_by = ['E246', 'E249'] } # all listed appear; this code does not
 ```
 
-The claim is REQUIRED: an example that asserts nothing is unwritable, which
-retired the self-demonstration gate and its 36-entry baseline outright, plus
-the zero-ratchet test whose own docstring had named exactly this retirement
-("nothing in a type stops the next spec omitting it").
+The claim is REQUIRED: an example that asserts nothing is unwritable.
 
-Extra emitted codes are still fine (one malformed line legitimately raises
-several diagnostics); the exact per-stage sets are the observation snapshot's
-business. What changed is the NEGATIVE half: `legal` and the own-code-absent
-part of `subsumed_by` are assertions the old subset check could not express at
-all, and this page used to say so ("a spec cannot be used to assert that a
-code is NOT emitted"). A spec whose examples are all `subsumed_by` is the
-parser-specificity worklist, verifiable against the snapshot rather than
-merely recorded; `coverage --errors` lists it.
+Extra emitted codes are fine (one malformed line legitimately raises several
+diagnostics); the exact per-stage sets are the observation snapshot's
+business. The NEGATIVE half is assertable: `legal` and the own-code-absent
+part of `subsumed_by` assert that a code is NOT emitted. A spec whose examples
+are all `subsumed_by` is the parser-specificity worklist, verifiable against
+the snapshot; `coverage --errors` lists it.
+
+Reading a spec: a `subsumed_by` claim tells you what chatter emits, not
+necessarily what the rule is. Read the spec's Description and title for the
+rule, and treat a mismatch between the title code and the example's codes as
+an open question rather than as a specification. `subsumed_by E316`
+("unparsable content") means the example does not parse, so the specific rule
+is never reached: a parser gap. A specific other code is usually a wrong
+fixture. When authoring, an example whose input violates the rule should
+produce that rule's code; if it does not, chatter has a gap, and the gap is
+the finding.
 
 ### There is no `layer` field, and the runner is total
 
-Until R4 (2026-08-21) every spec declared `layer = 'parser' | 'validation'`,
-and the field decided what a generated test could SEE: a parser-layer spec got
-a string-based test inspecting parse diagnostics only, a validation-layer spec
-got a fixture. Declaring a validation-layer code in a parser-layer spec
-therefore produced a test that could never see it, which the E342/E390 case
-demonstrated in production.
+Which stage catches a rule is not authored; it is an OBSERVATION, recorded per
+example in `spec/observations/example-diagnostics.json`. Every example is a
+fixture, and the fixture runner collects BOTH stages' codes against a real
+file, so there is no stage a declared code can hide in (some examples' codes
+are genuinely SPLIT across stages, which no per-stage harness could assert).
+Error specs have no string-based per-stage tests; the fixture runner plus the
+observation snapshot cover them.
 
-R4 deleted the field and the failure mode together, in three moves:
-
-- **every example is a fixture**, and the fixture runner has always collected
-  BOTH stages' codes against a real file, so there is no stage a declared code
-  can hide in (five examples' codes are genuinely SPLIT across stages, which
-  no per-stage harness could assert);
-- **the string-based error tests are gone**, being strictly weaker than the
-  fixture runner plus the observation snapshot;
-- **which stage catches a rule is an OBSERVATION**, recorded per example in
-  `spec/observations/example-diagnostics.json`. The authored field disagreed
-  with the observation on 17 examples on the day it was measured.
-
-Tree-sitter corpus membership, which the field used to route, is derived from
-the snapshot instead: an example joins iff it produced parse-stage
-diagnostics, so there is structure to pin.
+Tree-sitter corpus membership is derived from the snapshot: an example joins
+iff it produced parse-stage diagnostics, so there is structure to pin.
 
 ### `status` controls implementation checking, not every regression contract
 
@@ -243,12 +223,9 @@ diagnostics, so there is structure to pin.
 | `deprecated`, `unreachable_from_chat` | Implementation is deferred; legal/subsumption regression claims remain checked. |
 | **absent** | REFUSED: `spec/codes/error-codes.toml` fails to load, naming the entry. |
 
-Declared per CODE, in the registry, since R1. It was a per-FILE field, and
-before 2026-08-11 it defaulted to `implemented` when absent, so the file said
-nothing and the loader invented an answer: on that date it was true of **104 of
-238 specs**. The default went first and the duplication went second, so
-`implemented` now means one person decided it once for the code, rather than
-each of its spec files claiming it separately.
+Declared per CODE, in the registry, with no default: `implemented` means
+someone decided it once for the code, rather than each of its spec files
+claiming it separately.
 
 Changing a spec from `not_implemented` to `implemented` un-`#[ignore]`s its
 generated tests, and those tests may never have run. Regenerate and run them in
@@ -259,9 +236,9 @@ Deferred code status is not a count of missing validation rules. Run
 to see each authored claim beside its observed codes. This view distinguishes
 verified legal/subsumption claims, contradicted claims and planned violation
 claims using the claim's shared evaluator. The separate deferred-spec regression
-test enforces legal/subsumption claims even when their historical code is not
+test enforces legal/subsumption claims even when their code is not
 implemented. A verified alternate diagnostic does not reactivate that code;
-an observed emission of the historical code instead requires status review.
+an observed emission of the deferred code instead requires status review.
 
 ### `source` names the transcript
 
@@ -272,9 +249,8 @@ names each transcript after the stem of its `source`, and an example with no
 
 The backend-parity harness also preserves this context: its input owns both
 CHAT text and the declared source path, and performs contextual validation for
-either parser. Dropping the source previously made both backends appear to miss
-E531 despite their agreement. A measurement regression now checks mismatching,
-matching, and anonymous source names through both backends.
+either parser. A measurement regression checks mismatching, matching, and
+anonymous source names through both backends.
 
 A `legal` claim asserts absence of this spec's own code. It does not assert that
 other rules accept the input or that parsing required no recovery. For example,
@@ -307,18 +283,13 @@ the same list drives writing, checking and the gate.
 {{#include generated/spec-artifacts.md}}
 
 That table is itself generated from the registry, and the currency gate keeps
-it true. The hand-written one it replaced listed five generators when the tree
-held eighteen binaries, and named four separate commands that had by then become
-one.
+it true.
 
 One generator sits outside it, deliberately: `gen_form_markers` has its own
 registry and its own drift gate (`just form-markers-gen`).
 
-`docs/errors/*.md` used to be described here as "an optional local reference
-nothing commits". That was false when written: the directory has been tracked
-since 2026-06-23, 226 files of it. It is now a registry artifact like any other,
-so `just spec-gen` writes it and `just spec-check` compares it, and the
-standalone `gen_error_docs` binary that wrote it outside the gate is deleted.
+`docs/errors/*.md` is a tracked, committed registry artifact like any other:
+`just spec-gen` writes it and `just spec-check` compares it.
 
 Two registries under `spec/` own closed vocabularies and generate every site
 that names them: `spec/symbols/symbol_registry.json` (`just symbols-gen`) and
@@ -336,9 +307,8 @@ described below before obsolete files may be pruned.
 `grammar/test/corpus/generated/` retains unchanged files and removes obsolete
 ones through `GeneratedDir`, which requires a `.generated-output-dir` marker
 and refuses human ownership or symlinked entries;
-`grammar/test/corpus/manual/` is never written by a generator. Both were once
-one tree, which destroyed 1,468 lines of hand-mined corpus tests twice in three
-days.
+`grammar/test/corpus/manual/` is never written by a generator, so a
+regeneration can never destroy hand-mined corpus tests.
 
 ## What checks what
 
@@ -368,11 +338,6 @@ runtime observation of a specific CHECK executable.
 
 ## Related
 
-- [Why the Spec System Looks Like That](spec-system-history.md), which answers
-  the questions this page raises and does not settle: what `_auto` means, why an
-  E202 spec can carry an example expecting E316, and why eleven codes have two
-  spec files. Read it before concluding that a spec file means what it appears
-  to mean.
 - [Spec Workflow](../contributing/spec-workflow.md), how to make a change.
 - [Testing](../contributing/testing.md), the wider test strategy.
 - [Grammar Governance](grammar-governance.md), the grammar side.

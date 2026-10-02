@@ -8,6 +8,8 @@ interface Props {
   backendSilent: boolean;
   processedFiles: number;
   totalErrors: number;
+  /** Why the cache would not open for this run, if it would not. */
+  cacheUnavailable: string | null;
   startTime: number | null;
   onRevalidate: () => void;
   onCancel: () => void;
@@ -26,6 +28,7 @@ export default function ProgressBar({
   backendSilent,
   processedFiles,
   totalErrors,
+  cacheUnavailable,
   startTime,
   onRevalidate,
   onCancel,
@@ -77,9 +80,22 @@ export default function ProgressBar({
       {run.kind === "finishedIncomplete" && (
         <span className="error-count-text">
           Incomplete: {run.lostFiles} of {run.stats.totalFiles} files were never
-          checked. Of the rest, {run.stats.validFiles} valid,{" "}
+          checked: {run.cause} Of the rest, {run.stats.validFiles} valid,{" "}
           {run.stats.invalidFiles} invalid.
         </span>
+      )}
+
+      {/* Like incomplete, it leads with what was NOT checked. */}
+      {run.kind === "stopped" && (
+        <span className="error-count-text">
+          {run.reason}: {run.unprocessedFiles} of {run.stats.totalFiles} files
+          were not checked. Of the rest, {run.stats.validFiles} valid,{" "}
+          {run.stats.invalidFiles} invalid.
+        </span>
+      )}
+
+      {run.kind === "nothingFound" && (
+        <span className="error-count-text">No CHAT files found</span>
       )}
 
       {run.kind === "discovering" && <span>Discovering files...</span>}
@@ -101,7 +117,7 @@ export default function ProgressBar({
 
       {run.kind === "finished" && (
         <span>
-          {finishedRunSummary(run, totalErrors)}
+          {finishedRunSummary(run, totalErrors, cacheUnavailable)}
         </span>
       )}
 

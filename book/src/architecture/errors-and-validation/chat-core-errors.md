@@ -1,7 +1,7 @@
 # Errors, CHAT core
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 The error infrastructure used across all CHAT-core crates
 (`talkbank-model`, `talkbank-parser`, `talkbank-transform`,
@@ -43,9 +43,8 @@ let diagnostic = ParseError::build(ErrorCode::ParseFailed)
     .finish();
 ```
 
-Migration: remove `?`/`unwrap()` after `finish()` and replace `try_finish()` with
-`finish()` after supplying both fields. `ParseErrorBuilderError` no longer
-exists; incomplete builders cannot finish. Streaming pipeline source admission
+`finish()` returns the diagnostic directly: there is no `try_finish()` and no
+`ParseErrorBuilderError`, because an incomplete builder cannot finish. Streaming pipeline source admission
 reports the producer's original diagnostic once and returns a parse failure;
 it neither invents a source location nor fabricates an empty recovered document.
 

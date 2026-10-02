@@ -16,9 +16,9 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::recorded_time::RecordedTime;
 use crate::speaker_id::{
     DecisionEngine, InsertedRoleSpec, JudgmentProvenance, MergeOverride, OverrideFile,
     SpeakerAction, SpeakerIdError,
@@ -158,7 +158,7 @@ pub struct PendingEntry {
     pub session_id: String,
     /// When the pending entry was created (by the orchestrator's
     /// pass 1).
-    pub created_at: DateTime<Utc>,
+    pub created_at: RecordedTime,
     /// Kind-specific payload. The kind itself is encoded as a serde
     /// tag on the enum, flattened into the entry-level TOML.
     #[serde(flatten)]
@@ -650,7 +650,7 @@ fn apply_decision(
     operator: &str,
     overrides: &mut OverrideFile,
 ) -> Result<(), AdjudicationError> {
-    let now = Utc::now();
+    let now = RecordedTime::now();
     let merge_override = match (&entry.data, decision) {
         (
             PendingKindData::SpeakerIdLowConfidence { suggested },
@@ -845,7 +845,7 @@ PAR1 = { code = "INV", tag = "Investigator" }
     fn deterministic_entry_omits_engine_field_on_serialize() {
         let entry = PendingEntry {
             session_id: "sess-check".to_string(),
-            created_at: chrono::Utc::now(),
+            created_at: RecordedTime::now(),
             data: PendingKindData::SpeakerIdLowConfidence {
                 suggested: SuggestedSpeakerIdMapping {
                     mapping: {
@@ -906,7 +906,7 @@ PAR1 = { code = "INV", tag = "Investigator" }
         mapping.insert("PAR1".to_string(), SpeakerAction::Rename);
         let entry = PendingEntry {
             session_id: "sess-accept-multi".to_string(),
-            created_at: Utc::now(),
+            created_at: RecordedTime::now(),
             data: PendingKindData::SpeakerIdLowConfidence {
                 suggested: SuggestedSpeakerIdMapping {
                     mapping,

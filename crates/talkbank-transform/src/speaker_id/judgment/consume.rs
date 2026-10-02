@@ -4,8 +4,6 @@
 
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
-
 use crate::adjudication::{PendingEntry, PendingKindData, SuggestedSpeakerIdMapping};
 use crate::speaker_id::{
     DecisionEngine, EndpointUrl, InsertedRoleSpec, JudgmentProvenance, ModelId, PromptVersion,
@@ -54,7 +52,7 @@ pub fn judgment_to_pending(
     session_id: &str,
     judgment: &HolisticJudgment,
     meta: &ProvenanceMeta,
-    created_at: DateTime<Utc>,
+    created_at: crate::recorded_time::RecordedTime,
 ) -> Result<PendingEntry, ConsumeError> {
     let mut mapping: BTreeMap<String, SpeakerAction> = BTreeMap::new();
     // Collect every adult (donor code + assigned role), in the
@@ -185,8 +183,6 @@ fn disambiguate_adult_roles(
 mod tests {
     use std::collections::BTreeMap;
 
-    use chrono::{TimeZone, Utc};
-
     use crate::adjudication::{PendingAdjudications, PendingKindData};
     use crate::speaker_id::judgment::output::{
         AdultRole, DonorCode, HolisticJudgment, SampleTypeVerdict, SpeakerVerdict,
@@ -229,8 +225,8 @@ mod tests {
         }
     }
 
-    fn fixed_ts() -> chrono::DateTime<Utc> {
-        Utc.with_ymd_and_hms(2026, 6, 6, 10, 0, 0).unwrap()
+    fn fixed_ts() -> crate::recorded_time::RecordedTime {
+        "2026-06-06T10:00:00Z".parse().unwrap()
     }
 
     // -----------------------------------------------------------------------

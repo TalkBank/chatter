@@ -1,7 +1,7 @@
 # CHAT Data Model
 
 **Status:** Current
-**Last updated:** 2026-09-28 16:31 EDT
+**Last updated:** {{git-dates:page}}
 
 The `talkbank-model` crate defines the typed AST for CHAT files. Every
 other crate, parser, transform, CLAN, CLI, LSP, and the entire batchalign
@@ -13,9 +13,8 @@ extract → infer → inject pattern that all NLP tasks follow.
 
 Construct `ChatDate` through `from_text` or `new`. `Valid(CheckedChatDate)`
 contains private components admitted together with the original spelling;
-read them with `day()`, `month()`, `year()` and `as_str()`. Migrate former
-`Valid { day, month, year, raw }` matches to `Valid(date)` and these accessors.
-There is no independent component constructor or mutable field access.
+read them with `day()`, `month()`, `year()` and `as_str()`; match `Valid(date)`
+and use these accessors. There is no independent component constructor or mutable field access.
 
 This checks ASCII `DD-MMM-YYYY` syntax, uppercase month abbreviations and days
 01–31, **not calendar validity**: impossible month/day combinations and year
@@ -214,9 +213,8 @@ At Level 1: `AnnotatedWord(Box<Annotated<Word>>)`,
 `AnnotatedGroup(Annotated<Group>)`,
 `AnnotatedEvent(Annotated<Event>)`,
 `AnnotatedAction(Annotated<Action>)`. The same variants exist at Level 2, and
-since 2026-08-26 so does every bare counterpart: see
-[Annotations](../../chat-format/annotations.md) for the full pairing and for
-what the asymmetry used to cost.
+so does every bare counterpart: see
+[Annotations](../../chat-format/annotations.md) for the full pairing.
 
 ### `ReplacedWord`
 

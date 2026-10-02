@@ -1,7 +1,7 @@
 # Phon Tiers (%xmodsyl, %xphosyl, %xphoaln, %xphoint)
 
 **Status:** Reference
-**Last updated:** 2026-09-28 15:09 EDT
+**Last updated:** {{git-dates:page}}
 
 The Phon extension tiers provide syllable-level phonological annotation,
 segmental alignment between target and actual IPA, and per-phone time
@@ -19,20 +19,18 @@ than a rule to settle here.
 
 chatter parses and **validates all four tiers as first-class CHAT tiers**.
 
-> **The `x` prefix.** Current Phon exports no longer use the leading `x`.
-> Chatter accepts **both** the legacy `x`-prefixed names (`%xmodsyl`,
+> **The `x` prefix.** Phon exports use the unprefixed names.
+> Chatter accepts **both** the `x`-prefixed names (`%xmodsyl`,
 > `%xphosyl`, `%xphoaln`, `%xphoint`) and the unprefixed names (`%modsyl`,
 > `%phosyl`, `%phoaln`, `%phoint`); the parser and validator key off the tier
 > *kind*, not the literal prefix. Chatter's canonical serialized form currently
-> remains `x`-prefixed; input compatibility and output spelling are distinct.
+> is `x`-prefixed; input compatibility and output spelling are distinct.
 
-CLAN's dependent-tier definitions added `%phoint` on September 25, 2026
-(`clan-info` commit `f062b58`). This closes the earlier missing-declaration
-issue for the unprefixed tier. Acceptance depends on the definitions actually
-loaded by CHECK; an older bundled `depfile.cut` may still reject it. The entry
-permits arbitrary tier content and does not specify or validate the internal
-Phon interval grammar. This update does not change Chatter's existing aliases
-or canonical output spelling.
+CLAN's dependent-tier definitions declare `%phoint` (`clan-info` commit
+`f062b58`). Acceptance depends on the definitions actually loaded by CHECK; an
+older bundled `depfile.cut` may still reject it. The entry permits arbitrary
+tier content and does not specify or validate the internal Phon interval
+grammar. It does not affect Chatter's aliases or canonical output spelling.
 
 ## The four tiers
 
@@ -137,9 +135,8 @@ is followed by a CLAN time-alignment bullet: the byte `0x15` (NAK), the interval
 ## Validation
 
 **These checks run by default.** Pass `--suppress xphon` to silence the entire
-Phon `%x` validation surface, or suppress an individual code. (The historical
-`--check-xphon` opt-in flag is now a deprecated no-op: the checks it used to
-gate are on by default.)
+Phon `%x` validation surface, or suppress an individual code. (The `--check-xphon`
+flag is a deprecated no-op: the checks are always on.)
 
 **Word-count cross-checks:**
 

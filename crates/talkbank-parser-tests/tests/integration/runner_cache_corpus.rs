@@ -1,14 +1,15 @@
 //! Cache inputs are external evidence, not newly established CHAT validity.
 
 use super::{
-    CacheMode, CacheOutcome, FileStatus, Path, RunCoverage, ValidationCache, ValidationConfig,
-    ValidationEvent, validate_files_streaming, workspace_root,
+    CacheOutcome, FileStatus, RoundtripCheck, RunCache, RunEnding, ValidationCache,
+    ValidationConfig, ValidationEvent, validate_files_streaming, workspace_root,
 };
 
 #[test]
 fn reference_cached_roundtrip_failure_is_not_promoted_to_success() {
     use std::sync::Arc;
-    use talkbank_cache::CachePool;
+    use talkbank_cache::{CacheError, CacheLookup, CachePool, ContentHash};
+    use talkbank_model::validation::AlignmentValidation;
 
     enum ValidationEntry {
         Retained,
@@ -18,67 +19,101 @@ fn reference_cached_roundtrip_failure_is_not_promoted_to_success() {
         store: Arc<CachePool>,
         validation: ValidationEntry,
     }
-    impl ValidationCache for ReplayCache {
-        fn get(&self, path: &Path, alignment: bool) -> Option<CacheOutcome> {
+    impl talkbank_cache::VerdictReader for ReplayCache {
+        fn identity(&self) -> &talkbank_cache::CacheIdentity {
+            crate::default_run_identity()
+        }
+
+        fn get(
+            &self,
+            path: &talkbank_cache::ResolvedPath,
+            content: &ContentHash,
+            alignment: AlignmentValidation,
+        ) -> Result<CacheLookup<CacheOutcome>, CacheError> {
             match self.validation {
-                ValidationEntry::Retained => ValidationCache::get(&*self.store, path, alignment),
-                ValidationEntry::Withheld => None,
+                ValidationEntry::Retained => {
+                    talkbank_cache::VerdictReader::get(&*self.store, path, content, alignment)
+                }
+                ValidationEntry::Withheld => Ok(CacheLookup::Miss),
             }
         }
-        fn set(&self, path: &Path, alignment: bool, outcome: CacheOutcome) -> Result<(), String> {
-            ValidationCache::set(&*self.store, path, alignment, outcome)
+
+        fn get_roundtrip(
+            &self,
+            path: &talkbank_cache::ResolvedPath,
+            content: &ContentHash,
+            alignment: AlignmentValidation,
+        ) -> Result<CacheLookup<talkbank_cache::RoundtripOutcome>, CacheError> {
+            talkbank_cache::VerdictReader::get_roundtrip(&*self.store, path, content, alignment)
         }
-        fn get_roundtrip(&self, path: &Path, alignment: bool) -> Option<CacheOutcome> {
-            ValidationCache::get_roundtrip(&*self.store, path, alignment)
+    }
+
+    impl ValidationCache for ReplayCache {
+        fn set(
+            &self,
+            path: &talkbank_cache::ResolvedPath,
+            content: &ContentHash,
+            alignment: AlignmentValidation,
+            outcome: CacheOutcome,
+        ) -> Result<(), CacheError> {
+            ValidationCache::set(&*self.store, path, content, alignment, outcome)
         }
         fn set_roundtrip(
             &self,
-            path: &Path,
-            alignment: bool,
-            outcome: CacheOutcome,
-        ) -> Result<(), String> {
-            ValidationCache::set_roundtrip(&*self.store, path, alignment, outcome)
+            path: &talkbank_cache::ResolvedPath,
+            content: &ContentHash,
+            alignment: AlignmentValidation,
+            outcome: talkbank_cache::RoundtripOutcome,
+        ) -> Result<(), CacheError> {
+            ValidationCache::set_roundtrip(&*self.store, path, content, alignment, outcome)
         }
     }
 
     let mut config = ValidationConfig {
-        jobs: Some(1),
-        cache: CacheMode::Enabled,
+        jobs: Some(std::num::NonZeroUsize::MIN),
         ..Default::default()
     };
     let path = workspace_root().join("corpus/reference/core/basic-conversation.cha");
     let store = Arc::new(CachePool::in_memory(config.cache_identity()).expect("isolated cache"));
     // Establish validation from the real file rather than inventing that verdict.
-    let (events, _cancel) =
-        validate_files_streaming(vec![path.clone()], &config, Some(store.clone()));
+    let (events, _cancel) = validate_files_streaming(
+        vec![path.clone()],
+        &talkbank_transform::ValidationRun::new(config.clone(), RunCache::ReadWrite(store.clone()))
+            .expect("a cache opened for this run's identity"),
+    );
     let mut completed = false;
     for event in events {
-        if let ValidationEvent::Finished(stats) = event {
-            assert_eq!(stats.coverage(), RunCoverage::Complete);
-            assert_eq!(stats.valid_files, 1);
+        if let ValidationEvent::Finished(RunEnding::Complete(stats)) = event {
+            let stats = stats.snapshot();
+            assert_eq!(stats.valid_files(), 1);
             completed = true;
         }
     }
     assert!(completed);
     assert_eq!(
-        ValidationCache::get(&*store, &path, config.check_alignment),
+        crate::cache_shim::verdict(talkbank_cache::VerdictReader::get(
+            &*store,
+            &crate::cache_shim::cached(&path),
+            &crate::cache_shim::content(&path),
+            config.alignment
+        )),
         Some(CacheOutcome::Valid)
     );
     // Deliberately supply a negative external cache result. This is a cache
     // replay contract, NOT evidence that this reference fails a fresh roundtrip.
     ValidationCache::set_roundtrip(
         &*store,
-        &path,
-        config.check_alignment,
-        CacheOutcome::Invalid,
+        &crate::cache_shim::cached(&path),
+        &crate::cache_shim::content(&path),
+        config.alignment,
+        talkbank_cache::RoundtripOutcome::Failed,
     )
     .expect("negative roundtrip cache entry");
-    config.roundtrip = true;
+    config.roundtrip = RoundtripCheck::Run;
 
     enum Phase {
         Discovery,
         Start,
-        Roundtrip,
         Completion,
         Finished,
         Closed,
@@ -88,49 +123,43 @@ fn reference_cached_roundtrip_failure_is_not_promoted_to_success() {
             store: store.clone(),
             validation,
         });
-        let (events, _cancel) = validate_files_streaming(vec![path.clone()], &config, Some(cache));
+        let (events, _cancel) = validate_files_streaming(
+            vec![path.clone()],
+            &talkbank_transform::ValidationRun::new(config.clone(), RunCache::ReadWrite(cache))
+                .expect("a cache opened for this run's identity"),
+        );
         let mut phase = Phase::Discovery;
         for event in events {
             phase = match (phase, event) {
                 (Phase::Discovery, ValidationEvent::Discovering) => Phase::Start,
-                (Phase::Start, ValidationEvent::Started { total_files: 1 }) => Phase::Roundtrip,
-                (Phase::Roundtrip, ValidationEvent::RoundtripComplete(event)) => {
-                    assert_eq!(event.path, path);
-                    assert!(!event.passed);
-                    assert_eq!(
-                        event.failure_reason.as_deref(),
-                        Some("Roundtrip failed (cached)")
-                    );
-                    assert!(
-                        event.diff.is_none(),
-                        "cached verdict cannot fabricate a fresh diff"
-                    );
-                    Phase::Completion
-                }
+                (Phase::Start, ValidationEvent::Started { total_files: 1 }) => Phase::Completion,
                 (Phase::Completion, ValidationEvent::FileComplete(event)) => {
                     assert_eq!(event.path, path);
-                    let FileStatus::RoundtripFailed { cache_hit, reason } = event.status else {
+                    let FileStatus::RoundtripFailed { reason, diff, .. } = event.status else {
                         panic!("negative roundtrip result must not be reported as valid");
                     };
-                    assert!(cache_hit);
+                    assert_eq!(
+                        event.cache,
+                        talkbank_transform::validation_runner::CacheUse::Hit
+                    );
                     assert_eq!(reason, "Roundtrip failed (cached)");
+                    // A cached verdict cannot fabricate a fresh diff.
+                    assert_eq!(diff, None);
                     Phase::Finished
                 }
-                (Phase::Finished, ValidationEvent::Finished(stats)) => {
-                    assert_eq!(stats.coverage(), RunCoverage::Complete);
-                    assert_eq!(stats.total_files, 1);
-                    assert_eq!(stats.invalid_files, 1);
-                    assert_eq!(stats.roundtrip_failed, 1);
-                    assert_eq!(stats.cache_hits, 1);
+                (Phase::Finished, ValidationEvent::Finished(RunEnding::Complete(stats))) => {
+                    let stats = stats.snapshot();
+                    assert_eq!(stats.total_files().get(), 1);
+                    assert_eq!(stats.invalid_files(), 1);
+                    assert_eq!(stats.roundtrip_failed(), 1);
+                    assert_eq!(stats.cache_hits(), 1);
                     assert_eq!(
-                        stats.valid_files
-                            + stats.parse_errors
-                            + stats.internal_failures
-                            + stats.roundtrip_passed
-                            + stats.cache_misses,
+                        stats.valid_files()
+                            + stats.internal_failures()
+                            + stats.roundtrip_passed()
+                            + stats.cache_misses(),
                         0
                     );
-                    assert!(!stats.cancelled);
                     Phase::Closed
                 }
                 (_, event) => panic!("unexpected cached-failure event: {event:?}"),

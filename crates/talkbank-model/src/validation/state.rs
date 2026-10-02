@@ -1,12 +1,12 @@
 //! Owned validation evidence. Mutable models and accepted models have distinct APIs.
 
-use crate::model::{FileStem, TranscriptName};
+use crate::model::{OwnedTranscriptName, TranscriptName};
 use crate::{
     ChatFile, CompletedDiagnostics, ErrorCollector, ErrorSink, ParseError, RuleSelection, WriteChat,
 };
 
 /// Whether validation also computes and checks dependent-tier alignments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AlignmentValidation {
     /// Check model rules without computing tier alignment.
     Structure,
@@ -39,28 +39,6 @@ impl ValidationPolicy {
     }
 }
 
-#[derive(Debug, Clone)]
-enum CheckedName {
-    Anonymous,
-    Named(String),
-}
-
-impl CheckedName {
-    fn capture(name: TranscriptName<'_>) -> Self {
-        match name {
-            TranscriptName::Anonymous => Self::Anonymous,
-            TranscriptName::Named(stem) => Self::Named(stem.as_str().to_owned()),
-        }
-    }
-
-    fn as_name(&self) -> TranscriptName<'_> {
-        match self {
-            Self::Anonymous => TranscriptName::Anonymous,
-            Self::Named(stem) => TranscriptName::Named(FileStem::from_stem(stem)),
-        }
-    }
-}
-
 /// Immutable model accepted by the recorded validation policy.
 ///
 /// This proves model validation, not that a source recording agrees with its
@@ -82,7 +60,7 @@ impl CheckedName {
 pub struct ValidChatFile {
     document: ChatFile,
     policy: ValidationPolicy,
-    name: CheckedName,
+    name: OwnedTranscriptName,
     diagnostics: Vec<ParseError>,
 }
 
@@ -110,7 +88,7 @@ impl ValidChatFile {
 
     /// The name used for filename-dependent checks, or explicit anonymity.
     pub fn name(&self) -> TranscriptName<'_> {
-        self.name.as_name()
+        self.name.borrow()
     }
 
     /// Diagnostics retained from the successful attempt (warnings only).
@@ -137,7 +115,7 @@ pub struct ValidationFailure {
     document: Box<ChatFile>,
     diagnostics: Vec<ParseError>,
     policy: ValidationPolicy,
-    name: CheckedName,
+    name: OwnedTranscriptName,
     reason: ValidationFailureReason,
 }
 
@@ -173,7 +151,7 @@ impl ValidationFailure {
 
     /// Name against which the model was checked.
     pub fn name(&self) -> TranscriptName<'_> {
-        self.name.as_name()
+        self.name.borrow()
     }
 
     /// Whether unknown or recovered tier provenance prevented full checking.
@@ -285,12 +263,7 @@ impl ChatFile {
         let incomplete_parse = self
             .utterances()
             .any(|u| !u.parse_health().permits_validation());
-        match policy.alignment {
-            AlignmentValidation::Structure => self.validate_with_rules(policy.rules, &sink, name),
-            AlignmentValidation::IncludeTierAlignment => {
-                self.validate_with_alignment_and_rules(policy.rules, &sink, name);
-            }
-        }
+        self.validate_at(policy, &sink, name);
         let has_errors = collected.has_errors();
         let (diagnostics, reason) = match CompletedDiagnostics::admit(collected.into_vec()) {
             Err(failure) => (
@@ -308,7 +281,7 @@ impl ChatFile {
                 (completed.into_diagnostics(), reason)
             }
         };
-        let name = CheckedName::capture(name);
+        let name = name.to_owned_name();
         if let Some(reason) = reason {
             Err(ValidationFailure {
                 document: Box::new(self),

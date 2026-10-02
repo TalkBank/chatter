@@ -1,7 +1,7 @@
 # Documentation Architecture
 
 **Status:** Current
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** {{git-dates:page}}
 
 ## Principle: Centralized Book + Subsystem Satellites
 
@@ -53,6 +53,27 @@ flowchart TD
    Regenerate with `just spec-gen`.
 5. **Historical docs go to project archive.** Don't keep old audit logs,
    investigation notes, or superseded proposals in the public repo.
+
+## Publication dates and content review
+
+`SUMMARY.md` uses an HTML `<a href="…">Git history</a>` link to its own
+history; mdBook would interpret a Markdown link there as a chapter entry.
+
+`Last modified` is publication metadata, not a certificate of content review.
+Book chapters use `**Last modified:** {{git-dates:page}}`; the configured
+Git-date preprocessor renders the date and commit from that chapter's history.
+Documents outside the rendered book, including `SUMMARY.md`, use a header
+linked to their own Git history, for example
+`**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/CONTRIBUTING.md)`.
+Both forms follow ordinary edits and content-preserving squashes without a
+manual date sweep. Content review remains part of change review.
+
+The date check admits the metadata header itself. A placeholder mentioned in
+the body, a non-book rendering placeholder, or a history link to another file
+does not exempt a document. Handwritten dates remain supported and checked
+against actual and prospective commit dates; update them from real `date`
+output when editing. Existing known-stale handwritten dates remain in the
+ratchet until their pages are reviewed and corrected.
 
 ## One unified book
 

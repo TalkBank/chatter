@@ -64,6 +64,8 @@ pub mod model;
 pub mod parser_api;
 pub use parser_api::ParserKind;
 pub mod pipeline;
+pub mod resolved_path;
+pub use resolved_path::{ResolvedDirectory, ResolvedPath, ResolvedPrefix};
 pub mod text_types;
 pub mod validation;
 

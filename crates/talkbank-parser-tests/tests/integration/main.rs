@@ -18,11 +18,25 @@
     clippy::unreachable
 )]
 
+/// The cache identity of the default validation configuration: what the
+/// test caches below report, since every run they are bound to validates
+/// under the default rules and parser. A test that changed either would be
+/// refused where its run is bound, not served these caches' verdicts.
+fn default_run_identity() -> &'static talkbank_cache::CacheIdentity {
+    static IDENTITY: std::sync::LazyLock<talkbank_cache::CacheIdentity> =
+        std::sync::LazyLock::new(|| {
+            talkbank_transform::ValidationConfig::default().cache_identity()
+        });
+    &IDENTITY
+}
+
 mod alignment_location_from_source;
 mod alignment_units_from_source;
 mod async_corpus;
 mod bracketed_contents_from_source;
 mod ca_symbols_from_registry;
+#[path = "../../../talkbank-cache/tests/integration/shim.rs"]
+mod cache_shim;
 mod chat_corpus;
 mod check_mapping_audit;
 mod check_validity_parity;

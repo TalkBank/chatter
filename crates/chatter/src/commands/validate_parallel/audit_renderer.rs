@@ -1,43 +1,28 @@
 //! Audit-mode renderer: JSONL bulk output driven by the unified event stream.
 //!
-//! Audit mode is a *sink*, not a separate pipeline. It used to be the latter,
-//! a standalone worker loop that re-walked the tree and accepted only four of
-//! the command's options, so everything the runtime layers on top of raw
-//! validation was silently dropped: `--suppress`, `--parser`,
-//! `--strict-linkers`, `--roundtrip`, `--jobs` and `--max-errors`. Found when
-//! `--suppress xphon --audit` reported `Invalid: 0`, exited 0, and wrote every
-//! suppressed diagnostic into the audit file anyway.
-//!
-//! Modelling audit as one more [`ValidationRenderer`] fixes that by
-//! construction: the renderer sees events from the SAME worker pool every
-//! other presentation does, and suppression joins the rule set upstream of
-//! validation (a suppressed code is never emitted at all), so every option
-//! applies to the JSONL without anyone remembering to thread it through a
+//! Audit mode is a *sink*, not a separate pipeline: one more
+//! [`ValidationRenderer`] over events from the SAME worker pool every other
+//! presentation uses. Suppression joins the rule set upstream of validation
+//! (a suppressed code is never emitted at all), so every option
+//! (`--suppress`, `--parser`, `--strict-linkers`, `--roundtrip`, `--jobs`,
+//! `--max-errors`) applies to the JSONL without being threaded through a
 //! second implementation.
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use super::renderer::ValidationRenderer;
+use super::renderer::{RenderedOutput, SummaryContext, ValidationRenderer};
+use super::shared::{incomplete_sentence, nothing_found_sentence, stop_sentence};
 use crate::commands::validate::audit_reporter::{AuditReporter, AuditReporterHandle, AuditStats};
 use talkbank_transform::validation_runner::{
-    ErrorEvent, FileCompleteEvent, RoundtripEvent, ValidationStatsSnapshot,
+    FileCompleteEvent, RunEnding, ValidationStatsSnapshot,
 };
 
 /// Renderer that writes streamed diagnostics to a JSONL audit file.
 pub struct AuditRenderer {
-    /// Writer-thread owner, taken at `handle_finished` to flush and join.
+    /// Writer-thread owner, taken at `finish` to flush and join.
     reporter: Option<AuditReporter>,
     /// Cloneable handle used to send records to the writer thread.
     handle: AuditReporterHandle,
-    /// Paths already accounted for by an `Errors` event.
-    ///
-    /// `report_file_results` marks a file processed, so the matching
-    /// `FileComplete` must not mark it a second time or `total_files` would
-    /// double-count every file that produced diagnostics.
-    reported: HashSet<PathBuf>,
-    /// Per-code totals from the writer thread, available only after it joins.
-    audit_stats: Option<AuditStats>,
     /// Where the JSONL went, named in the summary so a corpus-scale run
     /// tells the operator where its artifact is.
     output_path: PathBuf,
@@ -53,21 +38,63 @@ const AUDIT_PROGRESS_INTERVAL: usize = 500;
 impl AuditRenderer {
     /// Create an audit renderer writing JSONL records to `output_path`.
     pub fn new(output_path: &Path) -> std::io::Result<Self> {
-        let reporter = AuditReporter::new(output_path)?;
-        let handle = reporter.reporter();
-        // Printed at construction rather than on `Discovering`: that event is
-        // only emitted when the runner performs its own directory walk, and
-        // the CLI hands this pipeline a pre-collected file list.
-        println!("Running validation in audit mode...");
-        println!("Output file: {}", output_path.display());
-        println!();
+        let (reporter, handle) = AuditReporter::new(output_path)?;
+        // Said once the file exists, before the run starts.
+        outln!("Running validation in audit mode...");
+        outln!("Output file: {}", output_path.display());
+        outln!();
         Ok(Self {
             reporter: Some(reporter),
             handle,
-            reported: HashSet::new(),
-            audit_stats: None,
             output_path: output_path.to_path_buf(),
         })
+    }
+}
+
+impl AuditRenderer {
+    /// Flush and join the writer thread and return what it returned: its
+    /// per-code totals, or why the audit file is incomplete, said here
+    /// whatever the run's ending. A second call has no writer left to
+    /// join, and says so as a failure rather than as an empty audit.
+    fn finish_writer(&mut self) -> std::io::Result<AuditStats> {
+        let written = match self.reporter.take() {
+            Some(reporter) => reporter.finish(),
+            None => Err(std::io::Error::other(
+                "the audit writer was already finished",
+            )),
+        };
+        if let Err(error) = &written {
+            eprintln!(
+                "Error: the audit file {} could not be written: {error}",
+                self.output_path.display()
+            );
+        }
+        written
+    }
+
+    /// The audit summary, the run's cache accounting and where the JSONL is.
+    fn print_summary(
+        &self,
+        stats: &ValidationStatsSnapshot,
+        written: &std::io::Result<AuditStats>,
+    ) {
+        if let Some(sentence) = super::renderer::cache_errors_sentence(stats) {
+            eprintln!("{sentence}");
+        }
+        // A write failure was said when the writer finished; only a success
+        // has a summary to print.
+        if let Ok(audit_stats) = written {
+            audit_stats.print_summary();
+        }
+
+        // Cache accounting comes from the RUN, not from the audit sink: the
+        // sink sees only files that produced records. The lines are the ones
+        // the text renderer prints, from the snapshot's own accessors.
+        for line in super::renderer::cache_summary_lines(stats) {
+            outln!("{line}");
+        }
+        outln!();
+        outln!("Detailed errors written to: {}", self.output_path.display());
     }
 }
 
@@ -75,85 +102,56 @@ impl ValidationRenderer for AuditRenderer {
     fn handle_discovering(&mut self) {}
 
     fn handle_started(&mut self, total_files: usize) {
-        println!("Found {} files to validate", total_files);
-        println!();
+        outln!("Found {} files to validate", total_files);
+        outln!();
     }
 
-    fn handle_errors(&mut self, error_event: &ErrorEvent) -> usize {
-        // Reaching here means the worker's own `ValidationConfig` already
-        // excluded suppressed codes, so every error in it is one the user
-        // asked to see.
-        self.handle.report_file_results(
-            &error_event.path.to_string_lossy(),
-            error_event.errors.clone(),
-        );
-        self.reported.insert(error_event.path.clone());
-        error_event.errors.len()
-    }
-
-    fn handle_roundtrip_complete(&mut self, event: &RoundtripEvent) -> usize {
-        // Roundtrip failures carry a reason rather than a `ParseError` list, so
-        // they cannot become JSONL diagnostic records; account for the file and
-        // let the run's exit code and summary carry the failure.
-        if event.passed {
-            return 0;
-        }
-        if self.reported.insert(event.path.clone()) {
-            self.handle.mark_file_done(true);
-        }
-        1
-    }
-
-    fn handle_file_complete(&mut self, file_event: &FileCompleteEvent, files_completed: usize) {
+    /// One file, accounted for once: its diagnostics, sent to the writer
+    /// (the worker's own `ValidationConfig` already excluded suppressed
+    /// codes), and whether it failed, read off its status, so the audit's
+    /// count of files with errors is the run's (a valid file with warnings
+    /// has records but did not fail; an unread file, a failed roundtrip and
+    /// a tool failure may have none but did).
+    fn handle_file_complete(&mut self, file: FileCompleteEvent, files_completed: usize) {
         if files_completed.is_multiple_of(AUDIT_PROGRESS_INTERVAL) {
             eprintln!("Progress: {} files...", files_completed);
         }
-        // A file whose diagnostics already streamed was marked processed by
-        // `report_file_results`; marking it again would inflate `total_files`.
-        if self.reported.remove(&file_event.path) {
-            return;
-        }
-        self.handle
-            .mark_file_done(super::renderer::status_is_error(&file_event.status));
-    }
-
-    fn handle_finished(
-        &mut self,
-        _stats: &ValidationStatsSnapshot,
-        _files_completed: usize,
-        _max_errors: Option<usize>,
-        _error_count: usize,
-    ) {
-        // Flush and join the writer thread here: `print_summary` takes `&self`
-        // but `AuditReporter::finish` consumes the reporter, so the audit
-        // totals must be captured while `&mut self` is still available.
-        let Some(reporter) = self.reporter.take() else {
-            return;
-        };
-        match reporter.finish() {
-            Ok(stats) => self.audit_stats = Some(stats),
-            Err(error) => eprintln!("Error finalizing audit output: {}", error),
+        let failed = file.status.failed();
+        match file.status.shown() {
+            Some(shown) => self.handle.report_file_results(
+                &file.path.to_string_lossy(),
+                shown.errors.to_vec(),
+                failed,
+            ),
+            None => self.handle.mark_file_done(failed),
         }
     }
 
-    fn print_summary(&self, _path: &Path, stats: &ValidationStatsSnapshot, _roundtrip: bool) {
-        match self.audit_stats.as_ref() {
-            Some(audit_stats) => audit_stats.print_summary(),
-            None => eprintln!("Warning: audit summary unavailable (writer thread did not finish)"),
+    /// Every ending flushes and joins the writer, so what was recorded is
+    /// on disk even for a run that died; the stop or loss is said on the
+    /// operator's terminal, and only a run with totals gets the summary.
+    fn finish(&mut self, end: &RunEnding, summary: SummaryContext<'_>) -> RenderedOutput {
+        let written = self.finish_writer();
+        match end {
+            RunEnding::Complete(stats) => self.print_summary(stats.snapshot(), &written),
+            RunEnding::NothingFound => eprintln!("{}", nothing_found_sentence(summary.label)),
+            RunEnding::Stopped { stats, reason } => {
+                eprintln!("{}", stop_sentence(*reason, stats.missing_files()));
+                self.print_summary(stats.snapshot(), &written);
+            }
+            RunEnding::Incomplete { stats, cause } => {
+                eprintln!(
+                    "{}",
+                    incomplete_sentence(stats.snapshot(), stats.missing_files(), cause)
+                );
+                self.print_summary(stats.snapshot(), &written);
+            }
+            RunEnding::Aborted(reason) => eprintln!("Error: {reason}"),
         }
-
-        // Cache accounting comes from the RUN, not from the audit sink: the
-        // sink sees only files that produced records. The runtime's snapshot
-        // is the authority, and taking it from there is also why this renderer
-        // needs no counters of its own.
-        println!("Cache hits: {}", stats.cache_hits);
-        println!("Cache misses: {}", stats.cache_misses);
-        // The snapshot's own accessor, so audit and streaming report the SAME
-        // number. A hand-rolled `hits / (hits + misses)` here silently gave a
-        // different rate than every other surface, under an identical label.
-        println!("Hit rate: {:.1}%", stats.cache_hit_rate());
-        println!();
-        println!("Detailed errors written to: {}", self.output_path.display());
+        match written {
+            Ok(_) => RenderedOutput::Complete,
+            Err(_) => RenderedOutput::AuditFileIncomplete,
+        }
     }
 
     /// An audit records findings ABOUT TRANSCRIPTS, so a cache event does not
@@ -164,5 +162,15 @@ impl ValidationRenderer for AuditRenderer {
     /// the event on the trait made someone answer it, which is the point.
     fn handle_cache_event(&mut self, event: &crate::commands::validate::cache::CacheEvent) {
         eprintln!("{}", event.sentence());
+    }
+
+    /// The operator is at a terminal; a note about the run is not a finding
+    /// about a transcript, so it does not go in the file.
+    fn handle_notice(&mut self, notice: &super::shared::RunNotice) {
+        eprintln!("{}", notice.sentence());
+    }
+
+    fn interrupt_report(&self) -> super::shared::InterruptReport {
+        super::shared::InterruptReport::OnStderr
     }
 }

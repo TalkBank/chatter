@@ -516,7 +516,7 @@ fn media_spec_stored_identity_survives_argument_aliases_and_directory_changes() 
     assert_eq!(admitted.path(), stored_path);
     assert_eq!(
         admitted.name(),
-        TranscriptName::Named(FileStem::from_stem("Schlu\u{0308}ssel"))
+        TranscriptName::Named(FileStem::from_stem("Schlu\u{0308}ssel").expect("a stem"))
     );
     // Establish an old directory timestamp without a timing-dependent sleep.
     let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
@@ -552,7 +552,7 @@ fn media_spec_stored_identity_survives_argument_aliases_and_directory_changes() 
     assert_eq!(resolved.path(), renamed);
     assert_eq!(
         resolved.name(),
-        TranscriptName::Named(FileStem::from_stem("other"))
+        TranscriptName::Named(FileStem::from_stem("other").expect("a stem"))
     );
     assert_eq!(
         std::fs::read(resolved.path()).expect("unchanged bytes"),

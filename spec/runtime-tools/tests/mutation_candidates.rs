@@ -21,7 +21,7 @@ fn canonical_terminators_delete_only_their_source_bytes() -> anyhow::Result<()> 
             vec!["+\"/.", ".", "+\"."],
         ),
     ] {
-        let name = TranscriptName::Named(FileStem::from_stem("terminators"));
+        let name = TranscriptName::Named(FileStem::from_stem("terminators").expect("a stem"));
         let rules = RuleSelection::new();
         let seed = AdmittedSeed::admit(&parser, source, name, rules)?;
         assert_eq!(seed.name(), name);
@@ -100,11 +100,11 @@ fn malformed_and_semantically_invalid_seeds_are_refused() -> anyhow::Result<()> 
     AdmittedSeed::admit(
         &parser,
         media,
-        TranscriptName::Named(FileStem::from_stem("media_sample")),
+        TranscriptName::Named(FileStem::from_stem("media_sample").expect("a stem")),
         RuleSelection::new(),
     )?;
     assert!(matches!(
-        AdmittedSeed::admit(&parser, media, TranscriptName::Named(FileStem::from_stem("other_sample")), RuleSelection::new()),
+        AdmittedSeed::admit(&parser, media, TranscriptName::Named(FileStem::from_stem("other_sample").expect("a stem")), RuleSelection::new()),
         Err(SeedRejection::Validation(diagnostics)) if diagnostics.iter().any(|error| error.code.to_string() == "E531")
     ));
     Ok(())
@@ -123,7 +123,7 @@ fn ca_absent_terminator_admits_no_deletion_under_either_policy() -> anyhow::Resu
         let seed = AdmittedSeed::admit(
             &parser,
             source,
-            TranscriptName::Named(FileStem::from_stem("E305_3")),
+            TranscriptName::Named(FileStem::from_stem("E305_3").expect("a stem")),
             rules,
         )?;
         assert_eq!(seed.rules(), rules);
@@ -138,7 +138,7 @@ fn ca_other_completion_requires_selected_strict_linker_rule() -> anyhow::Result<
     let source = include_str!(
         "../../../crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E354_4.cha"
     );
-    let name = TranscriptName::Named(FileStem::from_stem("E354_4"));
+    let name = TranscriptName::Named(FileStem::from_stem("E354_4").expect("a stem"));
     let seed = AdmittedSeed::admit(&parser, source, name, RuleSelection::new())?;
     let candidates = seed.terminator_deletions().collect::<Result<Vec<_>, _>>()?;
     assert_eq!(candidates.len(), 1);
@@ -163,7 +163,7 @@ fn strict_valid_other_completion_has_two_complete_deletions() -> anyhow::Result<
     let seed = AdmittedSeed::admit(
         &parser,
         source,
-        TranscriptName::Named(FileStem::from_stem("E354_2")),
+        TranscriptName::Named(FileStem::from_stem("E354_2").expect("a stem")),
         RuleSelection::new().with_strict_linkers(),
     )?;
     let candidates = seed.terminator_deletions().collect::<Result<Vec<_>, _>>()?;
@@ -190,7 +190,7 @@ fn timed_seed_keeps_bullets_pictures_and_dependent_tiers_intact() -> anyhow::Res
     let seed = AdmittedSeed::admit(
         &parser,
         source,
-        TranscriptName::Named(FileStem::from_stem("media-bullets")),
+        TranscriptName::Named(FileStem::from_stem("media-bullets").expect("a stem")),
         RuleSelection::new(),
     )?;
     let candidates = seed.terminator_deletions().collect::<Result<Vec<_>, _>>()?;

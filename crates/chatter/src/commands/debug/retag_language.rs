@@ -28,13 +28,7 @@ pub fn run_retag_language(paths: &[PathBuf], from: &str, to: &str) {
         die("--from and --to are the same code; nothing to retag");
     }
 
-    let files = collect_cha_files(paths);
-    if files.is_empty() {
-        die("no .cha files found in the provided paths");
-    }
-
-    let parser = talkbank_parser::TreeSitterParser::new()
-        .unwrap_or_else(|e| die(&format!("parser initialization failed: {e:?}")));
+    let (files, parser) = super::transcripts_and_parser(paths);
     let (mut files_changed, mut declarations, mut scopes, mut markers) = (0usize, 0, 0, 0);
     let mut refused: Vec<PathBuf> = Vec::new();
 
@@ -62,9 +56,9 @@ pub fn run_retag_language(paths: &[PathBuf], from: &str, to: &str) {
     }
 
     if files_changed == 0 {
-        println!("No {from} occurrences to retag.");
+        outln!("No {from} occurrences to retag.");
     } else {
-        println!(
+        outln!(
             "Retagged {from} -> {to} in {files_changed} file(s): \
              {declarations} declaration(s), {scopes} utterance scope(s), {markers} word marker(s)."
         );
@@ -74,13 +68,13 @@ pub fn run_retag_language(paths: &[PathBuf], from: &str, to: &str) {
     // file half-retagged, and the operator has to know which files still name
     // the old code.
     if !refused.is_empty() {
-        println!(
+        outln!(
             "\nREFUSED {} file(s) naming {from} in a `<...> [@s:{from}]` span, which this \
              cannot rewrite. They are UNCHANGED and still name the old code:",
             refused.len()
         );
         for path in &refused {
-            println!("  {}", path.display());
+            outln!("  {}", path.display());
         }
     }
 }

@@ -30,6 +30,28 @@ pub enum CacheError {
     /// A database migration failed.
     #[error("Migration error: {0}")]
     Migration(#[from] sqlx::migrate::MigrateError),
+    /// A read-only open found no cache database to read.
+    #[error("no validation cache exists at {path}")]
+    NoCacheDatabase {
+        /// The database path looked for.
+        path: String,
+    },
+    /// A read-only open found a database whose schema is older than this
+    /// build's; a writing run upgrades it.
+    #[error("the validation cache at {path} has an older schema; a writing run upgrades it")]
+    SchemaNotCurrent {
+        /// The database path.
+        path: String,
+    },
+    /// A database a newer build migrated past every migration this build
+    /// knows: this build can neither read it nor migrate it.
+    #[error(
+        "the validation cache at {path} was written by a newer build, which this build cannot read"
+    )]
+    SchemaNewer {
+        /// The database path.
+        path: String,
+    },
     /// Timed out waiting for the cross-process cache initialization lock.
     ///
     /// Another process held the advisory init lock (taken around first-time
@@ -55,6 +77,30 @@ pub enum CacheError {
         path: String,
         /// Underlying I/O error.
         source: std::io::Error,
+    },
+    /// A file's modification time lies outside the range a timestamp can
+    /// hold (years -9999 to 9999), reachable only by a forged time.
+    #[error("modification time of {} is out of range", path.display())]
+    ModifiedOutOfRange {
+        /// The file whose time could not be admitted.
+        path: std::path::PathBuf,
+        /// Why jiff refused it.
+        source: jiff::Error,
+    },
+    /// A stored column held a value its type does not allow (a pass/fail
+    /// that is neither 0 nor 1, a tested roundtrip with no verdict).
+    #[error("corrupt cache row: column {column} holds {value:?}")]
+    CorruptColumn {
+        /// The column.
+        column: &'static str,
+        /// What it held.
+        value: Option<i64>,
+    },
+    /// SQLite reported a count that is negative or does not fit in `usize`.
+    #[error("cache count {value} is not a count on this platform")]
+    CountOutOfRange {
+        /// The count as SQLite reported it.
+        value: i128,
     },
     /// Freeform error message for miscellaneous failures.
     #[error("{0}")]

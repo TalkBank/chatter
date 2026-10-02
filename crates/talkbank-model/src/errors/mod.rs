@@ -82,7 +82,7 @@ pub use clan_location::{ClanHiddenLineError, ClanLocation, resolve_clan_location
 pub use codes::{CheckStatus, ErrorCode, XPHON_ERROR_CODES, validation_rules_fingerprint};
 pub use collectors::{ErrorCollector, ParseTracker};
 pub use completed_diagnostics::{CompletedDiagnostics, InternalFailure};
-pub use config::RuleSelection;
+pub use config::{LinkerChecks, RuleSelection};
 pub use context::{ErrorContext, SourceExcerptError};
 pub use diagnostic_kind::{DiagnosticKind, ValidationProfile, kind_of, severity};
 pub use enhance::{enhance_errors_with_index, enhance_errors_with_source};

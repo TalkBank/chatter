@@ -1,23 +1,16 @@
 name: Clippy (rolling stable)
 
-# Hygiene canary: runs the same two-pass clippy as ci.yml, but against
-# the **latest** Rust stable rather than the pinned version. New clippy
-# lints ship with every Rust stable release (~every 6 weeks). The
-# pinned per-push CI is reproducible by design, so it cannot tell us
-# when a fresh stable would introduce warnings; this workflow exists
-# precisely for that.
+# Weekly canary: the same two-pass clippy as ci.yml, on a schedule. The
+# whole repo tracks the current stable release, and new clippy lints ship
+# with every stable (~every 6 weeks), so this run surfaces them within days
+# of a release instead of inside an unrelated push.
 #
 # When this job goes red:
 # 1. The cause is almost always one of:
 #    a. New clippy lints in the new stable Rust release, or
 #    b. A new clippy version tightening an existing lint's heuristic.
-# 2. The fix is a focused commit that:
-#    - Bumps `rust-toolchain.toml` `channel` to match the new stable
-#    - Runs `just rust-sync` to propagate that version to every CI workflow
-#      pin (scripts/sync-rust-versions.py; the rust-version-sync CI job
-#      enforces that no pin was missed)
-#    - Fixes whatever new warnings the bump surfaced
-#    Then per-push CI catches up and stays clean again.
+# 2. The fix is a focused commit that fixes the new warnings, kept apart
+#    from other changes so the cause stays clear.
 #
 # Schedule: weekly Mondays 12:00 UTC (~07:00 EST / 08:00 EDT). Earlier
 # than the typical Rust stable release timing on Thursdays, so by the

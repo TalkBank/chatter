@@ -175,7 +175,7 @@ fn cross_header_id_language_not_in_languages_fires_through_config_path() -> Resu
 ";
     let codes = codes_through_config_path(
         content,
-        TranscriptName::Named(FileStem::from_stem("cross_header_language")),
+        TranscriptName::Named(FileStem::from_stem("cross_header_language").expect("a stem")),
     )?;
     assert!(
         codes.iter().any(|c| c == "E519"),
@@ -206,7 +206,7 @@ fn cross_header_id_role_disagrees_with_participants_fires_through_config_path()
 ";
     let codes = codes_through_config_path(
         content,
-        TranscriptName::Named(FileStem::from_stem("cross_header_role")),
+        TranscriptName::Named(FileStem::from_stem("cross_header_role").expect("a stem")),
     )?;
     assert!(
         codes.iter().any(|c| c == "E532"),

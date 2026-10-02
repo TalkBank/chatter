@@ -7,7 +7,7 @@ This is a curated mapping inventory, not a runtime parity report. A mapping does
 - Emitted CHECK codes in the committed reference: 143
 - CHECK codes with curated mappings: 87
 - CHECK codes without curated mappings: 56
-- Compiled Chatter error codes (from the spec registry): 226
+- Compiled Chatter error codes (from the spec registry): 227
 
 ## Evidence and reproduction
 
@@ -293,3 +293,4 @@ These are unmapped codes, not automatically enhancements. Status is read from th
 | `E999` | `UnknownError` | Planned |
 | `W108` | `SpeakerNotFoundInParticipants` | Active |
 | `W109` | `MediaFilenameNonCanonicalUnicode` | Active |
+| `W110` | `MediaFilenameCaseDiffers` | Active |

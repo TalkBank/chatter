@@ -1,13 +1,13 @@
 # Crates.io Publication
 
 **Status:** Current
-**Last updated:** 2026-09-28 20:59 EDT
+**Last updated:** {{git-dates:page}}
 
 ## Scope
 
 The 1.0 publication contract includes foundation libraries and registry-installable
 CLI/LSP binaries. Publication is a deliberate maintainer action, not a
-tag-triggered release path. The existing foundation-named check now covers the
+tag-triggered release path. The foundation-named check covers the
 complete dependency closure below; enabling publication is not proof of readiness.
 
 The publication order is:
@@ -51,7 +51,7 @@ smoke tests. These are acceptance targets, not a claim that current registry
 versions are available. MSRV, supported platforms and post-1.0 compatibility
 policy still require explicit decisions and candidate-bound verification.
 
-## What the repo now automates
+## What the repo automates
 
 The existing foundation-named entry points cover the full publication set:
 

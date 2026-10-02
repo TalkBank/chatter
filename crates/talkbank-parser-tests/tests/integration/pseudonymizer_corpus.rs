@@ -141,7 +141,7 @@ fn canonical_reference_binds_source_mapping_and_alignment_evidence() {
     let input = names
         .admit_document(
             REFERENCE,
-            TranscriptName::Named(FileStem::from_stem("eng-conversation")),
+            TranscriptName::Named(FileStem::from_stem("eng-conversation").expect("a stem")),
             RuleSelection::new().with_strict_linkers(),
             &parser,
         )
@@ -643,7 +643,7 @@ fn authored_filename_context_is_not_silently_discarded() {
         names
             .admit_document(
                 NAMED_MEDIA,
-                TranscriptName::Named(FileStem::from_stem("media_sample")),
+                TranscriptName::Named(FileStem::from_stem("media_sample").expect("a stem")),
                 RuleSelection::new(),
                 &parser,
             )
@@ -653,7 +653,7 @@ fn authored_filename_context_is_not_silently_discarded() {
         names
             .admit_document(
                 NAMED_MEDIA,
-                TranscriptName::Named(FileStem::from_stem("other_sample")),
+                TranscriptName::Named(FileStem::from_stem("other_sample").expect("a stem")),
                 RuleSelection::new(),
                 &parser,
             )
@@ -1390,14 +1390,14 @@ fn source_retention_does_not_admit_controls_recovery_or_unreviewed_warnings() {
         env!("CARGO_MANIFEST_DIR"),
         "/tests/error_corpus/validation_errors/W109_4.cha"
     ));
-    let identity = TranscriptName::Named(FileStem::from_stem("Schlüssel"));
+    let identity = TranscriptName::Named(FileStem::from_stem("Schlüssel").expect("a stem"));
     let error = names
         .admit_document(warning, identity, RuleSelection::new(), &parser)
         .unwrap_err();
     assert_eq!(error, InputRefusal::DiagnosticReview);
     assert!(std::error::Error::source(&error).is_none());
     assert!(!error.to_string().contains("Schlüssel"));
-    let identity = TranscriptName::Named(FileStem::from_stem("Schlüssel"));
+    let identity = TranscriptName::Named(FileStem::from_stem("Schlüssel").expect("a stem"));
     let accepted = names
         .admit_document(canonical, identity, RuleSelection::new(), &parser)
         .unwrap();

@@ -1,7 +1,7 @@
 # Chatter Desktop
 
 **Status:** Current
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** {{git-dates:page}}
 
 Chatter Desktop is a native graphical validation app for CHAT files, released
 alongside the `chatter` CLI. Prefer the `chatter` CLI for scripted or batch
@@ -179,10 +179,20 @@ config:
 | Roundtrip check | `--roundtrip` | Off |
 | Parser | `--parser tree-sitter\|re2c` | Tree-sitter |
 | Strict cross-utterance linkers | `--strict-linkers` | Off |
-| Parallel jobs | `--jobs N` | All CPUs |
+| Parallel jobs (at least 1) | `--jobs N` | All CPUs |
 
 Settings are disabled while a validation run is in progress and apply to the
 next run (including Re-validate).
+
+**Parallel jobs** takes a whole number of at least 1, or empty for all CPUs.
+Anything else (`0`, `1.5`, a negative number) is not taken: the field says so,
+and that the next run uses the last valid value. The backend refuses `0` as
+well.
+
+When a run finishes, its summary also says if the validation cache failed
+(for example, a locked database), or would not open at all, with the reason:
+those files were validated without the cache, so the results stand, but the
+next run will not be faster for them.
 
 **Re2c is experimental and incomplete.** It is not a second validity authority;
 use Tree-sitter for ordinary work and report disagreements with a minimal CHAT
@@ -286,11 +296,16 @@ The window title updates to reflect the current state:
 - **Starting:** "Chatter, Starting…"
 - **Discovering:** "Chatter, Discovering files…"
 - **Running:** "Chatter, Validating (45/120)"
-- **Finished:** a diagnostic/failure summary or "Chatter, All 74 files valid"
-- **Cancelled:** "Chatter, Cancelled; results are partial"
+- **Finished:** a diagnostic/failure summary, or "Chatter, All 74 files
+  valid" (with "; 3 warnings" when some files have warnings only)
+- **Cancelled:** "Chatter, Cancelled (3 files not checked)"
 - **Empty:** "Chatter, No CHAT files found"
 - **Incomplete:** "Chatter, Incomplete (2 files not checked)"
 - **Stopped:** "Chatter, Run stopped unexpectedly"
+
+A cancelled run says how many files it never reached, and its status bar
+leads with that number. It is its own state, never a finished run with a
+flag, so it cannot show "All N files valid".
 
 The last two are failures, and they never claim anything about your whole
 folder. **Incomplete** means the validator finished but some files were
@@ -406,7 +421,7 @@ desktop service object.
 | Error filtering |, | Code filter + severity toggle |
 | Copy error |, | Copy button per error |
 | Open in CLAN | `c` key | Button per error |
-| Export | `--format json --audit` | Save dialog (JSON or text) |
+| Export | `--format json` or `--audit FILE` | Save dialog (JSON or text) |
 | Streaming progress | Progress bar | Progress bar + ETA |
 | Dark mode | Terminal theme | System/Light/Dark toggle |
 | Caching | Same engine | Same engine |

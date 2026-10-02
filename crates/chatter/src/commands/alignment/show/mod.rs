@@ -19,6 +19,27 @@ use tracing::{Level, error, info, span};
 use crate::cli::AlignmentTier;
 use crate::output::print_errors;
 
+/// How much of each alignment `show-alignment` prints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlignmentView {
+    /// Every aligned pair on its own line, with headings and errors.
+    Full,
+    /// One line per alignment and an error count (`--compact`).
+    Compact,
+}
+
+impl crate::cli::FlagMode for AlignmentView {
+    const LONG: &'static str = "compact";
+    const HELP: &'static str = "Compact output (one line per alignment)";
+    const SHORT: Option<char> = Some('c');
+    fn absent() -> Self {
+        Self::Full
+    }
+    fn present() -> Self {
+        Self::Compact
+    }
+}
+
 /// Show alignment visualization for debugging.
 ///
 /// The CLI emits this view to help developers compare `%mor`, `%pho`, and `%gra` tiers against the cleaned
@@ -26,7 +47,7 @@ use crate::output::print_errors;
 /// Dependent Tier sections) so the developer can see why alignment may have failed, and then the `render`
 /// modules produce a tier-specific tabular view of aligned words and features. The view can operate in
 /// compact mode or limited to a specific `AlignmentTier` filter to keep attention on the relevant CHAT tiers.
-pub fn show_alignment(input: &PathBuf, tier_filter: Option<AlignmentTier>, compact: bool) {
+pub fn show_alignment(input: &PathBuf, tier_filter: Option<AlignmentTier>, view: AlignmentView) {
     let _span = span!(Level::INFO, "show_alignment", ?input).entered();
     info!("Showing alignment for {:?}", input);
 
@@ -54,7 +75,7 @@ pub fn show_alignment(input: &PathBuf, tier_filter: Option<AlignmentTier>, compa
         input,
         &context.chat_file,
         tier_filter,
-        compact,
+        view,
         had_validation_errors,
     );
 }

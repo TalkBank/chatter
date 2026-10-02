@@ -1,7 +1,7 @@
 # Branch Protection and Required CI Checks
 
 **Status:** Current
-**Last updated:** 2026-07-26 20:04 EDT
+**Last updated:** {{git-dates:page}}
 
 This page defines the required status checks and protection policy for `main`.
 
@@ -28,9 +28,7 @@ workflow defines, so the required set and the workflow do not drift apart:
 - `Grammar (generate staleness, tree-sitter test, queries)`
 - `Dependency policy (cargo-deny)`
 
-This list had drifted: until 2026-07-26 it named only the first, third and
-fourth, having been written before the wasm, app-version-sync and shellcheck
-jobs existed. A required-check list that silently omits jobs is worse than no
+A required-check list that silently omits jobs is worse than no
 list, because it reads as a deliberate selection rather than an oversight.
 **When you add a job to `ci.yml`, add it here in the same commit.**
 

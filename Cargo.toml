@@ -22,7 +22,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.27.0"
+version = "0.28.0"
 edition = "2024"
 authors = ["Franklin Chen <franklinchen@franklinchen.com>"]
 license = "MIT OR Apache-2.0"
@@ -32,7 +32,7 @@ keywords = ["talkbank", "chat-format", "linguistics", "nlp", "parsing"]
 categories = ["parser-implementations", "text-processing"]
 # No MSRV declared: crates.io publication is deferred, so an arbitrary
 # minimum-supported-Rust promise (and the cost of holding the foundation
-# crates back to it while developing on the pinned toolchain) buys nothing
+# crates back to it while developing on current stable) buys nothing
 # yet. Set a deliberate `rust-version` when publication is actually pursued.
 
 # Workspace-level lint policy.
@@ -90,7 +90,8 @@ aho-corasick = "1.1"
 # library). `blocking` provides the sync run; default `github_releases` backend.
 axoupdater = { version = "0.10", features = ["blocking"] }
 blake3 = "1.8"
-chrono = "0.4"
+# `static` compiles in the America/New_York rules that `RecordedTime` writes.
+jiff = { version = "0.2", features = ["static"] }
 crossbeam-channel = "0.5"
 dashmap = "6.2"
 dirs = "7.0"
@@ -154,7 +155,6 @@ comrak = "0.55.0"
 
 # String matching / NLP utilities
 ferrous-opencc = "0.4.0"
-num_cpus = "1.17"
 rand = "0.10"
 regex = "1.13"
 shellexpand = "3.1"
@@ -175,18 +175,18 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # TalkBank crates, path for local dev, version for crates.io publishing
-send2clan = { path = "crates/send2clan", version = "0.27.0" }
-talkbank-cache = { path = "crates/talkbank-cache", version = "0.27.0" }
-chatter = { path = "crates/chatter", version = "0.27.0" }
-talkbank-build = { path = "crates/talkbank-build", version = "0.27.0" }
-talkbank-derive = { path = "crates/talkbank-derive", version = "0.27.0" }
-talkbank-llm = { path = "crates/talkbank-llm", version = "0.27.0" }
-talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.27.0" }
-talkbank-model = { path = "crates/talkbank-model", version = "0.27.0" }
-talkbank-parser = { path = "crates/talkbank-parser", version = "0.27.0" }
-talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.27.0" }
-talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.27.0" }
-talkbank-transform = { path = "crates/talkbank-transform", version = "0.27.0" }
+send2clan = { path = "crates/send2clan", version = "0.28.0" }
+talkbank-cache = { path = "crates/talkbank-cache", version = "0.28.0" }
+chatter = { path = "crates/chatter", version = "0.28.0" }
+talkbank-build = { path = "crates/talkbank-build", version = "0.28.0" }
+talkbank-derive = { path = "crates/talkbank-derive", version = "0.28.0" }
+talkbank-llm = { path = "crates/talkbank-llm", version = "0.28.0" }
+talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.28.0" }
+talkbank-model = { path = "crates/talkbank-model", version = "0.28.0" }
+talkbank-parser = { path = "crates/talkbank-parser", version = "0.28.0" }
+talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.28.0" }
+talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.28.0" }
+talkbank-transform = { path = "crates/talkbank-transform", version = "0.28.0" }
 
 # Testing
 assert_cmd = "2.2"

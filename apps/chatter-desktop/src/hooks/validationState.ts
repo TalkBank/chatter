@@ -30,22 +30,33 @@ import type { FileEntry, ValidationEvent, ValidationStats } from "../protocol/va
  *   adding a `lostFiles` field to `finished`, would put the burden on every
  *   consumer to remember to check, which is the forgetting this shape exists to
  *   prevent.
+ * - `stopped` vs `finished`. A cancelled run's counts describe only what it
+ *   reached, so it is its own phase rather than a flag on `finished`.
+ * - `nothingFound` vs `finished`. A target with no transcript validated
+ *   nothing; it has no counts, and is never a clean finish.
  */
 export type RunPhase =
   | { kind: "idle" }
   | { kind: "invoked" }
   | { kind: "discovering" }
   | { kind: "running"; totalFiles: number }
-  | { kind: "finished"; stats: ValidationStats }
-  | { kind: "finishedIncomplete"; stats: ValidationStats; lostFiles: number }
+  | { kind: "finished"; stats: ValidationStats; passed: boolean }
+  | { kind: "nothingFound" }
+  | {
+      kind: "finishedIncomplete";
+      stats: ValidationStats;
+      lostFiles: number;
+      cause: string;
+    }
+  | { kind: "stopped"; stats: ValidationStats; unprocessedFiles: number; reason: string }
   | { kind: "aborted"; reason: string };
 
 /**
  * State that accumulates ACROSS phases, beside the phase-specific data.
  *
- * Split this way because these three genuinely span the run (files stream in
+ * Split this way because these genuinely span the run (files stream in
  * from `errors`/`fileComplete` regardless of phase), whereas `totalFiles`,
- * `stats` and the abort reason belong to exactly one phase each and now live
+ * `stats` and the abort reason belong to exactly one phase each and live
  * there.
  */
 export interface ValidationState {
@@ -53,6 +64,8 @@ export interface ValidationState {
   files: Map<string, FileEntry>;
   processedFiles: number;
   totalErrors: number;
+  /** Why the cache would not open for this run, if it would not. */
+  cacheUnavailable: string | null;
 }
 
 export function createInitialValidationState(): ValidationState {
@@ -61,6 +74,7 @@ export function createInitialValidationState(): ValidationState {
     files: new Map(),
     processedFiles: 0,
     totalErrors: 0,
+    cacheUnavailable: null,
   };
 }
 
@@ -82,22 +96,16 @@ export function isRunPending(run: RunPhase): boolean {
 }
 
 /**
- * True for a run that has stopped with a specific outcome from which
- * Re-validate should be offered: it either produced results (`finished`) or
- * it died (`aborted`). `idle` is deliberately excluded: there is no prior run
- * to re-run.
- *
- * `aborted` used to be a dead end with no way forward except dragging a
- * target in again, because only `finished` offered Re-validate. Naming the
- * shared condition means a future terminal phase is either included here
- * deliberately or the exhaustive switch below fails to compile; it cannot be
- * forgotten silently the way three independent ad hoc `run.kind === "..."`
- * checks could be.
+ * True for a run that has ended, by any of its endings, so Re-validate is
+ * offered. `idle` is excluded: there is no prior run to re-run. Exhaustive,
+ * so a new phase is classified here or this fails to compile.
  */
 export function isRunRecoverable(run: RunPhase): boolean {
   switch (run.kind) {
     case "finished":
+    case "nothingFound":
     case "finishedIncomplete":
+    case "stopped":
     case "aborted":
       return true;
     case "idle":
@@ -121,12 +129,14 @@ export function totalFilesOf(run: RunPhase): number {
       return run.totalFiles;
     case "finished":
     case "finishedIncomplete":
-      // The count of files DISCOVERED, which an incomplete run still knows;
-      // what it lacks is a result for each of them.
+    case "stopped":
+      // The count of files DISCOVERED, which an incomplete or stopped run
+      // still knows; what it lacks is a result for each of them.
       return run.stats.totalFiles;
     case "idle":
     case "invoked":
     case "discovering":
+    case "nothingFound":
     case "aborted":
       return 0;
   }
@@ -138,6 +148,9 @@ export function applyValidationEvent(
   relativeName: (path: string) => string,
 ): ValidationState {
   switch (event.type) {
+    case "cacheUnavailable":
+      return { ...prev, cacheUnavailable: event.reason };
+
     case "discovering":
       return { ...prev, run: { kind: "discovering" } };
 
@@ -202,36 +215,41 @@ export function applyValidationEvent(
           kind: "finishedIncomplete",
           stats: event.stats,
           lostFiles: event.lostFiles,
+          cause: event.cause,
+        },
+      };
+
+    case "stopped":
+      return {
+        ...prev,
+        run: {
+          kind: "stopped",
+          stats: event.stats,
+          unprocessedFiles: event.unprocessedFiles,
+          reason: event.reason,
         },
       };
 
     case "finished":
-      return { ...prev, run: { kind: "finished", stats: event.stats } };
+      return { ...prev, run: { kind: "finished", stats: event.stats, passed: event.passed } };
+
+    case "nothingFound":
+      return { ...prev, run: { kind: "nothingFound" } };
   }
 
   return assertNever(event);
 }
 
 /**
- * Whether the file tree may claim "all valid". This must be gated on the run
- * having actually finished, not merely on the error-file count being zero:
- * `errorFileCount` only reflects files that have streamed a result *so far*,
- * so it reads as zero for the entire window between "discovery done" and
- * "last file actually validated" whenever no error has arrived yet. See
- * apps/chatter-desktop/AGENTS.md's parity notes for the desktop-vs-CLI
- * divergence this guards against. An `aborted` run is deliberately excluded:
- * it produced no results, so "all valid" would be a claim about nothing. So is
- * `finishedIncomplete`: "all valid" is a claim about every discovered file, and
- * an incomplete run never opened some of them, so a clean-looking result there
- * is a false clean bill of health rather than a verdict.
+ * Whether the file tree may claim "all valid": the run finished and PASSED
+ * (the runner's own verdict, the one the CLI's exit status reads), and no
+ * file has anything to show. Only `finished` carries a verdict, so a run
+ * that is still going, stopped, lost files, found nothing or died can never
+ * reach the claim; and `errorFileCount` keeps a passed run with warnings
+ * showing its files.
  */
 export function shouldShowAllFilesValid(run: RunPhase, errorFileCount: number): boolean {
-  return run.kind === "finished" && errorFileCount === 0
-    && !run.stats.cancelled && run.stats.totalFiles > 0
-    && run.stats.validFiles === run.stats.totalFiles
-    && run.stats.invalidFiles === 0 && run.stats.parseErrors === 0
-    && run.stats.internalFailures === 0
-    && run.stats.roundtripFailed === 0;
+  return run.kind === "finished" && run.passed && errorFileCount === 0;
 }
 
 /** One projection for tree visibility and detail rendering, including failures
@@ -251,23 +269,45 @@ export function fileOutcome(file: FileEntry): FileOutcome {
     case "valid": return { kind: "valid" };
     case "invalid": return { kind: "problem", message: `Validation failed (${status.errorCount} diagnostics)` };
     case "readError": return { kind: "problem", message: `Read error: ${status.message}` };
-    case "parseError": return { kind: "problem", message: `Parse error: ${status.message}` };
     case "internalFailure": return { kind: "problem", message: `Internal failure: ${status.message}` };
     case "roundtripFailed": return { kind: "problem", message: `Roundtrip failed: ${status.reason}` };
   }
   return assertNever(status);
 }
 
-/** Finished is not necessarily successful: cancellation and non-diagnostic
- * failures must agree across the title, notification and status bar. */
+/** The file's outcome as one line for a person: what the error panel
+ * shows and what a text export writes, from this one owner. */
+export function fileStatusLabel(file: FileEntry): string {
+  const outcome = fileOutcome(file);
+  switch (outcome.kind) {
+    case "problem": return outcome.message;
+    case "valid": return "Valid";
+    case "pending": return "Validation pending";
+  }
+}
+
+/** Finished is not necessarily successful: the runner's verdict decides,
+ * so the title, notification and status bar agree with the CLI's exit
+ * status. A cancelled run is never `finished`; it is `stopped`. */
 export function finishedRunSummary(
-  run: Extract<RunPhase, { kind: "finished" }>, diagnostics: number,
+  run: Extract<RunPhase, { kind: "finished" }>,
+  diagnostics: number,
+  cacheUnavailable: string | null,
 ): string {
   const stats = run.stats;
-  if (stats.cancelled) return "Cancelled; results are partial";
-  if (stats.totalFiles === 0) return "No CHAT files found";
-  if (shouldShowAllFilesValid(run, diagnostics)) return `All ${stats.totalFiles} files valid`;
-  return `${diagnostics} diagnostics; ${stats.invalidFiles} invalid files, ${stats.parseErrors} read/parse failures, ${stats.internalFailures} internal failures, ${stats.roundtripFailed} roundtrip failures`;
+  // A failing cache is said, never shown as a cold one: those files were
+  // validated without it, and the results stand.
+  const cacheNote = cacheUnavailable !== null
+    ? `; cache unavailable (validated without it): ${cacheUnavailable}`
+    : stats.cacheErrors > 0
+      ? `; ${stats.cacheErrors} cache failures (validated without the cache)`
+      : "";
+  if (run.passed) {
+    // Warnings do not fail a run; they are counted, not hidden.
+    const warnings = diagnostics > 0 ? `; ${diagnostics} warnings` : "";
+    return `All ${stats.totalFiles} files valid${warnings}${cacheNote}`;
+  }
+  return `${diagnostics} diagnostics; ${stats.invalidFiles} invalid or unreadable files, ${stats.internalFailures} internal failures, ${stats.roundtripFailed} roundtrip failures${cacheNote}`;
 }
 
 export function relativeDisplayName(fullPath: string, targetPath: string): string {

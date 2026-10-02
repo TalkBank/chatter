@@ -1,7 +1,7 @@
 //! An analysis owns the exact source revision from which all its artifacts derive.
 
 use std::sync::Arc;
-use talkbank_model::model::{ChatFile, FileStem, TranscriptName};
+use talkbank_model::model::{ChatFile, TranscriptName};
 use talkbank_model::{ErrorCollector, Severity};
 use talkbank_parser::{ParsedRevision, TreeSitterParser};
 use tower_lsp::lsp_types::{Diagnostic, Url};
@@ -55,13 +55,16 @@ impl DocumentAnalysis {
                 to_diagnostics_batch(&parse_errors.iter().collect::<Vec<_>>(), &source),
             )
         } else {
-            let name = uri
-                .path_segments()
-                .and_then(|mut segments| segments.next_back())
-                .and_then(|filename| filename.strip_suffix(".cha"))
-                .map_or(TranscriptName::Anonymous, |stem| {
-                    TranscriptName::Named(FileStem::from_stem(stem))
-                });
+            // Named after the `.cha` file on disk (its URI decoded to a path,
+            // so a name with a space or an accent is the stored name, not its
+            // percent-encoding); a buffer with no `.cha` file is anonymous.
+            let path = uri
+                .to_file_path()
+                .ok()
+                .filter(|path| path.extension().is_some_and(|extension| extension == "cha"));
+            let name = path
+                .as_deref()
+                .map_or(TranscriptName::Anonymous, TranscriptName::for_path);
             let validation_errors = ErrorCollector::new();
             file.validate_with_alignment(&validation_errors, name);
             let errors = validation_errors.into_vec();

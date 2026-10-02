@@ -1,7 +1,7 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-09-28 22:20 EDT
+**Last updated:** {{git-dates:page}}
 
 ## Pre-Merge Verification
 
@@ -82,7 +82,7 @@ announcing.
 | `.github/workflows/release-desktop.yml` | Desktop installer release automation | dist publish job: creates the draft with dist's announcement title and CHANGELOG body, builds and uploads the installers and updater bundles, and verifies the candidate; `workflow_dispatch` runs build-only |
 | `.github/workflows/release-app-banner.yml` | Release page banner | dist post-announce job: prepends the desktop app banner to the published release notes |
 | `.github/workflows/release-lint.yml` | Release-time lint | `just release-lint`: clippy over both workspaces plus the feature-off build. Runs on a version tag and on `workflow_dispatch`, never per push |
-| `.github/workflows/clippy-rolling.yml` | New-stable clippy drift detection | Weekly maintenance workflow |
+| `.github/workflows/clippy-rolling.yml` | New-stable clippy lints | Weekly scheduled clippy, so a new stable's lints surface within days |
 
 ### Current release stance
 
@@ -143,7 +143,7 @@ re-create all of them on any new repository (secrets do not transfer).
 
 ## The development loop
 
-Set on 2026-08-27, after a single parser fix cost a day to the process
+The loop exists because a single parser fix can cost a day to the process
 around it rather than to the fix.
 
 1. **Inner loop:** `just test`. Write the failing test or the type change

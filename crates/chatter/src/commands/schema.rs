@@ -20,8 +20,8 @@ const SCHEMA_URL: &str = "https://talkbank.org/schemas/v0.1/chat-file.json";
 /// same canonical schema without bundling the binary.
 pub fn run_schema(url_only: bool) {
     if url_only {
-        println!("{SCHEMA_URL}");
+        outln!("{SCHEMA_URL}");
     } else {
-        print!("{SCHEMA_JSON}");
+        out!("{SCHEMA_JSON}");
     }
 }

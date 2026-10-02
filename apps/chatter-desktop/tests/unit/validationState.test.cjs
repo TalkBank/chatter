@@ -11,6 +11,7 @@ const {
   relativeDisplayName,
   shouldShowAllFilesValid,
   fileOutcome,
+  fileStatusLabel,
   finishedRunSummary,
 } = require("../../.test-dist/src/hooks/validationState.js");
 
@@ -24,11 +25,10 @@ function stats(overrides = {}) {
     invalidFiles: 0,
     cacheHits: 0,
     cacheMisses: 2,
-    parseErrors: 0,
+    cacheErrors: 0,
     internalFailures: 0,
     roundtripPassed: 0,
     roundtripFailed: 0,
-    cancelled: false,
     ...overrides,
   };
 }
@@ -36,7 +36,6 @@ function stats(overrides = {}) {
 test("terminal failures without diagnostics remain visible problems", () => {
   for (const status of [
     { type: "readError", message: "permission denied" },
-    { type: "parseError", message: "parser unavailable" },
     { type: "internalFailure", message: "CHAT validity was not determined" },
     { type: "roundtripFailed", reason: "model changed", cacheHit: false },
     { type: "invalid", errorCount: 2, cacheHit: true },
@@ -51,6 +50,16 @@ test("terminal failures without diagnostics remain visible problems", () => {
   }
 });
 
+// The one label a file's outcome reads as, on screen and in a text export.
+test("a file's status label is its outcome in words", () => {
+  const file = { path: "/sample.cha", name: "sample.cha", diagnostics: [], source: "", status: null };
+  assert.equal(fileStatusLabel(file), "Validation pending");
+  file.status = { type: "valid", cacheHit: false };
+  assert.equal(fileStatusLabel(file), "Valid");
+  file.status = { type: "readError", message: "permission denied" };
+  assert.equal(fileStatusLabel(file), "Read error: permission denied");
+});
+
 test("only completed valid files without diagnostics have a valid outcome", () => {
   const file = { path: "/sample.cha", name: "sample.cha", diagnostics: [], source: "", status: null };
   assert.equal(fileOutcome(file).kind, "pending");
@@ -60,19 +69,49 @@ test("only completed valid files without diagnostics have a valid outcome", () =
   assert.equal(fileOutcome(file).kind, "problem", "warnings stay visible");
 });
 
-test("finished summaries cannot certify failed, cancelled or empty populations", () => {
+// The all-valid claim is the runner's verdict (`passed`), never a rule the
+// desktop computes over the counts: a failed run cannot be certified, a
+// passed run is, and a passed run with warnings says so.
+test("finished summaries certify exactly the runs the runner passed", () => {
   for (const overrides of [
-    { validFiles: 1, parseErrors: 1 },
     { validFiles: 1, internalFailures: 1 },
     { validFiles: 1, invalidFiles: 1 },
     { roundtripFailed: 1 },
-    { cancelled: true },
-    { totalFiles: 0, validFiles: 0 },
   ]) {
-    assert.equal(shouldShowAllFilesValid({ kind: "finished", stats: stats(overrides) }, 0), false);
-    assert.ok(!finishedRunSummary({ kind: "finished", stats: stats(overrides) }, 0).includes("files valid"));
+    const failed = { kind: "finished", stats: stats(overrides), passed: false };
+    assert.equal(shouldShowAllFilesValid(failed, 0), false);
+    assert.ok(!finishedRunSummary(failed, 0, null).includes("files valid"));
   }
-  assert.equal(finishedRunSummary({ kind: "finished", stats: stats() }, 0), "All 2 files valid");
+  const passed = { kind: "finished", stats: stats(), passed: true };
+  assert.equal(finishedRunSummary(passed, 0, null), "All 2 files valid");
+  assert.equal(finishedRunSummary(passed, 3, null), "All 2 files valid; 3 warnings");
+  assert.equal(shouldShowAllFilesValid(passed, 1), false, "files with warnings stay shown");
+});
+
+// A target with no transcript is its own phase: no counts, no claim, and
+// Re-validate offered.
+test("a nothingFound event yields its own phase, which certifies nothing", () => {
+  const next = applyValidationEvent(
+    createInitialValidationState(),
+    { type: "nothingFound" },
+    (path) => path,
+  );
+  assert.equal(next.run.kind, "nothingFound");
+  assert.equal(shouldShowAllFilesValid(next.run, 0), false);
+  assert.ok(isRunRecoverable(next.run));
+  assert.equal(totalFilesOf(next.run), 0);
+});
+
+test("a stopped run is its own phase and never certifies anything", () => {
+  const stopped = {
+    kind: "stopped",
+    stats: stats({ totalFiles: 5, validFiles: 3 }),
+    unprocessedFiles: 2,
+    reason: "Cancelled",
+  };
+  assert.equal(shouldShowAllFilesValid(stopped, 0), false);
+  assert.equal(isRunRecoverable(stopped), true);
+  assert.equal(totalFilesOf(stopped), 5);
 });
 
 function diagnostic(code, message, start = 1) {
@@ -145,10 +184,9 @@ test("relative display names handle file roots and Windows separators", () => {
   );
 });
 
-// REGRESSION GUARD: before this fix, FileTree derived "all valid" from
-// `errorFileCount === 0` alone, which is also true for the entire window
-// between "discovery done" and "last file actually validated" whenever no
-// error has streamed in yet - not the same thing as the run being finished.
+// "All valid" is never derived from `errorFileCount === 0` alone, which is
+// also true for the whole window between "discovery done" and "last file
+// validated" while no error has streamed in yet.
 test("an aborted run never claims all files valid", () => {
   assert.equal(
     shouldShowAllFilesValid({ kind: "aborted", reason: "the validator stopped" }, 0),
@@ -174,12 +212,12 @@ test("shouldShowAllFilesValid requires phase to be finished, not just zero error
     "must not claim all-valid before a run has started",
   );
   assert.equal(
-    shouldShowAllFilesValid({ kind: "finished", stats: stats() }, 0),
+    shouldShowAllFilesValid({ kind: "finished", stats: stats(), passed: true }, 0),
     true,
     "must claim all-valid once finished with zero error files",
   );
   assert.equal(
-    shouldShowAllFilesValid({ kind: "finished", stats: stats() }, 2),
+    shouldShowAllFilesValid({ kind: "finished", stats: stats(), passed: true }, 2),
     false,
     "must not claim all-valid when finished with error files present",
   );
@@ -220,18 +258,15 @@ test("a run still in flight counts as running for UI purposes from invoke onward
   assert.ok(!isRunPending({ kind: "aborted", reason: "died" }));
 });
 
-// REGRESSION GUARD: `aborted` used to be a dead end (no Re-validate button,
-// unlike `finished`), because only `finished` was checked at the call sites
-// that decide whether to offer Re-validate. Covers all six `RunPhase`
-// variants so a future phase is a deliberate yes/no here, not a silent
-// omission at whichever call site someone remembered to update.
-test("isRunRecoverable is true only for finished and aborted", () => {
+// Every ended phase offers Re-validate and no other does, so a new phase is
+// a deliberate yes or no here.
+test("isRunRecoverable is true exactly for the ended phases", () => {
   assert.ok(!isRunRecoverable({ kind: "idle" }), "nothing to re-run before a run has started");
   assert.ok(!isRunRecoverable({ kind: "invoked" }), "a run in flight is not done yet");
   assert.ok(!isRunRecoverable({ kind: "discovering" }), "a run in flight is not done yet");
   assert.ok(!isRunRecoverable({ kind: "running", totalFiles: 3 }), "a run in flight is not done yet");
   assert.ok(
-    isRunRecoverable({ kind: "finished", stats: stats() }),
+    isRunRecoverable({ kind: "finished", stats: stats(), passed: true }),
     "a completed run can be re-validated",
   );
   assert.ok(
@@ -240,15 +275,18 @@ test("isRunRecoverable is true only for finished and aborted", () => {
   );
 });
 
-// REGRESSION GUARD: a run whose workers abandoned files reports perfectly
-// ordinary-looking counts, because the missing files contributed to no
-// counter. A 500-file corpus could validate 480 and show "all files valid",
-// which is the worst possible failure for a tool that tells researchers
-// whether their data is sound.
+// A run whose workers abandoned files reports ordinary-looking counts,
+// because the missing files contributed to no counter, so it can never reach
+// the all-valid claim.
 test("an incomplete run never claims all files valid", () => {
   assert.ok(
     !shouldShowAllFilesValid(
-      { kind: "finishedIncomplete", stats: stats({ totalFiles: 5, validFiles: 3 }), lostFiles: 2 },
+      {
+        kind: "finishedIncomplete",
+        stats: stats({ totalFiles: 5, validFiles: 3 }),
+        lostFiles: 2,
+        cause: "1 worker(s) failed with an internal error.",
+      },
       0,
     ),
     "zero errors among the files that WERE checked is not a verdict on the ones that were not",
@@ -262,12 +300,15 @@ test("a finishedIncomplete event yields the incomplete phase, not finished", () 
       type: "finishedIncomplete",
       stats: stats({ totalFiles: 5, validFiles: 3 }),
       lostFiles: 2,
+      cause: "1 worker(s) failed with an internal error.",
     },
     (path) => path,
   );
 
   assert.equal(next.run.kind, "finishedIncomplete");
   assert.equal(next.run.lostFiles, 2);
+  // The runner's own sentence for why, carried through unchanged.
+  assert.equal(next.run.cause, "1 worker(s) failed with an internal error.");
 });
 
 // An incomplete run is still re-runnable: re-running is exactly what a user
@@ -278,6 +319,35 @@ test("isRunRecoverable includes finishedIncomplete", () => {
       kind: "finishedIncomplete",
       stats: stats({ totalFiles: 5, validFiles: 3 }),
       lostFiles: 2,
+      cause: "1 worker(s) failed with an internal error.",
     }),
   );
+});
+
+test("a failing cache is said in the finished summary", () => {
+  const run = { kind: "finished", stats: stats({ cacheErrors: 3 }), passed: true };
+  const summary = finishedRunSummary(run, 0, null);
+  assert.ok(summary.includes("3 cache failures"), summary);
+  assert.ok(
+    !finishedRunSummary({ kind: "finished", stats: stats(), passed: true }, 0, null).includes("cache"),
+  );
+});
+
+// A cache that would not open is said in the summary, with its reason, and
+// the reducer keeps it beside the run until the next run starts.
+test("a cache that would not open is said in the finished summary", () => {
+  const next = applyValidationEvent(
+    createInitialValidationState(),
+    { type: "cacheUnavailable", reason: "database is locked" },
+    (path) => path,
+  );
+  assert.equal(next.cacheUnavailable, "database is locked");
+  assert.equal(next.run.kind, "idle", "the note does not move the run's phase");
+  const summary = finishedRunSummary(
+    { kind: "finished", stats: stats(), passed: true },
+    0,
+    next.cacheUnavailable,
+  );
+  assert.ok(summary.includes("cache unavailable"), summary);
+  assert.ok(summary.includes("database is locked"), summary);
 });

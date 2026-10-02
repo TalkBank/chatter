@@ -1,7 +1,7 @@
 # Batch Workflows
 
 **Status:** Current
-**Last modified:** 2026-06-12 21:05 EDT
+**Last modified:** {{git-dates:page}}
 
 The `chatter` CLI is designed for processing large CHAT corpora efficiently. This page covers common batch workflows.
 
@@ -36,6 +36,14 @@ Stop after the first reported error:
 ```bash
 chatter validate /path/to/corpus/ --max-errors 1
 ```
+
+The limit is at least 1 (`--max-errors 0` is a usage error), and only errors
+count: a warnings-only corpus is never stopped. When the count reaches the
+limit, no new file starts, and if files were left the run says
+`Stopped after reaching --max-errors N; M file(s) were not validated.` (on
+stderr; a `stop` record in JSON mode) and exits 1. A run whose limit was
+reached by its last file stopped nothing and never says it. The TUI honours
+the limit too.
 
 Write a JSONL audit file while validating:
 
@@ -83,7 +91,7 @@ only effective one on Windows, where the default location comes from
 the system Known Folder API rather than environment variables.
 
 ```bash
-chatter cache stats    # Show hit rates and entry count
+chatter cache stats    # Show the cache's location, size and entry count
 chatter cache clear --all
 ```
 
@@ -105,7 +113,6 @@ This runs the parser equivalence test; each `.cha` file is its own test, so repo
 ## Integration with batchalign
 
 The Batchalign pipeline uses the same Rust core (via PyO3) for CHAT
-parsing and serialization. Since the 2026-04-28 monorepo merge,
-Batchalign source lives inside this repository under `crates/batchalign-*`
-(the standalone `batchalign3` GitHub repo was archived). Files processed
+parsing and serialization. Batchalign itself is the upstream `batchalign3`
+project, outside this repository. Files processed
 by Batchalign produce valid CHAT that passes `chatter validate`.

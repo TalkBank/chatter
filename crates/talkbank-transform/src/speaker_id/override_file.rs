@@ -18,9 +18,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use talkbank_model::{ParticipantRole, SpeakerCode};
+
+use crate::recorded_time::RecordedTime;
 
 use super::error::SpeakerIdError;
 use super::identify::DonorMatchReport;
@@ -121,7 +122,7 @@ impl MergeOverride {
         report: &DonorMatchReport,
         adult_roles: BTreeMap<String, InsertedRoleSpec>,
         operator: String,
-        decided_at: DateTime<Utc>,
+        decided_at: RecordedTime,
     ) -> Self {
         Self {
             mode: OverrideMode::Auto,
@@ -148,7 +149,7 @@ impl MergeOverride {
         scores: BTreeMap<String, f64>,
         margin: Option<f64>,
         operator: String,
-        decided_at: DateTime<Utc>,
+        decided_at: RecordedTime,
         note: Option<String>,
     ) -> Self {
         Self {
@@ -257,8 +258,9 @@ pub struct MergeOverride {
     /// Free-form identifier of the operator who made the decision.
     pub operator: String,
 
-    /// When the decision was made (RFC 3339).
-    pub decided_at: DateTime<Utc>,
+    /// When the decision was made: RFC 3339 in New York time, whole
+    /// seconds (see [`RecordedTime`]).
+    pub decided_at: RecordedTime,
 
     /// Free-text operator note. Strongly recommended for `Explicit`
     /// and `Override` modes. `None` and `Some("")` are
@@ -451,7 +453,7 @@ tag = "Investigator""#,
             scores: BTreeMap::new(),
             margin: None,
             operator: "test".to_string(),
-            decided_at: Utc::now(),
+            decided_at: RecordedTime::now(),
             note: None,
             flags: Vec::new(),
             engine: DecisionEngine::Deterministic,

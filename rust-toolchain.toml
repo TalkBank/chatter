@@ -1,11 +1,12 @@
 [toolchain]
-# Pin to a specific stable release rather than "stable" so per-push
-# CI is reproducible, when Rust ships a new stable (every ~6 weeks),
-# new clippy lints would otherwise turn every open PR red overnight.
-# Drift against the latest stable is caught by the weekly
-# clippy-rolling.yml workflow against `@stable`; when that goes red,
-# bump this pin in a focused commit that also fixes the new lints.
-channel = "1.98.0"
+# Track the current stable Rust release (decided 2026-10-01, replacing a
+# numeric pin). A new stable can bring new clippy lints; the weekly
+# clippy-rolling.yml run surfaces them within days of a release, and they
+# are fixed in a focused commit. rustfmt's output is stable within a style
+# edition, so a release does not move the generated traversal (the pin never
+# caught such a change across 1.96 to 1.98). This file still owns the
+# components and targets below.
+channel = "stable"
 # `llvm-tools` is here for the same reason `targets` is below: coverage is
 # the completeness criterion for the test suite, and a criterion that needs
 # a human to remember a rustup command is one nobody measures.

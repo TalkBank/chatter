@@ -9,6 +9,7 @@
 //!
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use super::super::AlignmentView;
 use talkbank_model::ParseError;
 use talkbank_model::alignment::IndexPair;
 use talkbank_model::{AlignmentSet, Utterance};
@@ -23,34 +24,34 @@ pub(super) fn render_main_to_mor(
     utterance: &Utterance,
     utterance_index: usize,
     alignments: &AlignmentSet,
-    compact: bool,
+    view: AlignmentView,
 ) -> (usize, usize) {
     let main_to_mor = match &alignments.mor {
         Some(alignment) => alignment,
         None => return (0, 0),
     };
 
-    if compact {
-        print!("Utt#{} Main→Mor: ", utterance_index + 1);
+    if let AlignmentView::Compact = view {
+        out!("Utt#{} Main→Mor: ", utterance_index + 1);
         for (i, pair) in main_to_mor.pairs.iter().enumerate() {
             if i > 0 {
-                print!(", ");
+                out!(", ");
             }
             let main_text = main_text(utterance, pair.source());
             let mor_text = mor_text(utterance, pair.target());
-            print!("\"{}\" → \"{}\"", main_text, mor_text);
+            out!("\"{}\" → \"{}\"", main_text, mor_text);
         }
-        println!();
+        outln!();
     } else {
-        println!("Main → %mor alignment:");
+        outln!("Main → %mor alignment:");
         for pair in &main_to_mor.pairs {
             let main_text = main_text(utterance, pair.source());
             let mor_text = mor_text(utterance, pair.target());
-            println!("  \"{}\" → \"{}\"", main_text, mor_text);
+            outln!("  \"{}\" → \"{}\"", main_text, mor_text);
         }
     }
 
-    let errors = render_errors(&main_to_mor.errors, compact);
+    let errors = render_errors(&main_to_mor.errors, view);
     (1, errors)
 }
 
@@ -59,34 +60,34 @@ pub(super) fn render_mor_to_gra(
     utterance: &Utterance,
     utterance_index: usize,
     alignments: &AlignmentSet,
-    compact: bool,
+    view: AlignmentView,
 ) -> (usize, usize) {
     let mor_to_gra = match &alignments.gra {
         Some(alignment) => alignment,
         None => return (0, 0),
     };
 
-    if compact {
-        print!("Utt#{} Mor→Gra: ", utterance_index + 1);
+    if let AlignmentView::Compact = view {
+        out!("Utt#{} Mor→Gra: ", utterance_index + 1);
         for (i, pair) in mor_to_gra.pairs.iter().enumerate() {
             if i > 0 {
-                print!(", ");
+                out!(", ");
             }
             let mor_text = mor_text(utterance, pair.source());
             let gra_text = gra_text(utterance, pair.target());
-            print!("\"{}\" → \"{}\"", mor_text, gra_text);
+            out!("\"{}\" → \"{}\"", mor_text, gra_text);
         }
-        println!();
+        outln!();
     } else {
-        println!("%mor → %gra alignment:");
+        outln!("%mor → %gra alignment:");
         for pair in &mor_to_gra.pairs {
             let mor_text = mor_text(utterance, pair.source());
             let gra_text = gra_text(utterance, pair.target());
-            println!("  \"{}\" → \"{}\"", mor_text, gra_text);
+            outln!("  \"{}\" → \"{}\"", mor_text, gra_text);
         }
     }
 
-    let errors = render_errors(&mor_to_gra.errors, compact);
+    let errors = render_errors(&mor_to_gra.errors, view);
     (1, errors)
 }
 
@@ -95,34 +96,34 @@ pub(super) fn render_main_to_pho(
     utterance: &Utterance,
     utterance_index: usize,
     alignments: &AlignmentSet,
-    compact: bool,
+    view: AlignmentView,
 ) -> (usize, usize) {
     let main_to_pho = match &alignments.pho {
         Some(alignment) => alignment,
         None => return (0, 0),
     };
 
-    if compact {
-        print!("Utt#{} Main→Pho: ", utterance_index + 1);
+    if let AlignmentView::Compact = view {
+        out!("Utt#{} Main→Pho: ", utterance_index + 1);
         for (i, pair) in main_to_pho.pairs.iter().enumerate() {
             if i > 0 {
-                print!(", ");
+                out!(", ");
             }
             let main_text = main_text(utterance, pair.source());
             let pho_text = pho_text(utterance, pair.target());
-            print!("\"{}\" → \"{}\"", main_text, pho_text);
+            out!("\"{}\" → \"{}\"", main_text, pho_text);
         }
-        println!();
+        outln!();
     } else {
-        println!("Main → %pho alignment:");
+        outln!("Main → %pho alignment:");
         for pair in &main_to_pho.pairs {
             let main_text = main_text(utterance, pair.source());
             let pho_text = pho_text(utterance, pair.target());
-            println!("  \"{}\" → \"{}\"", main_text, pho_text);
+            outln!("  \"{}\" → \"{}\"", main_text, pho_text);
         }
     }
 
-    let errors = render_errors(&main_to_pho.errors, compact);
+    let errors = render_errors(&main_to_pho.errors, view);
     (1, errors)
 }
 
@@ -131,34 +132,34 @@ pub(super) fn render_main_to_sin(
     utterance: &Utterance,
     utterance_index: usize,
     alignments: &AlignmentSet,
-    compact: bool,
+    view: AlignmentView,
 ) -> (usize, usize) {
     let main_to_sin = match &alignments.sin {
         Some(alignment) => alignment,
         None => return (0, 0),
     };
 
-    if compact {
-        print!("Utt#{} Main→Sin: ", utterance_index + 1);
+    if let AlignmentView::Compact = view {
+        out!("Utt#{} Main→Sin: ", utterance_index + 1);
         for (i, pair) in main_to_sin.pairs.iter().enumerate() {
             if i > 0 {
-                print!(", ");
+                out!(", ");
             }
             let main_text = main_text(utterance, pair.source());
             let sin_text = sin_text(utterance, pair.target());
-            print!("\"{}\" → \"{}\"", main_text, sin_text);
+            out!("\"{}\" → \"{}\"", main_text, sin_text);
         }
-        println!();
+        outln!();
     } else {
-        println!("Main → %sin alignment:");
+        outln!("Main → %sin alignment:");
         for pair in &main_to_sin.pairs {
             let main_text = main_text(utterance, pair.source());
             let sin_text = sin_text(utterance, pair.target());
-            println!("  \"{}\" → \"{}\"", main_text, sin_text);
+            outln!("  \"{}\" → \"{}\"", main_text, sin_text);
         }
     }
 
-    let errors = render_errors(&main_to_sin.errors, compact);
+    let errors = render_errors(&main_to_sin.errors, view);
     (1, errors)
 }
 
@@ -212,17 +213,17 @@ fn sin_text(utterance: &Utterance, index: Option<usize>) -> String {
 }
 
 /// Print alignment errors for a tier pair and return the count.
-fn render_errors(errors: &[ParseError], compact: bool) -> usize {
+fn render_errors(errors: &[ParseError], view: AlignmentView) -> usize {
     if errors.is_empty() {
         return 0;
     }
 
-    if compact {
-        println!("  ⚠ {} error(s)", errors.len());
+    if let AlignmentView::Compact = view {
+        outln!("  ⚠ {} error(s)", errors.len());
     } else {
-        println!("  Errors:");
+        outln!("  Errors:");
         for err in errors {
-            println!("    • {}", err.message);
+            outln!("    • {}", err.message);
         }
     }
 

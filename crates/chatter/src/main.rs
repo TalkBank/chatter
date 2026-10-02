@@ -1,4 +1,7 @@
 #![warn(missing_docs)]
+// Results reach stdout only through `outln!`/`out!` (`stdout.rs`); `println!`
+// and `print!` panic when a consumer closes the pipe. Clippy refuses them here.
+#![deny(clippy::print_stdout)]
 // Test code is exempt from this crate's `deny`-level panic lints,
 // see `docs/panic-audit/chatter.md`.
 #![cfg_attr(
@@ -73,12 +76,12 @@
 //! (removed). The tree-sitter parser is the sole parser.
 //! `talkbank_model::ChatFile` AST.
 //!
-//! # Broken pipe handling
+//! # A closed standard output
 //!
-//! `main()` installs a custom panic hook that silences broken-pipe panics
-//! (common when output is piped to `head` or similar), and catches unwind
-//! payloads so the process exits cleanly with code 0 rather than printing a
-//! panic backtrace.
+//! Every text writer writes through the `outln!` and `out!` macros
+//! (`stdout.rs`), never `println!`: when a consumer such as `head` closes
+//! the pipe, the command ends with exit status 1, the status
+//! `validate --format json` gives, instead of panicking.
 //!
 //! # Module map
 //!
@@ -114,6 +117,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+// First, so its `outln!` and `out!` macros are in scope in every module below.
+#[macro_use]
+mod stdout;
 mod cli;
 mod commands;
 pub mod exit_codes;
@@ -122,7 +128,7 @@ pub mod progress;
 pub mod ui;
 
 use clap::{CommandFactory, FromArgMatches};
-use std::panic::{AssertUnwindSafe, PanicHookInfo, catch_unwind, resume_unwind};
+use std::panic::resume_unwind;
 
 /// Stack size for the thread the whole program runs on.
 ///
@@ -136,8 +142,10 @@ use std::panic::{AssertUnwindSafe, PanicHookInfo, catch_unwind, resume_unwind};
 /// a thread with an explicit stack size removes the dependency on
 /// platform main-stack defaults entirely (the same approach rustc
 /// takes). Regression gate: `tests/stack_limit_tests.rs` plus the
-/// native windows-latest CI job.
-const PROGRAM_STACK_BYTES: usize = 16 * 1024 * 1024;
+/// native windows-latest CI job. It IS the worker pool's
+/// `CHAT_THREAD_STACK_BYTES`, so the program thread and the workers that
+/// parse beside it cannot be sized apart.
+const PROGRAM_STACK_BYTES: usize = talkbank_transform::worker_pool::CHAT_THREAD_STACK_BYTES;
 
 /// Entry point for this binary target.
 ///
@@ -170,14 +178,6 @@ fn main() {
 
 /// The real program body; runs on the explicitly sized program thread.
 fn program_main() {
-    let default_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        if panic_info_is_broken_pipe(info) {
-            return;
-        }
-        default_hook(info);
-    }));
-
     let raw_args: Vec<String> = std::env::args().collect();
 
     // Build the clap Command and parse.
@@ -190,36 +190,5 @@ fn program_main() {
     let cli =
         cli::Cli::from_arg_matches(&matches).expect("clap should have validated all arguments");
 
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        cli::run(cli);
-    }));
-
-    if let Err(payload) = result {
-        if panic_is_broken_pipe(&payload) {
-            std::process::exit(0);
-        }
-        resume_unwind(payload);
-    }
-}
-
-/// Return `true` when a panic hook payload reports a broken pipe.
-fn panic_info_is_broken_pipe(info: &PanicHookInfo<'_>) -> bool {
-    if let Some(msg) = info.payload().downcast_ref::<String>() {
-        return msg.contains("Broken pipe");
-    }
-    if let Some(msg) = info.payload().downcast_ref::<&str>() {
-        return msg.contains("Broken pipe");
-    }
-    false
-}
-
-/// Return `true` when an unwind payload reports a broken pipe.
-fn panic_is_broken_pipe(payload: &Box<dyn std::any::Any + Send>) -> bool {
-    if let Some(msg) = payload.downcast_ref::<String>() {
-        return msg.contains("Broken pipe");
-    }
-    if let Some(msg) = payload.downcast_ref::<&str>() {
-        return msg.contains("Broken pipe");
-    }
-    false
+    cli::run(cli);
 }

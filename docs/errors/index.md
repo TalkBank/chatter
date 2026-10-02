@@ -274,4 +274,5 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E999](E999.md) | Unknown error (internal fallback) | Invalidity | tier | ⏳ |
 | [W108](W108.md) | Speaker not declared in @Participants (warning form) | Invalidity | utterance | ✅ |
 | [W109](W109.md) | Media filename not in canonical Unicode form | Style | header | ✅ |
+| [W110](W110.md) | Media filename differs from the file name only in letter case | Style | header | ✅ |
 

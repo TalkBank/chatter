@@ -1,6 +1,6 @@
 # Design reference
 
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/agent-reference/design.md)
 
 Read the sections relevant to your task. [AGENTS.md](../../AGENTS.md)
 is the canonical policy entry point and resolves workflow conflicts here.
@@ -139,8 +139,11 @@ signature cannot describe. A surviving test says which of those it is.
     test is acceptable only as a coarse hang check with an order-of-magnitude
     ceiling, and says so.
 11. **%mor is UD-only.** Legacy `&` fusional suffixes are unsupported.
-12. Touched docs update `Last modified` from real `date` output; the book is
-    kept current in the same commit as any behaviour change.
+12. Keep the book current with behaviour changes. Publication metadata uses
+    Git-derived page dates or source-bound history links; it is not a content
+    review certificate. Update remaining handwritten dates from real `date`
+    output on edits. The date convention has one owner in
+    `book/src/contributing/documentation-architecture.md`.
 13. Architecture docs use Mermaid:
     `book/src/contributing/documentation-architecture.md`.
 14. Structured `@Options` names are `CA` and `NoAlign` only.

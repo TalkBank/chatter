@@ -1,12 +1,12 @@
 # Merge Pipeline, Test Plan
 
-> Historical design: references below to the `chatter merge` CLI describe the
-> former command. `merge`, `pipeline`, and `batch` have been removed.
-> The structural library remains.
-> See the [removal notice](../chatter/user-guide/merge.md).
+> `chatter merge`, `chatter pipeline` and `chatter batch` are not CLI commands.
+> Where this page names them it describes the operation of the structural
+> library in `talkbank-transform`, which is current. See the
+> [removal notice](../chatter/user-guide/merge.md).
 
 **Status:** Draft
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** {{git-dates:page}}
 
 This page is the test-coverage roadmap for the new merge pipeline
 (`chatter speaker-id` + `chatter merge` + `chatter adjudicate` +
@@ -18,9 +18,8 @@ at the highest level the feature lives at, and we want to
 enumerate those tests *before* writing the implementation, so
 coverage is designed, not discovered.
 
-The original cycle plan below is historical design context, not proof of
-current coverage. In particular, its early global-sort implementation has been
-replaced by an ordered AST merge. Current regression coverage in
+The cycle plan below is design context, not proof of current coverage. The
+implemented merge is an ordered AST merge, not a global sort. Current regression coverage in
 `transcript_merge_tests.rs` checks complete reference line order, donor body
 comments, direct model validity, refusal of missing or reversed timing,
 determined versus ambiguous section placement, and malformed donor metadata
@@ -557,7 +556,7 @@ the standard TDD progression.
   on a measured workload, no targeted perf assertions. The
   reference corpus's existing round-trip benchmarks remain the
   baseline.
-- **Fuzz testing.** This repository now has a local `fuzz/`
+- **Fuzz testing.** This repository has a local `fuzz/`
   workspace for parser/validation fuzzing. If the merge crate
   stabilizes enough to justify dedicated fuzzing, adding a
   merge-specific target for random parseable CHAT-pair inputs is a

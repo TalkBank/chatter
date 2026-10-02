@@ -14,7 +14,7 @@ pub use validated::{ValidatedParseError, parse_validated_with_parser};
 pub(crate) mod rewrite;
 
 pub use convert::{
-    JsonSchemaPolicy, chat_to_json, chat_to_json_named, chat_to_json_unvalidated,
+    JsonLayout, JsonSchemaPolicy, chat_to_json, chat_to_json_named, chat_to_json_unvalidated,
     chat_to_json_with_schema_policy, normalize_chat,
 };
 pub use error::PipelineError;

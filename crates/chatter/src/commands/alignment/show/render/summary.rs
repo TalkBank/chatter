@@ -23,8 +23,8 @@ pub(super) fn render_summary(
     totals: &RenderTotals,
     had_validation_errors: bool,
 ) {
-    println!();
-    println!("{}", "=".repeat(80));
+    outln!();
+    outln!("{}", "=".repeat(80));
     if totals.total_alignments == 0 {
         match tier_filter {
             Some(tier) => eprintln!(
@@ -36,9 +36,10 @@ pub(super) fn render_summary(
         }
     }
 
-    println!(
+    outln!(
         "Summary: {} alignment(s) shown, {} error(s) found",
-        totals.total_alignments, totals.total_errors
+        totals.total_alignments,
+        totals.total_errors
     );
 
     if had_validation_errors || totals.total_errors > 0 {

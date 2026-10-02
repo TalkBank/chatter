@@ -20,8 +20,7 @@ use super::*;
 pub fn run_sanitize(input: &Path, output_path: Option<&Path>) {
     let source = std::fs::read_to_string(input)
         .unwrap_or_else(|e| die(&format!("cannot read {}: {e}", input.display())));
-    let parser = talkbank_parser::TreeSitterParser::new()
-        .unwrap_or_else(|e| die(&format!("parser initialization failed: {e:?}")));
+    let parser = super::parser();
     let Some(parsed) = parse_or_report(&parser, input, &source) else {
         std::process::exit(1);
     };
@@ -49,7 +48,7 @@ pub fn run_sanitize(input: &Path, output_path: Option<&Path>) {
         None => std::io::stdout()
             .lock()
             .write_all(chat_text.as_bytes())
-            .unwrap_or_else(|e| die(&format!("cannot write to stdout: {e}"))),
+            .unwrap_or_else(|e| crate::stdout::closed(e)),
     }
 }
 

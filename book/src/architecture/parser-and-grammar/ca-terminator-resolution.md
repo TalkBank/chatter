@@ -1,13 +1,13 @@
 # CA Terminator Resolution
 
 **Status:** Current
-**Last updated:** 2026-05-05 12:23 EDT
+**Last updated:** {{git-dates:page}}
 
 How CA markers are split between separators and linkers in the parser/model.
 
 ## Current rule
 
-The parser/model no longer promotes CA markers into utterance terminators.
+The parser/model does not promote CA markers into utterance terminators.
 
 The supported split is:
 
@@ -25,7 +25,7 @@ than being retyped as `Terminator`.
 1. Tree-sitter grammar keeps arrows and `≈/≋` on the `separator` path.
 2. The tree parser converts those nodes directly into `Separator` variants.
 3. The re2c parser classifies `≈/≋` as separators and `+≈/+≋` as linkers.
-4. The old post-hoc `resolve_ca_terminator()` promotion pass was removed.
+4. No post-hoc pass promotes CA markers to terminators.
 5. `Terminator::try_from_chat_str()` intentionally rejects CA arrows,
    `≈`, `≋`, `+≈`, and `+≋`.
 

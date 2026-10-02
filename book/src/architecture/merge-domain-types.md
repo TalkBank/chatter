@@ -1,25 +1,23 @@
 # Merge Pipeline, Domain Types
 
-> Historical design: references below to the `chatter merge` CLI describe the
-> former command. `merge`, `pipeline`, and `batch` have been removed.
-> The structural library remains.
-> See the [removal notice](../chatter/user-guide/merge.md).
+> `chatter merge`, `chatter pipeline` and `chatter batch` are not CLI commands.
+> Where this page names them it describes the operation of the structural
+> library in `talkbank-transform`, which is current. See the
+> [removal notice](../chatter/user-guide/merge.md).
 
 **Status:** Draft
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 This page specifies the typed Rust vocabulary shared by `chatter merge`,
 `chatter speaker-id`, the override-file reader/writer, and the
 adjudication tooling (CLI today; a VS Code or web UI would share the
-same types). It was originally written **before** the implementing
-code, as a deliberate design-first specification against the user
+same types). It is a design-first specification against the user
 contract in [chatter merge](../chatter/user-guide/merge.md) and
 [chatter speaker-id](../chatter/user-guide/speaker-id.md). The
-implementation has since shipped, and this page now records the
-shipped form: where the implementation departed from the original
-design (the owning crate, several type names, and the schema-v2
-per-speaker role map), the affected section says so explicitly
-instead of silently rewriting history.
+implementation has shipped, and this page records the shipped form: where
+the implementation departs from the design (the owning crate, several type
+names, and the schema-v2 per-speaker role map), the affected section says so
+explicitly.
 
 The design follows the cross-cutting rules in this repo's root
 `AGENTS.md`:
@@ -131,14 +129,13 @@ modules import and reference them.
 The subsections below are the type specification. The ones central
 to the override-file contract (`InsertedRoleSpec`, `SpeakerAction`,
 the speaker-mapping pair, `OverrideMode`, `MergeOverride`,
-`OverrideFile`, and the three error enums) have been updated in
-place to the shipped form. The remaining subsections
+`OverrideFile`, and the three error enums) describe the shipped form.
+The remaining subsections
 (`JaccardScore`, `ConfidenceThreshold`, `Margin`, `RetainSet`,
-`MergeFlag`, `OperatorId`, `SessionId`) are preserved as the
-original design; where the shipped form differs, the designed-vs-shipped table
+`MergeFlag`, `OperatorId`, `SessionId`) describe the design; where the shipped form differs, the designed-vs-shipped table
 above is authoritative for the current symbol and shape.
-`LexicalMatchEvidence` and the recorded report types were added after the
-original design so absolute support cannot be discarded.
+`LexicalMatchEvidence` and the recorded report types carry absolute support so
+it cannot be discarded.
 
 ### `JaccardScore`
 
@@ -513,8 +510,9 @@ pub struct MergeOverride {
     /// Free-form identifier of the operator who made the decision.
     pub operator: String,
 
-    /// When the decision was made (RFC 3339).
-    pub decided_at: DateTime<Utc>,
+    /// When the decision was made: RFC 3339 in New York time, whole
+    /// seconds (`talkbank_transform::recorded_time::RecordedTime`).
+    pub decided_at: RecordedTime,
 
     /// Free-text operator note. Strongly recommended for `Explicit`
     /// and `Override` modes.
@@ -540,11 +538,9 @@ pub struct MergeOverride {
 The struct embeds the timestamp via `chrono::DateTime<Utc>`; serde
 serializes to RFC 3339 (`2026-05-27T08:41:00Z`) by default. TOML
 preserves this format faithfully. The `engine` / `judgment`
-provenance fields postdate the original design (they record whether a
-decision was deterministic or LLM-made; see
-`speaker_id/provenance.rs`); they were added without a schema bump
-because they are backward compatible in both directions, as
-documented in
+provenance fields record whether a decision was deterministic or LLM-made
+(see `speaker_id/provenance.rs`); they need no schema bump because they are
+backward compatible in both directions, as documented in
 [merge-overrides.md](../chatter/integrating/merge-overrides.md).
 
 ### `OverrideFile`
@@ -595,7 +591,7 @@ impl OverrideFile {
 (The designed standalone `read` never shipped; `read_or_default` is
 the single read path, and the designed `insert` shipped as `upsert`.
 Iteration helpers `session_ids`, `auto_entries`, and `llm_entries`
-were added for diagnostics, the post-merge sanity scan, and LLM
+serve diagnostics, the post-merge sanity scan, and LLM
 audits respectively.)
 
 The `#[serde(flatten)]` on `entries` means the on-disk TOML is

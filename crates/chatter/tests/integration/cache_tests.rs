@@ -228,7 +228,56 @@ fn test_cache_invalidation_after_file_modification() -> Result<(), TestError> {
     Ok(())
 }
 
-/// Tests force flag clears cache.
+/// `--force` clears the rows the run itself wrote, whatever spelling of the
+/// path the user typed: relative, `./`, absolute as the user's shell spells
+/// it (on macOS a temporary directory is `/var/...`, which the operating
+/// system resolves to `/private/var/...`), or through `..`: every spelling
+/// is one resolved location.
+#[test]
+fn force_clears_rows_whatever_spelling_the_argument_used() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let content = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello world .\n@End\n";
+    fs::write(dir.path().join("a.cha"), content)?;
+    fs::create_dir_all(dir.path().join("sub"))?;
+    let absolute = dir.path().join("a.cha");
+    let absolute = absolute
+        .to_str()
+        .ok_or_else(|| TestError::Failure("temporary path is not UTF-8".to_owned()))?
+        .to_owned();
+    let validate = |extra: &[&str]| {
+        harness
+            .chatter_cmd()
+            .current_dir(dir.path())
+            .args(["validate", "a.cha", "--format", "json"])
+            .args(extra)
+            .output()
+    };
+    assert!(validate(&[])?.status.success());
+    for spelling in ["a.cha", "./a.cha", absolute.as_str(), "sub/../a.cha"] {
+        let output = harness
+            .chatter_cmd()
+            .current_dir(dir.path())
+            .args(["validate", spelling, "--format", "json", "--force"])
+            .output()?;
+        assert!(output.status.success(), "{}", combined_output(&output));
+        let cleared: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .filter(|record| record["action"] == "clear")
+            .collect();
+        assert_eq!(
+            cleared
+                .first()
+                .and_then(|record| record["entries_cleared"].as_u64()),
+            Some(1),
+            "{spelling}: {}",
+            combined_output(&output)
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn test_force_flag_clears_cache() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
@@ -599,6 +648,103 @@ fn test_cache_stats_command() -> Result<(), TestError> {
     Ok(())
 }
 
+/// `cache stats` only reads: with no cache it says so, in both formats, and
+/// creates nothing. It used to create the directory, its lock file and the
+/// database, and migrate it, to report zero entries of a cache it had just
+/// made.
+#[test]
+fn cache_stats_on_a_missing_cache_creates_nothing() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let cache_dir = harness.cache_dir();
+    let database = cache_dir.join("talkbank-cache.db");
+
+    let text = harness.run_output(&["cache", "stats"])?;
+    assert_success(&text, "cache stats with no cache");
+    let said = combined_output(&text);
+    if !said.contains(&format!("No cache database at {}", database.display())) {
+        return Err(TestError::Failure(format!(
+            "stats should say there is no cache database, got:\n{said}"
+        )));
+    }
+    if cache_dir.exists() {
+        return Err(TestError::Failure(
+            "cache stats created the cache directory".to_string(),
+        ));
+    }
+
+    let json = harness.run_output(&["cache", "stats", "--format", "json"])?;
+    assert_success(&json, "cache stats --format json with no cache");
+    let record = crate::common::parse_json(&json)?;
+    let expected = serde_json::json!({ "database": "absent", "cache_dir": cache_dir });
+    if record != expected {
+        return Err(TestError::Failure(format!(
+            "expected {expected}, got {record}"
+        )));
+    }
+    if cache_dir.exists() {
+        return Err(TestError::Failure(
+            "cache stats --format json created the cache directory".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// A dry run says what the clear it previews does. Over a database of an
+/// older schema (here one no build migrated) a clear migrates it and then
+/// clears; the dry run used to exit 1 with "a schema this build does not
+/// read" while the clear went ahead. Now it reports the migration, writes
+/// nothing, and the clear does what it said.
+#[test]
+fn a_dry_run_reports_the_migration_a_clear_performs() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let cache_dir = harness.cache_dir();
+    fs::create_dir_all(&cache_dir)?;
+    let database = cache_dir.join("talkbank-cache.db");
+    fs::write(&database, b"")?;
+    let migration = format!(
+        "migrate the cache database at {} to this build's schema",
+        database.display()
+    );
+
+    let dry_run = harness.run_output(&["cache", "clear", "--all", "--dry-run"])?;
+    assert_success(&dry_run, "cache clear --dry-run over an older schema");
+    let said = combined_output(&dry_run);
+    if !said.contains(&format!("Would {migration}")) || !said.contains("(dry-run;") {
+        return Err(TestError::Failure(format!(
+            "the dry run should say it would migrate first, got:\n{said}"
+        )));
+    }
+    let entries: Vec<_> = fs::read_dir(&cache_dir)?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<Result<_, _>>()?;
+    if fs::metadata(&database)?.len() != 0 || entries.len() != 1 {
+        return Err(TestError::Failure(format!(
+            "the dry run wrote to the cache directory: {entries:?}"
+        )));
+    }
+
+    let clear = harness.run_output(&["cache", "clear", "--all"])?;
+    assert_success(&clear, "cache clear over an older schema");
+    let said = combined_output(&clear);
+    if !said.contains(&format!(
+        "Migrated the cache database at {}",
+        database.display()
+    )) || !said.contains("Cleared 0 cache entries")
+    {
+        return Err(TestError::Failure(format!(
+            "the clear should migrate, then clear, got:\n{said}"
+        )));
+    }
+    let stats =
+        crate::common::parse_json(&harness.run_output(&["cache", "stats", "--format", "json"])?)?;
+    if stats["database"] != "current" {
+        return Err(TestError::Failure(format!(
+            "the clear should leave a current cache, got {stats}"
+        )));
+    }
+    Ok(())
+}
+
 /// Tests cache clear dry run.
 #[test]
 fn test_cache_clear_dry_run() -> Result<(), TestError> {
@@ -786,5 +932,25 @@ fn a_row_written_by_one_parser_never_serves_the_other() -> Result<(), TestError>
             "re2c should have hit its own row from the first run, got:\n{third_out}"
         )));
     }
+    Ok(())
+}
+
+/// `cache clear --dry-run` writes nothing. Over a cache directory with no
+/// database it creates none (no file, no migration) and says there is
+/// nothing to clear; it used to create and migrate a database to count it.
+#[test]
+fn cache_clear_dry_run_creates_no_database() -> Result<(), TestError> {
+    let cache_dir = tempdir()?;
+    let output = assert_cmd::cargo::cargo_bin_cmd!("chatter")
+        .env("TALKBANK_CHAT_CACHE_DIR", cache_dir.path())
+        .args(["cache", "clear", "--all", "--dry-run"])
+        .output()?;
+    assert_success(&output, "cache clear --all --dry-run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Would clear 0 cache entries"), "{stdout}");
+    let created: Vec<_> = fs::read_dir(cache_dir.path())?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<Result<_, _>>()?;
+    assert!(created.is_empty(), "a dry run created {created:?}");
     Ok(())
 }

@@ -46,7 +46,7 @@ fn media_normalization_specs_repair_only_the_header_token() {
     let expected =
         std::fs::read_to_string(root.join("W109_4.cha")).expect("canonical media control");
     for stem in ["Schlüssel", "Schlu\u{0308}ssel"] {
-        let name = TranscriptName::Named(FileStem::from_stem(stem));
+        let name = TranscriptName::Named(FileStem::from_stem(stem).expect("a stem"));
         let errors = ErrorCollector::new();
         let (file, parsed) = parser.parse_chat_file_with_source(&input, &errors);
         let parsed = parsed.expect("source-bound parse");

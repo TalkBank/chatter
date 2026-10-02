@@ -55,9 +55,13 @@ fn seed_version(cache_dir: &std::path::Path, file: &std::path::Path, version: &R
         talkbank_cache::CacheIdentity::new(version.clone(), talkbank_model::ParserKind::TreeSitter),
     )
     .expect("open cache to seed a version");
-    cache
-        .set_validation(file, false, true)
-        .expect("write a validation row");
+    crate::shim::set_validation(
+        &cache,
+        file,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_cache::CacheOutcome::Valid,
+    )
+    .expect("write a validation row");
 }
 
 #[test]
@@ -88,7 +92,7 @@ fn opening_a_cache_drops_rows_no_reader_can_ever_bind() {
     .expect("open cache under the current version");
 
     match cache.version_prune() {
-        VersionPruneOutcome::NothingUnreachable => {
+        VersionPruneOutcome::NothingUnreachable | VersionPruneOutcome::FreshDatabase => {
             panic!("a stranded version was on disk and should have been pruned")
         }
         VersionPruneOutcome::Pruned(report) => {
@@ -100,6 +104,9 @@ fn opening_a_cache_drops_rows_no_reader_can_ever_bind() {
             assert_eq!(report.rows_deleted(), 1, "one row was seeded per version");
             match report.reclaimed() {
                 SpaceReclaimed::Vacuumed { .. } => {}
+                SpaceReclaimed::VacuumedSizeUnknown => {
+                    panic!("an ordinary cache file should be measurable around a VACUUM")
+                }
                 SpaceReclaimed::NotReclaimed(reason) => {
                     panic!("a file-backed cache with no competing process should vacuum: {reason}")
                 }
@@ -111,19 +118,23 @@ fn opening_a_cache_drops_rows_no_reader_can_ever_bind() {
     // one grace generation is still warm, and everything older is gone for
     // good rather than merely invisible.
     let reachable = |version: &RulesVersion| {
-        CachePool::with_directory(
+        let cache = CachePool::with_directory(
             cache_dir.path().to_path_buf(),
             talkbank_cache::CacheIdentity::new(
                 version.clone(),
                 talkbank_model::ParserKind::TreeSitter,
             ),
         )
-        .expect("reopen cache")
-        .get_validation(&file_path, false)
+        .expect("reopen cache");
+        crate::shim::get_validation(
+            &cache,
+            &file_path,
+            talkbank_model::validation::AlignmentValidation::Structure,
+        )
     };
     assert_eq!(
         reachable(&previous),
-        Some(true),
+        Some(talkbank_cache::CacheOutcome::Valid),
         "one generation of grace is kept so a downgrade is not cold"
     );
     assert_eq!(
@@ -158,14 +169,19 @@ fn opening_a_cache_that_holds_only_reachable_rows_deletes_nothing() {
     .expect("reopen under the current version");
     match cache.version_prune() {
         VersionPruneOutcome::NothingUnreachable => {}
+        VersionPruneOutcome::FreshDatabase => panic!("a directory cache ran its prune"),
         VersionPruneOutcome::Pruned(report) => panic!(
             "nothing was unreachable, yet {} row(s) were deleted",
             report.rows_deleted()
         ),
     }
     assert_eq!(
-        cache.get_validation(&file_path, false),
-        Some(true),
+        crate::shim::get_validation(
+            &cache,
+            &file_path,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_cache::CacheOutcome::Valid),
         "the current version's own rows must survive its prune"
     );
 }
@@ -174,7 +190,7 @@ fn opening_a_cache_that_holds_only_reachable_rows_deletes_nothing() {
 /// Administrative opens must not introduce a third, fabricated generation.
 #[test]
 fn parser_rotation_and_maintenance_preserve_both_live_rule_generations() {
-    use talkbank_cache::{CacheIdentity, MaintenanceCache};
+    use talkbank_cache::{CacheIdentity, CacheOnDisk};
     use talkbank_model::ParserKind;
 
     let dir = tempfile::tempdir().unwrap();
@@ -191,13 +207,18 @@ fn parser_rotation_and_maintenance_preserve_both_live_rule_generations() {
                 CacheIdentity::new(version.clone(), parser),
             )
             .unwrap();
-            let valid = parser == ParserKind::TreeSitter;
-            cache.set_validation(&file, false, valid).unwrap();
-            cache.set_roundtrip(&file, false, !valid).unwrap();
+            let (verdict, roundtrip) = verdicts_for(parser);
+            crate::shim::set_validation(&cache, &file, Structure, verdict).unwrap();
+            crate::shim::set_roundtrip(&cache, &file, Structure, roundtrip).unwrap();
         }
     }
     for _ in 0..3 {
-        let maintenance = MaintenanceCache::open_directory(cache_dir.clone()).unwrap();
+        let CacheOnDisk::Current(inspection) =
+            CacheOnDisk::inspect_directory(cache_dir.clone()).unwrap()
+        else {
+            panic!("the cache the loop wrote is current");
+        };
+        let maintenance = inspection.into_maintenance().unwrap();
         assert_eq!(maintenance.stats().unwrap().total_entries, 8);
         drop(maintenance);
         for version in &versions {
@@ -207,9 +228,15 @@ fn parser_rotation_and_maintenance_preserve_both_live_rule_generations() {
                     CacheIdentity::new(version.clone(), parser),
                 )
                 .unwrap();
-                let valid = parser == ParserKind::TreeSitter;
-                assert_eq!(cache.get_validation(&file, false), Some(valid));
-                assert_eq!(cache.get_roundtrip(&file, false), Some(!valid));
+                let (verdict, roundtrip) = verdicts_for(parser);
+                assert_eq!(
+                    crate::shim::get_validation(&cache, &file, Structure),
+                    Some(verdict)
+                );
+                assert_eq!(
+                    crate::shim::get_roundtrip(&cache, &file, Structure),
+                    Some(roundtrip)
+                );
                 assert!(matches!(
                     cache.version_prune(),
                     VersionPruneOutcome::NothingUnreachable
@@ -217,4 +244,35 @@ fn parser_rotation_and_maintenance_preserve_both_live_rule_generations() {
             }
         }
     }
+}
+
+/// Contradictory verdicts per parser, so a row served to the wrong parser
+/// shows: tree-sitter's validation passed and its roundtrip failed, re2c's
+/// the other way round.
+fn verdicts_for(
+    parser: talkbank_model::ParserKind,
+) -> (
+    talkbank_cache::CacheOutcome,
+    talkbank_cache::RoundtripOutcome,
+) {
+    use talkbank_cache::CacheOutcome::{Invalid, Valid};
+    use talkbank_cache::RoundtripOutcome::{Failed, Passed};
+    match parser {
+        talkbank_model::ParserKind::TreeSitter => (Valid, Failed),
+        talkbank_model::ParserKind::Re2c => (Invalid, Passed),
+    }
+}
+
+use talkbank_model::validation::AlignmentValidation::Structure;
+
+/// An in-memory cache is created empty by its open, so it reports that no
+/// prune ran rather than a prune that found nothing.
+#[test]
+fn an_in_memory_cache_reports_that_no_prune_ran() {
+    let cache = talkbank_cache::CachePool::in_memory(talkbank_cache::CacheIdentity::new(
+        talkbank_cache::RulesVersion::for_testing("in-memory"),
+        talkbank_model::ParserKind::TreeSitter,
+    ))
+    .expect("in-memory cache opens");
+    assert_eq!(cache.version_prune(), &VersionPruneOutcome::FreshDatabase);
 }

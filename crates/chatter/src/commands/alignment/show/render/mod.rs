@@ -9,6 +9,7 @@
 //!
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use super::AlignmentView;
 use std::path::Path;
 
 use talkbank_model::{AlignmentSet, ChatFile};
@@ -29,7 +30,7 @@ pub(super) fn render_alignments(
     input: &Path,
     chat_file: &ChatFile,
     tier_filter: Option<AlignmentTier>,
-    compact: bool,
+    view: AlignmentView,
     had_validation_errors: bool,
 ) {
     header::render_intro(input);
@@ -47,7 +48,7 @@ pub(super) fn render_alignments(
         }
 
         let main_content = utterance.main.content.to_content_string();
-        if !compact {
+        if let AlignmentView::Full = view {
             header::render_utterance_header(
                 utt_idx,
                 utterance.main.speaker.as_str(),
@@ -58,38 +59,35 @@ pub(super) fn render_alignments(
         let mut shown_alignments = 0;
 
         if should_render_tier(tier_filter, AlignmentTier::Mor) {
-            let (shown, errors) =
-                tiers::render_main_to_mor(utterance, utt_idx, alignments, compact);
+            let (shown, errors) = tiers::render_main_to_mor(utterance, utt_idx, alignments, view);
             shown_alignments += shown;
             totals.total_alignments += shown;
             totals.total_errors += errors;
         }
 
         if should_render_tier(tier_filter, AlignmentTier::Gra) {
-            let (shown, errors) = tiers::render_mor_to_gra(utterance, utt_idx, alignments, compact);
+            let (shown, errors) = tiers::render_mor_to_gra(utterance, utt_idx, alignments, view);
             shown_alignments += shown;
             totals.total_alignments += shown;
             totals.total_errors += errors;
         }
 
         if should_render_tier(tier_filter, AlignmentTier::Pho) {
-            let (shown, errors) =
-                tiers::render_main_to_pho(utterance, utt_idx, alignments, compact);
+            let (shown, errors) = tiers::render_main_to_pho(utterance, utt_idx, alignments, view);
             shown_alignments += shown;
             totals.total_alignments += shown;
             totals.total_errors += errors;
         }
 
         if should_render_tier(tier_filter, AlignmentTier::Sin) {
-            let (shown, errors) =
-                tiers::render_main_to_sin(utterance, utt_idx, alignments, compact);
+            let (shown, errors) = tiers::render_main_to_sin(utterance, utt_idx, alignments, view);
             shown_alignments += shown;
             totals.total_alignments += shown;
             totals.total_errors += errors;
         }
 
-        if shown_alignments == 0 && !compact {
-            println!("  (No alignments for selected tier type)");
+        if shown_alignments == 0 && matches!(view, AlignmentView::Full) {
+            outln!("  (No alignments for selected tier type)");
         }
     }
 

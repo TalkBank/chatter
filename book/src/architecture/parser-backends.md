@@ -1,7 +1,7 @@
 # Parser Backends
 
 **Status:** Current
-**Last updated:** 2026-09-28 20:59 EDT
+**Last updated:** {{git-dates:page}}
 
 TalkBank has two CHAT parser implementations. Both implement the `ChatParser`
 trait and produce the same `ChatFile` model type, not necessarily identical
@@ -153,11 +153,11 @@ Used for parser parity testing and performance benchmarking.
 
 ### Source ownership and participant recovery
 
-As of 0.19.0, parsed values borrow the caller's source; token storage and
-temporary recovery buffers are released after parsing. The former
-`Box::leak` strategy is gone.
+Parsed values borrow the caller's source; token storage and temporary
+recovery buffers are released after parsing. The backend leaks no memory
+(no `Box::leak`).
 
-File parsing now receives a `LexedSource` that privately owns tokens and their
+File parsing receives a `LexedSource` that privately owns tokens and their
 lexer locations alongside the borrowed source. Its only constructor lexes
 that source, preventing callers from pairing unrelated token and location
 arrays. Participant lists consume those located tokens through one parser
@@ -180,11 +180,11 @@ same diagnostics with the caller's offset. The internal AST snapshot records
 this distinction; it does not define a serialized CHAT format change.
 
 The re2c newline token represents one LF, CRLF or lone CR, matching the
-canonical grammar. It no longer fuses consecutive breaks and loses blank-line
-structure. Source-aware file dispatch reports an unconsumed blank newline at
+canonical grammar. It does not fuse consecutive breaks, so blank-line
+structure is kept. Source-aware file dispatch reports an unconsumed blank newline at
 its lexer span. Generated error fixtures preserve their exact line-ending
 bytes in Git; published Markdown normalizes display line breaks and labels
-that presentation change.
+that presentation.
 
 ### Annotation categories survive conversion
 
@@ -259,9 +259,8 @@ rules consume spaces after the required tab, so those spaces never become
 header or tier content. The same carrier covers ordinary headers, embedded
 speaker headers, dependent prefixes, and main-tier separators. AST header lines,
 main tiers and dependent entries retain the admitted `TierSeparator` through
-model lowering. The former main-tier-only whitespace scan and its separate CA
-probe are removed: both backends now use the shared file validator and its CA
-policy. Separator spans are omitted from serialized AST/model metadata, and
+model lowering. Both backends use the shared file validator and its CA
+policy; there is no main-tier-only whitespace scan or separate CA probe. Separator spans are omitted from serialized AST/model metadata, and
 CHAT serialization writes the canonical tab in both CA and non-CA files.
 
 The source-spec boundary test covers all E758 examples, padded CA headers and
@@ -274,32 +273,29 @@ records that API change.
 
 The grammar admits a nonempty run of colons with no 255-character limit.
 `WordLengthening::count` and the re2c AST carry `NonZeroUsize`, measured at the
-parser boundary. Neither backend narrows source length to `u8`; the old paths
-could overflow or silently wrap. A zero count cannot be constructed or decoded
+parser boundary. Neither backend narrows source length to `u8`, so a run of
+any length neither overflows nor silently wraps. A zero count cannot be constructed or decoded
 from JSON, and both the default constructor and omitted JSON count mean one
-colon. Serialization no longer repairs zero counts with `max(1)`.
+colon. Serialization does not repair zero counts with `max(1)`.
 
-This changes the Rust count field and `with_count` argument from `u8` to
-`NonZeroUsize`. JSON retains the integer `count` field, omitted for one colon,
+The Rust count field and `with_count` argument are `NonZeroUsize`. JSON retains the integer `count` field, omitted for one colon,
 but accepts longer runs and rejects zero. The schema describes that boundary.
 The public-parser regression checks both source roundtrip and semantic equality
-at the old integer boundary; equality alone previously allowed both backends
-to lose the same information.
+at the former `u8` boundary (255 colons); equality alone would allow both
+backends to lose the same information.
 
 ### Remaining parity limits
 
 The [dated re2c measurements](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-parser-re2c/docs/parity-report.md)
-include known silent invalid cases; do not treat older zero-silence results as
-current guarantees. A clean `--parser re2c` run is not a general validity
+include known silent invalid cases; do not treat zero-silence results as
+guarantees. A clean `--parser re2c` run is not a general validity
 guarantee. Backend disagreements
 remain in diagnostic specificity, extra or missing diagnostics, and source
-locations. The current per-case authority is
+locations. The per-case authority is
 `tests/integration/error_parity/baseline.rs`; run its gate for derived counts.
-Postcode, glued-replacement and separator silence described in older versions
-of this page are fixed and are no longer examples of open gaps.
 
 Both backends feed the shared model validator, but source information discarded
-before lowering cannot be checked there. Rejected morphology now preserves taint;
+before lowering cannot be checked there. Rejected morphology preserves taint;
 other recovery paths and remaining dummy diagnostic locations still need review.
 
 ## CLI Usage
@@ -324,9 +320,9 @@ The reference-corpus equivalence and roundtrip gates compare actual parsed
 models and serialized output. The error-spec gate
 `backends_diverge_only_where_recorded` separately compares diagnostic code
 sets against a named, bidirectional baseline: a newly divergent case fails,
-and a resolved case must be removed from that baseline. This change removes
-E550 after file and fragment participant recovery agree. E747 is also closed:
-both lexers preserve single logical line breaks, and both parsers locate a
+and a resolved case must be removed from that baseline. E550 is not in the
+baseline because file and fragment participant recovery agree, and neither is
+E747: both lexers preserve single logical line breaks, and both parsers locate a
 blank line under LF, CRLF and lone-CR endings while retaining its surrounding
 utterances.
 
@@ -338,18 +334,10 @@ from each backend's conformance to the declared spec. Run its report with:
 cargo test -p talkbank-parser-re2c --test integration backends_diverge_only_where_recorded --locked -- --nocapture
 ```
 
-Older wild-corpus percentages and the 140-case diagnostic table are omitted
-because they do not describe the current spec suite. No new wild-corpus or
-performance measurement is claimed here; the timings below are historical.
+No wild-corpus percentage or performance figure is recorded here; measure
+the current build rather than relying on a stored number.
 
 ### Performance
-
-| Benchmark | TreeSitter | Re2c | Speedup |
-|-----------|-----------|------|---------|
-| Small file (13 lines) | 44 µs | 9.6 µs | 4.6x |
-| Medium file (dependent tiers) | 69 µs | 9.4 µs | 7.3x |
-| Large file (complex) | 7,734 µs | 970 µs | 8.0x |
-| Batch (35 files) | 21.7 ms | 3.0 ms | 7.2x |
 
 Run benchmarks: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`
 
@@ -359,7 +347,7 @@ Run benchmarks: `cargo bench -p talkbank-parser-re2c --bench parse_comparison`
 |----------|-------------------|-----|
 | LSP / editor integration | tree-sitter | Incremental reparsing |
 | Batch validation (>100 files) | tree-sitter | re2c is faster but is not a validity authority |
-| CI validation | tree-sitter | "both correct" was the claim; it is not currently true |
+| CI validation | tree-sitter | The two backends are not interchangeable validity authorities |
 | Error diagnostics (user-facing) | tree-sitter | More specific E3xx codes |
 | Parser comparison testing | Both | Disagreements require adjudication against the specs; neither backend is an oracle |
 | Profiling / benchmarking | re2c | DFA lexer gives a performance floor |
@@ -372,7 +360,7 @@ post-hoc promotion logic:
 - `TierContent::extract_terminal_bullet()`: trailing InternalBullet → utterance bullet
 - `parse_bullet_node_timestamps()`: structured bullet CST → (start_ms, end_ms)
 
-CA intonation arrows are no longer promoted to terminators at the
+CA intonation arrows are not promoted to terminators at the
 parser/model boundary; both parsers leave them as `Separator` items.
 See [CA Terminator Resolution](parser-and-grammar/ca-terminator-resolution.md).
 

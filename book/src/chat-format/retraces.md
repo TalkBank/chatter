@@ -1,7 +1,7 @@
 # Retraces and Repetitions
 
 **Status:** Current
-**Last updated:** 2026-09-09 08:49 EDT
+**Last updated:** {{git-dates:page}}
 
 Retraces mark content that the speaker said but then corrected, repeated,
 or abandoned. They are one of the most consequential constructs in CHAT
@@ -112,28 +112,29 @@ and live inside `content`; annotations written AFTER it annotate the retrace and
 live on an `AnnotatedRetrace(Box<Annotated<Retrace>>)` wrapper, exactly parallel
 to `Group` / `AnnotatedGroup`.
 
-A single flat `annotations` field used to hold both, which made the two
-indistinguishable. `dog [* p:w] [/]` was silently written back as
-`dog [/] [* p:w]`, and a second adjacent marker overwrote the first, so
-`на [//] [/] на` became `на [/] на`. Neither was visible to `validate`, to
-`--roundtrip` (which tests idempotence of `serialize(parse(x))`, not fidelity to
-the input) or to `SemanticEq` (the two orderings WERE the same model).
+A single flat `annotations` field holding both would make the two
+indistinguishable: `dog [* p:w] [/]` would be silently written back as
+`dog [/] [* p:w]`, and a second adjacent marker would overwrite the first, so
+`на [//] [/] на` would become `на [/] на`. Neither would be visible to
+`validate`, to `--roundtrip` (which tests idempotence of `serialize(parse(x))`,
+not fidelity to the input) or to `SemanticEq` (the two orderings would be the
+same model).
 
 ### Why First-Class?
 
-Before the retrace refactor, retraces were represented as annotations
-on words or groups. This meant every `match` on content had to inspect
-annotation lists to determine whether a word was retraced. This led to
-a class of bugs where retraced content was accidentally included in
-alignment counting, word extraction, or retokenization.
+Representing retraces as annotations on words or groups would mean every
+`match` on content had to inspect annotation lists to determine whether a word
+was retraced, a class of bugs where retraced content is accidentally included
+in alignment counting, word extraction, or retokenization.
 
 Making `Retrace` a top-level `UtteranceContent` variant means:
 
 1. **The compiler enforces handling, WHERE the match is exhaustive.** Every
    `match` on `UtteranceContent` must have a `Retrace` arm. The caveat is real:
-   when `AnnotatedRetrace` was added, five sites matching a retrace behind a
-   `_ =>` arm compiled unchanged and silently answered wrong, one of them the
-   gate in front of all retrace validation. A first-class variant guarantees
+   a site matching a retrace behind a `_ =>` arm compiles unchanged when a
+   variant such as `AnnotatedRetrace` is added and silently answers wrong (at
+   five sites it did, one of them the gate in front of all retrace
+   validation). A first-class variant guarantees
    exhaustiveness only where the matches are already exhaustive, which is why
    this codebase bans catch-alls over content enums.
 2. **Domain-aware gating is centralized.** The content walker checks the
@@ -260,8 +261,8 @@ UtteranceContent::Retrace(_) | UtteranceContent::AnnotatedRetrace(_) | /* other 
 ```
 
 `%wor` generation and overlap counting still use dedicated recursive helpers,
-but now for `%wor`-specific sequencing details like replacement handling rather
-than for retrace-sensitive membership.
+but only for `%wor`-specific sequencing details like replacement handling, not
+for retrace-sensitive membership.
 
 ## Validation
 
@@ -299,13 +300,12 @@ material counts as words on purpose: `xxx`, `yyy` and `www` lower as words, so
 retracing speech nobody could make out stays valid.
 
 **Which variants are containers is owned in one place for these rules**,
-`model::content::structure::ContentStructure`. It is written that way because
-two hand-written copies of that knowledge disagreed about `PhoGroup` and
-`SinGroup`, which silently stopped E377 firing inside `‹...›` with no test able
+`model::content::structure::ContentStructure`. It has one owner because
+two hand-written copies of that knowledge can disagree, as about `PhoGroup` and
+`SinGroup`, which silently stops E377 firing inside `‹...›` with no test able
 to see it.
 
-Be precise about the scope, because an earlier draft of this paragraph was not:
-the retrace validators classify through it, and the alignment walkers do not.
+Be precise about the scope: the retrace validators classify through it, and the alignment walkers do not.
 They need to know WHICH container they are in, so a tier domain can skip a
 phonological group but not a quotation, and `Container` deliberately does not
 carry that. Settling those payloads is the prerequisite for migrating them.

@@ -1,7 +1,7 @@
 # Symbol Registry Architecture
 
 **Status:** Current
-**Last modified:** 2026-08-25 14:14 EDT
+**Last modified:** {{git-dates:page}}
 
 ## Purpose
 
@@ -29,16 +29,15 @@ the same category error in opposite directions.
 
 The `paired_stretch_symbols` and `word_attached_symbols` arrays the grammar and
 the model consume are **derived** from `parse_role` and appear nowhere in the
-file, and they are NAMED for the role they are derived from. Until 2026-08-25
-they were `ca_delimiter_symbols` and `ca_element_symbols`: a name asserting
-provenance on a value holding a parse role, which is the collapse the next
-section warns about, sitting in the array names themselves.
+file, and they are NAMED for the role they are derived from, not for a notation family:
+a name asserting provenance on a value holding a parse role would be the
+collapse the next section warns about.
 
 ## parse_role is not provenance
 
 `parse_role` says what the GRAMMAR does with a symbol. `notation_family` says
-where it comes from. They are independent, and collapsing them is what once
-filed two disfluency marks (`≠` blocking, `↫` segment repetition) as
+where it comes from. They are independent, and collapsing them would file two
+disfluency marks (`≠` blocking, `↫` segment repetition) as
 Conversation Analysis notation; CLAN names them `NOTCA_CROSSED_EQUAL` and
 `NOTCA_LEFT_ARROW_CIRCLE`. Code that needs to know "is this CA" calls
 `notation_family()`; never infer it from the name of a `ca_*` array.
@@ -52,7 +51,7 @@ Conversation Analysis notation; CLAN names them `NOTCA_CROSSED_EQUAL` and
 
 ## What is enforced, and where
 
-Most structural checking now happens in `spec/symbols/registry.js`, which every
+Most structural checking happens in `spec/symbols/registry.js`, which every
 generator reads the registry through, so a malformed registry cannot reach a
 generator even if nobody runs the validator: required fields present, ids
 snake_case and unique, codepoints well-formed and unique, `parse_role` and
@@ -60,21 +59,20 @@ snake_case and unique, codepoints well-formed and unique, `parse_role` and
 symbol. `validate_symbol_registry.js` adds the character-class checks (single
 Unicode scalar values, no duplicates) and prints the report.
 
-One check was DELETED rather than moved. The two derived arrays used to be
-hand-written and had to be proved disjoint; they are now derived from a single `parse_role` field, so a symbol in
-both is unrepresentable and there is nothing left to assert.
+There is no disjointness check. The two derived arrays come from a single
+`parse_role` field, so a symbol in both is unrepresentable and there is
+nothing to assert.
 
 Every example is additionally PARSED AND VALIDATED by
 `crates/talkbank-parser/tests/integration/symbol_registry_examples.rs`, so a
-documented usage that stops being valid CHAT fails the build. That gate earned
-its place immediately: the uniform example template is valid for 24 of the 25
-symbols and invalid for `↫`, which needs a stem outside its brackets.
+documented usage that stops being valid CHAT fails the build. The uniform
+example template is valid for 24 of the 25 symbols and invalid for `↫`, which
+needs a stem outside its brackets.
 
-**Lexicographic ordering is NOT required**, and no category is sorted. This
-page previously said it was, which was wrong in both directions: nothing
+**Lexicographic ordering is NOT required**, and no category is sorted. Nothing
 enforces it, and the validator says in its own comment that semantic grouping
-is more useful than forced ordering. A contributor who "fixed" the ordering
-would be making a large diff that buys nothing.
+is more useful than forced ordering. Reordering would make a large diff that
+buys nothing.
 
 ## Generated outputs
 
@@ -104,19 +102,13 @@ It runs the REAL generators rather than re-describing their output, so there is
 no second description to drift. They are JavaScript, so the gate shells out to
 `node`.
 
-**The generator list is DISCOVERED, not written down** (2026-08-20). It named
-two scripts by hand, so the two added that day would have been ungated by
-omission: a gate that lists what it covers stops covering things silently. It
-now globs `spec/symbols/generate_*.js`, and refuses to report at all if the glob
-finds fewer than two.
+**The generator list is DISCOVERED, not written down.** A gate that lists what
+it covers stops covering things silently, so the gate globs
+`spec/symbols/generate_*.js` and refuses to report at all if the glob finds
+fewer than two.
 
-**Before 2026-08-12 there was no gate at all.** Nothing compared any of the
-three outputs against the registry, and neither `just symbols-gen` nor the
-validator ran in CI, so a hand-edit to a generated symbol set was undetectable.
-This page claimed drift was "caught by the checked-in generated artifacts plus
-the normal local verification sweep and CI checks"; none of that was true. The
-gate found real drift on its first run: two Rust outputs were rustfmt-wrapped in
-the tree and unwrapped by the generator.
+A hand-edit to a generated symbol set is therefore detected by the gate, which
+runs in CI.
 
 ## Change workflow
 

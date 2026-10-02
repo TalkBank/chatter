@@ -60,8 +60,8 @@ pub fn run_update() {
     // `run_sync` returns `Some(result)` when an update was installed, `None` when
     // already on the latest release.
     match updater.run_sync() {
-        Ok(Some(_result)) => println!("chatter has been updated to the latest release."),
-        Ok(None) => println!("chatter is already up to date."),
+        Ok(Some(_result)) => outln!("chatter has been updated to the latest release."),
+        Ok(None) => outln!("chatter is already up to date."),
         Err(err) => {
             eprintln!("chatter update: self-update failed: {err}");
             eprintln!("You can reinstall the latest release from:");

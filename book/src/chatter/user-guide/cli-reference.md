@@ -1,7 +1,7 @@
 # CLI Reference
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 The `chatter` CLI is the primary command-line surface for the TalkBank CHAT toolchain.
 
@@ -72,7 +72,7 @@ chatter validate corpus/                          # directory (recursive, parall
 chatter validate file.cha corpus/ other.cha       # mix of files and directories
 chatter validate corpus/ -f json                  # structured JSON output
 chatter validate corpus/ --force                  # ignore cache, revalidate everything
-chatter validate corpus/ --force --audit out.jsonl # bulk audit to JSONL file
+chatter validate corpus/ --audit out.jsonl         # bulk audit to JSONL file
 chatter validate corpus/ --suppress xphon         # suppress named error group
 chatter validate corpus/ --suppress E726,E727     # suppress specific error codes
 chatter validate corpus/ -j 8                     # use 8 parallel workers
@@ -84,18 +84,27 @@ Options:
 | Flag | Description |
 |------|-------------|
 | `-f, --format text\|json` | Output format (default: text) |
-| `--list-checks` | Print every validation check with Active/Planned status, then exit (no `<PATH>` required) |
+| `--list-checks` | Print every validation check with Active/Planned status, then exit. It reads no file, so a `<PATH>` beside it is a usage error |
 | `--skip-alignment` | Skip dependent-tier alignment checks |
 | `--force` | Ignore cache, revalidate all files |
-| `-j, --jobs N` | Parallel workers for directory mode (default: CPU count) |
-| `--quiet` | Only emit errors, suppress success messages |
-| `--max-errors N` | Stop after N errors across all files |
+| `-j, --jobs N` | Parallel workers for directory mode (default: CPU count). `N` must be at least 1; `--jobs 0` is a usage error (exit 2) |
+| `--quiet` | Only emit errors, suppress success messages (text output only: with `--format json` it is a usage error) |
+| `--max-errors N` | Stop once N errors (never warnings) have been found across all files. Files already being validated finish; if any were left, the run says `Stopped after reaching --max-errors N; M file(s) were not validated.` (stderr in text mode, a `stop` record in JSON mode) and exits 1. `N` must be at least 1; `--max-errors 0` is a usage error (exit 2) |
 | `--roundtrip` | Test serialization idempotency (developer tool) |
 | `--parser tree-sitter\|re2c` | Parser backend (default: tree-sitter; re2c is opt-in for faster batch validation). **Diagnostic line and column numbers are not reliable under `re2c`**, see the note below |
-| `--strict-linkers` | Enable strict cross-utterance linker pairing checks (E351-E355); off by default |
+| `--strict-linkers` | Enable the opt-in cross-utterance checks of quotations (the `+"/.` and `+".` terminators and the `+"` linker) and of the completion linkers `+,` and `++`; off by default. `--list-checks` marks each code this turns on as `[Opt-in]` |
 | `--suppress xphon` | Silence the Phon `%x` dependent-tier checks (E725-E728, E735-E746), which run by default |
-| `--audit FILE` | Stream errors to JSONL file (bulk audit mode) |
-| `--suppress CODES` | Suppress error codes or groups (comma-separated) |
+| `--audit FILE` | Stream errors to JSONL file (bulk audit mode). Its own output: a usage error with `--format` or `--quiet`. A file that cannot be written whole fails the run. An audit only reads an existing cache (no create, migrate, clear, prune or write), so `--force` with it is a usage error too |
+| `--suppress CODES` | Suppress error codes or groups (comma-separated). A value that names no known code or group is a usage error (exit 2) |
+
+Every path argument is expanded the same way: a file is validated as given,
+and a directory contributes the `.cha` files under it (links followed, each
+directory once). If an argument or any entry under a directory cannot be
+read, `validate` reports each one and exits 1 before validating anything.
+If the validation cache fails during a run (for example, a locked
+database), the files are validated without it and the run says so
+(`Warning: N cache read(s) or write(s) failed` on stderr in text mode,
+`cache_errors` in the JSON summary).
 
 > **`--parser re2c` reports unreliable diagnostic positions.**
 >
@@ -123,8 +132,8 @@ Options:
 **Suppress groups:** `xphon` expands to the whole Phon `%x`
 dependent-tier validation surface (%xmodsyl/%xphosyl/%xphoaln/%xphoint,
 codes E725-E728 and E735-E746). These checks **run by default**; pass
-`--suppress xphon` to silence the group. (The old `--check-xphon` flag
-is a deprecated no-op kept only so existing scripts do not break.) The
+`--suppress xphon` to silence the group. (`--check-xphon` is a deprecated
+no-op, accepted so existing scripts do not break.) The
 `--suppress` flag can mix groups and codes: `--suppress xphon,E316`.
 
 **Suppression does not cost you the cache.** It changes what is printed, not
@@ -149,8 +158,9 @@ Flags:
 - `-o, --output <PATH>`: write to a file instead of stdout.
 - `--validate`: validate (including alignment by default) before
   writing the normalized output.
-- `--skip-alignment`: when paired with `--validate`, skip the
-  dependent-tier alignment checks (still validates the rest).
+- `--skip-alignment`: with `--validate`, skip the dependent-tier alignment
+  checks (the rest is still validated). It requires `--validate`; alone it
+  is a usage error (exit 2).
 
 `normalize` writes to stdout unless you pass `-o/--output`. There is no `--in-place` flag.
 
@@ -177,12 +187,35 @@ chatter schema --url
 
 **Single-file mode:** `to-json` validates by default. Use `--skip-validation`,
 `--skip-alignment`, or `--skip-schema-validation` to bypass checks.
+`--skip-validation` already skips alignment, so passing it with
+`--skip-alignment` is a usage error (exit 2).
+
+**Failures** are reported the same way in both modes: a line
+`ERROR: <path>: <failure>`, then the rendered diagnostics of a parse failure,
+a validation failure, an incomplete validation or an internal failure, and
+the command exits 1.
 
 **Directory mode:** Walks recursively, converting each `.cha` to `.json` under `--output-dir`
 with the same relative path. **Incremental by default**: skips files whose JSON is
 already newer than the source. Use `--force` to rebuild all. Use `--prune` to remove
-`.json` files with no matching `.cha` (handles renames/deletions). Use `--jobs N` for
-parallel conversion (defaults to number of CPUs).
+`.json` files with no matching `.cha` (handles renames/deletions). `--prune` never
+follows a symbolic link in the output tree: a linked file or directory is left
+alone, so nothing outside `--output-dir` can be deleted. Use `--jobs N` for
+parallel conversion (defaults to number of CPUs; `N` must be at least 1, and
+`--jobs 0` is a usage error). If any directory or entry under the input cannot
+be read, `to-json` reports each one and exits 1 before converting anything, as
+`fix` and the `debug` commands do with their path arguments. (`validate`
+instead validates the rest and reports each unreadable path as a read error
+in its results, which fails the run.) An input directory with no `.cha` file
+(an empty tree, or a mount point with nothing mounted) is refused the same
+way, `ERROR: no .cha files found in DIR`, exit 1, before anything is
+converted or pruned: `--prune` over it would delete every `.json` under
+`--output-dir`.
+
+**Each mode takes only its own options.** `--output-dir`, `--force`,
+`--prune` and `--jobs` apply only to a directory input, and `-o/--output`
+only to a file; giving one for the other kind of input is a usage error
+(exit 2), as is a directory input without `--output-dir`.
 
 ## Editing and Inspection Commands
 
@@ -209,7 +242,9 @@ chatter watch corpus/
 chatter watch corpus/ --skip-alignment --clear
 ```
 
-Flags: `--skip-alignment` (faster reruns); `-c/--clear` (clear the
+Each changed file is validated as `chatter validate --quiet` would validate
+it, with the default rules and the shared cache, and a file that passes says
+so. Flags: `--skip-alignment` (faster reruns); `-c/--clear` (clear the
 terminal between runs).
 
 ### `fix`
@@ -223,7 +258,6 @@ is never itself rewritten) before being spliced in.
 ```bash
 chatter fix file.cha                      # report only, writes nothing
 chatter fix corpus/ --apply               # write the mechanical fixes
-chatter fix corpus/ --apply --dry-run     # preview without writing
 chatter fix file.cha --apply --code E259  # opt a semantic fix into writing
 ```
 
@@ -238,10 +272,19 @@ it rather than trusting the caller:
   one): never written by this command, regardless of `--code`; only
   reported.
 
+A bare `fix` reports what it would do and writes nothing; `--apply` writes.
+A bare `fix` is the dry run, so there is no `--dry-run` flag: passing one is
+an unknown-argument usage error (exit 2). A file that cannot be read, or a
+fix that `--apply` cannot write, is reported on stderr, is not counted as
+applied, and makes `fix` exit 1.
+
 Flags: `--apply` (write; without it, `fix` only reports what it would do);
-`--dry-run` (preview, requires `--apply`); `--code <CODE>` (repeatable;
+`--code <CODE>` (repeatable;
 narrows the diagnostics considered to exactly the named codes, and is how
-a semantic-tier code opts into being written); `--skip-alignment`.
+a semantic-tier code opts into being written; an unknown code is a usage
+error, exit 2); `--skip-alignment`. An argument list that names no
+transcript, or a path that cannot be read, stops `fix` and the `debug`
+tools before anything is processed (exit 1).
 
 **Missing facts are not guessed.** E308, E504 and E507 do not offer participant,
 role or language placeholders, even with `--code`. Supply the actual facts;
@@ -295,12 +338,27 @@ Flags:
 
 ```bash
 chatter cache stats
-chatter cache stats --json
+chatter cache stats --format json
 chatter cache clear --prefix /path/to/corpus
 chatter cache clear --all --dry-run
 ```
 
 The validation cache lives under the platform cache directory and stores per-file validation results. `validate --force` refreshes cache state for the specified path.
+
+`cache clear` needs exactly one of `--all` and `--prefix PATH` (otherwise it is
+a usage error, exit 2). `--prefix` selects the entries for that path and
+everything under it, by whole path components; a relative prefix is taken
+from the current directory, as the cache stores absolute paths.
+`--dry-run` says what the clear would do and writes nothing: how many entries
+it would clear, or, for a cache an older build left, that it would first
+migrate the database to this build's schema (a migration can remove
+duplicate entries, so the count is known only afterwards; the clear itself
+migrates, then clears). With no cache database, both say there is none,
+create nothing and exit 0. `cache stats` only reads, too: with no cache it
+says `No cache database at PATH` and exits 0, and it reports an older
+schema without migrating it.
+`validate --force` clears exactly the rows of the files it validates,
+however their paths were typed (`a.cha`, `./a.cha` or an absolute path).
 
 ### What the cache does and does not speed up
 
@@ -372,8 +430,9 @@ subcommands include:
     `fix-s` clears the shortcut to keep the original meaning intact.
   - The pre-validation rule that catches the unrewritten pattern is
     E255 (whole-utterance same-language `@s` run); `fix-s` is the
-    canonical repair. The companion warn-only E254 reports `@s:LANG`
-    codes missing from `@Languages`; `fix-s` appends them.
+    canonical repair. `fix-s` also appends to `@Languages` any `@s:LANG`
+    code the file uses but does not declare (no rule requires the
+    declaration: an explicit word-level `@s:CODE` is valid undeclared).
   - True no-op on already-correct files: a file is rewritten only when
     a `[- lang]` conversion or `@Languages` repair can be proved
     necessary.
@@ -434,27 +493,43 @@ yet complete. Work on copies and validate the output.
 Full guides: [Speaker ID](speaker-id.md), [Rediarize](rediarize.md), and
 [Review Tools](merge-workflow.md). The holistic mode of `speaker-id` can call
 an LLM provider when configured; deterministic modes need no network access.
-The former `merge`, `pipeline`, and `batch` commands have been
-[removed](merge.md); there is no drop-in CLI for fuzzy event matching.
+There are no `merge`, `pipeline` or `batch` commands ([why](merge.md)),
+and no drop-in CLI for fuzzy event matching.
 
 ## Exit Codes
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Success -- all files valid, or command completed without errors |
-| `1` | Failure -- validation errors found, parse errors, or command failed |
-| `2` | Usage error -- invalid arguments or missing required options (from clap) |
+| `0` | Success: all files valid, or the command completed without errors |
+| `1` | Failure: validation errors found, parse errors, or the command failed |
+| `2` | Usage error: invalid arguments or missing required options (from clap) |
 
-`chatter validate` exits with code 1 if **any** file has validation errors
-or parse errors. This makes it safe to use in scripts and CI pipelines:
+`chatter validate` exits 0 only when the run covered every file it was
+given and none was invalid, unreadable or a tool failure (warnings do not
+fail a run). It exits 1 for any such file, for a run that stopped or lost
+files, and for an input that named no transcript, on every surface: text,
+JSON, an audit file and the TUI alike (a TUI closed before its run ended
+exits 1). This makes it safe to use in scripts and CI pipelines:
 
 ```bash
 chatter validate corpus/ --quiet --tui-mode disable || echo "Validation failed"
 ```
 
-Use `--quiet` to suppress per-file success output while still relying on
-exit codes. Use `--format json` for machine-readable structured output
-(JSON objects go to stdout; exit code still reflects pass/fail).
+Use `--quiet` to print only problems while still relying on the exit code.
+Use `--format json` for machine-readable structured output (JSON objects go
+to stdout; the exit code is the same).
+
+A consumer that stops reading early (`chatter ... | head`) closes standard
+output; every command then stops and exits 1, whatever it was printing,
+since the output it promised is incomplete.
+
+The output flags are decided together, once, into one surface: plain text,
+quiet text, JSON, an audit file, or the interactive TUI. The TUI is chosen
+automatically only for plain text with stdout a terminal (`--tui-mode auto`,
+the default); `--format json`, `--quiet` and `--audit` never open it, and
+`--tui-mode force` beside any of them is a usage error (exit 2), as are
+`--audit` with `--format` or `--quiet`, and `--format json` with `--quiet`.
+`--max-errors` applies to every surface, the TUI included.
 
 ## Output Contracts
 

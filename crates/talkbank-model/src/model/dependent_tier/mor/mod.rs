@@ -25,5 +25,8 @@ mod tests;
 pub use analysis::{MorFeature, MorStem, PosCategory, clan_to_ud_upos};
 pub use chunk::{MorChunk, MorChunkKind};
 pub use item::Mor;
-pub use tier::{MorTier, MorTierType};
+pub use tier::{
+    AttachmentRelation, BlockChunk, CoordinatedMutationError, HostRedirects, ItemTarget, MorTier,
+    MorTierType, RootRelationUnderHost, SpanRoot, SplicedBlock, SplicedBlockError,
+};
 pub use word::{MorAnalysis, MorWord};

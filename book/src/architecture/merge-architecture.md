@@ -1,12 +1,12 @@
 # Merge Pipeline, Crate Architecture
 
-> Historical design: references below to the `chatter merge` CLI describe the
-> former command. `merge`, `pipeline`, and `batch` have been removed.
-> The structural library remains.
-> See the [removal notice](../chatter/user-guide/merge.md).
+> `chatter merge`, `chatter pipeline` and `chatter batch` are not CLI commands.
+> Where this page names them it describes the operation of the structural
+> library in `talkbank-transform`, which is current. See the
+> [removal notice](../chatter/user-guide/merge.md).
 
 **Status:** Draft
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** {{git-dates:page}}
 
 This page explains where the new merge-pipeline code lives in the
 `chatter` workspace, which crates gain modules, what
@@ -275,7 +275,7 @@ sequenceDiagram
     end
 ```
 
-The CLI layer is thin, but it is no longer a pass-through: clap parses
+The CLI layer is thin, but not a pass-through: clap parses
 arguments into the `Commands::Merge` variant, `run_merge` reads and parses
 both inputs, calls the transform layer's `merge_chat_files`, and translates
 the `Result<Merged, MergeError>` into stdout/stderr/exit-code output. All

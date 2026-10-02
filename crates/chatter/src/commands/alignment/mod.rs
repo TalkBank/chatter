@@ -14,4 +14,4 @@
 mod helpers;
 mod show;
 
-pub use show::show_alignment;
+pub use show::{AlignmentView, show_alignment};

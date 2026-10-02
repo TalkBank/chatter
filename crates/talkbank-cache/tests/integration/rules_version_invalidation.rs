@@ -79,14 +79,22 @@ fn validation_result_is_not_served_across_a_rules_version_change() {
             ),
         )
         .expect("open cache under old rules version");
-        cache
-            .set_validation(&file_path, false, true)
-            .expect("cache a valid result under old rules");
+        crate::shim::set_validation(
+            &cache,
+            &file_path,
+            talkbank_model::validation::AlignmentValidation::Structure,
+            talkbank_cache::CacheOutcome::Valid,
+        )
+        .expect("cache a valid result under old rules");
 
         // Sanity check: the same rules version reads its own entry back.
         assert_eq!(
-            cache.get_validation(&file_path, false),
-            Some(true),
+            crate::shim::get_validation(
+                &cache,
+                &file_path,
+                talkbank_model::validation::AlignmentValidation::Structure
+            ),
+            Some(talkbank_cache::CacheOutcome::Valid),
             "a result must be readable under the rules version that wrote it"
         );
     }
@@ -100,7 +108,11 @@ fn validation_result_is_not_served_across_a_rules_version_change() {
         .expect("open cache under new rules version");
 
         assert_eq!(
-            cache.get_validation(&file_path, false),
+            crate::shim::get_validation(
+                &cache,
+                &file_path,
+                talkbank_model::validation::AlignmentValidation::Structure
+            ),
             None,
             "a result cached under a different validation-rules version must be a \
              cache MISS, forcing fresh re-validation; serving the stale 'Valid' here \
@@ -158,13 +170,21 @@ fn validation_result_is_not_served_across_a_parser_fingerprint_change() {
             ),
         )
         .expect("open cache under old parser fingerprint");
-        cache
-            .set_validation(&file_path, false, true)
-            .expect("cache a valid result under old parser fingerprint");
+        crate::shim::set_validation(
+            &cache,
+            &file_path,
+            talkbank_model::validation::AlignmentValidation::Structure,
+            talkbank_cache::CacheOutcome::Valid,
+        )
+        .expect("cache a valid result under old parser fingerprint");
 
         assert_eq!(
-            cache.get_validation(&file_path, false),
-            Some(true),
+            crate::shim::get_validation(
+                &cache,
+                &file_path,
+                talkbank_model::validation::AlignmentValidation::Structure
+            ),
+            Some(talkbank_cache::CacheOutcome::Valid),
             "a result must be readable under the parser fingerprint that wrote it"
         );
     }
@@ -181,7 +201,11 @@ fn validation_result_is_not_served_across_a_parser_fingerprint_change() {
         .expect("open cache under new parser fingerprint");
 
         assert_eq!(
-            cache.get_validation(&file_path, false),
+            crate::shim::get_validation(
+                &cache,
+                &file_path,
+                talkbank_model::validation::AlignmentValidation::Structure
+            ),
             None,
             "a result cached under a different parser fingerprint must be a cache \
              MISS, forcing fresh re-validation under the new grammar; serving the \

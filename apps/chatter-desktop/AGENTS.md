@@ -1,7 +1,7 @@
 # AGENTS.md, Chatter Desktop App
 
 **Status:** Current
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** [Git history](https://github.com/TalkBank/chatter/commits/main/apps/chatter-desktop/AGENTS.md)
 
 ## Overview
 
@@ -46,8 +46,8 @@ on which source line the caret lands at. The cross-surface guard is
 
 | Feature | TUI implementation | Desktop status |
 |---------|-------------------|----------------|
-| **Hide valid files** | TUI tracks `total_files_with_errors()` separately | **Implemented**: only error files shown; header shows "N files with errors / M total" |
-| **Alphabetical sort** | Files sorted during validation (`state.files.sort_by`) | **Implemented**: `localeCompare` sort in `buildTree()` |
+| **Hide valid files** | TUI lists only files with diagnostics or a failure (`record_file`, `TuiState::add_file`) | **Implemented**: only error files shown; header shows "N files with errors / M total" |
+| **Alphabetical sort** | Files inserted in path order (`TuiState::add_file`) | **Implemented**: `localeCompare` sort in `buildTree()` |
 | **Recursive directory tree** | Full recursive traversal with indented display | **Implemented**: collapsible tree with pruned empty dirs |
 | **Error count badges** | Per-file error count in file list | **Implemented** |
 
@@ -81,7 +81,7 @@ streaming entrypoints the CLI uses, with a real cache instance.
 
 | Feature | CLI implementation | Desktop status |
 |---------|--------------------|-----------------|
-| **On-disk validation cache** | `Arc<UnifiedCache>` constructed with `ValidationConfig::cache_identity()`, passed to the streaming entrypoints | **Implemented**: same construction, same entrypoints, for both directory and single-file targets |
+| **On-disk validation cache** | `Arc<UnifiedCache>` constructed with `ValidationConfig::cache_identity()`, bound to the config as a `ValidationRun` (refused for another identity), passed to the streaming entrypoints | **Implemented**: same construction and binding, same entrypoints, for both directory and single-file targets |
 | **`@Media`-filename check (E531)** | Runs via the shared worker loop's file-stem dispatch | **Implemented** for single-file targets (previously skipped entirely) |
 | **`--roundtrip` / `--parser re2c` / `--strict-linkers` / `--jobs`** | CLI flags map onto `ValidationConfig` fields | **Implemented**: a settings popover (`ValidationSettingsPanel`) sends the same fields through `ValidateRequest` |
 | **Stats accounting (valid/invalid/cache-hit counts)** | Shared `ValidationStats` accumulator | **Implemented** for both targets (previously hand-rolled for single files) |

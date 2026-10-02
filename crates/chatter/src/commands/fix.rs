@@ -42,67 +42,58 @@ use talkbank_transform::splice::{
     apply_edits_verified, catalog_fix, mapped_edit_sites,
 };
 
-use super::debug::{collect_cha_files, die};
-use super::error_codes::resolve_error_codes;
+use super::debug::die;
+use crate::cli::FixMode;
 use talkbank_model::model::TranscriptName;
 
 /// Apply catalog fixes to CHAT file(s) at exact byte spans.
 ///
 /// Implements `chatter fix`. Every `.cha` file under `paths` is parsed and
 /// validated, each diagnostic is resolved against the fix catalog, and the
-/// resulting edits are admitted (health-gated) and spliced. `write`
-/// determines whether the spliced result is written to disk or only
-/// reported; see the module docs for exactly which fixes are eligible to be
-/// written under a bare `--apply` versus a named `--code`.
+/// resulting edits are admitted (health-gated) and spliced. `mode`
+/// ([`FixMode::Apply`] or [`FixMode::Report`]) determines whether the
+/// spliced result is written to disk or only reported; see the module docs
+/// for exactly which fixes are eligible to be written under a bare `--apply`
+/// versus a named `--code`.
 ///
-/// `codes` (the `--code` CLI flag) is resolved to a [`CodeSelection`]
-/// before any file is opened: naming nothing considers every diagnostic
-/// ([`CodeSelection::All`]); naming one or more real codes narrows to
-/// exactly those ([`CodeSelection::Only`]), the same way `validate
-/// --suppress` narrows its own working set; naming even one value that
-/// resolves to no real code aborts the whole run rather than silently
-/// falling back to "every code" (see [`resolve_requested_codes`]). Naming a
+/// `codes` (the `--code` CLI flag, each value already a real code parsed
+/// by clap) becomes a [`CodeSelection`] before any file is opened: naming
+/// nothing considers every diagnostic ([`CodeSelection::All`]); naming one
+/// or more codes narrows to exactly those ([`CodeSelection::Only`]), the
+/// same way `validate --suppress` narrows its own working set. Naming a
 /// [`BatchSafety::Semantic`] code is how a caller opts into writing it;
 /// leaving it unnamed leaves the semantic tier reported but unwritten.
 ///
 /// A file with nothing to report prints nothing; a run over a large corpus
 /// should not have to scroll past every already-clean file.
+///
+/// Returns how the run ended; the caller exits unsuccessfully when
+/// [`FixOutcome::failed`] says a file could not be read or written.
 pub fn run_fix(
     paths: &[PathBuf],
-    apply: bool,
-    dry_run: bool,
-    codes: &[String],
-    skip_alignment: bool,
-) {
-    let files = collect_cha_files(paths);
-    if files.is_empty() {
-        die("no .cha files found in the provided paths");
-    }
+    mode: FixMode,
+    codes: &[ErrorCode],
+    alignment: talkbank_model::validation::AlignmentValidation,
+) -> FixOutcome {
+    let files = super::inputs::readable_transcripts(paths)
+        .unwrap_or_else(|refusal| die(&refusal.to_string()));
 
-    let requested_codes = resolve_requested_codes(codes);
-    let write = apply && !dry_run;
+    let requested_codes = requested_codes(codes);
 
     let parser = TreeSitterParser::new()
         .unwrap_or_else(|e| die(&format!("parser initialization failed: {e:?}")));
 
     let mut total_skipped = 0usize;
-    let mut files_with_changes = 0usize;
+    let mut unreadable = 0usize;
     let mut summaries: Vec<FileFixSummary> = Vec::new();
 
-    let mut names = talkbank_transform::paths::StoredNameResolver::default();
-    for path in files {
-        let stored = match names.resolve(&path) {
-            Ok(stored) => stored,
-            Err(err) => {
-                eprintln!("ERROR: cannot resolve {}: {err}", path.display());
-                continue;
-            }
-        };
+    for stored in files {
         let path = stored.path();
         let source = match std::fs::read_to_string(path) {
             Ok(source) => source,
             Err(err) => {
                 eprintln!("ERROR: cannot read {}: {err}", path.display());
+                unreadable += 1;
                 continue;
             }
         };
@@ -111,17 +102,17 @@ pub fn run_fix(
             &parser,
             &source,
             &requested_codes,
-            skip_alignment,
-            write,
+            alignment,
+            mode,
             stored.name(),
         );
         if outcome.report_lines.is_empty() {
             continue;
         }
 
-        println!("{}", path.display());
+        outln!("{}", path.display());
         for line in &outcome.report_lines {
-            println!("  {line}");
+            outln!("  {line}");
         }
 
         total_skipped += outcome.skipped_count;
@@ -129,18 +120,16 @@ pub fn run_fix(
         let Some(spliced) = outcome.spliced else {
             continue;
         };
-        files_with_changes += 1;
 
-        let write_outcome = if write {
-            match std::fs::write(path, &spliced) {
+        let write_outcome = match mode {
+            FixMode::Apply => match std::fs::write(path, &spliced) {
                 Ok(()) => WriteOutcome::Written,
                 Err(err) => {
                     eprintln!("ERROR: cannot write {}: {err}", path.display());
                     WriteOutcome::Failed
                 }
-            }
-        } else {
-            WriteOutcome::NotAttempted
+            },
+            FixMode::Report => WriteOutcome::NotAttempted,
         };
 
         summaries.push(FileFixSummary {
@@ -164,14 +153,48 @@ pub fn run_fix(
         .filter(|summary| matches!(summary.write_outcome, WriteOutcome::Written))
         .count();
 
-    if write {
-        println!(
+    match mode {
+        FixMode::Apply => outln!(
             "\n{total_selected} fix(es) applied across {files_written} file(s); {total_skipped} diagnostic(s) skipped."
+        ),
+        FixMode::Report => outln!(
+            "\n{total_selected} fix(es) would be applied across {} file(s) (pass --apply to write); {total_skipped} diagnostic(s) skipped.",
+            // One summary per file with a spliced result.
+            summaries.len()
+        ),
+    }
+
+    let outcome = FixOutcome {
+        unreadable,
+        unwritten: summaries
+            .iter()
+            .filter(|summary| matches!(summary.write_outcome, WriteOutcome::Failed))
+            .count(),
+    };
+    if outcome.failed() {
+        eprintln!(
+            "ERROR: {} file(s) could not be read; {} file(s) could not be written.",
+            outcome.unreadable, outcome.unwritten
         );
-    } else {
-        println!(
-            "\n{total_selected} fix(es) would be applied across {files_with_changes} file(s) (pass --apply to write); {total_skipped} diagnostic(s) skipped."
-        );
+    }
+    outcome
+}
+
+/// How a `chatter fix` run ended: how many files it could not read, and how
+/// many changed files `--apply` could not write. Each one is a file the
+/// caller asked about that this run left unexamined or unchanged.
+#[must_use]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FixOutcome {
+    unreadable: usize,
+    unwritten: usize,
+}
+
+impl FixOutcome {
+    /// Whether the command must exit unsuccessfully: a file could not be
+    /// read, or a fix could not be written.
+    pub fn failed(&self) -> bool {
+        self.unreadable > 0 || self.unwritten > 0
     }
 }
 
@@ -181,9 +204,9 @@ pub fn run_fix(
 /// standing in for "no narrowing": that sentinel meant an argument list
 /// that resolved to nothing (every value a typo) was indistinguishable
 /// from no `--code` at all, so a wholly unrecognized `--code` silently
-/// widened the run to every code in the catalog. `resolve_requested_codes`
-/// never returns `Only` with an empty set (see its doc), so an argument
-/// list that named codes cannot collapse to `All`.
+/// widened the run to every code in the catalog. `requested_codes` builds
+/// `Only` from a non-empty list of real codes, so a `--code` list cannot
+/// collapse to `All`.
 enum CodeSelection {
     /// No `--code` was given: every diagnostic is a candidate for
     /// selection, subject to `BatchSafety` as always.
@@ -215,41 +238,28 @@ impl CodeSelection {
     }
 }
 
-/// Resolve `codes` (raw `--code` strings) into a [`CodeSelection`], or
-/// abort the whole run naming every value that resolved to nothing.
-///
-/// Fails closed: on 2026-05-06 a batch rewriter in this codebase damaged
-/// 440 files because a mechanism much like this one treated "nothing
-/// recognized" the same as "nothing narrowed". A `--code` value that
-/// names no real error code is a typo, and a typo must never widen a
-/// batch run to every code in the catalog; it must stop the run before
-/// any file is even opened.
-fn resolve_requested_codes(codes: &[String]) -> CodeSelection {
-    if codes.is_empty() {
-        return CodeSelection::All;
+/// The [`CodeSelection`] `--code` names: every diagnostic when it named
+/// nothing, otherwise exactly the named codes. Each value was already parsed
+/// by clap into a real [`ErrorCode`], so a typo stopped the run as a usage
+/// error before any file was opened and can never widen it to every code.
+fn requested_codes(codes: &[ErrorCode]) -> CodeSelection {
+    match codes {
+        [] => CodeSelection::All,
+        named => CodeSelection::Only(named.iter().copied().collect()),
     }
-    let resolved = resolve_error_codes(codes);
-    if !resolved.unrecognized.is_empty() {
-        die(&format!(
-            "--code named an unrecognized error code: {}",
-            resolved.unrecognized.join(", ")
-        ));
-    }
-    CodeSelection::Only(resolved.codes)
 }
 
 /// What happened to the spliced text of one file that had at least one
 /// selected edit.
 ///
 /// A three-way enum rather than a `bool`: "the write was never
-/// attempted" (dry-run/report mode) and "the write was attempted and
+/// attempted" (report mode) and "the write was attempted and
 /// failed" both look like "did not write" to a boolean, but only the
 /// second means edits were SELECTED and then LOST, which is exactly the
 /// case the write-count bug in this module needed to distinguish and a
 /// `bool` cannot.
 enum WriteOutcome {
-    /// `--apply` was not requested, or `--dry-run` suppressed the write:
-    /// nothing was ever attempted.
+    /// The run was [`FixMode::Report`]: nothing was ever attempted.
     NotAttempted,
     /// The write reached disk.
     Written,
@@ -274,7 +284,7 @@ impl WriteOutcome {
 /// what was selected, and whether it actually reached disk.
 struct FileFixSummary {
     /// Diagnostics selected to apply in this file (or that would have
-    /// applied, in dry-run/report mode).
+    /// applied, in report mode).
     selected_count: usize,
     /// What happened to the spliced result for this file.
     write_outcome: WriteOutcome,
@@ -288,7 +298,7 @@ struct FileFixOutcome {
     /// `--code` narrowing produce no line, matching how `--suppress` narrows
     /// `validate` silently.
     report_lines: Vec<String>,
-    /// Count of diagnostics selected to apply (written or, in report/dry-run
+    /// Count of diagnostics selected to apply (written or, in report
     /// mode, that would have been written).
     selected_count: usize,
     /// Count of diagnostics considered and not selected, for any reason.
@@ -298,6 +308,24 @@ struct FileFixOutcome {
     spliced: Option<String>,
 }
 
+/// Validate at the requested coverage: the one place `fix` turns it into a
+/// validator call, for the first check and the post-fix re-check alike.
+fn validate_at(
+    chat_file: &mut talkbank_model::ChatFile,
+    alignment: talkbank_model::validation::AlignmentValidation,
+    sink: &ErrorCollector,
+    name: TranscriptName<'_>,
+) {
+    chat_file.validate_at(
+        talkbank_model::validation::ValidationPolicy::new(
+            talkbank_model::RuleSelection::new(),
+            alignment,
+        ),
+        sink,
+        name,
+    );
+}
+
 /// Parse, validate, resolve every diagnostic against the fix catalog, and
 /// splice the selected edits for one file. Never writes; the caller decides
 /// whether to persist [`FileFixOutcome::spliced`].
@@ -305,18 +333,14 @@ fn fix_one_file(
     parser: &TreeSitterParser,
     source: &str,
     requested_codes: &CodeSelection,
-    skip_alignment: bool,
-    write: bool,
+    alignment: talkbank_model::validation::AlignmentValidation,
+    mode: FixMode,
     name: TranscriptName<'_>,
 ) -> FileFixOutcome {
     let sink = ErrorCollector::new();
     let (mut chat_file, parsed) = parser.parse_chat_file_with_source(source, &sink);
 
-    if skip_alignment {
-        chat_file.validate(&sink, name);
-    } else {
-        chat_file.validate_with_alignment(&sink, name);
-    }
+    validate_at(&mut chat_file, alignment, &sink, name);
     let diagnostics = sink.into_vec();
 
     let mut report_lines = Vec::new();
@@ -371,7 +395,10 @@ fn fix_one_file(
         .map(|edit| provenance_label(edit.provenance()))
         .collect();
     let selected_count = admitted_labels.len();
-    let action_verb = if write { "apply" } else { "would apply" };
+    let action_verb = match mode {
+        FixMode::Apply => "apply",
+        FixMode::Report => "would apply",
+    };
 
     let codes_before = code_counts(&diagnostics);
 
@@ -387,7 +414,7 @@ fn fix_one_file(
                 &spliced,
                 &admission.admitted,
                 &codes_before,
-                skip_alignment,
+                alignment,
                 name,
             ) {
                 for label in &admitted_labels {
@@ -499,16 +526,12 @@ fn verify_fix_result(
     spliced: &str,
     admitted: &[SpliceEdit],
     codes_before: &HashMap<ErrorCode, usize>,
-    skip_alignment: bool,
+    alignment: talkbank_model::validation::AlignmentValidation,
     name: TranscriptName<'_>,
 ) -> Result<(), FixVerificationError> {
     let sink = ErrorCollector::new();
     let mut reparsed = parser.parse_chat_file_streaming(spliced, &sink);
-    if skip_alignment {
-        reparsed.validate(&sink, name);
-    } else {
-        reparsed.validate_with_alignment(&sink, name);
-    }
+    validate_at(&mut reparsed, alignment, &sink, name);
     let diagnostics_after = sink.into_vec();
 
     let codes_after = code_counts(&diagnostics_after);
@@ -692,6 +715,7 @@ fn describe_skip_reason(reason: &SkipReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use talkbank_transform::splice::{EditTarget, Replacement, TransformName};
 
     fn parser() -> TreeSitterParser {
@@ -751,7 +775,7 @@ mod tests {
             spliced,
             &admitted,
             &codes_before,
-            false,
+            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
             TranscriptName::Anonymous,
         );
         match result {
@@ -798,7 +822,7 @@ mod tests {
             spliced,
             &admitted,
             &codes_before,
-            false,
+            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
             TranscriptName::Anonymous,
         );
         match result {

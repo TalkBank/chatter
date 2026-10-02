@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ValidationSettings } from "../protocol/desktopProtocol";
+import { parseJobCount, type ValidationSettings } from "../protocol/desktopProtocol";
 
 interface Props {
   settings: ValidationSettings;
@@ -17,6 +17,10 @@ interface Props {
  */
 export default function ValidationSettingsPanel({ settings, onChange, disabled }: Props) {
   const [open, setOpen] = useState(false);
+  // The field's own text, so an entry that is not a count stays visible
+  // (and says why) instead of being coerced or silently dropped.
+  const [jobsText, setJobsText] = useState(settings.jobs === null ? "" : String(settings.jobs));
+  const jobsInput = parseJobCount(jobsText);
 
   return (
     <div className="validation-settings">
@@ -79,15 +83,38 @@ export default function ValidationSettingsPanel({ settings, onChange, disabled }
             <input
               type="number"
               min={1}
+              step={1}
               placeholder="all CPUs"
               disabled={disabled}
-              value={settings.jobs ?? ""}
+              value={jobsText}
+              aria-invalid={jobsInput.kind === "invalid"}
               onChange={(event) => {
                 const raw = event.target.value;
-                onChange({ ...settings, jobs: raw === "" ? null : Number(raw) });
+                setJobsText(raw);
+                const parsed = parseJobCount(raw);
+                switch (parsed.kind) {
+                  case "allCpus":
+                    onChange({ ...settings, jobs: null });
+                    break;
+                  case "count":
+                    onChange({ ...settings, jobs: parsed.count });
+                    break;
+                  case "invalid":
+                    // The setting keeps its last valid value; the hint below
+                    // says the entry was not taken.
+                    break;
+                }
               }}
             />
           </label>
+          {jobsInput.kind === "invalid" && (
+            <p className="validation-settings-hint" role="alert">
+              Parallel jobs must be a whole number of at least 1, or empty for all CPUs.
+              {" "}The next run uses{" "}
+              {settings.jobs === null ? "all CPUs" : `${settings.jobs} job(s)`}, the last
+              valid entry.
+            </p>
+          )}
         </div>
       )}
     </div>

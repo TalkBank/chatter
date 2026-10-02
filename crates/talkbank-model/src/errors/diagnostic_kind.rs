@@ -179,6 +179,7 @@ mod tests {
                 ErrorCode::MediaFilenameNonCanonicalUnicode,
                 DiagnosticKind::Style,
             ), // W109: canonical-equivalent names are a style notice, not E531.
+            (ErrorCode::MediaFilenameCaseDiffers, DiagnosticKind::Style), // W110: case-only difference.
         ];
 
         for code in ErrorCode::iter() {

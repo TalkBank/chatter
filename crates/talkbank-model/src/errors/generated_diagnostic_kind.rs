@@ -243,5 +243,6 @@ pub(crate) fn kind_of_from_spec(code: ErrorCode) -> DiagnosticKind {
         ErrorCode::UnknownError => DiagnosticKind::Invalidity,      // E999
         ErrorCode::SpeakerNotFoundInParticipants => DiagnosticKind::Invalidity, // W108
         ErrorCode::MediaFilenameNonCanonicalUnicode => DiagnosticKind::Style, // W109
+        ErrorCode::MediaFilenameCaseDiffers => DiagnosticKind::Style, // W110
     }
 }

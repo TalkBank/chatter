@@ -22,6 +22,8 @@ export interface ValidationExportEntry {
   path: string;
   errors: ValidationExportError[];
   status: FileStatus | null;
+  /** The outcome as the app shows it (`fileStatusLabel`). */
+  statusLabel: string;
 }
 
 export type { ParserKindSetting, ValidationSettings } from "../../protocol/desktopProtocol";

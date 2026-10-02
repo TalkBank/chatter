@@ -6,6 +6,7 @@ use talkbank_transform::speaker_id::ConfidenceThreshold;
 use super::cache_commands::CacheCommands;
 use super::cli_types::{AlignmentTier, OutputFormat, ParserBackend};
 use super::debug_commands::DebugCommands;
+use super::flag_modes::{Flag, NormalizeCheckArgs, ToJsonCheckArgs};
 use super::judgment_args::JudgmentArgs;
 
 /// Top-level `talkbank` subcommands.
@@ -28,6 +29,7 @@ pub enum Commands {
         /// `spec/errors/*.md` statuses.
         #[arg(
             long,
+            conflicts_with = "path",
             help = "List all validation checks with Active/Planned status, then exit"
         )]
         list_checks: bool,
@@ -36,36 +38,35 @@ pub enum Commands {
         #[arg(short, long, value_enum, default_value_t = OutputFormat::Text, help = "Validation output style (text|json)")]
         format: OutputFormat,
 
-        /// Skip tier alignment (validation includes alignment by default)
-        #[arg(
-            long = "skip-alignment",
-            help = "Disable dependent tier alignment checks (alignment is on by default)"
-        )]
-        skip_alignment: bool,
+        /// `--skip-alignment`, parsed into the coverage it selects.
+        #[command(flatten)]
+        alignment: Flag<talkbank_model::validation::AlignmentValidation>,
 
-        /// Force fresh validation, clearing and updating cache
-        #[arg(
-            long,
-            help = "Force fresh validation (clears and updates cache for specified path)"
-        )]
-        force: bool,
+        /// `--force`, parsed into the cache refresh it selects.
+        #[command(flatten)]
+        cache_refresh: Flag<crate::commands::CacheRefreshMode>,
 
-        /// Number of parallel jobs (default: number of CPUs)
+        /// Number of parallel jobs (default: number of CPUs). At least 1:
+        /// `--jobs 0` is a usage error.
         #[arg(short, long)]
-        jobs: Option<usize>,
+        jobs: Option<std::num::NonZeroUsize>,
 
         /// Suppress success output (errors still print)
         #[arg(long, help = "Quiet mode (only emit errors, rely on exit codes)")]
         quiet: bool,
 
-        /// Stop after this many errors (across all files)
+        /// Stop once this many errors have been found, across all files.
+        /// Errors only: warnings never count. Files already being validated
+        /// finish; the run then reports how many were not validated and
+        /// exits unsuccessfully. At least 1: `--max-errors 0` is a usage
+        /// error.
         #[arg(long)]
-        max_errors: Option<usize>,
+        max_errors: Option<std::num::NonZeroUsize>,
 
-        /// Run roundtrip test (serialize → re-parse → compare) after validation.
-        /// Tests serialization idempotency. Developer tool for parser/serializer testing.
-        #[arg(long, help = "Test serialization idempotency (developer tool)")]
-        roundtrip: bool,
+        /// `--roundtrip` (serialize, re-parse, compare each clean file; a
+        /// developer check of the serializer), parsed into its mode.
+        #[command(flatten)]
+        roundtrip: Flag<talkbank_transform::RoundtripCheck>,
 
         /// Parser backend for CHAT parsing.
         /// tree-sitter (default) supports incremental reparsing.
@@ -79,7 +80,8 @@ pub enum Commands {
         #[arg(
             long,
             help = "Stream errors to JSONL file (bulk audit mode)",
-            value_name = "OUTPUT_FILE"
+            value_name = "OUTPUT_FILE",
+            conflicts_with_all = ["format", "quiet", "force"]
         )]
         audit: Option<PathBuf>,
 
@@ -95,11 +97,8 @@ pub enum Commands {
         /// E344 and E346. Naming a range here at all was the mistake, since
         /// the generated error index already states, per code, which option
         /// it requires, derived from the spec example that demonstrates it.
-        #[arg(
-            long = "strict-linkers",
-            help = "Enable strict cross-utterance linker validation                     (quotation and completion linkers)"
-        )]
-        strict_linkers: bool,
+        #[command(flatten)]
+        strict_linkers: Flag<talkbank_model::LinkerChecks>,
 
         /// Suppress error codes or named groups. Suppressed errors are not
         /// reported and do not cause a non-zero exit code.
@@ -113,15 +112,15 @@ pub enum Commands {
         /// Can mix groups and codes: --suppress xphon,E316
         ///
         /// Group and code names are matched case-insensitively. A value that
-        /// names neither a known group nor a known error code is refused
-        /// (non-zero exit, naming the offending value) rather than silently
-        /// suppressing nothing.
+        /// names neither a known group nor a known error code is a usage
+        /// error (exit 2, naming the offending value), parsed by clap.
         #[arg(
             long,
             value_delimiter = ',',
+            value_parser = crate::commands::error_codes::parse_suppression,
             help = "Suppress error codes or groups (e.g., --suppress xphon,E726)"
         )]
-        suppress: Vec<String>,
+        suppress: Vec<crate::commands::error_codes::SuppressionSelector>,
 
         /// Deprecated no-op. Phon `%x` validation now runs by default, so this
         /// flag is unnecessary; passing it prints a deprecation note. To silence
@@ -341,16 +340,9 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
 
-        /// Validate (includes alignment) before normalization
-        #[arg(long, help = "Validate and check alignment before writing output")]
-        validate: bool,
-
-        /// Skip alignment when validating
-        #[arg(
-            long = "skip-alignment",
-            help = "Skip alignment checks when --validate is supplied"
-        )]
-        skip_alignment: bool,
+        /// `--validate` and `--skip-alignment`, parsed into one check level.
+        #[command(flatten)]
+        checks: NormalizeCheckArgs,
     },
 
     /// Convert CHAT file to JSON
@@ -373,52 +365,31 @@ pub enum Commands {
         #[arg(long)]
         output_dir: Option<PathBuf>,
 
-        /// Compact (minified) JSON output instead of pretty-printed
-        #[arg(long)]
-        compact: bool,
+        /// `--compact`, parsed into the layout it selects.
+        #[command(flatten)]
+        layout: Flag<talkbank_transform::JsonLayout>,
 
-        /// Force full rebuild (ignore mtime, reconvert all files)
-        #[arg(long)]
-        force: bool,
+        /// `--force`, parsed into the rebuild it selects.
+        #[command(flatten)]
+        refresh: Flag<crate::commands::json::JsonRefresh>,
 
-        /// Remove .json files with no matching .cha source (directory mode)
-        #[arg(long)]
-        prune: bool,
+        /// `--prune`, parsed into what happens to orphaned JSON.
+        #[command(flatten)]
+        orphans: Flag<crate::commands::json::OrphanJson>,
 
-        /// Number of parallel workers for directory mode
+        /// Number of parallel workers for directory mode (default: number of
+        /// CPUs). At least 1: `--jobs 0` is a usage error.
         #[arg(short, long)]
-        jobs: Option<usize>,
+        jobs: Option<std::num::NonZeroUsize>,
 
-        /// (Deprecated) Validation is now on by default. This flag is ignored.
-        #[arg(long, hide = true)]
-        validate: bool,
+        /// `--skip-validation` and `--skip-alignment`, parsed into one
+        /// check level.
+        #[command(flatten)]
+        checks: ToJsonCheckArgs,
 
-        /// (Deprecated) Alignment is now on by default. Use --skip-alignment to disable.
-        #[arg(short, long, hide = true)]
-        alignment: bool,
-
-        /// Skip tier alignment checks
-        #[arg(
-            long = "skip-alignment",
-            help = "Disable tier alignment validation during conversion"
-        )]
-        skip_alignment: bool,
-
-        /// Skip data model validation (parse only, always produce JSON)
-        #[arg(
-            long = "skip-validation",
-            help = "Skip validation of the CHAT data model (parse only, no alignment)"
-        )]
-        skip_validation: bool,
-
-        /// Skip validation against the CHAT JSON Schema
-        #[arg(
-            long,
-            help = "Skip validation against the CHAT JSON Schema \
-            (https://talkbank.org/schemas/v0.1/chat-file.json). \
-            Useful for faster output when you trust the data model."
-        )]
-        skip_schema_validation: bool,
+        /// `--skip-schema-validation`, parsed into the schema policy.
+        #[command(flatten)]
+        schema: Flag<talkbank_transform::JsonSchemaPolicy>,
     },
 
     /// Convert JSON file to CHAT
@@ -445,9 +416,9 @@ pub enum Commands {
         #[arg(short, long, value_enum)]
         tier: Option<AlignmentTier>,
 
-        /// Compact output (one line per alignment)
-        #[arg(short, long)]
-        compact: bool,
+        /// `-c`/`--compact`, parsed into the view it selects.
+        #[command(flatten)]
+        view: Flag<crate::commands::alignment::AlignmentView>,
     },
 
     /// Watch CHAT file(s) for changes and continuously validate
@@ -455,9 +426,9 @@ pub enum Commands {
         /// Path to CHAT file or directory to watch
         path: PathBuf,
 
-        /// Skip tier alignment checks
-        #[arg(long)]
-        skip_alignment: bool,
+        /// `--skip-alignment`, parsed into the coverage it selects.
+        #[command(flatten)]
+        alignment: Flag<talkbank_model::validation::AlignmentValidation>,
 
         /// Clear terminal before each validation run
         #[arg(short, long)]
@@ -469,21 +440,19 @@ pub enum Commands {
         /// Paths to CHAT files or directories
         paths: Vec<PathBuf>,
 
-        /// Write the fixes (without this, report only)
-        #[arg(long)]
-        apply: bool,
+        /// `--apply` writes; without it fix only reports. Parsed straight
+        /// into one value.
+        #[command(flatten)]
+        mode: Flag<super::fix_mode::FixMode>,
 
-        /// Show what would change without writing
-        #[arg(long, requires = "apply")]
-        dry_run: bool,
+        /// Restrict to these error codes; required to apply a Semantic fix.
+        /// An unknown code is a usage error (exit 2).
+        #[arg(long = "code", value_parser = crate::commands::error_codes::parse_error_code)]
+        codes: Vec<talkbank_model::ErrorCode>,
 
-        /// Restrict to these error codes; required to apply a Semantic fix
-        #[arg(long = "code")]
-        codes: Vec<String>,
-
-        /// Skip tier alignment checks
-        #[arg(long)]
-        skip_alignment: bool,
+        /// `--skip-alignment`, parsed into the coverage it selects.
+        #[command(flatten)]
+        alignment: Flag<talkbank_model::validation::AlignmentValidation>,
     },
 
     /// Show cleaned text for each word in utterances (debugging aid)

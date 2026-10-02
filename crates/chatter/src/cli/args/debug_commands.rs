@@ -4,8 +4,6 @@
 use clap::{Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-use super::cli_types::OutputFormat;
-
 /// Scope selector for `chatter debug join-retrace --scope`.
 ///
 /// Selects which dangling-retrace kinds are eligible for the join transform.
@@ -89,9 +87,9 @@ pub enum DebugCommands {
         /// Path to CHAT file(s) or directory trees to repair in place.
         path: Vec<PathBuf>,
 
-        /// Show what would be joined without modifying any files.
-        #[arg(long)]
-        dry_run: bool,
+        /// Write the joins, or with `--dry-run` only report them.
+        #[command(flatten)]
+        commit: super::Flag<crate::commands::debug::Commit>,
 
         /// Select which dangling-retrace kinds are eligible for joining.
         /// `repetition` (default): `[/]` with prefix-match gate. `corrections`:
@@ -104,10 +102,6 @@ pub enum DebugCommands {
     OverlapAudit {
         /// Path to CHAT file(s) or directory
         path: Vec<PathBuf>,
-
-        /// Output format
-        #[arg(short, long, value_enum, default_value_t = OutputFormat::Text)]
-        format: OutputFormat,
 
         /// Write JSON lines database to this file (one JSON object per file).
         /// Enables persistent overlap data for downstream analysis.

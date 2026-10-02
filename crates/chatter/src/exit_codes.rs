@@ -14,6 +14,13 @@ pub const EXIT_SUCCESS: i32 = 0;
 /// command can't begin its work because the inputs are unusable.
 pub const EXIT_INPUT_ERROR: i32 = 1;
 
+/// Standard output closed or failed before the command wrote everything it
+/// promised: a consumer such as `head` stopped reading. The status a failed
+/// `validate` run gives, and the one `validate --format json` gives when its
+/// consumer closes the pipe; every text writer ends with it too
+/// (`crate::stdout`).
+pub const EXIT_OUTPUT_INCOMPLETE: i32 = 1;
+
 /// Precondition violation. Inputs parsed cleanly but the operation
 /// itself can't proceed semantically, ambiguous speaker, language
 /// mismatch, invalid mapping spec, etc.

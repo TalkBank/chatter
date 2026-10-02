@@ -15,8 +15,6 @@ use std::fs;
 use std::path::PathBuf;
 use tracing::{Level, debug, info, span, warn};
 
-use crate::output::print_errors;
-
 /// Normalize a CHAT file to the canonical format defined by the CHAT File Format and Header sections.
 ///
 /// The command re-parses the transcript, optionally re-applies validation/alignment, and emits
@@ -26,8 +24,7 @@ use crate::output::print_errors;
 pub fn normalize_chat(
     input: &PathBuf,
     output: Option<&PathBuf>,
-    validate: bool,
-    skip_alignment: bool,
+    level: talkbank_model::CheckLevel,
 ) {
     let _span = span!(Level::INFO, "normalize_chat", input = %input.display()).entered();
     info!("Normalizing CHAT file to canonical format");
@@ -49,14 +46,7 @@ pub fn normalize_chat(
     };
 
     // Build pipeline options that control validation/alignment, matching the manual’s discussion of `%wor` alignment costs.
-    let mut options = talkbank_model::ParseValidateOptions::default();
-    if validate {
-        if skip_alignment {
-            options = options.with_validation();
-        } else {
-            options = options.with_alignment();
-        }
-    }
+    let options = talkbank_model::ParseValidateOptions::default().with_level(level);
 
     // Use pipeline function to parse, validate, and normalize
     let canonical_chat = {
@@ -64,24 +54,17 @@ pub fn normalize_chat(
         match talkbank_transform::normalize_chat(&content, options) {
             Ok(chat_str) => {
                 debug!("Pipeline successful, {} bytes", chat_str.text().len());
-                if validate {
-                    info!("✓ Validation passed");
-                    eprintln!("✓ Validation passed");
+                match level {
+                    talkbank_model::CheckLevel::ParseOnly => {}
+                    talkbank_model::CheckLevel::Validate(_) => {
+                        info!("✓ Validation passed");
+                        eprintln!("✓ Validation passed");
+                    }
                 }
                 chat_str
             }
             Err(e) => {
-                match e {
-                    talkbank_transform::PipelineError::Validation(errors) => {
-                        warn!("Validation found {} errors", errors.len());
-                        eprintln!("✗ Validation errors found:");
-                        print_errors(input, &content, &errors);
-                    }
-                    _ => {
-                        warn!("Pipeline error: {}", e);
-                        eprintln!("Error: {}", e);
-                    }
-                }
+                crate::output::report_pipeline_failure(input, &content, &e);
                 std::process::exit(1);
             }
         }
@@ -110,6 +93,6 @@ pub fn normalize_chat(
             output_path.display()
         );
     } else {
-        print!("{}", canonical_chat.text());
+        out!("{}", canonical_chat.text());
     }
 }

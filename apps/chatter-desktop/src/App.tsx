@@ -8,7 +8,7 @@ import ProgressBar from "./components/ProgressBar";
 import ValidationSettingsPanel from "./components/ValidationSettingsPanel";
 import { useTheme } from "./hooks/useTheme";
 import { useValidation } from "./hooks/useValidation";
-import { finishedRunSummary, isRunPending, isRunRecoverable } from "./hooks/validationState";
+import { fileStatusLabel, finishedRunSummary, isRunPending, isRunRecoverable } from "./hooks/validationState";
 import { DEFAULT_VALIDATION_SETTINGS, type ValidationSettings } from "./protocol/desktopProtocol";
 import type { ParseError } from "./protocol/validation";
 import {
@@ -131,14 +131,18 @@ export default function App() {
       case "aborted":
         document.title = "Chatter \u00b7 Run stopped unexpectedly";
         break;
+      case "stopped":
+        document.title = `Chatter \u00b7 ${run.reason} (${run.unprocessedFiles} files not checked)`;
+        break;
       case "finishedIncomplete":
         // Never "all N valid": the run never opened `lostFiles` of them.
         document.title = `Chatter \u00b7 Incomplete (${run.lostFiles} files not checked)`;
         break;
+      case "nothingFound":
+        document.title = "Chatter \u00b7 No CHAT files found";
+        break;
       case "finished": {
-        // `run.stats` is present by construction here; the old shape needed a
-        // null check that could silently fall through to a bare title.
-        document.title = `Chatter \u00b7 ${finishedRunSummary(run, state.totalErrors)}`;
+        document.title = `Chatter \u00b7 ${finishedRunSummary(run, state.totalErrors, state.cacheUnavailable)}`;
         break;
       }
     }
@@ -150,7 +154,7 @@ export default function App() {
     if (run.kind !== "finished") return;
     if (document.hasFocus()) return;
 
-    const body = finishedRunSummary(run, state.totalErrors);
+    const body = finishedRunSummary(run, state.totalErrors, state.cacheUnavailable);
 
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification("Validation complete", { body });
@@ -226,6 +230,7 @@ export default function App() {
           renderedText: diagnostic.renderedText,
         })),
         status: file.status,
+        statusLabel: fileStatusLabel(file),
       }));
 
       await exportCapability.exportResults(results, format, path);
@@ -310,6 +315,7 @@ export default function App() {
         backendSilent={backendSilent}
         processedFiles={state.processedFiles}
         totalErrors={state.totalErrors}
+        cacheUnavailable={state.cacheUnavailable}
         startTime={startTime}
         onRevalidate={handleRevalidate}
         onCancel={cancelValidation}

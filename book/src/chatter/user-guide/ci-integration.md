@@ -1,7 +1,7 @@
 # CI Integration
 
 **Status:** Current
-**Last updated:** 2026-04-13 19:23 EDT
+**Last updated:** {{git-dates:page}}
 
 How to use `chatter` in continuous integration pipelines.
 
@@ -22,15 +22,21 @@ chatter validate corpus/ --quiet --tui-mode disable
 ```
 
 - `--quiet` suppresses per-file success output
-- `--tui-mode disable` prevents interactive TUI (required in non-TTY environments)
+- `--tui-mode disable` keeps the interactive TUI away even on a terminal. A
+  run whose stdout is not a terminal, or that asks for `--quiet`,
+  `--format json` or `--audit`, never opens the TUI anyway.
 - Exit code 0 means all files valid; 1 means errors found
+
+`--format json`, `--quiet` and `--audit` each name one output: `--audit`
+with `--format` or `--quiet`, `--format json` with `--quiet`, and
+`--tui-mode force` with any of them are usage errors (exit 2).
 
 ## GitHub Actions Example
 
 ```yaml
 - name: Validate CHAT corpus
   run: |
-    chatter validate corpus/ --quiet --tui-mode disable --format json --audit results.jsonl
+    chatter validate corpus/ --audit results.jsonl
 
 - name: Upload validation report
   if: failure()
@@ -40,9 +46,10 @@ chatter validate corpus/ --quiet --tui-mode disable
     path: results.jsonl
 ```
 
-The `--audit results.jsonl` flag streams per-error JSON lines to a file,
-which is useful for archiving or downstream analysis even when the step
-fails.
+The `--audit results.jsonl` flag streams one JSON line per diagnostic to a
+file, each carrying its `severity` (`"Error"` or `"Warning"`), which is
+useful for archiving or downstream analysis even when the step fails. The
+record shape is in the [diagnostic contract](../integrating/diagnostic-contract.md).
 
 ## JSON Output for Automation
 

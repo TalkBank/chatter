@@ -10,7 +10,7 @@
 use std::sync::{Arc, Barrier};
 use std::thread;
 
-use talkbank_cache::{CacheOutcome, CachePool, ValidationCache};
+use talkbank_cache::CachePool;
 
 #[test]
 fn concurrent_opens_on_fresh_cache_dir_all_succeed() {
@@ -45,11 +45,19 @@ fn concurrent_opens_on_fresh_cache_dir_all_succeed() {
                 .map_err(|e| format!("open: {e}"))?;
                 // Also exercise a write + read so the pool is actually usable,
                 // not merely constructed.
-                cache
-                    .set(probe.as_path(), false, CacheOutcome::Valid)
-                    .map_err(|e| format!("set (opener {i}): {e}"))?;
-                match cache.get(probe.as_path(), false) {
-                    Some(CacheOutcome::Valid) => Ok(()),
+                crate::shim::set_validation(
+                    &cache,
+                    probe.as_path(),
+                    talkbank_model::validation::AlignmentValidation::Structure,
+                    talkbank_cache::CacheOutcome::Valid,
+                )
+                .map_err(|e| format!("set (opener {i}): {e}"))?;
+                match crate::shim::get_validation(
+                    &cache,
+                    probe.as_path(),
+                    talkbank_model::validation::AlignmentValidation::Structure,
+                ) {
+                    Some(talkbank_cache::CacheOutcome::Valid) => Ok(()),
                     other => Err(format!("get (opener {i}) returned {other:?}")),
                 }
             })

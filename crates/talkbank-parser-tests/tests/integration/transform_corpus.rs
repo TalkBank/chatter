@@ -7,6 +7,7 @@ use talkbank_model::model::{ChatFile, SemanticEq};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::chat_corpus::ChatCorpus;
 use talkbank_parser_tests::test_error::strict_parse;
+use talkbank_transform::JsonLayout;
 
 #[path = "adjudication_corpus.rs"]
 mod adjudication_contracts;
@@ -32,6 +33,8 @@ mod diagnostic_contracts;
 mod file_contracts;
 #[path = "gem_merge_corpus.rs"]
 mod gem_merge_contracts;
+#[path = "host_redirects_corpus.rs"]
+mod host_redirects_contracts;
 #[path = "transform_json_corpus.rs"]
 mod json_contracts;
 #[path = "transform_language_corpus.rs"]
@@ -376,7 +379,9 @@ fn media_name_specs_keep_authored_identity_through_required_validation() {
             .expect("canonical media-name fixture");
         let name = match &entry.transcript_name {
             FixtureTranscriptName::Anonymous => TranscriptName::Anonymous,
-            FixtureTranscriptName::Named(stem) => TranscriptName::Named(FileStem::from_stem(stem)),
+            FixtureTranscriptName::Named(stem) => {
+                TranscriptName::Named(FileStem::from_stem(stem).expect("a stem"))
+            }
         };
         let errors = ErrorCollector::new();
         let result = talkbank_transform::parse_validated_with_parser(
@@ -828,13 +833,13 @@ fn reference_json_wire_roundtrip_preserves_typed_models() {
     for fixture in corpus.fixtures() {
         let original = strict_parse(parser.parse_chat_file(fixture.source()))
             .expect("reference parses cleanly");
-        for pretty in [false, true] {
+        for layout in [JsonLayout::Compact, JsonLayout::Pretty] {
             // This is a Rust wire-format roundtrip, not analysis of CHAT through
             // a JSON representation. The expected semantics stay in the AST.
             let wire = talkbank_transform::chat_to_json_unvalidated(
                 fixture.source(),
                 ParseValidateOptions::default(),
-                pretty,
+                layout,
             )
             .unwrap_or_else(|error| panic!("JSON {}: {error}", fixture.path().display()));
             let restored: ChatFile = serde_json::from_str(&wire).expect("typed JSON model");
@@ -846,7 +851,7 @@ fn reference_json_wire_roundtrip_preserves_typed_models() {
             let checked = talkbank_transform::chat_to_json(
                 fixture.source(),
                 ParseValidateOptions::default(),
-                pretty,
+                layout,
             )
             .unwrap_or_else(|error| {
                 panic!("schema-checked JSON {}: {error}", fixture.path().display())

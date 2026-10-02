@@ -6,20 +6,21 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use super::cancel::CancelSignal;
-use super::config::{ParserKind, ValidationConfig};
+use super::cancel::{CancelSignal, ErrorBudget};
+use super::config::{ParserKind, RoundtripCheck, RunCache, ValidationConfig};
 use super::roundtrip::{self, RoundtripResult};
 use super::types::{
-    ErrorEvent, FileCompleteEvent, FileStatus, RoundtripEvent, RoundtripVerdict, ValidationEvent,
-    ValidationStats,
+    CacheUse, FailedAttempt, FileCompleteEvent, FileDiagnostics, FileStatus, RoundtripVerdict,
+    Shown, ValidationEvent, ValidationTally,
 };
 use crate::paths::StoredTranscript;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::Sender;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use talkbank_cache::{CacheOutcome, ValidationCache};
-use talkbank_model::Severity;
+use std::path::Path;
+use talkbank_cache::{
+    CacheLookup, CacheOutcome, ContentHash, ResolvedPath, RoundtripOutcome, ValidationCache,
+    VerdictReader,
+};
 use talkbank_model::{ChatFile, ChatParser, ErrorSink, ParseOutcome};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_re2c::Re2cParser;
@@ -43,11 +44,14 @@ pub(super) enum ParserDispatch {
 
 impl ParserDispatch {
     /// Create the appropriate parser for the given `ParserKind`.
-    pub(super) fn new(kind: ParserKind) -> Result<Self, String> {
+    pub(super) fn new(kind: ParserKind) -> Result<Self, WorkerSetupFailure> {
         match kind {
             ParserKind::TreeSitter => TreeSitterParser::new()
                 .map(ParserDispatch::TreeSitter)
-                .map_err(|e| format!("{e}")),
+                .map_err(|error| WorkerSetupFailure {
+                    parser: kind,
+                    reason: error.to_string(),
+                }),
             ParserKind::Re2c => Ok(ParserDispatch::Re2c(Re2cParser::new())),
         }
     }
@@ -70,7 +74,7 @@ impl ParserDispatch {
             Self::InternalFailure => {
                 errors.report(talkbank_model::ParseError::at_span(
                     talkbank_model::ErrorCode::InternalError,
-                    Severity::Warning,
+                    talkbank_model::Severity::Warning,
                     talkbank_model::Span::new(0, 1),
                     "injected producer fault",
                 ));
@@ -85,445 +89,403 @@ impl ParserDispatch {
     }
 }
 
-/// Main loop executed by each validation worker thread.
-pub(super) fn worker_loop<C>(
-    work_rx: Receiver<PathBuf>,
-    event_tx: Sender<ValidationEvent>,
-    cancel: Arc<CancelSignal>,
-    cache: Option<Arc<C>>,
-    config: ValidationConfig,
-    stats: Arc<ValidationStats>,
-) where
-    C: ValidationCache + Send + Sync,
-{
-    let parser = match ParserDispatch::new(config.parser_kind) {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::error!(error = %e, "Error creating parser ({:?})", config.parser_kind);
-            return;
-        }
-    };
+/// What a worker borrows from the run for its whole life. The pool's
+/// threads are scoped, so these are plain references: no `Arc` clones and no
+/// per-worker copy of the configuration.
+pub(super) struct WorkerContext<'a> {
+    /// Where per-file events go.
+    pub(super) event_tx: &'a Sender<ValidationEvent>,
+    /// The run's stop latch.
+    pub(super) cancel: &'a CancelSignal,
+    /// The run's error count against its limit.
+    pub(super) budget: &'a ErrorBudget,
+    /// The run's cache, and what the run may do with it.
+    pub(super) cache: &'a RunCache,
+    /// The run's settings.
+    pub(super) config: &'a ValidationConfig,
+}
 
-    worker_loop_with_parser(work_rx, event_tx, cancel, cache, config, stats, parser);
+/// A worker that could not start: it took no file from the queue.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct WorkerSetupFailure {
+    /// The parser it tried to create.
+    pub(super) parser: ParserKind,
+    /// Why it could not.
+    pub(super) reason: String,
+}
+
+/// Main loop executed by each validation worker thread. Returns the worker's
+/// own tally, which the runner sums after the join, or why the worker could
+/// not start, which the runner reports if files go missing.
+pub(super) fn worker_loop(
+    work: impl Iterator<Item = StoredTranscript>,
+    context: &WorkerContext<'_>,
+) -> Result<ValidationTally, WorkerSetupFailure> {
+    let parser = ParserDispatch::new(context.config.parser_kind).inspect_err(|failure| {
+        tracing::error!(
+            parser = ?failure.parser,
+            reason = %failure.reason,
+            "A validation worker could not create its parser"
+        );
+    })?;
+    Ok(worker_loop_with_parser(work, context, parser))
 }
 
 /// The worker owns one initialized parser for its entire queue. The separate
 /// boundary also lets tests inject a tool fault into the real cache/event path.
-pub(super) fn worker_loop_with_parser<C>(
-    work_rx: Receiver<PathBuf>,
-    event_tx: Sender<ValidationEvent>,
-    cancel: Arc<CancelSignal>,
-    cache: Option<Arc<C>>,
-    config: ValidationConfig,
-    stats: Arc<ValidationStats>,
+pub(super) fn worker_loop_with_parser(
+    mut work: impl Iterator<Item = StoredTranscript>,
+    context: &WorkerContext<'_>,
     parser: ParserDispatch,
-) where
-    C: ValidationCache + Send + Sync,
-{
-    let mut names = crate::paths::StoredNameResolver::default();
+) -> ValidationTally {
+    let mut tally = ValidationTally::default();
     loop {
         // Check for cancellation. Reads a LATCH, not the raw channel: polling
         // the channel here consumed the single cancel token, so only one of the
         // N workers ever saw it and the rest ran the queue to the end. See
         // `CancelSignal`.
-        if cancel.is_cancelled() {
+        if context.cancel.reason().is_some() {
             break;
         }
+        // The queue closed and drained: no more files.
+        let Some(stored) = work.next() else {
+            break;
+        };
+        let complete = process_file(stored, context, &parser, &mut tally);
+        tally.record(&complete.status, complete.cache);
+        // Spent from the status itself, before the next file is taken, so a
+        // limit reached here stops this worker at once and the others at
+        // their next file.
+        context
+            .budget
+            .spend(complete.status.errors_found(), context.cancel);
+        // A closed result stream ends the worker: the completed file is
+        // accounted for, but no later file may begin after delivery fails.
+        if context
+            .event_tx
+            .send(ValidationEvent::FileComplete(complete))
+            .is_err()
+        {
+            break;
+        }
+    }
+    tally
+}
 
-        // Get next file from work queue
-        match work_rx.recv() {
-            Ok(file_path) => {
-                let stored = match names.resolve(&file_path) {
-                    Ok(stored) => stored,
-                    Err(error) => {
-                        let status = FileStatus::ReadError {
-                            message: error.to_string(),
-                        };
-                        update_stats(&stats, &status);
-                        if event_tx
-                            .send(ValidationEvent::FileComplete(FileCompleteEvent {
-                                path: file_path,
-                                status,
-                            }))
-                            .is_err()
-                        {
-                            break;
-                        }
-                        continue;
-                    }
-                };
-                let file_path = stored.path().to_path_buf();
-                // Attempt to serve from cache before touching the filesystem.
-                // CacheOutcome::Valid = cached valid; Invalid = cached invalid (re-validate for errors).
-                if config.cache.allows_reads()
-                    && let Some(CacheOutcome::Valid) = cache
-                        .as_ref()
-                        .and_then(|cache_ref| cache_ref.get(&file_path, config.check_alignment))
-                {
-                    tracing::debug!(file = ?file_path, "Cache hit (valid) - skipping reparse");
+/// The cache use of a file that was validated (not served from the cache):
+/// a miss when there was a cache to consult, nothing otherwise.
+fn validated_fresh(cache: &RunCache) -> CacheUse {
+    match cache {
+        RunCache::Absent => CacheUse::NotConsulted,
+        RunCache::ReadOnly(_) | RunCache::ReadWrite(_) => CacheUse::Miss,
+    }
+}
 
-                    // If roundtrip is requested, check roundtrip cache too
-                    if config.roundtrip {
-                        let roundtrip_cached = cache
-                            .as_ref()
-                            .and_then(|c| c.get_roundtrip(&file_path, config.check_alignment));
-                        if let Some(rt_outcome) = roundtrip_cached {
-                            let rt_passed = rt_outcome == CacheOutcome::Valid;
-                            let status = if rt_passed {
-                                FileStatus::Valid {
-                                    cache_hit: true,
-                                    roundtrip: RoundtripVerdict::Passed,
-                                }
-                            } else {
-                                FileStatus::RoundtripFailed {
-                                    cache_hit: true,
-                                    reason: "Roundtrip failed (cached)".to_string(),
-                                }
-                            };
+/// One stored transcript from the queue to its result: its status, how it
+/// used the cache, and the diagnostics it showed. The caller counts it and
+/// sends it as the file's one event.
+fn process_file(
+    stored: StoredTranscript,
+    context: &WorkerContext<'_>,
+    parser: &ParserDispatch,
+    tally: &mut ValidationTally,
+) -> FileCompleteEvent {
+    let config = context.config;
+    let complete = |status, cache| FileCompleteEvent {
+        path: stored.path().to_path_buf(),
+        status,
+        cache,
+    };
 
-                            // Emit roundtrip event for the cached result
-                            let _ =
-                                event_tx.send(ValidationEvent::RoundtripComplete(RoundtripEvent {
-                                    path: file_path.clone(),
-                                    passed: rt_passed,
-                                    failure_reason: if rt_passed {
-                                        None
-                                    } else {
-                                        Some("Roundtrip failed (cached)".to_string())
-                                    },
-                                    diff: None,
-                                }));
+    // Read once. The cache is keyed by the hash of these bytes, so a verdict
+    // is looked up and stored for exactly the content that is validated.
+    let content = match fs::read_to_string(stored.path()) {
+        Ok(content) => content,
+        Err(e) => {
+            let message = e.to_string();
+            return complete(FileStatus::ReadError { message }, CacheUse::NotConsulted);
+        }
+    };
+    let hash = ContentHash::of(content.as_bytes());
+    // The transcript's resolved location, made when it was found: every
+    // lookup and store below keys by it, as `--force` clears by it.
+    let cached = stored.resolved();
+    let file_path = stored.path();
 
-                            update_stats(&stats, &status);
-                            if event_tx
-                                .send(ValidationEvent::FileComplete(FileCompleteEvent {
-                                    path: file_path,
-                                    status,
-                                }))
-                                .is_err()
-                            {
-                                break;
-                            }
-                            continue;
-                        }
-                        // else: roundtrip not cached, fall through to full processing
-                    } else {
-                        // No roundtrip needed, just use validation cache hit
-                        let status = FileStatus::Valid {
-                            cache_hit: true,
-                            roundtrip: RoundtripVerdict::NotRequested,
-                        };
-                        update_stats(&stats, &status);
-                        if event_tx
-                            .send(ValidationEvent::FileComplete(FileCompleteEvent {
-                                path: file_path,
-                                status,
-                            }))
-                            .is_err()
-                        {
-                            break;
-                        }
-                        continue;
-                    }
-                }
-
-                // Cache miss or invalid file, need to parse
-                tracing::debug!(file = ?file_path, "Cache miss - parsing file");
-
-                // Read file content
-                let content = match fs::read_to_string(&file_path) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        let status = FileStatus::ReadError {
-                            message: e.to_string(),
-                        };
-
-                        update_stats(&stats, &status);
-                        // A closed result stream ends the worker on this path
-                        // too. The completed read failure is accounted for,
-                        // but no later file may begin after delivery fails.
-                        if event_tx
-                            .send(ValidationEvent::FileComplete(FileCompleteEvent {
-                                path: file_path,
-                                status,
-                            }))
-                            .is_err()
-                        {
-                            break;
-                        }
-                        continue;
-                    }
-                };
-
-                let source = Arc::<str>::from(content);
-
-                let attempt = validate_single_file_streaming(
-                    &stored,
-                    config.check_alignment,
-                    config.rules,
-                    &parser,
-                    source.as_ref(),
+    // Serve a cached Valid verdict without parsing. An Invalid verdict is
+    // re-validated, so its diagnostics can be shown. Whether the roundtrip
+    // verdict was already looked up (and missed) is carried forward, so it
+    // is never looked up twice for one file.
+    let mut roundtrip_lookup = RoundtripLookup::NotYet;
+    if let Some(CacheOutcome::Valid) = lookup(context, tally, file_path, |cache| {
+        cache.get(cached, &hash, config.alignment)
+    }) {
+        tracing::debug!(file = ?file_path, "Cache hit (valid) - skipping reparse");
+        match config.roundtrip {
+            RoundtripCheck::Skip => {
+                // A cached Valid verdict means the file showed nothing.
+                return complete(
+                    FileStatus::Valid {
+                        roundtrip: RoundtripVerdict::NotRequested,
+                        warnings: None,
+                    },
+                    CacheUse::Hit,
                 );
-                let (completed, chat_file) = match attempt {
-                    Ok(completed) => completed,
-                    Err(failure) => {
-                        let _ = event_tx.send(ValidationEvent::Errors(ErrorEvent {
-                            path: file_path.clone(),
-                            errors: failure.diagnostics().to_vec(),
-                            source: source.clone(),
-                        }));
-                        let status = FileStatus::InternalFailure { failure };
-                        update_stats(&stats, &status);
-                        if event_tx
-                            .send(ValidationEvent::FileComplete(FileCompleteEvent {
-                                path: file_path,
-                                status,
-                            }))
-                            .is_err()
-                        {
-                            break;
-                        }
-                        // No cache admission, presentation suppression, or roundtrip.
-                        continue;
+            }
+            RoundtripCheck::Run => {
+                match lookup(context, tally, file_path, |cache| {
+                    cache.get_roundtrip(cached, &hash, config.alignment)
+                }) {
+                    Some(roundtrip) => {
+                        return complete(cached_roundtrip_status(roundtrip, None), CacheUse::Hit);
                     }
-                };
-                let complete = completed.into_diagnostics();
-
-                // THE CACHED FACT, derived from the COMPLETE diagnostic set and
-                // therefore true under every presentation policy: did this file
-                // produce any diagnostic at all?
-                //
-                // Only a file with none is cached Valid. Warnings must be shown
-                // on every run until the user fixes them, so a warnings-only
-                // file must not be cached Valid (that would silently hide it),
-                // and a file whose only diagnostics are currently suppressed
-                // must not be either, or the row would be a rendering rather
-                // than a fact and the next run with different `--suppress`
-                // would be served a view built for someone else.
-                let validation_outcome = if complete.is_empty() {
-                    CacheOutcome::Valid
-                } else {
-                    CacheOutcome::Invalid
-                };
-
-                // Presentation is applied HERE, at the boundary where the run
-                // hands results to a consumer, and never upstream of the fact
-                // above.
-                let shown = config.presentation.apply_all(complete);
-
-                let error_count = shown
-                    .iter()
-                    .filter(|e| matches!(e.severity, Severity::Error))
-                    .count();
-
-                let is_valid = error_count == 0;
-
-                let status = if is_valid {
-                    // Validation passed. Run roundtrip if configured.
-                    if config.roundtrip {
-                        run_roundtrip_and_emit(
-                            &chat_file, &parser, &file_path, &config, &cache, &event_tx,
-                        )
-                    } else {
-                        FileStatus::Valid {
-                            cache_hit: false,
-                            roundtrip: RoundtripVerdict::NotRequested,
-                        }
-                    }
-                } else {
-                    FileStatus::Invalid {
-                        error_count,
-                        cache_hit: false,
-                    }
-                };
-
-                // Do not publish input findings from an attempt that later
-                // failed internally. Consumers may turn this event into an
-                // invalid-file record, contradicting the terminal failure.
-                if !matches!(status, FileStatus::InternalFailure { .. }) && !shown.is_empty() {
-                    let _ = event_tx.send(ValidationEvent::Errors(ErrorEvent {
-                        path: file_path.clone(),
-                        errors: shown,
-                        source: source.clone(),
-                    }));
-                }
-
-                // A producer fault during the optional reparse also prevents
-                // this run from publishing a completed validation cache entry.
-                if !matches!(status, FileStatus::InternalFailure { .. })
-                    && config.cache.allows_writes()
-                    && let Some(cache_ref) = cache.as_ref()
-                    && let Err(e) =
-                        cache_ref.set(&file_path, config.check_alignment, validation_outcome)
-                {
-                    tracing::warn!(file = ?file_path, error = %e, "Failed to cache validation result");
-                }
-
-                update_stats(&stats, &status);
-
-                // Stream file completion
-                if event_tx
-                    .send(ValidationEvent::FileComplete(FileCompleteEvent {
-                        path: file_path,
-                        status,
-                    }))
-                    .is_err()
-                {
-                    break; // Receiver dropped (cancelled)
+                    // Roundtrip not cached: fall through to full processing.
+                    None => roundtrip_lookup = RoundtripLookup::Missed,
                 }
             }
-            Err(_) => break, // Work channel closed, no more files
+        }
+    }
+
+    tracing::debug!(file = ?file_path, "Cache miss - parsing file");
+    let cache_use = validated_fresh(context.cache);
+    let policy = talkbank_model::validation::ValidationPolicy::new(config.rules, config.alignment);
+    let (completed, chat_file) =
+        match validate_single_file_streaming(&stored, policy, parser, &content) {
+            Ok(completed) => completed,
+            Err(failure) => {
+                // The attempt's own diagnostics stay on the failure, shown
+                // against the file's text; no cache admission, presentation
+                // suppression, or roundtrip.
+                return complete(
+                    FileStatus::InternalFailure {
+                        failure,
+                        attempt: FailedAttempt::Validation { source: content },
+                    },
+                    cache_use,
+                );
+            }
+        };
+    let complete_diagnostics = completed.into_diagnostics();
+
+    // THE CACHED FACT, derived from the COMPLETE diagnostic set and
+    // therefore true under every presentation policy: did this file
+    // produce any diagnostic at all?
+    //
+    // Only a file with none is cached Valid. Warnings must be shown
+    // on every run until the user fixes them, so a warnings-only
+    // file must not be cached Valid (that would silently hide it),
+    // and a file whose only diagnostics are currently suppressed
+    // must not be either, or the row would be a rendering rather
+    // than a fact and the next run with different `--suppress`
+    // would be served a view built for someone else.
+    let validation_outcome = match complete_diagnostics.is_empty() {
+        true => CacheOutcome::Valid,
+        false => CacheOutcome::Invalid,
+    };
+
+    // Presentation is applied HERE, at the boundary where the run
+    // hands results to a consumer, and never upstream of the fact
+    // above.
+    let shown = config.presentation.apply_all(complete_diagnostics);
+
+    // The file's cache use is that of the verdict that decided its status:
+    // a cached roundtrip verdict on a freshly validated file is a hit. The
+    // text moves into the status with the diagnostics that point into it.
+    let mut passed = |warnings| match config.roundtrip {
+        RoundtripCheck::Run => run_roundtrip(
+            &chat_file,
+            parser,
+            RoundtripTarget {
+                file_path,
+                cached,
+                hash: &hash,
+                lookup: roundtrip_lookup,
+                warnings,
+            },
+            context,
+            tally,
+        ),
+        RoundtripCheck::Skip => (
+            FileStatus::Valid {
+                roundtrip: RoundtripVerdict::NotRequested,
+                warnings,
+            },
+            cache_use,
+        ),
+    };
+    let (status, cache_use) = match Shown::of(shown, content) {
+        Shown::Errors(diagnostics) => (FileStatus::Invalid { diagnostics }, cache_use),
+        Shown::Nothing => passed(None),
+        Shown::Warnings(warnings) => passed(Some(warnings)),
+    };
+
+    // A producer fault during the optional reparse publishes no cache
+    // entry, and its status carries none of the input's findings:
+    // consumers would read the findings as an invalid file, contradicting
+    // the failure.
+    match &status {
+        FileStatus::InternalFailure { .. } => {}
+        FileStatus::Valid { .. }
+        | FileStatus::Invalid { .. }
+        | FileStatus::RoundtripFailed { .. }
+        | FileStatus::ReadError { .. } => store(context, tally, file_path, |cache| {
+            cache.set(cached, &hash, config.alignment, validation_outcome)
+        }),
+    }
+
+    complete(status, cache_use)
+}
+
+/// Whether a file's roundtrip verdict has been looked up yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RoundtripLookup {
+    /// Not yet: look it up before running the check.
+    NotYet,
+    /// Looked up and missed (on the cached-valid path): run the check.
+    Missed,
+}
+
+/// Read the cache, when the run has one: a hit's verdict, `None` on a miss
+/// or with no cache, and on a failure `None` too, counted in the tally and
+/// logged, so the file is validated without the cache and the run's totals
+/// say the cache failed.
+fn lookup<V>(
+    context: &WorkerContext<'_>,
+    tally: &mut ValidationTally,
+    file_path: &Path,
+    query: impl FnOnce(&dyn VerdictReader) -> Result<CacheLookup<V>, talkbank_cache::CacheError>,
+) -> Option<V> {
+    let reader: &dyn VerdictReader = match context.cache {
+        RunCache::Absent => return None,
+        RunCache::ReadOnly(reader) => reader.as_ref(),
+        RunCache::ReadWrite(cache) => {
+            let cache: &dyn ValidationCache = cache.as_ref();
+            cache
+        }
+    };
+    match query(reader) {
+        Ok(CacheLookup::Hit(outcome)) => Some(outcome),
+        Ok(CacheLookup::Miss) => None,
+        Err(error) => {
+            tracing::warn!(file = ?file_path, %error, "Cache read failed; validating without it");
+            tally.record_cache_error();
+            None
         }
     }
 }
 
-/// Run roundtrip test and emit events. Returns the resulting FileStatus.
-fn run_roundtrip_and_emit<C>(
+/// Write to the cache, when the run may; a failure is counted and logged.
+/// Only a [`RunCache::ReadWrite`] has a write method to call.
+fn store(
+    context: &WorkerContext<'_>,
+    tally: &mut ValidationTally,
+    file_path: &Path,
+    write: impl FnOnce(&dyn ValidationCache) -> Result<(), talkbank_cache::CacheError>,
+) {
+    let cache = match context.cache {
+        RunCache::Absent | RunCache::ReadOnly(_) => return,
+        RunCache::ReadWrite(cache) => cache.as_ref(),
+    };
+    if let Err(error) = write(cache) {
+        tracing::warn!(file = ?file_path, %error, "Cache write failed");
+        tally.record_cache_error();
+    }
+}
+
+/// The status a cached roundtrip verdict gives a valid file with these
+/// warnings. One place for both routes to a cached roundtrip: a
+/// cached-valid file (no warnings), and a freshly validated one.
+fn cached_roundtrip_status(
+    roundtrip: RoundtripOutcome,
+    warnings: Option<FileDiagnostics>,
+) -> FileStatus {
+    match roundtrip {
+        RoundtripOutcome::Passed => FileStatus::Valid {
+            roundtrip: RoundtripVerdict::Passed,
+            warnings,
+        },
+        RoundtripOutcome::Failed => FileStatus::RoundtripFailed {
+            reason: "Roundtrip failed (cached)".to_owned(),
+            diff: None,
+            warnings,
+        },
+    }
+}
+
+/// The file a roundtrip check is about, whether its cached verdict has
+/// been looked up yet, and the warnings its validation showed.
+struct RoundtripTarget<'a> {
+    file_path: &'a Path,
+    cached: &'a ResolvedPath,
+    hash: &'a ContentHash,
+    lookup: RoundtripLookup,
+    warnings: Option<FileDiagnostics>,
+}
+
+/// Run the roundtrip check on a valid file, or read its cached verdict.
+/// Returns the resulting status and its cache use: a hit when the roundtrip
+/// verdict came from the cache, otherwise the use of the fresh validation
+/// that preceded it.
+fn run_roundtrip(
     chat_file: &ChatFile,
     parser: &ParserDispatch,
-    file_path: &Path,
-    config: &ValidationConfig,
-    cache: &Option<Arc<C>>,
-    event_tx: &Sender<ValidationEvent>,
-) -> FileStatus
-where
-    C: ValidationCache + Send + Sync,
-{
-    // Check roundtrip cache first
-    if config.cache.allows_reads()
-        && let Some(rt_outcome) = cache
-            .as_ref()
-            .and_then(|c| c.get_roundtrip(file_path, config.check_alignment))
-    {
-        let rt_passed = rt_outcome == CacheOutcome::Valid;
-        // Emit roundtrip event
-        let _ = event_tx.send(ValidationEvent::RoundtripComplete(RoundtripEvent {
-            path: file_path.to_path_buf(),
-            passed: rt_passed,
-            failure_reason: if rt_passed {
-                None
-            } else {
-                Some("Roundtrip failed (cached)".to_string())
-            },
-            diff: None,
-        }));
-
-        if rt_passed {
-            return FileStatus::Valid {
-                cache_hit: true,
-                roundtrip: RoundtripVerdict::Passed,
-            };
-        } else {
-            return FileStatus::RoundtripFailed {
-                cache_hit: true,
-                reason: "Roundtrip failed (cached)".to_string(),
-            };
-        }
+    target: RoundtripTarget<'_>,
+    context: &WorkerContext<'_>,
+    tally: &mut ValidationTally,
+) -> (FileStatus, CacheUse) {
+    let config = context.config;
+    let RoundtripTarget {
+        file_path,
+        cached,
+        hash,
+        lookup: looked_up,
+        warnings,
+    } = target;
+    // Check the roundtrip cache first, unless the cached-valid path already
+    // did and missed.
+    let cached_verdict = match looked_up {
+        RoundtripLookup::NotYet => lookup(context, tally, file_path, |cache| {
+            cache.get_roundtrip(cached, hash, config.alignment)
+        }),
+        RoundtripLookup::Missed => None,
+    };
+    if let Some(roundtrip) = cached_verdict {
+        return (cached_roundtrip_status(roundtrip, warnings), CacheUse::Hit);
     }
+    let fresh = validated_fresh(context.cache);
 
     let result = match roundtrip::run_roundtrip(chat_file, parser) {
         Ok(result) => result,
         // These spans belong to serialized roundtrip text, not the original
-        // source. Retain the fault in the terminal status without attributing
-        // it to the user's source through an Errors event.
-        Err(failure) => return FileStatus::InternalFailure { failure },
+        // source. Retain the fault in the status without attributing it to
+        // the user's source as diagnostics.
+        Err(failure) => {
+            let attempt = FailedAttempt::RoundtripReparse;
+            return (FileStatus::InternalFailure { failure, attempt }, fresh);
+        }
     };
 
     // Cache the roundtrip result
     let roundtrip_outcome = match &result {
-        RoundtripResult::Passed => CacheOutcome::Valid,
-        RoundtripResult::Failed(_) => CacheOutcome::Invalid,
+        RoundtripResult::Passed => RoundtripOutcome::Passed,
+        RoundtripResult::Failed(_) => RoundtripOutcome::Failed,
     };
-    if config.cache.allows_writes()
-        && let Some(cache_ref) = cache.as_ref()
-        && let Err(e) =
-            cache_ref.set_roundtrip(file_path, config.check_alignment, roundtrip_outcome)
-    {
-        tracing::warn!(file = ?file_path, error = %e, "Failed to cache roundtrip result");
-    }
+    store(context, tally, file_path, |cache| {
+        cache.set_roundtrip(cached, hash, config.alignment, roundtrip_outcome)
+    });
 
-    // Emit roundtrip event, then the status, from one reading of the result.
-    match result {
-        RoundtripResult::Passed => {
-            let _ = event_tx.send(ValidationEvent::RoundtripComplete(RoundtripEvent {
-                path: file_path.to_path_buf(),
-                passed: true,
-                failure_reason: None,
-                diff: None,
-            }));
-            FileStatus::Valid {
-                cache_hit: false,
-                roundtrip: RoundtripVerdict::Passed,
-            }
-        }
-        RoundtripResult::Failed(failure) => {
-            let reason = failure.reason();
-            let _ = event_tx.send(ValidationEvent::RoundtripComplete(RoundtripEvent {
-                path: file_path.to_path_buf(),
-                passed: false,
-                failure_reason: Some(reason.clone()),
-                diff: failure.diff().map(str::to_string),
-            }));
-            FileStatus::RoundtripFailed {
-                cache_hit: false,
-                reason,
-            }
-        }
-    }
-}
-
-/// Updates stats.
-pub(super) fn update_stats(stats: &Arc<ValidationStats>, status: &FileStatus) {
-    match status {
-        FileStatus::InternalFailure { .. } => {
-            stats.record_internal_failure();
-            stats.record_cache_miss();
-        }
-        FileStatus::Valid {
-            cache_hit,
-            roundtrip,
-        } => {
-            stats.record_valid_file();
-            if *cache_hit {
-                stats.record_cache_hit();
-            } else {
-                stats.record_cache_miss();
-            }
-            // The roundtrip count is read off the status, which every branch
-            // that builds a Valid status has to fill in; the counter cannot be
-            // forgotten by one of them again.
-            match roundtrip {
-                RoundtripVerdict::Passed => stats.record_roundtrip_passed(),
-                RoundtripVerdict::NotRequested => {}
-            }
-        }
-        FileStatus::Invalid { cache_hit, .. } => {
-            stats.record_invalid_file();
-            if *cache_hit {
-                stats.record_cache_hit();
-            } else {
-                stats.record_cache_miss();
-            }
-        }
-        FileStatus::RoundtripFailed { cache_hit, .. } => {
-            // Roundtrip failures count as invalid files, and as roundtrips.
-            stats.record_invalid_file();
-            stats.record_roundtrip_failed();
-            if *cache_hit {
-                stats.record_cache_hit();
-            } else {
-                stats.record_cache_miss();
-            }
-        }
-        FileStatus::ParseError { .. } => {
-            stats.record_parse_error();
-            stats.record_cache_miss();
-        }
-        FileStatus::ReadError { .. } => {
-            stats.record_invalid_file();
-            stats.record_cache_miss();
-        }
-    }
+    let status = match result {
+        RoundtripResult::Passed => FileStatus::Valid {
+            roundtrip: RoundtripVerdict::Passed,
+            warnings,
+        },
+        RoundtripResult::Failed(failure) => FileStatus::RoundtripFailed {
+            reason: failure.reason(),
+            diff: failure.diff().map(str::to_string),
+            warnings,
+        },
+    };
+    (status, fresh)
 }
 
 /// Validate one file and return its COMPLETE diagnostic set, plus the parsed
@@ -539,8 +501,7 @@ pub(super) fn update_stats(stats: &Arc<ValidationStats>, status: &FileStatus) {
 /// let a `--suppress` list decide a cache row's value in v0.6.0.
 fn validate_single_file_streaming(
     transcript: &StoredTranscript,
-    check_alignment: bool,
-    rules: talkbank_model::RuleSelection,
+    policy: talkbank_model::validation::ValidationPolicy,
     parser: &ParserDispatch,
     content: &str,
 ) -> Result<(talkbank_model::CompletedDiagnostics, ChatFile), talkbank_model::InternalFailure> {
@@ -558,11 +519,7 @@ fn validate_single_file_streaming(
     // reported as read errors before cache admission.
     let name = transcript.name();
 
-    if check_alignment {
-        chat_file.validate_with_alignment_and_rules(rules, &collector, name);
-    } else {
-        chat_file.validate_with_rules(rules, &collector, name);
-    }
+    chat_file.validate_at(policy, &collector, name);
 
     Ok((
         talkbank_model::CompletedDiagnostics::admit(collector.into_vec())?,

@@ -557,11 +557,13 @@ pub fn emit_for(parser: &TreeSitterParser, example: &ErrorExample) -> StagedDiag
     // stem. The name comes from the example's own `**Source**` line; an example
     // with no source is `Anonymous`, which is the honest answer rather than a
     // synthetic stem that would make such rules fire by construction.
+    // `source_stem` is the last non-empty component of the line, so it is a
+    // stem by construction; one the stem check still refused would name no
+    // file, and is anonymous.
     let name = example
         .source_stem()
-        .map_or(TranscriptName::Anonymous, |stem| {
-            TranscriptName::Named(FileStem::from_stem(stem))
-        });
+        .and_then(|stem| FileStem::from_stem(stem).ok())
+        .map_or(TranscriptName::Anonymous, TranscriptName::Named);
     let validation_sink = ErrorCollector::new();
     // The example says which rules it runs under, and this is the only place
     // that answer is turned into a `RuleSelection`. Before the example could

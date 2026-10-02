@@ -1,7 +1,7 @@
 # Developer Verification Checks
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:08 EDT
+**Last modified:** {{git-dates:page}}
 
 What to run locally, and what each thing costs. The commands are `just`
 recipes; `just --list` shows them all.
@@ -22,8 +22,7 @@ cd grammar && tree-sitter test        # grammar-only edits
 **Do not run `cargo check` before `cargo test`.** `cargo test` type-checks
 everything `check` would, and the two are DIFFERENT cargo units: `check` emits
 only `.rmeta` while `test` emits full `.rlib` with codegen, so nothing is
-reused and alternating them recompiles the whole dependency graph twice. This
-page used to prescribe exactly that sequence. If a crate has no tests, run
+reused and alternating them recompiles the whole dependency graph twice. If a crate has no tests, run
 `cargo test -p <crate>` anyway; it compiles and reports zero tests.
 
 ## The git hooks, and what each refuses
@@ -34,7 +33,7 @@ and an untracked hook is a gate that exists on exactly one machine.
 
 | Hook | Refuses |
 |---|---|
-| `pre-commit` | staged document dates older than the prospective commit/squash date, then chains to the optional local hook |
+| `pre-commit` | invalid publication metadata or stale staged handwritten dates, then chains to the optional local hook |
 | `commit-msg` | a `type(scope)!:` subject that does not touch `CHANGELOG.md`; and production Rust staged with no test, spec, corpus or fixture beside it |
 | `pre-push` | a push with no `just gate` stamp, or a stamp taken on different bytes |
 
@@ -43,12 +42,14 @@ the stamp `just gate` writes, because git has already opened its connection to
 the remote by the time a pre-push hook runs, so a multi-minute hook is closed
 by the SSH idle timeout and fails a push that had passed.
 
-`just doc-dates` checks pending worktree changes and unpublished changes since
-the configured upstream against today's date. The commit hook checks the Git
-index instead, so an unstaged correction cannot conceal a stale staged header.
-Detached CI checks actual committed history. The small date check is repeated
-at commit time because committing changes history without changing the tree
-covered by the full gate receipt. Headers are never automatically rewritten.
+`just doc-dates` admits each document's publication metadata. Git-derived
+headers follow the document's own history automatically; see
+[documentation architecture](documentation-architecture.md). Remaining
+handwritten dates are checked against actual history and, for pending changes
+since the configured upstream, today's date. The commit hook reads the Git
+index, so an unstaged correction cannot conceal a stale staged header.
+Detached CI checks actual committed history. Neither Git publication metadata
+nor a handwritten date certifies a content review.
 
 **The red-evidence gate has one way past it, and it is not a flag.** If a change
 genuinely admits neither a test nor a type, say so in a `Red:` trailer on its
@@ -83,11 +84,9 @@ per-push gate needs to know.
 `gate` puts every cheap check ahead of every expensive one, so a workflow typo
 or a stale version pin fails in seconds rather than after the test suite.
 
-**Do not assemble this by hand from the list below.** It used to be a list,
-`just push` ran no tests at all under a comment claiming it was the full CI
-gate, and the predictable thing happened: a green `just test` was read as a
-green gate and CI went red on a doctest. `just test` is `--tests`, and doctests
-are a separate compilation it cannot see.
+**Do not assemble this by hand from the list below.** A green `just test` is
+not a green gate: `just test` is `--tests`, and doctests are a separate
+compilation it cannot see.
 
 What `gate` runs, and why each is not covered by the others:
 
@@ -103,7 +102,7 @@ What `gate` runs, and why each is not covered by the others:
 | `just actionlint`, the two sync checks | workflow syntax and version pins |
 
 Clippy is deliberately absent, and so is the feature-off build: both are
-`just release-lint`, which per-push CI no longer runs either. Nothing in CI
+`just release-lint`, which per-push CI does not run either. Nothing in CI
 goes red on something the local gate did not run; that equivalence is what
 `scripts/check_ci_gate_sync.py` enforces.
 

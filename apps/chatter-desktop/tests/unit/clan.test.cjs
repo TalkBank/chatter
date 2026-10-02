@@ -37,10 +37,10 @@ test("openInClan forwards the bare error.message as the CLAN highlight (matches 
   assert.equal(command, DESKTOP_COMMANDS.openInClan);
 
   // The CLI/TUI sends the bare error.message; CLAN locates the highlight from
-  // this text. Prefixing it with "E601: " (the old behavior) diverged from the
-  // working CLI, so the highlight no longer matched the source.
-  assert.equal(payload.msg, "Invalid dependent tier content");
-  assert.notEqual(payload.msg, "E601: Invalid dependent tier content");
+  // this text, so a code prefix would miss it. One request value, as the Rust
+  // command takes it.
+  assert.equal(payload.request.msg, "Invalid dependent tier content");
+  assert.notEqual(payload.request.msg, "E601: Invalid dependent tier content");
 });
 
 test("openInClan forwards file, line, column and byte offset from the error", async () => {
@@ -57,8 +57,7 @@ test("openInClan forwards file, line, column and byte offset from the error", as
   await clan.openInClan({ file: "/corpus/E601.cha", error });
 
   const [, payload] = invocations[0];
-  assert.equal(payload.file, "/corpus/E601.cha");
-  assert.equal(payload.line, 8);
-  assert.equal(payload.col, 1);
-  assert.equal(payload.byteOffset, 168);
+  assert.deepEqual(payload, {
+    request: { file: "/corpus/E601.cha", line: 8, col: 1, byteOffset: 168, msg: sampleError().message },
+  });
 });

@@ -1,7 +1,7 @@
 # Grammar Workflow
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:45 EDT
+**Last modified:** {{git-dates:page}}
 
 The tree-sitter grammar at `grammar/grammar.js` is the formal definition of the CHAT format. Changes require careful validation.
 
@@ -103,7 +103,7 @@ boundary and recovery policies. Binding proves source identity, not syntactic
 completeness or semantic validity; do not remove recovery states merely because
 the finite corpus has not reached them.
 
-The generated source-bound extraction path is now available:
+The generated source-bound extraction path:
 `bound.extract()` returns `Result<SourceChildren, ReconstructionFault>`; the
 admitted immutable carrier's generated
 `field_<minted_name>()` accessors retain source identity in `SourceField`.
@@ -138,14 +138,14 @@ Likewise, a present CA token with empty text or a symbol outside its shared
 generated registry is a producer/source-association failure. Actual MISSING
 tokens retain their existing recovery handling.
 
-Document-root classification now retains associated carriers for both complete
+Document-root classification retains associated carriers for both complete
 documents and reconstructed ERROR roots. The latter uses
 `SourceSlice::extract_full_document_from_error_recovery()`. Line and header
 dispatch preserve association from those carriers; wrapped-header fragments
 enter the same dispatcher with their already admitted source slice.
 Participant lowering accepts a `SourceBound<ParticipantsHeaderNode>` and carries
 association through its contents, repeated groups, speaker, name, and role.
-Its text reads no longer accept a separately supplied source string.
+Its text reads accept no separately supplied source string.
 
 Calling the free `extract_participant(bound.node())` returns a fallible ordinary
 carrier. Other header families retain their transitional lowering APIs behind
@@ -234,9 +234,9 @@ the change, not a follow-up.
 
 ## The reference corpus is a regression signal, NOT a validity authority
 
-`corpus/reference/` must stay green, but this page used to call it "the
-ultimate arbiter of correctness" and tell you to revert immediately on a single
-failure. That is wrong, and acting on it would entrench bad data.
+`corpus/reference/` must stay green, but it is not "the ultimate arbiter of
+correctness", and a single failure is not a reason to revert immediately:
+acting on that would entrench bad data.
 
 The corpus is SYNTHESIZED. When a change makes it reject a file, adjudicate the
 FILE against the real authorities (`spec/`, the grammar, and real corpus data)

@@ -24,10 +24,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use chrono::Utc;
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::{ParticipantRole, SpeakerCode};
 use talkbank_transform::parse_and_validate;
+use talkbank_transform::recorded_time::RecordedTime;
 use talkbank_transform::speaker_id::{
     Confidence, ConfidenceField, DEFAULT_CONFIDENCE_THRESHOLD, DecisionEngine, EndpointUrl,
     InsertedRoleSpec, JudgmentProvenance, MappingSpec, MergeOverride, ModelId, OverrideFile,
@@ -552,7 +552,7 @@ fn llm_entries_filters_by_engine() {
         &report,
         adult_roles,
         "test-operator".to_string(),
-        Utc::now(),
+        RecordedTime::now(),
     );
     file.upsert("det-1".to_string(), entry);
     assert_eq!(file.llm_entries().count(), 0);

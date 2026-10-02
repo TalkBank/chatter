@@ -27,6 +27,7 @@ use sqlx::SqlitePool;
 
 use super::error::CacheError;
 use super::rules_version::RulesVersion;
+use super::types::{CacheStorage, DatabaseFile};
 
 /// What the reachability prune did on one cache open.
 ///
@@ -38,6 +39,9 @@ pub enum VersionPruneOutcome {
     /// Every row in the database was reachable. Nothing was deleted, and no
     /// `VACUUM` was paid for.
     NothingUnreachable,
+    /// No prune ran: the database was created empty by this open (an
+    /// in-memory cache), so there was nothing to examine.
+    FreshDatabase,
     /// Rows under superseded versions were deleted.
     Pruned(VersionPruneReport),
 }
@@ -48,7 +52,7 @@ pub struct VersionPruneReport {
     /// Rows deleted.
     rows_deleted: u64,
     /// Distinct superseded versions those rows belonged to.
-    versions_deleted: u64,
+    versions_deleted: usize,
     /// Whether the freed pages were returned to the filesystem.
     reclaimed: SpaceReclaimed,
 }
@@ -60,7 +64,7 @@ impl VersionPruneReport {
     }
 
     /// Distinct superseded versions removed by this prune.
-    pub fn versions_deleted(&self) -> u64 {
+    pub fn versions_deleted(&self) -> usize {
         self.versions_deleted
     }
 
@@ -85,6 +89,10 @@ pub enum SpaceReclaimed {
         /// File size after the rewrite, in bytes.
         bytes_after: u64,
     },
+    /// `VACUUM` rewrote the database, but its file's size could not be read
+    /// before or after, so no figure is given rather than a made-up 0. The
+    /// read failure is in the log.
+    VacuumedSizeUnknown,
     /// The rows are gone but the file was not rewritten, so its pages stay
     /// allocated for reuse. Carries why.
     NotReclaimed(VacuumSkipped),
@@ -130,6 +138,9 @@ impl std::fmt::Display for VersionPruneReport {
                 bytes_before / 1_048_576,
                 bytes_after / 1_048_576
             ),
+            SpaceReclaimed::VacuumedSizeUnknown => {
+                f.write_str("; database rewritten (its size could not be read)")
+            }
             SpaceReclaimed::NotReclaimed(reason) => {
                 write!(f, "; file not rewritten ({reason})")
             }
@@ -158,7 +169,7 @@ struct RetainedVersions {
 /// entry point to remember and no background task to supervise.
 pub(super) async fn prune_unreachable_versions(
     pool: &SqlitePool,
-    db_path: Option<&std::path::Path>,
+    storage: &CacheStorage,
     current: &RulesVersion,
 ) -> Result<VersionPruneOutcome, CacheError> {
     let retained = retained_versions(pool, current).await?;
@@ -168,7 +179,7 @@ pub(super) async fn prune_unreachable_versions(
         return Ok(VersionPruneOutcome::NothingUnreachable);
     }
 
-    let reclaimed = reclaim(pool, db_path).await;
+    let reclaimed = reclaim(pool, storage).await;
 
     Ok(VersionPruneOutcome::Pruned(VersionPruneReport {
         rows_deleted: deleted.rows,
@@ -182,7 +193,7 @@ struct DeletedRows {
     /// Rows removed.
     rows: u64,
     /// Distinct versions those rows belonged to.
-    versions: u64,
+    versions: usize,
 }
 
 /// Work out which versions survive: the current one, plus the most recently
@@ -256,7 +267,7 @@ async fn delete_unretained(
 
     Ok(DeletedRows {
         rows: result.rows_affected(),
-        versions: versions.0.max(0) as u64,
+        versions: crate::cache_utils::count(versions.0)?,
     })
 }
 
@@ -264,16 +275,22 @@ async fn delete_unretained(
 ///
 /// Never fatal: the rows are already gone and the cache is correct either way,
 /// so a busy database costs a smaller file, not a failed open.
-async fn reclaim(pool: &SqlitePool, db_path: Option<&std::path::Path>) -> SpaceReclaimed {
-    let Some(path) = db_path else {
-        return SpaceReclaimed::NotReclaimed(VacuumSkipped::NotFileBacked);
+async fn reclaim(pool: &SqlitePool, storage: &CacheStorage) -> SpaceReclaimed {
+    let path = match storage {
+        CacheStorage::InMemory => {
+            return SpaceReclaimed::NotReclaimed(VacuumSkipped::NotFileBacked);
+        }
+        CacheStorage::Directory(cache_dir) => crate::cache_db_path(cache_dir),
     };
 
-    let bytes_before = file_size(path);
+    let bytes_before = database_size(&path);
     match sqlx::query("VACUUM").execute(pool).await {
-        Ok(_) => SpaceReclaimed::Vacuumed {
-            bytes_before,
-            bytes_after: file_size(path),
+        Ok(_) => match (bytes_before, database_size(&path)) {
+            (Some(bytes_before), Some(bytes_after)) => SpaceReclaimed::Vacuumed {
+                bytes_before,
+                bytes_after,
+            },
+            (None, _) | (_, None) => SpaceReclaimed::VacuumedSizeUnknown,
         },
         Err(error) => {
             tracing::debug!(%error, "cache VACUUM skipped");
@@ -282,13 +299,22 @@ async fn reclaim(pool: &SqlitePool, db_path: Option<&std::path::Path>) -> SpaceR
     }
 }
 
-/// Size of `path` in bytes, or 0 when it cannot be measured.
-///
-/// A size is only ever reported to a human alongside another size; an
-/// unreadable file yields a 0 that reads as "unknown" in that line rather than
-/// failing a prune that already succeeded.
-fn file_size(path: &std::path::Path) -> u64 {
-    std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
+/// The database file's size, measured the one way the crate reads its file
+/// ([`DatabaseFile::read`]). `None`, with the reason logged, when there is no
+/// figure to give: the prune has already succeeded, so an unreadable size is
+/// not an error, but it is never reported as 0 either.
+fn database_size(path: &std::path::Path) -> Option<u64> {
+    match DatabaseFile::read(path) {
+        Ok(DatabaseFile::Present { size_bytes, .. }) => Some(size_bytes),
+        Ok(DatabaseFile::Missing) => {
+            tracing::warn!(path = %path.display(), "cache database missing while measuring a VACUUM");
+            None
+        }
+        Err(error) => {
+            tracing::warn!(%error, "cannot measure the cache database around a VACUUM");
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -311,6 +337,20 @@ mod tests {
         assert!(rendered.contains("190000"), "{rendered}");
         assert!(rendered.contains("86"), "{rendered}");
         assert!(rendered.contains("243 MB -> 53 MB"), "{rendered}");
+    }
+
+    /// A rewrite whose size could not be read says so, rather than
+    /// reporting a reclaim of 0 bytes.
+    #[test]
+    fn an_unmeasured_vacuum_gives_no_figure() {
+        let report = VersionPruneReport {
+            rows_deleted: 5,
+            versions_deleted: 1,
+            reclaimed: SpaceReclaimed::VacuumedSizeUnknown,
+        };
+        let rendered = report.to_string();
+        assert!(rendered.contains("could not be read"), "{rendered}");
+        assert!(!rendered.contains("MB"), "{rendered}");
     }
 
     /// A skipped rewrite says so, and says why, rather than reporting a

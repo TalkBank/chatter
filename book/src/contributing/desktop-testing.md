@@ -1,7 +1,7 @@
 # Desktop App Testing
 
 **Status:** Current
-**Last updated:** 2026-09-28 20:59 EDT
+**Last updated:** {{git-dates:page}}
 
 This document covers the testing strategy for the Chatter desktop app
 (`apps/chatter-desktop/`). Testing is split into three tiers by speed and scope.
@@ -45,14 +45,18 @@ boundary tests rather than inventing a second fixture oracle.
 
 `validationState.ts::fileOutcome` projects a streamed `FileEntry` into a
 discriminated union: pending, valid, or problem with an explanation. Both the
-file tree and the detail panel use it. In particular, `readError`, `parseError`,
-`internalFailure`, `roundtripFailed` and cached invalid statuses must remain visible when there is
-no diagnostic array. Do not infer success from an empty array.
+file tree and the detail panel use it, and `fileStatusLabel` words it for
+the detail panel and the text export. In particular, `readError`,
+`internalFailure`, `roundtripFailed` and cached invalid statuses must remain
+visible when there is no diagnostic array. Do not infer success from an empty
+array.
 
-`shouldShowAllFilesValid` additionally requires a nonempty, non-cancelled,
-finished population whose totals certify all files as valid, with no read/parse
-or internal/roundtrip failures. An internal failure increments `internalFailures`,
-not the valid or invalid counter: CHAT validity remains undetermined.
+`shouldShowAllFilesValid` requires a `finished` phase whose `passed` is
+true (the runner's own verdict, the one the CLI's exit status reads) and no
+file with anything to show. A cancelled run is the separate `stopped` phase,
+and a target with no transcript is `nothingFound`, so neither can reach this
+check. An internal failure increments `internalFailures`, not the valid or
+invalid counter: CHAT validity remains undetermined.
 `finishedRunSummary` is shared by the window title,
 notification and status bar. Regression tests exercise failure statuses without
 diagnostics, warning visibility, cancellation, empty populations and success.
@@ -225,8 +229,9 @@ cargo install tauri-driver    # WebDriver backend for Tauri (Linux/Windows only)
 cargo tauri build --debug     # Build the app binary
 ```
 
-**Note:** `tauri-driver` only works on Linux and Windows. On macOS, WKWebView
-does not support WebDriver. Run E2E tests in CI (Linux) or on a Windows machine.
+**Note:** the checked-in configuration drives standalone `tauri-driver`, which
+supports Linux and Windows, not macOS. This is a limitation of that route,
+not of every available Tauri automation option; see the evaluation below.
 
 ### Running
 
@@ -258,8 +263,9 @@ The Rust integration tests cover the shared validation pipeline and bridge,
 not those native interactions.
 
 Do not copy a direct `window.__TAURI__.core.invoke("validate", { path })`
-example: this app does not enable the global Tauri API, and `validate` also
-requires roundtrip, parser-kind and strict-linker arguments. Production calls
+example: this app does not enable the global Tauri API, and `validate` takes
+one `request` argument (a `ValidateRequest`: path, roundtrip, parser kind,
+strict linkers and jobs), not a bare path. Production calls
 use the typed runtime capability and transport. A future automated native
 validation test must use that contract, subscribe before starting the run,
 await its terminal event with a bounded timeout, and isolate cache/settings.
@@ -286,14 +292,40 @@ above; passing a DOM assertion after a delay is not a validation receipt.
 
 | Platform | WebView engine | E2E support |
 |----------|---------------|-------------|
-| macOS | WKWebView | **Not supported**: `tauri-driver` does not work on macOS (WKWebView has no WebDriver API) |
+| macOS | WKWebView | Not supported by our current standalone-driver configuration; service-based alternatives exist |
 | Windows | WebView2 (Chromium) | Full support via `tauri-driver` |
 | Linux | WebKitGTK | Full support via `tauri-driver`; requires Xvfb for headless |
 
-**macOS limitation:** Apple's WKWebView does not expose a WebDriver endpoint,
-so `tauri-driver` cannot drive the app on macOS. E2E tests must run on Linux
-(CI) or Windows. For local macOS development, rely on the Rust integration
-tests (Tier 2) and manual smoke testing.
+**Current macOS coverage:** use the Rust integration tests (Tier 2) and explicit
+native smoke evidence. Do not infer native coverage from browser or transport
+doubles. The service-based option below has not been adopted or verified here.
+
+### Automation follow-up: evaluation, not implementation
+
+The [Tauri WebDriver guide](https://v2.tauri.app/develop/tests/webdriver/)
+documents `@wdio/tauri-service` with an embedded WebDriver plugin supporting
+macOS as well as Linux and Windows. It also documents renderer-only browser mode
+and external-driver alternatives. See the
+[WebdriverIO Tauri documentation](https://webdriver.io/docs/desktop-testing/tauri/).
+These capabilities are upstream claims, not passing Chatter test receipts.
+
+The least disruptive next experiment is rendered-component testing through the
+existing `DesktopRuntimeProvider` injection seam: valid, invalid and internal
+failure results; cancel/revalidate; export failure; and overlapping update
+requests. Keep typed event sequences and bounded completion assertions. This
+would complement the existing Rust bridge tests, not replace real IPC evidence.
+
+Before adding a native automation dependency, review its permissions, lifecycle,
+dependency cost and release exclusion. An embedded control server must never
+ship in production artifacts; require an explicit test-build configuration and
+an automated release-exclusion check. Do not add a second validator, test-only
+production command, or global IPC escape hatch. Keep settings/cache isolated.
+
+The existing native smoke deck only checks launch UI. Its configuration also
+resolves the binary under `apps/target`, rather than the workspace `target`, and
+does not select the Windows `.exe` suffix. Correct binary discovery and retain
+an actual successful run before treating this deck as a usable release check.
+The smoke test's suggested `validate_for_test` shortcut is not an approved design.
 
 CSS rendering differs slightly between WebKit (Linux) and Chromium (Windows).
 Visual regressions are possible, consider screenshot comparison tests if this

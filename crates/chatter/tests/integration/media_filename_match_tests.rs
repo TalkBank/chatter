@@ -276,8 +276,48 @@ fn nfd_media_name_matching_an_nfc_datafile_name_is_not_a_mismatch() -> Result<()
     Ok(())
 }
 
+/// An `@Media` name that differs from the datafile basename only in letter
+/// case is W110, not E531: CHECK compares case-insensitively, but a
+/// case-sensitive filesystem does not find `Session.mp3` for `session`.
+#[test]
+fn case_only_media_name_difference_is_w110_not_a_mismatch() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    let path = write_fixture(dir.path(), "Session.cha", &fixture_with_media("session"))?;
+    let output = harness.run_validate(&path, &["--force"])?;
+    let text = combined_output(&output);
+    assert!(
+        !text.contains("E531"),
+        "a case-only difference is not E531: {text}"
+    );
+    assert!(
+        text.contains("W110"),
+        "a case-only difference must be flagged: {text}"
+    );
+    Ok(())
+}
+
+/// Case and Unicode spelling are independent facts: a name that differs in
+/// case AND is not NFC gets both warnings, and still no E531.
+#[test]
+fn case_and_unicode_differences_are_reported_independently() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir().map_err(|e| TestError::Failure(format!("tempdir: {e}")))?;
+    let path = write_fixture(
+        dir.path(),
+        "Schl\u{fc}ssel4.cha",
+        &fixture_with_media("schlu\u{308}ssel4"),
+    )?;
+    let output = harness.run_validate(&path, &["--force"])?;
+    let text = combined_output(&output);
+    assert!(!text.contains("E531"), "{text}");
+    assert!(text.contains("W110"), "{text}");
+    assert!(text.contains("W109"), "{text}");
+    Ok(())
+}
+
 /// An `@Media` name and datafile basename that are both already NFC (the
-/// common case) get neither E531 nor W109.
+/// common case) get neither E531, W109 nor W110.
 #[test]
 fn matching_nfc_media_filename_has_no_canonicalization_warning() -> Result<(), TestError> {
     let harness = CliHarness::new()?;
@@ -294,6 +334,10 @@ fn matching_nfc_media_filename_has_no_canonicalization_warning() -> Result<(), T
     assert!(
         !text.contains("W109"),
         "identical NFC names must not get a canonicalization warning: {text}"
+    );
+    assert!(
+        !text.contains("W110"),
+        "identical names must not get a case warning: {text}"
     );
     Ok(())
 }

@@ -117,6 +117,55 @@ class ProspectiveDates(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("STALE: a page.md", result.stderr)
 
+    def test_git_history_metadata_survives_a_real_squash_without_restamping(self) -> None:
+        self.page.write_text(
+            "# Page\n\n**Last modified:** [Git history]"
+            "(https://github.com/TalkBank/chatter/commits/main/a%20page.md)\n"
+        )
+        git(["add", "."], self.root)
+        git(["commit", "-qm", "metadata owner"], self.root, date="2020-01-01")
+        hook = self.root / ".git" / "hooks" / "pre-commit"
+        shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook)
+        hook.chmod(0o755)
+        self.assertEqual(self.check("--prospective").returncode, 0)
+        git(["reset", "--soft", "published"], self.root)
+        git(["commit", "-qm", "content-preserving squash"], self.root)
+        self.assertEqual(self.check().returncode, 0)
+
+    def test_a_placeholder_example_cannot_excuse_an_edited_manual_header(self) -> None:
+        self.page.write_text(self.page.read_text() + "\nExample: {{git-dates:page}}\n")
+        result = self.check("--prospective")
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_a_history_link_must_name_the_document_it_dates(self) -> None:
+        self.page.write_text(
+            "# Page\n\n**Last modified:** [Git history]"
+            "(https://github.com/TalkBank/chatter/commits/main/other.md)\n"
+        )
+        self.assertNotEqual(self.check("--prospective").returncode, 0)
+
+    def test_a_book_date_placeholder_is_not_a_nonbook_date(self) -> None:
+        self.page.write_text("# Page\n\n**Last modified:** {{git-dates:page}}\n")
+        self.assertNotEqual(self.check("--prospective").returncode, 0)
+
+    def test_a_rendered_chapter_uses_its_page_metadata(self) -> None:
+        book = self.root / "book/src"
+        book.mkdir(parents=True)
+        chapter = book / "introduction.md"
+        chapter.write_text(
+            "# Intro\n\n**Book last changed:** {{git-dates:book}}\n"
+            "**This page last changed:** {{git-dates:page}}\n"
+        )
+        self.assertEqual(self.check("--prospective").returncode, 0)
+        summary = book / "SUMMARY.md"
+        summary.write_text("# Summary\n\n**Last modified:** {{git-dates:page}}\n")
+        self.assertNotEqual(self.check("--prospective").returncode, 0)
+        summary.write_text(
+            '# Summary\n\n**Last modified:** <a href="https://github.com/TalkBank/'
+            'chatter/commits/main/book/src/SUMMARY.md">Git history</a>\n'
+        )
+        self.assertEqual(self.check("--prospective").returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

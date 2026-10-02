@@ -1,30 +1,25 @@
 //! `chatter cache` subcommands.
 
 use clap::Subcommand;
-use std::path::PathBuf;
 
 /// Cache maintenance subcommands under `chatter cache`.
 #[derive(Subcommand)]
 pub enum CacheCommands {
     /// Display cache statistics
     Stats {
-        /// Output JSON format
-        #[arg(long)]
-        json: bool,
+        /// Output style (text|json), as for `validate`.
+        #[arg(short, long, value_enum, default_value_t = super::cli_types::OutputFormat::Text)]
+        format: super::cli_types::OutputFormat,
     },
 
     /// Clear cache entries
     Clear {
-        /// Clear all cache entries
-        #[arg(long, conflicts_with = "prefix")]
-        all: bool,
+        /// `--all` or `--prefix PATH`, parsed into one scope.
+        #[command(flatten)]
+        scope: super::cache_clear_args::ClearScope,
 
-        /// Clear entries matching this path prefix
-        #[arg(long, conflicts_with = "all")]
-        prefix: Option<PathBuf>,
-
-        /// Show what would be cleared without actually clearing
-        #[arg(long)]
-        dry_run: bool,
+        /// `--dry-run`, parsed into a mode.
+        #[command(flatten)]
+        mode: super::flag_modes::Flag<super::cache_clear_args::ClearMode>,
     },
 }

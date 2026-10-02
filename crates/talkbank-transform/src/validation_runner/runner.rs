@@ -6,112 +6,70 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use super::cancel::CancelSignal;
-use super::config::ValidationConfig;
-use super::helpers::collect_cha_files;
+use super::cancel::{CancelReason, CancelSignal, Canceller, ErrorBudget, cancel_channel};
+use super::config::ValidationRun;
 use super::types::{
-    AbortReason, RunCoverage, ValidationEvent, ValidationStats, ValidationStatsSnapshot,
+    AbortReason, CacheUse, FileCompleteEvent, FileStatus, LossCause, RunCoverage, RunEnding,
+    ValidationEvent, ValidationStatsSnapshot, ValidationTally, WorkerFaults,
 };
-use super::worker::worker_loop;
-use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
+use super::worker::{WorkerContext, worker_loop};
+use crate::worker_pool::fan_out;
+use crossbeam_channel::{Receiver, Sender, unbounded};
+use std::num::NonZeroUsize;
 use std::path::Path;
-use std::sync::Arc;
 use std::thread;
-use talkbank_cache::ValidationCache;
 
 /// How a runner call ended, from the spawning closure's point of view.
 ///
-/// This is a VALUE rather than a `()` return so that terminality has exactly
-/// one owner: the runner states how the stream ended, and the closure matches
-/// that statement exhaustively. Previously the runner returned nothing and
-/// three separate consumers each invented their own answer for "the stream
-/// closed without `Finished`", one of which (the TUI) answered "the run
-/// completed" and rendered partial counts as final.
+/// A VALUE rather than a `()` return so that terminality has exactly one
+/// owner: the runner states how the stream ended, and the closure matches
+/// that statement exhaustively to disarm the [`TerminalGuard`].
 #[must_use]
 pub(super) enum RunOutcome {
-    /// [`ValidationEvent::Finished`] was sent; the stream is properly
-    /// terminated and consumers have the run's real totals.
+    /// An ending was sent; the stream is properly terminated and consumers
+    /// have the run's real totals.
     Finished,
     /// The receiver was gone before anything could be reported, so there is
     /// nobody to tell. Not a fault: the caller dropped the stream (window
-    /// closed, run superseded, `--max-errors` short-circuit), and emitting a
-    /// terminal event into a dead channel would accomplish nothing.
+    /// closed, run superseded), and sending an ending into a dead channel
+    /// would accomplish nothing.
     ReceiverGone,
 }
 
-/// What became of the worker pool once every thread was joined.
+/// Decide how a run that reached its end ended.
 ///
-/// A typed value rather than the `had_panic` bool it replaces, because that
-/// bool reached nothing but a `tracing::error!` line that no GUI user ever
-/// sees, and the run then reported a clean `Finished` carrying partial stats.
-/// Naming the outcome puts it in the terminal-event decision, where it has to
-/// be dealt with.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum WorkerPoolOutcome {
-    /// Every worker thread returned normally, so nothing was abandoned by a
-    /// worker. Files can still be missing for other reasons (cancellation),
-    /// which is why coverage is checked rather than inferred from this.
-    AllReturned,
-    /// At least one worker unwound, abandoning whatever files it had taken off
-    /// the queue. Those files produce no result and no counter.
-    SomeUnwound {
-        /// How many worker threads unwound.
-        unwound_workers: usize,
-    },
-}
-
-impl WorkerPoolOutcome {
-    /// Classify a raw count of unwound workers.
-    ///
-    /// Private constructor rather than letting callers build the variants, so
-    /// `SomeUnwound { unwound_workers: 0 }` (a state that contradicts its own
-    /// name) cannot be assembled by the runner.
-    pub(super) fn from_unwound_count(unwound_workers: usize) -> Self {
-        match unwound_workers {
-            0 => Self::AllReturned,
-            unwound_workers => Self::SomeUnwound { unwound_workers },
-        }
-    }
-}
-
-/// Decide which terminal event a completed run is entitled to send.
-///
-/// The verdict comes from COVERAGE (what the snapshot proves was processed),
-/// not from whether a worker panicked, because the two can differ in both
-/// directions: a worker can unwind after its last file and lose nothing, and
-/// files can go missing without any panic. `pool_outcome` supplies the cause
-/// for the log, so an operator reading the incompleteness report learns why.
-pub(super) fn terminal_event(
+/// Three facts decide it, each from its owner: COVERAGE (what the snapshot
+/// proves was processed), the latched STOP reason (whether the run was told
+/// to stop), and the WORKER FAULTS (unwound workers, refused threads,
+/// workers that could not create their parser). They differ in every
+/// direction: a run told to stop may already have covered every file (then
+/// nothing was stopped, and it is `Complete`); files can go missing with no
+/// stop requested; and a worker that fails during a stop loses files the
+/// stop did not explain, so a fault outranks a stop.
+pub(super) fn run_ending(
     stats: ValidationStatsSnapshot,
-    pool_outcome: WorkerPoolOutcome,
-) -> ValidationEvent {
-    match stats.coverage() {
-        RunCoverage::Complete => ValidationEvent::Finished(stats),
-        // A cancelled run stopped short because it was told to. Reporting that
-        // as incompleteness would make the incompleteness report routine, and
-        // a routine warning is an ignored one.
-        RunCoverage::Cancelled { unprocessed_files } => {
+    stop: Option<CancelReason>,
+    faults: Option<WorkerFaults>,
+) -> RunEnding {
+    let stats = match stats.coverage() {
+        RunCoverage::Complete(stats) => return RunEnding::Complete(stats),
+        RunCoverage::Shortfall(stats) => stats,
+    };
+    let missing = stats.missing_files();
+    let cause = match (faults, stop) {
+        (None, Some(reason)) => {
             tracing::info!(
-                unprocessed_files,
-                "Validation cancelled before covering every discovered file"
+                unprocessed_files = missing.get(),
+                ?reason,
+                "Validation stopped before covering every discovered file"
             );
-            ValidationEvent::Finished(stats)
+            return RunEnding::Stopped { stats, reason };
         }
-        RunCoverage::Lost { lost_files } => {
-            match pool_outcome {
-                WorkerPoolOutcome::AllReturned => tracing::error!(
-                    lost_files,
-                    "Validation lost files with no worker panic to explain it"
-                ),
-                WorkerPoolOutcome::SomeUnwound { unwound_workers } => tracing::error!(
-                    lost_files,
-                    unwound_workers,
-                    "Validation workers panicked and abandoned files"
-                ),
-            }
-            ValidationEvent::FinishedIncomplete { stats, lost_files }
-        }
-    }
+        (Some(faults), _) => LossCause::WorkerFaults(faults),
+        (None, None) => LossCause::Unexplained,
+    };
+    tracing::error!(lost_files = missing.get(), %cause, "Validation lost files");
+    RunEnding::Incomplete { stats, cause }
 }
 
 /// Whether [`TerminalGuard`] will still report an abort when dropped.
@@ -127,8 +85,8 @@ enum GuardState {
     Disarmed,
 }
 
-/// Guarantees that a validation stream ends with a terminal event even when
-/// the thread driving it unwinds.
+/// Guarantees that a validation stream ends with an ending even when the
+/// thread driving it unwinds.
 ///
 /// # What firing this guard proves
 ///
@@ -171,7 +129,9 @@ impl Drop for TerminalGuard {
                 // is running inside `drop`, frequently during an unwind. This
                 // is the one place where discarding the result is the correct
                 // behavior rather than a silent swallow.
-                let _ = event_tx.send(ValidationEvent::Aborted(AbortReason::Panicked));
+                let _ = event_tx.send(ValidationEvent::Finished(RunEnding::Aborted(
+                    AbortReason::Panicked,
+                )));
             }
             GuardState::Disarmed => {}
         }
@@ -180,61 +140,48 @@ impl Drop for TerminalGuard {
 
 /// Run validation for all discovered files and stream progress/events.
 ///
-/// Returns a tuple of:
-/// - `Receiver<ValidationEvent>` - Events stream as validation progresses
-/// - `Sender<()>` - Send to this channel to cancel validation
+/// Returns the event stream and the run's [`Canceller`].
 ///
 /// # Example
-/// Keep the cancellation sender alive while consuming events. A closed channel
-/// or an incomplete/aborted run must not be presented as successful validation.
+/// Keep the canceller alive while consuming events. Only
+/// [`RunEnding::passed`] may be reported as a successful validation of the
+/// whole input; a stream that closes with no ending is an abort.
 ///
 /// ```no_run
-/// use std::{path::Path, sync::Arc};
+/// use std::path::Path;
 /// use talkbank_transform::validation_runner::{
-///     validate_directory_streaming, ValidationCache, ValidationConfig, ValidationEvent,
+///     validate_directory_streaming, AbortReason, RunEnding, ValidationConfig, ValidationEvent,
+///     ValidationRun,
 /// };
-/// # fn observe<C: ValidationCache + Send + Sync + 'static>(
-/// #     dir: &Path, config: &ValidationConfig, cache: Option<Arc<C>>,
-/// # ) -> Result<(), String> {
-/// let (events, _cancel) = validate_directory_streaming(dir, config, cache);
+/// # fn observe(dir: &Path, config: ValidationConfig) -> RunEnding {
+/// let run = ValidationRun::uncached(config);
+/// let (events, _canceller) = validate_directory_streaming(dir, &run);
 ///
 /// for event in events {
 ///     match event {
 ///         ValidationEvent::Discovering
 ///         | ValidationEvent::Started { .. }
-///         | ValidationEvent::Errors(_)
-///         | ValidationEvent::FileComplete(_)
-///         | ValidationEvent::RoundtripComplete(_) => println!("{event:?}"),
-///         ValidationEvent::Finished(stats) => {
-///             // Inspect the totals, including cancellation and invalid files;
-///             // completed processing does not mean every file was valid.
-///             println!("{stats:?}");
-///             return Ok(());
+///         | ValidationEvent::FileComplete(_) => println!("{event:?}"),
+///         ValidationEvent::Finished(ending) => {
+///             println!("passed: {}", ending.passed());
+///             return ending;
 ///         }
-///         ValidationEvent::FinishedIncomplete { lost_files, .. } => {
-///             return Err(format!("validation lost {lost_files} files"));
-///         }
-///         ValidationEvent::Aborted(reason) => return Err(format!("{reason:?}")),
 ///     }
 /// }
-/// Err("validation event stream closed without a terminal event".into())
+/// RunEnding::Aborted(AbortReason::NoEnding)
 /// # }
 /// ```
-pub fn validate_directory_streaming<C>(
+pub fn validate_directory_streaming(
     directory: &Path,
-    config: &ValidationConfig,
-    cache: Option<Arc<C>>,
-) -> (Receiver<ValidationEvent>, Sender<()>)
-where
-    C: ValidationCache + Send + Sync + 'static,
-{
+    run: &ValidationRun,
+) -> (Receiver<ValidationEvent>, Canceller) {
     // Use unbounded channel for events to prevent backpressure
     // Errors are cheap to store, and we want workers to never block on sending events
     let (event_tx, event_rx) = unbounded::<ValidationEvent>();
-    let (cancel_tx, cancel_rx) = bounded::<()>(1);
+    let (canceller, cancel_rx) = cancel_channel();
 
     let dir = directory.to_path_buf();
-    let cfg = config.clone();
+    let run = run.clone();
 
     thread::spawn(move || {
         // Armed before any work, so even a failure during discovery terminates
@@ -244,39 +191,33 @@ where
         let _ = event_tx.send(ValidationEvent::Discovering);
         // Exhaustive, no catch-all: a future outcome must be decided here
         // rather than defaulting into a disarm.
-        match run_validation(dir, cfg, cache, event_tx, cancel_rx) {
+        match run_validation(dir, run, event_tx, cancel_rx) {
             RunOutcome::Finished | RunOutcome::ReceiverGone => guard.disarm(),
         }
     });
 
-    (event_rx, cancel_tx)
+    (event_rx, canceller)
 }
 
 /// Validate a pre-collected list of .cha files using the same streaming
 /// pipeline as [`validate_directory_streaming`].
 ///
-/// This exists so the `chatter validate` CLI can route a list of file
-/// paths (e.g. `chatter validate a.cha b.cha c.cha`) through the same
-/// renderer/progress/TUI surface as a directory walk, instead of
-/// reinventing per-file output. The CLI is responsible for resolving
-/// arguments to a flat file list (walking any directories first); this
-/// entry point trusts the list verbatim, no filtering, no extension
-/// check.
+/// For a caller holding plain file paths (the desktop app, tests). No
+/// filtering and no extension check: each path is resolved to its stored
+/// name once, before any worker starts, and one that cannot be resolved is
+/// a [`FileStatus::ReadError`] in the run's results. Command-line arguments
+/// go through [`validate_arguments_streaming`] instead.
 ///
 /// Cancellation, event semantics, and worker behavior are identical
 /// to the directory variant.
-pub fn validate_files_streaming<C>(
+pub fn validate_files_streaming(
     files: Vec<std::path::PathBuf>,
-    config: &ValidationConfig,
-    cache: Option<Arc<C>>,
-) -> (Receiver<ValidationEvent>, Sender<()>)
-where
-    C: ValidationCache + Send + Sync + 'static,
-{
+    run: &ValidationRun,
+) -> (Receiver<ValidationEvent>, Canceller) {
     let (event_tx, event_rx) = unbounded::<ValidationEvent>();
-    let (cancel_tx, cancel_rx) = bounded::<()>(1);
+    let (canceller, cancel_rx) = cancel_channel();
 
-    let cfg = config.clone();
+    let run = run.clone();
 
     thread::spawn(move || {
         // Same terminal-event guarantee as the directory entrypoint; see
@@ -285,60 +226,82 @@ where
         // Send discovering event immediately so the renderer transitions
         // out of "starting up" the same way it would for a directory walk.
         let _ = event_tx.send(ValidationEvent::Discovering);
-        match run_validation_on_files(files, cfg, cache, event_tx, cancel_rx) {
+        // Each path is resolved to its stored name here, once, with one
+        // resolver; one that cannot be is a read error like any other.
+        let (files, unreadable) = crate::paths::resolve_transcripts(files);
+        match run_validation_with_unreadable(files, unreadable, run, event_tx, cancel_rx) {
             RunOutcome::Finished | RunOutcome::ReceiverGone => guard.disarm(),
         }
     });
 
-    (event_rx, cancel_tx)
+    (event_rx, canceller)
+}
+
+/// Validate command-line arguments as expanded by
+/// [`crate::paths::expand_transcript_arguments`]: every file it found, and
+/// every argument or directory entry it could not read, reported as a
+/// [`FileStatus::ReadError`] counted in the run's totals.
+///
+/// The one policy for unreadable input, shared with the directory entry
+/// point: a run over partly unreadable input is a run with read errors
+/// (it fails, and says which paths), never a refusal printed outside the
+/// event stream, where a JSON consumer could not see it.
+pub fn validate_arguments_streaming(
+    input: crate::paths::ExpandedArguments,
+    run: &ValidationRun,
+) -> (Receiver<ValidationEvent>, Canceller) {
+    let (event_tx, event_rx) = unbounded::<ValidationEvent>();
+    let (canceller, cancel_rx) = cancel_channel();
+    let run = run.clone();
+    thread::spawn(move || {
+        // Same terminal-event guarantee as the other entry points; see
+        // [`TerminalGuard`].
+        let mut guard = TerminalGuard::armed(event_tx.clone());
+        let _ = event_tx.send(ValidationEvent::Discovering);
+        let (files, unreadable) = input.into_parts();
+        match run_validation_with_unreadable(files, unreadable, run, event_tx, cancel_rx) {
+            RunOutcome::Finished | RunOutcome::ReceiverGone => guard.disarm(),
+        }
+    });
+    (event_rx, canceller)
 }
 
 /// Internal runner implementation used by the directory streaming
-/// entrypoint. Discovers `.cha` files under `directory` and forwards
-/// the collected list to [`run_validation_on_files`]. Kept thin so the
-/// directory-walk and explicit-file-list paths share all worker /
-/// event-stream / stats logic.
+/// entrypoint: walks `directory` (every level, following links) and hands
+/// the stored transcripts it found, and what it could not read, to the
+/// shared run body.
 ///
 /// Returns how the stream ended; see [`RunOutcome`].
-pub(super) fn run_validation<C>(
+pub(super) fn run_validation(
     directory: std::path::PathBuf,
-    config: ValidationConfig,
-    cache: Option<Arc<C>>,
+    run: ValidationRun,
     event_tx: Sender<ValidationEvent>,
     cancel_rx: Receiver<()>,
-) -> RunOutcome
-where
-    C: ValidationCache + Send + Sync + 'static,
-{
-    let mut files = Vec::new();
-    collect_cha_files(
-        &directory,
-        config.directory == super::config::DirectoryMode::Recursive,
-        &mut files,
+) -> RunOutcome {
+    let (found, failures) = crate::paths::walk_transcripts(&directory).into_parts();
+    let files = crate::paths::DistinctTranscripts::new(
+        found
+            .into_iter()
+            .map(crate::paths::FoundTranscript::into_stored),
     );
-    files.sort();
-    run_validation_on_files(files, config, cache, event_tx, cancel_rx)
+    run_validation_with_unreadable(files, failures, run, event_tx, cancel_rx)
 }
 
-/// Worker-pool body shared by the directory and explicit-file-list
-/// streaming entrypoints. Takes a pre-collected list of files,
-/// dispatches to N worker threads, streams the standard
-/// `ValidationEvent` sequence (Started → Errors / FileComplete /
-/// RoundtripComplete → Finished) on `event_tx`, and respects
-/// `cancel_rx`.
-///
-/// Returns how the stream ended; see [`RunOutcome`].
-pub(super) fn run_validation_on_files<C>(
-    files: Vec<std::path::PathBuf>,
-    config: ValidationConfig,
-    cache: Option<Arc<C>>,
+/// The run body, shared by every entry point. `files` are already stored
+/// transcripts, each location once, so no worker resolves a name and no file
+/// is validated or counted twice; `unreadable` holds what could
+/// not be read or named, each reported as a file that could not be read
+/// ([`FileStatus::ReadError`]) and counted in the run's totals, so a run
+/// with an unreadable directory can never look like a clean run over a
+/// smaller corpus.
+fn run_validation_with_unreadable(
+    files: crate::paths::DistinctTranscripts,
+    unreadable: Vec<crate::paths::WalkFailure>,
+    run: ValidationRun,
     event_tx: Sender<ValidationEvent>,
     cancel_rx: Receiver<()>,
-) -> RunOutcome
-where
-    C: ValidationCache + Send + Sync + 'static,
-{
-    let total_files = files.len();
+) -> RunOutcome {
+    let total_files = files.len() + unreadable.len();
 
     // Send start event
     if event_tx
@@ -348,111 +311,90 @@ where
         return RunOutcome::ReceiverGone; // Receiver dropped
     }
 
-    let Some(total_files) = std::num::NonZeroUsize::new(total_files) else {
-        let stats = ValidationStats::new(0);
+    // The one place a run with nothing to validate is recognised.
+    let Some(total_files) = NonZeroUsize::new(total_files) else {
         event_tx
-            .send(ValidationEvent::Finished(stats.snapshot()))
+            .send(ValidationEvent::Finished(RunEnding::NothingFound))
             .ok();
         return RunOutcome::Finished;
     };
 
-    // Set up work queue
-    let (work_tx, work_rx) = bounded::<std::path::PathBuf>(total_files.get());
-    let stats = Arc::new(ValidationStats::new(total_files.get()));
+    // What the walk could not read, counted before any worker starts.
+    let mut unreadable_tally = ValidationTally::default();
+    for failure in unreadable {
+        let status = FileStatus::ReadError {
+            message: failure.error.to_string(),
+        };
+        unreadable_tally.record(&status, CacheUse::NotConsulted);
+        if event_tx
+            .send(ValidationEvent::FileComplete(FileCompleteEvent {
+                path: failure.path,
+                status,
+                cache: CacheUse::NotConsulted,
+            }))
+            .is_err()
+        {
+            return RunOutcome::ReceiverGone;
+        }
+    }
 
     // One shared latch rather than N direct readers of the cancel channel; see
     // `CancelSignal` for the token-stealing bug that made cancellation reach
-    // only one worker and left `cancelled` false in the final stats.
-    let cancel = Arc::new(CancelSignal::new(cancel_rx));
-
-    // Determine number of workers. Treat `jobs=0` as `1` to preserve progress.
-    let num_workers = match config.jobs {
-        Some(0) => {
-            tracing::warn!("validation jobs=0 requested; using 1 worker instead");
-            1
-        }
-        Some(n) => n,
-        None => num_cpus::get(),
+    // only one worker and lost the stop from the final decision.
+    let cancel = CancelSignal::new(cancel_rx);
+    let config = run.config();
+    let budget = ErrorBudget::new(config.error_limit);
+    let context = WorkerContext {
+        event_tx: &event_tx,
+        cancel: &cancel,
+        budget: &budget,
+        cache: run.cache(),
+        config,
     };
 
-    // Spawn worker threads
-    let workers: Vec<_> = (0..num_workers)
-        .map(|_| {
-            let rx = work_rx.clone();
-            let tx = event_tx.clone();
-            let cancel = Arc::clone(&cancel);
-            let cache_ref = cache.clone();
-            let cfg = config.clone();
-            let stats = stats.clone();
+    // The shared pool. The feeder stops at the first item after a
+    // cancellation, through the shared latch so that observing it here does
+    // not hide it from the workers, which check it themselves before each
+    // file. Each worker returns its own tally, summed after the join.
+    let pool = fan_out(
+        files.into_iter().take_while(|_| cancel.reason().is_none()),
+        config.jobs,
+        |work| worker_loop(work, &context),
+    );
+    let tally = pool
+        .results
+        .iter()
+        .filter_map(|result| result.as_ref().ok())
+        .copied()
+        .fold(unreadable_tally, ValidationTally::add);
+    let faults = WorkerFaults::observe(
+        &pool.outcome,
+        pool.results
+            .iter()
+            .filter_map(|result| result.as_ref().err()),
+    );
 
-            thread::spawn(move || {
-                worker_loop(rx, tx, cancel, cache_ref, cfg, stats);
-            })
-        })
-        .collect();
-
-    // Send all work to the queue
-    for file in files {
-        // Check for early cancellation, through the shared latch so that
-        // observing it here does not hide it from the workers.
-        if cancel.is_cancelled() {
-            break;
-        }
-
-        if work_tx.send(file).is_err() {
-            break; // Workers died
-        }
-    }
-    drop(work_tx); // Signal no more work
-
-    // Wait for all workers to complete
-    let mut unwound_workers = 0usize;
-    for (worker_id, worker) in workers.into_iter().enumerate() {
-        match worker.join() {
-            Ok(()) => {
-                // Worker completed successfully
-            }
-            Err(panic_payload) => {
-                tracing::error!(
-                    worker_id = worker_id,
-                    "Worker panicked: {:?}",
-                    panic_payload
-                );
-                unwound_workers += 1;
-            }
-        }
-    }
-    let pool_outcome = WorkerPoolOutcome::from_unwound_count(unwound_workers);
-
-    // Send final stats. The latch answers truthfully however many other
-    // threads already observed the same cancellation.
-    if cancel.is_cancelled() {
-        stats.mark_cancelled();
-    }
-
-    let final_stats = stats.snapshot();
-
-    // Log cache statistics for debugging
-    // The empty population returned before workers were created. Retain that
-    // admission proof rather than branching again on its statistics copy.
-    let hit_rate = (final_stats.cache_hits as f64 / total_files.get() as f64) * 100.0;
+    let final_stats = tally.snapshot(total_files);
     tracing::info!(
-        cache_hits = final_stats.cache_hits,
-        cache_misses = final_stats.cache_misses,
-        total_files = final_stats.total_files,
-        hit_rate_percent = hit_rate,
-        valid_files = final_stats.valid_files,
-        invalid_files = final_stats.invalid_files,
+        cache_hits = final_stats.cache_hits(),
+        cache_misses = final_stats.cache_misses(),
+        total_files = final_stats.total_files().get(),
+        hit_rate_percent = ?final_stats.cache_hit_rate(),
+        valid_files = final_stats.valid_files(),
+        invalid_files = final_stats.invalid_files(),
         "Validation complete"
     );
 
-    if let Err(e) = event_tx.send(terminal_event(final_stats, pool_outcome)) {
-        tracing::warn!(event = ?e.0, "Failed to send terminal event: receiver dropped");
+    // The latch answers truthfully however many other threads already
+    // observed the same stop.
+    let ending = run_ending(final_stats, cancel.reason(), faults);
+    if let Err(e) = event_tx.send(ValidationEvent::Finished(ending)) {
+        tracing::warn!(event = ?e.0, "Failed to send the run's ending: receiver dropped");
     }
 
-    // `Finished` was the intended terminal event whether or not a departed
-    // receiver was still there to hear it. Reporting `ReceiverGone` here would
-    // be equally true but less useful: what the guard needs to know is that
-    // this run reached its end deliberately, not that a listener left.
+    // The ending was intended whether or not a departed receiver was still
+    // there to hear it. Reporting `ReceiverGone` here would be equally true
+    // but less useful: what the guard needs to know is that this run reached
+    // its end deliberately, not that a listener left.
     RunOutcome::Finished
 }

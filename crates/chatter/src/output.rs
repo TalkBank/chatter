@@ -24,6 +24,25 @@ pub(crate) fn has_hard_error(errors: &[ParseError]) -> bool {
     errors.iter().any(|error| error.severity == Severity::Error)
 }
 
+/// Report a failed pipeline run over `path`: one line naming the failure,
+/// then the rendered diagnostics of every failure that carries them (an
+/// internal failure and an incomplete validation included). The one reporter
+/// for `to-json` (one file and a directory) and `normalize`.
+pub(crate) fn report_pipeline_failure(
+    path: &Path,
+    content: &str,
+    error: &talkbank_transform::PipelineError,
+) {
+    tracing::warn!("Pipeline error: {}", error);
+    eprintln!("ERROR: {}: {error}", path.display());
+    // Which failures carry diagnostics is decided once, by
+    // `PipelineError::diagnostics`; the line above is the whole report for
+    // the others.
+    if let Some(diagnostics) = error.diagnostics() {
+        print_errors(path, content, diagnostics);
+    }
+}
+
 /// Print errors to stderr with miette formatting.
 ///
 /// Routes through the shared [`render_diagnostics`] orchestration so the CLI and

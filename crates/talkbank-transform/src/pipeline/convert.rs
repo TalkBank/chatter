@@ -30,7 +30,7 @@ use talkbank_model::model::TranscriptName;
 ///
 /// * `content` - The CHAT file content
 /// * `options` - Parsing and validation options
-/// * `pretty` - Pretty-print JSON output
+/// * `layout` - Pretty-printed or compact JSON
 ///
 /// # Returns
 ///
@@ -40,22 +40,31 @@ use talkbank_model::model::TranscriptName;
 /// # Example
 ///
 /// ```no_run
-/// use talkbank_transform::chat_to_json;
+/// use talkbank_transform::{JsonLayout, chat_to_json};
 /// use talkbank_model::ParseValidateOptions;
 ///
 /// # fn convert() -> Result<(), talkbank_transform::PipelineError> {
 /// let content = "*CHI:\thello world .";
 /// let options = ParseValidateOptions::default();
-/// let _json = chat_to_json(content, options, true)?;
+/// let _json = chat_to_json(content, options, JsonLayout::Pretty)?;
 /// # Ok(())
 /// # }
 /// ```
 pub fn chat_to_json(
     content: &str,
     options: ParseValidateOptions,
-    pretty: bool,
+    layout: JsonLayout,
 ) -> Result<String, PipelineError> {
-    chat_to_json_named(content, options, pretty, TranscriptName::Anonymous)
+    chat_to_json_named(content, options, layout, TranscriptName::Anonymous)
+}
+
+/// How serialized JSON is laid out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JsonLayout {
+    /// Indented, one field per line (the CLI's default).
+    Pretty,
+    /// Minified on one line (`--compact`).
+    Compact,
 }
 
 /// JSON Schema checking is independent of CHAT validation and transcript identity.
@@ -65,13 +74,6 @@ pub enum JsonSchemaPolicy {
     Validate,
     /// Serialize without checking JSON Schema; preserve requested CHAT checks.
     Skip,
-}
-
-impl JsonSchemaPolicy {
-    /// Admit the CLI's schema-only opt-out without changing parse options.
-    pub const fn from_skip_flag(skip: bool) -> Self {
-        if skip { Self::Skip } else { Self::Validate }
-    }
 }
 
 /// Convert CHAT to JSON for a transcript whose name is known.
@@ -85,10 +87,10 @@ impl JsonSchemaPolicy {
 pub fn chat_to_json_named(
     content: &str,
     options: ParseValidateOptions,
-    pretty: bool,
+    layout: JsonLayout,
     name: TranscriptName<'_>,
 ) -> Result<String, PipelineError> {
-    chat_to_json_with_schema_policy(content, options, pretty, name, JsonSchemaPolicy::Validate)
+    chat_to_json_with_schema_policy(content, options, layout, name, JsonSchemaPolicy::Validate)
 }
 
 /// Convert a named transcript, selecting JSON Schema checks after CHAT parsing.
@@ -96,18 +98,18 @@ pub fn chat_to_json_named(
 pub fn chat_to_json_with_schema_policy(
     content: &str,
     options: ParseValidateOptions,
-    pretty: bool,
+    layout: JsonLayout,
     name: TranscriptName<'_>,
     schema: JsonSchemaPolicy,
 ) -> Result<String, PipelineError> {
     let parser = talkbank_parser::TreeSitterParser::new()
         .map_err(|e| PipelineError::ParserCreation(format!("{e}")))?;
     let chat_file = super::parse::parse_and_validate_named(&parser, content, options, name)?;
-    match (schema, pretty) {
-        (JsonSchemaPolicy::Validate, true) => to_json_pretty_validated(&chat_file),
-        (JsonSchemaPolicy::Validate, false) => to_json_validated(&chat_file),
-        (JsonSchemaPolicy::Skip, true) => to_json_pretty_unvalidated(&chat_file),
-        (JsonSchemaPolicy::Skip, false) => to_json_unvalidated(&chat_file),
+    match (schema, layout) {
+        (JsonSchemaPolicy::Validate, JsonLayout::Pretty) => to_json_pretty_validated(&chat_file),
+        (JsonSchemaPolicy::Validate, JsonLayout::Compact) => to_json_validated(&chat_file),
+        (JsonSchemaPolicy::Skip, JsonLayout::Pretty) => to_json_pretty_unvalidated(&chat_file),
+        (JsonSchemaPolicy::Skip, JsonLayout::Compact) => to_json_unvalidated(&chat_file),
     }
     .map_err(|e| PipelineError::JsonSerialization(e.to_string()))
 }
@@ -128,7 +130,7 @@ pub fn chat_to_json_with_schema_policy(
 ///
 /// * `content` - The CHAT file content
 /// * `options` - Parsing and validation options
-/// * `pretty` - Pretty-print JSON output
+/// * `layout` - Pretty-printed or compact JSON
 ///
 /// # Returns
 ///
@@ -137,12 +139,12 @@ pub fn chat_to_json_with_schema_policy(
 pub fn chat_to_json_unvalidated(
     content: &str,
     options: ParseValidateOptions,
-    pretty: bool,
+    layout: JsonLayout,
 ) -> Result<String, PipelineError> {
     chat_to_json_with_schema_policy(
         content,
         options,
-        pretty,
+        layout,
         TranscriptName::Anonymous,
         JsonSchemaPolicy::Skip,
     )
@@ -188,7 +190,7 @@ pub fn normalize_chat(
 
 #[cfg(test)]
 mod tests {
-    use super::{chat_to_json, normalize_chat};
+    use super::{JsonLayout, chat_to_json, normalize_chat};
     use crate::PipelineError;
     use talkbank_model::ParseValidateOptions;
 
@@ -196,7 +198,7 @@ mod tests {
     fn test_chat_to_json_pretty() -> Result<(), PipelineError> {
         let content = "@UTF8\n@Begin\n@End\n";
         let options = ParseValidateOptions::default();
-        let json = chat_to_json(content, options, true)?;
+        let json = chat_to_json(content, options, JsonLayout::Pretty)?;
         assert!(json.contains("{\n")); // Pretty-printed
         Ok(())
     }
@@ -205,7 +207,7 @@ mod tests {
     fn test_chat_to_json_compact() -> Result<(), PipelineError> {
         let content = "@UTF8\n@Begin\n@End\n";
         let options = ParseValidateOptions::default();
-        let json = chat_to_json(content, options, false)?;
+        let json = chat_to_json(content, options, JsonLayout::Compact)?;
         assert!(!json.contains("  ")); // Not pretty-printed
         Ok(())
     }

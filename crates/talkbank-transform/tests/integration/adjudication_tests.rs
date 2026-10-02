@@ -21,12 +21,12 @@
 
 use std::collections::BTreeMap;
 
-use chrono::{TimeZone, Utc};
 use talkbank_transform::adjudication::AdjudicationKind;
 use talkbank_transform::adjudication::{
     OperatorDecision, PendingAdjudications, PendingEntry, PendingKindData, ScriptedPrompter,
     SuggestedSpeakerIdMapping, run_adjudication,
 };
+use talkbank_transform::recorded_time::RecordedTime;
 use talkbank_transform::speaker_id::{
     DecisionEngine, InsertedRoleSpec, OverrideFile, OverrideMode, SpeakerAction,
 };
@@ -53,7 +53,7 @@ fn adjudicate_speaker_id_accepts_suggested() {
         schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
         entries: vec![PendingEntry {
             session_id: "session-102-t1".to_string(),
-            created_at: Utc.with_ymd_and_hms(2026, 5, 27, 11, 0, 0).unwrap(),
+            created_at: "2026-05-27T11:00:00Z".parse::<RecordedTime>().unwrap(),
             data: PendingKindData::SpeakerIdLowConfidence {
                 suggested: SuggestedSpeakerIdMapping {
                     mapping: suggested_mapping.clone(),
@@ -165,7 +165,7 @@ fn adjudicate_speaker_id_override_mapping() {
         schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
         entries: vec![PendingEntry {
             session_id: "session-204-t1".to_string(),
-            created_at: Utc.with_ymd_and_hms(2026, 5, 27, 11, 0, 0).unwrap(),
+            created_at: "2026-05-27T11:00:00Z".parse::<RecordedTime>().unwrap(),
             data: PendingKindData::SpeakerIdLowConfidence {
                 suggested: SuggestedSpeakerIdMapping {
                     mapping: suggested_mapping,
@@ -279,7 +279,7 @@ fn adjudicate_parent_role_lookup_chooses_role() {
         schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
         entries: vec![PendingEntry {
             session_id: "session-307-parent".to_string(),
-            created_at: Utc.with_ymd_and_hms(2026, 5, 27, 12, 0, 0).unwrap(),
+            created_at: "2026-05-27T12:00:00Z".parse::<RecordedTime>().unwrap(),
             data: PendingKindData::ParentRoleLookup {
                 donor_speaker: "PAR".to_string(),
                 speaker_mapping: speaker_mapping.clone(),
@@ -377,7 +377,7 @@ fn adjudicate_sanity_scan_accept_suggested() {
         schema_version: PendingAdjudications::CURRENT_SCHEMA_VERSION,
         entries: vec![PendingEntry {
             session_id: "session-455-t2".to_string(),
-            created_at: Utc.with_ymd_and_hms(2026, 5, 28, 12, 0, 0).unwrap(),
+            created_at: "2026-05-28T12:00:00Z".parse::<RecordedTime>().unwrap(),
             data: PendingKindData::SanityScanMisclassification {
                 suggested: SuggestedSpeakerIdMapping {
                     mapping: suggested_mapping.clone(),

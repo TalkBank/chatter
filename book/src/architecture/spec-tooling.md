@@ -1,7 +1,7 @@
 # Spec Tooling
 
 **Status:** Current
-**Last modified:** 2026-08-21 12:45 EDT
+**Last modified:** {{git-dates:page}}
 
 What the generator crates ARE. For the spec system's contract, which is what
 you need to write or change a spec, read
@@ -59,23 +59,3 @@ Three things make that true rather than hoped for.
 - **Drift gates compare committed artifacts against what the generators
   produce**, calling the real generators rather than a second description of
   their output. See [Spec System](spec-system.md) for the full list.
-
-## History, so the next reader is not misled
-
-This page used to describe a bootstrap-era pipeline and a set of proposals. All
-of it was stale by mid-2026 and some of it was actively wrong:
-
-- It referred to `make test-gen` as the standard reaction to a parser change.
-  **There is no Makefile in this repository.** Run the `spec/tools` binaries
-  directly, or the `just` recipes.
-- It listed as an open concern that `spec/tools` "still carries bootstrap-era
-  Rust parser/model dependencies". That was resolved by the
-  `spec/runtime-tools` split; `spec/tools` depends on no parser or model crate.
-- It prescribed per-spec metadata (ownership, `draft`/`accepted`/`deprecated`)
-  that no loader has ever read. The real metadata, and what each field does, is
-  in [Spec System](spec-system.md).
-- It proposed an `input`/`ir`/`emit`/`validate`/`sync` module split that was
-  never implemented, and a `spec lint` binary that does not exist.
-
-Aspirations are worth writing down, but not in a page a contributor reads as a
-description of the code.

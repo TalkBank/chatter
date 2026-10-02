@@ -55,6 +55,27 @@ impl std::fmt::Display for PipelineError {
 
 impl std::error::Error for PipelineError {}
 
+impl PipelineError {
+    /// The located diagnostics this failure carries, or `None` for a failure
+    /// that has none (an I/O error, a parser that could not be created, a
+    /// serialization failure, dropped content). The one place that knows
+    /// which variants carry diagnostics, so no reporter can forget one: the
+    /// CLI's renderer and speaker identification's recorded codes both read
+    /// it, and each used to keep its own partial list.
+    pub fn diagnostics(&self) -> Option<&[talkbank_model::ParseError]> {
+        match self {
+            PipelineError::InternalFailure(failure) => Some(failure.diagnostics()),
+            PipelineError::Parse(errors) => Some(&errors.errors),
+            PipelineError::Validation(errors) => Some(errors),
+            PipelineError::IncompleteValidation(failure) => Some(failure.diagnostics()),
+            PipelineError::Io(_)
+            | PipelineError::ParserCreation(_)
+            | PipelineError::JsonSerialization(_)
+            | PipelineError::DroppedContent(_) => None,
+        }
+    }
+}
+
 impl From<std::io::Error> for PipelineError {
     /// Convert filesystem I/O errors into pipeline errors.
     fn from(err: std::io::Error) -> Self {

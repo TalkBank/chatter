@@ -42,11 +42,6 @@ pub struct ProgressState {
     pub files_processed_display: usize,
     /// True until Started event arrives (file discovery phase).
     pub discovering: bool,
-    /// Final snapshot counts from Finished event.
-    pub final_valid_files: Option<usize>,
-    pub final_invalid_files: Option<usize>,
-    pub final_cache_hits: Option<usize>,
-    pub final_cache_misses: Option<usize>,
 }
 
 /// Metrics returned by [`super::rendering::render_error_details`] each frame.
@@ -75,34 +70,6 @@ pub struct TuiState {
     pub status_message: Option<String>,
 }
 
-/// How a streaming validation run has ended, as far as the TUI knows.
-///
-/// Replaces a `validation_complete: bool` that was set true both when the run
-/// reported `Finished` and when the event channel simply closed, so a dead run
-/// rendered as a completed one and advertised its partial tallies as final
-/// totals. The three endings demand different things of the header, the empty
-/// state and the footer, which is precisely why one boolean could not carry
-/// them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RunPhase {
-    /// Events are still arriving; no terminal event has been seen.
-    Running,
-    /// The runner covered every discovered file. Only this phase may show the
-    /// counts as totals for the input.
-    Finished,
-    /// The runner ended without covering everything it discovered: files were
-    /// abandoned and their contents were never examined.
-    Incomplete {
-        /// Files discovered but never accounted for.
-        lost_files: usize,
-    },
-    /// The run died without producing totals at all.
-    Aborted {
-        /// Human-readable explanation, safe to show verbatim.
-        reason: String,
-    },
-}
-
 /// Whether a progress redraw happens now or only once enough files have gone by.
 ///
 /// A named pair rather than a `bool`: `update_progress_display(true)` and
@@ -118,21 +85,6 @@ pub enum Redraw {
     WhenStrideReached,
 }
 
-impl RunPhase {
-    /// Whether the run has stopped, by any of its endings.
-    ///
-    /// Used for the affordances that apply to every stopped run (offering
-    /// Rerun, ending the progress animation). Rendering that must distinguish
-    /// the endings matches the variants instead; this is deliberately the only
-    /// place the distinction is collapsed.
-    pub fn is_terminal(&self) -> bool {
-        match self {
-            Self::Running => false,
-            Self::Finished | Self::Incomplete { .. } | Self::Aborted { .. } => true,
-        }
-    }
-}
-
 /// Which pane has focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -143,35 +95,36 @@ pub enum Focus {
 impl TuiState {
     const PROGRESS_DRAW_STRIDE: usize = 50;
 
-    /// Initialize TUI state from the first validation snapshot.
-    ///
-    /// If the incoming list is non-empty, both panes start with their first
-    /// item selected so keyboard navigation is immediately active.
-    pub fn new(files: Vec<FileErrors>, theme: Theme) -> Self {
-        let mut file_list_state = ListState::default();
-        if !files.is_empty() {
-            file_list_state.select(Some(0));
-        }
-
-        let mut error_list_state = ListState::default();
-        if !files.is_empty() && !files[0].errors.is_empty() {
-            error_list_state.select(Some(0));
-        }
-
+    /// A state with no file listed yet.
+    pub fn new(theme: Theme) -> Self {
         Self {
             theme,
-            files,
+            files: Vec::new(),
             selected_file_idx: 0,
             selected_error_idx: 0,
             focus: Focus::FileList,
-            file_list_state,
-            error_list_state,
+            file_list_state: ListState::default(),
+            error_list_state: ListState::default(),
             progress: ProgressState {
                 discovering: true,
                 ..Default::default()
             },
             scroll: ScrollState::default(),
             status_message: None,
+        }
+    }
+
+    /// List a file, keeping the list sorted by path: each file is listed
+    /// once, from its one result. The first file listed is selected, so
+    /// keyboard navigation is active at once.
+    pub fn add_file(&mut self, file: FileErrors) {
+        let at = self.files.partition_point(|listed| listed.path < file.path);
+        self.files.insert(at, file);
+        if self.files.len() == 1 {
+            self.file_list_state.select(Some(0));
+            if !self.files[0].errors.is_empty() {
+                self.error_list_state.select(Some(0));
+            }
         }
     }
 
@@ -215,16 +168,6 @@ impl TuiState {
     /// Return the currently selected error inside the selected file.
     pub fn current_error(&self) -> Option<&ParseError> {
         self.current_file()?.errors.get(self.selected_error_idx)
-    }
-
-    /// Count all errors across currently tracked files.
-    pub fn total_errors(&self) -> usize {
-        self.files.iter().map(|f| f.errors.len()).sum()
-    }
-
-    /// Return the number of files currently in the error list.
-    pub fn total_files_with_errors(&self) -> usize {
-        self.files.len()
     }
 
     pub fn move_up(&mut self) {

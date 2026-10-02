@@ -106,6 +106,63 @@ fn a_broken_region_does_not_block_a_fix_elsewhere() -> Result<(), TestError> {
     Ok(())
 }
 
+/// A bare `fix` is report mode: it names what it would change and leaves
+/// the file byte-identical. `--apply` is the only way to write, so this pins
+/// the mapping the hand-written clap parser in `cli/args/fix_mode.rs` owns;
+/// no type checks which flag means which mode.
+#[test]
+fn a_bare_fix_reports_and_writes_nothing() -> Result<(), TestError> {
+    let (harness, path) = harness_with_fixture("report.cha", MECHANICAL_AND_SEMANTIC_FIXTURE)?;
+    let output = harness.run_output(&["fix", path_arg(&path)?])?;
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("would apply") && stdout.contains("E241"),
+        "a bare fix did not name what it would change: {stdout}"
+    );
+    assert_eq!(
+        fs::read_to_string(&path)?,
+        MECHANICAL_AND_SEMANTIC_FIXTURE,
+        "a bare fix wrote the file"
+    );
+    Ok(())
+}
+
+/// `--dry-run` is gone (a bare `fix` already reports without writing), so
+/// clap refuses it as an unknown argument, alone or beside `--apply`, and
+/// nothing is written. An old `--apply --dry-run` script must fail loudly
+/// rather than have its `--dry-run` ignored and the fixes written.
+#[test]
+fn dry_run_is_an_unknown_argument() -> Result<(), TestError> {
+    let (harness, path) = harness_with_fixture("refused.cha", MECHANICAL_AND_SEMANTIC_FIXTURE)?;
+    for flags in [&["--dry-run"][..], &["--apply", "--dry-run"][..]] {
+        let mut args = vec!["fix", path_arg(&path)?];
+        args.extend_from_slice(flags);
+        let output = harness.run_output(&args)?;
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "{flags:?} is not a usage error: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("unexpected argument '--dry-run'"),
+            "{flags:?} was not refused as an unknown argument: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            fs::read_to_string(&path)?,
+            MECHANICAL_AND_SEMANTIC_FIXTURE,
+            "{flags:?} wrote the file"
+        );
+    }
+    Ok(())
+}
+
 /// An apparent line boundary is not authority to split a recovered domain.
 /// Preserve the original regression input and require fail-closed behavior.
 #[test]
@@ -276,32 +333,6 @@ fn a_real_code_absent_from_the_file_selects_nothing() -> Result<(), TestError> {
     Ok(())
 }
 
-/// `--dry-run` (which requires `--apply`) previews without writing.
-#[test]
-fn dry_run_reports_without_writing() -> Result<(), TestError> {
-    let (harness, path) = harness_with_fixture("mixed.cha", MECHANICAL_AND_SEMANTIC_FIXTURE)?;
-
-    let output = harness.run_output(&["fix", path_arg(&path)?, "--apply", "--dry-run"])?;
-    assert!(
-        output.status.success(),
-        "stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let after = fs::read_to_string(&path)?;
-    assert_eq!(
-        after, MECHANICAL_AND_SEMANTIC_FIXTURE,
-        "--dry-run must not write to disk"
-    );
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("E241"),
-        "dry run did not name what would change: {stdout}"
-    );
-    Ok(())
-}
-
 /// The post-write safety net (the write gate plus the re-parse check in
 /// `crates/chatter/src/commands/fix.rs::verify_fix_result`) must not block a
 /// legitimate fix, and its own claim that the targeted diagnostic is gone
@@ -378,14 +409,12 @@ fn lint_subcommand_no_longer_exists() -> Result<(), TestError> {
     Ok(())
 }
 
-/// A fix that is SELECTED but fails to WRITE must not be counted as
-/// applied. Regression for the review finding that `run_fix` incremented
-/// its running total before attempting the write: a run whose only
-/// writable file failed to write printed a nonzero "fix(es) applied"
-/// count against zero files.
+/// A fix that is SELECTED but fails to WRITE is not counted as applied,
+/// and it fails the command: `--apply` asked for the file to change and it
+/// did not, so the exit status says so to a script.
 #[cfg(unix)]
 #[test]
-fn write_failure_does_not_inflate_the_applied_count() -> Result<(), TestError> {
+fn a_failed_write_is_not_counted_and_fails_the_command() -> Result<(), TestError> {
     use std::os::unix::fs::PermissionsExt;
 
     let (harness, path) = harness_with_fixture("readonly.cha", MECHANICAL_AND_SEMANTIC_FIXTURE)?;
@@ -408,5 +437,15 @@ fn write_failure_does_not_inflate_the_applied_count() -> Result<(), TestError> {
         stdout.contains("0 fix(es) applied across 0 file(s)"),
         "a failed write must not be counted as applied: {stdout}"
     );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "a write failure must fail the command: {stderr}"
+    );
+    assert!(
+        stderr.contains("1 file(s) could not be written"),
+        "the run did not say what failed: {stderr}"
+    );
+    assert_eq!(fs::read_to_string(&path)?, MECHANICAL_AND_SEMANTIC_FIXTURE);
     Ok(())
 }

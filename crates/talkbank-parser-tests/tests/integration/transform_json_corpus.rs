@@ -6,7 +6,9 @@ use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::repo_paths::workspace_root;
 use talkbank_parser_tests::test_error::strict_parse;
 use talkbank_spec_vocabulary::validation_manifest::{FixtureTranscriptName, ValidationManifest};
-use talkbank_transform::{JsonSchemaPolicy, PipelineError, chat_to_json_with_schema_policy};
+use talkbank_transform::{
+    JsonLayout, JsonSchemaPolicy, PipelineError, chat_to_json_with_schema_policy,
+};
 
 #[path = "ca_omission_import_corpus.rs"]
 mod ca_omission_import_corpus;
@@ -717,14 +719,16 @@ fn media_name_spec_claims_survive_both_schema_policies() {
             strict_parse(parser.parse_chat_file(&source)).expect("name examples parse cleanly");
         let name = match &entry.transcript_name {
             FixtureTranscriptName::Anonymous => TranscriptName::Anonymous,
-            FixtureTranscriptName::Named(stem) => TranscriptName::Named(FileStem::from_stem(stem)),
+            FixtureTranscriptName::Named(stem) => {
+                TranscriptName::Named(FileStem::from_stem(stem).expect("a stem"))
+            }
         };
         for schema in [JsonSchemaPolicy::Validate, JsonSchemaPolicy::Skip] {
-            for pretty in [false, true] {
+            for layout in [JsonLayout::Compact, JsonLayout::Pretty] {
                 match chat_to_json_with_schema_policy(
                     &source,
                     ParseValidateOptions::default().with_validation(),
-                    pretty,
+                    layout,
                     name,
                     schema,
                 ) {

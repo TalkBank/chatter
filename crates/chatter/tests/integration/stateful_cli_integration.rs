@@ -66,8 +66,8 @@ fn parse_json_lines_file(path: &Path) -> Result<Vec<Value>, TestError> {
 }
 
 fn cache_stats_json(harness: &CliHarness) -> Result<Value, TestError> {
-    let stats = harness.run_output(&["cache", "stats", "--json"])?;
-    assert_success(&stats, "cache stats --json");
+    let stats = harness.run_output(&["cache", "stats", "--format", "json"])?;
+    assert_success(&stats, "cache stats --format json");
     parse_json(&stats)
 }
 
@@ -213,6 +213,15 @@ fn unavailable_cache_preserves_json_validation_results() -> Result<(), TestError
                 .as_str()
                 .is_some_and(|error| !error.is_empty())
         );
+        // A run with no cache consulted none: no miss is invented and there
+        // is no hit rate.
+        let summary = records
+            .iter()
+            .find(|record| record["type"] == "summary")
+            .expect("a summary record");
+        assert_eq!(summary["cache_hits"].as_u64(), Some(0), "{summary}");
+        assert_eq!(summary["cache_misses"].as_u64(), Some(0), "{summary}");
+        assert!(summary["cache_hit_rate"].is_null(), "{summary}");
     }
     assert_eq!(fs::read_to_string(blocked)?, "not a directory");
     Ok(())

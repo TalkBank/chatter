@@ -17,12 +17,12 @@ fn parser_toggle_reuses_only_its_own_cached_verdict() {
     ] {
         let config = ValidationConfig {
             parser_kind,
-            jobs: Some(1),
+            jobs: Some(std::num::NonZeroUsize::MIN),
             ..ValidationConfig::default()
         };
-        let cache = state.cache_for_config(&config);
+        let cache = state.cache_for_config(&config).expect("test cache opens");
         let (events, _cancel) =
-            validate_target_streaming_with_config(file.clone(), config, cache).unwrap();
+            validate_target_streaming_with_config(file.clone(), &bound(config, cache)).unwrap();
         let statuses: Vec<_> = events
             .iter()
             .filter_map(|event| match event {

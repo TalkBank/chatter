@@ -1,7 +1,7 @@
 # Library Usage
 
 **Status:** Current
-**Last updated:** 2026-09-28 10:22 EDT
+**Last updated:** {{git-dates:page}}
 
 The TalkBank Rust crates can be used as dependencies in your own Rust
 projects for parsing, validating, and manipulating CHAT files. This page
@@ -50,7 +50,7 @@ automatic repair of existing speech. The caller remains responsible for the
 intended pronunciation; unsupported input is preserved exactly rather than
 partially rewritten or assigned a guessed pronunciation.
 
-English ordinal composition supports 0–9999 and retains British-style
+English ordinal composition supports 0-9999 and retains British-style
 conjunctions without prose commas. Larger suffix-bearing ordinals are preserved,
 including their original suffix: `10001st` must not become `10001th`.
 
@@ -58,8 +58,8 @@ English decade expansion requires a multiple of ten in one of these domains:
 
 | Input domain | Examples | Generated words |
 | --- | --- | --- |
-| Shorthand 0–90 | `0s`, `80s`, `90s` | `zeros`, `eighties`, `nineties` |
-| Full-year 1100–2990 | `1100s`, `1950s`, `2990s` | `eleven hundreds`, `nineteen fifties`, `twenty-nine nineties` |
+| Shorthand 0-90 | `0s`, `80s`, `90s` | `zeros`, `eighties`, `nineties` |
+| Full-year 1100-2990 | `1100s`, `1950s`, `2990s` | `eleven hundreds`, `nineteen fifties`, `twenty-nine nineties` |
 
 Other suffix forms, such as `21s`, `100s`, `2001s`, and `3000s`, remain
 unchanged. This deliberately avoids inventing phrases such as “twenty-ones”
@@ -132,8 +132,13 @@ for path in &chat_files {
 
 `ParseValidateOptions` also exposes `with_alignment()` (implies
 `with_validation()`, additionally validates cross-tier alignment for
-`%mor`, `%gra`, `%pho`, `%wor`) and `with_strict_linkers()` (enables
-E351-E355 self-completion/other-completion linker checks).
+`%mor`, `%gra`, `%pho`, `%wor`), `with_level(CheckLevel)` to choose the
+level directly (`CheckLevel::ParseOnly` or
+`CheckLevel::Validate(AlignmentValidation::Structure | IncludeTierAlignment)`),
+and
+`with_strict_linkers()` (enables the
+opt-in cross-utterance quotation and completion checks; `chatter
+validate --list-checks` marks each code it turns on as `[Opt-in]`).
 
 ## Working with the Model
 
@@ -242,6 +247,17 @@ The schema for `ChatFile` lives at `schema/chat-file.schema.json` and is
 regenerated from the Rust types via `just schema-gen`. For arbitrary
 serde values (not just `ChatFile`), `to_json_unvalidated` /
 `to_json_pretty_unvalidated` work the same way without the schema step.
+
+To go straight from CHAT text to JSON, `talkbank_transform::chat_to_json`
+parses, validates and serializes in one call, taking a `JsonLayout`
+(`Pretty` or `Compact`) rather than a bare `bool`:
+
+```rust,ignore
+use talkbank_model::ParseValidateOptions;
+use talkbank_transform::{JsonLayout, chat_to_json};
+
+let json = chat_to_json(source, ParseValidateOptions::default().with_validation(), JsonLayout::Compact)?;
+```
 
 ## Custom Error Handling
 

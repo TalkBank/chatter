@@ -1037,4 +1037,15 @@ pub enum ErrorCode {
     /// [`MediaFilenameMismatch`]: Self::MediaFilenameMismatch
     #[code("W109")]
     MediaFilenameNonCanonicalUnicode,
+    /// `@Media` filename and the file being parsed are the same name except
+    /// for letter case (`Session.cha` declaring `@Media: session`). CHECK's own
+    /// comparison ignores case, so this is not the real filename mismatch that
+    /// [`MediaFilenameMismatch`] reports, but a name that differs only in case
+    /// resolves on a case-insensitive filesystem (macOS by default) and not on
+    /// a case-sensitive one, so a transcript that finds its media on one host
+    /// loses it on another. TalkBank names must match exactly.
+    ///
+    /// [`MediaFilenameMismatch`]: Self::MediaFilenameMismatch
+    #[code("W110")]
+    MediaFilenameCaseDiffers,
 }

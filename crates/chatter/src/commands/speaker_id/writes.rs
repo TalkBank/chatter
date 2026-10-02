@@ -7,12 +7,12 @@ use std::io::Write;
 use std::path::Path;
 use tracing::{info, warn};
 
-use chrono::Utc;
 use talkbank_model::model::ChatFile;
 use talkbank_model::{ParticipantRole, SpeakerCode};
 use talkbank_transform::adjudication::{
     PendingAdjudications, PendingEntry, PendingKindData, SuggestedSpeakerIdMapping,
 };
+use talkbank_transform::recorded_time::RecordedTime;
 use talkbank_transform::speaker_id::{
     ConfidenceThreshold, DonorMatchReport, InsertedRoleSpec, MergeOverride, OverrideFile,
     RecordedSpeakerIdentificationAttempt, SpeakerAction,
@@ -66,7 +66,7 @@ pub(super) fn write_match_report(path: &Path, attempt: &RecordedSpeakerIdentific
 /// Append (or update) an entry for the current session in the
 /// override file. The session ID defaults to the input CHAT file's
 /// basename stem; the operator defaults to `$USER` (`"unknown"` if
-/// unset). `decided_at` is the current UTC time.
+/// unset). `decided_at` is the current time, to the second.
 pub(crate) fn write_override_entry(path: &Path, input: &Path, outcome: &ReferenceModeOutcome) {
     let session_id = derive_session_id(input);
     let operator = std::env::var("USER").unwrap_or_else(|_| {
@@ -98,7 +98,7 @@ pub(crate) fn write_override_entry(path: &Path, input: &Path, outcome: &Referenc
         &outcome.report,
         adult_roles,
         operator,
-        Utc::now(),
+        RecordedTime::now(),
     );
     let mut file = match OverrideFile::read_or_default(path) {
         Ok(f) => f,
@@ -147,7 +147,7 @@ pub(super) fn write_pending_entry(
     }
     let entry = PendingEntry {
         session_id: session_id.clone(),
-        created_at: Utc::now(),
+        created_at: RecordedTime::now(),
         data: PendingKindData::SpeakerIdLowConfidence {
             suggested: SuggestedSpeakerIdMapping {
                 mapping: suggested_mapping,

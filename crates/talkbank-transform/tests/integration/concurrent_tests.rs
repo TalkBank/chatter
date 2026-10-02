@@ -28,7 +28,7 @@ use std::thread;
 
 use talkbank_parser::TreeSitterParser;
 use talkbank_transform::{
-    CacheMode, CachePool, DirectoryMode, ParserKind, ValidationConfig, ValidationEvent,
+    CachePool, ParserKind, RoundtripCheck, RunEnding, ValidationConfig, ValidationEvent,
     validate_directory_streaming,
 };
 
@@ -73,14 +73,17 @@ fn write_temp_cha(dir: &Path, name: &str, content: &str) -> std::path::PathBuf {
     path
 }
 
+/// Four workers, the pool size the concurrency tests run with. Evaluated at
+/// compile time, so a zero here would be a build error, not a test failure.
+const FOUR_WORKERS: std::num::NonZeroUsize = std::num::NonZeroUsize::new(4).expect("4 is not zero");
+
 /// Helper to build a `ValidationConfig` with cache disabled and fixed job count.
-fn test_config(jobs: usize) -> ValidationConfig {
+fn test_config(jobs: std::num::NonZeroUsize) -> ValidationConfig {
     ValidationConfig {
-        cache: CacheMode::Disabled,
         jobs: Some(jobs),
-        check_alignment: false,
-        directory: DirectoryMode::Recursive,
-        roundtrip: false,
+        alignment: talkbank_model::validation::AlignmentValidation::Structure,
+        roundtrip: RoundtripCheck::Skip,
+        error_limit: talkbank_transform::ErrorLimit::Unlimited,
         parser_kind: ParserKind::TreeSitter,
         rules: talkbank_model::RuleSelection::new(),
         presentation: talkbank_transform::PresentationPolicy::new(),
@@ -112,9 +115,13 @@ fn concurrent_cache_writes() {
                 for i in 0..50 {
                     let name = format!("t{thread_id}_f{i}.cha");
                     let path = write_temp_cha(&dir_path, &name, VALID_CHAT);
-                    cache
-                        .set_validation(&path, false, true)
-                        .expect("set_validation should not fail");
+                    crate::cache_shim::set_validation(
+                        &cache,
+                        &path,
+                        talkbank_model::validation::AlignmentValidation::Structure,
+                        talkbank_transform::CacheOutcome::Valid,
+                    )
+                    .expect("set_validation should not fail");
                 }
             })
         })
@@ -128,10 +135,14 @@ fn concurrent_cache_writes() {
     for thread_id in 0..4u32 {
         let name = format!("t{thread_id}_f0.cha");
         let path = dir.path().join(name);
-        let result = cache.get_validation(&path, false);
+        let result = crate::cache_shim::get_validation(
+            &cache,
+            &path,
+            talkbank_model::validation::AlignmentValidation::Structure,
+        );
         assert_eq!(
             result,
-            Some(true),
+            Some(talkbank_transform::CacheOutcome::Valid),
             "Entry written by thread {thread_id} should be readable"
         );
     }
@@ -160,10 +171,14 @@ fn concurrent_cache_read_write() {
     let writer_paths = paths.clone();
     let writer = thread::spawn(move || {
         for (i, path) in writer_paths.iter().enumerate() {
-            let valid = i % 2 == 0;
-            writer_cache
-                .set_validation(path, false, valid)
-                .expect("write should succeed");
+            let verdict = crate::cache_shim::alternating(i);
+            crate::cache_shim::set_validation(
+                &writer_cache,
+                path,
+                talkbank_model::validation::AlignmentValidation::Structure,
+                verdict,
+            )
+            .expect("write should succeed");
         }
     });
 
@@ -176,13 +191,17 @@ fn concurrent_cache_read_write() {
         // the correct boolean for that index.
         for _round in 0..3 {
             for (i, path) in reader_paths.iter().enumerate() {
-                match reader_cache.get_validation(path, false) {
+                match crate::cache_shim::get_validation(
+                    &reader_cache,
+                    path,
+                    talkbank_model::validation::AlignmentValidation::Structure,
+                ) {
                     None => none_count += 1,
                     Some(val) => {
-                        let expected = i % 2 == 0;
+                        let expected = crate::cache_shim::alternating(i);
                         assert_eq!(
                             val, expected,
-                            "Read garbage: index {i} expected {expected}, got {val}"
+                            "Read garbage: index {i} expected {expected:?}, got {val:?}"
                         );
                         some_count += 1;
                     }
@@ -225,7 +244,12 @@ fn concurrent_cache_clear_during_write() {
             let path = write_temp_cha(&dir_path, &format!("cw_{i}.cha"), VALID_CHAT);
             // Writes may fail if clear_all is running concurrently; that is
             // acceptable as long as there is no panic or corruption.
-            let _ = writer_cache.set_validation(&path, false, true);
+            let _ = crate::cache_shim::set_validation(
+                &writer_cache,
+                &path,
+                talkbank_model::validation::AlignmentValidation::Structure,
+                talkbank_transform::CacheOutcome::Valid,
+            );
         }
     });
 
@@ -233,7 +257,7 @@ fn concurrent_cache_clear_during_write() {
     let clearer = thread::spawn(move || {
         for _ in 0..10 {
             clearer_cache
-                .clear_all()
+                .clear(&talkbank_transform::CacheScope::All)
                 .expect("clear_all should not fail");
             // Yield to let the writer make progress between clears.
             thread::yield_now();
@@ -280,9 +304,13 @@ fn concurrent_cache_stats_consistency() {
                 for i in 0..entries_per_thread {
                     let name = format!("stat_t{tid}_f{i}.cha");
                     let path = write_temp_cha(&dir_path, &name, VALID_CHAT);
-                    cache
-                        .set_validation(&path, false, true)
-                        .expect("set_validation should succeed");
+                    crate::cache_shim::set_validation(
+                        &cache,
+                        &path,
+                        talkbank_model::validation::AlignmentValidation::Structure,
+                        talkbank_transform::CacheOutcome::Valid,
+                    )
+                    .expect("set_validation should succeed");
                 }
             })
         })
@@ -331,11 +359,16 @@ fn concurrent_cache_different_paths() {
             let subdir = subdirs[tid as usize].clone();
             thread::spawn(move || {
                 for i in 0..entries_per_thread {
-                    let valid = i % 3 != 0; // Mix of valid and invalid
+                    // A mix: every third file invalid.
+                    let verdict = every_third_invalid(i);
                     let path = write_temp_cha(&subdir, &format!("f{i}.cha"), VALID_CHAT);
-                    cache
-                        .set_validation(&path, false, valid)
-                        .expect("set_validation should succeed");
+                    crate::cache_shim::set_validation(
+                        &cache,
+                        &path,
+                        talkbank_model::validation::AlignmentValidation::Structure,
+                        verdict,
+                    )
+                    .expect("set_validation should succeed");
                 }
             })
         })
@@ -348,13 +381,17 @@ fn concurrent_cache_different_paths() {
     // Verify all entries from all threads.
     for tid in 0..threads_count {
         for i in 0..entries_per_thread {
-            let expected = i % 3 != 0;
+            let expected = every_third_invalid(i);
             let path = subdirs[tid as usize].join(format!("f{i}.cha"));
-            let result = cache.get_validation(&path, false);
+            let result = crate::cache_shim::get_validation(
+                &cache,
+                &path,
+                talkbank_model::validation::AlignmentValidation::Structure,
+            );
             assert_eq!(
                 result,
                 Some(expected),
-                "Thread {tid}, file {i}: expected {expected}"
+                "Thread {tid}, file {i}: expected {expected:?}"
             );
         }
     }
@@ -486,7 +523,7 @@ fn parser_error_isolation() {
 // =============================================================================
 
 /// Use `validate_directory_streaming` with a temp dir of 10 .cha files.
-/// Verify all files are processed and a `Finished` event arrives.
+/// Verify all files are processed and a `Complete` event arrives.
 #[test]
 fn pipeline_parallel_validate() {
     let dir = tempfile::tempdir().expect("create temp dir");
@@ -495,8 +532,11 @@ fn pipeline_parallel_validate() {
         write_temp_cha(dir.path(), &format!("file_{i}.cha"), VALID_CHAT);
     }
 
-    let config = test_config(4);
-    let (events, _cancel) = validate_directory_streaming::<CachePool>(dir.path(), &config, None);
+    let config = test_config(FOUR_WORKERS);
+    let (events, _cancel) = validate_directory_streaming(
+        dir.path(),
+        &talkbank_transform::ValidationRun::uncached(config.clone()),
+    );
 
     let mut started = false;
     let mut file_complete_count = 0usize;
@@ -512,44 +552,53 @@ fn pipeline_parallel_validate() {
             ValidationEvent::FileComplete(_) => {
                 file_complete_count += 1;
             }
-            ValidationEvent::Errors(_) => {}
-            ValidationEvent::RoundtripComplete(_) => {}
-            ValidationEvent::Finished(stats) => {
+            ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                let stats = stats.snapshot();
                 finished = true;
                 assert_eq!(
-                    stats.total_files, file_count,
+                    stats.total_files().get(),
+                    file_count,
                     "Final stats should reflect all files"
                 );
-                assert!(!stats.cancelled, "Should not be marked as cancelled");
             }
             // A healthy parallel run must cover every file it discovered and
-            // must not die. Both terminal failure modes are named explicitly
-            // rather than swallowed by a wildcard, so a regression that starts
+            // must not die. Every other terminal is named explicitly rather
+            // than swallowed by a wildcard, so a regression that starts
             // losing files under concurrency fails HERE instead of passing as
             // "well, it terminated".
-            ValidationEvent::FinishedIncomplete { stats, lost_files } => {
+            ValidationEvent::Finished(RunEnding::Stopped { stats, reason, .. }) => {
+                let unprocessed = stats.missing_files();
+                panic!("nobody stopped this run, yet {unprocessed} files were left ({reason:?})");
+            }
+            ValidationEvent::Finished(RunEnding::Incomplete { stats, .. }) => {
+                let lost_files = stats.missing_files();
+                let stats = stats.snapshot();
                 panic!(
                     "parallel run lost {lost_files} of {} files",
-                    stats.total_files
+                    stats.total_files().get()
                 );
             }
-            ValidationEvent::Aborted(reason) => {
+            ValidationEvent::Finished(RunEnding::Aborted(reason)) => {
                 panic!("parallel run aborted: {reason:?}");
+            }
+            ValidationEvent::Finished(RunEnding::NothingFound) => {
+                panic!("the run found none of the {file_count} files");
             }
         }
     }
 
     assert!(started, "Should have received Started event");
-    assert!(finished, "Should have received Finished event");
+    assert!(finished, "Should have received Complete event");
     assert_eq!(
         file_complete_count, file_count,
         "Should receive FileComplete for every file"
     );
 }
 
-/// Start validation of 10 files, send cancel signal after receiving 3
-/// FileComplete events. Verify the Finished event arrives with
-/// `cancelled: true`.
+/// Start validation of 10 files and cancel after 3 have completed. The run
+/// ends `Stopped` with the caller's reason when files were left, or
+/// `Complete` when the one worker had already reached the end: either way
+/// it ends, and never as a `Complete` that left files unvalidated.
 #[test]
 fn pipeline_cancel_midway() {
     let dir = tempfile::tempdir().expect("create temp dir");
@@ -559,47 +608,53 @@ fn pipeline_cancel_midway() {
     }
 
     // Use 1 job to make cancellation timing more predictable.
-    let config = test_config(1);
-    let (events, cancel) = validate_directory_streaming::<CachePool>(dir.path(), &config, None);
+    let config = test_config(std::num::NonZeroUsize::MIN);
+    let (events, canceller) = validate_directory_streaming(
+        dir.path(),
+        &talkbank_transform::ValidationRun::uncached(config.clone()),
+    );
 
     let mut file_complete_count = 0usize;
-    let mut finished_stats = None;
+    let mut terminal = None;
 
     for event in events {
         match event {
             ValidationEvent::FileComplete(_) => {
                 file_complete_count += 1;
                 if file_complete_count == 3 {
-                    // Send cancellation signal.
-                    let _ = cancel.send(());
+                    canceller.cancel();
                 }
             }
-            ValidationEvent::Finished(stats) => {
-                finished_stats = Some(stats);
-            }
-            _ => {}
+            ValidationEvent::Discovering | ValidationEvent::Started { .. } => {}
+            ValidationEvent::Finished(ending) => terminal = Some(ending),
         }
     }
 
-    let _stats = finished_stats.expect("Should receive Finished event even after cancel");
-    // The runner may have processed more than 3 files before noticing the
-    // cancel (race condition), but we should get fewer than all 10.
-    // The cancelled flag may or may not be set depending on timing,
-    // the runner checks cancel_rx after all workers finish. What matters
-    // is that we got a Finished event and did not hang.
-    assert!(
-        file_complete_count <= file_count,
-        "Should not process more files than exist"
-    );
+    match terminal.expect("the run must end with an ending") {
+        RunEnding::Stopped { stats, reason } => {
+            let unprocessed = stats.missing_files();
+            let stats = stats.snapshot();
+            assert_eq!(reason, talkbank_transform::CancelReason::Requested);
+            assert_eq!(stats.files_accounted_for() + unprocessed.get(), file_count);
+        }
+        RunEnding::Complete(stats) => {
+            let stats = stats.snapshot();
+            assert_eq!(stats.files_accounted_for(), file_count);
+        }
+        other => panic!("a cancelled run must be Stopped or Complete, got {other:?}"),
+    }
 }
 
 /// `validate_directory_streaming` on an empty directory. Should get
-/// `Started { 0 }` then `Finished` immediately.
+/// `Started { 0 }` then `NothingFound` immediately.
 #[test]
 fn pipeline_empty_directory() {
     let dir = tempfile::tempdir().expect("create temp dir");
-    let config = test_config(4);
-    let (events, _cancel) = validate_directory_streaming::<CachePool>(dir.path(), &config, None);
+    let config = test_config(FOUR_WORKERS);
+    let (events, _cancel) = validate_directory_streaming(
+        dir.path(),
+        &talkbank_transform::ValidationRun::uncached(config.clone()),
+    );
 
     let mut started_total = None;
     let mut finished = false;
@@ -610,10 +665,9 @@ fn pipeline_empty_directory() {
             ValidationEvent::Started { total_files } => {
                 started_total = Some(total_files);
             }
-            ValidationEvent::Finished(stats) => {
+            ValidationEvent::Finished(ending) => {
                 finished = true;
-                assert_eq!(stats.total_files, 0, "Empty dir should have 0 files");
-                assert!(!stats.cancelled, "Should not be cancelled");
+                assert_eq!(ending, RunEnding::NothingFound, "Empty dir finds nothing");
             }
             _ => {
                 panic!("Unexpected event for empty directory: {event:?}");
@@ -646,8 +700,11 @@ fn stress_100_files_parallel() {
         write_temp_cha(dir.path(), &format!("stress_{i}.cha"), VALID_CHAT);
     }
 
-    let config = test_config(4);
-    let (events, _cancel) = validate_directory_streaming::<CachePool>(dir.path(), &config, None);
+    let config = test_config(FOUR_WORKERS);
+    let (events, _cancel) = validate_directory_streaming(
+        dir.path(),
+        &talkbank_transform::ValidationRun::uncached(config.clone()),
+    );
 
     let mut file_complete_count = 0usize;
     let mut finished = false;
@@ -657,13 +714,14 @@ fn stress_100_files_parallel() {
             ValidationEvent::FileComplete(_) => {
                 file_complete_count += 1;
             }
-            ValidationEvent::Finished(stats) => {
+            ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                let stats = stats.snapshot();
                 finished = true;
                 assert_eq!(
-                    stats.total_files, file_count,
+                    stats.total_files().get(),
+                    file_count,
                     "Should process all 100 files"
                 );
-                assert!(!stats.cancelled, "Should not be cancelled");
             }
             _ => {}
         }
@@ -696,16 +754,24 @@ fn stress_cache_1000_entries() {
 
     // Write all entries.
     for (i, path) in paths.iter().enumerate() {
-        let valid = i % 2 == 0;
-        cache
-            .set_validation(path, false, valid)
-            .expect("set_validation should succeed");
+        let verdict = crate::cache_shim::alternating(i);
+        crate::cache_shim::set_validation(
+            &cache,
+            path,
+            talkbank_model::validation::AlignmentValidation::Structure,
+            verdict,
+        )
+        .expect("set_validation should succeed");
     }
 
     // Read them all back.
     for (i, path) in paths.iter().enumerate() {
-        let expected = i % 2 == 0;
-        let result = cache.get_validation(path, false);
+        let expected = crate::cache_shim::alternating(i);
+        let result = crate::cache_shim::get_validation(
+            &cache,
+            path,
+            talkbank_model::validation::AlignmentValidation::Structure,
+        );
         assert_eq!(
             result,
             Some(expected),
@@ -735,5 +801,13 @@ fn stress_parser_rapid_creation() {
             "Parser #{i} should parse valid CHAT successfully"
         );
         // Parser is dropped here; resources should be freed cleanly.
+    }
+}
+
+/// Test data: every third file invalid, the rest valid.
+fn every_third_invalid(index: u32) -> talkbank_transform::CacheOutcome {
+    match index % 3 {
+        0 => talkbank_transform::CacheOutcome::Invalid,
+        _ => talkbank_transform::CacheOutcome::Valid,
     }
 }

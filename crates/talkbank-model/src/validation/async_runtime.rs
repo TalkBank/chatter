@@ -22,7 +22,7 @@
 //!     let errors = ErrorCollector::new();
 //!
 //!     // Run validation on blocking thread pool
-//!     let _validated = validate_async(file, errors.clone(), None).await;
+//!     let _validated = validate_async(file, errors.clone(), OwnedTranscriptName::Anonymous).await;
 //!
 //!     let error_vec = errors.into_vec();
 //!     println!("Found {} errors", error_vec.len());
@@ -54,7 +54,7 @@ pub enum AsyncValidationError {
 ///
 /// * `file` - The ChatFile to validate (consumed, returns Validated)
 /// * `errors` - Error sink for collecting validation errors (must be Send + Sync + Clone)
-/// * `filename` - Optional filename for media validation
+/// * `name` - The transcript's name, for the rules about it (`@Media`)
 ///
 /// # Returns
 ///
@@ -65,32 +65,25 @@ pub enum AsyncValidationError {
 /// ```ignore
 /// use talkbank_model::validation::validate_async;
 /// use talkbank_model::ErrorCollector;
+/// use talkbank_model::model::{OwnedFileStem, OwnedTranscriptName};
 ///
 /// let errors = ErrorCollector::new();
-/// let validated = validate_async(file, errors.clone(), Some("myfile")).await?;
+/// let name = OwnedTranscriptName::Named(OwnedFileStem::new("myfile")?);
+/// let validated = validate_async(file, errors.clone(), name).await?;
 /// ```
 #[cfg(feature = "async")]
 pub async fn validate_async<S>(
     file: ChatFile,
     errors: S,
-    filename: Option<String>,
+    name: crate::model::OwnedTranscriptName,
 ) -> Result<crate::validation::ValidChatFile, AsyncValidationError>
 where
     S: ErrorSink + Send + 'static,
 {
-    tokio::task::spawn_blocking(move || {
-        file.validate_into(
-            &errors,
-            filename
-                .as_deref()
-                .map_or(crate::model::TranscriptName::Anonymous, |stem| {
-                    crate::model::TranscriptName::Named(crate::model::FileStem::from_stem(stem))
-                }),
-        )
-    })
-    .await
-    .map_err(AsyncValidationError::from)?
-    .map_err(AsyncValidationError::from)
+    tokio::task::spawn_blocking(move || file.validate_into(&errors, name.borrow()))
+        .await
+        .map_err(AsyncValidationError::from)?
+        .map_err(AsyncValidationError::from)
 }
 
 /// Validate a `ChatFile` asynchronously with a custom `RuleSelection`.
@@ -103,42 +96,34 @@ where
 /// * `file` - The ChatFile to validate (cloned for async task)
 /// * `rules` - Which validation rules to run
 /// * `errors` - Error sink for collecting validation errors (must be Send + 'static)
-/// * `filename` - Optional filename for media validation
+/// * `name` - The transcript's name, for the rules about it (`@Media`)
 ///
 /// # Example
 ///
 /// ```ignore
 /// use talkbank_model::validation::{validate_with_rules_async, RuleSelection};
 /// use talkbank_model::ErrorCollector;
+/// use talkbank_model::model::{OwnedFileStem, OwnedTranscriptName};
 ///
 /// let rules = RuleSelection::new().with_strict_linkers();
 ///
 /// let errors = ErrorCollector::new();
-/// validate_with_rules_async(file.clone(), rules, errors.clone(), Some("myfile".to_string())).await?;
+/// let name = OwnedTranscriptName::Named(OwnedFileStem::new("myfile")?);
+/// validate_with_rules_async(file.clone(), rules, errors.clone(), name).await?;
 /// ```
 #[cfg(feature = "async")]
 pub async fn validate_with_rules_async<S>(
     file: ChatFile,
     rules: RuleSelection,
     errors: S,
-    filename: Option<String>,
+    name: crate::model::OwnedTranscriptName,
 ) -> Result<(), AsyncValidationError>
 where
     S: ErrorSink + Send + 'static,
 {
-    tokio::task::spawn_blocking(move || {
-        file.validate_with_rules(
-            rules,
-            &errors,
-            filename
-                .as_deref()
-                .map_or(crate::model::TranscriptName::Anonymous, |stem| {
-                    crate::model::TranscriptName::Named(crate::model::FileStem::from_stem(stem))
-                }),
-        )
-    })
-    .await
-    .map_err(AsyncValidationError::from)
+    tokio::task::spawn_blocking(move || file.validate_with_rules(rules, &errors, name.borrow()))
+        .await
+        .map_err(AsyncValidationError::from)
 }
 
 #[cfg(all(test, feature = "async"))]
@@ -163,7 +148,8 @@ mod tests {
         let file = make_test_file();
         let errors = ErrorCollector::new();
 
-        let rejected = validate_async(file, errors, None).await;
+        let rejected =
+            validate_async(file, errors, crate::model::OwnedTranscriptName::Anonymous).await;
         assert!(matches!(rejected, Err(AsyncValidationError::Validation(_))));
 
         // Should complete without panicking
@@ -177,7 +163,13 @@ mod tests {
         let config = RuleSelection::new();
         let errors = ErrorCollector::new();
 
-        validate_with_rules_async(file, config, errors, None).await?;
+        validate_with_rules_async(
+            file,
+            config,
+            errors,
+            crate::model::OwnedTranscriptName::Anonymous,
+        )
+        .await?;
 
         // Should complete without panicking
         Ok(())

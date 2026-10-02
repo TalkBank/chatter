@@ -1,7 +1,7 @@
 # Parsing
 
 **Status:** Current
-**Last updated:** 2026-09-28 18:02 EDT
+**Last updated:** {{git-dates:page}}
 
 The parsing pipeline converts CHAT text into a typed `ChatFile` AST.
 `ParseError::internal` constructs E001 producer-failure evidence; it must not
@@ -32,7 +32,7 @@ grammatical-relation fields use that one boundary rather than attributing a
 failed source read to malformed CHAT. This reader proves readable coordinates,
 not tree/source identity; generated source-bound admission remains the stronger
 contract. Structural recovery and lexical validation retain their own findings.
-Postcode decoding now requires `SourceBound<PostcodeNode>`: final-code groups
+Postcode decoding requires `SourceBound<PostcodeNode>`: final-code groups
 project their generated source fields and admit the selected token range before
 decoding. The decoder takes no independent source string and retains the token's
 exact span. First and repeated groups share one leaf-slot decoder; displaced
@@ -88,7 +88,7 @@ CHAT rejection after a successful read. This is not a new grammar, a whole-tree
 range prepass, or a change to the public `ChatParser` trait's ID-fragment API.
 
 All six dedicated structured-header dispatch paths (`Languages`, `Participants`,
-`ID`, `Media`, `Situation`, `Types`) now retain source-bound nodes through one
+`ID`, `Media`, `Situation`, `Types`) retain source-bound nodes through one
 shared diagnostic-forwarding wrapper. No path in this family accepts a separate
 source argument. Situation text and the three Types fields are read through
 source-bound projections; unreadable ranges are internal failures, not missing
@@ -126,7 +126,7 @@ and numeric/empty checks; source faults propagate as `CstFailure` to dispatch
 instead of dropping a relation and misclassifying a producer failure as CHAT
 invalidity. Recovery and declared-versus-lowered completeness remain explicit.
 String-based grammar-tier and relation fragment APIs are unchanged.
-Compiled-grammar admission now narrows the tier-body and repeated relation
+Compiled-grammar admission narrows the tier-body and repeated relation
 carriers: composite `gra_contents` and `gra_relation` cannot be Missing.
 Error/Absent still preserve the existing truncated-body policy; lexical
 whitespace, index, head and label recovery remain. Declared-versus-lowered
@@ -146,7 +146,7 @@ accept `SourceBound` and return `CstFailure`; internal faults propagate to dispa
 never into empty-content or recovery branches. Compound spelling, empty-content
 omission, Missing/Error/Absent handling and string fragment APIs are unchanged.
 
-Both families now consume compiled canonical-grammar admission at their tier,
+Both families consume compiled canonical-grammar admission at their tier,
 group-list, group-choice and grouped-content boundaries. Generated
 `NonMissingKindSlot` carriers rule out Missing for composite bodies, groups,
 grouped content, `pho_words` and `sin_word`; this is a producer proof, not an
@@ -190,7 +190,7 @@ range admission remains an internal failure rather than CHAT invalidity.
 Gem-label and option-name accumulation also rejects a failed source read rather
 than returning a shortened label or incomplete flag set. Their outcome types
 distinguish rejected admission from a genuinely absent label or empty options.
-Participant entry lowering now consumes the generated range-admitted carrier:
+Participant entry lowering consumes the generated range-admitted carrier:
 speaker/name/role slices are checked before decoding and read without another
 fallible source operation. Missing/Error/Absent states, name order, role admission
 and displaced recovery diagnostics remain. Admission failure reports internal
@@ -231,7 +231,7 @@ Main-tier body lowering preserves its source-bound ending through extraction.
 Failure to read the body content or ending propagates as `CstFailure`; it cannot
 produce a successfully constructed empty body. Structural recovery remains
 separate from these producer failures.
-All structured timestamp consumers now pass `SourceBound<BulletNode>` to the
+All structured timestamp consumers pass `SourceBound<BulletNode>` to the
 shared reader. Start/end fields retain that association through generated field
 projection and checked reads. There is no independent source-string argument
 to mismatch with a bullet, and unreadable fields report producer failure rather
@@ -326,12 +326,12 @@ has a readable root. This is an API-contract violation, not a CHAT syntax rule.
 Keep range refusals until the producer models the edit/source relationship;
 neither a bound parent nor unreached fixture branches establishes that proof.
 
-The editor now uses `TreeSitterParser::parse_chat_file_revision` and its opaque
+The editor uses `TreeSitterParser::parse_chat_file_revision` and its opaque
 `ParsedRevision` cache. Only the parser constructs that cache from the source
 it actually parsed. The next transition accepts new text and a previous
 revision, derives a UTF-8-safe edit from the retained baseline, edits a cloned
-tree, and parses it. The LSP no longer owns an independent edit calculator or
-stores a separately replaceable source/tree pair. Detached trees remain
+tree, and parses it. The LSP owns no independent edit calculator and
+stores no separately replaceable source/tree pair. Detached trees remain
 available for structural queries but cannot be installed back into a revision.
 This closes stale pairing in the revision API, not the raw-tree compatibility
 APIs described above, and does not certify recovered CHAT as valid.
@@ -347,7 +347,7 @@ within the remainder, so it cannot overlap the prefix. This removes intermediate
 split-code-point states without removing any CST recovery or range admission.
 
 Utterance lowering also takes `SourceBound<UtteranceNode>` directly from the
-document projection. Its entry point no longer accepts an independently chosen
+document projection. Its entry point accepts no independently chosen
 source string. Its generated dependent-tier repeat retains `SourceField`
 association until attachment admits the choice once as `SourceBound<Choice>`.
 Parse-health classification and exhaustive dependent-tier dispatch select from
@@ -551,10 +551,9 @@ that material must remain rejected, without requiring a particular diagnostic.
 The E202 spec pairs a valid suffix with a one-character deletion inside a
 retraced group after multibyte text, exercising the normal document path.
 Parallel valid/deleted-suffix pairs exercise phonology and sign groups; their
-displaced word faults now retain generic E316 rejection. The parser no longer
-rescans recovery text for a dangling @ or an unclosed replacement opener.
-E202 still applies at the model-validation boundary; the former parser-only
-E311 diagnostic is retired.
+displaced word faults are rejected with generic E316. The parser does not
+rescan recovery text for a dangling @ or an unclosed replacement opener.
+E202 applies at the model-validation boundary; E311 has no live producer.
 
 Fragment-corpus tests also extract dependent tiers through model-owned spans
 and compare public full-line and content-only APIs against file parsing.
@@ -617,15 +616,14 @@ real ERROR nodes from a retained spec fixture and a separately parsed identical
 source: the producing owner admits them, while the other owner must refuse.
 That is source-identity boundary evidence, not a production recovery-slot witness.
 
-Delimiter-specific diagnoses require grammar evidence. The former
-`UnclosedDelimiter` wrapper proved readable text, not an unclosed construct,
-and has been removed with its E312/E313 text classifiers.
+Delimiter-specific diagnoses require grammar evidence. A wrapper proving
+readable text does not establish an unclosed construct, so no text classifier
+produces E312 or E313.
 
-The former `BracketRecovery` classifier has been removed. Its source-range
-wrapper did not establish annotation syntax: it inferred an annotation from
-text prefixes and missing whitespace from the preceding character. Those
-malformed inputs remain rejected by grammar recovery, with generic E316 where
-no structural evidence supports a narrower fault. Canonical valid controls
+No classifier infers an annotation from text prefixes or missing whitespace
+from the preceding character. Such malformed inputs are rejected by grammar
+recovery, with generic E316 where no structural evidence supports a narrower
+fault. Canonical valid controls
 remain clean; a diagnostic-specific state is not itself proof of parser
 structure.
 
@@ -659,9 +657,9 @@ for the parser's tree/source ownership boundary.
 
 Replacement-word producers also retain the whole typed CST wrapper's span,
 including trailing scoped annotations. The shared spacing projection admits
-that wrapper's code end while retaining the spoken word's own start. A dummy
-replacement span previously concealed missing separators at either closing
-bracket; canonical replacement pairs now exercise both endings and nested use.
+that wrapper's code end while retaining the spoken word's own start. Canonical
+replacement pairs exercise missing separators at either closing bracket and
+nested use.
 
 Wrapped-header selection starts at `ParsedSource::root()` and carries bound
 descendants through `SourceSlice::children`. Admission takes only the owning
@@ -795,7 +793,7 @@ TreeParsingError. Source compatibility is not proof of original-tree identity.
 
 Utterance construction and main-tier conversion consume the generated
 `SourceBound<MainTierNode>`. This replaces the handwritten `ReadableMainTier`
-range wrapper: the immutable parse owner and its field projections now supply
+range wrapper: the immutable parse owner and its field projections supply
 both node identity and checked text. Failed child-field admission reports
 an internal producer failure without constructing an utterance. Fragment
 conversion retains the same capability; its separate original-input parameter
@@ -824,7 +822,7 @@ its range refusal or its admitted bound wrapper. This replaces the consumer's
 separate kind check, raw read, and repeated classification. The operation is
 owned by TSGU and regenerated into Chatter, not hand-edited in the generated file.
 
-The recursive contents/group cycle now retains generated source association:
+The recursive contents/group cycle retains generated source association:
 body contents, first/repeated content choices, content-item choices, annotated
 angle groups, quotations, phonology groups, and sign groups all pass bound nodes
 or associated children into the same walker. Bound choice views preserve the
@@ -835,9 +833,9 @@ The utterance-body versus inside-brackets distinction still owns E759 behavior,
 and angle-edge whitespace still owns E750. Range refusals and recovery sinks
 remain visible.
 
-Standalone-word conversion now also requires a producer-bound word. Base-content
+Standalone-word conversion also requires a producer-bound word. Base-content
 choice dispatch retains that association through annotated words and replacement
-sequences; fragment lowering no longer detaches its admitted word. The independent
+sequences; fragment lowering never detaches its admitted word. The independent
 `%wor` route carries its bound tier through body, repeated item choices and word
 items to the same converter. No leaf reconstructs ownership from a detached node
 and arbitrary source. Word-level source text uses the admitted slice; missing and
@@ -845,7 +843,7 @@ empty words retain their separate refusals. Document attachment still drops
 malformed `%wor` tiers, while the public bound-node adapter retains recovery
 handling because source ownership does not prove syntax validity.
 
-Word bodies now retain ownership through both generated sequence shapes and
+Word bodies retain ownership through both generated sequence shapes and
 every piece choice. Segments, stress, lengthening and shortening content consume
 admitted text; standalone and word-internal overlap markers share one source-bound
 decoder. Missing/error/absent positions and displaced children retain their
@@ -926,8 +924,7 @@ cargo test -p talkbank-parser-tests --tests reference_corpus_parses
 ```
 
 Each `.cha` file is its own test, so failures are reported per file. The file
-count is deliberately not stated here: this page claimed 78 for months while the
-corpus grew past a hundred. Ask the tree
+count is deliberately not stated here, because it grows. Ask the tree
 (`rg --files -g '*.cha' corpus/reference | wc -l`).
 
 ## TreeSitterParser API
@@ -989,7 +986,7 @@ Trailing garbage or another tier cannot be silently ignored.
 Non-colon separator decoding consumes the generated `typed_or_placeholder`
 view: present and kind-admitted MISSING alternatives share one semantic mapping,
 while unclassified placeholders retain their distinct recovery diagnostic.
-The consumer no longer reclassifies raw MISSING nodes independently.
+The consumer does not reclassify raw MISSING nodes independently.
 
 Marked-token and typed-text decoding share checked node-text admission. Its
 typed result distinguishes a range outside the supplied source from a range
@@ -1039,12 +1036,12 @@ secondary spans. Context is projected only when its text exactly matches the
 owned synthetic source; an independent context retains its own coordinates
 regardless of length. `cargo test -p talkbank-parser --lib api::fragment::tests`
 checks long inputs, related labels and independent context text. These adapters
-no longer use the legacy sink's length heuristic. Header lowering consumes a
+do not use the legacy sink's length heuristic. Header lowering consumes a
 `HeaderFragment` that owns the located node together with its wrapped source.
 Admission requires the node to account for all caller text: only surrounding
 whitespace may lie outside it or extend into the synthetic line terminator.
-The former start-only check accepted the first of two headers and discarded the
-second. The public regression reproduces that refusal boundary, while controls
+A start-only check would accept the first of two headers and discard the
+second. The public regression covers that refusal boundary, while controls
 retain folded header content and caller-supplied LF/CRLF. Raw ordinal lookup
 and document-root navigation remain separate traversal improvements.
 Header lookup failures carry tree facts in `HeaderNotFound`, rather than
@@ -1065,12 +1062,11 @@ analysis consumes that slice without an independent source argument or another
 UTF-8 admission. No caller supplies a separate recovery node, source or offset. Missing and error
 nodes remain reported in source order. Diagnostic ranges are clipped to caller
 input, excluding an appended newline, and error text uses checked UTF-8 slices.
-The former raw-argument collector and its recursive wrapper are removed.
 
 `cargo test -p talkbank-parser --test integration context_public_api` reproduces
 the fragment regression checks: UTF-8 word spans, caller offsets, rejected
 fragments, and utterances with or without a trailing newline or document headers.
-These caught obsolete prefix subtraction that collapsed valid word spans to
+These guard against prefix subtraction that collapses valid word spans to
 zero, subtraction of caller origins from errors, and unremoved synthetic
 prefixes on rejected utterances and participant entries.
 
@@ -1084,20 +1080,19 @@ Synthetic terminators for morphology, phonology and grammatical-relation
 fragments are parsed at local origin zero; only the extracted caller result
 is moved into document coordinates. Wrapper allocation separately admits its
 complete synthetic source size, and trimming a caller newline cannot bypass
-admission of the original input range. This does not change the legacy
-`SpanShift` edit API or `Span::from_usize` truncation for unrelated callers;
-the admitted parser paths replace their raw origin casts. The legacy `OffsetAdjustingErrorSink` remains exported by the model
-crate for compatibility, but the tree-sitter parser has no remaining callers.
-Its eventual removal is separate from migrating these owned parser paths.
+admission of the original input range. The legacy
+`SpanShift` edit API and `Span::from_usize` truncation remain for unrelated
+callers; the admitted parser paths use no raw origin casts. The legacy
+`OffsetAdjustingErrorSink` is exported by the model crate for compatibility;
+the tree-sitter parser has no callers of it.
 
 ### Missing encoding declaration
 
 The document grammar admits an absent `@UTF8` anchor as an explicit optional
 slot. Lowering consumes that generated slot and retains the present headers
 and utterances without inventing an encoding declaration. Shared validation
-still rejects the file with E503. Previously the canonical parser discarded
-the entire document and reported several required headers as missing even
-though they were present. The authored E503 example and its declaration-present
+still rejects the file with E503. The canonical parser retains the present headers rather than
+discarding the document and reporting them as missing. The authored E503 example and its declaration-present
 control exercise this recovery; CLAN CHECK reports the corresponding CHECK (69).
 
 The re2c file parser carries each header's lexer extent and separator together
@@ -1130,20 +1125,20 @@ establish that outer-document boundary: their siblings remain covered by the
 whole-input backstop, so a lone End after a malformed Begin is not mislabeled
 as a duplicate. The E501 spec supplies both final-newline regression variants.
 
-Its input is now `ParsedSource`, created by
+Its input is `ParsedSource`, created by
 `TreeSitterParser::parse_source_incremental`. The generated owner retains the
 exact input supplied to tree-sitter and has no independent tree/string
 constructor. Document lowering consumes the classification and derives source
 and capacity from it; there is no separate source parameter. `into_tree`
 consumes the association for incremental editing, and reparsing produces a new
-association. This also removes the former whole-document tree clone.
+association. Incremental editing does not clone the whole-document tree.
 
 Recovery text uses the generated `SourceSlice` boundary. Raw node binding
 checks both tree membership and canonical coordinates: a copied tree-sitter
 node can be edited without editing its tree. Foreign and independently edited
 nodes cannot yield a source slice. Required-slot `Absent` remains a legitimate
 reconstruction result for incomplete ERROR nodes; lack of a corpus witness
-does not make it impossible. Standalone word and main-tier admission now retain
+does not make it impossible. Standalone word and main-tier admission retain
 checked source slices as well, with word selection driven by the generated
 source-file union. Wrapped headers follow `WrappedFragment -> ParsedFragment ->
 HeaderFragment`: the middle phase parses the wrapper's own source, and header
@@ -1164,11 +1159,11 @@ not a parallel list of child positions and kind strings, owns its CST shape.
 
 Header fragments and full documents share the exhaustive pre-`@Begin` header
 decoder. Its generated choice includes `@PID`, `@Window`, `@Color words`, and
-`@Font`; routing only `@PID` through that decoder previously let the other
+`@Font`; routing only `@PID` through that decoder would let the other
 three fall through to successful `Unknown` values. Finite reference-corpus
 tests compare header, main-tier and utterance fragment models with full-file
 parsing, carrying the file's CA semantic context explicitly.
-The shared decoder now consumes a source-bound choice. Document lowering
+The shared decoder consumes a source-bound choice. Document lowering
 projects it from the associated repeat; fragment lowering classifies its
 already-bound source slice. Header spans derive from that same choice, not a
 separate caller argument. PID lowering projects its generated free-text field
@@ -1214,7 +1209,7 @@ contracts, not new claims about which whole-file validation rules should fire.
 Nested choices receive a generated `FromNodeKind` implementation when their leaf
 kind sets are disjoint. The generator retains each leaf's complete constructor
 path and refuses ambiguous or composite alternatives. Content recovery uses
-this classifier; it no longer maintains a parallel list of alternatives.
+this classifier; it maintains no parallel list of alternatives.
 Present content items retain their typed wrapper through dispatch, eliminating
 the raw-node conversion and impossible second kind refusal.
 

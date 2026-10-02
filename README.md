@@ -1,6 +1,6 @@
 # chatter
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/README.md)
 
 [![CI](https://github.com/TalkBank/chatter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TalkBank/chatter/actions/workflows/ci.yml)
 [![Cross-platform](https://github.com/TalkBank/chatter/actions/workflows/cross-platform.yml/badge.svg?branch=main)](https://github.com/TalkBank/chatter/actions/workflows/cross-platform.yml)
@@ -125,9 +125,9 @@ below.
 
 ## Quick start (for developers)
 
-Prerequisites: the Rust toolchain pinned by
+Prerequisites: current stable Rust, selected by
 [`rust-toolchain.toml`](rust-toolchain.toml) (`rustup` reads it and
-installs the right version automatically) and SQLite dev headers
+installs it with the needed components automatically) and SQLite dev headers
 (bundled on macOS; Linux needs `libsqlite3-dev`).
 
 ```sh
@@ -187,7 +187,7 @@ Detailed architecture documentation: the
 
 ## Toolchain
 
-- **Rust**, pinned to a specific stable release in
+- **Rust**, the current stable release, selected by
   [`rust-toolchain.toml`](rust-toolchain.toml) (edition 2024; no MSRV
   declared until crates.io publication)
 - **Node 20+** for the desktop app's web front end

@@ -15,7 +15,10 @@ mod chat_file;
 mod line;
 mod utterance;
 
-pub use chat_file::{ChatFile, ChatFileLines, FileStem, TranscriptName};
+pub use chat_file::{
+    ChatFile, ChatFileLines, FileStem, FileStemError, OwnedFileStem, OwnedTranscriptName,
+    TranscriptName,
+};
 pub use line::Line;
 pub use utterance::{
     ParseHealth, ParseHealthState, ParseHealthTier, Utterance, UtteranceLanguage,

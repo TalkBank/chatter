@@ -1,7 +1,7 @@
 # Parser Leniency Policy
 
 **Status:** Current
-**Last updated:** 2026-08-27 18:09 EDT
+**Last updated:** {{git-dates:page}}
 
 This document is the single source of truth for how the tree-sitter grammar,
 Rust validation layer, and CLI tooling divide responsibility for enforcing the
@@ -82,131 +82,126 @@ grammar's permissiveness.
 
 ## Permissiveness Regression Decisions
 
-During development, several validation rules were tightened and then relaxed
-after they produced false positives against the reference corpus. These
-decisions are documented in the permissiveness regression log (archived). Each is
-summarised here with its rationale.
+Several validation rules are deliberately permissive because stricter forms
+produce false positives against the reference corpus. Each decision is
+summarised here with its ruling and rationale (the permissiveness regression
+log, archived, holds the full record).
 
-### Decision 1: `[*]` bare annotation, E214 disabled, then RETIRED
+### Decision 1: `[*]` bare annotation, E214 retired
 
-- **Previous behaviour**: `E214` emitted when `[*]` appeared without an explicit
-  error code (empty `ContentAnnotation::Error`).
-- **Current behaviour**: Bare `[*]` is accepted without error.
+- **Behaviour**: Bare `[*]` (an empty `ContentAnnotation::Error`) is accepted
+  without error; no code is emitted for it.
 - **Rationale**: Reference files (`errormarkers.cha`, `compound.cha`) use bare
   `[*]` as valid CHAT.
-- **What happened next, and it is why this entry is worth reading twice.** The
-  number outlived the decision. After the branch above was removed, `E214` was
-  reused in the same file for a DIFFERENT rule, "the scoped-annotation LIST is
-  empty", and its spec file went on documenting the original `[*]` rule. So one
-  code carried a retired rule in its documentation and an unreachable one in
-  its implementation, and its own spec example produced no diagnostic at all.
-  Nothing detected the drift because neither rule could fire.
-- **Retired 2026-08-26.** `AnnotatedContentAnnotations` is non-empty by
-  construction, so the second rule is now unrepresentable rather than merely
-  unimplemented, and the first stays retired on this decision's own reasoning.
+- **Why the number stays retired.** A code that names two different rules
+  (the bare-`[*]` rule and "the scoped-annotation LIST is empty") leaves its
+  documentation and its implementation free to disagree, and nothing detects
+  the drift when neither rule can fire. `AnnotatedContentAnnotations` is
+  non-empty by construction, so the empty-list rule is unrepresentable rather
+  than merely unimplemented, and the bare-`[*]` rule stays retired on this
+  decision's own reasoning.
 - **Revisit**: If coded error annotations become required, that is a NEW code
   against the `ContentAnnotation::Error` payload, behind an explicit strict
   profile. Do not revive `E214`: it has meant two things already.
 
 ### Decision 2: `@t` without `@s:<lang>`, E248 disabled
 
-- **Previous behaviour**: `E248` emitted for `@t` markers without an explicit
-  language marker.
-- **Current behaviour**: `@t` accepted without requiring `@s:<lang>`.
-- **Implementation**: Removed checks in
-  `talkbank-model/src/validation/word/structure.rs`.
+- **Behaviour**: `@t` is accepted without requiring `@s:<lang>`; `E248` (the
+  code for a `@t` marker lacking an explicit language marker) is not emitted.
+- **Implementation**: `talkbank-model/src/validation/word/structure.rs` carries
+  no such check.
 - **Rationale**: Reference file `formmarkers.cha` contains `a@t` and is expected
   to be valid.
 - **Revisit**: Scope to explicit strict validation mode if desired.
 
-### Decision 3: Undeclared inline language codes, E254 re-introduced as warning
+### Decision 3: Undeclared inline language codes, E254 retired
 
-- **Original behaviour**: Inline `@s:...` markers with language codes not
-  declared in `@Languages` emitted `E254` as an error.
-- **Intermediate behaviour**: `E254` was disabled and the code removed
-  from the codebase to keep reference file `lang-marker.cha` valid.
-- **Current behaviour**: `E254` (`UndeclaredExplicitWordLanguage`) is
-  back in the registry at
-  `crates/talkbank-model/src/errors/codes/error_code.rs:321` and
-  emitted at
-  `crates/talkbank-model/src/validation/word/language/resolve.rs:195`,
-  but as a **warning** rather than an error. This was paired with the
-  introduction of `E255`
-  (`WholeUtteranceLanguageSwitchShouldUsePrecode`) for whole-utterance
-  `@s` runs that should use `[- lang]` precodes.
-- **Why it returned**: Heterogeneous corpora (Cantonese, Polish, Czech,
-  Spanish, HK bilingual) made the warn-only signal load-bearing for
-  catching `@s:LANG` markers that disagreed with `@Languages`. The
-  warning surfaces the inconsistency without blocking the file.
-- **Revisit**: If the warn-only signal turns out to be ignored in
-  practice, decide between escalating back to error severity or
-  removing.
+- **Behaviour**: An explicit word-level `@s:LANG` marker carries no
+  requirement to be declared in `@Languages` (reference file `lang-marker.cha`
+  stays valid). `E254` (`UndeclaredExplicitWordLanguage`) is a retired code and
+  is not emitted.
+- **Rationale**: `@Languages` declares the transcript's substantial
+  languages; a one-word insertion is not substantial presence. CLAN CHECK
+  imposes no `@s` declaration requirement either.
+- **Neighbouring rules**: `E255`
+  (`WholeUtteranceLanguageSwitchShouldUsePrecode`) covers whole-utterance
+  `@s` runs that should use `[- lang]` precodes, and a `[- lang]` utterance
+  precode whose language is absent from `@Languages` is `E755`.
+- **Revisit**: The number is retired and not reused.
 
 ### Decision 4: Mixed-language digit legality, permissive-any rule
 
-- **Previous behaviour**: Digits had to be legal in **all** applicable languages
-  for mixed/ambiguous markers.
-- **Current behaviour**: Digits accepted if legal in **at least one** applicable
-  language.
-- **Implementation**: Changed from `is_valid_in_all()` to `any()` in
+- **Behaviour**: For mixed/ambiguous markers, digits are accepted if legal in
+  **at least one** applicable language (not required to be legal in all).
+- **Implementation**: an `any()` over the applicable languages in
   `talkbank-model/src/validation/word/language/digits.rs`.
 - **Rationale**: Prevents false positives in mixed-language reference examples.
 - **Revisit**: Confirm spec intent for mixed/ambiguous validation semantics.
 
 ### Decision 5: `@Bg` nesting, same-label only
 
-- **Previous behaviour**: Any nested `@Bg` while another gem scope was open
-  emitted `E529`.
-- **Current behaviour**: `E529` only fires when nesting the **same label** (or
+- **Behaviour**: `E529` only fires when nesting the **same label** (or
   same unlabeled scope key). Different labels may nest hierarchically.
-- **Implementation**: Changed from `any_scope_open` to `same_scope_open` in
+- **Implementation**: a `same_scope_open` test (not "any scope open") in
   `talkbank-model/src/validation/header/structure.rs`.
 - **Rationale**: Avoids false positives on hierarchical markup patterns (e.g.,
   HSLLD corpus).
 - **Revisit**: Decide whether nesting policy should be global or per-label.
 
-### Decision 6: Temporal bullets in CA mode (RESOLVED 2026-07-29: skip removed)
+### Decision 6: Temporal bullets in CA mode, checked for every file
 
-- **Previous behaviour**: temporal constraints were skipped wholesale when a
-  file was in CA mode (`validate_temporal_constraints()` early-returned).
-- **Current behaviour**: `E701`/`E704` run for every file, CA included.
-- **Rationale for removal**: the original workaround ("CA reference files
-  include patterns that triggered false monotonicity/self-overlap
-  diagnostics") outlived its cause. The temporal rules have since gained the
-  500 ms tolerance and per-speaker semantics; with the skip removed, the CA
-  reference files and all 994 kept CA-declared files validate clean (measured
-  2026-07-29, full population). The skip also had no CLAN CHECK counterpart,
-  and was internally incoherent: `E362` bullet monotonicity always ran on CA
-  files while `E701`/`E704` did not.
-- **Revisit**: closed. The anticipated "CA-specific temporal policy" turned
-  out to be unnecessary: no policy difference is needed at all.
+- **Behaviour**: `E701`/`E704` run for every file, CA included; there is no
+  CA-mode skip.
+- **Rationale**: the temporal rules carry a 500 ms tolerance and per-speaker
+  semantics, and with them the CA reference files and all 994 kept
+  CA-declared files validate clean (full-population measurement). A CA-mode
+  skip has no CLAN CHECK counterpart and would be internally incoherent:
+  `E362` bullet monotonicity runs on CA files, so `E701`/`E704` must too.
+- **Revisit**: closed. No CA-specific temporal policy is needed: no policy
+  difference between CA and non-CA files exists.
 
 ### Decision 7: Pipeline severity threshold, errors only
 
-- **Previous behaviour**: Any validation diagnostic (including warnings) caused
-  `PipelineError::Validation`.
-- **Current behaviour**: Pipeline returns failure only if at least one diagnostic
+- **Behaviour**: Pipeline returns failure only if at least one diagnostic
   has `Severity::Error`.
 - **Implementation**: `talkbank-transform/src/pipeline/parse.rs`.
 - **Rationale**: Warnings should not block parse/transform/export pipelines.
 - **Revisit**: Keep as default; add explicit `--strict` flag/profile if needed.
 
-### Decision 8: Spacing warnings W210/W211, disabled (RETIRED 2026-07-16)
+### Decision 8: Spacing warnings W210/W211, retired
 
-- **Previous behaviour**: Style-level spacing warnings around terminators and
-  overlap markers.
-- **Current behaviour**: Checks removed from core main-tier validation path.
-- **Implementation**: `check_spacing_warnings()` invocation removed from
-  `talkbank-model/src/model/content/main_tier.rs`.
-- **Rationale**: Generated unexpected diagnostics on files treated as valid in
-  reference workflow.
-- **Revisit**: CLOSED. The codes were RETIRED outright on 2026-07-16
-  (maintainer ruling): real CLAN CHECK accepts the W210 construct
-  (glued terminator), overlap markers hug their content by design so
-  W211's shape is valid CA notation, and no production code ever
-  emitted either. The numbers are retired and not reused; no lint
-  profile will reintroduce them. The living spacing rules are E243,
-  E749, E750, E751, E757, and E758.
+- **Behaviour**: No style-level spacing warning runs around terminators and
+  overlap markers; the core main-tier validation path in
+  `talkbank-model/src/model/content/main_tier.rs` has no such pass.
+- **Rationale**: Such warnings produce unexpected diagnostics on files treated
+  as valid in the reference workflow.
+- **Revisit**: CLOSED (maintainer ruling). Real CLAN CHECK accepts the W210
+  construct (glued terminator), overlap markers hug their content by design
+  so W211's shape is valid CA notation, and no production code emits either.
+  The numbers are retired and not reused; no lint profile will reintroduce
+  them. The living spacing rules are E243, E749, E750, E751, E757, and E758.
+
+### Decision 9: Repeated `@Date` headers, accepted
+
+- **Behaviour**: A file may carry any number of `@Date` headers, anywhere
+  headers are allowed, with the same or different values, adjacent or
+  separated. Each is validated on its own (`E516` empty, `E518`
+  malformed); no rule relates one `@Date` to another.
+- **Parity**: CLAN CHECK accepts the same three shapes: two identical
+  `@Date` lines together, two different ones together, and a later
+  `@Date` after utterances begin. Measured against CLAN `V 21-Sep-2026
+  11:00` and chatter 0.27.0 with three minimal files, all accepted by both.
+- **Why so permissive**: Repeated dates are legitimate CHAT in real
+  corpora. Episode-structured transcripts put an `@Date` before each
+  recording session, so the same date repeats whenever several episodes
+  share a day. Diary corpora open each day with its own `@Date`, including
+  days that produced no utterances. Sessions recorded over two days carry
+  both dates. A narrower rule ("two adjacent `@Date` lines are an error")
+  was proposed in 2026-10 for identical adjacent duplicates introduced by
+  an export tool. The maintainer ruling is that chatter does not add
+  `@Date` rules ahead of CLAN CHECK.
+- **Revisit**: Only when CLAN CHECK adds a repeated-`@Date` rule. Chatter
+  then follows it for parity, under a new code.
 
 ---
 
@@ -262,7 +257,7 @@ Which rules run. Every field here changes the diagnostics that exist, which is
 why this type, and only this type, derives the validation cache key.
 
 ```rust,ignore
-let rules = RuleSelection::new().with_strict_linkers(); // turns on E351-E355
+let rules = RuleSelection::new().with_strict_linkers(); // turns on the [Opt-in] codes
 ```
 
 - `new()`: every always-on check, no opt-in check
@@ -301,9 +296,10 @@ let policy = PresentationPolicy::new()
 **Why the crate split.** `talkbank-transform` depends on `talkbank-cache`, so
 the cache crate cannot name `PresentationPolicy`. Folding a display preference
 into the cache key is therefore a dependency cycle rather than a judgement call.
-It was a judgement call in v0.6.0, it went wrong, and `--suppress` partitioned
-the cache: two runs differing only in what they printed shared no entries, and a
-second pass over a 106,000-file corpus re-validated all of it from cold.
+Were a display preference part of the cache key, `--suppress` would partition
+the cache: two runs differing only in what they printed would share no
+entries, and a second pass over a large corpus would re-validate all of it
+from cold.
 
 **What this makes true of a cache row.** The stored fact is "this file produced
 no diagnostics at all under this rule selection". No presentation policy can
@@ -330,7 +326,7 @@ consume the complete diagnostic set.
 | `--skip-alignment` | Skip tier alignment validation |
 | `--roundtrip` | Test serialization idempotency after validation |
 | `--force` | Clear cache for path and revalidate |
-| `--max-errors N` | Stop after N errors |
+| `--max-errors N` | Stop once N errors (never warnings) are found (N is at least 1) |
 
 ### What Is Missing
 
@@ -347,7 +343,7 @@ From the permissiveness regression log:
 | Profile | Purpose | Behaviour |
 |---------|---------|-----------|
 | `reference-compatible` | Current permissive baseline | Default, matches current validation behaviour |
-| `strict-chat` | Full spec enforcement | Re-enable selected tightenings (E248, etc.; E254 was retired 2026-07-15 with the @s ruling, E214 on 2026-08-26 with the non-empty annotation type) |
+| `strict-chat` | Full spec enforcement | Re-enable selected tightenings (E248, etc.; E254 and E214 are retired codes and are not candidates) |
 
 The roundtrip gate should be pinned to an agreed profile to prevent future
 ambiguity about what "pass" means.
@@ -389,9 +385,5 @@ layer.
 | `talkbank-model/src/errors/config.rs` | `RuleSelection` API (and the cache key derived from it) |
 | `talkbank-transform/src/presentation.rs` | `PresentationPolicy` and the `ConfigurableErrorSink` adapter |
 | `talkbank-model/src/validation/header/structure.rs` | Header validation: E501, E502, E503, E504-E533 |
-| `talkbank-model/src/validation/temporal.rs` | Temporal constraint checks (E701, E704); CA-mode skip |
-| `talkbank-model/src/model/content/main_tier.rs` | Where W210/W211 were removed |
-
----
-
-*Last updated: 2026-02-18*
+| `talkbank-model/src/validation/temporal.rs` | Temporal constraint checks (E701, E704), run for every file |
+| `talkbank-model/src/model/content/main_tier.rs` | Main-tier validation path; carries no W210/W211 spacing pass |

@@ -1,7 +1,7 @@
 # What a Version Bump Promises
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 If you depend on chatter, two different things can move under you and they move
 independently:
@@ -66,9 +66,8 @@ retirements you know about, so a typo still fails and a NEW retirement fails
 loudly until someone records why. That is the check worth having; checking
 against today's live set is not.
 
-Reported by an external consumer in August 2026, whose ledger cited E754
-(`LetterFormMultipleLetters`, retired 2026-08-11) for a repair that is still
-correct: a digit zero typed for the letter `o` in `0@l`. The rule went away
+Example: a ledger that cites E754 (`LetterFormMultipleLetters`, a retired
+code) for a repair that is still correct: a digit zero typed for the letter `o` in `0@l`. The rule went away
 because it counted characters and a digraph is one letter written with two;
 the repair it surfaced was right either way.
 

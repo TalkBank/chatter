@@ -13,7 +13,7 @@
 
 mod ca_delimiter;
 mod comma;
-mod gra_relation_vocabulary;
+pub(crate) mod gra_relation_vocabulary;
 mod overlap;
 mod phon_xtier;
 mod repetition_segment;

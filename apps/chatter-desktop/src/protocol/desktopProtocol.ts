@@ -24,13 +24,36 @@ export type ExportFormat = "json" | "text";
 /** Which parser backend to validate with. Mirrors Rust `ParserKindRequest`. */
 export type ParserKindSetting = "tree-sitter" | "re2c";
 
+/**
+ * A positive whole number of parallel validation jobs. Branded so that only
+ * `parseJobCount` makes one: 0, fractions, negatives and non-numbers cannot
+ * reach the backend, which refuses them too (its `jobs` is a `NonZeroUsize`).
+ */
+export type JobCount = number & { readonly __brand: "JobCount" };
+
+/** What the jobs field holds: all CPUs (empty), a count, or text that is not one. */
+export type JobsInput =
+  | { kind: "allCpus" }
+  | { kind: "count"; count: JobCount }
+  | { kind: "invalid" };
+
+/** Parse the jobs field: the one constructor of `JobCount`. */
+export function parseJobCount(raw: string): JobsInput {
+  const text = raw.trim();
+  if (text === "") return { kind: "allCpus" };
+  if (!/^[0-9]+$/.test(text)) return { kind: "invalid" };
+  const value = Number(text);
+  if (!Number.isSafeInteger(value) || value < 1) return { kind: "invalid" };
+  return { kind: "count", count: value as JobCount };
+}
+
 /** User-configurable validation settings, threaded through to `ValidationConfig`. */
 export interface ValidationSettings {
   roundtrip: boolean;
   parserKind: ParserKindSetting;
   strictLinkers: boolean;
   /** Number of parallel validation jobs; `null` = use all CPUs. */
-  jobs: number | null;
+  jobs: JobCount | null;
 }
 
 /** Matches `ValidationConfig::default()` on the Rust side. */
@@ -41,11 +64,17 @@ export const DEFAULT_VALIDATION_SETTINGS: ValidationSettings = {
   jobs: null,
 };
 
-export interface ValidateCommandArgs extends ValidationSettings {
+/** Mirrors Rust `ValidateRequest`: one value, the command's only argument. */
+export interface ValidateRequest extends ValidationSettings {
   path: string;
 }
 
-export interface OpenInClanCommandArgs {
+export interface ValidateCommandArgs {
+  request: ValidateRequest;
+}
+
+/** Mirrors Rust `OpenInClanRequest`. */
+export interface OpenInClanRequestArgs {
   file: string;
   line: number;
   col: number;
@@ -53,10 +82,19 @@ export interface OpenInClanCommandArgs {
   msg: string;
 }
 
-export interface ExportResultsCommandArgs {
+export interface OpenInClanCommandArgs {
+  request: OpenInClanRequestArgs;
+}
+
+/** Mirrors Rust `ExportResultsRequest`. */
+export interface ExportResultsRequestArgs {
   results: string;
   format: ExportFormat;
   path: string;
+}
+
+export interface ExportResultsCommandArgs {
+  request: ExportResultsRequestArgs;
 }
 
 export interface RevealInFileManagerCommandArgs {

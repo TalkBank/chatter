@@ -1,7 +1,7 @@
 # Algorithms and Data Structures
 
 **Status:** Current
-**Last modified:** 2026-06-15 15:00 EDT
+**Last modified:** {{git-dates:page}}
 
 This chapter documents the key algorithms and data structure decisions across
 the TalkBank Rust crates.
@@ -91,10 +91,6 @@ fragments (a word, a tier line) directly. Methods like
 `parser.parse_word_fragment()`, `parser.parse_main_tier_fragment()`, etc.
 are used when synthesizing CHAT from non-CHAT sources (ASR output, UD
 annotations).
-
-> **Historical note:** A Chumsky-based direct parser previously provided
-> combinator-based fragment parsing. It was removed in March 2026; tree-sitter
-> is now the sole parser.
 
 ## Structural Tier Alignment
 

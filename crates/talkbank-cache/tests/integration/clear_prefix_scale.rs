@@ -20,7 +20,13 @@ fn seed_entries(cache: &CachePool, dir: &Path, count: usize) {
     for i in 0..count {
         let file = dir.join(format!("f{i:05}.cha"));
         std::fs::write(&file, b"@UTF8\n").unwrap();
-        cache.set_validation(&file, true, true).unwrap();
+        crate::shim::set_validation(
+            cache,
+            &file,
+            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+            talkbank_cache::CacheOutcome::Valid,
+        )
+        .unwrap();
     }
 }
 
@@ -46,7 +52,9 @@ fn clear_prefix_is_bulk_not_per_file() {
 
     let started = Instant::now();
     let removed = cache
-        .clear_prefix(&data_dir.path().to_string_lossy())
+        .clear(&talkbank_cache::CacheScope::Under(
+            talkbank_cache::ResolvedPrefix::of(data_dir.path()).expect("resolvable prefix"),
+        ))
         .unwrap();
     let elapsed = started.elapsed();
 
@@ -95,16 +103,43 @@ fn clear_prefix_respects_path_component_boundaries() {
     let out_file = sibling.join("outside.cha");
     std::fs::write(&in_file, b"@UTF8\n").unwrap();
     std::fs::write(&out_file, b"@UTF8\n").unwrap();
-    cache.set_validation(&in_file, true, true).unwrap();
-    cache.set_validation(&out_file, true, true).unwrap();
+    crate::shim::set_validation(
+        &cache,
+        &in_file,
+        talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+        talkbank_cache::CacheOutcome::Valid,
+    )
+    .unwrap();
+    crate::shim::set_validation(
+        &cache,
+        &out_file,
+        talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+        talkbank_cache::CacheOutcome::Valid,
+    )
+    .unwrap();
 
-    let removed = cache.clear_prefix(&inside.to_string_lossy()).unwrap();
+    let removed = cache
+        .clear(&talkbank_cache::CacheScope::Under(
+            talkbank_cache::ResolvedPrefix::of(&inside).expect("resolvable prefix"),
+        ))
+        .unwrap();
 
     assert_eq!(removed, 1, "only the entry under the prefix directory goes");
     assert_eq!(
-        cache.get_validation(&out_file, true),
-        Some(true),
+        crate::shim::get_validation(
+            &cache,
+            &out_file,
+            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment
+        ),
+        Some(talkbank_cache::CacheOutcome::Valid),
         "an entry in a sibling directory sharing the string prefix survives"
     );
-    assert_eq!(cache.get_validation(&in_file, true), None);
+    assert_eq!(
+        crate::shim::get_validation(
+            &cache,
+            &in_file,
+            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment
+        ),
+        None
+    );
 }

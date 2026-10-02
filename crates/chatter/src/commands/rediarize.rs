@@ -116,7 +116,7 @@ pub fn run_rediarize(
             info!("wrote rediarized file: {}", path.display());
         }
         None => {
-            print!("{rewritten}");
+            out!("{rewritten}");
         }
     }
 

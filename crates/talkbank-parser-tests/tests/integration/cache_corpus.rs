@@ -1,14 +1,16 @@
 //! Cache facts must originate in real canonical-file validation.
 
+use crate::cache_shim::{cached, content, verdict};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
-use talkbank_cache::{CacheOutcome, CachePool, ValidationCache};
+use talkbank_cache::{CacheOutcome, CachePool};
 use talkbank_model::ParseError;
+use talkbank_model::validation::AlignmentValidation;
 use talkbank_parser_tests::chat_corpus::ChatCorpus;
 use talkbank_transform::validation_runner::{
-    CacheMode, FileStatus, RoundtripVerdict, RunCoverage, ValidationConfig, ValidationEvent,
-    ValidationStatsSnapshot, validate_files_streaming,
+    FileStatus, RoundtripCheck, RoundtripVerdict, RunCache, RunEnding, ValidationConfig,
+    ValidationEvent, ValidationStatsSnapshot, validate_files_streaming,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -32,13 +34,18 @@ fn canonical_cache_is_learned_cold_and_reused_without_losing_diagnostics() {
         .map(|fixture| fixture.path().to_owned())
         .collect();
     let config = ValidationConfig {
-        jobs: Some(2),
+        jobs: std::num::NonZeroUsize::new(2),
         ..Default::default()
     };
     let cache =
         Arc::new(CachePool::in_memory(config.cache_identity()).expect("isolated SQLite cache"));
     assert_eq!(cache.stats().expect("cache stats").total_entries, 0);
-    let cold = collect_run(&paths, &config, cache.clone(), &BTreeSet::new());
+    let cold = collect_run(
+        &paths,
+        &config,
+        RunCache::ReadWrite(cache.clone()),
+        &BTreeSet::new(),
+    );
     let mut hits = BTreeSet::new();
     for path in &paths {
         let expected = if cold.diagnostics.contains_key(path) {
@@ -47,26 +54,24 @@ fn canonical_cache_is_learned_cold_and_reused_without_losing_diagnostics() {
             CacheOutcome::Valid
         };
         assert_eq!(
-            cache.get(path, config.check_alignment),
+            verdict(talkbank_cache::VerdictReader::get(
+                cache.as_ref(),
+                &cached(path),
+                &content(path),
+                config.alignment
+            )),
             Some(expected),
             "{}",
             path.display()
         );
-        let equivalent_path = path
-            .parent()
-            .expect("canonical fixture has a parent")
-            .join(".")
-            .join(path.file_name().expect("canonical fixture has a filename"));
-        assert_eq!(path, &equivalent_path);
-        assert_eq!(
-            cache.get(&equivalent_path, config.check_alignment),
-            Some(expected),
-            "equivalent path must reuse the canonical cache fact: {}",
-            equivalent_path.display()
-        );
         if expected == CacheOutcome::Valid {
             assert_eq!(
-                ValidationCache::get_roundtrip(cache.as_ref(), path, config.check_alignment),
+                verdict(talkbank_cache::VerdictReader::get_roundtrip(
+                    cache.as_ref(),
+                    &cached(path),
+                    &content(path),
+                    config.alignment
+                )),
                 None
             );
             hits.insert(path.clone());
@@ -76,48 +81,55 @@ fn canonical_cache_is_learned_cold_and_reused_without_losing_diagnostics() {
         !hits.is_empty(),
         "canonical files must establish real warm hits"
     );
-    let warm_config = ValidationConfig {
-        cache: CacheMode::ReadOnly,
-        ..config.clone()
-    };
-    let warm = collect_run(&paths, &warm_config, cache.clone(), &hits);
+    let warm = collect_run(&paths, &config, RunCache::ReadOnly(cache.clone()), &hits);
     assert_eq!(cold.verdicts, warm.verdicts);
     assert_eq!(
         cold.diagnostics, warm.diagnostics,
         "invalid/warning files still need full evidence"
     );
-    assert_eq!(cold.stats.roundtrip_passed, warm.stats.roundtrip_passed);
-    assert_eq!(cold.stats.valid_files, warm.stats.valid_files);
-    assert_eq!(cold.stats.invalid_files, warm.stats.invalid_files);
+    assert_eq!(cold.stats.roundtrip_passed(), warm.stats.roundtrip_passed());
+    assert_eq!(cold.stats.valid_files(), warm.stats.valid_files());
+    assert_eq!(cold.stats.invalid_files(), warm.stats.invalid_files());
     // A cached validation result is not evidence that a roundtrip ran. First
     // request must do the work and persist its independently learned result.
     let roundtrip_config = ValidationConfig {
-        roundtrip: true,
+        roundtrip: RoundtripCheck::Run,
         ..config
     };
-    let backfilled = collect_run(&paths, &roundtrip_config, cache.clone(), &BTreeSet::new());
+    let backfilled = collect_run(
+        &paths,
+        &roundtrip_config,
+        RunCache::ReadWrite(cache.clone()),
+        &BTreeSet::new(),
+    );
     assert_eq!(cold.diagnostics, backfilled.diagnostics);
-    assert_eq!(cold.stats.valid_files, backfilled.stats.valid_files);
-    assert_eq!(cold.stats.invalid_files, backfilled.stats.invalid_files);
+    assert_eq!(cold.stats.valid_files(), backfilled.stats.valid_files());
+    assert_eq!(cold.stats.invalid_files(), backfilled.stats.invalid_files());
     for path in &hits {
         assert_eq!(
-            ValidationCache::get_roundtrip(cache.as_ref(), path, roundtrip_config.check_alignment),
-            Some(CacheOutcome::Valid)
+            verdict(talkbank_cache::VerdictReader::get_roundtrip(
+                cache.as_ref(),
+                &cached(path),
+                &content(path),
+                roundtrip_config.alignment
+            )),
+            Some(talkbank_cache::RoundtripOutcome::Passed)
         );
     }
-    let warm_roundtrip_config = ValidationConfig {
-        cache: CacheMode::ReadOnly,
-        ..roundtrip_config
-    };
-    let reused = collect_run(&paths, &warm_roundtrip_config, cache.clone(), &hits);
+    let reused = collect_run(
+        &paths,
+        &roundtrip_config,
+        RunCache::ReadOnly(cache.clone()),
+        &hits,
+    );
     assert_eq!(backfilled.verdicts, reused.verdicts);
     assert_eq!(backfilled.diagnostics, reused.diagnostics);
     assert_eq!(
-        backfilled.stats.roundtrip_passed,
-        reused.stats.roundtrip_passed
+        backfilled.stats.roundtrip_passed(),
+        reused.stats.roundtrip_passed()
     );
     assert!(
-        cache.stats().expect("cache stats").cache_dir.is_none(),
+        cache.stats().expect("cache stats").storage == talkbank_cache::StorageStats::InMemory,
         "no disk cache created"
     );
 }
@@ -125,80 +137,65 @@ fn canonical_cache_is_learned_cold_and_reused_without_losing_diagnostics() {
 /// Persistence failures must not replace actual validation with invented facts.
 #[test]
 fn canonical_cache_write_failure_preserves_results_and_forces_revalidation() {
-    use std::path::Path;
-    use std::sync::Mutex;
     use talkbank_parser_tests::repo_paths::workspace_root;
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    enum Attempt {
-        Validation(PathBuf, bool, CacheOutcome),
-        Roundtrip(PathBuf, bool, CacheOutcome),
-    }
-    #[derive(Default)]
-    struct RefusedWrites(Mutex<Vec<Attempt>>);
-    impl ValidationCache for RefusedWrites {
-        fn get(&self, _: &Path, _: bool) -> Option<CacheOutcome> {
-            None
-        }
-        fn set(&self, path: &Path, alignment: bool, outcome: CacheOutcome) -> Result<(), String> {
-            self.0
-                .lock()
-                .expect("attempt log")
-                .push(Attempt::Validation(path.to_owned(), alignment, outcome));
-            Err("test storage refuses persistence".into())
-        }
-        fn set_roundtrip(
-            &self,
-            path: &Path,
-            alignment: bool,
-            outcome: CacheOutcome,
-        ) -> Result<(), String> {
-            self.0.lock().expect("attempt log").push(Attempt::Roundtrip(
-                path.to_owned(),
-                alignment,
-                outcome,
-            ));
-            Err("test storage refuses persistence".into())
-        }
-    }
+    use crate::cache_shim::{Attempt, RefusingCache};
     let root = workspace_root();
     let good = root.join("corpus/reference/core/basic-conversation.cha");
     let bad =
         root.join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/E714_4.cha");
     let paths = [good.clone(), bad.clone()];
     let config = ValidationConfig {
-        jobs: Some(1),
-        roundtrip: true,
-        check_alignment: true,
+        jobs: Some(std::num::NonZeroUsize::MIN),
+        roundtrip: RoundtripCheck::Run,
+        alignment: AlignmentValidation::IncludeTierAlignment,
         ..Default::default()
     };
-    let cache = Arc::new(RefusedWrites::default());
-    let first = collect_run(&paths, &config, cache.clone(), &BTreeSet::new());
-    let second = collect_run(&paths, &config, cache.clone(), &BTreeSet::new());
+    let cache = Arc::new(RefusingCache::new(config.cache_identity()));
+    let first = collect_run(
+        &paths,
+        &config,
+        RunCache::ReadWrite(cache.clone()),
+        &BTreeSet::new(),
+    );
+    let second = collect_run(
+        &paths,
+        &config,
+        RunCache::ReadWrite(cache.clone()),
+        &BTreeSet::new(),
+    );
     assert_eq!(first.verdicts, second.verdicts);
     assert_eq!(first.diagnostics, second.diagnostics);
-    assert_eq!(first.stats.valid_files, 1);
-    assert_eq!(first.stats.invalid_files, 1);
-    assert_eq!(first.stats.roundtrip_passed, 1);
+    assert_eq!(first.stats.valid_files(), 1);
+    assert_eq!(first.stats.invalid_files(), 1);
+    assert_eq!(first.stats.roundtrip_passed(), 1);
     let per_run = [
-        Attempt::Roundtrip(good.clone(), config.check_alignment, CacheOutcome::Valid),
-        Attempt::Validation(good, config.check_alignment, CacheOutcome::Valid),
-        Attempt::Validation(bad, config.check_alignment, CacheOutcome::Invalid),
+        Attempt::Roundtrip(
+            good.clone(),
+            config.alignment,
+            talkbank_cache::RoundtripOutcome::Passed,
+        ),
+        Attempt::Validation(good, config.alignment, CacheOutcome::Valid),
+        Attempt::Validation(bad, config.alignment, CacheOutcome::Invalid),
     ];
     assert_eq!(
-        *cache.0.lock().expect("attempt log"),
+        cache.attempts(),
         per_run.iter().chain(&per_run).cloned().collect::<Vec<_>>()
     );
 }
 
-fn collect_run<C: ValidationCache + Send + Sync + 'static>(
+fn collect_run(
     paths: &[PathBuf],
     config: &ValidationConfig,
-    cache: Arc<C>,
+    cache: RunCache,
     hits: &BTreeSet<PathBuf>,
 ) -> CompletedRun {
     let expected: BTreeSet<_> = paths.iter().cloned().collect();
-    let (events, _cancel) = validate_files_streaming(paths.to_vec(), config, Some(cache));
+    let (events, _cancel) = validate_files_streaming(
+        paths.to_vec(),
+        &talkbank_transform::ValidationRun::new(config.clone(), cache)
+            .expect("a cache opened for this run's identity"),
+    );
     let mut verdicts = BTreeMap::new();
     let mut diagnostics = BTreeMap::new();
     let mut roundtrips = BTreeSet::new();
@@ -211,64 +208,64 @@ fn collect_run<C: ValidationCache + Send + Sync + 'static>(
         match event {
             ValidationEvent::Discovering => {}
             ValidationEvent::Started { total_files } => assert_eq!(total_files, paths.len()),
-            ValidationEvent::Errors(event) => {
-                assert!(expected.contains(&event.path));
-                assert!(
-                    diagnostics
-                        .insert(event.path, (event.source, event.errors))
-                        .is_none()
-                );
-            }
-            ValidationEvent::RoundtripComplete(event) => {
-                assert!(config.roundtrip, "unrequested roundtrip event");
-                assert!(expected.contains(&event.path));
-                assert!(event.passed && event.failure_reason.is_none() && event.diff.is_none());
-                assert!(roundtrips.insert(event.path));
-            }
             ValidationEvent::FileComplete(event) => {
+                assert!(expected.contains(&event.path));
+                if let Some(shown) = event.status.shown() {
+                    assert!(
+                        diagnostics
+                            .insert(
+                                event.path.clone(),
+                                (Arc::from(shown.source), shown.errors.to_vec())
+                            )
+                            .is_none()
+                    );
+                }
                 let expected_hit = hits.contains(&event.path);
+                let hit = matches!(
+                    event.cache,
+                    talkbank_transform::validation_runner::CacheUse::Hit
+                );
                 let verdict = match event.status {
-                    FileStatus::Valid {
-                        cache_hit,
-                        roundtrip,
-                    } => {
-                        assert_eq!(cache_hit, expected_hit);
-                        let expected_roundtrip = if config.roundtrip {
-                            RoundtripVerdict::Passed
-                        } else {
-                            RoundtripVerdict::NotRequested
+                    FileStatus::Valid { roundtrip, .. } => {
+                        assert_eq!(hit, expected_hit);
+                        let expected_roundtrip = match config.roundtrip {
+                            RoundtripCheck::Run => RoundtripVerdict::Passed,
+                            RoundtripCheck::Skip => RoundtripVerdict::NotRequested,
                         };
                         assert_eq!(roundtrip, expected_roundtrip);
-                        assert_eq!(roundtrips.contains(&event.path), config.roundtrip);
+                        if let RoundtripVerdict::Passed = roundtrip {
+                            assert!(roundtrips.insert(event.path.clone()));
+                        }
                         Verdict::Valid(roundtrip)
                     }
-                    FileStatus::Invalid {
-                        error_count,
-                        cache_hit,
-                    } => {
-                        assert!(!cache_hit && !expected_hit);
+                    FileStatus::Invalid { diagnostics: shown } => {
+                        assert!(!hit && !expected_hit);
                         assert!(diagnostics.contains_key(&event.path));
-                        Verdict::Invalid(error_count)
+                        Verdict::Invalid(shown.error_count().get())
                     }
                     other => panic!("unexpected canonical status: {other:?}"),
                 };
                 assert!(verdicts.insert(event.path, verdict).is_none());
             }
-            ValidationEvent::Finished(stats) => {
-                assert_eq!(stats.coverage(), RunCoverage::Complete);
-                assert!(!stats.cancelled);
-                assert_eq!(stats.total_files, paths.len());
-                assert_eq!(stats.cache_hits, hits.len());
-                assert_eq!(stats.cache_misses, paths.len() - hits.len());
-                assert_eq!(stats.roundtrip_passed, roundtrips.len());
-                assert_eq!(stats.roundtrip_failed, 0);
+            ValidationEvent::Finished(RunEnding::Complete(stats)) => {
+                let stats = stats.snapshot();
+                assert_eq!(stats.total_files().get(), paths.len());
+                assert_eq!(stats.cache_hits(), hits.len());
+                assert_eq!(stats.cache_misses(), paths.len() - hits.len());
+                assert_eq!(stats.roundtrip_passed(), roundtrips.len());
+                assert_eq!(stats.roundtrip_failed(), 0);
                 assert_eq!(verdicts.keys().cloned().collect::<BTreeSet<_>>(), expected);
-                terminal = Some(stats);
+                terminal = Some(stats.clone());
             }
-            ValidationEvent::FinishedIncomplete { stats, lost_files } => {
-                panic!("lost {lost_files}: {stats:?}")
+            ValidationEvent::Finished(RunEnding::Stopped { stats, reason }) => panic!(
+                "stopped ({reason:?}) with {} left: {stats:?}",
+                stats.missing_files()
+            ),
+            ValidationEvent::Finished(RunEnding::Incomplete { stats, .. }) => {
+                panic!("lost {}: {stats:?}", stats.missing_files())
             }
-            ValidationEvent::Aborted(reason) => panic!("aborted: {reason}"),
+            ValidationEvent::Finished(RunEnding::Aborted(reason)) => panic!("aborted: {reason}"),
+            ValidationEvent::Finished(RunEnding::NothingFound) => panic!("the run found nothing"),
         }
     }
     CompletedRun {

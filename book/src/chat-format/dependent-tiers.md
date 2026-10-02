@@ -1,7 +1,7 @@
 # Dependent Tiers
 
 **Status:** Reference
-**Last updated:** 2026-09-09 08:49 EDT
+**Last updated:** {{git-dates:page}}
 
 Dependent tiers appear on lines beginning with `%` immediately after an utterance. They provide annotations linked to the main tier content.
 
@@ -170,9 +170,9 @@ flowchart TD
 
 These tiers originate from the [Phon](https://www.phon.ca/)
 project and provide syllable-annotated phonological transcription and segmental
-alignment. They were originally serialized as `%x`-prefixed user-defined tiers
-(`%xmodsyl`, `%xphosyl`, `%xphoaln`) and are being promoted to official CHAT
-tiers. Phon stores phonological data in its own XML format. As of Phon
+alignment. Older exports serialize them as `%x`-prefixed user-defined tiers
+(`%xmodsyl`, `%xphosyl`, `%xphoaln`); current Phon exports use the official
+unprefixed tier names (see [Phon Tiers](phon-tiers.md)). Phon stores phonological data in its own XML format. As of Phon
 4.0.0-beta.9 (2026-06-25), Phon reads and writes CHAT natively.
 
 ### %modsyl / %phosyl, Syllabified Phonology

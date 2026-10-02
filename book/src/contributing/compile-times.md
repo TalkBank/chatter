@@ -1,14 +1,11 @@
-# Rust Compilation Times: Findings and Optimizations
+# Rust Compilation Times
 
-**Status:** Reference (historical analysis; current Cargo.toml profile knobs
-are the source of truth)
-**Last updated:** 2026-05-20 20:32 EDT
+**Status:** Reference
+**Last updated:** {{git-dates:page}}
 
-This document captures the compilation performance analysis that drove the
-current dev/test profile knobs in the workspace root `Cargo.toml`. The
-absolute measurements below were taken before the 2026-04-28 batchalign3
-fold roughly tripled the third-party dependency surface; subsequent updates
-are reflected in `Cargo.toml` comments, which are the source of truth.
+How the workspace's dev and test profile settings keep compilation fast, and
+what to avoid. The workspace root `Cargo.toml` comments are the source of truth
+for the exact settings; re-run `cargo build --timings` for current numbers.
 
 ## Background: How Rust Compilation Works
 
@@ -35,123 +32,55 @@ Additionally, there are external tools:
    the final binary. Faster linkers (like `lld`) can shave seconds off link time
    for large binaries.
 
-## What We Found
+## Settings this workspace uses
 
-### Problem 1: sccache Was Disabling Incremental Compilation (Critical)
+- **`debug = "line-tables-only"`** in `[profile.dev]` and `[profile.test]`.
+  Backtraces keep file and line information, while the bulky type and variable
+  metadata (full DWARF, large `.dSYM` bundles and `.o` files that inflate
+  linker input) is skipped. You cannot inspect local variables in a debugger
+  (lldb/gdb); for most development workflows this is the right tradeoff.
+- **`split-debuginfo = "off"`** in the same profiles. macOS defaults to
+  `unpacked`, which leaves one `.rcgu.o` per codegen unit in
+  `target/debug/deps` and makes warm test runs pay for scanning tens of
+  thousands of directory entries.
+- **`opt-level = 3` for build scripts and proc macros**
+  (`[profile.dev.build-override]`).
+- **No workspace-wide third-party optimization.** `[profile.dev.package."*"]`
+  and `[profile.test.package."*"]` with `opt-level = 1` are not set: with the
+  workspace's third-party dependency surface (axum, async-trait, tokio's full
+  feature set, and so on) their build-time cost is prohibitive. Where runtime
+  is the bottleneck for a specific test, opt in locally rather than setting it
+  workspace-wide.
 
-The global `~/.cargo/config.toml` had:
+## Do not let a compiler wrapper disable incremental compilation
 
-```toml
-[build]
-rustc-wrapper = "/opt/homebrew/bin/sccache"
-```
+A global `~/.cargo/config.toml` that sets `rustc-wrapper` (for example to
+sccache) disables Rust incremental compilation entirely, because the wrapper
+interposes between Cargo and rustc and breaks the incremental artifact
+protocol. sccache also gives near-zero benefit for this workspace: rlib
+crates, which most workspace crates produce, cannot be cached by sccache. The
+result is that every build after a one-line change is a full rebuild of the
+dependency chain; a change to `talkbank-model`, near the root of the crate
+graph, recompiles 11+ downstream crates.
 
-This caused two compounding problems:
-
-- **sccache disables Rust incremental compilation entirely.** When a
-  `rustc-wrapper` is set, Cargo cannot use incremental mode because the wrapper
-  interposes between Cargo and rustc, breaking the incremental artifact protocol.
-
-- **sccache had near-zero cache benefit for this workspace.** The sccache stats
-  showed a 2.7% Rust cache hit rate. Out of 37 compilations, 36 were marked
-  "non-cacheable" because rlib crates (library crates, which is what most
-  workspace crates produce) cannot be cached by sccache.
-
-The result: every `cargo build` after a one-line change was effectively a clean
-rebuild of the entire dependency chain. A change to `talkbank-model` (near the
-root of the crate graph) triggered a full recompile of 11+ downstream crates,
-taking 60-90 seconds even for a trivial edit.
-
-### Problem 2: Full Debug Info Was Inflating Link Times
-
-The dev profile was generating full DWARF debug info (level 2), which includes:
-- Type definitions for every struct/enum
-- Variable location info for debugger inspection
-- Full scope and lifetime metadata
-
-This produces large `.dSYM` bundles and `.o` files, increasing linker input size
-and slowing down the link phase.
-
-### Problem 3: Third-Party Dependencies at -O0
-
-All third-party crates (serde, regex, tree-sitter, etc.) were compiled at
-`opt-level = 0` in dev builds. Since these crates rarely change, this was a
-pure penalty: slow runtime (tests using serde deserialization, tree-sitter
-parsing, or regex matching ran ~10x slower than necessary) with no compile-time
-benefit after the first build.
-
-### Non-Problem: lld Linker
-
-The `linker = "lld"` setting in the global cargo config was fine. On macOS this
-uses `ld64.lld` from Homebrew's LLVM toolchain (LLD 21.1.8), which is slightly
-faster than Apple's default linker for workspaces of this size. No change needed.
-
-## Changes Made
-
-### Change 1: Project-Local sccache Override
-
-Created `.cargo/config.toml` in the project root:
+If your global config sets a wrapper, override it for this project only with a
+local `.cargo/config.toml`:
 
 ```toml
 [build]
 rustc-wrapper = ""
 ```
 
-This overrides the global sccache setting for this project only, re-enabling
-incremental compilation. Other Rust projects on the system are unaffected.
+Other Rust projects on the system are unaffected, and sccache stays available
+for CI and other projects. The file is gitignored (the repository's
+`.gitignore` names `/.cargo/config.toml`) rather than committed because
+the empty-string value trips a `cargo-llvm-cov` bug that treats `""` as a real
+wrapper path instead of "no wrapper"; each contributor opts in locally, and CI
+does not carry the override.
 
-**Why not modify the global config?** Keeping the project-local override is
-safer, sccache may still be useful for other projects or CI workflows.
-
-**Note:** `.cargo/config.toml` is gitignored (not committed) because the
-empty-string `rustc-wrapper = ""` value trips a `cargo-llvm-cov` bug that
-treats `""` as a real wrapper path instead of "no wrapper." Each
-contributor opts in locally; CI does not carry the override.
-
-### Change 2: Reduced Debug Info
-
-In the workspace `Cargo.toml`:
-
-```toml
-[profile.dev]
-debug = "line-tables-only"
-
-[profile.test]
-debug = "line-tables-only"
-```
-
-This generates only file/line number information for backtraces, skipping the
-bulky type and variable metadata. You still get useful panic/backtrace output
-with source locations; you just can't inspect local variables in a debugger
-(lldb/gdb). For most development workflows this is the right tradeoff.
-
-### Change 3: Optimized Third-Party Dependencies, RETIRED post-fold
-
-The original change set `[profile.dev.package."*"] opt-level = 1` to
-optimize every third-party crate. After the 2026-04-28 batchalign3 fold
-roughly tripled the third-party dependency surface (axum, async-trait,
-tokio's full feature set, etc.), the build-time cost of this setting
-became prohibitive, and the workspace `Cargo.toml` comment block now
-explains why it was removed.
-
-`[profile.test.package."*"] opt-level = 1` was also removed for the
-same reason; for specific tests where runtime is the bottleneck, opt
-in locally rather than reintroducing the workspace-wide setting.
-
-## Results (pre-fold, 2026-03 measurement)
-
-The numbers below were captured pre-fold against the original ten-crate
-workspace. The fold roughly tripled the third-party dep set and forced
-retiring `[profile.dev.package."*"] opt-level = 1`; today's wall-clock
-will be slower and depends on which crate you touched. Re-run
-`cargo build --timings` on the current workspace if you need fresh
-numbers.
-
-| Scenario | Before | After (pre-fold) |
-|----------|--------|------------------|
-| Clean build | ~3-5 min (est.) | ~39s |
-| Incremental rebuild (touch `talkbank-model`) | ~60-90s | ~4s |
-| Test runtime (serde/regex/tree-sitter hot paths) | Slow (-O0) | Faster (-O1, when opt-in) |
+The `lld` linker (`linker = "lld"` in the global config, `ld64.lld` from
+Homebrew's LLVM on macOS) is fine and slightly faster than Apple's default
+linker for a workspace of this size.
 
 ## Optional: Cranelift Backend for Maximum Iteration Speed
 
@@ -176,9 +105,12 @@ correctness testing or benchmarking.
    scratch (CI runners, cross-compilation). For edit-rebuild cycles, incremental
    compilation is far more valuable.
 
-3. **Optimize dependencies, not your own crates.** `[profile.dev.package."*"]`
-   with `opt-level = 1` gives you faster test execution with minimal compile
-   cost (dependencies rarely change).
+3. **Optimize dependencies, not your own crates, where the dependency surface
+   is small.** `[profile.dev.package."*"]` with `opt-level = 1` speeds test
+   execution at little compile cost when dependencies rarely change, but its
+   build-time cost grows with the dependency set. This workspace does not set
+   it (or the `profile.test` equivalent); where runtime is the bottleneck for a
+   specific test, opt in locally.
 
 4. **Debug info has a real cost.** Full DWARF debug info inflates binary sizes
    and link times. Use `line-tables-only` unless you actively need a debugger.

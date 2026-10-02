@@ -9,6 +9,605 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-10-02
+
+This release is about telling the truth about a validation run: how it ended,
+what it read, what it did with the cache, and what each output promises. Most
+of it is breaking for library callers and for scripts that relied on a
+command silently ignoring something; each such change is marked.
+
+### Changed
+
+- **Breaking (Rust API):** `RunEnding::Complete` requires producer-admitted
+  `CompleteStats`; `Stopped` and `Incomplete` require `PartialStats`.
+  Read counts through `snapshot()` and shortfalls through `missing_files()`;
+  the separate `unprocessed` and `lost_files` fields are removed. Cloning
+  stopped-run counts cannot promote them to complete-run success. CLI JSON
+  and desktop event formats are unchanged.
+
+- Documentation publication metadata follows its own Git history: rendered
+  book headers use the existing Git-date preprocessor, and other affected
+  documents link to their own history. Content-preserving release squashes
+  do not require fresh content-review dates. The date check admits the header
+  itself, so a placeholder example in the body or a history link to another
+  document cannot mask a stale handwritten date. The existing stale-document
+  baseline is unchanged.
+
+#### How a validation run ends
+
+- **Breaking (CLI):** a `chatter validate` run that did not cover every file
+  fails the command (exit 1) and says so. A run told to stop (Ctrl-C, or
+  `--max-errors`) reports how many files it left, `Stopped after reaching the
+  error limit (N); M file(s) were not validated.` (or `Validation cancelled;
+  ...`), and a stop that came after the last file is no stop at all: the run
+  is complete. A run that found no transcript says `Error: no .cha files
+  found in PATH` and exits 1.
+- **Breaking (CLI):** the TUI's exit status is the run's, as the other
+  outputs' are: closing it (`q` or Esc) exits 0 only after a complete run
+  with no invalid, unreadable or tool-failed file, and 1 otherwise, including
+  when it is closed before the run ends or the terminal fails. Ctrl-C stops
+  the run and leaves the TUI open on its ending; a second Ctrl-C force-quits
+  at once with exit 130, as it always did, whatever the run found. It lists every file that
+  failed, a file it could not read, a failed roundtrip and a tool failure
+  among them, says "No .cha files found" for an input with none, and shows
+  the `--suppress` and cache notes the other outputs print. An unreadable
+  argument used to show "no errors found" and exit 0.
+- **Breaking (CLI):** `--max-errors N` counts errors only, never warnings, and
+  the validation runner enforces it: each worker counts its file's errors
+  before taking the next file, so with `--jobs 1` the stop is exact, and the
+  text, JSON, audit and TUI surfaces all honour it. The CLI used to count
+  every rendered diagnostic, so a warnings-only file could spend the limit
+  and the run still exit 0 with files never validated; the TUI ignored the
+  limit. `--max-errors 0` is a usage error (exit 2).
+- A run that lost files says why: workers that panicked, workers that could
+  not create their parser, or a worker thread the system refused, every one
+  observed and none hidden behind another, or no explanation (a validator
+  defect). A worker that could not create its parser used to return an empty
+  tally, so a run in which every worker failed that way read as a stop, or as
+  a loss with nothing to explain it. Text, audit and TUI endings and the
+  desktop's incomplete state say the cause.
+- **Breaking (CLI JSON):** `validate --format json` reports the ending on
+  stdout: the summary's `cancelled` is replaced by `outcome` (`"complete"`,
+  `"stopped"` or `"incomplete"`); a stopped run emits a `stop` record (`reason`
+  `"max_errors"` with `limit`, or `"cancelled"`, and `unprocessed_files`)
+  before its summary; a run that lost files emits an `incomplete` record
+  (`lost_files`, `total_files`, `cause` (`"worker_faults"` or
+  `"unexplained"`) and `detail`); a run that died emits an `aborted` record.
+  All of these were stderr text, which JSON mode promises to keep empty.
+- JSON mode keeps stderr empty by construction. `--suppress` and the
+  deprecated `--check-xphon` are `notice` records, as is a Ctrl-C handler
+  that could not be installed (`interrupt_unavailable`); cache maintenance is
+  a `cache` record, Ctrl-C prints nothing (the run ends with a `cancelled`
+  stop record), and an unwritable `--audit` file is reported by the command
+  instead of exiting from inside the renderer.
+- `validate --format json` writes each record straight to stdout, with no
+  intermediate string, and a consumer that closes the pipe ends the stream:
+  the run exits 1 with stderr empty. It panicked (exit 101, a panic message
+  on stderr).
+- **Breaking (CLI JSON):** a run that found no transcript ends with a summary
+  whose `outcome` is `"nothing_found"` and which carries no counts; it was a
+  `"complete"` summary of `total_files: 0`.
+- `validate --format json` records and `--audit` JSONL lines are serialized
+  from typed models: a diagnostic's `severity` (`Error`, `Warning`) is
+  spelled by the model rather than taken from a `Debug` rendering, and keys
+  come in a fixed order (`type` first).
+- **Breaking (CLI JSON):** `validate --format json` emits exactly one file
+  record per file. A file with warnings and no error is one `valid` record
+  carrying a `warnings` array; it was an `invalid` record followed by a
+  `valid` one. An `invalid` record's `error_count` counts errors only (it
+  counted warnings too), while its `errors` array still lists every
+  diagnostic with its severity. A `roundtrip_failed` record carries its
+  `diff` and any `warnings`, and the contract lists that status.
+
+#### What a run presents, and what it reads
+
+- **Breaking (CLI):** `chatter validate` decides its output once, from all of
+  `--format`, `--quiet`, `--audit` and `--tui-mode`: plain text, quiet text,
+  JSON, an audit file, or the TUI. The TUI is chosen automatically only for
+  plain text with stdout a terminal; `--format json` on a terminal used to
+  open it. Flags that name two outputs are usage errors (exit 2): `--audit`
+  with `--format` or `--quiet` (it printed text and exited 0), `--format json`
+  with `--quiet` (`--quiet` was ignored), and `--tui-mode force` with any of
+  them.
+- **Breaking (CLI):** `chatter validate` reports an argument it cannot read,
+  a nonexistent one included, as a read error in its results (`✗ PATH (read
+  error: ...)`, a `read_error` record in JSON mode, counted among the invalid
+  files), validates the rest, and exits 1. It used to refuse the whole run
+  with stderr text a JSON consumer could not see.
+- One walk finds the input of `validate`, `to-json`, `fix`, the `debug`
+  commands and the desktop app's directory runs. A directory or entry that
+  cannot be read is reported, never skipped: `validate` and the desktop
+  record it as a file that could not be read, and the other commands report
+  it and exit 1 before processing anything. Links are followed (`to-json`
+  used to skip them), a directory reached twice is walked once, and a link
+  whose target is gone is a failure whatever its name, since it may have
+  been a directory (a link to an unmounted volume's subcorpus). A file named
+  on the command line of `fix` or a `debug` command is used whatever its
+  extension, as `validate` already did.
+- A transcript's stored name is resolved once, where it is found: a walk
+  takes it from the listing that found the file, and a file argument is
+  resolved once before any worker starts. `fix` and the `debug` tools refuse
+  an argument whose stored name cannot be resolved before processing
+  anything (exit 1; `fix` used to skip it with an error line), and `to-json`
+  on a directory refuses a transcript whose stem is not UTF-8 the same way.
+- A transcript named twice on the command line (two spellings of one file,
+  `dir/a.cha` beside `./dir/a.cha` or `dir/sub/../a.cha`, or a file inside a
+  directory also given) is processed once, under the first spelling given.
+- `fix` and every `debug` tool refuse an argument list that names no
+  transcript (exit 1); `debug overlap-audit` and `debug linker-audit` used to
+  analyze nothing and exit 0.
+- **Breaking (CLI):** a `validate --audit` file that could not be written
+  whole fails the run (exit 1), and the writer stops at its first failed
+  write; a failed write was a warning, the file kept going with a hole in it,
+  and the run could exit 0.
+- **Breaking (CLI JSONL):** every `validate --audit` record carries
+  `severity` (`"Error"` or `"Warning"`, spelled as the `--format json`
+  records spell it), after `code`: `{"file", "code", "severity", "message",
+  "line", "column"}`. A warning record had nothing to tell it from an
+  error, though a warning does not fail its file. The record shape is now
+  documented in the diagnostic contract.
+- **Breaking (CLI):** the `validate --audit` summary counts what its labels
+  say. `Files that failed` (was `Files with errors`) counts the files the run
+  failed (invalid, unreadable, a failed roundtrip or a tool failure), so a
+  valid file with warnings is not one, and a file that failed with no
+  diagnostic (unreadable) is. `Total errors` counts errors only and the new
+  `Total warnings` counts warnings; `Total errors` counted every diagnostic.
+  `Diagnostics by code` (was `Errors by code`) gives each code's errors and
+  warnings separately (`E301: 2 error(s), 1 warning(s) in 2 file(s)`).
+
+#### The validation cache
+
+- `chatter cache clear --dry-run` writes nothing: it opens the cache
+  read-only, as an audit does (SQLite's `-shm` and `-wal` files may appear
+  beside an existing database, as for an audit), and a cache with no
+  database has nothing to clear. It created the cache directory, its lock
+  file and the database, and ran migrations, to count zero rows.
+- **Breaking (CLI):** `chatter cache stats` only reads the cache, as the dry
+  run does. With no cache database it says `No cache database at PATH` and
+  exits 0 (no cache yet is a legal state, as the dry run and an audit treat
+  it), and it creates nothing; it created the directory, its lock file and
+  the database, and migrated it, to report zero entries of a cache it had
+  just made. A database an older build left is reported, not migrated.
+- **Breaking (CLI):** `chatter cache clear --dry-run` and `chatter cache
+  clear` agree, because both start from one look at the cache directory.
+  Over a database of an older schema the dry run exited 1 ("a schema this
+  build does not read") while the clear migrated it and went ahead; the dry
+  run now says the clear would first migrate the database, and that the
+  number of entries is known only after the migration (which can remove
+  duplicates), and writes nothing; the clear says it migrated, then what it
+  cleared. With no cache database, a clear creates none and says so
+  (`Cleared 0 cache entries: no cache database at PATH`); it created and
+  migrated an empty database to clear nothing. A database a newer build
+  wrote fails `stats`, `clear` and its dry run alike (exit 1).
+- **Cache keys are a specified hash.** Every row was keyed by `DefaultHasher`,
+  whose algorithm Rust does not promise to keep, so a toolchain update could
+  have turned the persistent cache into misses with nothing to say so. Rows
+  are now keyed by blake3 over a written-down encoding of the path's
+  components and the row's namespace (the book's validation-cache chapter
+  gives it). The key scheme is part of the cache version, so rows written by
+  earlier releases are never served and leave through the existing prune of
+  superseded versions: **the first run after upgrading revalidates every file
+  once.**
+- The cache knows a transcript by its location with every directory
+  resolved by the operating system and its own name kept as stored, so
+  every spelling of a file is one row: relative or absolute, through `..` or
+  a linked directory, and `/tmp` beside `/private/tmp` on macOS.
+  `validate --force` clears the cached verdicts of the files it validates
+  whatever spelling the paths were given in; with a relative argument
+  (`validate --force a.cha`) it cleared nothing and the stale verdict was
+  served. `cache clear --prefix` resolves its prefix the same way (a
+  directory since deleted through its deepest existing ancestor), and the
+  missing-file purge no longer depends on where it is run from.
+- **Breaking (CLI):** `validate --audit` only reads the cache: it opens an
+  existing cache read-only, creating, migrating, pruning, clearing and
+  writing nothing (with no cache, or one an older build left, it runs
+  without one and says so), and `--audit --force` is a usage error (exit 2;
+  it cleared the files' rows). SQLite may still create its shared-memory and
+  write-ahead-log files (`talkbank-cache.db-shm`, `talkbank-cache.db-wal`)
+  beside an existing database, which any reader of a WAL database needs; the
+  database itself is not written.
+- Validation reads each transcript once and keys the cache by the hash of
+  those bytes, so a verdict is stored for exactly the content validated even
+  if the file changes during the run. A cache read or write that fails is
+  counted and reported (a stderr warning, `cache_errors` in the JSON summary,
+  a note in the desktop summary) instead of looking like a cold cache.
+- A run reports cache hits and misses only for files that consulted a cache,
+  and `cache_hit_rate` (the JSON summary's, the text summary's `Hit rate`,
+  `ValidationStatsSnapshot::cache_hit_rate()`) is hits over those files
+  (hits plus misses); it was hits over every file, so an unreadable file
+  lowered it. A run whose cache did not open reports no misses, its JSON
+  `cache_hit_rate` is `null` (it was 0.0, with every file a miss), and the
+  text summary says `Cache: not consulted`. A cached roundtrip verdict counts
+  as a hit.
+- **Breaking (CLI JSON):** `chatter cache stats --format json` is tagged by
+  `database`: `{"database": "absent", "cache_dir": ...}` when the directory
+  holds no database, `{"database": "older_schema", "cache_dir": ...}` for a
+  database an older build left (its entries are not counted), and
+  `"database": "current"` with `total_entries`, `cache_dir`,
+  `cache_size_bytes` and `last_modified`. It reports what it could not find
+  as `null`, never as a stand-in: `cache_dir` is `null` for
+  an in-memory cache (it was the string `"in-memory"`); `cache_size_bytes` is
+  the database file's length, or `null` if the file is missing when the
+  statistics are read (it was `0`, the same as an empty file); `last_modified` is UTC
+  with exactly three fractional digits (`2026-03-09T13:05:31.000Z`), `null`
+  exactly when `cache_size_bytes` is (it was the current time). A size or
+  time that cannot be read, a time outside the years -9999 to 9999, and a
+  cache directory that is not UTF-8 fail the command instead of being
+  reported as 0, `null` or a lossy path. The text output says `(in memory)`
+  and `(no cache file)`.
+- **Breaking (CLI):** `chatter cache clear` with neither or both of `--all`
+  and `--prefix` is a usage error (exit 2; it exited 1). `--dry-run` with
+  `--prefix` reports how many entries it would clear, and a clear reports the
+  number its delete removed. `--prefix` takes any path the system accepts,
+  UTF-8 or not, and selects the rows the cache wrote for it.
+
+#### Commands
+
+- **Breaking (CLI):** a command whose standard output closes (`chatter ...
+  | head`) exits 1, silently, from every text writer, as `validate --format
+  json` already did. Text output caught the `println!` panic and exited 0,
+  so a `validate` run that found invalid files exited 0 when its summary had
+  nowhere to go; a missed catch was a panic (exit 101). Every CLI text
+  writer goes through one fallible writer, and the panic hook that matched
+  "Broken pipe" in panic messages is removed.
+- **Breaking (CLI):** `to-json` on a directory with no `.cha` file (an
+  empty tree, or a mount point with nothing mounted) exits 1 with `ERROR: no
+  .cha files found in DIR` before converting or pruning anything. With
+  `--prune` it exited 0 and deleted every `.json` under `--output-dir`, each
+  read as an orphan of the empty input; a prune now needs a non-empty
+  population of transcripts by type.
+- **Breaking (CLI):** flags are parsed into what they select, and a
+  combination a command would have ignored is a usage error (exit 2):
+  `normalize --skip-alignment` without `--validate`; `to-json
+  --skip-validation --skip-alignment`; `validate --list-checks` beside a path;
+  and `to-json` with an option for the other kind of input (`--output-dir`,
+  `--force`, `--prune` or `--jobs` for a file; `-o/--output` for a
+  directory). A file input used to ignore the directory options. A directory
+  input without `--output-dir` is a usage error (exit 2; it exited 1).
+- **Breaking (CLI):** a `--code` (`fix`) or `--suppress` (`validate`) value
+  that names no known error code (or, for `--suppress`, no known group) is a
+  usage error (exit 2) naming the value; the commands printed their own error
+  and exited 1.
+- **Breaking (CLI):** `--jobs 0` (on `validate` and `to-json`) is a usage
+  error (exit 2); it ran one worker with a logged warning. Omit `--jobs` to
+  use every CPU.
+- **Breaking (CLI):** `chatter cache stats` takes `-f/--format text|json`, as
+  `validate` does, in place of `--json`.
+- `chatter fix` exits 1 when a file could not be read or `--apply` could not
+  write a fix, and says how many on stderr; it exited 0 after reporting each
+  failure.
+- `chatter to-json` and `chatter normalize` report a failure the same way: a
+  line `ERROR: <path>: <failure>`, then the rendered diagnostics of a parse
+  failure, a validation failure, an incomplete validation or an internal
+  failure. `to-json` on one file printed only a one-line summary for some of
+  these, under its own `✗ Validation errors found:` and `✗ JSON error:`
+  headlines; `normalize` printed `✗ Validation errors found:` for a
+  validation failure and dropped the diagnostics of every other failure
+  behind `Error: <failure>`.
+- `chatter to-json --prune` still never follows a link in the output tree,
+  while the walk that reads transcripts now follows them: its deletions stay
+  inside `--output-dir`. `--prune` also no longer deletes a JSON file whose
+  transcript merely could not be checked, and reports a file or empty
+  directory it cannot remove (the run then exits 1).
+- `chatter to-json <dir>` warns when it cannot remove the stale JSON of a
+  transcript that now fails to convert, runs on the shared worker pool (a
+  worker that panics is reported with the files it left unconverted, and the
+  run exits 1), and counts files queued on its progress line.
+- `chatter watch` validates each changed file through the same one-file
+  pipeline as `validate` (stored name, cache, rules), with `validate`'s
+  default cache identity, and opens the cache once when it starts (it
+  reopened and pruned it on every save). It keeps watching when a watched
+  file cannot be read (a rename or a lock mid-edit) instead of exiting, and
+  prints a file's diagnostics as `validate --quiet` does.
+
+#### Library API
+
+- **Breaking (library, talkbank-cache):** `RulesVersion::for_testing` exists
+  only with the new `test-support` feature, which no production build
+  enables; a production caller could name a version no rule set produced.
+  The crate's examples use `RulesVersion::current()`.
+- **Breaking (library, talkbank-model):** a file stem is checked where it is
+  made. `FileStem::from_stem` returns `Result<FileStem, FileStemError>`,
+  refusing an empty stem and one with a path separator, and
+  `OwnedTranscriptName::Named` holds an `OwnedFileStem` (built from a path, a
+  checked string or a `FileStem`) instead of a `String`;
+  `TranscriptName::to_owned_name` makes one. The LSP names a document by its
+  decoded file path (`TranscriptName::for_path`), so a file name with a space
+  or an accent is matched against `@Media` as stored, not percent-encoded.
+- **Breaking (library):** a validation run takes `DistinctTranscripts`
+  (`talkbank_transform::paths`, built only by `DistinctTranscripts::new`),
+  stored transcripts each named once by resolved location, so
+  `validate_files_streaming` handed one file under two spellings validates
+  and counts it once, as the argument path already did; it validated it
+  twice. `ExpandedArguments::into_parts` returns them.
+- **Breaking (library):** a validation run's ending is typed. A stream ends
+  with one `ValidationEvent::Finished(RunEnding)` (it ended with
+  `Finished(stats)`, `FinishedIncomplete` or `Aborted`), where `RunEnding`
+  is `Complete(stats)`,
+  `NothingFound` (no transcript at all; it was a complete run of zero
+  files), `Stopped { stats, unprocessed, reason }`, `Incomplete { stats,
+  lost_files, cause: LossCause }` (`LossCause` is `WorkerFaults`, never
+  empty, or `Unexplained`) or `Aborted(AbortReason)`, with counts as
+  `NonZeroUsize`. `RunEnding::passed()` is the one answer to whether a run
+  vouches for its input, the answer the CLI, the TUI and the desktop all
+  give. `AbortReason` gains `NoEnding`, for a consumer whose stream closed
+  without an ending, and the new `CancelReason` (`ErrorLimit { limit }` or
+  `Requested`) implements `Display`, the wording every surface uses for a
+  stop. `ValidationStatsSnapshot` has private
+  fields read through accessors, with a non-zero `total_files`, and only the
+  runner makes one (its `cancelled` field is gone: a stop is the `Stopped`
+  ending); `RunCoverage` is no longer public. The streaming entry
+  points return a `Canceller` (was `Sender<()>`) and are no longer generic
+  over the cache (they take a `ValidationRun`).
+- **Breaking (library):** `ValidationConfig`: `check_alignment: bool` is
+  `alignment: AlignmentValidation`; `roundtrip` is a `RoundtripCheck` (`Skip`
+  or `Run`; was a `bool`); `jobs` is `Option<NonZeroUsize>`; `error_limit:
+  ErrorLimit` (`Unlimited` or `StopAfter(n)`) is new; and `directory` and
+  `cache` are removed (every walk descends every level, and the cache is a
+  parameter). `DirectoryMode` and `CacheMode` are removed. The atomic
+  `ValidationStats` is removed: each worker counts its own files and the
+  runner sums them after the join.
+- **Breaking (library):** every runner entry point
+  (`validate_directory_streaming(directory, &run)`,
+  `validate_files_streaming(files, &run)`,
+  `validate_arguments_streaming(input, &run)`) takes a `ValidationRun`, a
+  `ValidationConfig` bound to the cache the run may use; they took the
+  configuration and the cache as two arguments, so a library caller could
+  hand a run under one rule set a cache opened for another (strict linkers,
+  another parser) and get that cache's verdicts. `ValidationRun::new(config,
+  cache)` refuses a cache whose identity is not `config.cache_identity()`
+  (`CacheIdentityMismatch`), `ValidationRun::uncached(config)` binds none, and
+  `ValidationRun::config()` reads the bound configuration. `VerdictReader`
+  gains a required `identity()`. The CLI opens the cache from the run's
+  configuration and binds it; the desktop binds the pool it memoizes per
+  identity, and `validate_target_streaming_with_config(target, &run)` takes
+  the bound run.
+- **Breaking (library):** a run's cache is a `RunCache` (`Absent`,
+  `ReadOnly(Arc<dyn VerdictReader>)` or `ReadWrite(Arc<dyn
+  ValidationCache>)`), and how a file used the cache is
+  `FileCompleteEvent::cache: CacheUse` (`Hit`, `Miss`, `NotConsulted`);
+  `FileStatus` loses its `cache_hit` fields, and `cache_hit_rate()` returns
+  `Option<f64>`.
+- **Breaking (library):** the cache traits. `VerdictReader` (`get`,
+  `get_roundtrip`) and `ValidationCache: VerdictReader` (`set`,
+  `set_roundtrip`), all required, take a `ResolvedPath` (from
+  `talkbank-model`: the parent directory resolved, the name kept as stored;
+  every `StoredTranscript` carries its own, `StoredTranscript::resolved`),
+  the `ContentHash` of the bytes validated, and an `AlignmentValidation`,
+  and return `Result<CacheLookup<V>, CacheError>` (a failed lookup is an
+  error, never a miss). Validation verdicts are `CacheOutcome`; roundtrip
+  verdicts are the new `RoundtripOutcome` (`Passed`, `Failed`).
+  `ReadOnlyCache` opens an existing, current cache read-only and writes
+  nothing; it refuses a missing one (`CacheError::NoCacheDatabase`) or one
+  whose schema is not this build's (`CacheError::SchemaNotCurrent`).
+  `CachePool`'s own get/set methods, `clear_prefix` and `clear_all` are
+  removed: maintenance is `count(&CacheScope)` and `clear(&CacheScope)` with
+  `CacheScope::All` or `Under(ResolvedPrefix)`, and `clear_paths` (any
+  iterator of `&ResolvedPath`) clears by key in every namespace.
+  `CacheStats` holds a `StorageStats` (`InMemory`, or `Directory { cache_dir,
+  database }` with `DatabaseFile::Missing` or `Present { size_bytes, modified
+  }`); `SpaceReclaimed` gains `VacuumedSizeUnknown`; `VersionPruneOutcome`
+  gains `FreshDatabase` (an in-memory cache, where no prune ran);
+  `VersionPruneReport::versions_deleted` is a `usize`;
+  `purge_nonexistent` fails on a path it cannot check instead of deleting its
+  entry. New `CacheError` variants: `CorruptColumn`, `CountOutOfRange`,
+  `ModifiedOutOfRange`, `NoCacheDatabase`, `SchemaNotCurrent`.
+- **Breaking (library, talkbank-cache):** administration starts from
+  `CacheOnDisk::inspect()` (or `inspect_directory(dir)`), one look that
+  creates, migrates and writes nothing and returns what is there:
+  `Absent(NoDatabase)`, `OlderSchema(OlderSchema)` or
+  `Current(InspectionCache)`. A `MaintenanceCache` is reached only from that
+  value, by `OlderSchema::migrate()` or `InspectionCache::into_maintenance()`:
+  `MaintenanceCache::open` and `open_directory`, which created and migrated a
+  database in any directory they were given, and `InspectionCache::open` and
+  `open_directory` are removed. A database a newer build migrated is the new
+  `CacheError::SchemaNewer` (for `ReadOnlyCache` too, which reported it as
+  `SchemaNotCurrent`, whose message said a writing run would upgrade it);
+  `SchemaNotCurrent` now means an older schema only.
+- **Breaking (library):** one event per file. `ValidationEvent::Errors` and
+  `RoundtripComplete`, with `ErrorEvent` and `RoundtripEvent`, are removed:
+  a file's diagnostics travel inside its `FileStatus`, in the variants that
+  can have them: `Invalid { diagnostics: InvalidDiagnostics }` (never
+  empty, with a `NonZeroUsize` `error_count()`), `Valid { warnings }` and
+  `RoundtripFailed { warnings, diff }` (`Option<FileDiagnostics>`), and
+  `InternalFailure { failure, attempt }`, whose `FailedAttempt` says
+  whether the failure's diagnostics point into the file's text
+  (`Validation { source }`) or into the roundtrip's serialized text
+  (`RoundtripReparse`). `FileStatus::shown()` gives the diagnostics to show
+  against the file, with that text; `FileStatus::failed()` says whether the
+  file failed. A consumer renders each file once, and the file's text moves
+  into its status without a copy.
+- **Breaking (library):** `StoredTranscript` carries its `ResolvedPath`
+  (`StoredTranscript::resolved`), made when it is admitted, so a transcript
+  whose directory cannot be resolved is refused by `resolve` and
+  `from_entry`.
+- **Breaking (library, talkbank-model):** the coordinated splice
+  `MorTier::splice_range_coordinated(gra, item_range, block, root, redirects)`
+  (and `splice_coordinated(gra, item_idx, block, root, redirects)`, the same
+  over one item) takes its replacement as a `SplicedBlock`, says where the
+  block's root attaches with a `SpanRoot`, and where host dependents of the
+  replaced items go with a `HostRedirects`; it adds no cycle and no second
+  root, so a host `%gra` tree stays a tree. Every type is re-exported beside
+  `MorTier` in `talkbank_model::model::dependent_tier::mor`, with
+  `CoordinatedMutationError`.
+  - `SplicedBlock::new(mors, relations)` replaces the `new_mors` and
+    `new_relations` arguments. It parses the block-relative relations once
+    and refuses (`SplicedBlockError`) a relation count that differs from the
+    chunk count (was `CoordinatedMutationError::CountMismatch`), a head
+    outside the block (was `HeadOutOfNewBlock`), a relation whose `index` is
+    not its chunk (`IndexOutOfOrder`), a block with no root or several
+    (`RootCount`), and a cycle (`Cycle`). The splice wrote a rootless cyclic
+    block into the host: the `1 -> 2`, `2 -> 1` reparse of `por@s favor@s`
+    became a cycle in the host's `%gra`.
+    `SplicedBlock::root_chunk()` exposes the admitted root as a `BlockChunk`
+    so callers can direct host dependents to it without a separate root scan.
+  - A host `%gra` relation that depended on a replaced item keeps depending on
+    that word. The splices rewrote such a head to the first chunk of the new
+    block, by position: in morphotag's L2 output for `ich glaube
+    it's@s:eng working@s:eng und don't@s:eng stop@s:eng .` that made `und`
+    depend on `do` and `stop` on `it`, where they depend on `stop` and
+    `working`. The caller states the correspondence: `HostRedirects::ByItem`
+    (equal item counts, each item following its counterpart) or
+    `HostRedirects::PerItem(Vec<ItemTarget>)`, one target per replaced item:
+    `ItemTarget::Chunk(BlockChunk)`, a chunk of the block, or
+    `ItemTarget::Counterpart`, the block item at the same position (chunk for
+    chunk when the two items have the same chunk count, otherwise the new
+    item's head chunk), so a caller can state one target and let the rest
+    follow. A statement that does not fit, or a dependent whose item has no
+    unique head chunk, is refused before either tier changes
+    (`RedirectItemCountsDiffer`, `RedirectCountMismatch`,
+    `RedirectOutOfBlock`, `NoCounterpart`, `NoUniqueHeadChunk`).
+  - `SpanRoot` replaces the `root_anchor_override: Option<usize>` argument:
+    `UtteranceRoot` (head `0`, relation `ROOT`), or `HostChunk { chunk,
+    relation }`, a host chunk (`SemanticWordIndex1`) numbered as before the
+    splice and translated by it, with the relation the span root takes under
+    it, an `AttachmentRelation`, whose constructor refuses a root label
+    (`RootRelationUnderHost`), so `ROOT` under a host head cannot be written;
+    the block's own label for its root is not kept. `SpanRoot::from_gra_head`
+    builds one from a host relation's `GraHeadRef` and the relation. The old
+    anchor was a pre-splice index never shifted, and `None` took the head of
+    the range's first chunk: in `dont@s:eng mal geh .` the span's `do` came to
+    depend on `mal`. A span root at the utterance's root while a host
+    relation outside the range is already the root is refused
+    (`UtteranceRootTaken`; the splice wrote two roots), as is a host chunk
+    inside the replaced range or past the host (`SpanRootInReplacedRange`,
+    `SpanRootOutOfHost`), or one whose own chain of heads reaches the range
+    (`SpanRootDependsOnSpan`: with `x@s y@s z .` and `z -> x`, anchoring the
+    span `x y` at `z` returned a cycle with no root).
+  - A host whose `%gra` does not number each relation by its chunk (relation
+    `k`, from 1, with index `k`) is refused (`HostIndexOutOfOrder`), since
+    every head is read as a chunk number. Such a host was spliced anyway, its
+    misnumbered relations' indices shifted by arithmetic that could wrap
+    below zero on a shrinking splice. Inside the splice, the numberings
+    before and after it, of the block, and of the replaced range are
+    distinct types with one translation between the host's numbering before
+    and after, so a pre-splice index cannot be written into the result.
+  - `CoordinatedMutationError` derives `Clone`, `PartialEq` and `Eq`, and its
+    host-chunk fields are `SemanticWordIndex1`. It stays exhaustive, as the
+    crate's error enums are: a new refusal is a compile error for a caller
+    that matches them.
+  talkbank-tools adapts when it moves to this release.
+- **Breaking (library):** `talkbank_model::ParseValidateOptions` has private
+  fields; its public `validate`, `alignment` and `strict_linkers` booleans
+  could say "alignment without validation". The level is the new
+  `CheckLevel` (`ParseOnly` or `Validate(AlignmentValidation)`), set with
+  `with_level` and read with `level()`; `should_validate` is removed (use
+  `validation_policy().is_some()`). `RuleSelection` holds a `LinkerChecks`.
+- **Breaking (library, talkbank-model `async`):** `validate_async` and
+  `validate_with_rules_async` take an `OwnedTranscriptName` (`Named(String)`
+  or `Anonymous`) in place of `filename: Option<String>`, whose `None`
+  silently meant "skip the rules about the transcript's name".
+- **Breaking (library):** `chat_to_json`, `chat_to_json_named`,
+  `chat_to_json_with_schema_policy` and `chat_to_json_unvalidated` take a
+  `JsonLayout` (`Pretty` or `Compact`; was `pretty: bool`), and
+  `JsonSchemaPolicy::from_skip_flag` is removed: the libraries keep no
+  bool-to-mode constructors, and the CLI parses each presence flag straight
+  into the mode it selects.
+- **Breaking (library):** timestamps in the TOML decision files are
+  `talkbank_transform::recorded_time::RecordedTime`, replacing
+  `chrono::DateTime<Utc>` (`PendingEntry::created_at`,
+  `MergeOverride::decided_at`, and the matching parameters of
+  `MergeOverride::auto_decision`, `operator_decision` and
+  `judgment_to_pending`). It is written as New York time in whole seconds
+  with its offset (`"2026-05-27T08:41:00-04:00"`), whichever host writes it,
+  and reads every RFC 3339 time with an offset, so existing files load
+  unchanged, and in TOML also a native datetime.
+
+#### Desktop
+
+- The desktop app shows a stopped (cancelled) run as its own state, with the
+  number of files it never reached, and an incomplete run with its cause;
+  `FrontendStats.cancelled` is replaced by a `stopped` event.
+- The desktop's all-valid claim is the runner's verdict, carried as
+  `passed` on the `finished` event, so it agrees with the CLI's exit status:
+  a run whose files have only warnings is "All N files valid; K warnings".
+  A target with no transcript is its own `nothingFound` state, with
+  Re-validate offered; it was a finished run of zero files. Stop, loss and
+  abort reasons are the runner's own wording.
+- A validation cache that will not open is said in the run's summary, with
+  the reason, and the run goes on without it; it was a line on the app's
+  stderr, which a desktop user never sees.
+- The `validate`, `open_in_clan` and `export_results` commands each take one
+  `request` argument (`ValidateRequest`, `OpenInClanRequest`,
+  `ExportResultsRequest`), the value the backend already used, in place of
+  loose ones. A text export writes each file's status as the app shows it,
+  one label from one owner, where the backend kept its own copy of the
+  sentences.
+- `ValidateRequest`'s `jobs` is `Option<NonZeroUsize>` (was `Option<u32>`),
+  so `jobs: 0` is refused when the request is deserialized. The Parallel jobs
+  field parses its text into a positive whole number (or empty for all
+  CPUs), says when an entry is not one and which value the next run uses,
+  and never sends `0` or `1.5` on.
+
+#### Internals
+
+- One worker pool, `talkbank_transform::worker_pool::fan_out`, runs the
+  validation runner and `chatter to-json <dir>`. Its workers run on the same
+  16 MiB stack as the CLI's program thread (they used the 2 MiB thread
+  default), `--jobs 1` is the same pool at width one, and each worker returns
+  its own counts instead of updating shared counters.
+- chatter no longer depends on `chrono`; it uses `jiff`.
+
+### Removed
+
+- **Breaking (CLI):** `chatter fix --dry-run`. A bare `fix` already reports
+  without writing, and `--apply --dry-run` (meaning "do not apply") was
+  confusing. Passing `--dry-run` is an unknown-argument usage error (exit 2),
+  so a script using it fails instead of writing.
+- **Breaking (CLI):** `chatter to-json`'s hidden `--validate` and
+  `-a/--alignment` flags, deprecated no-ops since validation and alignment
+  became the default; passing one is a usage error (exit 2) instead of being
+  ignored.
+- **Breaking (library, JSON, desktop protocol):** the parse-error file
+  status, which nothing produced (both parsers always return a model with
+  diagnostics, and an unparsable file is `Invalid`): `FileStatus::ParseError`,
+  `ValidationStatsSnapshot::parse_errors`, the JSON summary's `parse_errors`
+  (always 0), the `parse_error` record status, the text summary's
+  `Parse errors:` line, and the desktop's `parseError` status and
+  `parseErrors` count. The desktop summary counts "invalid or unreadable
+  files", which is what `invalid_files` holds.
+- chatter's `RoundtripValidationMode`, a second copy of `RoundtripCheck`.
+- **Breaking (CLI):** `chatter debug overlap-audit -f/--format`, which the
+  command never read (it prints TSV, with `--database` for JSON lines);
+  passing it is a usage error (exit 2).
+- **Breaking (library):** `LossCause::tag`; a JSON consumer reads the CLI's
+  `incomplete` record, whose `cause` is serialized from its own wire type.
+
+### Added
+
+- W110 warns when the `@Media` filename and the transcript's own name differ
+  only in letter case (`Session.cha` declaring `@Media: session`). CHECK's
+  comparison ignores case, so this stays out of E531, but such a name finds
+  its recording on a case-insensitive filesystem and not on a case-sensitive
+  one. Case and Unicode spelling are reported independently, so a name can
+  carry both W110 and W109.
+- `PipelineError::diagnostics()` returns the located diagnostics a pipeline
+  failure carries, or `None`; `to-json`, `normalize` and speaker
+  identification report failures through it.
+- `talkbank_model::LinkerChecks` (`Lenient`, `Strict`) and
+  `RuleSelection::with_linkers`, so a caller holding the linker choice as a
+  value selects the strict linker checks without a branch of its own.
+- `ChatFile::validate_at(policy, errors, name)` validates under a
+  `ValidationPolicy`: its rules, at its alignment coverage.
+- `talkbank_transform::paths` finds input the one way every command uses:
+  `walk_files` (a `Walk` of `FoundFile`s and `WalkFailure`s, with a `Links`
+  policy, `Follow` or `Skip`), `walk_transcripts` (a `TranscriptWalk` of
+  `FoundTranscript`s, each a relative path and a `StoredTranscript`) and
+  `expand_transcript_arguments` (`ExpandedArguments`, one `StoredTranscript`
+  per resolved location). `StoredTranscript::into_path`.
+- `talkbank_model::ResolvedPath` and `ResolvedDirectory`, a file's location
+  with its directory resolved by the operating system and its own name kept,
+  the identity the cache keys by, and `ResolvedPrefix`, a resolved
+  directory or file that a cache scope selects under (all re-exported by
+  `talkbank-cache` and `talkbank-transform`).
+- `validate_arguments_streaming`, the runner entry point for expanded
+  command-line arguments, which reports each unreadable argument as a read
+  error in the run's results.
+- `talkbank_transform::worker_pool` (`fan_out`, `PoolRun`, `PoolOutcome`),
+  the one bounded worker pool (see Internals), and `PoolOutcome::faults`,
+  the one reading of how its workers ended, as `PoolFault`s (`Unwound`,
+  `ThreadRefused`); the runner's `WorkerFault` wraps one as `Pool`.
+
 ## [0.27.0] - 2026-09-28
 
 ### Changed
@@ -53,8 +652,8 @@ version and are listed under "Changed" / "Removed".
   but never source-byte splicing or a claim of parser-backed cleanliness.
   JSON remains unchanged and carries no runtime admission evidence.
 
-- English decade generation now admits only multiples of ten in 0–90 shorthand
-  or 1100–2990 full-year form. Other suffix-bearing inputs retain their exact
+- English decade generation now admits only multiples of ten in 0-90 shorthand
+  or 1100-2990 full-year form. Other suffix-bearing inputs retain their exact
   spelling instead of acquiring a guessed plural year phrase.
 
 - Generated typed-CST carriers support opt-in range admission, preserving
@@ -68,7 +667,7 @@ version and are listed under "Changed" / "Removed".
   E504 or E507, matching the shared fix catalog. Diagnostic prose is no longer
   parsed to construct participant declarations; enter the actual facts explicitly.
 
-- English ordinal generation preserves tokens outside its supported 0–9999
+- English ordinal generation preserves tokens outside its supported 0-9999
   range unchanged, instead of rewriting their suffix to `th`.
 
 - English ordinal generation omits prose commas in thousands with remainders,
@@ -456,7 +1055,7 @@ version and are listed under "Changed" / "Removed".
   remote URLs, and a file-side warning may remain after a successful fix.
 
 - `@Time Start` reports E541 for out-of-range clock components, matching the
-  existing duration bounds: hours 0–23 and minutes/seconds 0–59. Both accepted
+  existing duration bounds: hours 0-23 and minutes/seconds 0-59. Both accepted
   and rejected values retain their original spelling. Diagnostic rendering
   requires model-issued refusal evidence.
 
@@ -555,7 +1154,7 @@ version and are listed under "Changed" / "Removed".
 - Phon reconstruction checks share the alignment mapping's independent
   `%mod`/`%pho` positions, preventing false errors after one-sided pauses.
 
-- `OverlapMarkerIndex::new` is now fallible and admits only 1–9; JSON decoding
+- `OverlapMarkerIndex::new` is now fallible and admits only 1-9; JSON decoding
   enforces the same range. The unused post-construction validator is removed.
   Scoped overlap token decoders reject malformed indices instead of silently
   changing them into unindexed markers.
@@ -3346,6 +3945,9 @@ on a fixed rule set.
 
 ### Removed
 
+- nextest. CI, the cross-platform workflows and the documented local
+  commands run plain `cargo test`, with job time limits in place of
+  nextest's hang guard.
 - **TalkBank XML support, in full.** The `to-xml` command, the
   `talkbank_transform::xml` emitter, the `corpus/reference-xml/` golden
   corpus, the `xml_golden` and `xml_schema_validate` suites, the bundled
@@ -3519,6 +4121,10 @@ on a fixed rule set.
 
 ### Removed
 
+- `W210` and `W211` are retired, and their numbers are not reused. No
+  production code path emitted either; CLAN CHECK accepts W210's
+  glued-terminator construct, and W211's shape is valid overlap-hugging CA
+  notation. The JSON schema no longer lists them.
 - The E254 warning (word-level `@s:CODE` not listed in `@Languages`)
   is retired: an explicit word-level language code is self-contained
   and deliberately carries no declaration requirement. `@Languages`
@@ -3900,7 +4506,404 @@ First public release.
   installer script to avoid the Gatekeeper quarantine prompt.
 - **Not on crates.io yet.** crates.io publication is deferred.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.27.0...HEAD
+## Earlier changes (moved from the book)
+
+The book states the current design only. These entries record fixes and
+behaviour changes that its pages used to narrate. They are not attributed to a
+release because the book did not record one; dates are those the book gave.
+
+### Spec system
+
+- The machine-written `_auto` error specs are gone. `corpus_to_specs` and
+  `enhance_specs` were deleted (spec-system redesign, R5), and `spec/errors/`
+  carries a `.human-authored` marker that every generator refuses to write
+  into. In August 2026, 152 of 238 error spec files were `*_auto.md`; they
+  recorded what chatter did rather than what it should do, because the tool
+  wrote the spec's own filename code whenever its (never existing)
+  `expectations.json` gave no codes. By 2026-09-03 one `_auto` file was left,
+  and it has since been merged into `E519.md`.
+- Duplicate spec files for one code were reconciled on 2026-09-03: the
+  residue pairs (E202, E241, E604) were deleted, `E243_auto.md`'s example was
+  re-filed under E202, and E316, E342, E375, E522, E360 and E502 were each
+  merged into one `E###.md`. That changed the keys the re2c parity baseline
+  uses, so `KNOWN_DIVERGENCES` was regenerated.
+- `Category` was removed from specs on 2026-08-19 (a free-text grouping nothing
+  read); `Level` moved from the file onto each example (Phase 2, 2026-08-21);
+  all error specs moved to `+++` TOML frontmatter (Phase 1b, 2026-08-21).
+- Every example now carries a required typed `claim` (R2, 2026-08-21), which
+  deleted `SpecSelfDemonstrationGate` and its 36-entry baseline. The authored
+  `layer` field was deleted (R4, 2026-08-21), together with the string-based
+  error tests: the authored field disagreed with the observation snapshot on 17
+  examples. `kind` and `status` moved from each spec file to the code registry
+  (R1, 2026-08-26), which removed the `spec_status` gate, the
+  `spec/errors <-> ErrorCode` divergence check and the per-code `kind`
+  agreement loop. `status` no longer defaults to `implemented` when absent
+  (this had been true of 104 of 238 specs on 2026-08-11). A retired code
+  number reused is now a registry load error, replacing a comment in the enum.
+- The `docs/errors/*.md` pages are a registry artifact written by
+  `just spec-gen`; the standalone `gen_error_docs` binary was deleted. The
+  hand-written artifact table in the spec chapter was replaced by one generated
+  from the registry. `grammar/test/corpus/generated/` and `manual/` are
+  separate trees; they had been one tree, which destroyed 1,468 lines of
+  hand-mined corpus tests twice in three days.
+- The backend-parity harness now carries each example's declared source path,
+  so contextual rules such as E531 run for both parsers; dropping it had made
+  both backends appear to miss E531.
+
+### Reference corpus overhaul (Phases 0-6)
+
+- The reference corpus grew from 345 English-only files to 374 files in 20
+  languages, then was reorganised into nine topical subdirectories under
+  `corpus/reference/`. At the end of the overhaul: concrete grammar node
+  coverage went from 316/334 (94.6%) to 334/334 (100%); error specs from
+  177/181 to 181/181 (169 with CHAT examples, 12 documented stubs); the
+  golden artifacts were regenerated and `reference_corpus.rs` rebuilt with 374
+  cases.
+- Phase 0 built `corpus_node_coverage` (it confirmed 18 uncovered node types);
+  Phase 1 built `extract_corpus_candidates` and selected 25 files across 20
+  languages (eng, zho, fra, deu, spa, jpn, nld, heb, por, ell, tur, hrv, pol,
+  ita, hun, rus, est, dan, ara, isl); Phase 2 added four handcrafted files in
+  `constructs/` (`rare-terminators.cha`, `uptake.cha`, `best-guess.cha`,
+  `unsupported.cha`) for the 18 gaps; Phase 3 ran batchalign3 morphotag over
+  the language files; Phase 4 created error specs E707, E711 and E717, corrected
+  E376's recorded code, filled 17 triggerable stub specs, documented 12
+  untriggerable ones (E001, E002, E211, E317, E318, E340, E374, E377, E378,
+  E380, E385, E386), corrected 5 misclassified specs (E319-E322, E376) and
+  built `perturb_corpus` with 11 mutation strategies.
+- Mining the MacWhinney subcorpus (407 files) found zero tree-sitter parse
+  errors, and mining all of Eng-NA took over four minutes; that is why
+  perturbation is the systematic route.
+- The former Chumsky direct parser could not handle `unsupported_line` nodes
+  (373 of 374 roundtrips passed under it); it has been removed and tree-sitter
+  is the sole canonical parser.
+
+### Chatter 1.0 readiness work log (2026-09-05 onward)
+
+- Baseline on 2026-09-05: 223 error specs (179 implemented, 37 not implemented,
+  five unreachable from CHAT, two deprecated); of 418 examples, 368 satisfied
+  their claims, 50 were deferred and none failed. The CHECK mapping audit
+  stopped inferring parity from code names and reading an obsolete source
+  path; it reads the compiled registry. Real CHECK grounding passed (12.59 s
+  and 12.45 s on two runs) over the committed fixture set.
+- E246 was marked implemented (its reachable `(he):` example emits E246 and
+  E209; `hel:o` and `(he)l:o` are legal controls). E212 gained a whole-file
+  violation and a CA-mode legal control (an explicit category prefix prevents
+  the CA normalizer from rewriting `0(the)`; the standalone shortening reports
+  E209 and E212), and its original `hello world .` example now declares
+  `legal`. E251's malformed word sample moved to E342 as an active
+  missing-element example (tree-sitter reports E255/E342; re2c reports
+  E209/E253/E255; neither emits E251), raising verified examples to 365 and
+  lowering deferred to 51.
+- `Word` prosodic checks use the private `ProsodicWord` measurement and two
+  linear passes with constant-time neighbor queries (each marker used to search
+  a prefix or suffix again); E244-E252 behaviour and diagnostic order are
+  unchanged.
+- `JsonSchemaPolicy` selects serialization after the shared named CHAT parse.
+  A single-file conversion with schema validation skipped used to succeed on a
+  mismatched media name; both policies now reject mismatches. Directory
+  conversion exposes failing diagnostics and returns exit 1.
+- `just regen` now refreshes the JSON schema (model documentation is embedded
+  in it). The schema writer preserves unchanged files; generation is the
+  explicit `just schema-gen`. The generator no longer rewrites `$ref` siblings
+  into `allOf` (Draft 2020-12 allows siblings; the transform rewrote literal
+  data as though it were a schema and its removal dropped 74 wrappers and five
+  shape-only tests). `just traversal-gen` and the other generated-Rust recipes
+  stage output through `scripts/generate_if_changed.py`; `tree-sitter generate`
+  runs into a staging directory with `--output` and `--check` is read-only.
+- The spec artifact writer used to delete every current named output before
+  writing; `Ownership::NamedFiles` now deletes only retired names. `GeneratedDir`
+  replaced `clear_owned` and proves ownership before pruning. A bounded nextest
+  trial did not improve the warm generator suite.
+- The foundation publication check derives the held-back set from Cargo
+  metadata and requires `publish = false`; it rejected `talkbank-llm`, which
+  was publishable by default and now holds publication back explicitly.
+- Diagnostic indexes: editing a string in place reused stale line positions,
+  and another source's line map panicked on a multibyte character. `SourceIndex`
+  replaced the public `enhance_errors_with_line_map` (a breaking library API
+  change) and the hidden thread-local cache.
+- The re2c parser separated source lifetime from temporary token-storage
+  lifetime, removing every production `Box::leak`; `SinToken::new_unchecked`
+  was removed and `SinTier::from_tokens` returns `Result`.
+- The hygiene scanner mistook a nested `fn report(...)` declaration for a call
+  and missed a call with whitespace before `(`; both are fixed with a
+  regression.
+
+### Word grammar
+
+- `standalone_word` had at one point been coarsened into one opaque DFA token,
+  with a Chumsky direct parser re-parsing it into `WordContent`. That cost two
+  parsers with independent bugs, validation that could not find markers without
+  re-parsing, one opaque editor node, and a `cleaned_text()` that scanned for
+  marker characters. When the Chumsky parser was eliminated the structured word
+  grammar was restored (markers re-excluded from `word_segment` via the symbol
+  registry, one CST child per marker, `WordContent` aligned 1:1 with grammar
+  nodes, the purity invariant made a gate).
+- In commit `fdceeac2` the consolidated `word_segment_purity.txt` (8 named
+  tests) was replaced by per-construct test files generated from the specs.
+
+### Parser
+
+- The editor uses the `ParsedRevision` cache (`parse_chat_file_revision`); the
+  LSP no longer owns its own edit calculator or a separately replaceable
+  source/tree pair. The raw CST, strict-model and streaming incremental methods
+  remain as compatibility entry points. Tree-sitter incremental parsing no
+  longer clones the whole-document tree.
+- E311 (parser-only unclosed-replacement diagnostic), the `UnclosedDelimiter`
+  wrapper and its E312/E313 text classifiers, and the `BracketRecovery`
+  classifier (which inferred annotations from text prefixes) were removed; the
+  malformed inputs remain rejected by grammar recovery, with generic E316 where
+  no structural evidence supports a narrower fault. The raw-argument error
+  collector and its recursive wrapper were removed.
+- A dummy replacement span used to conceal missing separators at either closing
+  bracket; replacement producers now retain the whole CST wrapper's span.
+- A missing `@UTF8` anchor is an optional grammar slot: the canonical parser
+  used to discard the whole document and report the present headers as
+  missing; it now keeps them and shared validation rejects the file with E503.
+- Header lowering used a start-only check that accepted the first of two
+  headers and discarded the second; `HeaderFragment` admission now requires the
+  node to account for all caller text. Routing only `@PID` through the shared
+  pre-`@Begin` decoder had let `@Window`, `@Color words` and `@Font` fall
+  through to successful `Unknown` values.
+- Fragment adapters no longer use the legacy error sink's length heuristic.
+
+### Symbols and CA terminators
+
+- A Chumsky-based direct parser provided combinator-based fragment parsing
+  until it was removed in March 2026; tree-sitter is the sole parser.
+- The derived symbol arrays were named `ca_delimiter_symbols` and
+  `ca_element_symbols` until 2026-08-25; they are `paired_stretch_symbols` and
+  `word_attached_symbols`. The two arrays used to be hand-written and need a
+  disjointness check, which was deleted when they became derived from one
+  `parse_role` field. Before 2026-08-12 no gate compared the symbol outputs
+  against the registry; `generated_symbol_sets_are_current` was added then, and
+  on 2026-08-20 its hand-written generator list became a glob of
+  `spec/symbols/generate_*.js`. Its first run found two rustfmt-wrapped Rust
+  outputs that the generator unwrapped.
+- The parser/model used to promote trailing CA markers into utterance
+  terminators through a post-hoc `resolve_ca_terminator()` pass; the pass was
+  removed and CA arrows and `≈`/`≋` stay `Separator` content items.
+- The validation page no longer describes one downstream consumer's server
+  behaviour, PyO3 boundary types and report directory, and no longer calls the
+  reference corpus "the sacred semantic target".
+
+### re2c backend
+
+- As of 0.19.0 re2c-parsed values borrow the caller's source (the earlier
+  `Box::leak` strategy is gone). The re2c newline token used to fuse
+  consecutive breaks and lose blank-line structure. The main-tier-only
+  whitespace scan and its separate CA probe were removed in favour of the
+  shared file validator. `WordLengthening::count` and the re2c AST moved from
+  `u8` to `NonZeroUsize` (source runs over 255 colons could overflow or
+  silently wrap, and zero counts were repaired with `max(1)` on
+  serialization); JSON now accepts longer runs and rejects zero.
+- Postcode, glued-replacement and separator silence recorded in older parity
+  reports are fixed. The "both parsers correct" claim for CI validation is not
+  currently true.
+- Stored benchmark timings (tree-sitter vs re2c): small file (13 lines) 44 us
+  vs 9.6 us (4.6x); medium file with dependent tiers 69 us vs 9.4 us (7.3x);
+  large file 7,734 us vs 970 us (8.0x); batch of 35 files 21.7 ms vs 3.0 ms
+  (7.2x). Older wild-corpus percentages and a 140-case diagnostic table were
+  dropped as not describing the current spec suite.
+
+### Correctness architecture work log (2026-09-08)
+
+- The first session of work against the correctness plan: the workspace guard
+  that permitted one named test at a time was removed (the whole suite ran in
+  31 seconds for 3,048 tests); 368 dead snapshots then the last 56 were
+  resolved and `snapshot-hygiene` joined `gate` (the 56 were 47 stale `.cha`
+  stems from a reorganised corpus layout, 4 from a `snapshot_tests` module
+  rewritten to plain assertions, 4 superseded copies and 1 naming a missing
+  file); undemonstrated error codes were corrected from fifty-three to ten (219
+  codes carried a spec, 166 demonstrated, 44 excused by registry status, five
+  of the ten closed that night); 107 fabricated-AST constructions became
+  `Word::simple` (66 others pass two different strings); the grammar corpus
+  was found to be 211 generated cases (233 recorded, later re-derived as 139
+  specs) expecting what the parser produced, with 137 of 138 construct specs
+  carrying a `cst` block nothing asserts (41 naming nonexistent node types, 43
+  containing `...`).
+- Review of the first probe mechanism found `Outcome::Clean(String, Examined)`
+  forgeable, a suite of one control probe satisfying every check, a tier axis
+  with one reachable value (every `Precondition` declared `PrePush`), an absent
+  directory minting the same witness as an empty one, and a second-tree hole
+  closed by `gate_discipline`. Both Python ratchets (fabricated-AST and
+  demonstration) became gates and six script files were deleted. A final review
+  found the re2c fragment entry points passing the caller's raw sink into
+  `%gra` lowering (a head overflow reported at byte 2 instead of the caller's
+  offset) and `just gate` running at the inner-loop tier because the tier was
+  exported from `test`; the tier became the `_test` recipe argument.
+- The probe run was 5.3 s of a 13.7 s `just test`; threads made the standalone
+  binary 4.5x faster (1.2 s) but `just test` slower (16.6 s) and were
+  reverted; a shared read cache shipped (loop 12.0 s). The ratchet that
+  counted comments scored prose as the hazard (505 and 601, of which 54 were
+  prose) and was corrected on 2026-09-08. Coverage measured 2026-09-08 over the
+  whole suite: validation 89.2% reported vs 47.7% parse-backed; model 83.8% vs
+  43.0%; parser 69.3% vs 68.8%; transform 89.5% vs 89.5%. E370 located its
+  marker through a second main-tier serializer; the parser started recording
+  `Retrace::marker_span` that day and the renderer was deleted.
+- The `uncovered_branches` JSON field was renamed `uncovered_region_starts`.
+  The repository-root error-corpus generator resolved one parent too many and
+  wrote outside the repository (66 files found beside it); it was fixed to
+  refuse a root without the manifest directory.
+
+### Contributor workflow documentation
+
+- `just push` once ran four fast checks (and at another time no tests at all)
+  under a comment claiming to be the full CI gate; a green `just test` was read
+  as a green gate and CI went red on a doctest. The gate is now `just gate`.
+  The book once told contributors to run `cargo check` before `cargo test`
+  (which recompiles the dependency graph twice), listed eight `just` recipes
+  when there were thirty-one, described a `make verify` target as "not yet
+  ported" (there is no Makefile), gave per-file `--test <name>` targets that
+  had not existed for some time, and listed fewer CI jobs than exist.
+  `build.rs` once claimed a CI job verified the vendored re2c lexer; there has
+  never been one. A specific, plausible-looking error message was once defended
+  as a loss when the corruption producing it was fixed. Per-push CI no longer
+  runs clippy or the feature-off build (`just release-lint`).
+
+### Annotations
+
+- Until 2026-08-26 `UtteranceContent` had no bare `Action`, so the parser
+  wrapped every unannotated action in an `Annotated` with an empty list;
+  across a 106,000-file corpus that was 20,184,072 values claiming to be
+  annotated while carrying nothing (almost all a bare `0` marking silence in
+  daylong recordings). `BracketedItem` had no bare `Group`, so an unannotated
+  nested group became an `AnnotatedGroup` with an empty list. Two error codes
+  meant to catch the empty case could not: one was disabled because bare `[*]`
+  is valid CHAT, its number was reused for a rule that was unreachable. Both
+  bare variants were added and the empty state became unconstructible.
+
+### Form markers
+
+- The form-marker meanings were corrected wholesale on 2026-08-11 against the
+  CHAT manual's "Special Form Markers" table: six had been glossed with
+  plausible expansions of the letters (`@k` as "kinship", `@p` "proper name",
+  `@sl` "slang", `@sas` "second attempt success", `@g` "gemination", `@ls`
+  "letter sequence"). `@a` was removed from chatter the same day: the corpus
+  authority had eliminated it from every file on 2024-09-03 together with `@e`
+  and `@lp`; the other two were dropped from chatter then and `@a` was
+  overlooked.
+
+### %mor
+
+- Earlier documentation described a "comma-stripping" convention where
+  `PronType=Int,Rel` became `-IntRel`; the grammar and parser preserve the
+  comma. The UD MOR redesign (2026) removed `MorSuffix`, `MorCompound`,
+  `MorPrefix`, `MorSubcategory`, `AnnotatedChunk` and `Chunk` from the data
+  model, taking it from about 12 types to 4.
+
+### Phon tiers
+
+- CLAN's dependent-tier definitions added `%phoint` on September 25, 2026
+  (`clan-info` commit `f062b58`), closing the earlier missing-declaration
+  issue for the unprefixed tier. Current Phon exports no longer use the
+  leading `x` on tier names. The Phon `%x` checks were once opt-in via
+  `--check-xphon`; they are on by default and the flag is a deprecated no-op.
+
+### JSON output
+
+- A `word_index` field in the per-word language output existed until 2026-08-07
+  and was removed as derivable and misleading. The independent raw/cleaned
+  `Word` constructor arguments and `set_raw_text` were removed; `raw_text()`
+  returns an owned string and no raw-text cache can go stale.
+
+### Validation rules
+
+- E756 (empty dependent tier) is formerly W601, renumbered because it always
+  was a hard error. It read only user-defined `%x` tiers until 2026-08-15
+  because the model could not represent an empty standard tier, so an empty
+  `%eng:` had nowhere to be recorded and the two parser backends disagreed
+  about it. `%com` and `%add` were exempt from its whitespace-only check by
+  accident until 2026-09-08.
+- E757 once caught only `hello [/]there`; it now applies to any item ending in
+  a bracketed code (`hello [!]there`, `bobo [= toy]there`). The cause was a
+  parser omission: an annotated word's wrapper span was left DUMMY at
+  construction, so the glue was invisible to a span-adjacency check and any
+  diagnostic reported on an annotated word pointed at byte zero.
+- E767: an `@Media` line with a space before the comma used to fail to match,
+  so the header fell back to `Unknown` and reported E525 alongside E330; the
+  grammar now parses it so the rule can name the space (a change of
+  diagnostic, not of verdict).
+- E764: nothing reported `dog&-um` (two words) before the rule existed. E243
+  now reports a bare or embedded pipe in a word (CLAN CHECK error 48). The
+  `%gra` relation-head check was added because neither chatter nor CLAN CHECK
+  validated relation labels, so a typo like `PUNCTT` rode silently into
+  analyses.
+
+### Test infrastructure measurements
+
+- With unpacked debug artifacts disabled, a clean `spec/target` measured 586
+  deps entries, no `.rcgu.o` files and 1.3 GB; the full spec suite took 20.14 s
+  from an empty target and 1.64 s warm. A bounded nextest trial on the
+  generators library (51 tests, one binary, four workers, warm) took about
+  0.6 s against 0.4 s for Cargo, so Cargo remains the runner.
+- A measured no-op `just regen` preserved bytes and nanosecond modification
+  times of all 3,815 tracked files, took 8.177 s and compiled nothing; the next
+  `just test` took 10.625 s with no compilation (2,985 passed, 61 ignored,
+  across 34 test harnesses).
+
+### Documentation and CHECK assessment
+
+- The CHECK assessment manifest's notes had accumulated fix narratives
+  ("GAP CLOSED 2026-07-09", "ROOT CAUSE was...", "E316 until 2026-09-08",
+  "previously missed", "wrongly recorded as not-firing", and similar); they now
+  state the current verdict and its grounds. Rulings and their dates are kept.
+  Facts the old notes carried: the streaming lowering used to drop `@Begin:`
+  and `@Begins` ERROR nodes (the whole-tree recovery backstop now reports
+  E316); duplicate `@ID` lines were missed until E549; `@Time Duration` range
+  was unchecked until E540; E552 was added as the inverse of E544; `@Media`
+  filename E531 was dead through the CLI until the file stem was threaded
+  through `validate_single_file_streaming`; `@zXXX` without a colon fell
+  through to a bare user-defined label until the `@z:` colon was required;
+  E242 named only the close-quote case until 2026-09-01; `%mor` malformed words
+  reported E316 beside E702 until 2026-09-08; CHECK 152 was wrongly in the dead
+  list until 2026-07-15.
+- The spec-tooling page once described a bootstrap-era pipeline: it referred to
+  `make test-gen` (there is no Makefile), listed as open a concern about
+  `spec/tools` carrying parser/model dependencies (resolved by the
+  `spec/runtime-tools` split), prescribed per-spec metadata that no loader read
+  (ownership, `draft`/`accepted`/`deprecated`), and proposed an
+  `input`/`ir`/`emit`/`validate`/`sync` module split and a `spec lint` binary
+  that were never built.
+- The branch-protection required-check list named only four jobs until
+  2026-07-26, having been written before the wasm, app-version-sync and
+  shellcheck jobs existed.
+- `ParseError::build(...).finish()` is infallible: `try_finish()` and
+  `ParseErrorBuilderError` were removed, and a hand-picked subset of the form
+  markers that once sat in the word-syntax page glossed `@si` as "signed word"
+  (it is singing; `@sl` is signed language).
+- A consumer's ledger cited E754 (`LetterFormMultipleLetters`, retired
+  2026-08-11) in August 2026 for a repair that is still correct.
+
+### Compile-time investigation (2026-03, pre-fold)
+
+- The compile-times investigation found that a global sccache `rustc-wrapper`
+  was disabling incremental compilation (2.7% Rust cache hit rate; 36 of 37
+  compilations non-cacheable), that full DWARF debug info inflated link times,
+  and that third-party crates at `-O0` ran serde, regex and tree-sitter paths
+  about 10x slower than necessary. Pre-fold measurements on the original
+  ten-crate workspace: clean build about 3-5 min (estimated) to about 39 s;
+  incremental rebuild after touching `talkbank-model` about 60-90 s to about
+  4 s. The 2026-04-28 batchalign3 fold roughly tripled the third-party
+  dependency surface, which made `[profile.dev.package."*"] opt-level = 1` (and
+  the `profile.test` equivalent) prohibitive; both were removed.
+
+### API changes recorded in the book
+
+- `ChatDate::Valid` held `{ day, month, year, raw }` public fields; it is now
+  `Valid(CheckedChatDate)` with private components and the accessors `day()`,
+  `month()`, `year()` and `as_str()`.
+- The `chatter merge`, `chatter pipeline` and `chatter batch` commands were
+  removed from the CLI; the structural library in
+  `talkbank_transform::transcript_merge` remains.
+
+- The development-loop section of the CI and release page was written on
+  2026-08-27 after a single parser fix cost a day to the process around it
+  rather than to the fix. The parity baseline stopped listing E550 and E747
+  once file and fragment participant recovery agreed and both lexers preserved
+  single logical line breaks.
+
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/TalkBank/chatter/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/TalkBank/chatter/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/TalkBank/chatter/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/TalkBank/chatter/compare/v0.24.2...v0.25.0

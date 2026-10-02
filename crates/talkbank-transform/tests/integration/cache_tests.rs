@@ -18,7 +18,7 @@
 use std::io::Write as _;
 use std::path::Path;
 use talkbank_cache::CacheError;
-use talkbank_transform::{CacheOutcome, CachePool, ValidationCache};
+use talkbank_transform::{CacheLookup, CacheOutcome, CachePool};
 
 /// Create a temp file with the given content, returning its path.
 /// The `dir` must outlive the test to keep the file on disk.
@@ -44,9 +44,22 @@ fn cache_set_and_get_valid() -> Result<(), CacheError> {
         talkbank_cache::RulesVersion::current(),
         talkbank_model::ParserKind::TreeSitter,
     ))?;
-    cache.set_validation(&path, false, true)?;
-    let result = cache.get_validation(&path, false);
-    assert_eq!(result, Some(true), "Should retrieve cached valid result");
+    crate::cache_shim::set_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
+    let result = crate::cache_shim::get_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+    );
+    assert_eq!(
+        result,
+        Some(talkbank_transform::CacheOutcome::Valid),
+        "Should retrieve cached valid result"
+    );
     Ok(())
 }
 
@@ -59,9 +72,22 @@ fn cache_set_and_get_invalid() -> Result<(), CacheError> {
         talkbank_cache::RulesVersion::current(),
         talkbank_model::ParserKind::TreeSitter,
     ))?;
-    cache.set_validation(&path, false, false)?;
-    let result = cache.get_validation(&path, false);
-    assert_eq!(result, Some(false), "Should retrieve cached invalid result");
+    crate::cache_shim::set_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Invalid,
+    )?;
+    let result = crate::cache_shim::get_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+    );
+    assert_eq!(
+        result,
+        Some(talkbank_transform::CacheOutcome::Invalid),
+        "Should retrieve cached invalid result"
+    );
     Ok(())
 }
 
@@ -75,7 +101,11 @@ fn cache_miss_returns_none() -> Result<(), CacheError> {
         talkbank_model::ParserKind::TreeSitter,
     ))?;
     // Do NOT set anything, query should return None
-    let result = cache.get_validation(&path, false);
+    let result = crate::cache_shim::get_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+    );
     assert_eq!(result, None, "Uncached path should return None");
     Ok(())
 }
@@ -90,17 +120,35 @@ fn cache_alignment_flag_is_key() -> Result<(), CacheError> {
         talkbank_model::ParserKind::TreeSitter,
     ))?;
     // Store valid for alignment=false, invalid for alignment=true
-    cache.set_validation(&path, false, true)?;
-    cache.set_validation(&path, true, false)?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+        talkbank_transform::CacheOutcome::Invalid,
+    )?;
 
     assert_eq!(
-        cache.get_validation(&path, false),
-        Some(true),
+        crate::cache_shim::get_validation(
+            &cache,
+            &path,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::CacheOutcome::Valid),
         "alignment=false should return valid"
     );
     assert_eq!(
-        cache.get_validation(&path, true),
-        Some(false),
+        crate::cache_shim::get_validation(
+            &cache,
+            &path,
+            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment
+        ),
+        Some(talkbank_transform::CacheOutcome::Invalid),
         "alignment=true should return invalid"
     );
     Ok(())
@@ -126,11 +174,35 @@ fn cache_roundtrip_parser_kind_is_key() -> Result<(), CacheError> {
             talkbank_model::ParserKind::Re2c,
         ),
     )?;
-    tree.set_roundtrip(&path, false, true)?;
-    re2c.set_roundtrip(&path, false, false)?;
+    crate::cache_shim::set_roundtrip(
+        &tree,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::RoundtripOutcome::Passed,
+    )?;
+    crate::cache_shim::set_roundtrip(
+        &re2c,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::RoundtripOutcome::Failed,
+    )?;
 
-    assert_eq!(tree.get_roundtrip(&path, false), Some(true));
-    assert_eq!(re2c.get_roundtrip(&path, false), Some(false));
+    assert_eq!(
+        crate::cache_shim::get_roundtrip(
+            &tree,
+            &path,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::RoundtripOutcome::Passed)
+    );
+    assert_eq!(
+        crate::cache_shim::get_roundtrip(
+            &re2c,
+            &path,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::RoundtripOutcome::Failed)
+    );
     Ok(())
 }
 
@@ -143,12 +215,28 @@ fn cache_clear_all() -> Result<(), CacheError> {
         talkbank_cache::RulesVersion::current(),
         talkbank_model::ParserKind::TreeSitter,
     ))?;
-    cache.set_validation(&path, false, true)?;
-    assert_eq!(cache.get_validation(&path, false), Some(true));
-
-    cache.clear_all()?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
     assert_eq!(
-        cache.get_validation(&path, false),
+        crate::cache_shim::get_validation(
+            &cache,
+            &path,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::CacheOutcome::Valid)
+    );
+
+    cache.clear(&talkbank_transform::CacheScope::All)?;
+    assert_eq!(
+        crate::cache_shim::get_validation(
+            &cache,
+            &path,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
         None,
         "After clear_all, get should return None"
     );
@@ -175,21 +263,46 @@ fn cache_clear_prefix() -> Result<(), CacheError> {
         talkbank_cache::RulesVersion::current(),
         talkbank_model::ParserKind::TreeSitter,
     ))?;
-    cache.set_validation(&path_a1, false, true)?;
-    cache.set_validation(&path_a2, false, true)?;
-    cache.set_validation(&path_b1, false, false)?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path_a1,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path_a2,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path_b1,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Invalid,
+    )?;
 
-    let cleared = cache.clear_prefix(corpus_a.to_str().ok_or(CacheError::CacheDirMissing)?)?;
+    let cleared = cache.clear(&talkbank_transform::CacheScope::Under(
+        talkbank_model::ResolvedPrefix::of(&corpus_a).expect("resolvable prefix"),
+    ))?;
     assert_eq!(cleared, 2, "Should clear 2 entries matching prefix");
 
     assert_eq!(
-        cache.get_validation(&path_a1, false),
+        crate::cache_shim::get_validation(
+            &cache,
+            &path_a1,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
         None,
         "Cleared entry should be gone"
     );
     assert_eq!(
-        cache.get_validation(&path_b1, false),
-        Some(false),
+        crate::cache_shim::get_validation(
+            &cache,
+            &path_b1,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::CacheOutcome::Invalid),
         "Non-matching prefix should remain"
     );
     Ok(())
@@ -206,9 +319,24 @@ fn cache_stats_count() -> Result<(), CacheError> {
         talkbank_cache::RulesVersion::current(),
         talkbank_model::ParserKind::TreeSitter,
     ))?;
-    cache.set_validation(&p1, false, true)?;
-    cache.set_validation(&p2, false, false)?;
-    cache.set_validation(&p3, true, true)?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &p1,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &p2,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Invalid,
+    )?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &p3,
+        talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
 
     let stats = cache.stats()?;
     assert_eq!(stats.total_entries, 3, "Stats should reflect 3 entries");
@@ -224,14 +352,35 @@ fn cache_overwrite_entry() -> Result<(), CacheError> {
         talkbank_cache::RulesVersion::current(),
         talkbank_model::ParserKind::TreeSitter,
     ))?;
-    cache.set_validation(&path, false, true)?;
-    assert_eq!(cache.get_validation(&path, false), Some(true));
+    crate::cache_shim::set_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
+    assert_eq!(
+        crate::cache_shim::get_validation(
+            &cache,
+            &path,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::CacheOutcome::Valid)
+    );
 
     // Overwrite with opposite result
-    cache.set_validation(&path, false, false)?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Invalid,
+    )?;
     assert_eq!(
-        cache.get_validation(&path, false),
-        Some(false),
+        crate::cache_shim::get_validation(
+            &cache,
+            &path,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::CacheOutcome::Invalid),
         "Overwritten entry should return new value"
     );
     Ok(())
@@ -257,8 +406,13 @@ fn cache_stats_after_clear() -> Result<(), CacheError> {
         talkbank_cache::RulesVersion::current(),
         talkbank_model::ParserKind::TreeSitter,
     ))?;
-    cache.set_validation(&path, false, true)?;
-    cache.clear_all()?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
+    cache.clear(&talkbank_transform::CacheScope::All)?;
 
     let stats = cache.stats()?;
     assert_eq!(
@@ -278,18 +432,47 @@ fn cache_multiple_paths_independent() -> Result<(), CacheError> {
         talkbank_cache::RulesVersion::current(),
         talkbank_model::ParserKind::TreeSitter,
     ))?;
-    cache.set_validation(&path_a, false, true)?;
-    cache.set_validation(&path_b, false, false)?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path_a,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Valid,
+    )?;
+    crate::cache_shim::set_validation(
+        &cache,
+        &path_b,
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_transform::CacheOutcome::Invalid,
+    )?;
 
-    assert_eq!(cache.get_validation(&path_a, false), Some(true));
-    assert_eq!(cache.get_validation(&path_b, false), Some(false));
+    assert_eq!(
+        crate::cache_shim::get_validation(
+            &cache,
+            &path_a,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::CacheOutcome::Valid)
+    );
+    assert_eq!(
+        crate::cache_shim::get_validation(
+            &cache,
+            &path_b,
+            talkbank_model::validation::AlignmentValidation::Structure
+        ),
+        Some(talkbank_transform::CacheOutcome::Invalid)
+    );
 
-    // Verify the ValidationCache trait also works
-    let outcome_a = ValidationCache::get(&cache, &path_a, false);
-    assert_eq!(outcome_a, Some(CacheOutcome::Valid));
-
-    let outcome_b = ValidationCache::get(&cache, &path_b, false);
-    assert_eq!(outcome_b, Some(CacheOutcome::Invalid));
+    // The typed trait directly: each path's verdict for its own content.
+    let lookup = |path: &std::path::Path| {
+        talkbank_cache::VerdictReader::get(
+            &cache,
+            &crate::cache_shim::cached(path),
+            &crate::cache_shim::content(path),
+            talkbank_model::validation::AlignmentValidation::Structure,
+        )
+    };
+    assert_eq!(lookup(&path_a)?, CacheLookup::Hit(CacheOutcome::Valid));
+    assert_eq!(lookup(&path_b)?, CacheLookup::Hit(CacheOutcome::Invalid));
     Ok(())
 }
 

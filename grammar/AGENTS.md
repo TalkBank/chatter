@@ -1,6 +1,6 @@
 # Grammar, Tree-sitter Grammar for CHAT
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/grammar/AGENTS.md)
 
 ## Overview
 Tree-sitter grammar definition for CHAT (`grammar.js`) plus generated parser and corpus tests.
@@ -107,7 +107,7 @@ shapes are documented at the top of `talkbank-parser`'s `lib.rs`):
 
 The `generate_typed_traversal` example (with NO `--skip` flag: the
 self-contained backend models grammar extras explicitly, so the skip is
-obviated; `--edition 2024 --toolchain <the rust-toolchain.toml channel>`) into
+obviated; `--edition 2024 --toolchain stable`, the rust-toolchain.toml channel) into
 `crates/talkbank-parser/src/generated_traversal.rs`. This is the single
 canonical generated module (the 2026-07 migration onto the self-contained
 backend is complete; the OLD `generate_traversal` module was retired and this
@@ -115,8 +115,8 @@ one, formerly `generated_traversal_typed`, took the canonical name).
 
 **It is a single command; there is no separate `cargo fmt` step.** The wrapper
 runs `rustfmt` on its own output before emitting it, so the file it writes is
-already fmt-clean. The `--edition 2024 --toolchain <the rust-toolchain.toml channel>` flags pin that
-`rustfmt` to this repo's edition and `rust-toolchain.toml` pin, so the emitted
+already fmt-clean. The `--edition 2024 --toolchain stable` flags run that
+`rustfmt` with this repo's edition and toolchain channel, so the emitted
 file is byte-identical to what CI's `rustfmt` would produce. CI's
 `cargo fmt --all -- --check` still guards the committed file as defense in depth
 (it catches a regen done with a different toolchain). The digest-based staleness

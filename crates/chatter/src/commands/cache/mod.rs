@@ -19,11 +19,10 @@ pub use stats::cache_stats;
 /// Dispatch one `chatter cache` subcommand to its concrete implementation.
 pub fn run_cache_command(command: CacheCommands) {
     match command {
-        CacheCommands::Stats { json } => cache_stats(json),
+        CacheCommands::Stats { format } => cache_stats(format),
         CacheCommands::Clear {
-            all,
-            prefix,
-            dry_run,
-        } => cache_clear(all, prefix, dry_run),
+            scope: crate::cli::ClearScope(scope),
+            mode: crate::cli::Flag(mode),
+        } => cache_clear(scope, mode),
     }
 }

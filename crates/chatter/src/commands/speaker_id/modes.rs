@@ -607,7 +607,12 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
     // 10. Convert the judgment into a pending entry. Consume errors (multiple
     //     adults, missing adult role, self-contradictory merge) fail closed
     //     rather than writing a misleading suggestion.
-    let entry = match judgment_to_pending(&session_id, &judgment, &meta, chrono::Utc::now()) {
+    let entry = match judgment_to_pending(
+        &session_id,
+        &judgment,
+        &meta,
+        talkbank_transform::recorded_time::RecordedTime::now(),
+    ) {
         Ok(e) => e,
         Err(e) => {
             warn!("judgment could not be consumed into a pending entry: {}", e);
@@ -626,7 +631,7 @@ pub(crate) fn run_holistic_mode(args: HolisticModeArgs<'_>) {
         session_id,
         pending_path.display()
     );
-    println!(
+    outln!(
         "Wrote holistic speaker-id suggestion for session {} to {}",
         session_id,
         pending_path.display()

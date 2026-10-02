@@ -1,7 +1,7 @@
 //! Async admission contracts over canonical spec inputs, not fabricated models.
 #![allow(clippy::expect_used, clippy::panic)]
 
-use talkbank_model::model::{FileStem, SemanticEq, TranscriptName};
+use talkbank_model::model::{OwnedTranscriptName, SemanticEq};
 use talkbank_model::validation::{AsyncValidationError, validate_async};
 use talkbank_model::{ErrorCollector, ErrorSink, NullErrorSink, ParseError};
 use talkbank_parser::TreeSitterParser;
@@ -29,14 +29,19 @@ async fn spec_async_consumer_failure_is_a_task_failure_not_a_validation_result()
 
     // Neither API may mistake an interrupted diagnostic stream for completed
     // validation. In particular, the admission API must never yield a proof.
-    let admission = validate_async(file.clone(), PanickingDiagnosticConsumer, None).await;
+    let admission = validate_async(
+        file.clone(),
+        PanickingDiagnosticConsumer,
+        OwnedTranscriptName::Anonymous,
+    )
+    .await;
     assert!(matches!(admission, Err(AsyncValidationError::Join(error)) if error.is_panic()));
 
     let streamed = talkbank_model::validation::validate_with_rules_async(
         file,
         talkbank_model::validation::RuleSelection::new(),
         PanickingDiagnosticConsumer,
-        None,
+        OwnedTranscriptName::Anonymous,
     )
     .await;
     assert!(matches!(streamed, Err(AsyncValidationError::Join(error)) if error.is_panic()));
@@ -59,15 +64,13 @@ async fn spec_async_admission_preserves_sync_proofs_and_refusals() {
         let Ok(file) = strict_parse(parser.parse_chat_file(&source)) else {
             continue;
         };
-        let filename = match &entry.transcript_name {
-            FixtureTranscriptName::Anonymous => None,
-            FixtureTranscriptName::Named(stem) => Some(stem.clone()),
+        let owned = match &entry.transcript_name {
+            FixtureTranscriptName::Anonymous => OwnedTranscriptName::Anonymous,
+            FixtureTranscriptName::Named(stem) => OwnedTranscriptName::Named(
+                talkbank_model::model::OwnedFileStem::new(stem).expect("a stem"),
+            ),
         };
-        let name = filename
-            .as_deref()
-            .map_or(TranscriptName::Anonymous, |stem| {
-                TranscriptName::Named(FileStem::from_stem(stem))
-            });
+        let name = owned.borrow();
         let errors = ErrorCollector::new();
         let synchronous = file.clone().validate_into(&errors, name);
         // The custom-rule API is a streamed-diagnostic operation, not a
@@ -79,7 +82,7 @@ async fn spec_async_admission_preserves_sync_proofs_and_refusals() {
             file.clone(),
             entry.rules.selection(),
             talkbank_model::errors::AsyncChannelErrorSink::new(sender),
-            filename.clone(),
+            owned.clone(),
         )
         .await
         .expect("async validation task completes");
@@ -94,7 +97,7 @@ async fn spec_async_admission_preserves_sync_proofs_and_refusals() {
             entry.fixture
         );
         // Discarding streamed diagnostics must never manufacture a proof.
-        let asynchronous = validate_async(file, NullErrorSink, filename.clone()).await;
+        let asynchronous = validate_async(file, NullErrorSink, owned.clone()).await;
         match (synchronous, asynchronous) {
             (Ok(expected), Ok(actual)) => {
                 assert_eq!(expected.policy(), actual.policy());

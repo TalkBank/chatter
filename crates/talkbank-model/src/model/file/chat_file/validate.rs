@@ -372,11 +372,12 @@ impl ChatFile {
     ///
     /// ```
     /// use talkbank_model::{ChatFile, ErrorCollector};
-    /// use talkbank_model::model::{FileStem, TranscriptName};
+    /// use talkbank_model::model::TranscriptName;
     /// # fn inspect(chat_file: &ChatFile) {
     ///
     /// let sink = ErrorCollector::new();
-    /// chat_file.validate(&sink, TranscriptName::Named(FileStem::from_stem("myfile")));
+    /// let path = std::path::Path::new("corpus/myfile.cha");
+    /// chat_file.validate(&sink, TranscriptName::for_path(path));
     /// let errors = sink.into_vec();
     /// # }
     /// ```
@@ -553,6 +554,27 @@ impl ChatFile {
         self.precompute_alignments();
         tracing::debug!("running streaming validation with an explicit rule selection");
         self.validate_with_rules(rules, errors, name)
+    }
+
+    /// Validate under a [`ValidationPolicy`](crate::validation::ValidationPolicy):
+    /// its rules, at its alignment coverage. The one place a coverage value
+    /// becomes a validator call, so every caller holding a policy (the
+    /// validation runner, the proof-carrying `validate_with_policy`, `fix`)
+    /// runs the same checks for the same value.
+    pub fn validate_at(
+        &mut self,
+        policy: crate::validation::ValidationPolicy,
+        errors: &impl crate::ErrorSink,
+        name: TranscriptName<'_>,
+    ) {
+        match policy.alignment() {
+            crate::validation::AlignmentValidation::Structure => {
+                self.validate_with_rules(policy.rules(), errors, name)
+            }
+            crate::validation::AlignmentValidation::IncludeTierAlignment => {
+                self.validate_with_alignment_and_rules(policy.rules(), errors, name)
+            }
+        }
     }
 }
 

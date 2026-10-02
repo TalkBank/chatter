@@ -10,10 +10,13 @@ export function createExportCapability(
     },
 
     async exportResults(results, format, path) {
+      // One request value, the Rust command's `ExportResultsRequest`.
       await transport.invoke(DESKTOP_COMMANDS.exportResults, {
-        results: JSON.stringify(results),
-        format,
-        path,
+        request: {
+          results: JSON.stringify(results),
+          format,
+          path,
+        },
       });
     },
   };

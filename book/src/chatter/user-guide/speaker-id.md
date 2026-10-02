@@ -1,7 +1,7 @@
 # Speaker-ID (`chatter speaker-id`)
 
 **Status:** Draft
-**Last modified:** 2026-09-28 13:54 EDT
+**Last modified:** {{git-dates:page}}
 
 `chatter speaker-id` assigns CHAT-conformant speaker codes and role
 tags to a CHAT file whose speakers carry anonymous or placeholder
@@ -372,7 +372,7 @@ mapping = { PAR0 = "rename", PAR1 = "drop" }
 scores = { PAR0 = 0.1931, PAR1 = 0.7347 }
 margin = 3.81
 operator = "alice"
-decided_at = 2026-05-27T08:41:00-04:00
+decided_at = "2026-05-27T08:41:00-04:00"
 ```
 
 The complete schema specification, every field, every type, every

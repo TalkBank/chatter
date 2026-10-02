@@ -1,7 +1,22 @@
 //! Coordinated mutation admission over actual reference morphological tiers.
 #![allow(clippy::expect_used)]
 
+use talkbank_model::model::GrammaticalRelation;
 use talkbank_model::model::SemanticEq;
+use talkbank_model::model::dependent_tier::mor::{
+    BlockChunk, CoordinatedMutationError, HostRedirects, ItemTarget, Mor, SpanRoot, SplicedBlock,
+    SplicedBlockError,
+};
+
+/// A block of `item` alone whose first chunk is the span root and every
+/// other chunk depends on it: a valid block of the item's shape, for tests
+/// whose subject is the host, not the block.
+fn rooted_block(item: &Mor) -> SplicedBlock {
+    let relations = (1..=item.count_chunks())
+        .map(|chunk| GrammaticalRelation::new(chunk, usize::from(chunk > 1), "DEP"))
+        .collect();
+    SplicedBlock::new(vec![item.clone()], relations).expect("a rooted block")
+}
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, test_error::strict_parse};
 
@@ -453,6 +468,7 @@ struct DonorBlock {
     mor: talkbank_model::model::MorTier,
     gra: talkbank_model::model::GraTier,
     chunks: usize,
+    block: SplicedBlock,
 }
 
 impl DonorBlock {
@@ -469,13 +485,12 @@ impl DonorBlock {
             return None;
         }
         let relations = gra.relations().get(..chunks)?;
-        if relations.iter().any(|relation| relation.head > chunks) {
-            return None;
-        }
+        let block = SplicedBlock::new(mor.items().to_vec(), relations.to_vec()).ok()?;
         Some(Self {
             mor: mor.clone(),
             gra: gra.clone(),
             chunks,
+            block,
         })
     }
 }
@@ -515,12 +530,18 @@ fn reference_coordinated_replacement_grows_and_shrinks_with_admitted_donors() {
     for (host, donor) in [(&blocks[0], &blocks[1]), (&blocks[1], &blocks[0])] {
         let mut mor = host.mor.clone();
         let mut gra = host.gra.clone();
+        // The blocks share no item correspondence, so the redirects are
+        // stated: every host dependent of the old block goes to the donor's
+        // first chunk.
         mor.splice_range_coordinated(
             &mut gra,
             0..host.mor.items().len(),
-            donor.mor.items().to_vec(),
-            donor.gra.relations()[..donor.chunks].to_vec(),
-            Some(0),
+            donor.block.clone(),
+            SpanRoot::UtteranceRoot,
+            HostRedirects::PerItem(vec![
+                ItemTarget::Chunk(BlockChunk::FIRST);
+                host.mor.items().len()
+            ]),
         )
         .expect("admitted donor replacement");
         assert_eq!(mor.items(), donor.mor.items());
@@ -578,14 +599,12 @@ fn reference_single_splices_refuse_unrebased_donor_heads_and_wrong_counts() {
                 continue;
             };
             if relations.iter().any(|relation| relation.head > chunks) {
-                let mut mor = original_mor.clone();
-                let mut gra = original_gra.clone();
-                assert!(
-                    mor.splice_coordinated(&mut gra, 0, first.clone(), relations.to_vec(), None)
-                        .is_err()
-                );
-                assert_eq!(&mor, original_mor);
-                assert_eq!(&gra, original_gra);
+                // An unrebased donor head is refused where the block is
+                // built, before any splice can see it.
+                assert!(matches!(
+                    SplicedBlock::new(vec![first.clone()], relations.to_vec()),
+                    Err(SplicedBlockError::HeadOutOfBlock { .. })
+                ));
                 head_refusals += 1;
             } else if talkbank_model::alignment::align_mor_to_gra(original_mor, original_gra)
                 .errors
@@ -593,8 +612,16 @@ fn reference_single_splices_refuse_unrebased_donor_heads_and_wrong_counts() {
             {
                 let mut mor = original_mor.clone();
                 let mut gra = original_gra.clone();
-                mor.splice_coordinated(&mut gra, 0, first.clone(), relations.to_vec(), None)
+                let block = SplicedBlock::new(vec![first.clone()], relations.to_vec())
                     .expect("reference first-item heads are local to the replacement");
+                mor.splice_coordinated(
+                    &mut gra,
+                    0,
+                    block,
+                    SpanRoot::UtteranceRoot,
+                    HostRedirects::ByItem,
+                )
+                .expect("a block holding the utterance's root takes its place");
                 assert!(mor.semantic_eq(original_mor));
                 assert!(
                     talkbank_model::alignment::align_mor_to_gra(&mor, &gra)
@@ -606,20 +633,10 @@ fn reference_single_splices_refuse_unrebased_donor_heads_and_wrong_counts() {
             // An entire tier's relations cannot be supplied for only its first
             // item when it also contains other chunks (including punctuation).
             if original_gra.relations().len() != chunks {
-                let mut mor = original_mor.clone();
-                let mut gra = original_gra.clone();
-                assert!(
-                    mor.splice_coordinated(
-                        &mut gra,
-                        0,
-                        first.clone(),
-                        original_gra.relations().to_vec(),
-                        None
-                    )
-                    .is_err()
-                );
-                assert_eq!(&mor, original_mor);
-                assert_eq!(&gra, original_gra);
+                assert!(matches!(
+                    SplicedBlock::new(vec![first.clone()], original_gra.relations().to_vec()),
+                    Err(SplicedBlockError::CountMismatch { .. })
+                ));
                 count_refusals += 1;
             }
         }
@@ -664,21 +681,19 @@ fn spec_short_grammatical_tiers_refuse_single_splices_atomically() {
                 }
                 let mut mor = original_mor.clone();
                 let mut gra = original_gra.clone();
+                let refused = mor.splice_coordinated(
+                    &mut gra,
+                    index,
+                    rooted_block(item),
+                    SpanRoot::UtteranceRoot,
+                    HostRedirects::ByItem,
+                );
                 assert!(
-                    mor.splice_coordinated(
-                        &mut gra,
-                        index,
-                        item.clone(),
-                        original_gra
-                            .relations()
-                            .iter()
-                            .take(item.count_chunks())
-                            .cloned()
-                            .collect(),
-                        None
-                    )
-                    .is_err(),
-                    "short host gra admitted: {}",
+                    matches!(
+                        refused,
+                        Err(CoordinatedMutationError::GraTierTooShort { .. })
+                    ),
+                    "short host gra admitted: {}: {refused:?}",
                     fixture.path().display()
                 );
                 assert_eq!(&mor, original_mor, "refusal changed mor");
@@ -712,27 +727,26 @@ fn reference_coordinated_splices_refuse_invalid_ranges_atomically() {
                 let mut mor = original_mor.clone();
                 let mut gra = original_gra.clone();
                 assert!(
-                    mor.splice_range_coordinated(
-                        &mut gra,
-                        range,
-                        vec![first.clone()],
-                        original_gra
-                            .relations()
-                            .iter()
-                            .take(first.count_chunks())
-                            .cloned()
-                            .collect(),
-                        None
-                    )
-                    .is_err(),
+                    matches!(
+                        mor.splice_range_coordinated(
+                            &mut gra,
+                            range,
+                            rooted_block(first),
+                            SpanRoot::UtteranceRoot,
+                            HostRedirects::ByItem,
+                        ),
+                        Err(CoordinatedMutationError::InvalidItemRange { .. }
+                            | CoordinatedMutationError::ItemIndexOutOfBounds { .. })
+                    ),
                     "invalid replacement range admitted: {}",
                     fixture.path().display()
                 );
                 assert_eq!(&mor, original_mor, "refusal changed mor");
                 assert_eq!(&gra, original_gra, "refusal changed gra");
             }
-            // Replacing the lexical block retains its payload and applies the
-            // documented collapse policy to outside dependents (the terminator).
+            // Replacing the lexical block with itself, item by item, retains its
+            // payload and leaves every outside dependent (the terminator) on
+            // the word it depended on.
             let chunks: usize = original_mor
                 .items()
                 .iter()
@@ -744,16 +758,15 @@ fn reference_coordinated_splices_refuse_invalid_ranges_atomically() {
                 .take(chunks)
                 .cloned()
                 .collect();
-            if relations.len() == chunks && relations.iter().all(|relation| relation.head <= chunks)
-            {
+            if let Ok(block) = SplicedBlock::new(original_mor.items().to_vec(), relations) {
                 let mut mor = original_mor.clone();
                 let mut gra = original_gra.clone();
                 mor.splice_range_coordinated(
                     &mut gra,
                     0..len,
-                    original_mor.items().to_vec(),
-                    relations,
-                    Some(0),
+                    block,
+                    SpanRoot::UtteranceRoot,
+                    HostRedirects::ByItem,
                 )
                 .expect("complete reference block is admitted");
                 assert!(mor.semantic_eq(original_mor));
@@ -777,14 +790,7 @@ fn reference_coordinated_splices_refuse_invalid_ranges_atomically() {
                         );
                     } else {
                         assert_eq!(actual.index, original.index);
-                        assert_eq!(
-                            actual.head,
-                            if original.head > 0 && original.head <= chunks {
-                                1
-                            } else {
-                                original.head
-                            }
-                        );
+                        assert_eq!(actual.head, original.head);
                         assert_eq!(actual.relation, original.relation);
                     }
                 }

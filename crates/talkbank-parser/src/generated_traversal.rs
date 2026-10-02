@@ -1,4 +1,4 @@
-//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source 18b304a0ae65
+//! Generator: tree-sitter-node-types 0.2.0 (generate_typed_traversal), source ba378d612151
 //! Source grammar digest (sha256): grammar.json=a6bedb33ee1335fe23eeace0833662cb43f6238cdc9464740951097d23fcdb27 node-types.json=ea8a2d154add41001ab2828c71c132b91b0b914d4afad41c0f204d5c05b94c80
 //! DO NOT EDIT BY HAND. Regenerate via the consuming repo's grammar-change workflow.
 //!
@@ -1142,7 +1142,9 @@ impl<'value, 'tree, 'source, T> SourceField<'value, 'tree, 'source, Positioned<'
 }
 impl<'value, 'tree: 'value, 'source: 'value, T> SourceField<'value, 'tree, 'source, Vec<T>> {
     /// Visit every element without detaching it from its source.
-    #[must_use]
+    ///
+    /// No `#[must_use]`: the returned iterator type is already must-use, and a
+    /// second bare attribute trips clippy's `double_must_use`.
     pub fn iter(
         self,
     ) -> impl ExactSizeIterator<Item = SourceField<'value, 'tree, 'source, T>> + 'value {

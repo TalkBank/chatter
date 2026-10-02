@@ -1,7 +1,7 @@
 # Validation Errors
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 The CHAT validator produces diagnostics at two severity levels: **errors** (must fix) and **warnings** (should fix). Each diagnostic has an error code that maps back to a documented spec and validator rule.
 
@@ -203,6 +203,17 @@ content; the standard post-splice reparse still has to prove the result.
 A pause marker must be space-delimited from the word before it: write
 `hello (.) there`, not `hello(.) there`. Mirrors CLAN CHECK error 57.
 
+### E531, W109, W110: transcript and @Media names
+
+The `@Media` name must equal the transcript's own file name, spelled exactly.
+E531 (error) means the two are different names. W109 (warning) means they are
+the same name but not both in Unicode NFC, the standard composed spelling of
+accented letters. W110 (warning) means they differ only in letter case. W109
+and W110 do not stop validation, but a name that differs in either way is
+found on macOS and not on Linux. See
+[File Names and @Media](../../chat-format/file-names.md) for the rule, why it
+matters and how to fix each.
+
 ### E752: Timing bullets without an @Media header
 
 The transcript carries timing evidence (an utterance-final bullet, a
@@ -248,7 +259,7 @@ languages, not every language that appears. Mirrors CLAN CHECK error
 A dependent tier with empty or whitespace-only content declares an
 annotation that is not there; add the content or remove the line.
 Whitespace-only counts as nothing on every free-text tier, `%com` and
-`%add` included (they were exempt by accident until 2026-09-08); CLAN
+`%add` included; CLAN
 CHECK 31 rejects the same lines.
 
 This covers every tier whose body is free text, which is every
@@ -257,12 +268,8 @@ dependent tier except the structured ones (`%mor`, `%gra`, `%pho`,
 more specifically, because its body is not free text and there is no
 "you declared nothing" to report.
 
-The rule read only user-defined `%x` tiers until 2026-08-15. That was
-never the rule, only its name: the model could not represent an empty
-standard tier, so an empty `%eng:` had nowhere to be recorded and the
-two parser backends disagreed about it, one calling the file valid and
-the other rejecting it through an undescribed code. (Formerly W601;
-renumbered because it always was a hard error.)
+The rule covers standard tiers such as `%eng:` as well as user-defined
+`%x` tiers, and is a hard error.
 
 ### E757: Bracketed code glued to the following word
 
@@ -297,12 +304,11 @@ legacy; the non-empty-symbol invariant is real).
 A `%gra` label is `HEAD` or `HEAD-SUBTYPE`. UD fixes the head set at 37
 universal relations and defines subtypes as language-specific and
 open-ended, so only the head is checked; a subtype such as `NMOD-POSS`
-or `ACL-RELCL` passes untouched. Nothing validated relation labels
-before, in chatter or in CLAN CHECK, so a typo like `PUNCTT` for
-`PUNCT` rode silently into every analysis that reads the dependency
-graph. Common causes: truncation (`IOB` for `IOBJ`), typos, and the
+or `ACL-RELCL` passes untouched. CLAN CHECK does not validate relation
+labels, so without this rule a typo like `PUNCTT` for `PUNCT` would ride
+silently into every analysis that reads the dependency graph. Common causes: truncation (`IOB` for `IOBJ`), typos, and the
 retired TalkBank labels (`SUBJ`, `JCT`, `POBJ`, `INCROOT`), none of
-which occurs in the corpora any more.
+which occurs in the corpora.
 
 ### E762: prefix marker `#` stands alone or opens a word
 
@@ -357,11 +363,10 @@ violation that CLAN rejects is an error here.
 
 The construct is unambiguous, so the grammar deliberately PARSES it rather
 than failing, which is the only way to name the rule and point at the exact
-space. That is a change of diagnostic, not of verdict: before, the `@Media`
-line failed to match and the whole header fell back to `Unknown`, reporting
-E525 about a header chatter had recognised perfectly well alongside E330
-"Missing media_type node" on a line visibly ending in `, audio`. Deleting the
-one space now validates clean.
+space. Were the line to fail to match, the whole header would fall back to
+`Unknown` and report E525 about a header chatter had recognised perfectly
+well, alongside E330 "Missing media_type node" on a line visibly ending in
+`, audio`. Deleting the one space validates clean.
 
 ### E768: `@Media` filename cannot be written and read back
 
@@ -375,34 +380,29 @@ the comma, so no `.cha` file can express a violating value; the rule guards a
 `ChatFile` that arrived as JSON, where deserialization is deliberately lenient
 and validation is what reports the violation.
 
-### E757 widening: every bracketed code, not only retraces
+### E757 scope: every bracketed code, not only retraces
 
-`hello [/]there` was caught; `hello [!]there` and `bobo [= toy]there`
-were not, because the rule only examined retraces. It now applies to any
-item that ends in a bracketed code, which is what the code always
-claimed to mean.
+`hello [/]there`, `hello [!]there` and `bobo [= toy]there` are all caught: the
+rule applies to any item that ends in a bracketed code.
 
-The cause was a parser omission rather than a missing rule: an annotated
-word's wrapper span was left DUMMY at construction (its annotated event,
-action, and group siblings all set a real one), so the glue was invisible
-to a span-adjacency check, and any diagnostic reported on an annotated
-word pointed at byte zero. Both are fixed by giving that wrapper the span
-it should always have had.
+An annotated word's wrapper carries a real span (as its annotated event,
+action, and group siblings do), so the glue is visible to a span-adjacency
+check, and a diagnostic reported on an annotated word points at the word.
 
 ### E764: prefixed form glued to the preceding word
 
 `dog&-um` parses as TWO words, because `&` cannot continue a word. So a
 single missing space silently manufactures a word boundary the
-transcriber never wrote, and until this rule nothing reported it. Applies
+transcriber never wrote, and nothing else reports it. Applies
 to the three `&` prefixes (`&-` filler, `&~` nonword, `&+` fragment).
 
 Glued omission (`dog0is`) is a different shape: `0` is ordinary word
 text, so it yields one malformed word and is already rejected by E220.
 
-### E243 addition: the pipe character
+### E243 and the pipe character
 
 `|` is the %mor tier's delimiter and has no meaning in main-tier word
-text; a bare or embedded pipe in a word now reports E243
+text; a bare or embedded pipe in a word reports E243
 (IllegalCharactersInWord). Covers the grounded shape of CLAN CHECK
 error 48.
 

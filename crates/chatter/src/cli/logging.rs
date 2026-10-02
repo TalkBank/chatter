@@ -21,7 +21,7 @@ use super::LogFormat;
 /// - `-vv`: INFO level
 /// - `-vvv`: DEBUG level
 /// - `-vvvv`: TRACE level
-pub fn init_tracing(verbosity: u8, log_format: &LogFormat, _is_tui_mode: bool) {
+pub fn init_tracing(verbosity: u8, log_format: &LogFormat) {
     // Determine log level from verbosity count - OFF by default unless RUST_LOG is set
     let level = match verbosity {
         0 => None,

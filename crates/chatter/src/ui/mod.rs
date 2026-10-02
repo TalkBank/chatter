@@ -15,4 +15,4 @@ pub mod theme;
 pub mod validation_tui;
 
 pub use theme::{Theme, ThemePreset};
-pub use validation_tui::{FileErrors, TuiAction, run_validation_tui, run_validation_tui_streaming};
+pub use validation_tui::{TuiAction, run_validation_tui_streaming};

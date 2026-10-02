@@ -44,7 +44,12 @@ pub mod commands {
         /// E341, E344 and E346, which the same option enables.
         pub strict_linkers: bool,
         /// Number of parallel validation jobs (`None` = use all CPUs).
-        pub jobs: Option<u32>,
+        ///
+        /// Non-zero by type, so a request carrying `jobs: 0` is refused when
+        /// the command's arguments are deserialized, the same way the CLI
+        /// refuses `--jobs 0`, instead of reaching the runner as a count it
+        /// would have to reinterpret.
+        pub jobs: Option<std::num::NonZeroUsize>,
     }
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

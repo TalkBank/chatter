@@ -1,15 +1,15 @@
 # Correctness Architecture
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 This is the target design of chatter's correctness machinery, written for the
 maintainer who inherits it. It is not a patch list and not a description of the
 tree as it stands today. Where the current tree disagrees with this page, the
 tree is what has to move.
 
-The historical execution sections and counts below are design evidence, not a
-current completion report. For the current measurement boundary, use
+The measurements below are design evidence, not a completion report. For the
+current measurement boundary, use
 [Coverage scope and completeness](testing.md#coverage-scope-and-completeness).
 Uncovered code is an investigation target, never automatic permission to delete
 recovery, constructor, wire-format or internal-failure handling.
@@ -23,238 +23,129 @@ Every count on this page carries the command that produced it. The commands are
 collected in [Appendix A](#appendix-a-how-every-number-here-was-produced) so
 that a number which has drifted can be re-derived rather than believed.
 
-## What the first night of execution established
+## Properties of the gate mechanism and the measured suite
 
-Written after the first session of work against this plan, because several of
-its numbers were wrong and the corrections are more useful than the originals.
+These are properties of the current machinery, stated as design a successor
+must preserve. Counts are re-derived with the commands in Appendix A.
 
-**Tests can now be run.** The workspace guard permitted one named test at a
-time, justified by measurements from a different repository entirely. Chatter's
-whole suite is 31 seconds for 3,048 tests. A guard that prevents measurement
-prevents the work it protects, and three of this page's own figures were wrong
-because the measurement was unavailable.
+**The whole suite can be run.** Chatter's whole suite runs in well under a
+minute, so the workspace guard permits running tests freely. A guard that
+prevents measurement prevents the work it protects.
 
-**Dead snapshots: 368, then the last 56, and the gate is wired.** The
-authoritative answer needs a run, and two independent witnesses: unreferenced
-by the run, AND no test function of that name anywhere, or an exact duplicate
-at another path, or a crate prefix renamed out of existence. One belonged to an
-ignored test and was kept, which is why the second witness is not optional. The
-suite proves what it did before and runs faster.
+**Dead snapshots are found with two independent witnesses.** A snapshot is dead
+only if it is unreferenced by a run AND no test function of that name exists
+anywhere, or it is an exact duplicate at another path, or its crate prefix names
+a target that no longer exists. A witness a different function can satisfy is
+not a witness (`fn pho_tier` matches the accessor `pho_tier(`). The
+`snapshot-hygiene` gate is part of `gate`.
 
-The 56 that survived that sweep were resolved on 2026-09-08 and
-`snapshot-hygiene` is now in `gate`. Four families: 47 named `.cha` stems no
-file in the repository has, from a corpus layout that was reorganised; 4
-belonged to a `snapshot_tests` module that kept its name after being rewritten
-to plain assertions; 4 were superseded copies left behind when a test target or
-a module moved, with the live ones present under the new name; and 1 named a
-test file that does not exist. The first pass at the second witness said eight
-of them were live, and it was wrong: `fn pho_tier` matches the accessor
-`pho_tier(` as well as a test of that name. A witness a different function can
-satisfy is not a witness.
+**Undemonstrated codes are read from the registry.** `spec/codes/error-codes.toml`
+carries a status for every code, and three of its values legitimately have no
+example: `not_implemented`, `deprecated` and `unreachable_from_chat`. A code is
+undemonstrated only when it has none of those and no example. Production code
+names a rule by its `ErrorCode` VARIANT, not by its number, and the number is
+what a maintainer writes in comments; any scan for "is this code applied" must
+use the registry's `variant` field over non-comment code.
 
-**Undemonstrated error codes: ten, not fifty-three.** The first count did not
-read the status the registry already carries. `spec/codes/error-codes.toml`
-declares one for every code, and three of its values legitimately have no
-example: `not_implemented`, `deprecated`, and `unreachable_from_chat`, whose
-documentation describes this exact situation better than the mechanism I had
-started to build beside it. 219 codes carry a spec, 166 are demonstrated, 44
-are excused, 10 remain, and five of the ten were closed the same night.
+**The fabricated-AST population is two populations.** Constructions that pass
+the same string twice are `Word::simple`, correct by construction. Those that
+pass two different string literals state a raw text carrying CHAT markers and a
+cleaned text without them independently, with nothing forcing the second to be
+what cleaning the first produces; and the constructor stores the cleaned string
+as a single flat text element, where a parse of the same word would produce
+structured content naming the marker. Such tests may assert on shapes the parser
+cannot produce, which is this page's central claim. They cannot be fixed in
+place, because the crate cannot parse; they move to one that can. The
+remainder is concentrated in `talkbank-model`, the crate without a parser
+dependency, as a consequence rather than a coincidence. The ratchet that holds
+the count excludes comments and string literals, because prose about the hazard
+must not score as the hazard, and a measure that errs toward undercounting
+would mask a real addition.
 
-The sentence that stood here said two of the ten were named only in the
-backend-parity baseline and wanted an adjudication rather than an example. That
-was wrong, and how it was wrong is the useful part: the scan behind it searched
-for the code NUMBER, while production code names a rule by its `ErrorCode`
-VARIANT, and it searched comments, where the number is exactly what a
-maintainer writes. Re-derived from the registry's own `variant` field over
-non-comment code, every remaining undemonstrated code IS applied by production
-code, so every one of them wants an example.
+**The grammar corpus is self-certifying where it is generated.** No construct
+spec declares an expected tree, and the branch that could set one is
+unreachable, since it fires only for a `chat-file` or `document` input fence
+that no spec uses. The field the corpus test asserts is `full_cst`, the
+whole-document tree, so every GENERATED corpus case expects exactly what the
+parser produced when the case was written: a wrong grammar rule regenerates a
+wrong expectation and passes. The cases under `grammar/test/corpus/manual/` are
+hand-authored and no generator touches them, so "self-certifying" is true of
+the generated tree, not of the corpus.
 
-**The fabricated-AST population is two populations.** Of 708 constructions, 107
-passed the same string twice and are now `Word::simple`, correct by
-construction. (The 708 was taken with the comment-counting rule corrected two
-paragraphs below, so it is an overcount of the same kind; the 107 conversions
-were counted at their call sites and are unaffected. It is not re-measured
-here, because re-measuring the past needs a worktree and the figure that
-matters is the one the ratchet now holds.) Of the 66 that pass two different string literals, the shape is
-always the same: a raw text carrying CHAT markers and a cleaned text without
-them, stated independently, with nothing forcing the second to be what cleaning
-the first produces. Worse, the constructor stores the cleaned string as a
-single flat text element, where a parse of the same word would produce
-structured content naming the marker. So those tests may assert on shapes the
-parser cannot produce, which is this page's central claim, now concrete and
-countable. They cannot be fixed in place: the crate cannot parse, so they have
-to move to one that can.
+The human-authored expectation is disconnected, not missing. Almost every
+construct spec carries a fragment `cst` block and nothing asserts one: the
+accessor is reachable only through a dead branch, the one function that would
+compare it has no caller, and the sole gate on the block is a paren-balance
+check whose own doc comment says the block is read only by humans. Many of those
+blocks name node types the grammar does not have, and many contain a literal
+`...` ellipsis. So "make the corpus assert the fragment the human wrote" is not
+available as stated; the options are to repair the blocks first, or to make
+`full_cst` required and derive it once under review, which buys review rather
+than authorship. Either way the change is in
+`spec/tools/src/output/tree_sitter.rs` around the substitution, and it
+regenerates every generated case.
 
-**The grammar corpus is self-certifying in full, not in part.** This page said
-the generator substitutes the parser's own output when a construct spec
-declares no expected tree. Measured: ZERO of the 138 construct specs declare
-one, and the branch that could set it is unreachable, since it fires only for a
-`chat-file` or `document` input fence and no spec uses either. The field the
-corpus test asserts is `full_cst`, the whole-document tree, so every GENERATED
-corpus case expects exactly what the parser produced when the case was written.
-A wrong grammar rule regenerates a wrong expectation and passes, for all 211 of
-them. (Two numbers in this paragraph were wrong until 2026-09-08 and are
-re-derived above: 139 specs and 233 cases. The 24 cases under
-`grammar/test/corpus/manual/` are hand-authored and no generator touches them,
-so "self-certifying" is true of the generated tree, not of the corpus.)
+### How the gate-probe mechanism is built
 
-The human-authored expectation is not missing, it is disconnected, and it has
-rotted while disconnected. 137 of the 138 specs carry a fragment `cst` block and
-NOTHING asserts one: the accessor is reachable only through a dead branch, the
-one function that would compare it has no caller, and the sole gate on the block
-is a paren-balance check whose own doc comment says the block "is read only by
-humans, and no human read it". Of those 137, **41 name a node type the grammar
-does not have and 43 contain a literal `...` ellipsis**; one is nothing but
-`(date_header ...)`.
+Every gate must be able to fail, and the mechanism that proves it is itself
+built so that its two advertised properties are not reachable around.
 
-So the obvious fix, "make the corpus assert the fragment the human wrote", is
-not available as stated: a third of the authored blocks are not trees, and a
-third name types that do not exist. The real options are to repair the blocks
-first, or to make `full_cst` required and derive it once under review, which
-buys review rather than authorship. Either way the change is in
-`spec/tools/src/output/tree_sitter.rs` around the substitution, it regenerates
-all 211 cases, and it is a decision for daylight rather than a night shift.
+- **A clean verdict cannot be composed by its author.** A tuple variant of a
+  public enum is a public constructor of whatever it holds, so `Outcome`
+  carries no `Clean(String, Examined)` that would pair any summary with any
+  witness. A clean verdict is produced only through `ReadTree::clean`, which
+  requires the `Examined` witness. An absent directory mints a different
+  witness from an empty one, so a gate whose whole scope was removed cannot
+  report clean over nothing.
+- **A probe suite always contains a real planted violation.** `ProbeSuite`'s
+  constructor takes the first refusal as arguments and adds the control probe
+  itself, so a suite with no probes and a suite of only the control (which
+  satisfies "a gate that rejects everything" because a control IS a `MustPass`)
+  are unconstructible, and there are no runtime checks for them.
+- **A gate's tier is the caller's.** Each gate `Precondition` is compared at a
+  tier: `Precondition::at` returns `Unmet::{Skip, Fail}` rather than an `if` on
+  a bool inside a test. The tier is a private recipe ARGUMENT (`_test tier`),
+  so `just test` runs at `inner-loop` (a missing input is a skip) and `just
+  gate` runs strict (a missing input is a failure); a gate that can skip itself
+  at the pre-push gate is the state the mechanism exists to forbid.
+- **A gate cannot open a second tree.** `Tree::live` is public and
+  `pub(crate)` is no barrier inside the crate, and no type expresses "do not
+  open a second tree". `gate_discipline` is a registered gate that reads the
+  `fn check` body of every file declaring `impl Gate for` and refuses the calls
+  that reach a checkout directly, scoped to those bodies so a helper in the same
+  file may still build its own tree.
+- **A walk failure is plantable.** A directory enumeration that fails is a
+  `TreeEdit` set, so a walking gate proves its walk-failure half like any other
+  rule, instead of declaring it unprobeable.
+- **Ratchets are gates, not scripts.** A check written as Python under
+  `scripts/` is at the wrong altitude; `scripts/lint/` holds no ratchet. The
+  fabricated-AST gate counts neither comments nor string literals, and the
+  demonstration gate decides whether a file IS a code's spec file rather than
+  merely documents the code (`E202_missing_form_type` documents E202; it is not
+  E202's file).
+- **Fragment entry points rebase diagnostics, not sinks.** `rebase` moves the
+  model; a diagnostic already handed to a sink is past moving, so the re2c
+  fragment entry points do not pass the caller's raw sink into fallible `%gra`
+  lowering.
 
-**The remainder is not evenly distributed.** 485 of the 547 remaining
-constructions are in `talkbank-model`. That is the crate without a parser
-dependency, and the concentration is not a coincidence but the consequence.
+What the mechanism cannot reach:
 
-Those two figures read 505 and 601 for a day, and the correction is worth more
-than the numbers. The ratchet counted COMMENTS, so prose about the hazard
-scored as the hazard, and it fired on 2026-09-08 against a change whose only
-sin was six sentences explaining why `Span::DUMMY` is dangerous. Wrong in two
-directions, and the second is the defect: deleting a real call while adding a
-sentence about it left the total unmoved, which is the masking direction a
-ratchet must never err in. 54 of the 601 were prose. Nobody removed anything;
-the measurement got right.
-
-## What the review of the first mechanism established
-
-The gate-probe mechanism was written, then reviewed from five angles before it
-was committed. Both properties it advertised were reachable around, and the two
-findings are worth more than the fixes.
-
-**A clean verdict could be composed by its author.** `Outcome::Clean(String,
-Examined)` looked safe because `Examined` had one private constructor. Variants
-of a `pub` enum are constructible wherever the enum is visible, so the tuple
-variant WAS a public constructor pairing any summary with any witness: a gate
-could ignore the tree it was handed, read one file through a tree of its own,
-and report clean about a checkout it never opened, with every probe green
-because the plant lived in the discarded parameter. The module doc said no such
-constructor existed. **A tuple variant of a public enum is a public constructor
-of whatever it holds**, and that sentence is the general form.
-
-**A suite of one control probe satisfied every check.** `probes()` having no
-default body forces an author to say how a gate can fail; it does not force
-them to say anything true. `vec![Probe::control()]` planted nothing, satisfied
-the "a gate that rejects everything" check because a control IS a `MustPass`,
-and printed "1 probe(s) ... every planted violation was rejected". That is this
-project's own bug class inside the mechanism built to close it, at the one
-place a new gate's author works. `ProbeSuite`'s constructor takes the first
-refusal as arguments and adds the control itself, so both vacuous suites are
-now unconstructible and two runtime checks are gone.
-
-**A three-value axis had one reachable value.** Every `Precondition` declared
-`PrePush`, the default run tier was `PrePush`, and nothing set
-`CHATTER_GATE_TIER`, so the promise that a contributor with a filtered clone
-hears "not judged" rather than a defect report was true of no configuration.
-`just test` runs at `inner-loop` now, the comparison is a `Precondition::at`
-returning `Unmet::{Skip, Fail}` rather than an `if` on a bool inside a test,
-and a test asserts the two tiers decide differently over a real precondition.
-
-**An absent directory minted the same witness as an empty one**, so a gate
-whose whole scope had been removed reported clean over nothing, with evidence.
-
-**Both Python ratchets became gates.** `test_hygiene`'s module doc argues that
-a check written as Python under `scripts/` is at the wrong altitude twice over,
-and the first half of the night added two such scripts anyway. Both are gates
-now and six files went with them; `scripts/lint/` holds no ratchet at all.
-
-Each conversion found a defect in the script it replaced. The fabricated-AST
-count had to stop counting STRING LITERALS as well as comments, because the
-gate names both spellings in a `const` and writes them into probe fixtures, so
-counting string content made it fail on its own source the moment it moved into
-`crates/`; `talkbank-model` went 485 to 484 and nobody removed anything. The
-demonstration gate's declared-codes predicate was `looks_like_a_code`, which
-reads two characters because its job is to separate a spec from a `README.md`,
-and answered yes to `E202_missing_form_type`, a spec that DOCUMENTS E202 rather
-than being its file.
-
-**A gate could open a second tree, and now cannot.** `Tree::live` is public and
-`pub(crate)` is no barrier inside the crate, so a `check` that ignored its
-parameter, read one file through a tree of its own and called `clean` composed
-a clean verdict about a checkout it was never handed, with every probe green
-because the plant lived in the discarded parameter. No type expresses "do not
-open a second tree". `gate_discipline` is a registered gate that reads the `fn
-check` body of every file declaring `impl Gate for` and refuses the calls that
-reach a checkout directly, scoped to those bodies so a helper in the same file
-may still build its own tree. Watched: with `Tree::live()` planted into the
-golden-word gate's real `check`, it names the file and the call.
-
-**What a final review found, and both were mine.** The whole night's work was
-reviewed once more before being handed over. Two defects were serious enough
-that neither should have reached a maintainer, and both are worth naming
-because neither was a slip of attention.
-
-Making the re2c `%gra` lowering fallible gave three FRAGMENT entry points
-something to report for the first time, and all three passed the caller's raw
-sink into it. `rebase` moves the model; a diagnostic already handed to a sink is
-past moving. So a `%gra` head overflow reported at byte 2 of the fragment where
-the canonical backend reported it at the caller's offset. The contract test
-that pins this for headers could not see it, because its `%gra` case is a
-relation that emits nothing.
-
-And `just gate` ran the gate suite at the INNER-LOOP tier, because `test-all`
-depends on `test` and the tier was exported from `test`. An absent input
-printed as a skip and the pre-push gate stayed green: a gate that can skip
-itself, inside the mechanism written the same night to forbid it, and weaker
-than CI, which sets nothing and so runs strict. The tier is a recipe ARGUMENT
-now, named by the caller.
-
-**A walk failure became something a probe can plant.** Five gates each declared
-their walk-failure half unprobeable, in five sets of words, all saying that a
-failing `read_dir` needs a permission change and no content overlay can express
-one. That was a statement about the overlay rather than about the world: it
-could already say "empty" and "gone", and the third thing a walk can do had no
-coverage at all. One more set on the tree and one `TreeEdit` method closed five
-record entries at once, which is the largest reduction that list has had.
-
-**Three findings the mechanism cannot reach, stated so the next reader does not
-have to find them again.** A probe's plant and its expected message are both
-its author's invention, so a green suite certifies the author's understanding
-of the rule, not the rule. The unproven-rule record is two hand-written lists
-reconciled by a test, which catches drift between two files and is NOT the
-ratchet-against-reality that `UNPROTECTED` is; deriving it needs a per-gate
-vocabulary of rule identifiers that a probe and an unproven entry each name, so
-the unproven set becomes `rules() - probed()`. And the mechanism is general
-repository infrastructure living in a CHAT test-support crate, which is why
-`talkbank-parser-re2c`'s parity gate cannot register in `ALL` and keeps a
-degraded two-case copy of the shape.
-
-**The cost, measured against the loop rather than against itself.** The probe
-run was 5.3 seconds of a 13.7 second `just test`, so the mechanism that proves
-the gates can fail had nearly doubled the loop it protects. Threads took the
-standalone binary to 1.2 seconds, 4.5 times faster with a byte-identical report
-across three runs, and took `just test` to 16.6 seconds with system time from
-27 seconds to 2 minutes 30, because `cargo test` already runs the test binaries
-in parallel. That was reverted, and it is the lesson worth keeping: a speedup of
-the piece is not a speedup of the loop, and only timing the loop says which you
-have.
-
-A shared read cache ships instead and the loop is 12.0 seconds. Its own verdict
-is honest: system time 0.57 to 0.14 seconds, wall clock 5.3 to 5.0 standalone,
-so the reads were never the cost. Three micro-fixes (a conditional separator
-rewrite, an allocation-free `is_under`, a borrowed blanked span) bought about
-2%. The one lever left is memoizing the DERIVED per-file artifact the way the
-content is now memoized, chiefly the blanked source each hygiene probe rebuilds
-over about 1,100 files, which needs a key a planted file invalidates.
-
-Commands behind the numbers in this section, on 2026-09-08: the probe and gate
-counts are the last line of `cargo run -p talkbank-parser-tests --bin
-audit_gate_probes`; the file count is `rg --files crates -g '*.rs' | grep -v
-/generated/ | grep -v /target/ | wc -l`; the two timings are `time` around that
-binary and around `cargo test -p talkbank-parser-tests --test integration
-gates::every_registered_gate_passes`, both on a warm dev build.
+- A probe's plant and its expected message are both its author's invention, so
+  a green suite certifies the author's understanding of the rule, not the rule.
+- The unproven-rule record is two hand-written lists reconciled by a test, which
+  catches drift between two files and is NOT the ratchet-against-reality that
+  `UNPROTECTED` is. Deriving it needs a per-gate vocabulary of rule identifiers
+  that a probe and an unproven entry each name, so the unproven set becomes
+  `rules() - probed()`.
+- The mechanism is general repository infrastructure living in a CHAT
+  test-support crate, which is why `talkbank-parser-re2c`'s parity gate cannot
+  register in `ALL` and keeps a degraded two-case copy of the shape.
+- A speedup of one piece is not a speedup of the loop. Parallelising the probe
+  run made the standalone binary faster and `just test` slower (`cargo test`
+  already runs test binaries in parallel), and a shared read cache showed the
+  reads were never the cost; time the loop, not the piece. The remaining lever
+  is memoizing the derived per-file artifact each hygiene probe rebuilds (the
+  blanked source), which needs a key a planted file invalidates.
 
 ## The thesis
 
@@ -523,8 +414,8 @@ measured by this command. Record these limits with the report; a failed run is
 not a complete baseline. The export also includes inline test code, so a source
 directory's raw percentage is not automatically production-only coverage.
 
-The region worklist's JSON field is `uncovered_region_starts`; the former
-`uncovered_branches` name overstated what it measured. The separate
+The region worklist's JSON field is `uncovered_region_starts`, because the
+inventory counts uncovered region starts, not branches. The separate
 `--branches-json <path>` output records independent uncovered true/false
 outcomes from LLVM's branch records. Both inventories union source positions
 across instantiations. They are not LLVM's summary percentages: LLVM merges
@@ -672,8 +563,9 @@ an entry that becomes covered fails. Follow both, in both directions.
 
 ### Where it stands today, honestly
 
-**Measured 2026-09-08 over the WHOLE SUITE, every crate instrumented, generated
-files excluded, and split by what BOUGHT the coverage.** The command set is in
+**Measured over the WHOLE SUITE, every crate instrumented, generated
+files excluded, and split by what BOUGHT the coverage** (values drift;
+re-derive them with the appendix commands before quoting any). The command set is in
 the appendix; the third run is what makes the split exact rather than bounded.
 
 | Tree | Regions | Reported | **Parse-backed** | Fake |
@@ -691,12 +583,10 @@ structural rather than cultural: those crates depend on a parser and
 `talkbank-model` does not, so its tests cannot parse even when their authors
 would prefer to.
 
-That is the single largest fact about this repository's test suite, and it was
-invisible until the split was measured: the reported number was the one being
-improved.
+That is the single largest fact about this repository's test suite: the
+reported number is not the one that measures parsing-backed coverage.
 
-The rows below are the earlier `--lib` figures, kept because they are what the
-two-crate command produces and somebody will run it again:
+The rows below are the `--lib` figures that the two-crate command produces:
 
 | Tree | Lines | Regions | Branches | Functions |
 |---|---|---|---|---|
@@ -728,10 +618,9 @@ fired but never declined or the reverse, and they are the immediate
 `validation/retrace/rendering/utterance.rs` (172, 0%) and
 `validation/header/checkers.rs` (161, 0%). Five functions had a ratio of 1.00
 over more than 70 regions each, which means five functions nothing ran. The
-two `retrace/rendering` files were a second serializer of the main tier that
-E370 used to locate its marker, wrong on non-canonical spacing; on
-2026-09-08 the parser started recording the marker's own span
-(`Retrace::marker_span`) and the renderer was deleted.
+two `retrace/rendering` files were a second serializer of the main tier from
+which a marker's location could be recovered, wrong on non-canonical spacing;
+the parser records the marker's own span (`Retrace::marker_span`) instead.
 
 ### The precondition, and the deletion engine it unlocks
 
@@ -848,7 +737,7 @@ not a design.
 | Orphaned insta snapshots from deleted test targets | 54 files, 53 KiB, in `crates/talkbank-parser/tests/snapshots` | Four prefixes, none of which exists as a test target in that crate. No test reads or writes them. |
 | Reference-corpus whole-file JSON snapshots, live half | 104 files | Replaced, not merely deleted: see the decision below. |
 | Duplicate roundtrip harness | `direct_parser_roundtrip_corpus.rs`, 107 cases plus a loop test | A verbatim duplicate of `roundtrip_reference_corpus.rs` over the same 107 files with the same parser; its `DIRECT_PARSER_SKIP` list is empty and its name refers to an integration that has happened. Two harnesses proving one property. |
-| The repository-root error corpus | 26 tracked files under `tests/error_corpus/`, plus `generate_error_corpus.rs` | A second error corpus at a second root. Its generator resolved one parent too many and wrote OUTSIDE the repository, verified by the 66 files found beside it; the path is fixed and now refuses a root that does not contain the manifest directory. Four spec files still declare a `source` pointing at it. The 436-fixture spec corpus supersedes it; migrate the 19 parse-error cases into `spec/errors/` and fix the four `source` lines. |
+| The repository-root error corpus | 26 tracked files under `tests/error_corpus/`, plus `generate_error_corpus.rs` | A second error corpus at a second root. Its generator refuses a root that does not contain the manifest directory. Four spec files still declare a `source` pointing at it. The 436-fixture spec corpus supersedes it; migrate the 19 parse-error cases into `spec/errors/` and fix the four `source` lines. |
 | CLI command-surface manifest | `command_surface_manifest.rs` + `SURFACE_GROUPS`, 5 tests | A hand-written second copy of a list clap already derives, compared by parsing help text. Its own comment records the failure: a wrapped description line produced a phantom command. Derive from clap's command tree; keep the per-family coverage EXPECTATION as an attribute beside the command definition. |
 | Duplicate word-validation snapshots | `validation/word/snapshot_tests.rs`, 7 tests | Same helper, same fixtures, same codes as `tests.rs`, asserted through `insta` instead. A second assertion of one behaviour. |
 | Orphaned golden lists at the repository root | `golden_words_featured.txt`, `golden_words_minimal.txt` | Written to the CWD by an audit binary, tracked, read by nothing, disagreeing with both the crate copies and the book page that documents their counts. Three-way drift with no owner. |
@@ -1103,9 +992,8 @@ rg -c 'new_unchecked' $(git ls-files '*.rs') | awk -F: '{s+=$2} END{print s}'
 rg -c 'Span::DUMMY'   $(git ls-files '*.rs') | awk -F: '{s+=$2} END{print s}'
 
 # Construct specs, and the corpus cases derived from them. The `cst` fence is
-# written both as ```cst and as ``` cst, with a space, in 14 specs; a scan
-# anchored on the first form misses those and under-counts the rot by 14, which
-# is how this page briefly carried 27 instead of 41.
+# written both as ```cst and as ``` cst, with a space; a scan anchored on the
+# first form misses the second and under-counts the blocks.
 # The three coverage runs. The THIRD is what makes the fabrication split exact:
 # it excludes the fabricating package from the RUN but not from the REPORT, so
 # the regions only those tests reach are `full - without`.
@@ -1143,7 +1031,7 @@ rg -o 'ErrorCode::[A-Z][A-Za-z0-9]*' crates/talkbank-model/src crates/talkbank-p
 rg -l --glob '*.rs' -e '@generated' -e 'DO NOT EDIT' -e 'do not edit' crates/ spec/ apps/
 wc -l crates/talkbank-parser/src/generated_traversal.rs
 
-# Branch coverage (nightly; the pinned toolchain gives regions only)
+# Branch coverage (nightly; stable gives regions only)
 cargo +nightly llvm-cov --branch -p talkbank-model  --lib --json --output-path model.json
 cargo +nightly llvm-cov --branch -p talkbank-parser --lib --json --output-path parser.json
 ```

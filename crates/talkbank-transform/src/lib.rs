@@ -86,6 +86,7 @@ pub mod validate;
 
 // Transcript merge / adjudication surface (corpus-agnostic workflow).
 pub mod adjudication;
+pub mod recorded_time;
 pub mod sanity_scan;
 pub mod speaker_id;
 pub mod transcript_merge;
@@ -103,6 +104,11 @@ pub mod paths;
 // transform surface can opt out with `default-features = false`.
 #[cfg(feature = "validation-runner")]
 pub mod validation_runner;
+
+// The one bounded worker pool corpus-scale commands fan files out through.
+// Rides the `validation-runner` feature with the crossbeam channel it uses.
+#[cfg(feature = "validation-runner")]
+pub mod worker_pool;
 
 // How computed diagnostics are shown. Deliberately in THIS crate rather than
 // in `talkbank-model`: `talkbank-transform` depends on `talkbank-cache`, so the
@@ -123,9 +129,9 @@ pub use self::json::{
     validate_json_string,
 };
 pub use self::pipeline::{
-    DroppedContent, JsonSchemaPolicy, PipelineError, Rewrite, ValidatedParseError, chat_to_json,
-    chat_to_json_named, chat_to_json_unvalidated, chat_to_json_with_schema_policy, normalize_chat,
-    parse_and_validate, parse_and_validate_named, parse_and_validate_streaming,
+    DroppedContent, JsonLayout, JsonSchemaPolicy, PipelineError, Rewrite, ValidatedParseError,
+    chat_to_json, chat_to_json_named, chat_to_json_unvalidated, chat_to_json_with_schema_policy,
+    normalize_chat, parse_and_validate, parse_and_validate_named, parse_and_validate_streaming,
     parse_and_validate_streaming_for_path, parse_and_validate_streaming_named,
     parse_and_validate_streaming_with_parser, parse_and_validate_with_parser,
     parse_file_and_validate, parse_validated_with_parser,
@@ -138,15 +144,20 @@ pub use self::rendering::{
 };
 #[cfg(feature = "validation-runner")]
 pub use self::validation_runner::{
-    AbortReason, CacheMode, CacheOutcome, DirectoryMode, ErrorEvent, FileCompleteEvent, FileStatus,
-    ParserKind, RoundtripEvent, RoundtripVerdict, RunCoverage, ValidationCache, ValidationConfig,
-    ValidationEvent, ValidationStats, ValidationStatsSnapshot, validate_directory_streaming,
+    AbortReason, CacheIdentityMismatch, CacheOutcome, CacheUse, CancelReason, Canceller,
+    CompleteStats, ErrorLimit, FailedAttempt, FileCompleteEvent, FileDiagnostics, FileStatus,
+    InvalidDiagnostics, ParserKind, PartialStats, RoundtripCheck, RoundtripOutcome,
+    RoundtripVerdict, RunCache, RunEnding, ShownDiagnostics, ValidationCache, ValidationConfig,
+    ValidationEvent, ValidationRun, ValidationStatsSnapshot, VerdictReader,
+    validate_directory_streaming,
 };
 #[cfg(feature = "validation-runner")]
 pub use talkbank_cache::{
-    CACHE_DIR_ENV, CacheError, CacheIdentity, CachePool, CacheStats, MaintenanceCache,
-    RulesVersion, SpaceReclaimed, UnifiedCache, VacuumSkipped, VersionPruneOutcome,
-    VersionPruneReport, cache_db_path, default_cache_dir,
+    CACHE_DIR_ENV, CacheError, CacheIdentity, CacheLookup, CacheOnDisk, CachePool, CacheScope,
+    CacheStats, ContentHash, DatabaseFile, InspectionCache, MaintenanceCache, NoDatabase,
+    OlderSchema, ReadOnlyCache, ResolvedPath, ResolvedPrefix, RulesVersion, SpaceReclaimed,
+    StorageStats, UnifiedCache, VacuumSkipped, VersionPruneOutcome, VersionPruneReport,
+    cache_db_path, default_cache_dir,
 };
 /// Grammar-only fingerprint, retained for consumers inspecting grammar changes.
 /// Validation caches use [`parser_behavior_fingerprint`] instead.

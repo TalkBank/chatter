@@ -1,7 +1,7 @@
 # Word Syntax
 
 **Status:** Reference
-**Last updated:** 2026-05-11 23:33 EDT
+**Last updated:** {{git-dates:page}}
 
 Words are the primary content unit on the main tier. CHAT defines several word types and annotation mechanisms.
 
@@ -87,9 +87,9 @@ A word can also carry one special-form marker naming what kind of form it is
 with meanings and examples, is the table in
 [Symbols](symbols.md#-markers-word-level).
 
-There used to be a hand-picked subset of that table here, and it had already
-drifted: it glossed `@si` as "signed word", which is `@sl`. `@si` is singing.
-A partial copy of a closed set is worth less than a link to the whole one.
+A partial copy of a closed set is worth less than a link to the whole one: a
+hand-picked subset drifts (glossing `@si` as "signed word", which is `@sl`,
+when `@si` is singing).
 
 ## Annotations
 

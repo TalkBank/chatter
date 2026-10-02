@@ -1,9 +1,8 @@
 # Merge Override File Format
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** {{git-dates:page}}
 
 **Status:** Draft
-**Last updated:** 2026-07-18 03:15 EDT
 
 The merge override file is the typed, human-readable record of
 operator decisions in the `chatter speaker-id` → structural assembly
@@ -96,7 +95,7 @@ omitted; unknown fields cause a parse error.
 | `adult_roles` | table of donor code → inline table | The CHAT identity assigned to each speaker whose `mapping` action is `"rename"`, keyed by that speaker's donor code. Every `"rename"` key in `mapping` must have a matching key here. Each inline table has fields: `code` (string, CHAT speaker code), `tag` (string, CHAT role-tag), `specific_role` (string, optional, CHAT specific-role label such as `First_Investigator`, set only when two adults in the entry share `tag`). |
 | `mapping` | inline table | Map from input speaker codes to actions. Keys are speaker codes; values are `"rename"` or `"drop"`. Every speaker that exists in the input CHAT file must appear in `mapping`. |
 | `operator` | string | Free-form identifier of the person who created the entry (username, initials, email prefix). Recorded as audit trail. |
-| `decided_at` | RFC 3339 datetime | When the decision was made. Must include a time zone (UTC recommended). |
+| `decided_at` | RFC 3339 datetime | When the decision was made. chatter writes a quoted string in New York time, whole seconds, with its offset (`"2026-05-27T08:41:00-04:00"`). It reads any RFC 3339 time with an offset (`Z`, `+00:00`, `-04:00`, any fraction), quoted or as a native TOML datetime; a time without an offset is refused. |
 
 ### Optional fields
 
@@ -249,7 +248,7 @@ mapping = { PAR0 = "rename", PAR1 = "drop" }
 scores = { PAR0 = 0.1931, PAR1 = 0.7347 }
 margin = 3.81
 operator = "alice"
-decided_at = 2026-05-27T08:41:00-04:00
+decided_at = "2026-05-27T08:41:00-04:00"
 ```
 
 The reader reconstructs: child speaker was `PAR1` (high Jaccard
@@ -269,7 +268,7 @@ mapping = { PAR0 = "drop", PAR1 = "rename" }
 scores = { PAR0 = 0.6286, PAR1 = 0.3457 }
 margin = 1.82
 operator = "alice"
-decided_at = 2026-05-27T11:15:00-04:00
+decided_at = "2026-05-27T11:15:00-04:00"
 note = "Auto refused at 2.0× threshold. Listened to first 60 seconds; PAR0 produces child-content matching the hand transcript. PAR1 introduces herself as the clinician."
 ```
 
@@ -289,7 +288,7 @@ mapping = { PAR0 = "rename", PAR1 = "drop" }
 scores = { PAR0 = 0.3727, PAR1 = 0.6940 }
 margin = 1.86
 operator = "alice"
-decided_at = 2026-05-27T11:22:00-04:00
+decided_at = "2026-05-27T11:22:00-04:00"
 note = "Parent sample. Per contributor data sheet: mother. PAR0 contains clinician intro + parent mixed (Batchalign diarization limitation)."
 flags = ["diarization-mixed"]
 ```
@@ -312,7 +311,7 @@ mapping = { PAR0 = "drop", PAR1 = "rename" }
 scores = { PAR0 = 0.6286, PAR1 = 0.3457 }
 margin = 1.82
 operator = "alice"
-decided_at = 2026-05-27T11:15:00-04:00
+decided_at = "2026-05-27T11:15:00-04:00"
 note = "Auto refused at 2.0× threshold. Listened to first 60 seconds; PAR0 produces child-content matching the hand transcript. PAR1 introduces herself as the clinician."
 ```
 

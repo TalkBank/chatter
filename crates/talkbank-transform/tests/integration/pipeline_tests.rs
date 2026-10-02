@@ -18,8 +18,8 @@ use std::io::Write as _;
 use talkbank_model::{ErrorCollector, ParseValidateOptions};
 use talkbank_parser::TreeSitterParser;
 use talkbank_transform::{
-    PipelineError, chat_to_json, chat_to_json_unvalidated, normalize_chat, parse_and_validate,
-    parse_and_validate_streaming, parse_and_validate_streaming_with_parser,
+    JsonLayout, PipelineError, chat_to_json, chat_to_json_unvalidated, normalize_chat,
+    parse_and_validate, parse_and_validate_streaming, parse_and_validate_streaming_with_parser,
     parse_file_and_validate,
 };
 
@@ -190,7 +190,7 @@ fn parse_file_empty() {
 #[test]
 fn chat_to_json_valid() -> Result<(), PipelineError> {
     let options = ParseValidateOptions::default();
-    let json = chat_to_json(VALID_CHAT, options, true)?;
+    let json = chat_to_json(VALID_CHAT, options, JsonLayout::Pretty)?;
     // Should produce valid JSON
     let parsed: serde_json::Value =
         serde_json::from_str(&json).map_err(|e| PipelineError::JsonSerialization(e.to_string()))?;
@@ -201,8 +201,8 @@ fn chat_to_json_valid() -> Result<(), PipelineError> {
 #[test]
 fn chat_to_json_compact_vs_pretty() -> Result<(), PipelineError> {
     let options = ParseValidateOptions::default();
-    let pretty = chat_to_json(VALID_CHAT, options.clone(), true)?;
-    let compact = chat_to_json(VALID_CHAT, options, false)?;
+    let pretty = chat_to_json(VALID_CHAT, options.clone(), JsonLayout::Pretty)?;
+    let compact = chat_to_json(VALID_CHAT, options, JsonLayout::Compact)?;
 
     assert!(
         compact.len() < pretty.len(),
@@ -219,7 +219,7 @@ fn chat_to_json_compact_vs_pretty() -> Result<(), PipelineError> {
 #[test]
 fn chat_to_json_unvalidated_produces_json() -> Result<(), PipelineError> {
     let options = ParseValidateOptions::default();
-    let json = chat_to_json_unvalidated(VALID_CHAT, options, true)?;
+    let json = chat_to_json_unvalidated(VALID_CHAT, options, JsonLayout::Pretty)?;
     let parsed: serde_json::Value =
         serde_json::from_str(&json).map_err(|e| PipelineError::JsonSerialization(e.to_string()))?;
     assert!(parsed.is_object());

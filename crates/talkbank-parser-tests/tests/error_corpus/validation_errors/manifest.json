@@ -9420,6 +9420,50 @@
       },
       "status": "implemented",
       "source_spec": "spec/errors/W109.md"
+    },
+    {
+      "fixture": "W110_1.cha",
+      "transcript_name": {
+        "named": "Session"
+      },
+      "code": "W110",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/W110.md"
+    },
+    {
+      "fixture": "W110_2.cha",
+      "transcript_name": {
+        "named": "interview"
+      },
+      "code": "W110",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/W110.md"
+    },
+    {
+      "fixture": "W110_3.cha",
+      "transcript_name": {
+        "named": "interview"
+      },
+      "code": "W110",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/W110.md"
+    },
+    {
+      "fixture": "W110_4.cha",
+      "transcript_name": {
+        "named": "interview"
+      },
+      "code": "W110",
+      "claim": {
+        "subsumed_by": [
+          "E531"
+        ]
+      },
+      "status": "implemented",
+      "source_spec": "spec/errors/W110.md"
     }
   ],
   "implemented_codes_without_examples": [],

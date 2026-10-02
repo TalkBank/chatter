@@ -7,71 +7,78 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use sqlx::SqlitePool;
-use std::path::Path;
 
-use super::cache_utils::{get_cache_key_with_suffix, get_content_hash, now_secs};
+use talkbank_model::ResolvedPath;
+use talkbank_model::validation::AlignmentValidation;
+
+use super::cache_utils::{
+    self as cache_utils, CacheKey, CachedAt, alignment_column, roundtrip_column,
+    roundtrip_from_column,
+};
 use super::error::CacheError;
+use super::trait_def::{CacheLookup, ContentHash, RoundtripOutcome};
 use super::types::CacheIdentity;
 
-/// Get cached roundtrip result: `Some(true)` = passed, `Some(false)` = failed, `None` = not cached.
+/// The cached roundtrip verdict for `content`.
 ///
 /// `rules_version` is bound into the `version` column so a roundtrip outcome
-/// produced under a different validation rule set is a cache MISS.
+/// produced under a different validation rule set is a cache MISS. A
+/// database failure, or a tested row with no verdict, is an `Err`.
 pub async fn get_roundtrip(
     pool: &SqlitePool,
     identity: &CacheIdentity,
-    path: &Path,
-    check_alignment: bool,
-) -> Option<bool> {
-    let key = get_cache_key_with_suffix(path, identity.parser().cache_label());
-    let current_hash = get_content_hash(path).ok()?;
-    let alignment_val: i32 = if check_alignment { 1 } else { 0 };
+    path: &ResolvedPath,
+    content: &ContentHash,
+    alignment: AlignmentValidation,
+) -> Result<CacheLookup<RoundtripOutcome>, CacheError> {
+    let key = CacheKey::of(path, identity.roundtrip_namespace());
 
     let row = sqlx::query_as::<_, (String, i64, Option<i64>)>(
         "SELECT content_hash, roundtrip_tested, roundtrip_passed
          FROM file_cache
          WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind = ?4",
     )
-    .bind(&key)
+    .bind(key.as_str())
     .bind(identity.rules_version().as_str())
-    .bind(alignment_val)
+    .bind(alignment_column(alignment))
     .bind(identity.parser().cache_label())
     .fetch_optional(pool)
     .await
-    .ok()?;
+    .map_err(|source| CacheError::Database { source })?;
 
-    let (cached_hash, roundtrip_tested, roundtrip_passed) = row?;
-
-    // Invalidate if content changed.
-    if cached_hash != current_hash {
-        return None;
+    match row {
+        // A verdict for other content is no verdict for this content.
+        Some((cached_hash, ..)) if cached_hash != content.as_str() => Ok(CacheLookup::Miss),
+        None => Ok(CacheLookup::Miss),
+        // Not roundtrip-tested: no roundtrip verdict.
+        Some((_, 0, _)) => Ok(CacheLookup::Miss),
+        Some((_, 1, Some(passed))) => Ok(CacheLookup::Hit(roundtrip_from_column(passed)?)),
+        Some((_, 1, None)) => Err(CacheError::CorruptColumn {
+            column: "roundtrip_passed",
+            value: None,
+        }),
+        Some((_, tested, _)) => Err(CacheError::CorruptColumn {
+            column: "roundtrip_tested",
+            value: Some(tested),
+        }),
     }
-
-    // Only return result if roundtrip was actually tested
-    if roundtrip_tested == 0 {
-        return None;
-    }
-
-    roundtrip_passed.map(|p| p != 0)
 }
 
-/// Store roundtrip result as pass/fail.
+/// Store the roundtrip verdict for `content`.
 ///
 /// The row is tagged with `rules_version`, so it is only ever served back to a
 /// query carrying the same validation rule set.
 pub async fn set_roundtrip(
     pool: &SqlitePool,
     identity: &CacheIdentity,
-    path: &Path,
-    check_alignment: bool,
-    passed: bool,
+    path: &ResolvedPath,
+    content: &ContentHash,
+    alignment: AlignmentValidation,
+    outcome: RoundtripOutcome,
 ) -> Result<(), CacheError> {
-    let key = get_cache_key_with_suffix(path, identity.parser().cache_label());
-    let content_hash = get_content_hash(path)?;
-    let path_str = path.to_string_lossy().to_string();
-    let alignment_val: i32 = if check_alignment { 1 } else { 0 };
-    let passed_val: i32 = if passed { 1 } else { 0 };
-    let now = now_secs()? as i64;
+    let key = CacheKey::of(path, identity.roundtrip_namespace());
+    let path_str = cache_utils::column(path);
+    let passed = roundtrip_column(outcome);
 
     sqlx::query(
         "INSERT OR REPLACE INTO file_cache
@@ -79,14 +86,14 @@ pub async fn set_roundtrip(
           roundtrip_tested, roundtrip_passed, parser_kind)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9)",
     )
-    .bind(&key)
+    .bind(key.as_str())
     .bind(&path_str)
-    .bind(&content_hash)
+    .bind(content.as_str())
     .bind(identity.rules_version().as_str())
-    .bind(now)
-    .bind(alignment_val)
-    .bind(passed_val) // is_valid mirrors roundtrip result
-    .bind(passed_val)
+    .bind(CachedAt::now().column())
+    .bind(alignment_column(alignment))
+    .bind(passed) // is_valid mirrors roundtrip result
+    .bind(passed)
     .bind(identity.parser().cache_label())
     .execute(pool)
     .await
@@ -98,7 +105,6 @@ pub async fn set_roundtrip(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
     async fn test_pool() -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:")
@@ -114,33 +120,32 @@ mod tests {
     #[tokio::test]
     async fn set_roundtrip_replaces_existing_row_for_same_key() {
         let pool = test_pool().await;
-
-        let dir = tempdir().expect("create temp dir");
-        let file_path = dir.path().join("sample.cha");
-        std::fs::write(
-            &file_path,
-            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|demo|CHI|2;00.00|||Target_Child|||\n*CHI:\thello .\n@End\n",
-        )
-        .expect("write test chat file");
-
+        let path =
+            ResolvedPath::of_file(std::path::Path::new("sample.cha")).expect("resolvable path");
+        let content = ContentHash::of("@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|demo|CHI|2;00.00|||Target_Child|||\n*CHI:\thello .\n@End\n".as_bytes());
         let identity = CacheIdentity::new(
             crate::RulesVersion::for_testing("test-rules"),
             talkbank_model::ParserKind::TreeSitter,
         );
-
-        set_roundtrip(&pool, &identity, &file_path, false, false)
+        for outcome in [RoundtripOutcome::Failed, RoundtripOutcome::Passed] {
+            set_roundtrip(
+                &pool,
+                &identity,
+                &path,
+                &content,
+                AlignmentValidation::Structure,
+                outcome,
+            )
             .await
-            .expect("cache first roundtrip result");
-        set_roundtrip(&pool, &identity, &file_path, false, true)
-            .await
-            .expect("replace roundtrip result");
+            .expect("cache roundtrip result");
+        }
 
-        let key = get_cache_key_with_suffix(&file_path, "tree-sitter");
+        let key = CacheKey::of(&path, identity.roundtrip_namespace());
         let row_count: (i64,) = sqlx::query_as(
             "SELECT COUNT(*) FROM file_cache
              WHERE path_hash = ?1 AND version = ?2 AND check_alignment = ?3 AND parser_kind = ?4",
         )
-        .bind(&key)
+        .bind(key.as_str())
         .bind(identity.rules_version().as_str())
         .bind(0_i32)
         .bind("tree-sitter")
@@ -153,8 +158,16 @@ mod tests {
             "cache should keep exactly one row per roundtrip key"
         );
         assert_eq!(
-            get_roundtrip(&pool, &identity, &file_path, false).await,
-            Some(true),
+            get_roundtrip(
+                &pool,
+                &identity,
+                &path,
+                &content,
+                AlignmentValidation::Structure
+            )
+            .await
+            .unwrap(),
+            CacheLookup::Hit(RoundtripOutcome::Passed),
             "latest roundtrip result should win"
         );
     }

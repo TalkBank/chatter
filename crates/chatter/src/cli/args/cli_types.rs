@@ -25,20 +25,9 @@ pub enum TuiMode {
     Disable,
 }
 
-impl TuiMode {
-    /// Resolve the mode into a concrete decision, consulting the terminal when `Auto`.
-    pub fn should_use_tui(self) -> bool {
-        use std::io::IsTerminal;
-        match self {
-            Self::Force => true,
-            Self::Disable => false,
-            // `std::io::IsTerminal` (stable since Rust 1.70) replaces the
-            // unmaintained `atty` crate (RUSTSEC-2024-0375); identical
-            // semantics, no third-party dependency.
-            Self::Auto => std::io::stdout().is_terminal(),
-        }
-    }
-}
+// The mode is decided together with the output format, `--quiet` and
+// `--audit`, never alone: see `ValidationPresentation::resolve`, which also
+// consults the terminal (with `std::io::IsTerminal`) for `Auto`.
 
 /// Output encodings for command results.
 #[derive(Debug, Clone, Copy, ValueEnum)]

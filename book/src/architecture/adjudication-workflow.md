@@ -1,14 +1,13 @@
 # Adjudication Workflow
 
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
-> Historical design: references below to the `chatter merge` CLI describe the
-> former command. `merge`, `pipeline`, and `batch` have been removed.
-> The structural library remains.
-> See the [removal notice](../chatter/user-guide/merge.md).
+> `chatter merge`, `chatter pipeline` and `chatter batch` are not CLI commands.
+> Where this page names them it describes the operation of the structural
+> library in `talkbank-transform`, which is current. See the
+> [removal notice](../chatter/user-guide/merge.md).
 
 **Status:** Draft
-**Last updated:** 2026-08-27 13:44 EDT
 
 This page specifies how human-in-the-loop adjudication fits into
 the merge pipeline. Several pipeline stages have decision points
@@ -152,7 +151,7 @@ and the session is skipped for the rest of pass 1.
 
 **Pass 2** (after operator runs `chatter adjudicate`): the
 orchestrator re-runs `chatter speaker-id` for the previously
-skipped sessions, now finding decisions in the override file
+skipped sessions, finding decisions in the override file
 (`mode = "override"`). Sessions complete; pending entries are
 removed.
 
@@ -177,7 +176,7 @@ schema_version = 2
 [[entries]]
 session_id = "session-102-t1"
 kind = "speaker-id-low-confidence"
-created_at = 2026-05-27T11:00:00-04:00
+created_at = "2026-05-27T11:00:00-04:00"
 
 # Inputs the adjudication tool needs:
 input_path = "asr/session-102-t1.cha"

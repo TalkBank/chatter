@@ -33,4 +33,6 @@ mod validate;
 mod write;
 
 pub use core::{ChatFile, ChatFileLines};
-pub use transcript_name::{FileStem, TranscriptName};
+pub use transcript_name::{
+    FileStem, FileStemError, OwnedFileStem, OwnedTranscriptName, TranscriptName,
+};

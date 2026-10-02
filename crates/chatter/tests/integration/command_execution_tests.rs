@@ -256,6 +256,58 @@ fn watch_requires_path_argument() -> Result<(), TestError> {
     Ok(())
 }
 
+/// `--max-errors 0` is a usage error (exit 2): a limit of zero errors is not
+/// a limit anything can reach. The count is parsed as a `NonZeroUsize` at
+/// the argument boundary, as `--jobs` is.
+#[test]
+fn max_errors_zero_is_a_usage_error() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    harness
+        .chatter_cmd()
+        .arg("validate")
+        .arg(dir.path())
+        .args(["--max-errors", "0"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("--max-errors"));
+    Ok(())
+}
+
+/// `--jobs 0` is a usage error (exit 2) on every command that takes it, not a
+/// request the runner quietly turns into one worker. The count is parsed as a
+/// `NonZeroUsize` at the argument boundary, so no zero reaches the runner.
+#[test]
+fn jobs_zero_is_a_usage_error() -> Result<(), TestError> {
+    let harness = CliHarness::new()?;
+    let dir = tempdir()?;
+    let out_dir = dir.path().join("json");
+    let validate_long = harness
+        .chatter_cmd()
+        .arg("validate")
+        .arg(dir.path())
+        .args(["--jobs", "0"])
+        .assert();
+    let validate_short = harness
+        .chatter_cmd()
+        .arg("validate")
+        .arg(dir.path())
+        .args(["-j", "0"])
+        .assert();
+    let to_json = harness
+        .chatter_cmd()
+        .arg("to-json")
+        .arg(dir.path())
+        .arg("--output-dir")
+        .arg(&out_dir)
+        .args(["--jobs", "0"])
+        .assert();
+    for refused in [validate_long, validate_short, to_json] {
+        refused.code(2).stderr(predicate::str::contains("--jobs"));
+    }
+    Ok(())
+}
+
 // ============================================================================
 // program name (cross-platform identity)
 // ============================================================================
@@ -319,6 +371,68 @@ fn program_name_is_pinned_regardless_of_argv0() -> Result<(), TestError> {
             "usage line leaked the executable file name instead of the pinned \
              program name; args={args:?}\nstdout:\n{stdout}"
         );
+    }
+    Ok(())
+}
+
+/// Output flags that name two surfaces are usage errors (exit 2), never a
+/// silent winner: `--audit` beside `--format json`, and `--format json
+/// --quiet`.
+#[test]
+fn conflicting_output_flags_are_usage_errors() -> Result<(), TestError> {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("a.cha");
+    std::fs::write(
+        &file,
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n",
+    )?;
+    let audit = dir.path().join("out.jsonl");
+    for args in [
+        vec![
+            "--audit",
+            audit.to_str().expect("utf-8"),
+            "--format",
+            "json",
+        ],
+        vec!["--audit", audit.to_str().expect("utf-8"), "--quiet"],
+        vec!["--format", "json", "--quiet"],
+        vec!["--format", "json", "--tui-mode", "force"],
+        // An audit never writes the cache; --force would clear rows.
+        vec!["--audit", audit.to_str().expect("utf-8"), "--force"],
+    ] {
+        let output = crate::common::chatter_cmd()
+            .arg("validate")
+            .arg(&file)
+            .args(&args)
+            .output()?;
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {output:?}");
+        assert!(!audit.exists(), "{args:?} wrote the audit file");
+    }
+    Ok(())
+}
+
+/// A flag that a command would ignore is a usage error instead:
+/// `normalize --skip-alignment` without `--validate`, and `to-json
+/// --skip-validation --skip-alignment` (skipping validation already skips
+/// alignment).
+#[test]
+fn flags_a_command_would_ignore_are_usage_errors() -> Result<(), TestError> {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("a.cha");
+    std::fs::write(
+        &file,
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello .\n@End\n",
+    )?;
+    for args in [
+        vec!["normalize", "--skip-alignment"],
+        vec!["to-json", "--skip-validation", "--skip-alignment"],
+    ] {
+        let output = crate::common::chatter_cmd()
+            .args(&args[..1])
+            .arg(&file)
+            .args(&args[1..])
+            .output()?;
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {output:?}");
     }
     Ok(())
 }

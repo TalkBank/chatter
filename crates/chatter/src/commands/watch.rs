@@ -18,20 +18,22 @@ use std::time::{Duration, Instant};
 use talkbank_transform::paths::is_chat_transcript_path;
 use thiserror::Error;
 
-use crate::cli::OutputFormat;
-use crate::commands::{self, AlignmentValidationMode, CacheRefreshMode, ValidationInterface};
-use crate::ui::Theme;
+use crate::commands::CacheRefreshMode;
+use crate::commands::validate::cache::{CacheInit, initialize_validation_cache};
+use crate::commands::validate_parallel::{CachePolicy, validate_watched_file};
+use talkbank_transform::{RunEnding, ValidationConfig, ValidationRun};
 
-/// Watch CHAT files for changes and continuously validate, re-using the same validation/audit rules as the CLI.
+/// Watch CHAT files for changes and revalidate each changed transcript with
+/// the default rules and the shared validation cache.
 ///
-/// The manual encourages tooling to keep transcripts in sync with their Golden copy, so this mode monitors file events,
-/// debounces flapping editors, and reruns the same validation/alignment pipeline tied to the Main Tier/Dependent Tier
-/// sections. The mode also suppresses `%wor` alignment violations (per the Alignment chapter) because temporary
-/// flushes while typing should not pollute the console.
+/// File events are debounced (an editor that writes in bursts triggers one
+/// validation), and `alignment` is the `--skip-alignment` choice, as for
+/// `validate`. A directory is watched with everything below it. Each changed
+/// file goes through the validation runner's one-file pipeline, the one
+/// `validate` uses, with the cache opened once when the watch starts.
 pub fn watch_files(
     path: &Path,
-    check_alignment: bool,
-    recursive: bool,
+    alignment: talkbank_model::validation::AlignmentValidation,
     clear_screen: bool,
 ) -> Result<(), WatchError> {
     if !path.exists() {
@@ -40,29 +42,41 @@ pub fn watch_files(
         });
     }
 
-    println!("👀 Watching {} for changes...", path.display());
-    if recursive {
-        println!("   (recursive mode)");
+    outln!("👀 Watching {} for changes...", path.display());
+    outln!("   Press Ctrl+C to stop\n");
+
+    // The default rules, as `validate` without flags, so the two share
+    // cached verdicts; the cache is opened (and pruned) once, here.
+    let config = ValidationConfig {
+        alignment,
+        ..ValidationConfig::default()
+    };
+    let CacheInit {
+        run,
+        events: cache_events,
+    } = initialize_validation_cache(
+        &[],
+        CachePolicy::ReadWrite {
+            refresh: CacheRefreshMode::ReuseExisting,
+        },
+        config,
+    );
+    for event in &cache_events {
+        eprintln!("{}", event.sentence());
     }
-    println!("   Press Ctrl+C to stop\n");
+    let watched = Watched { run, clear_screen };
 
     // Run initial validation
     if path.is_file() {
-        validate_with_header(path, check_alignment, clear_screen);
+        watched.validate(path);
     }
 
     // Set up file watcher (debounced events ensure we do not over-drain CPU on editors that fire multi events)
     let (event_tx, event_rx) = unbounded();
     let mut watcher = create_watcher(event_tx)?;
 
-    let mode = if recursive {
-        RecursiveMode::Recursive
-    } else {
-        RecursiveMode::NonRecursive
-    };
-
     watcher
-        .watch(path, mode)
+        .watch(path, RecursiveMode::Recursive)
         .map_err(|source| WatchError::Watch {
             path: path.to_path_buf(),
             source,
@@ -89,7 +103,7 @@ pub fn watch_files(
                 }
             }
             recv(ctrl_c_rx) -> _ => {
-                println!("\n👋 Stopping watch mode...");
+                outln!("\n👋 Stopping watch mode...");
                 break;
             }
             default(Duration::from_millis(100)) => {
@@ -103,7 +117,7 @@ pub fn watch_files(
 
                 for file_path in ready {
                     pending.remove(&file_path);
-                    validate_with_header(file_path.as_path(), check_alignment, clear_screen);
+                    watched.validate(&file_path);
                 }
             }
         }
@@ -153,33 +167,44 @@ fn create_watcher(tx: Sender<PathBuf>) -> Result<RecommendedWatcher, WatchError>
     .map_err(|source| WatchError::CreateWatcher { source })
 }
 
-/// Helper that clears the screen, prints a header, and invokes `validate_file`.
-///
-/// Watch mode always suppresses `%wor` alignment failures (they are expensive for interactive use) and keeps the
-/// same Main Tier/Dependent Tier validation rules described in the manual’s CLI section.
-fn validate_with_header(path: &Path, check_alignment: bool, clear_screen: bool) {
-    if clear_screen {
-        // ANSI escape: clear screen and move cursor to top-left
-        print!("\x1B[2J\x1B[1;1H");
+/// What every validation in one watch shares.
+struct Watched {
+    /// The runner's configuration (default rules, the watch's alignment) and
+    /// the cache opened for it once for the whole watch.
+    run: ValidationRun,
+    /// Whether to clear the screen before each file.
+    clear_screen: bool,
+}
+
+impl Watched {
+    /// Clear the screen if asked, print a header, validate `path` through
+    /// the runner, and say whether it passed. Its diagnostics or failure are
+    /// printed as `validate --quiet` prints them; a file that cannot be read
+    /// (renamed or locked mid-edit) is said, and the watch goes on.
+    fn validate(&self, path: &Path) {
+        if self.clear_screen {
+            // ANSI escape: clear screen and move cursor to top-left
+            out!("\x1B[2J\x1B[1;1H");
+        }
+
+        outln!("📝 Validating: {}", path.display());
+        outln!("{}", "─".repeat(60));
+
+        let ending = validate_watched_file(path.to_path_buf(), &self.run);
+        match &ending {
+            RunEnding::Complete(stats) if ending.passed() => match stats.snapshot().cache_hits() {
+                0 => outln!("✓ {} is valid", path.display()),
+                _ => outln!("✓ {} is valid (cached)", path.display()),
+            },
+            // Its diagnostics, its failure or the run's own ending are
+            // already said.
+            RunEnding::Complete(_)
+            | RunEnding::NothingFound
+            | RunEnding::Stopped { .. }
+            | RunEnding::Incomplete { .. }
+            | RunEnding::Aborted(_) => {}
+        }
+
+        outln!();
     }
-
-    println!("📝 Validating: {}", path.display());
-    println!("{}", "─".repeat(60));
-
-    // Watch mode shows results to the user inline; the per-file outcome
-    // does not influence anything outside the loop, so it is intentionally
-    // discarded.
-    let _ = commands::validate_file(
-        &path.to_path_buf(),
-        OutputFormat::Text,
-        AlignmentValidationMode::from_enabled(check_alignment),
-        CacheRefreshMode::ReuseExisting,
-        false,
-        ValidationInterface::Plain,
-        Theme::default(),
-        &[],
-        false, // strict_linkers disabled in watch mode
-    );
-
-    println!();
 }

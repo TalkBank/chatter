@@ -34,7 +34,7 @@
 //! code; they only probe it.
 
 use talkbank_model::{ChatFile, ParseValidateOptions, SemanticEq, WriteChat};
-use talkbank_transform::{chat_to_json_unvalidated, parse_and_validate};
+use talkbank_transform::{JsonLayout, chat_to_json_unvalidated, parse_and_validate};
 
 /// Run the full CHAT -> JSON -> CHAT -> parse roundtrip and assert
 /// that the reparsed file is `SemanticEq` to the original parse.
@@ -53,7 +53,7 @@ fn assert_roundtrip_preserves_semantics(label: &str, original_chat: &str) {
         .unwrap_or_else(|e| panic!("[{label}] parse of original CHAT failed: {e}"));
 
     // CHAT -> JSON.
-    let json = chat_to_json_unvalidated(original_chat, opts.clone(), true)
+    let json = chat_to_json_unvalidated(original_chat, opts.clone(), JsonLayout::Pretty)
         .unwrap_or_else(|e| panic!("[{label}] CHAT->JSON failed: {e}"));
 
     // JSON -> ChatFile.

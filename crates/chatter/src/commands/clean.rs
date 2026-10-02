@@ -104,16 +104,16 @@ pub fn clean_file(input: &PathBuf, diff_only: bool, format: OutputFormat) {
             // Serialize.
             #[allow(clippy::expect_used)]
             let json = serde_json::to_string_pretty(&entries).expect("JSON serialization failed");
-            println!("{json}");
+            outln!("{json}");
         }
         OutputFormat::Text => {
             for (i, entry) in entries.iter().enumerate() {
                 if i > 0 {
-                    println!();
+                    outln!();
                 }
-                println!("*{}: (line {})", entry.speaker, entry.line);
+                outln!("*{}: (line {})", entry.speaker, entry.line);
                 for w in &entry.words {
-                    println!("  {:<24}{}", w.raw, w.cleaned);
+                    outln!("  {:<24}{}", w.raw, w.cleaned);
                 }
             }
         }

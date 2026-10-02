@@ -48,16 +48,14 @@ use chatter_desktop_lib::protocol::commands::{
     ExportFormat, ExportResultsRequest, OpenInClanRequest, ValidateRequest,
 };
 use chatter_desktop_lib::validation::{initialize_cache_at, validate_target_streaming_with_config};
-use crossbeam_channel::{Receiver, Sender};
-use talkbank_transform::validation_runner::ValidationConfig;
+use crossbeam_channel::Receiver;
+use talkbank_transform::validation_runner::{ValidationConfig, ValidationRun};
 
 #[test]
 fn internal_failure_wire_status_is_not_invalidity_or_success() {
-    use chatter_desktop_lib::events::to_frontend_event;
+    use chatter_desktop_lib::events::to_frontend_events;
     use talkbank_model::{CompletedDiagnostics, ErrorCode, ParseError, Severity, Span};
-    use talkbank_transform::validation_runner::{
-        FileCompleteEvent, FileStatus, ValidationEvent, ValidationStats,
-    };
+    use talkbank_transform::validation_runner::{FileCompleteEvent, FileStatus, ValidationEvent};
     let failure = CompletedDiagnostics::admit(vec![ParseError::at_span(
         ErrorCode::InternalError,
         Severity::Warning,
@@ -65,14 +63,18 @@ fn internal_failure_wire_status_is_not_invalidity_or_success() {
         "producer fault",
     )])
     .unwrap_err();
-    let event = to_frontend_event(
-        ValidationEvent::FileComplete(FileCompleteEvent {
+    let [None, Some(event)] =
+        to_frontend_events(ValidationEvent::FileComplete(FileCompleteEvent {
             path: PathBuf::from("sample.cha"),
-            status: FileStatus::InternalFailure { failure },
-        }),
-        Path::new("."),
-    )
-    .unwrap();
+            status: FileStatus::InternalFailure {
+                failure,
+                attempt: talkbank_transform::validation_runner::FailedAttempt::RoundtripReparse,
+            },
+            cache: talkbank_transform::CacheUse::Miss,
+        }))
+    else {
+        panic!("one fileComplete event, no errors event");
+    };
     let json = serde_json::to_value(event).unwrap();
     assert_eq!(json["status"]["type"], "internalFailure");
     assert!(
@@ -81,14 +83,6 @@ fn internal_failure_wire_status_is_not_invalidity_or_success() {
             .unwrap()
             .contains("validity was not determined")
     );
-    let stats = ValidationStats::new(1);
-    stats.record_internal_failure();
-    let event =
-        to_frontend_event(ValidationEvent::Finished(stats.snapshot()), Path::new(".")).unwrap();
-    let json = serde_json::to_value(event).unwrap();
-    assert_eq!(json["stats"]["internalFailures"], 1);
-    assert_eq!(json["stats"]["validFiles"], 0);
-    assert_eq!(json["stats"]["invalidFiles"], 0);
 }
 
 /// Test-only convenience wrapper: production always threads an explicit
@@ -105,18 +99,28 @@ fn internal_failure_wire_status_is_not_invalidity_or_success() {
 /// down to 1.3 MB mid-session. The claim was in a comment; nothing enforced it.
 fn validate_target_streaming(
     target: PathBuf,
-) -> Result<(Receiver<FrontendEvent>, Sender<()>), TargetError> {
+) -> Result<(Receiver<FrontendEvent>, talkbank_transform::Canceller), TargetError> {
     let config = ValidationConfig {
         // These integration tests exercise event semantics, not scheduler
         // throughput. A bounded pool prevents parallel tests from each
         // multiplying themselves by every host CPU.
-        jobs: Some(2),
+        jobs: std::num::NonZeroUsize::new(2),
         ..ValidationConfig::default()
     };
     {
-        let cache = initialize_cache_at(test_cache_dir(), config.cache_identity());
-        validate_target_streaming_with_config(target, config, cache)
+        let cache = initialize_cache_at(test_cache_dir(), config.cache_identity())
+            .expect("test cache opens");
+        validate_target_streaming_with_config(target, &bound(config, cache))
     }
+}
+
+/// `config` bound to `cache`, which the test opened for `config`'s identity.
+fn bound(
+    config: ValidationConfig,
+    cache: std::sync::Arc<talkbank_transform::UnifiedCache>,
+) -> ValidationRun {
+    ValidationRun::new(config, talkbank_transform::RunCache::ReadWrite(cache))
+        .expect("a cache opened for this run's identity")
 }
 
 /// A cache root private to this test binary, so a test run can never touch the
@@ -230,12 +234,13 @@ fn reference_corpus_events() -> &'static [FrontendEvent] {
 /// process-global state.
 fn collect_events_with_cache(target: &Path, cache_dir: &Path) -> Vec<FrontendEvent> {
     let config = ValidationConfig {
-        jobs: Some(2),
+        jobs: std::num::NonZeroUsize::new(2),
         ..ValidationConfig::default()
     };
-    let cache = initialize_cache_at(cache_dir.to_path_buf(), config.cache_identity());
+    let cache = initialize_cache_at(cache_dir.to_path_buf(), config.cache_identity())
+        .expect("test cache opens");
     let (rx, _cancel_tx) =
-        validate_target_streaming_with_config(target.to_path_buf(), config, cache)
+        validate_target_streaming_with_config(target.to_path_buf(), &bound(config, cache))
             .expect("desktop validation should start");
 
     let mut events = Vec::new();
@@ -500,6 +505,28 @@ fn protocol_contracts_serialize_to_expected_json_shape() {
     assert_eq!(validate["strictLinkers"], false);
     assert!(validate["jobs"].is_null());
 
+    // The job count is parsed at the request boundary: a positive count
+    // arrives as given, and zero is refused rather than reinterpreted, the
+    // same contract as the CLI's `--jobs`.
+    let request_with_jobs = |jobs: serde_json::Value| {
+        serde_json::from_value::<ValidateRequest>(serde_json::json!({
+            "path": "/tmp/reference",
+            "roundtrip": false,
+            "parserKind": "tree-sitter",
+            "strictLinkers": false,
+            "jobs": jobs,
+        }))
+    };
+    assert_eq!(
+        request_with_jobs(serde_json::json!(3)).unwrap().jobs,
+        std::num::NonZeroUsize::new(3)
+    );
+    assert_eq!(
+        request_with_jobs(serde_json::Value::Null).unwrap().jobs,
+        None
+    );
+    assert!(request_with_jobs(serde_json::json!(0)).is_err());
+
     let open_in_clan = serde_json::to_value(OpenInClanRequest {
         file: "/tmp/reference.cha".into(),
         line: 12,
@@ -592,13 +619,13 @@ fn finished_stats_match_file_events() {
         .filter(|e| matches!(e, FrontendEvent::FileComplete { .. }))
         .count();
 
-    if let Some(FrontendEvent::Finished { stats }) = events.last() {
+    if let Some(FrontendEvent::Finished { stats, .. }) = events.last() {
         assert_eq!(
             file_completes, stats.total_files,
             "FileComplete count should match stats.totalFiles"
         );
         assert_eq!(
-            stats.valid_files + stats.invalid_files + stats.parse_errors + stats.internal_failures,
+            stats.valid_files + stats.invalid_files + stats.internal_failures,
             stats.total_files,
             "every file must have one terminal outcome"
         );
@@ -1171,9 +1198,9 @@ fn cache_does_not_leak_a_verdict_across_strict_linkers_toggle() {
     };
 
     let run = |config: ValidationConfig| -> Vec<FrontendEvent> {
-        let cache = state.cache_for_config(&config);
+        let cache = state.cache_for_config(&config).expect("test cache opens");
         let (rx, _cancel_tx) =
-            validate_target_streaming_with_config(fixture.clone(), config, cache)
+            validate_target_streaming_with_config(fixture.clone(), &bound(config, cache))
                 .expect("desktop validation should start");
         let mut events = Vec::new();
         while let Ok(event) = rx.recv() {
@@ -1239,18 +1266,17 @@ fn a_run_starts_when_the_caller_is_driving_an_async_runtime() {
 
     let request = ValidateRequest {
         path: corpus.to_string_lossy().into_owned(),
-        jobs: Some(1),
+        jobs: Some(std::num::NonZeroUsize::MIN),
         ..ValidateRequest::default()
     };
     let config = talkbank_transform::ValidationConfig::from(&request);
 
     // The load-bearing part: this mirrors what Tauri does to `validate`.
     let started = tauri::async_runtime::block_on(async {
-        let cache = state.cache_for_config(&config);
+        let cache = state.cache_for_config(&config).expect("test cache opens");
         chatter_desktop_lib::validation::validate_target_streaming_with_config(
             PathBuf::from(&request.path),
-            config,
-            cache,
+            &bound(config, cache),
         )
     });
 

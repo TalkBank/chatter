@@ -16,7 +16,6 @@ pub use sanitize::*;
 
 use std::path::{Path, PathBuf};
 use talkbank_model::WriteChat;
-use talkbank_transform::paths::is_chat_transcript_path;
 
 pub(super) fn pct(n: usize, total: usize) -> String {
     if total == 0 {
@@ -26,24 +25,29 @@ pub(super) fn pct(n: usize, total: usize) -> String {
     }
 }
 
-/// Recursively collect .cha files from paths.
-pub(super) fn collect_cha_files(paths: &[PathBuf]) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    for p in paths {
-        if p.is_dir() {
-            collect_recursive(p, &mut files);
-        } else if is_chat_transcript_path(p) {
-            files.push(p.clone());
-        }
-    }
-    files.sort();
-    files
-}
-
 /// Print a user-facing error and exit non-zero.
 pub(super) fn die(msg: &str) -> ! {
     eprintln!("ERROR: {msg}");
     std::process::exit(1);
+}
+
+/// The parser every debug tool uses; one that cannot be created ends the
+/// command.
+pub(super) fn parser() -> talkbank_parser::TreeSitterParser {
+    talkbank_parser::TreeSitterParser::new()
+        .unwrap_or_else(|e| die(&format!("parser initialization failed: {e:?}")))
+}
+
+/// What every debug tool over transcripts starts from: the transcripts the
+/// arguments name, refused before anything is processed if any cannot be
+/// read or none is named, and the parser.
+pub(super) fn transcripts_and_parser(
+    paths: &[std::path::PathBuf],
+) -> (Vec<std::path::PathBuf>, talkbank_parser::TreeSitterParser) {
+    let files = crate::commands::inputs::readable_transcripts(paths)
+        .unwrap_or_else(|refusal| die(&refusal.to_string()))
+        .into_paths();
+    (files, parser())
 }
 
 /// A transcript open for editing IN PLACE, whose model provably reproduces it.
@@ -83,7 +87,8 @@ pub(super) struct InPlace {
 /// `commit(true)` says nothing at the call site. It also puts the dry run
 /// through the SAME change detection as the real write, rather than leaving
 /// `--dry-run` to re-derive "would this change anything" and drift.
-pub(super) enum Commit {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Commit {
     /// Write the file.
     Write,
     /// Report what a write would do, and touch nothing.
@@ -236,19 +241,6 @@ pub(super) fn parse_or_report(
                 talkbank_model::ParseErrors::from(diagnostics)
             );
             None
-        }
-    }
-}
-
-pub(super) fn collect_recursive(dir: &PathBuf, files: &mut Vec<PathBuf>) {
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                collect_recursive(&path, files);
-            } else if is_chat_transcript_path(&path) {
-                files.push(path);
-            }
         }
     }
 }

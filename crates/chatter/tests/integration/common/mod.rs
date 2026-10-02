@@ -75,11 +75,14 @@ impl CliHarness {
         let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("chatter");
         cmd.env("HOME", self.home_dir());
         cmd.env("XDG_CACHE_HOME", self.xdg_cache_home());
-        cmd.env(
-            "TALKBANK_CHAT_CACHE_DIR",
-            self.xdg_cache_home().join("talkbank-chat"),
-        );
+        cmd.env("TALKBANK_CHAT_CACHE_DIR", self.cache_dir());
         cmd
+    }
+
+    /// The cache directory the CLI process is pointed at. Nothing creates it
+    /// until a command that writes the cache runs.
+    pub fn cache_dir(&self) -> PathBuf {
+        self.xdg_cache_home().join("talkbank-chat")
     }
 
     /// Run `chatter` and capture the subprocess output.

@@ -47,13 +47,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Pinned to the repo toolchain (rust-toolchain.toml), not @stable: a
-      # floating @stable re-keys the rust-cache on every new stable release,
-      # forcing a cold full rebuild on all three OSes (the slow Windows leg),
-      # and tests a different compiler than we ship. Kept in sync by
-      # scripts/sync-rust-versions.py.
+      # The current stable release, as everywhere in this repo. The
+      # rust-cache key changes with each new stable, so the first run after a
+      # release builds cold on all three OSes: the same one cold build per
+      # release that bumping a pin cost.
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.98.0
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 

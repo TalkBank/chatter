@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   DESKTOP_COMMANDS,
   DESKTOP_EVENTS,
+  parseJobCount,
 } = require("../../.test-dist/src/protocol/desktopProtocol.js");
 const {
   createValidationRunnerCapability,
@@ -62,11 +63,13 @@ test("validation runner listens before invoking and disposes once", async () => 
     [
       DESKTOP_COMMANDS.validate,
       {
-        path: "/tmp/reference",
-        roundtrip: false,
-        parserKind: "tree-sitter",
-        strictLinkers: false,
-        jobs: null,
+        request: {
+          path: "/tmp/reference",
+          roundtrip: false,
+          parserKind: "tree-sitter",
+          strictLinkers: false,
+          jobs: null,
+        },
       },
     ],
   ]);
@@ -102,4 +105,13 @@ test("validation runner disposes the listener if validate fails", async () => {
     /boom/,
   );
   assert.equal(disposed, true);
+});
+
+test("the jobs field becomes a positive whole count, all CPUs, or invalid", () => {
+  assert.deepEqual(parseJobCount(""), { kind: "allCpus" });
+  assert.deepEqual(parseJobCount("  "), { kind: "allCpus" });
+  assert.deepEqual(parseJobCount("4"), { kind: "count", count: 4 });
+  for (const raw of ["0", "1.5", "-2", "abc", "1e3", "99999999999999999999"]) {
+    assert.deepEqual(parseJobCount(raw), { kind: "invalid" }, raw);
+  }
 });

@@ -5,9 +5,8 @@
 //! hints. The error details panel renders miette-style source snippets with caret
 //! underlines, line numbers, and suggestion annotations.
 //!
-//! Two variants exist: streaming (used during directory validation with a progress
-//! gauge and cancel support) and static (used after single-file validation with
-//! rerun support).
+//! The header carries a progress gauge, and the footer offers cancel while
+//! the run is going and rerun once it has ended.
 
 use ratatui::{
     Frame,
@@ -18,50 +17,53 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::state::{DetailMetrics, Focus, RunPhase, TuiState};
+use super::state::{DetailMetrics, Focus, TuiState};
 use super::text_processing::{process_source_line_for_display, process_text_for_display};
+use crate::commands::RunPhase;
 use talkbank_model::SourceLocation;
+use talkbank_transform::validation_runner::RunEnding;
 
 /// Render header for streaming validation.
 ///
-/// The title is per-phase because "Done" is a claim about the whole input.
+/// The title is per-ending because "Done" is a claim about the whole input.
 /// A run that abandoned files or died must not wear it: those endings say what
 /// happened instead, so the header can never present partial tallies as the
-/// run's totals.
+/// run's totals. Its color is the run's own verdict, [`RunEnding::passed`].
 pub fn render_header_streaming(f: &mut Frame, area: Rect, state: &TuiState, phase: &RunPhase) {
-    let title = match phase {
-        RunPhase::Finished => {
-            let total = state.progress.total_files;
-            let invalid = state
-                .progress
-                .final_invalid_files
-                .unwrap_or_else(|| state.total_files_with_errors());
-            format!("Done | {} files with errors / {} files", invalid, total)
-        }
-        RunPhase::Incomplete { lost_files } => format!(
-            "Did not finish | {} of {} files never checked",
-            lost_files, state.progress.total_files
+    let (title, color) = match phase {
+        RunPhase::Running => (
+            match state.progress.discovering {
+                true => "Discovering files...".to_owned(),
+                false => "Validating...".to_owned(),
+            },
+            state.theme.header_progress,
         ),
-        RunPhase::Aborted { .. } => "Stopped | the run did not finish".to_string(),
-        RunPhase::Running => {
-            if state.progress.discovering {
-                "Discovering files...".to_string()
-            } else {
-                "Validating...".to_string()
-            }
+        RunPhase::Ended(ending) => {
+            let title = match ending {
+                RunEnding::Complete(stats) => format!(
+                    "Done | {} files with errors / {} files",
+                    stats.snapshot().failed_files(),
+                    stats.snapshot().total_files()
+                ),
+                RunEnding::NothingFound => "Done | no .cha files found".to_owned(),
+                RunEnding::Stopped { stats, reason } => format!(
+                    "Stopped | {} of {} files not checked | {reason}",
+                    stats.missing_files(),
+                    stats.snapshot().total_files()
+                ),
+                RunEnding::Incomplete { stats, .. } => format!(
+                    "Did not finish | {} of {} files never checked",
+                    stats.missing_files(),
+                    stats.snapshot().total_files()
+                ),
+                RunEnding::Aborted(_) => "Stopped | the run did not finish".to_owned(),
+            };
+            let color = match ending.passed() {
+                true => state.theme.header_ok,
+                false => state.theme.header_err,
+            };
+            (title, color)
         }
-    };
-
-    let color = match phase {
-        RunPhase::Finished => {
-            if state.files.is_empty() {
-                state.theme.header_ok
-            } else {
-                state.theme.header_err
-            }
-        }
-        RunPhase::Incomplete { .. } | RunPhase::Aborted { .. } => state.theme.header_err,
-        RunPhase::Running => state.theme.header_progress,
     };
 
     let block = Block::default().borders(Borders::ALL);
@@ -81,8 +83,8 @@ pub fn render_header_streaming(f: &mut Frame, area: Rect, state: &TuiState, phas
     let ratio = if state.progress.total_files > 0 {
         (state.progress.files_processed_display as f64 / state.progress.total_files as f64)
             .clamp(0.0, 1.0)
-    } else if phase.is_terminal() {
-        // A stopped run with nothing to count leaves a full bar rather than an
+    } else if phase.is_ended() {
+        // An ended run with nothing to count leaves a full bar rather than an
         // animating empty one; the title says which ending it was.
         1.0
     } else {
@@ -95,24 +97,18 @@ pub fn render_header_streaming(f: &mut Frame, area: Rect, state: &TuiState, phas
     f.render_widget(gauge, rows[1]);
 }
 
-/// Render header for static validation.
-pub fn render_header(f: &mut Frame, area: Rect, state: &TuiState) {
-    let title = format!(
-        " Validation Errors - {} errors in {} files ",
-        state.total_errors(),
-        state.total_files_with_errors()
-    );
-
-    let header = Paragraph::new(title)
-        .style(
-            Style::default()
-                .fg(state.theme.header_err)
-                .add_modifier(Modifier::BOLD),
-        )
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
-
-    f.render_widget(header, area);
+/// Render the run's notices and cache events, one per line.
+pub fn render_notes(f: &mut Frame, area: Rect, state: &TuiState, notes: &[String]) {
+    let lines: Vec<Line> = notes
+        .iter()
+        .map(|note| {
+            Line::from(Span::styled(
+                note.as_str(),
+                Style::default().fg(state.theme.location),
+            ))
+        })
+        .collect();
+    f.render_widget(Paragraph::new(lines), area);
 }
 
 /// Render file list pane.
@@ -125,10 +121,10 @@ pub fn render_file_list(f: &mut Frame, area: Rect, state: &mut TuiState) {
         .files
         .iter()
         .map(|file| {
-            let path_str = file.path.display().to_string();
-            let error_count = file.errors.len();
-            let line = format!("{} ({}) ✗", path_str, error_count);
-
+            let line = match (&file.failure, file.errors.len()) {
+                (Some(_), 0) => format!("{} (failed) ✗", file.path.display()),
+                (_, error_count) => format!("{} ({error_count}) ✗", file.path.display()),
+            };
             ListItem::new(line).style(Style::default().fg(error_color))
         })
         .collect();
@@ -217,6 +213,15 @@ pub fn render_error_details(
     let mut error_line_starts: Vec<u16> = Vec::new();
 
     if let Some(file) = state.files.get(file_idx) {
+        if let Some(failure) = &file.failure {
+            all_lines.push(Line::from(Span::styled(
+                format!("  ✗ {failure}"),
+                Style::default()
+                    .fg(color_error)
+                    .add_modifier(Modifier::BOLD),
+            )));
+            all_lines.push(Line::from(""));
+        }
         for (error_idx, error) in file.errors.iter().enumerate() {
             let is_selected = error_idx == selected_error;
             // Style applied to all lines belonging to this error for selection highlight
@@ -457,9 +462,9 @@ pub fn render_footer_streaming(f: &mut Frame, area: Rect, state: &TuiState, phas
 
     render_footer_action_row(f, rows[0], state);
 
-    // Every stopped run offers Rerun, whichever way it stopped: after an abort
+    // Every ended run offers Rerun, whichever way it ended: after an abort
     // or a lost-files run, re-running is the obvious next move.
-    if phase.is_terminal() {
+    if phase.is_ended() {
         render_footer_nav_row(
             f,
             rows[1],
@@ -474,24 +479,4 @@ pub fn render_footer_streaming(f: &mut Frame, area: Rect, state: &TuiState, phas
             &[("c/Ctrl+C", ": Cancel  "), ("q/Esc", ": Quit")],
         );
     }
-}
-
-/// Render footer for static validation.
-pub fn render_footer(f: &mut Frame, area: Rect, state: &TuiState) {
-    let block = Block::default().borders(Borders::ALL);
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Length(1)])
-        .split(inner);
-
-    render_footer_action_row(f, rows[0], state);
-    render_footer_nav_row(
-        f,
-        rows[1],
-        state,
-        &[("r", ": Rerun  "), ("q/Esc", ": Quit")],
-    );
 }

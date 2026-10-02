@@ -54,8 +54,8 @@ pub fn print_check_list() {
         .filter(|c| c.check_status() == CheckStatus::Planned)
         .count();
 
-    println!("Validation checks (Active / Opt-in / Planned):");
-    println!();
+    outln!("Validation checks (Active / Opt-in / Planned):");
+    outln!();
     for code in &codes {
         let (badge, label) = match code.check_status() {
             CheckStatus::Active => ("[Active] ", "Active"),
@@ -69,10 +69,10 @@ pub fn print_check_list() {
         // Debug print of the variant gives the canonical Rust name
         // (e.g., `UnclosedBracket`) which is more informative than the
         // raw code alone.
-        println!("  {}  {}  {:?}  ({})", badge, code.as_str(), code, label);
+        outln!("  {}  {}  {:?}  ({})", badge, code.as_str(), code, label);
     }
-    println!();
-    println!(
+    outln!();
+    outln!(
         "Total: {} checks ({active_count} Active, {opt_in_count} Opt-in, \
          {planned_count} Planned)",
         codes.len()

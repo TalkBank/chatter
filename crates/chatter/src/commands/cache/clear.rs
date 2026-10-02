@@ -1,102 +1,86 @@
 //! Selective or full cache clearing for the validation cache.
 //!
-//! Supports two modes: `--all` removes every entry in the database, and
-//! `--prefix <PATH>` removes only entries whose path starts with the given string.
+//! Supports two scopes: `--all` removes every entry in the database, and
+//! `--prefix <PATH>` removes only the entries for that path and everything
+//! under it (whole path components, not a string prefix).
 //! Prefix mode is the typical choice after a corpus changes; it avoids invalidating
-//! results for unrelated corpora. Both modes support `--dry-run` to preview what would
-//! be removed.
+//! results for unrelated corpora. Both modes support `--dry-run` to preview what a
+//! clear would do, from the same look at the cache directory the clear starts from.
 
-use std::path::PathBuf;
-use talkbank_transform::MaintenanceCache;
+use talkbank_transform::{CacheError, CacheOnDisk, CacheScope};
 
-/// Clear validation cache entries for a more reproducible `talkbank validate` run.
+use crate::cli::ClearMode;
+
+/// Clear validation cache entries for a more reproducible `chatter validate` run.
 ///
-/// The CLI caches validation results by file path so rerunning the same file is cheap even when
-/// the CHAT file format manual describes expensive validations like `%wor` alignment. This command
-/// lets operators purge those entries entirely (`--all`) or just remove the ones matching a
-/// directory/tier prefix (`--prefix <PATH>`), which is useful when a corpus changes or the manual’s
-/// alignment rules evolve.
+/// Both modes start from one look at the cache directory
+/// ([`CacheOnDisk::inspect`], which writes nothing), so a preview and the
+/// clear it previews agree about what is there:
 ///
-/// # Arguments
+/// - no database: nothing to clear, and none is created (both modes say so
+///   and exit 0);
+/// - a database of an older schema: a clear migrates it, then clears; a dry
+///   run says it would, and cannot count the entries, since migrating can
+///   remove some, so it says that too;
+/// - a current database: a dry run counts read-only, and a clear reopens it
+///   writable and reports the number its delete removed.
 ///
-/// * `all` - Clear all cache entries
-/// * `prefix` - Clear only entries matching this path prefix
-/// * `dry_run` - Show what would be cleared without actually clearing
-///
-/// # Errors
-///
-/// Exits with code 1 if:
-/// - Both `all` and `prefix` are specified
-/// - Neither `all` nor `prefix` are specified
-/// - Cache access fails
-pub fn cache_clear(all: bool, prefix: Option<PathBuf>, dry_run: bool) {
-    // Validate arguments
-    if all && prefix.is_some() {
-        eprintln!("Error: Cannot specify both --all and --prefix");
+/// Exits 1 if the cache cannot be opened, migrated, counted or cleared,
+/// including a database a newer build wrote.
+pub fn cache_clear(scope: CacheScope, mode: ClearMode) {
+    let fail = |action: &str, error: CacheError| -> ! {
+        eprintln!("Error: Failed to {action}: {error}");
         std::process::exit(1);
-    }
-    if !all && prefix.is_none() {
-        eprintln!("Error: Must specify either --all or --prefix <PATH>");
-        std::process::exit(1);
-    }
-
-    let cache = match MaintenanceCache::open() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Error: Failed to open cache: {}", e);
-            std::process::exit(1);
-        }
     };
 
-    if all {
-        // Clear all entries
-        let count = match cache.stats() {
-            Ok(stats) => stats.total_entries,
-            Err(e) => {
-                eprintln!("Error: Failed to read cache stats: {}", e);
-                std::process::exit(1);
-            }
-        };
-
-        if dry_run {
-            println!("Would clear {} cache entries (dry-run)", count);
-        } else {
-            if let Err(e) = cache.clear_all() {
-                eprintln!("Error: Failed to clear cache: {}", e);
-                std::process::exit(1);
-            }
-            println!("Cleared {} cache entries", count);
-        }
-    } else if let Some(prefix_path) = prefix {
-        // Clear entries matching prefix
-        let prefix_str = match prefix_path.to_str() {
-            Some(s) => s.to_string(),
-            None => {
-                eprintln!("Error: Invalid UTF-8 in path");
-                std::process::exit(1);
-            }
-        };
-
-        if dry_run {
-            // For dry-run, we need to count how many would be cleared
-            // UnifiedCache doesn't have a count_prefix method, so we just show the prefix
-            println!(
-                "Would clear cache entries matching prefix '{}' (dry-run)",
-                prefix_str
+    // What the scope selects, said the same way by a dry run and a clear.
+    let selection = match &scope {
+        CacheScope::All => "cache entries".to_owned(),
+        CacheScope::Under(prefix) => format!(
+            "cache entries matching prefix '{}'",
+            prefix.as_path().display()
+        ),
+    };
+    let found = CacheOnDisk::inspect().unwrap_or_else(|e| fail("open cache", e));
+    match (found, mode) {
+        (CacheOnDisk::Absent(absent), ClearMode::DryRun) => outln!(
+            "Would clear 0 {selection} (dry-run): no cache database at {}",
+            absent.database().display()
+        ),
+        (CacheOnDisk::Absent(absent), ClearMode::Apply) => outln!(
+            "Cleared 0 {selection}: no cache database at {}",
+            absent.database().display()
+        ),
+        (CacheOnDisk::OlderSchema(older), ClearMode::DryRun) => outln!(
+            "Would migrate the cache database at {} to this build's schema, then clear the {selection} it holds (dry-run; how many is known only after the migration, which can remove entries)",
+            older.database().display()
+        ),
+        (CacheOnDisk::OlderSchema(older), ClearMode::Apply) => {
+            let database = older.database();
+            let cache = older.migrate().unwrap_or_else(|e| fail("migrate cache", e));
+            outln!(
+                "Migrated the cache database at {} to this build's schema",
+                database.display()
             );
-        } else {
-            match cache.clear_prefix(&prefix_str) {
-                Ok(count) => {
-                    println!(
-                        "Cleared {} cache entries matching prefix '{}'",
-                        count, prefix_str
-                    );
-                }
-                Err(e) => {
-                    eprintln!("Error: Failed to clear cache: {}", e);
-                    std::process::exit(1);
-                }
-            }
+            let count = cache
+                .clear(&scope)
+                .unwrap_or_else(|e| fail("clear cache", e));
+            outln!("Cleared {count} {selection}");
+        }
+        (CacheOnDisk::Current(cache), ClearMode::DryRun) => {
+            let count = cache
+                .count(&scope)
+                .unwrap_or_else(|e| fail("count cache entries", e));
+            outln!("Would clear {count} {selection} (dry-run)");
+        }
+        (CacheOnDisk::Current(cache), ClearMode::Apply) => {
+            let cache = cache
+                .into_maintenance()
+                .unwrap_or_else(|e| fail("open cache", e));
+            let count = cache
+                .clear(&scope)
+                .unwrap_or_else(|e| fail("clear cache", e));
+            outln!("Cleared {count} {selection}");
         }
     }
 }

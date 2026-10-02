@@ -135,7 +135,9 @@ fn measure_analysis_phases() {
         let sink = ErrorCollector::new();
         file.validate_with_alignment(
             &sink,
-            TranscriptName::Named(FileStem::from_stem("basic-conversation")),
+            TranscriptName::Named(
+                talkbank_model::model::FileStem::from_stem("basic-conversation").expect("a stem"),
+            ),
         );
         let errors = sink.into_vec();
         let validation = start.elapsed();

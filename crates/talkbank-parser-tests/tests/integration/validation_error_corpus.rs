@@ -130,7 +130,7 @@ fn leading_bullet_specs_preserve_scope_diagnostics_and_timing() {
         let sink = ErrorCollector::new();
         file.validate_with_alignment(
             &sink,
-            TranscriptName::Named(FileStem::from_stem("leading-bullet")),
+            TranscriptName::Named(FileStem::from_stem("leading-bullet").expect("a stem")),
         );
         let diagnostics = sink.into_vec();
         let leading: Vec<_> = diagnostics
@@ -230,7 +230,10 @@ fn media_normalization_specs_identify_the_noncanonical_side() {
         let mut file = parser.parse_chat_file_streaming(&source, &errors);
         assert!(errors.into_vec().is_empty(), "clean syntax: {fixture}");
         let errors = ErrorCollector::new();
-        file.validate_with_alignment(&errors, TranscriptName::Named(FileStem::from_stem(stem)));
+        file.validate_with_alignment(
+            &errors,
+            TranscriptName::Named(FileStem::from_stem(stem).expect("a stem")),
+        );
         let diagnostics = errors.into_vec();
         assert!(
             !diagnostics
@@ -385,7 +388,7 @@ fn validation_errors_detected() -> Result<(), TestError> {
             let transcript_name = match &entry.transcript_name {
                 FixtureTranscriptName::Anonymous => TranscriptName::Anonymous,
                 FixtureTranscriptName::Named(stem) => {
-                    TranscriptName::Named(FileStem::from_stem(stem))
+                    TranscriptName::Named(FileStem::from_stem(stem).expect("a stem"))
                 }
             };
             // The fixture runs under the rules its own code declares. Before

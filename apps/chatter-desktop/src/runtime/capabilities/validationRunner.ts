@@ -14,12 +14,15 @@ export function createValidationRunnerCapability(
       );
 
       try {
+        // One request value, the Rust command's `ValidateRequest`.
         await transport.invoke(DESKTOP_COMMANDS.validate, {
-          path,
-          roundtrip: settings.roundtrip,
-          parserKind: settings.parserKind,
-          strictLinkers: settings.strictLinkers,
-          jobs: settings.jobs,
+          request: {
+            path,
+            roundtrip: settings.roundtrip,
+            parserKind: settings.parserKind,
+            strictLinkers: settings.strictLinkers,
+            jobs: settings.jobs,
+          },
         });
       } catch (error) {
         unlisten();

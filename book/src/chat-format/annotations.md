@@ -1,7 +1,7 @@
 # Annotations
 
 **Status:** Current
-**Last updated:** 2026-08-27 18:09 EDT
+**Last updated:** {{git-dates:page}}
 
 A **scoped annotation** is a bracketed code written immediately after the thing
 it describes: `hello [*]`, `<the dog> [//]`, `bobo [= toy]`, `0 [= ! whining]`.
@@ -70,28 +70,17 @@ and `retain` can empty a collection in place.
 
 ## Why this is stated so emphatically
 
-Because the invariant was prose for a long time, and prose does not hold.
-
-Until 2026-08-26 `UtteranceContent` had no bare `Action`, though it had a bare
-`Event` sitting two lines away in the same enum. An action with no annotations
-therefore had nowhere to go, and the parser wrapped every one of them in an
-`Annotated` carrying an empty list. Measured across a 106,000-file corpus that
-was **20,184,072 values** claiming to be annotated while carrying nothing,
-almost all of them a bare `0` marking silence in daylong audio recordings.
-`BracketedItem` had the mirror-image gap: no bare `Group`, so an unannotated
-nested group became an `AnnotatedGroup` with an empty list, and the converter
-explained itself in a comment because it could do nothing else.
-
-Two error codes were supposed to catch the empty case. Neither could. The full
-account is in [Leniency Policy](../architecture/leniency-policy.md), Decision 1:
-one code was deliberately disabled because bare `[*]` is valid CHAT, its number
-was later reused for a different rule, and that rule was unreachable because an
-empty bracket is a parse error and the one genuinely empty construct was never
-validated.
-
-Both bare variants exist now, the two content enums are symmetric, and the
-empty state is unconstructible. The rule is no longer something a validator
+An invariant stated only in prose does not hold, so it is enforced by the
+types. `UtteranceContent` has a bare `Action` beside its bare `Event`, and
+`BracketedItem` has a bare `Group`; an action or group with no annotations
+therefore has somewhere to go, and nothing is wrapped in an `Annotated` or
+`AnnotatedGroup` carrying an empty list. The two content enums are symmetric,
+and the empty state is unconstructible. The rule is not something a validator
 looks for; it is something the compiler refuses.
+
+No error code catches the empty case, because none can: bare `[*]` is valid
+CHAT, and an empty bracket is a parse error. The reasoning is recorded in
+[Leniency Policy](../architecture/leniency-policy.md), Decision 1.
 
 ## What an annotation attaches to when constructs nest
 

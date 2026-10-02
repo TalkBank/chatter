@@ -1,15 +1,14 @@
 # Contributing to chatter
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/CONTRIBUTING.md)
 
 ## Development setup
 
 A fresh clone needs:
 
-- **Rust** (pinned by `rust-toolchain.toml` to a specific stable release,
-  not a floating `stable`, so per-push CI
-  is reproducible). `rustup` installs it automatically on first `cargo`
-  invocation.
+- **Rust**, the current stable release (`rust-toolchain.toml` selects the
+  stable channel and its components). `rustup` installs it automatically on
+  first `cargo` invocation.
 - **mdBook + mdbook-mermaid + lychee** for building and link-checking the
   docs (link-checking runs on the built HTML via lychee, not the
   mdbook-linkcheck2 renderer):

@@ -27,7 +27,9 @@ pub fn compute_related_information(
         ErrorCode::SpeakerNotDefined => find_header_span(chat_file, |header| {
             matches!(header, Header::Participants { .. })
         }),
-        ErrorCode::MediaFilenameMismatch => {
+        ErrorCode::MediaFilenameMismatch
+        | ErrorCode::MediaFilenameNonCanonicalUnicode
+        | ErrorCode::MediaFilenameCaseDiffers => {
             find_header_span(chat_file, |header| matches!(header, Header::Media(_)))
         }
         ErrorCode::InvalidLanguageCode => find_header_span(chat_file, |header| {
@@ -42,7 +44,9 @@ pub fn compute_related_information(
             ErrorCode::SpeakerNotDefined => {
                 "Speakers must be declared in @Participants header".to_string()
             }
-            ErrorCode::MediaFilenameMismatch => {
+            ErrorCode::MediaFilenameMismatch
+            | ErrorCode::MediaFilenameNonCanonicalUnicode
+            | ErrorCode::MediaFilenameCaseDiffers => {
                 "Media filename should match @Media header".to_string()
             }
             ErrorCode::InvalidLanguageCode => {

@@ -1,25 +1,17 @@
 # Panic audit: chatter
 
 **Status:** Reference
-**Last updated:** 2026-06-13 21:07 EDT
+**Last updated:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/panic-audit/chatter.md)
 
 See [README](README.md) for the shared policy. This page records the
 crate-specific panic surface.
 
 ## Surface
 
-Inline `#[allow(clippy::...)]` sites, dominated by command-routing
-catch-alls plus a few guarded unwraps.
+Inline `#[allow(clippy::...)]` sites: a few guarded unwraps. Command routing
+has none: `commands/dispatch.rs` is one exhaustive match over `Commands`, so
+an unrouted command is a compile error rather than an `unreachable!` arm.
 
-- **Command-routing `unreachable!`** (`commands/dispatch.rs`, five sites).
-  `CommandRoutingService::dispatch` partitions the `Commands` enum by family
-  and forwards each variant to exactly one `CommandFamilyService`. Each
-  service's `match` then handles only its family's variants, and the
-  `_ => unreachable!(...)` arm is reached only if the partitioning and a
-  service disagree, an internal bug. The inline comment names the routing
-  invariant. See [talkbank-lsp](talkbank-lsp.md) for the typed-sub-enum
-  follow-up sketch that would remove the catch-all entirely (the same shape
-  applies here).
 - **Guarded unwraps / formatting** (`commands/json.rs`, `commands/clean.rs`,
   `commands/debug/linker.rs`, `commands/debug/overlap.rs`,
   `commands/clan/mod.rs`, `commands/validate_parallel/runtime.rs`,

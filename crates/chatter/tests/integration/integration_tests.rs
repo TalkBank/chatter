@@ -16,6 +16,7 @@
 
 use predicates::prelude::*;
 use std::fs;
+use std::path::Path;
 use talkbank_parser_tests::test_error::TestError;
 use tempfile::{NamedTempFile, tempdir};
 
@@ -576,6 +577,280 @@ fn test_to_json_with_validation() -> Result<(), TestError> {
     Ok(())
 }
 
+/// `--max-errors` says it stopped the run only when the limit stopped it: a
+/// run that reaches the limit says so, and a clean run under the same limit
+/// never does.
+#[test]
+fn test_max_errors_reports_a_stop_only_when_the_limit_stops_the_run() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let invalid = dir.path().join("invalid");
+    let clean = dir.path().join("clean");
+    fs::create_dir_all(&invalid)?;
+    fs::create_dir_all(&clean)?;
+    for name in ["a", "b", "c"] {
+        fs::write(
+            invalid.join(format!("{name}.cha")),
+            INVALID_CHAT_MISSING_END,
+        )?;
+        fs::write(clean.join(format!("{name}.cha")), VALID_CHAT)?;
+    }
+    crate::common::chatter_cmd()
+        .arg("validate")
+        .arg(&invalid)
+        .args(["--max-errors", "1", "--jobs", "1"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "Stopped after reaching the error limit (1)",
+        ));
+    crate::common::chatter_cmd()
+        .arg("validate")
+        .arg(&clean)
+        .args(["--max-errors", "1"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Stopped after").not());
+    // JSON mode says it as a record on stdout and keeps stderr empty, as its
+    // contract promises.
+    let output = crate::common::chatter_cmd()
+        .arg("validate")
+        .arg(&invalid)
+        .args(["--max-errors", "1", "--jobs", "1", "--format", "json"])
+        .output()?;
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        output.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stop_records: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|record| record["type"] == "stop")
+        .collect();
+    assert_eq!(
+        stop_records,
+        [serde_json::json!({
+            "type": "stop",
+            "reason": "max_errors",
+            "limit": 1,
+            "unprocessed_files": 2
+        })]
+    );
+    Ok(())
+}
+
+/// Run `validate --format json` with `args` and return its exit code and
+/// its stop records. JSON mode keeps stderr empty, so that is asserted too.
+fn json_stop_records(
+    target: &Path,
+    args: &[&str],
+) -> Result<(Option<i32>, Vec<serde_json::Value>), TestError> {
+    let output = crate::common::chatter_cmd()
+        .arg("validate")
+        .arg(target)
+        .args(args)
+        .args(["--format", "json"])
+        .output()?;
+    assert!(
+        output.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stops = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|record| record["type"] == "stop")
+        .collect();
+    Ok((output.status.code(), stops))
+}
+
+/// `--max-errors` counts errors, never warnings: a warning-only transcript
+/// (W110, a case-only `@Media` difference) under a limit of 1 is validated,
+/// nothing stops, and the run passes.
+#[test]
+fn max_errors_counts_errors_not_warnings() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    fs::write(
+        dir.path().join("Session.cha"),
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+         @ID:\teng|corpus|CHI|||||Target_Child|||\n@Media:\tsession, audio\n\
+         *CHI:\thello .\u{15}0_1500\u{15}\n@End\n",
+    )?;
+    let (code, stops) = json_stop_records(dir.path(), &["--max-errors", "1", "--force"])?;
+    assert_eq!(
+        stops,
+        Vec::<serde_json::Value>::new(),
+        "a warning stopped the run"
+    );
+    assert_eq!(code, Some(0), "a warning-only corpus is valid");
+    Ok(())
+}
+
+/// A file with warnings and no error is ONE `valid` record carrying its
+/// warnings, and the run passes.
+#[test]
+fn json_mode_gives_a_warnings_only_file_one_valid_record() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    fs::write(
+        dir.path().join("Session.cha"),
+        "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
+         @ID:\teng|corpus|CHI|||||Target_Child|||\n@Media:\tsession, audio\n\
+         *CHI:\thello .\u{15}0_1500\u{15}\n@End\n",
+    )?;
+    let output = crate::common::chatter_cmd()
+        .arg("validate")
+        .arg(dir.path())
+        .args(["--format", "json", "--force"])
+        .output()?;
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "a warning-only corpus is valid"
+    );
+    let files: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|record| record["type"] == "file")
+        .collect();
+    assert_eq!(files.len(), 1, "one record per file: {files:?}");
+    assert_eq!(files[0]["status"], "valid");
+    assert_eq!(files[0]["warnings"][0]["code"], "W110");
+    assert_eq!(files[0]["warnings"][0]["severity"], "Warning");
+    Ok(())
+}
+
+/// A JSON consumer that closes its pipe ends the stream: the run exits 1,
+/// stderr stays empty, and nothing panics.
+#[test]
+fn json_mode_with_a_closed_stdout_fails_without_a_panic() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    for name in ["a", "b", "c"] {
+        fs::write(dir.path().join(format!("{name}.cha")), VALID_CHAT)?;
+    }
+    let cache = tempdir()?;
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_chatter"))
+        .env("TALKBANK_CHAT_CACHE_DIR", cache.path())
+        .arg("validate")
+        .arg(dir.path())
+        .args(["--format", "json", "--force"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+    // The reading end goes before the run can write its summary.
+    drop(child.stdout.take());
+    let output = child.wait_with_output()?;
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        output.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+/// A limit reached by the run's last file stops nothing, so it is not
+/// reported as a stop: the run covered every file, and the stop is read off
+/// how the run ended.
+#[test]
+fn max_errors_reached_by_the_last_file_is_not_a_stop() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    fs::write(dir.path().join("only.cha"), INVALID_CHAT_MISSING_END)?;
+    let (code, stops) = json_stop_records(dir.path(), &["--max-errors", "1"])?;
+    assert_eq!(
+        stops,
+        Vec::<serde_json::Value>::new(),
+        "nothing was stopped"
+    );
+    assert_eq!(code, Some(1), "the one file is invalid");
+    Ok(())
+}
+
+/// JSON mode keeps stderr empty by construction: notes about the run
+/// (`--suppress`, the deprecated `--check-xphon`) are `notice` records, and
+/// an input that cannot be read is a `read_error` record in the run's own
+/// results that fails it.
+#[test]
+fn json_mode_says_everything_on_stdout() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let file = dir.path().join("a.cha");
+    fs::write(&file, VALID_CHAT)?;
+    let missing = dir.path().join("missing.cha");
+    let records =
+        |args: &[&std::ffi::OsStr]| -> Result<(Option<i32>, Vec<serde_json::Value>), TestError> {
+            let output = crate::common::chatter_cmd()
+                .arg("validate")
+                .args(args)
+                .args(["--format", "json"])
+                .output()?;
+            assert!(
+                output.stderr.is_empty(),
+                "{args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            Ok((
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .filter_map(|line| serde_json::from_str(line).ok())
+                    .collect(),
+            ))
+        };
+    let (code, out) = records(&[file.as_os_str(), "--suppress".as_ref(), "E736".as_ref()])?;
+    assert_eq!(code, Some(0));
+    assert!(
+        out.iter()
+            .any(|r| r["type"] == "notice" && r["notice"] == "suppressing")
+    );
+    let (code, out) = records(&[file.as_os_str(), "--check-xphon".as_ref()])?;
+    assert_eq!(code, Some(0));
+    assert!(
+        out.iter()
+            .any(|r| r["type"] == "notice" && r["flag"] == "--check-xphon")
+    );
+    let (code, out) = records(&[missing.as_os_str()])?;
+    assert_eq!(code, Some(1), "an unreadable input fails the run");
+    assert!(
+        out.iter().any(|r| r["status"] == "read_error"),
+        "the unreadable input is a record: {out:?}"
+    );
+    Ok(())
+}
+
+/// A transcript that does not parse prints its diagnostics on every to-json
+/// path: one file or a directory, with CHAT validation on or skipped. The
+/// single-file path used to print only a one-line summary for a parse
+/// failure, because its error match ended in a catch-all.
+#[test]
+fn test_to_json_prints_parse_diagnostics_on_every_path() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    fs::create_dir_all(&input_dir)?;
+    let file_path = input_dir.join("broken.cha");
+    fs::write(&file_path, INVALID_CHAT_SYNTAX_ERROR)?;
+    let output_dir = dir.path().join("json");
+
+    for checks in [&[][..], &["--skip-validation"][..]] {
+        crate::common::chatter_cmd()
+            .arg("to-json")
+            .arg(&file_path)
+            .args(checks)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("Errors found in"));
+        crate::common::chatter_cmd()
+            .arg("to-json")
+            .arg(&input_dir)
+            .arg("--output-dir")
+            .arg(&output_dir)
+            .args(checks)
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("Errors found in"));
+    }
+    Ok(())
+}
+
 // ============================================================================
 // ToJson Directory Mode Tests
 // ============================================================================
@@ -686,6 +961,88 @@ fn test_to_json_force() -> Result<(), TestError> {
     Ok(())
 }
 
+/// Every file is counted exactly once, in the right bucket: converted,
+/// up-to-date or failed. The failure is a file that is not UTF-8, so it fails
+/// at the read without needing an invalid CHAT fixture, and it makes the run
+/// exit 1. The pool width is not varied here: serial and parallel runs share
+/// one pool, whose distribution is tested in `talkbank_transform::worker_pool`.
+#[test]
+fn test_to_json_counts_every_file_once() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    let sub_dir = input_dir.join("sub");
+    fs::create_dir_all(&sub_dir)?;
+    for name in ["a", "b", "c"] {
+        fs::write(input_dir.join(format!("{name}.cha")), VALID_CHAT)?;
+        fs::write(sub_dir.join(format!("{name}.cha")), VALID_CHAT)?;
+    }
+    fs::write(input_dir.join("not-utf8.cha"), [0xff_u8, 0xfe, 0xfd])?;
+    let output_dir = dir.path().join("json");
+
+    let run = || {
+        crate::common::chatter_cmd()
+            .arg("to-json")
+            .arg(&input_dir)
+            .arg("--output-dir")
+            .arg(&output_dir)
+            .arg("--skip-validation")
+            .arg("--skip-schema-validation")
+            .args(["--jobs", "3"])
+            .assert()
+            .code(1)
+    };
+    run().stderr(predicate::str::contains(
+        "Done: 6 converted, 0 up-to-date, 1 failed",
+    ));
+    for name in ["a", "b", "c"] {
+        assert!(output_dir.join(format!("{name}.json")).exists());
+        assert!(output_dir.join(format!("sub/{name}.json")).exists());
+    }
+    run().stderr(predicate::str::contains(
+        "Done: 0 converted, 6 up-to-date, 1 failed",
+    ));
+    Ok(())
+}
+
+/// A directory the walk cannot read is reported and refuses the run before
+/// anything is converted; it is not a smaller corpus that converted cleanly.
+#[cfg(unix)]
+#[test]
+fn test_to_json_reports_an_unreadable_directory() -> Result<(), TestError> {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    let locked = input_dir.join("locked");
+    fs::create_dir_all(&locked)?;
+    fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
+    fs::write(locked.join("b.cha"), VALID_CHAT)?;
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o000))?;
+    // A process that can read the directory anyway (root) cannot run this
+    // test; say so rather than pass without testing anything.
+    let readable_anyway = fs::read_dir(&locked).is_ok();
+    let output_dir = dir.path().join("json");
+    let output = crate::common::chatter_cmd()
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .arg("--skip-validation")
+        .arg("--skip-schema-validation")
+        .output();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755))?;
+    let output = output?;
+    assert!(
+        !readable_anyway,
+        "a mode 000 directory was readable: run this test as an ordinary user, not root"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("cannot read"), "{stderr}");
+    assert!(stderr.contains("nothing was processed"), "{stderr}");
+    assert!(!output_dir.join("a.json").exists(), "nothing is converted");
+    Ok(())
+}
+
 /// Tests --prune removes orphaned .json files.
 #[test]
 fn test_to_json_prune() -> Result<(), TestError> {
@@ -726,6 +1083,80 @@ fn test_to_json_prune() -> Result<(), TestError> {
 
     // Orphan should be gone, original should remain
     assert!(!output_dir.join("orphan.json").exists());
+    assert!(output_dir.join("a.json").exists());
+    Ok(())
+}
+
+/// An input with no transcript (an empty directory, such as an unmounted
+/// mount point) is refused before anything is converted or pruned: `--prune`
+/// over it would read every JSON file under `--output-dir` as an orphan and
+/// delete it.
+#[test]
+fn test_to_json_prune_refuses_an_empty_input() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("mount-point");
+    fs::create_dir_all(&input_dir)?;
+    let output_dir = dir.path().join("json");
+    fs::create_dir_all(output_dir.join("corpus"))?;
+    fs::write(output_dir.join("corpus/a.json"), "{}")?;
+
+    crate::common::chatter_cmd()
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .args(["--skip-validation", "--skip-schema-validation", "--prune"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no .cha files found"));
+
+    assert!(
+        output_dir.join("corpus/a.json").exists(),
+        "an empty input pruned the output tree"
+    );
+    Ok(())
+}
+
+/// `--prune` never reaches through a link in the output tree: a linked
+/// directory `json/shared -> elsewhere` keeps `elsewhere/x.json`, and the
+/// empty-directory climb removes nothing outside `--output-dir`.
+#[cfg(unix)]
+#[test]
+fn test_to_json_prune_does_not_follow_links_out_of_the_output_tree() -> Result<(), TestError> {
+    let dir = tempdir()?;
+    let input_dir = dir.path().join("corpus");
+    fs::create_dir_all(&input_dir)?;
+    fs::write(input_dir.join("a.cha"), VALID_CHAT)?;
+    let output_dir = dir.path().join("json");
+    fs::create_dir_all(&output_dir)?;
+    let elsewhere = dir.path().join("elsewhere");
+    fs::create_dir_all(elsewhere.join("nested"))?;
+    fs::write(elsewhere.join("nested/x.json"), "{}")?;
+    std::os::unix::fs::symlink(&elsewhere, output_dir.join("shared"))?;
+    std::os::unix::fs::symlink(elsewhere.join("nested/x.json"), output_dir.join("y.json"))?;
+
+    crate::common::chatter_cmd()
+        .arg("to-json")
+        .arg(&input_dir)
+        .arg("--output-dir")
+        .arg(&output_dir)
+        .args(["--skip-validation", "--skip-schema-validation", "--prune"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("0 pruned"));
+
+    assert!(
+        elsewhere.join("nested/x.json").exists(),
+        "deleted through a link"
+    );
+    assert!(
+        elsewhere.join("nested").is_dir(),
+        "a directory outside was removed"
+    );
+    assert!(
+        output_dir.join("shared").exists(),
+        "the link itself was removed"
+    );
     assert!(output_dir.join("a.json").exists());
     Ok(())
 }

@@ -52,7 +52,7 @@ const ROUND_DEADLINE: Duration = Duration::from_secs(60);
 #[test]
 #[ignore = "child-process entry point spawned by concurrent_process_opens_on_fresh_cache_dir_all_succeed"]
 fn race_child_open_cache() {
-    use talkbank_cache::{CacheOutcome, CachePool, ValidationCache};
+    use talkbank_cache::CachePool;
 
     let (Some(cache_dir), Some(probe), Some(go_file)) = (
         std::env::var_os(CHILD_CACHE_DIR_ENV),
@@ -90,11 +90,19 @@ fn race_child_open_cache() {
 
     // Exercise a write + read so the pool is actually usable, not merely
     // constructed.
-    cache
-        .set(probe.as_path(), false, CacheOutcome::Valid)
-        .expect("cache set must succeed after concurrent open");
-    match cache.get(probe.as_path(), false) {
-        Some(CacheOutcome::Valid) => {}
+    crate::shim::set_validation(
+        &cache,
+        probe.as_path(),
+        talkbank_model::validation::AlignmentValidation::Structure,
+        talkbank_cache::CacheOutcome::Valid,
+    )
+    .expect("cache set must succeed after concurrent open");
+    match crate::shim::get_validation(
+        &cache,
+        probe.as_path(),
+        talkbank_model::validation::AlignmentValidation::Structure,
+    ) {
+        Some(talkbank_cache::CacheOutcome::Valid) => {}
         other => panic!("cache get returned {other:?} after concurrent open"),
     }
 }

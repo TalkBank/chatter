@@ -1,7 +1,7 @@
 # Coding Standards
 
 **Status:** Current
-**Last updated:** 2026-08-27 14:04 EDT
+**Last updated:** {{git-dates:page}}
 
 ## Rust Conventions
 
@@ -95,8 +95,11 @@ Always regenerate from source inputs.
 
 - **Library crates:** `tracing` macros (`tracing::info!`,
   `tracing::warn!`, etc.), never `println!`/`eprintln!`.
-- **CLI binaries:** `println!`/`eprintln!` for user-facing output;
-  `tracing` for debug logging.
+- **CLI binaries:** results on stdout through `outln!`/`out!` (the
+  `chatter` crate's `stdout.rs`), never `println!`/`print!`, which panic
+  when a consumer such as `head` closes the pipe; the shared writer ends the
+  command with exit status 1 instead. `eprintln!` for diagnostics; `tracing`
+  for debug logging.
 - **Test code:** `println!` is acceptable (cargo captures it).
 
 ### Lazy Initialization

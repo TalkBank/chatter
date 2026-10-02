@@ -26,8 +26,9 @@ pub mod cache;
 pub mod clean;
 pub mod debug;
 mod dispatch;
-mod error_codes;
+pub(crate) mod error_codes;
 pub mod fix;
+pub(crate) mod inputs;
 pub mod json;
 pub mod list_checks;
 pub mod new_file;
@@ -51,8 +52,5 @@ pub use new_file::create_new_file;
 pub use normalize::normalize_chat;
 pub use schema::run_schema;
 pub use update::run_update;
-pub use validate::validate_file;
-pub use validate_parallel::{
-    AlignmentValidationMode, CacheRefreshMode, RoundtripValidationMode, ValidationInterface,
-};
+pub use validate_parallel::{CacheRefreshMode, RunPhase, ValidationPresentation};
 pub use watch::watch_files;

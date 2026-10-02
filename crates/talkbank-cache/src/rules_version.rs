@@ -85,6 +85,15 @@ const CACHE_CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// characters.
 const VERSION_PART_SEPARATOR: &str = "+rules.";
 
+/// The cache-key scheme, folded into every version. Rows are found by their
+/// `path_hash`, so rows written under another key scheme can never be found
+/// again; naming the scheme here gives them another version, and the
+/// reachability prune retires them deliberately (one predecessor generation
+/// is kept, as for any version change) instead of leaving them on disk,
+/// unreachable, under the current version. Bump it whenever
+/// `cache_utils::CacheKey`'s algorithm or encoding changes.
+pub(crate) const KEY_SCHEME: &str = "+keys.blake3-components-1";
+
 /// Separator preceding the caller-supplied parser/grammar fingerprint folded
 /// in by [`RulesVersion::current_with_rule_selection`]. Placed immediately
 /// after the rule-set fingerprint (before the rule-selection fragment appended
@@ -100,11 +109,13 @@ impl RulesVersion {
     /// rule-set fingerprint from `talkbank-model`. This baseline is useful for
     /// storage tests. Production validation uses [`Self::current_with_rule_selection`]
     /// with its required parser fingerprint; administrative callers instead
-    /// open [`crate::MaintenanceCache`] without a rule generation at all.
+    /// inspect the directory ([`crate::CacheOnDisk::inspect`]) and reach a
+    /// [`crate::MaintenanceCache`] from what they find, with no rule
+    /// generation at all.
     pub fn current() -> Self {
         let fingerprint = talkbank_model::validation_rules_fingerprint();
         Self(format!(
-            "{CACHE_CRATE_VERSION}{VERSION_PART_SEPARATOR}{fingerprint}"
+            "{CACHE_CRATE_VERSION}{KEY_SCHEME}{VERSION_PART_SEPARATOR}{fingerprint}"
         ))
     }
 
@@ -163,7 +174,7 @@ impl RulesVersion {
     ) -> Self {
         let fingerprint = talkbank_model::validation_rules_fingerprint();
         Self(format!(
-            "{CACHE_CRATE_VERSION}{VERSION_PART_SEPARATOR}{fingerprint}\
+            "{CACHE_CRATE_VERSION}{KEY_SCHEME}{VERSION_PART_SEPARATOR}{fingerprint}\
              {PARSER_PART_SEPARATOR}{parser_fingerprint}{}",
             rules.cache_key_fragment()
         ))
@@ -173,10 +184,13 @@ impl RulesVersion {
     /// to drive two distinct rule-set versions without recompiling against a
     /// different rule set.
     ///
-    /// This is a test-support seam, not a production constructor: production
-    /// code derives the version from the real rule set via [`Self::current`].
-    /// It is exposed (not `#[cfg(test)]`) so integration tests in dependent
-    /// crates can stand up "before rule X" / "after rule X" caches.
+    /// A test-support seam, not a production constructor: production code
+    /// derives the version from the real rule set via [`Self::current`] or
+    /// [`Self::current_with_rule_selection`]. It exists only with the
+    /// `test-support` feature (or in this crate's unit tests), which no
+    /// production build enables, so integration tests can stand up "before
+    /// rule X" / "after rule X" caches and nothing else can.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn for_testing(label: &str) -> Self {
         Self(label.to_owned())
     }
@@ -231,6 +245,29 @@ mod tests {
             version.as_str(),
             CACHE_CRATE_VERSION
         );
+    }
+
+    /// Both production versions name the key scheme, right after the crate
+    /// version, so rows written under another `CacheKey` encoding carry
+    /// another version and the reachability prune retires them. Without
+    /// it, a key-scheme change would leave old rows on disk under the
+    /// current version, unreachable and never pruned.
+    #[test]
+    fn every_production_version_names_the_key_scheme() {
+        let scheme_prefix = format!("{CACHE_CRATE_VERSION}{KEY_SCHEME}{VERSION_PART_SEPARATOR}");
+        for version in [
+            RulesVersion::current(),
+            RulesVersion::current_with_rule_selection(
+                &RuleSelection::new(),
+                TEST_PARSER_FINGERPRINT,
+            ),
+        ] {
+            assert!(
+                version.as_str().starts_with(&scheme_prefix),
+                "version {:?} should begin with {scheme_prefix:?}",
+                version.as_str()
+            );
+        }
     }
 
     /// Distinct test labels produce distinct versions, the property the

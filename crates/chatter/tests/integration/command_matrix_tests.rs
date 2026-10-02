@@ -199,8 +199,8 @@ fn run_prefix_clear(
 }
 
 fn cache_stats_json(harness: &CliHarness) -> Result<Value, TestError> {
-    let stats = run_command(harness, &["cache", "stats", "--json"])?;
-    assert_success(&stats, "cache stats --json");
+    let stats = run_command(harness, &["cache", "stats", "--format", "json"])?;
+    assert_success(&stats, "cache stats --format json");
     parse_json(&stats)
 }
 
@@ -398,7 +398,7 @@ fn validate_matrix_directory_json_stream_reports_summary_and_cache_hits() -> Res
     assert_eq!(first_summary["invalid"].as_u64(), Some(0));
     assert_eq!(first_summary["cache_hits"].as_u64(), Some(0));
     assert_eq!(first_summary["cache_misses"].as_u64(), Some(2));
-    assert_eq!(first_summary["cancelled"].as_bool(), Some(false));
+    assert_eq!(first_summary["outcome"].as_str(), Some("complete"));
 
     let second = harness.run_validate(&corpus, &["--format", "json"])?;
     assert_success(&second, "second directory validate --format json");
@@ -479,14 +479,17 @@ fn validate_matrix_audit_mode_writes_jsonl_without_cache_writes() -> Result<(), 
         Some(true)
     );
     assert_eq!(audit_records[0]["code"].as_str(), Some("E502"));
+    assert_eq!(audit_records[0]["severity"].as_str(), Some("Error"));
     assert!(
         audit_records[0]["message"]
             .as_str()
             .is_some_and(|message| message.contains("@End"))
     );
 
+    // The audit only reads the cache, and with none it made none: stats
+    // finds no database (and, since it only reads too, makes none either).
     let stats = cache_stats_json(&harness)?;
-    assert_eq!(stats["total_entries"].as_u64(), Some(0));
+    assert_eq!(stats["database"].as_str(), Some("absent"), "{stats}");
 
     Ok(())
 }
@@ -528,20 +531,36 @@ fn cache_matrix_stats_and_clear_commands_track_state() -> Result<(), TestError> 
             || cache_dir.starts_with(harness.xdg_cache_home()),
         "cache directory {cache_dir:?} should stay inside the isolated harness roots"
     );
+    // A number only when the database file exists; `null` means no file,
+    // never a zero size. Validation has just written this cache's file.
     assert!(
         initial_stats["cache_size_bytes"]
             .as_u64()
-            .is_some_and(|size| size > 0)
+            .is_some_and(|size| size > 0),
+        "a cache with a file reports its size: {initial_stats}"
+    );
+    // UTC, `Z`, exactly three fractional digits: `2026-09-28T16:00:00.000Z`.
+    let last_modified = initial_stats["last_modified"]
+        .as_str()
+        .expect("a cache with a file reports when it changed");
+    assert_eq!(
+        last_modified.len(),
+        "2026-09-28T16:00:00.000Z".len(),
+        "{last_modified}"
     );
     assert!(
-        initial_stats["last_modified"]
-            .as_str()
-            .is_some_and(|timestamp| timestamp.contains('T'))
+        last_modified.ends_with('Z') && last_modified.as_bytes()[19] == b'.',
+        "{last_modified}"
     );
 
     let dry_run = run_prefix_clear(&harness, &corpus_a, true)?;
     assert_success(&dry_run, "cache clear --prefix --dry-run");
-    assert!(stdout_string(&dry_run).contains("Would clear"));
+    // The dry run counts what the prefix selects: corpus A's one entry.
+    assert!(
+        stdout_string(&dry_run).contains("Would clear 1 cache entries matching prefix"),
+        "{}",
+        stdout_string(&dry_run)
+    );
     let stats_after_dry_run = cache_stats_json(&harness)?;
     assert_eq!(stats_after_dry_run["total_entries"].as_u64(), Some(2));
 
@@ -584,7 +603,7 @@ fn cache_matrix_invalid_clear_selector_cases_fail_fast() -> Result<(), TestError
         InvalidCacheCase {
             name: "missing selector",
             args: vec![OsString::from("cache"), OsString::from("clear")],
-            expected_stderr: "Must specify either --all or --prefix <PATH>",
+            expected_stderr: "<--all|--prefix <PREFIX>>",
         },
         InvalidCacheCase {
             name: "conflicting selectors",

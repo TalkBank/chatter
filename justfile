@@ -222,16 +222,6 @@ fmt-check:
     cargo fmt --all -- --check
     cargo fmt --manifest-path spec/Cargo.toml --all -- --check
 
-# Sync CI workflow Rust-version pins to their sources of truth
-# (rust-toolchain.toml for the toolchain, Cargo.toml rust-version for the
-# marked MSRV pin). Run this after bumping either file.
-rust-sync:
-    python3 scripts/sync-rust-versions.py --fix
-
-# Verify the pins are in sync (CI-style; non-mutating).
-rust-sync-check:
-    python3 scripts/sync-rust-versions.py --check
-
 # Sync the app version (npm manifest and lockfile) to the canonical [workspace.package]
 # version in Cargo.toml. Run after bumping the version. (tauri.conf.json has no
 # version field by design; the desktop bundle inherits the crate version.)
@@ -423,7 +413,6 @@ gate:
     just fmt-check
     just actionlint
     just ci-gate-sync
-    just rust-sync-check
     just app-sync-check
     just doc-dates
     just shellcheck
@@ -714,7 +703,7 @@ book-tools-check:
     done
     exit "$fail"
 
-# Build the book and link-check it with the repo-local pinned toolchain.
+# Build the book and link-check it with the repo's toolchain.
 # mermaid renders diagrams; lychee validates internal links on the built
 # HTML (--offline skips web links; --root-dir resolves the 404 page's '/').
 # The git-dates preprocessor (book.toml) stamps every page with git-derived

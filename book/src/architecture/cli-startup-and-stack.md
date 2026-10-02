@@ -1,23 +1,22 @@
 # CLI Startup and the Program Stack
 
 **Status:** Current
-**Last modified:** 2026-06-12 19:01 EDT
+**Last modified:** {{git-dates:page}}
 
 Why `main()` in `crates/chatter/src/main.rs` does not run the program
 directly, and what every contributor adding CLI surface should know about
 stack budgets.
 
-## The incident this page exists for
+## The hazard this page addresses
 
-From 2026-06-05 to 2026-06-12, every `chatter` invocation crashed on
-Windows in debug builds with `STATUS_STACK_OVERFLOW` (exit code
-`0xC00000FD`) before argument parsing even began. The crash surfaced as
-four failing `adjudication_tests` subprocess tests in the windows-latest
-CI job, but the faulting code was the clap-derived command-tree
-construction (`Cli::augment_args` via `CommandFactory::command()`),
-shared by every subcommand. The trigger was ordinary growth: the FREQ
-parity work added several hundred flags across 2026-06-03/04, and the
-construction path's stack needs crossed 1 MiB.
+The clap-derived command-tree construction (`Cli::augment_args` via
+`CommandFactory::command()`) runs before argument parsing and is shared
+by every subcommand. Its stack need grows with the number of declared
+flags. On Windows in debug builds, where the main thread has 1 MiB, a
+command tree large enough to cross that line makes every `chatter`
+invocation fail with `STATUS_STACK_OVERFLOW` (exit code `0xC00000FD`)
+before argument parsing begins. Each added flag or subcommand moves the
+tree closer to that line.
 
 ## Why stack usage is not portable
 
@@ -48,7 +47,8 @@ collide:
 Consequence: identical code can be fine in release on macOS (8 MiB
 budget, small frames) and fatal in debug on Windows (1 MiB budget, fat
 frames). Debug test binaries cross the line first, which is why CI
-subprocess tests caught it and shipped release binaries never crashed.
+subprocess tests are where a too-large command tree shows up, well
+before release binaries do.
 
 ## The design: an explicitly sized program thread
 
@@ -56,9 +56,9 @@ subprocess tests caught it and shipped release binaries never crashed.
 documented stack size (`PROGRAM_STACK_BYTES`, 16 MiB) and only joins and
 re-raises panics, so exit semantics are unchanged. This removes the
 dependency on platform main-stack defaults altogether instead of
-chasing the budget back under an invisible, platform-dependent line
-that the CLAN parity roadmap (roughly sixty commands' worth of flags
-still to come) guarantees we would cross again. rustc itself uses the
+holding the budget under an invisible, platform-dependent line that the
+CLAN parity roadmap (roughly sixty commands' worth of flags still to
+come) would cross again. rustc itself uses the
 same pattern for the same reasons.
 
 ```mermaid
@@ -88,21 +88,22 @@ extra thread spawn at startup is microseconds.
 - `crates/chatter/tests/stack_limit_tests.rs` runs the real binary
   under a Windows-sized 1 MiB stack (`sh -c 'ulimit -s 1024'`) on Unix,
   so macOS and Linux CI enforce the Windows constraint on every run.
-  Without this, the constraint is tested only by the windows-latest job,
-  where this incident sat unnoticed for a week.
-- The windows-latest cross-platform job remains the native test of the
-  real 1 MiB main stack (which no longer matters to the program thread,
-  but guards the `main()` shim itself).
+  Without this, the constraint would be tested only by the windows-latest
+  job.
+- The windows-latest cross-platform job is the native test of the real
+  1 MiB main stack (which does not constrain the program thread, but
+  guards the `main()` shim itself).
 
 ## Guidance for contributors
 
 - Do not move program logic back onto the bare OS main thread; anything
   before the `spawn` runs under the platform's smallest default.
-- Adding flags and subcommands is normal and expected; the budget is now
+- Adding flags and subcommands is normal and expected; the budget is
   the explicit `PROGRAM_STACK_BYTES` constant. If deep recursion or
   generated code ever approaches it, raise the constant deliberately in
   a reviewed change rather than discovering the limit in CI.
 - The same two multipliers apply to any worker threads you spawn:
-  Rust's 2 MiB spawned-thread default is also finite, and recursive
-  parser or validation code running on worker threads should size them
-  explicitly if depth is data-dependent.
+  Rust's 2 MiB spawned-thread default is also finite. Do not spawn your
+  own: fan work out through `talkbank_transform::worker_pool::fan_out`,
+  whose workers run on `CHAT_THREAD_STACK_BYTES` (16 MiB). The program
+  thread's `PROGRAM_STACK_BYTES` is that same constant, not a copy of it.

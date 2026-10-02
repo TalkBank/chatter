@@ -8,18 +8,18 @@ use std::path::Path;
 
 /// Print the banner for an alignment visualization run.
 pub(super) fn render_intro(input: &Path) {
-    println!("Alignment visualization for: {}", input.display());
-    println!("{}", "=".repeat(80));
+    outln!("Alignment visualization for: {}", input.display());
+    outln!("{}", "=".repeat(80));
 }
 
 /// Print one utterance header line before per-tier alignment rows.
 pub(super) fn render_utterance_header(utterance_index: usize, speaker: &str, main_content: &str) {
-    println!();
-    println!(
+    outln!();
+    outln!(
         "Utterance #{} - {}:\t{}",
         utterance_index + 1,
         speaker,
         main_content
     );
-    println!("{:-<80}", "");
+    outln!("{:-<80}", "");
 }

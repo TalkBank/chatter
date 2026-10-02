@@ -1,10 +1,10 @@
 # Review Tools (`adjudicate`, `sanity-scan`)
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** {{git-dates:page}}
 
 These experimental tools review speaker decisions and inspect existing output.
-The former `merge`, `pipeline`, and `batch` commands have been
-[removed](merge.md). These review tools do not replace event correspondence.
+`merge`, `pipeline`, and `batch` are not commands (see the
+[removal notice](merge.md)). These review tools do not replace event correspondence.
 Use `speaker-id --write-pending` to prepare unresolved speaker decisions.
 
 ## `chatter adjudicate` (the operator step)

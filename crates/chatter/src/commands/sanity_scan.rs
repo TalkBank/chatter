@@ -12,12 +12,12 @@ use std::path::Path;
 use tracing::{Level, info, span, warn};
 
 use crate::exit_codes::{EXIT_INPUT_ERROR, EXIT_LOW_CONFIDENCE, EXIT_SUCCESS};
-use chrono::Utc;
 use talkbank_model::{ParseValidateOptions, SpeakerCode};
 use talkbank_transform::adjudication::{
     PendingAdjudications, PendingEntry, PendingKindData, SuggestedSpeakerIdMapping,
 };
 use talkbank_transform::parse_and_validate;
+use talkbank_transform::recorded_time::RecordedTime;
 use talkbank_transform::sanity_scan::{SanityScanThreshold, scan_session};
 use talkbank_transform::speaker_id::OverrideFile;
 
@@ -123,7 +123,7 @@ pub fn run_sanity_scan(
             info!("⚠ flagged: {} ({})", session_id, flag.reason);
             pending.entries.push(PendingEntry {
                 session_id: session_id.to_string(),
-                created_at: Utc::now(),
+                created_at: RecordedTime::now(),
                 data: PendingKindData::SanityScanMisclassification {
                     suggested: SuggestedSpeakerIdMapping {
                         mapping: flag.suggested_mapping,

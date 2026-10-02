@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last modified:** 2026-09-28 21:10 EDT
+**Last modified:** {{git-dates:page}}
 
 What the test layers are and which one to reach for. The commands to run
 routinely, and what each costs, are in
@@ -20,7 +20,7 @@ refusals preserve the original model, and a second repair is a no-op. A repair
 policy is not evidence of speaker intent or a waiver of the input's E370.
 The repair scan owns the untouched source suffix and the resulting line prefix.
 Only adjacent utterances can enter admission. An `EligibleJoin` exclusively
-borrows the target and owns the successor until consumed, so mutation no longer
+borrows the target and owns the successor until consumed, so mutation never
 looks up raw indices or rechecks endpoints. Refusal returns the untouched
 successor. Header barriers and chain behavior remain policy contracts; the
 types prevent endpoint invalidation, not mistaken repair-policy choices.
@@ -42,8 +42,8 @@ GRA-relation, PHO-word and participant-entry projections use the same private
 single-item admission. Reference-derived multi-item inputs must be refused;
 PHO groups cannot stand in for a word. Empty input produces diagnostics at the
 requested insertion point. A direct single-relation tier control establishes
-that GRA needs no synthetic `PUNCT` relation, so that scaffold and its diagnostic
-filter are gone. PHO likewise needs no appended dot. Passing caller coordinates
+that GRA needs no synthetic `PUNCT` relation, so the wrapper adds no such
+scaffold and filters no diagnostic for it. PHO likewise needs no appended dot. Passing caller coordinates
 directly into these tier wrappers avoids losing zero-width positions through
 an intermediate `0..0` span.
 Complete dependent-tier fragments also require full-input coverage. A private
@@ -63,7 +63,7 @@ continuations; it preserves semantics and output without claiming source spans.
 Each concrete type requires its own reference witness, including the seven
 types supplied by the shared text-tier macro.
 
-The canonical serialization-sink workflow now includes content-only `%pho`,
+The canonical serialization-sink workflow includes content-only `%pho`,
 `%mod` and `%gra` writers alongside `%mor`. Parsed reference/spec tiers supply
 the values; the test compares allocating, streaming and full-prefix output,
 then refuses each actual content-write boundary and requires error propagation.
@@ -177,7 +177,7 @@ error code alone. CHECK accepts the control; no fabricated date or dropped
 header is allowed to stand in for unknown information.
 CA delimiter traversal uses the shared `ContentStructure` walk and typed
 `WordRef::words` ordering rather than separate main-tier/bracketed variant
-lists. Existing delimiter policy is unchanged, including replacement targets.
+lists. The delimiter policy covers replacement targets as well.
 E230's paired replacement specimens retain this policy despite CHECK's opposite
 results. Source analysis traces CHECK's duplicate scan of replacement text:
 once inside its bracket token and once after re-entry into the target words.
@@ -253,8 +253,7 @@ changes their grammatical attachment. Model/spans and ordered diagnostics must
 match a cold parse, and restoration must remove all transient recovery.
 The LSP consumes the same revision owner; its focused tests cover editor
 changes and source-bound diagnostic presentation. Its manual phase benchmark
-now measures edit, parse, and lowering together instead of reconstructing that
-transition independently.
+measures edit, parse, and lowering together through that same transition.
 
 ### Retired external corpus
 
@@ -271,14 +270,14 @@ good/bad label as the expected verdict. This policy does not claim the current
 finite corpus is already complete or that the external repository is archived.
 
 The recursive validation-event test uses owned root/nested copies of a
-canonical error spec and checks both paths and diagnostics. It no longer
-depends on a developer's external corpus or silently skips when it is absent.
+canonical error spec and checks both paths and diagnostics. It does not
+depend on a developer's external corpus and never silently skips.
 
 ### Corpus-backed contracts
 
 E541's clock-boundary family pairs valid two-/three-component start times with
-single-component overflows and a bare-seconds shape. It reproduced five values
-that CHECK rejected but Chatter silently accepted. Time-start assessment now
+single-component overflows and a bare-seconds shape; five of its values are
+ones CHECK rejects. Time-start assessment
 uses the shared clock-range predicate as well as shape admission and issues a
 borrowed refusal capability; the E541 renderer cannot accept unassessed text.
 Invalid parsed values remain available for byte-exact roundtrip, rather than
@@ -361,18 +360,18 @@ unsupported E534 in Chatter), explicit `0` between timing scopes, and a leading
 bullet. The CHECK witness for a bracket-first code does not establish parity
 for these bullet-specific paths; keep each observation tied to its shape.
 
-E770 now covers the leading-bullet shape. Its canonical contract checks exact
+E770 covers the leading-bullet shape. Its canonical contract checks exact
 diagnostic counts and original bullet spans, nested retrace traversal, explicit
 zero/event/pause controls, linker non-material, and recovery uncertainty.
 The state machine distinguishes awaiting material, established material and
 unknown preceding material after main-tier recovery. It does not reset after
 each bullet or implement the separate inter-bullet option policy. The invalid
 leading-bullet retrace also roundtrips byte-exactly: the container's first/rest
-split owns separators, and a bullet leaf no longer adds its own leading space.
+split owns separators, and a bullet leaf adds no leading space of its own.
 The recovered stray-bracket example retains its parse refusal and is excluded
 from byte-exact roundtrip claims.
 
-The E305 timed-terminator specs pair the unchanged media-bullets reference with
+The E305 timed-terminator specs pair the media-bullets reference with
 two source-bound single-token deletions. They retain dependent-tier timing,
 pictures and continuation text. Both mutations parse cleanly but fail the
 missing-terminator validation rule; they also exercise terminal-bullet extraction
@@ -480,7 +479,7 @@ admission.
 Comment bodies also retain generated association through admission, with
 non-present content still retained as an Unknown header. Their bullet-text
 adapter is an explicitly separate boundary; source binding does not license
-discarding its recovery segments. The unbound `HeaderSite` constructor is gone.
+discarding its recovery segments. There is no unbound `HeaderSite` constructor.
 Media filename/type/status and whitespace-before-comma specimens retain their
 diagnostics and typed payloads through full-file, fragment and incremental APIs;
 source-bound payload reads do not replace recovery or filename admission.
@@ -502,7 +501,7 @@ The companion `@Tape Location` pair instead produces a whole ERROR header:
 the same missing-separator policy needs both shapes, not a fixture assumption
 that every malformed header receives an identical CST.
 
-Underline validation now consumes `ContentStructure` throughout. Its leaf view
+Underline validation consumes `ContentStructure` throughout. Its leaf view
 retains opening/closing identity and optional source span, while group/retrace
 variants carry their contents without an optional-container check. Existing
 E356/E357 specimens cover word-internal, nested standalone and replacement-target
@@ -516,17 +515,17 @@ check. E762/E763 specifications continue to own the position/language policy;
 no fixture should be invented to reach a diagnostic description for a legal
 position that the admitted type cannot represent.
 
-The E763 language-header deletion deck caught a different error despite full
-local coverage: unresolved language was treated as "no language allows this"
-and emitted E763 alongside the genuine missing-header E504. Its admitted
-language-refusal value now requires at least one candidate and no permissive
+The E763 language-header deletion deck guards against treating unresolved
+language as "no language allows this", which would emit E763 alongside the
+genuine missing-header E504 even with full local coverage. The admitted
+language-refusal value requires at least one candidate and no permissive
 candidate. The finite deck preserves both sides: missing evidence suppresses
 only the language-specific diagnosis, while an explicit `@s:eng` word marker
 still establishes that diagnosis without a file language header. Coverage
 closure does not replace these policy counterexamples.
 The ambiguous-language E763 pair additionally distinguishes `eng&heb` (one
 permitting alternative) from `eng&fra` (neither permits the marker). Both parse
-and roundtrip cleanly; only the second emits E763. Owned governing marks now
+and roundtrip cleanly; only the second emits E763. Owned governing marks
 dispatch their actual marked payload directly to the borrowed resolver, leaving
 the utterance-default variant on its separate no-marker path rather than
 reclassifying an already matched value.
@@ -805,7 +804,7 @@ grammar-tier specs plus a primary-speech failure and clean reference control.
 Suppressing generated-tier parse diagnostics must retain the recovered model
 and its E600 alignment refusal; it cannot certify validity. Primary-speech
 diagnostics remain visible, and clean strict/lenient results agree. These
-controls now include similarly named `%morx` and `%grax` E315 specimens:
+controls include similarly named `%morx` and `%grax` E315 specimens:
 their diagnostics must remain visible. Suppression is owned by a private typed
 `Mor`/`Gra` view of the same parse, not by text-prefix matching. Only wholly
 contained, located diagnostics may be suppressed; unknown or cross-tier spans
@@ -827,18 +826,18 @@ and diagnostic spans. Unsupported-tier trimming may normalize whitespace;
 the contract does not falsely promise byte-exact spelling for that case.
 
 The options-based validation helper is exercised over parsed reference and
-error-spec models with every combination of validation, alignment and strict
-linker options. Its diagnostics and derived alignment state must match the
+error-spec models at every `CheckLevel`, with and without strict
+linkers. Its diagnostics and derived alignment state must match the
 explicit rule-selected validator. `ParseValidateOptions::validation_policy`
 admits either no validation phase or an explicit typed policy, shared by the
 model helper and transform pipeline. Strict linkers alone remain parse-only;
-alignment implies validation. An admitted policy is a request, not proof that
+alignment without validation is not a value the options can hold. An admitted policy is a request, not proof that
 the document is valid; the separate accepted-document API owns that proof.
 
 E243's Unicode boundary specs replace one scalar inside an otherwise unchanged
 word. They retain ordinary high-BMP and supplementary-plane controls, all 66
-noncharacters, every private-use range endpoint and the former CLAN exemption
-endpoints. The diagnostic
+noncharacters, every private-use range endpoint and the endpoints of CLAN's exemption
+ranges. The diagnostic
 contract checks retained word text, source spans and one error per rejected
 word; a deduplicated error-code set alone would miss lost diagnostics. The
 recorded U+10000 disagreement with CHECK does not override the independent
@@ -884,10 +883,11 @@ profiles. Line tables stay in the linked artifacts, so diagnostics and stack
 traces retain source locations without macOS's default `unpacked` layout
 leaving one `.rcgu.o` file per codegen unit in `target/debug/deps`.
 
-The setting is based on a 2026-09-04 failure analysis, not a cosmetic
-preference. The root workspace had 55,141 entries in `target/debug/deps`; the
-generator-heavy specification workspace had 842,704 entries, occupied 40 GB,
-and took 29.3 seconds merely to enumerate with `os.scandir`. The exact spec
+The setting is based on a measured failure analysis, not a cosmetic
+preference. Under the default layout the root workspace had 55,141 entries in
+`target/debug/deps`; the generator-heavy specification workspace had 842,704
+entries, occupied 40 GB, and took 29.3 seconds merely to enumerate with
+`os.scandir`. The exact spec
 test executable itself started, listed its tests and exited in 0.00 seconds,
 while a warm `cargo test --manifest-path spec/Cargo.toml --workspace --quiet`
 took 46.7 seconds. The file layout, rather than the test harness executable,
@@ -909,36 +909,33 @@ PY
 du -sh target spec/target
 ```
 
-After changing this setting, remove the old unpacked artifacts once with
+A target directory built without this setting holds unpacked artifacts;
+remove them once with
 `cargo clean` and `cargo clean --manifest-path spec/Cargo.toml`. Both commands
 delete derived build output only. A warm run should then be measured with
 `/usr/bin/time -p just test-spec` rather than inferred from the per-test times
 printed by libtest.
 
-The measured result after that cleanup was 586 entries, no `.rcgu.o` files and
-1.3 GB in `spec/target`. The full spec suite took 20.14 seconds from an empty
-target and 1.64 seconds warm. Its three generator commands and six runtime
+With the setting in effect, a clean `spec/target` holds no `.rcgu.o` files and
+the deps directory has a few hundred entries rather than hundreds of
+thousands. Its three generator commands and six runtime
 commands are declared with `test = false`, because their behavior is already
 covered by library and integration tests and their binary sources contain no
 tests. This avoids compiling and launching nine empty harnesses.
 
-The project continues to use plain `cargo test`. Whole-workspace nextest was
-removed after its eager test enumeration launched dozens of new binaries at
-once and repeatedly wedged macOS `syspolicyd`; the cache migration race that
-had required process isolation was fixed at its source. A future runner change
+The project uses plain `cargo test`. Whole-workspace nextest is not used: its
+eager test enumeration launches dozens of new binaries at once and repeatedly
+wedges macOS `syspolicyd`. The cache migration race is closed at its source, so
+no test needs process isolation. A future runner change
 needs measurements on a clean and a warm target and must demonstrate that it
 does not recreate that first-execution burst. Full Disk Access is unrelated to
 repository build artifacts, and Developer Tools permission is not a remedy for
 an oversized Cargo target directory.
 
-The 2026-09-05 follow-up tested nextest 0.9.143 on the generators library's
-51 tests in one binary, with four workers. Two alternating warm runs took
-0.437/0.385 seconds with Cargo and 0.658/0.614 seconds with nextest, including
-Cargo startup. Both runners passed; neither rebuilt the tests. This small
-suite gives no reason to change the default runner. It does not establish
-performance for the full workspace or for newly compiled binaries. The trial
-used a standalone downloaded executable and changed no repository runner
-configuration. Reproduce the comparison by alternating:
+On a small suite (the generators library's 51 tests, one binary, four
+workers, warm) nextest is slower than Cargo, so it gives no reason to change the default runner; that says nothing about
+the full workspace or newly compiled binaries. Reproduce the comparison by
+alternating:
 
 ```bash
 /usr/bin/time -p cargo test --manifest-path spec/Cargo.toml -p generators --lib --locked
@@ -953,26 +950,22 @@ explain time spent enumerating hundreds of thousands of build artifacts.
 ## Exercise the owned behavior
 
 Property tests must call the production operation whose contract they claim
-to verify. The retired `cache_key_properties` module instead copied a
-`DefaultHasher` algorithm for a `get_cache_key_with_suffix` function that no
-longer exists. Its two tests could pass with the real cache completely broken;
-one also treated absence of sampled hash collisions as a correctness property.
-Removing those tests deletes redundant work without changing cache coverage.
-The `cache_tests` integration module still exercises the real `CachePool`
-with temporary files, including independent paths, parser identity, alignment
-mode, overwrites, and clearing. This removes two property cases, not a test
-binary: they already shared the transform integration harness.
+to verify. A property test that copies a hashing algorithm instead of calling
+the real cache-key function can pass with the real cache completely broken, and
+the absence of sampled hash collisions is not a correctness property. Cache
+coverage lives in the `cache_tests` integration module, which exercises the
+real `CachePool` with temporary files, including independent paths, parser
+identity, alignment mode, overwrites, and clearing.
 
 ## Regeneration must preserve unchanged outputs
 
 The generators stage command output, publish only changed bytes and prune only
 obsolete files in exclusively owned directories. An unchanged `just regen`
 must leave generated Rust, C and fixture modification times alone, so Cargo
-does not rebuild merely because a generator ran. On 2026-09-05, a no-op
-regeneration preserved bytes and nanosecond modification times of all 3,815
-tracked files, took 8.177 seconds and compiled nothing. The following
-`just test` took 10.625 seconds with no compilation: 2,985 passed, 61 ignored,
-across 34 test harnesses. These are warm measurements, not clean-build timings.
+does not rebuild merely because a generator ran: a no-op regeneration
+preserves bytes and nanosecond modification times of every tracked file and
+compiles nothing, and the following `just test` compiles nothing either. Any
+timing taken this way is a warm measurement, not a clean-build timing.
 
 To reproduce the preservation check, snapshot tracked files before and after
 `just regen` without editing or staging files between the snapshots:
@@ -1008,8 +1001,7 @@ cargo test -p talkbank-parser-tests --tests <filter>     # correct
 cargo test -p talkbank-parser-tests --test  <name>       # fails: no such target
 ```
 
-`--test <name>` names a compilation target, and the per-file targets it used to
-name no longer exist. It does not fall back to filtering: it errors with
+`--test <name>` names a compilation target, and per-file targets do not exist. It does not fall back to filtering: it errors with
 `available test targets: integration, parser_suite`. Every command on this page
 was checked by running it.
 
@@ -1073,9 +1065,9 @@ change earns the same scrutiny as one that looks worse.
 | Reference corpus parses | `cargo test -p talkbank-parser-tests --tests reference_corpus_parses` | Every reference file parses cleanly with the tree-sitter parser. Checks parser acceptance, not cross-parser equivalence. |
 | Reference transform workflows | `cargo test -p talkbank-parser-tests --test integration transform_corpus::` | Public normalization admits a loss-checked `Rewrite`, preserves typed semantics and is idempotent. Compact and pretty CHAT-to-JSON output deserialize into semantically equivalent typed models. These wire tests do not imply optional model validation or JSON-schema admission. |
 | Roundtrip idempotency, and reference coverage | `cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus` | parse, serialize, re-parse yields a semantically identical AST (`SemanticEq`) for EVERY reference file. One test carries both guarantees: it iterates the whole corpus (coverage) and checks semantic equality on each (idempotency). |
-| Generated spec tests | `cargo test -p talkbank-parser-tests --tests generated_tests` | Every construct spec still parses cleanly. (Error specs no longer feed this: R4 deleted the string-based error tests as strictly weaker than the fixture corpus plus the observation snapshot.) |
-| Validation error corpus | `cargo test -p talkbank-parser-tests --tests validation_error_corpus` | Every ERROR-spec example (both stages, since R4) still satisfies its CLAIM against its generated `.cha` fixture, absences included. |
-| The gate registry | `cargo test -p talkbank-parser-tests --tests gates` | Runs every gate registered in `gate::ALL`. Ask the registry what that is rather than a list here: `cargo run -p talkbank-parser-tests --bin audit_gate_probes` names each gate, runs every probe against it, and prints the rules no probe reaches. This row used to enumerate five gates: it named one that is not registered at all, and omitted five that are. |
+| Generated spec tests | `cargo test -p talkbank-parser-tests --tests generated_tests` | Every construct spec still parses cleanly. (Error specs do not feed this: string-based error tests would be strictly weaker than the fixture corpus plus the observation snapshot.) |
+| Validation error corpus | `cargo test -p talkbank-parser-tests --tests validation_error_corpus` | Every ERROR-spec example (both stages) still satisfies its CLAIM against its generated `.cha` fixture, absences included. |
+| The gate registry | `cargo test -p talkbank-parser-tests --tests gates` | Runs every gate registered in `gate::ALL`. Ask the registry what that is rather than a list here: `cargo run -p talkbank-parser-tests --bin audit_gate_probes` names each gate, runs every probe against it, and prints the rules no probe reaches. |
 
 The transform corpus tests also send canonical error-spec inputs through
 required validation under structural and alignment policies. They compare
@@ -1151,15 +1143,14 @@ primary-stress run. The repair must traverse typed stress tokens rather than
 stop at the first matching character, and reproduce the paired control exactly.
 A checked primary-token witness licenses deletion only of an immediately
 adjacent primary token. Distinct token spans compose across every run, retaining
-the first token of each; no first-run-only accumulator remains. This resolves
+the first token of each; there is no first-run-only accumulator. This resolves
 E244 without suppressing the separate E247 finding about distinct primary
-stress positions. Secondary and mixed-stress repair policy is not expanded.
+stress positions. Secondary and mixed-stress repair policy is outside this contract.
 The stress-run spec deck also covers three primary markers, runs followed by
 separated primary/secondary stress, two separate duplicate runs in one word,
 and refusal of mixed/secondary-only pairs.
-Each word emits one E244: reporting once per adjacent pair previously proposed
-the same edit twice for a triple run, causing the real edit batch to fail on
-overlap. The regression submits all actual diagnostic proposals together and
+Each word emits one E244: reporting once per adjacent pair would propose the
+same edit twice for a triple run, making the real edit batch fail on overlap. The regression submits all actual diagnostic proposals together and
 checks exact paired controls or unchanged source, not isolated successful edits.
 E258's three-comma specs exercise two distinct edits in one admission batch,
 both at top level and within an annotated group. The changed source must equal
@@ -1171,7 +1162,7 @@ binds the exact whitespace node and the nearest annotated group's typed content
 field, requiring a content edge rather than guessing from neighboring delimiter
 bytes. All edge edits compose to the exact clean control through normal repair
 admission, preserving interior separators and annotations. Non-space whitespace
-remains refused; unrelated structural recovery within the group now also refuses
+remains refused; unrelated structural recovery within the group also refuses
 a proposal rather than relying on delimiter-shaped neighboring bytes.
 E241's marker-boundary specs sample shortened and miscased forms across the
 three marker categories. Their admitted batch must equal the canonical control
@@ -1294,15 +1285,29 @@ cannot admit the node, and source-field failures remain internal failures.
 
 Coordinated morphological/grammatical replacements use parsed reference tiers.
 Reversed, empty and out-of-range replacement requests must refuse without
-mutating either tier. Admitted lexical-block replacements preserve donor heads
-and apply the documented collapse of outside dependents onto the block's first
-chunk; they are not assumed to be whole-tier identity operations. The model's
+mutating either tier. Admitted lexical-block replacements preserve donor heads,
+and outside dependents follow the caller's `HostRedirects`: a block replaced by
+itself item by item leaves every outside head unchanged, and a donor block with
+no item correspondence sends them where the stated per-item targets say. They
+are not assumed to be whole-tier identity operations. L2 fixtures written as
+CHAT and parsed (`host_redirects_corpus.rs`: a host utterance and one donor
+utterance per span) pin the corrected heads for two `@s` sentences, one
+spliced span at a time, a dependent placed through a unique head chunk with a
+span root anchored after a growing range, and the refusals (unequal item
+counts by item, a wrong target count, an out-of-block target or a missing
+counterpart per item, an ambiguous head chunk only when a host relation
+depends on it, and a span root inside the replaced range, past the host,
+under a host chunk that depends on the span, or at the utterance's root
+beside the host's own), each leaving both tiers unchanged. `SplicedBlock`'s
+unit tests refuse every block that is not a one-rooted tree, and
+`AttachmentRelation`'s refuse every spelling of a root label. The model's
 private admitted host range exclusively borrows both tiers before mutation, and
 single-item replacement shares the same admission and rewrite path.
 Two admitted reference donor blocks with different chunk counts exercise both
 growth and shrinkage, preserving index validity and the declared head mapping.
-Single-item cases cover admission without a root override as well as atomic
-refusal of unrebased donor heads and wrong relation counts. Donor admission
+Single-item cases cover admission of a block holding the utterance's root,
+and the refusal of unrebased donor heads and wrong relation counts where the
+block is built. Donor admission
 retains the actual parsed tier pair with its checked lexical-block extent.
 
 Word-timing sequence tests follow the full capability chain: count binding,
@@ -1321,7 +1326,7 @@ hull certifies acoustic accuracy, and lexical ownership stays on the main tier.
 Sanitizer corpus tests run every reference document through deterministic
 redaction, fresh parsing and a second redaction for byte-idempotence. Speaker
 codes, main-tier timing and grammatical relations must survive. These wire
-contracts found delimiter collisions in inline placeholder output; they do not
+contracts guard against delimiter collisions in inline placeholder output; they do not
 certify complete privacy coverage or authorize disclosure of sanitized data.
 The same population witnesses all nine additional free-text header payloads:
 each must become the redaction marker without changing header kind or its
@@ -1330,9 +1335,9 @@ speaker reference, while unrelated preserved headers remain semantically equal.
 Builder corpus tests project reference headers and main tiers into the public
 transcript-description schema, preserving all representable ID demographics.
 They compare the built main tiers and participant join with serialized output,
-and require missing-language refusal. This found omitted CA parsing context:
-the builder emitted `@Options: CA` but initially interpreted parentheticals as
-shortenings. Its admitted context now owns nonempty languages and contextual
+and require missing-language refusal. A description that emits `@Options: CA` must
+not interpret parentheticals as shortenings, so the builder carries that CA
+parsing context. Its admitted context owns nonempty languages and contextual
 fragment parsing. Header and utterance construction obtain their inputs from
 the description borrowed by that capability, rather than accepting a second
 description. Participant names and first-language headers are also preserved
@@ -1401,8 +1406,8 @@ Omission and unresolved-language policies remain separate. CHECK observations
 and the manual's number-spelling rule support this boundary. The written
 Mandarin reference supplies authored spelling controls for the numeral spec;
 the generation API must match them without rewriting either source document.
-Its skipped-group case exposed duplicate zero emission. One group-prefix state
-now carries first/adjacent/skipped context to the sole zero-emission path.
+Its skipped-group case guards against duplicate zero emission: one group-prefix state
+carries first/adjacent/skipped context to the sole zero-emission path.
 This is a generation contract, not automatic repair or pronunciation inference.
 
 The Spanish number-spelling reference checks standalone cardinals around the
@@ -1431,7 +1436,7 @@ compound ordinals, short-scale cardinals, decade shorthand and century decades.
 Authored written controls pair with the E220 numeric-form specimen.
 Thousands with remainders retain the ordinal conjunction convention but omit
 prose commas: generation emits spoken words, not a formatted prose number.
-The ordinal composer admits only 0–9999 through a private checked type.
+The ordinal composer admits only 0-9999 through a private checked type.
 Unsupported suffix-bearing inputs are preserved exactly, not given a guessed
 `th` suffix. E220 specs exercise this refusal independently of CHAT validity;
 leading-zero preservation is a raw-string API test because CHAT gives an
@@ -1450,8 +1455,8 @@ Digit-leading compounds preserve their alphabetic tails after expansion;
 all-numeric dash sequences expand each group separately. Already-written
 reference words, including alphabetic hyphen compounds, must remain unchanged.
 The cardinal cases include multiplied scales, skipped groups and the `u64`
-maximum. They exposed generic concatenation of complete phrases (2000 became
-"two one thousand"). English now admits a nonzero decimal scale and its unit
+maximum. They guard against generic concatenation of complete phrases (2000 must not
+become "two one thousand"). English admits a nonzero decimal scale and its unit
 from the existing lexical table before composing the multiplier. Other-language
 generic decomposition remains a separate policy-review target; this English
 contract does not certify its linguistic correctness.
@@ -1489,7 +1494,7 @@ exterior admission must reconstruct the original speech/gem order, preserve
 payload and timing, and return both placement receipts. An equal-content clone
 cannot substitute for the bound reference. Existing untimed gems must refuse
 the timed-exterior capability. These are structural timing contracts, not
-evidence of acoustic accuracy or permission to omit speech. The E526–E530
+evidence of acoustic accuracy or permission to omit speech. The E526-E530
 authored controls and mutations also enter this boundary: unpaired, mismatched,
 duplicate and lazy markers cannot issue timed placement evidence. Legal
 untimed, nested or unlabelled examples still cannot provide that capability;
@@ -1529,8 +1534,8 @@ Rediarization corpus tests use absent timelines and single-track timelines
 derived from the reference documents' recorded bullets, with both existing and
 new anonymous track labels. They check exact attribution/flag accounting,
 preservation of everything except speaker attribution, reconciled participant
-and ID sets, and full model wire equivalence. This caught a returned model with
-an empty participant map despite populated headers. Rediarization now travels
+and ID sets, and full model wire equivalence. A returned model must not carry
+an empty participant map despite populated headers, so rediarization travels
 the canonical participant-join reporting transition before returning the model;
 the tests do not certify acoustic truth or invent source timestamps.
 The first corpus-derived contested row also tests every truncated JSON output
@@ -1564,8 +1569,8 @@ must likewise disappear when their participating tiers lose trust. These are
 trust-transition contracts, not additional Phon syntax or validity rules.
 The wire contract also includes already-computed alignment metadata: decoded
 cached pairs do not restore parse provenance, and recomputation replaces them
-with warnings. This caught diagnostic contexts that serialized an empty
-expectation list by omission but incorrectly required that field on decoding.
+with warnings. Diagnostic contexts that serialize an empty expectation list by
+omission must decode without requiring that field.
 The legacy wire payload remains inspectable; its presence is not validation
 evidence, and consumers must use the provenance-aware computation boundary.
 
@@ -1647,7 +1652,7 @@ integer syntax. Paired recording/birth controls and signed or nonnumeric
 components require the header-specific diagnostic and unchanged serialization.
 The model-owned private digit-admission type is shared by date construction,
 JSON decoding, and header validation. It proves width and alphabet before day
-or year is interpreted numerically; the corpus still owns the 01–31 policy and
+or year is interpreted numerically; the corpus still owns the 01-31 policy and
 wire-format behavior. These tests do not certify full calendar validation.
 The same canonical fixtures require invalid spellings to remain `Unsupported`
 through parsing and JSON roundtrip, not merely receive a validation diagnostic.
@@ -1794,7 +1799,7 @@ and retraced variants. The semicolon remains a typed separator for lossless
 legacy parsing, but modern CHAT validation rejects it at its own span. The
 extraction contract also verifies that this non-tag punctuation is not an NLP
 word; that does not make the input valid. Current CHECK evidence supports the
-rejection, unlike older descriptions of limited semicolon use.
+rejection.
 
 E243 ellipsis specs retain valid trailing-off and nested/replacement controls,
 then insert U+2026 into word text. The diagnostic contract checks each rejected
@@ -1805,7 +1810,7 @@ specific CHECK 48 shape, not every branch of that broad diagnostic.
 Compound-part specs delete lexical material while retaining stress markers
 before, between, or after compound joins. A typed progress state tracks whether
 the current part has spoken material and whether a join has been crossed;
-each join resets that evidence. E232/E233 can no longer be bypassed by placing
+each join resets that evidence. E232/E233 cannot be bypassed by placing
 prosody in an otherwise empty part. The corpus contract verifies exact codes,
 source spans, and unchanged serialization. CHECK catches the leading case but
 accepts the empty middle/final cases; its silence does not establish validity.
@@ -1829,14 +1834,14 @@ than trusting a number in prose.
 ## The gate registry
 
 A repository-wide gate computes findings and must FAIL when there are any.
-Written freehand that is two steps, and the second step kept going missing: a
-check inside `main()` that CI never invoked, a `#[test]` that printed its
-findings and asserted nothing, a `--check-only` mode that reported "Found N
-invalid words" and returned `Ok(())`, a coverage percentage compared to
+Written freehand that is two steps, and the second step is easy to omit: a
+check inside `main()` that CI never invokes, a `#[test]` that prints its
+findings and asserts nothing, a `--check-only` mode that reports "Found N
+invalid words" and returns `Ok(())`, a coverage percentage compared to
 nothing. Every one of those type-checks, because `()` and `Ok(())` are
 perfectly good return types for "I printed something".
 
-So a gate now implements the `Gate` trait in
+So a gate implements the `Gate` trait in
 `crates/talkbank-parser-tests/src/gate.rs`, whose only output is a verdict:
 there is no method that yields findings without one, so "compute the list and
 forget to act on it" is not expressible. Registration in `ALL` is the whole
@@ -1844,8 +1849,7 @@ mechanism, and a second gate checks the registry against the `impl Gate for`
 declarations in the sources, in both directions, so a gate that is written and
 not listed is a failure rather than a silence.
 
-**Two checks remain unconverted** and are named in that module so it does not
-read as finished: `verify_error_coverage.rs` still prints a coverage percentage
+**Two checks are not yet gates** and are named in that module: `verify_error_coverage.rs` still prints a coverage percentage
 and compares it to nothing, and `validate_golden_words.rs` keeps a path whose
 only caller is its own `main`. A `[[bin]]` in that crate sets `test = false`,
 which is target selection, so such a binary is excluded from `--tests` as well
@@ -1859,15 +1863,14 @@ Three gates hold reviewed baselines: `fabricated_ast` (a per-crate
 `UNDEMONSTRATED` list of identities absent from the canonical file snapshot), and `content_catch_alls` (an
 `UNPROTECTED` list). Each baseline is a `const` in its own module, so lowering
 one is an edit in the commit that earned it, reviewed like any other line.
-There is no `--write`: the previous Python ratchets had one, and what replaces
-it is that **each gate names exactly what to edit**. The two list ratchets print
-the entries that are now accounted for and must go; `fabricated_ast`, whose
+There is no `--write`; instead **each gate names exactly what to edit**. The two list ratchets print
+the entries that are accounted for and must go; `fabricated_ast`, whose
 baseline holds numbers, prints its replacement row verbatim, so banking a drop
 is a paste rather than a retyped number.
 
 These counts are investigation tools, not CHAT policy. Backend/API-only
-diagnostics must not force tree-sitter to reconstruct old diagnostic identities.
-The September 28 inventory retains those identities explicitly while their
+diagnostics must not force tree-sitter to reconstruct their diagnostic
+identities. The inventory retains those identities explicitly while their
 specs continue to enforce structural rejection and legal controls. A residual
 entry does not claim the code has been reached or that coverage is complete.
 
@@ -1879,7 +1882,7 @@ They are boundary evidence, not manufactured CHAT coverage. The general
 per-crate ceiling remains strict. This lexical inventory does not prove test
 semantics; retain the functional assertions and review same-count substitutions.
 
-They need a Rust build, which is the real cost of the move out of `scripts/`:
+They need a Rust build:
 
 ```bash
 cargo test -p talkbank-parser-tests --tests gates   # every gate, verdicts only
@@ -1914,8 +1917,8 @@ SYNTHESIZED regression signal, not a validity authority. When a change rejects
 a reference file, adjudicate the FILE against `spec/`, the grammar and real
 corpus data, and fix the data or move it to `spec/errors/`. Weakening the
 parser to keep a reference file green is the one response that is always wrong.
-This page called the corpus "the ultimate arbiter of correctness" twice, which
-is exactly the reasoning that would entrench a bad fixture.
+The corpus is not "the ultimate arbiter of correctness"; that reasoning would
+entrench a bad fixture.
 
 ## Coverage scope and completeness
 
@@ -1936,7 +1939,7 @@ promoting a specimen or removing an exclusion. Do not change denominators simply
 to make the node inventory read 100%.
 
 `core/headers-ses-vocabulary.cha` promotes the authored E546 legal control into
-the reference corpus: standalone ethnicity values now accompany combined
+the reference corpus: standalone ethnicity values accompany combined
 ethnicity/SES fields. Its explicit contract requires clean parsing, model
 validation, all eight ordered SES payloads and exact CHAT output. The grammar
 inventory therefore counts `ethnicity_value` instead of excluding it. Invalid
@@ -1980,8 +1983,8 @@ Re2c tokenizes the replacement opening separately and uses its existing word
 productions, with a required first word and an optional remainder. Conversion
 neither reparses text nor falls back to a plain word. The reference compound and
 multiword alternatives check full-file source spans; the E208 specimen and
-unclosed-bracket controls require parse rejection. E208's historical model emit
-site is retired, not preserved through an impossible empty model value. The
+unclosed-bracket controls require parse rejection. E208 has no model emit
+site; it is not preserved through an impossible empty model value. The
 primary parser's E376/E342 recovery remains. Re2c spacing diagnostics identify
 its opening token rather than duplicating tree-sitter recovery locations.
 
@@ -2080,8 +2083,7 @@ cargo test -p talkbank-model -- --nocapture       # show stdout from passing tes
 ```
 
 `--nocapture` goes after `--`; it is an argument to the test harness, not to
-cargo. This page used to give `cargo test --no-capture`, which is not a flag
-either program accepts.
+cargo.
 
 ## What to run when
 
@@ -2111,8 +2113,7 @@ cat mutants.out/missed.txt    # mutations no test caught
 **Scope it, and read the result as a work list rather than a score.** The
 validation tree is the highest-value target: `chatter validate` is the
 authority on CHAT validity, so a mutant that survives there is a rule that can
-be silently disabled. Running `-p talkbank-parser` unscoped, which this page
-used to recommend, spends most of its budget on `src/generated_traversal.rs`,
+be silently disabled. Running `-p talkbank-parser` unscoped spends most of its budget on `src/generated_traversal.rs`,
 over half that crate and generated, where a survivor indicts the generator
 rather than this repository. To see the size of a target before committing an
 evening to it, use `cargo mutants --list --file '<glob>'`.
@@ -2120,14 +2121,9 @@ evening to it, use `cargo mutants --list --file '<glob>'`.
 Each job runs a full workspace build peaking around 8 GB, and the failure mode
 is an out-of-memory kill during overlapping linker phases rather than steady
 state, so measure peak memory at a small `--jobs` before raising it. A fixed
-`--jobs 1` was this page's advice until 2026-09-07; it was written for one
-machine and is not a property of the tool.
+`--jobs 1` is not a property of the tool; the right value depends on the machine.
 
-Configuration is `mutants.toml` at the repo root. It genuinely is now: until
-2026-09-07 that file lived in the batchalign3 workspace, left behind when the
-CHAT core was extracted from it, so this paragraph named a file this repo did
-not have while the file itself excluded functions its own repo no longer
-defined.
+Configuration is `mutants.toml` at the repo root.
 
 ## Adding tests, and when not to
 

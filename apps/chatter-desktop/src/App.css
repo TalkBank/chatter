@@ -1032,6 +1032,12 @@ button:disabled {
   margin-left: auto;
 }
 
+.validation-settings-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-error);
+}
+
 /* ── Reduced-motion: honor the user's preference ─────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .error-card,

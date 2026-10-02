@@ -29,7 +29,6 @@ thiserror = { workspace = true }
 
 # Utilities
 regex = { workspace = true }
-chrono = "0.4"
 tera = { workspace = true }
 unicode-normalization = { workspace = true }
 

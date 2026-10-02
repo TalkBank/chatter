@@ -1,7 +1,7 @@
 # Summary
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** <a href="https://github.com/TalkBank/chatter/commits/main/book/src/SUMMARY.md">Git history</a>
 
 [Introduction](introduction.md)
 [Install](install/index.md)
@@ -31,6 +31,7 @@
 
 - [Overview](chat-format/overview.md)
 - [Headers](chat-format/headers.md)
+  - [File Names and @Media](chat-format/file-names.md)
 - [Utterances](chat-format/utterances.md)
 - [Retraces and Repetitions](chat-format/retraces.md)
 - [Replacements](chat-format/replacements.md)
@@ -48,7 +49,6 @@
 
 - [Overview](architecture/overview.md)
 - [Spec System](architecture/spec-system.md)
-- [Why the Spec System Looks Like That](architecture/spec-system-history.md)
 - [Grammar](architecture/grammar.md)
 - [Overlap Marker Binding](architecture/overlap-binding.md)
 - [Parsing](architecture/parsing.md)

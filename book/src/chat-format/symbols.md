@@ -1,7 +1,7 @@
 # Symbols
 
 **Status:** Reference
-**Last modified:** 2026-08-21 13:42 EDT
+**Last modified:** {{git-dates:page}}
 
 CHAT uses a rich set of symbols for transcription conventions. This
 page documents the symbol categories and the symbol registry that
@@ -111,21 +111,16 @@ are all generated from it, so a marker cannot exist in one and not another.
 {{#include generated/form-markers.md}}
 
 Every meaning above is taken from the "Special Form Markers" table in the CHAT
-manual, and each links to that marker's own anchor there. They were corrected
-wholesale on 2026-08-11: six had been glossed with plausible expansions of the
-letters rather than their actual meanings, so `@k` read as "kinship" (it is
-"kana", multiple letters), `@p` as "proper name" (it is a phonologically
-consistent form), `@sl` as "slang" (it is signed language), `@sas` as
-"second attempt success" (it is sign and speech), `@g` as "gemination" (it is
-the general special form), and `@ls` as "letter sequence" (it is the letter
-plural; the sequence is `@k`). If you find another that disagrees with the
-manual, the manual wins.
+manual, and each links to that marker's own anchor there. The meanings are the
+manual's, not expansions of the letters: `@k` is "kana" (multiple letters), `@p`
+a phonologically consistent form, `@sl` signed language, `@sas` sign and
+speech, `@g` the general special form, and `@ls` the letter plural (the letter
+sequence is `@k`). If you find another that disagrees with the manual, the
+manual wins.
 
-`@a` was removed on 2026-08-11. The corpus authority eliminated it from every
-file on 2024-09-03 together with `@e` and `@lp`; the other two were dropped
-from chatter at the time and `@a` was overlooked. It has no main-tier
-occurrences in any corpus, and appears in neither `depfile.cut` nor the
-manual's table.
+`@a` is not a form marker. The corpus authority eliminated it from every file
+together with `@e` and `@lp`; it has no main-tier occurrences in any corpus,
+and appears in neither `depfile.cut` nor the manual's table.
 
 The second-language qualifier `@s:LANG` is a separate construct (see
 the L2 morphotag section of the Batchalign book); it is not part of

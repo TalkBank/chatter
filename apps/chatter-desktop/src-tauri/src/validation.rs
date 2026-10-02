@@ -4,24 +4,25 @@
 //! - one `.cha` file
 //! - or one directory
 //!
-//! Both cases route through the exact same shared streaming entrypoints the
-//! CLI uses (`talkbank_transform::validation_runner::{validate_directory_streaming,
-//! validate_files_streaming}`), with a real on-disk cache. Desktop must not
+//! Both cases go through the shared streaming runner the CLI uses: a
+//! directory through `validate_directory_streaming`, a file through
+//! `validate_files_streaming` (the CLI's `validate_arguments_streaming` feeds
+//! the same run body), with a real on-disk cache. Desktop must not
 //! reimplement cache lookups, stats accounting, or per-file rule dispatch;
 //! see `apps/chatter-desktop/AGENTS.md` ("No desktop-local domain logic").
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::errors::TargetError;
-use crossbeam_channel::{Receiver, Sender, unbounded};
+use crossbeam_channel::{Receiver, unbounded};
 use talkbank_transform::UnifiedCache;
 use talkbank_transform::validation_runner::{
-    ParserKind, ValidationConfig, ValidationEvent, is_chat_transcript_path,
-    validate_directory_streaming, validate_files_streaming,
+    AbortReason, ParserKind, ValidationConfig, ValidationEvent, ValidationRun,
+    is_chat_transcript_path, validate_directory_streaming, validate_files_streaming,
 };
 
-use crate::events::{FrontendEvent, to_frontend_event};
+use crate::events::{FrontendEvent, to_frontend_events};
 use crate::protocol::commands::{ParserKindRequest, ValidateRequest};
 
 impl From<ParserKindRequest> for ParserKind {
@@ -40,49 +41,53 @@ impl From<&ValidateRequest> for ValidationConfig {
         // in the rule selection, which is also what keys the cache. The desktop
         // request carries no `--suppress` equivalent yet, so the presentation
         // policy stays the default: show everything the validator computed.
-        let rules = if request.strict_linkers {
-            talkbank_model::RuleSelection::new().with_strict_linkers()
-        } else {
-            talkbank_model::RuleSelection::new()
-        };
+        //
+        // The wire carries the checkbox as a boolean; this is its one
+        // translation into the linker mode.
+        let rules =
+            talkbank_model::RuleSelection::new().with_linkers(match request.strict_linkers {
+                true => talkbank_model::LinkerChecks::Strict,
+                false => talkbank_model::LinkerChecks::Lenient,
+            });
         Self {
-            roundtrip: request.roundtrip,
+            // The wire carries the checkbox as a boolean; this is its one
+            // translation into the runner's mode.
+            roundtrip: match request.roundtrip {
+                true => talkbank_transform::RoundtripCheck::Run,
+                false => talkbank_transform::RoundtripCheck::Skip,
+            },
             parser_kind: request.parser_kind.into(),
             rules,
-            jobs: request.jobs.map(|jobs| jobs as usize),
+            jobs: request.jobs,
             ..Self::default()
         }
     }
 }
 
-/// Start validation for a single desktop target with an explicit config and
-/// cache, used by the `validate` Tauri command once a `ValidateRequest`
-/// carries user-chosen settings (roundtrip, parser kind, strict linkers,
-/// jobs). The cache is a parameter, not built here, so the app can open it
-/// once at startup (`ValidationState::new()`) and reuse it across every
-/// validate/re-validate call instead of paying SQLite-pool setup cost per run.
+/// Start validation for a single desktop target with `run`: the request's
+/// configuration (roundtrip, parser kind, strict linkers, jobs) bound to the
+/// cache opened for it. The cache is opened by the caller, not here, so the
+/// app memoizes one pool per identity (`ValidationState::cache_for_config`)
+/// and reuses it across every validate/re-validate call instead of paying
+/// SQLite-pool setup cost per run; the binding refuses a pool opened for
+/// another identity.
 pub fn validate_target_streaming_with_config(
     target: PathBuf,
-    config: ValidationConfig,
-    cache: Option<Arc<UnifiedCache>>,
-) -> Result<(Receiver<FrontendEvent>, Sender<()>), TargetError> {
+    run: &ValidationRun,
+) -> Result<(Receiver<FrontendEvent>, talkbank_transform::Canceller), TargetError> {
     if !target.exists() {
         return Err(TargetError::Missing { path: target });
     }
 
     if target.is_dir() {
-        let (validation_rx, cancel_tx) = validate_directory_streaming(&target, &config, cache);
-        Ok((bridge_validation_events(validation_rx, target), cancel_tx))
+        let (validation_rx, canceller) = validate_directory_streaming(&target, run);
+        Ok((bridge_validation_events(validation_rx), canceller))
     } else if target.is_file() {
         if !is_chat_transcript_path(&target) {
             return Err(TargetError::NotChatTranscript { path: target });
         }
-        let root = target
-            .parent()
-            .unwrap_or_else(|| Path::new(""))
-            .to_path_buf();
-        let (validation_rx, cancel_tx) = validate_files_streaming(vec![target], &config, cache);
-        Ok((bridge_validation_events(validation_rx, root), cancel_tx))
+        let (validation_rx, canceller) = validate_files_streaming(vec![target], run);
+        Ok((bridge_validation_events(validation_rx), canceller))
     } else {
         Err(TargetError::NotFileOrDirectory { path: target })
     }
@@ -94,53 +99,30 @@ pub fn validate_target_streaming_with_config(
 /// `UnifiedCache::new(identity)` resolves the OS cache dir on its own.
 ///
 /// Open the default cache for the request's complete validation identity.
-pub fn initialize_cache(identity: talkbank_transform::CacheIdentity) -> Option<Arc<UnifiedCache>> {
-    report_cache_open(UnifiedCache::new(identity))
+/// A cache that will not open is an error the caller shows the user (the run
+/// goes on without it), never a line on a GUI app's invisible stderr.
+pub fn initialize_cache(
+    identity: talkbank_transform::CacheIdentity,
+) -> Result<Arc<UnifiedCache>, talkbank_transform::CacheError> {
+    UnifiedCache::new(identity).map(Arc::new)
 }
 
 /// Open an isolated cache directory for the same complete request identity.
 pub fn initialize_cache_at(
     cache_dir: PathBuf,
     identity: talkbank_transform::CacheIdentity,
-) -> Option<Arc<UnifiedCache>> {
-    report_cache_open(UnifiedCache::with_directory(cache_dir, identity))
+) -> Result<Arc<UnifiedCache>, talkbank_transform::CacheError> {
+    UnifiedCache::with_directory(cache_dir, identity).map(Arc::new)
 }
 
-fn report_cache_open(
-    result: Result<UnifiedCache, talkbank_transform::CacheError>,
-) -> Option<Arc<UnifiedCache>> {
-    match result {
-        Ok(cache) => Some(Arc::new(cache)),
-        Err(error) => {
-            eprintln!("Warning: Failed to initialize validation cache: {error}");
-            None
-        }
-    }
-}
-
-/// Why the bridge stopped forwarding events.
-///
-/// This exists so the loop's exit reason is a VALUE, matched exhaustively at
-/// one place below, rather than something each `break` is trusted to handle.
-/// The previous loop was `while let Ok(event) = validation_rx.recv()`, which
-/// silently discarded the `Err` that `recv` returns on disconnect: a run whose
-/// worker thread panicked ended the stream with no terminal event at all, and
-/// the frontend waited forever showing whatever phase it was in. That is the
-/// shape of the 2026-08-02 field report. Adding an end reason here means a
-/// future one cannot be added without the match below failing to compile.
+/// Why the bridge stopped forwarding events: a value, matched exhaustively
+/// once, rather than something each `break` is trusted to handle.
 enum StreamEnd {
-    /// The runner sent a terminal event; it is already forwarded.
+    /// The runner sent its ending; it is already forwarded.
     RunnerFinished,
-    /// The runner's sender dropped with no terminal event, so the run died.
-    ///
-    /// SHOULD NOW BE UNREACHABLE: the runner arms a drop guard that emits
-    /// `ValidationEvent::Aborted` when its thread unwinds, so a dead run ends
-    /// the stream with a terminal event of its own and exits through
-    /// `RunnerFinished` above. Retained anyway, deliberately: this arm is the
-    /// last line of defence against a frontend that waits forever, and the
-    /// cost of keeping it is one unreachable branch, whereas the cost of
-    /// removing it is the 2026-08-02 hang returning silently if the guard ever
-    /// regresses. Belt and braces on a failure mode with no other detector.
+    /// The runner's sender dropped with no ending. The runner's drop guard
+    /// makes this unreachable; the frontend is still told, as an abort,
+    /// so a regression of the guard can never leave it waiting forever.
     RunnerVanished,
     /// The frontend receiver was dropped (window closed, run superseded).
     /// Nobody is listening, so there is nothing to report.
@@ -149,67 +131,49 @@ enum StreamEnd {
 
 /// Whether this event ends the run, so the bridge should stop forwarding.
 ///
-/// Exhaustive by design: a new terminal event added upstream must be
-/// classified here, or this fails to compile. Getting it wrong in the
-/// forgiving direction (treating a terminal event as non-terminal) leaves the
-/// bridge waiting for a channel close it will then report as a vanished
-/// runner, which is exactly the duplicate-report confusion this avoids.
+/// Read off the event actually sent, and exhaustive: a new ending added
+/// upstream must be classified here, or this fails to compile.
 fn is_terminal(event: &FrontendEvent) -> bool {
     match event {
         FrontendEvent::Finished { .. }
+        | FrontendEvent::NothingFound
+        | FrontendEvent::Stopped { .. }
         | FrontendEvent::FinishedIncomplete { .. }
         | FrontendEvent::Aborted { .. } => true,
-        FrontendEvent::Discovering
+        FrontendEvent::CacheUnavailable { .. }
+        | FrontendEvent::Discovering
         | FrontendEvent::Started { .. }
         | FrontendEvent::Errors { .. }
         | FrontendEvent::FileComplete { .. } => false,
     }
 }
 
-fn bridge_validation_events(
-    validation_rx: Receiver<ValidationEvent>,
-    root: PathBuf,
-) -> Receiver<FrontendEvent> {
+fn bridge_validation_events(validation_rx: Receiver<ValidationEvent>) -> Receiver<FrontendEvent> {
     let (frontend_tx, frontend_rx) = unbounded();
 
     std::thread::spawn(move || {
-        let end = loop {
+        let end = 'stream: loop {
             let Ok(event) = validation_rx.recv() else {
                 break StreamEnd::RunnerVanished;
             };
-            let Some(frontend_event) = to_frontend_event(event, &root) else {
-                continue;
-            };
-            // Read the outcome off `frontend_event`, the thing actually about
-            // to be sent, rather than off the pre-mapping `event`. Today every
-            // terminal event maps to `Some`, so this is latent, but the
-            // ordering matters: if a future mapping ever stopped translating a
-            // terminal event to a frontend event, computing this from `event`
-            // would silently swallow it and the frontend would sit waiting
-            // forever, exactly the 2026-08-02 hang this bridge exists to
-            // prevent. Deriving it from what was actually delivered means
-            // that failure mode instead falls through to `RunnerVanished`
-            // below, once the channel closes, which is the correct answer:
-            // the frontend was never told how the run ended.
-            let terminal = is_terminal(&frontend_event);
-            if frontend_tx.send(frontend_event).is_err() {
-                break StreamEnd::FrontendGone;
-            }
-            if terminal {
-                break StreamEnd::RunnerFinished;
+            for frontend_event in to_frontend_events(event).into_iter().flatten() {
+                let terminal = is_terminal(&frontend_event);
+                if frontend_tx.send(frontend_event).is_err() {
+                    break 'stream StreamEnd::FrontendGone;
+                }
+                if terminal {
+                    break 'stream StreamEnd::RunnerFinished;
+                }
             }
         };
 
-        // Exhaustive on purpose: every way this stream can end must decide
-        // what the frontend is told, and "tell it nothing" has to be a
-        // deliberate arm rather than a fall-through.
+        // Exhaustive on purpose: every way this stream can end decides what
+        // the frontend is told.
         match end {
             StreamEnd::RunnerFinished | StreamEnd::FrontendGone => {}
             StreamEnd::RunnerVanished => {
                 let _ = frontend_tx.send(FrontendEvent::Aborted {
-                    reason: "The validator stopped without finishing. \
-                             No results were produced for this run."
-                        .to_owned(),
+                    reason: AbortReason::NoEnding.to_string(),
                 });
             }
         }
@@ -225,25 +189,16 @@ mod tests {
     use super::*;
     use crossbeam_channel::unbounded as unbounded_channel;
 
-    /// A validation run that dies without finishing must still terminate the
-    /// event stream with something the UI can act on.
-    ///
-    /// This is the shape of the 2026-08-02 field report ("doesn't seem to go
-    /// beyond the Discovering files step"): the bridge's receive loop ended on
-    /// channel disconnect and emitted nothing, so a run whose worker thread
-    /// panicked, or otherwise dropped its sender before `Finished`, left the
-    /// frontend waiting forever with no error and no completion. The user
-    /// cannot distinguish that from a slow run, and neither could the UI.
+    /// A validation run that dies without finishing still terminates the
+    /// event stream, with an abort the UI can act on, so the frontend is
+    /// never left waiting on a dead run.
     #[test]
     fn a_run_that_dies_before_finishing_still_terminates_the_stream() {
         let (validation_tx, validation_rx) = unbounded_channel();
-        let frontend_rx = bridge_validation_events(validation_rx, PathBuf::from("/corpus"));
+        let frontend_rx = bridge_validation_events(validation_rx);
 
-        // The runner announces itself, then dies: exactly what a panicking
-        // worker thread looks like from this side of the channel.
-        validation_tx
-            .send(talkbank_transform::ValidationEvent::Discovering)
-            .unwrap();
+        // The runner announces itself, then dies.
+        validation_tx.send(ValidationEvent::Discovering).unwrap();
         drop(validation_tx);
 
         let events: Vec<FrontendEvent> = frontend_rx.into_iter().collect();
@@ -254,34 +209,21 @@ mod tests {
         );
         assert!(
             matches!(events.last(), Some(FrontendEvent::Aborted { .. })),
-            "a stream that ends without Finished must emit Aborted so the UI \
+            "a stream that ends without an ending must emit Aborted so the UI \
              stops waiting; got {events:?}"
         );
     }
 
-    /// The normal path must NOT report an abort: `Finished` is a clean end.
+    /// A run's own ending ends the stream with no abort after it.
     #[test]
-    fn a_run_that_finishes_normally_reports_no_abort() {
+    fn a_run_that_ends_normally_reports_no_abort() {
         let (validation_tx, validation_rx) = unbounded_channel();
-        let frontend_rx = bridge_validation_events(validation_rx, PathBuf::from("/corpus"));
+        let frontend_rx = bridge_validation_events(validation_rx);
 
+        validation_tx.send(ValidationEvent::Discovering).unwrap();
         validation_tx
-            .send(talkbank_transform::ValidationEvent::Discovering)
-            .unwrap();
-        validation_tx
-            .send(talkbank_transform::ValidationEvent::Finished(
-                talkbank_transform::ValidationStatsSnapshot {
-                    total_files: 0,
-                    valid_files: 0,
-                    invalid_files: 0,
-                    cache_hits: 0,
-                    cache_misses: 0,
-                    parse_errors: 0,
-                    internal_failures: 0,
-                    roundtrip_passed: 0,
-                    roundtrip_failed: 0,
-                    cancelled: false,
-                },
+            .send(ValidationEvent::Finished(
+                talkbank_transform::RunEnding::NothingFound,
             ))
             .unwrap();
         drop(validation_tx);
@@ -289,14 +231,11 @@ mod tests {
         let events: Vec<FrontendEvent> = frontend_rx.into_iter().collect();
 
         assert!(
-            events
-                .iter()
-                .all(|e| !matches!(e, FrontendEvent::Aborted { .. })),
-            "a clean run must not report an abort; got {events:?}"
-        );
-        assert!(
-            matches!(events.last(), Some(FrontendEvent::Finished { .. })),
-            "last event should be Finished, got {events:?}"
+            matches!(
+                &events[..],
+                [FrontendEvent::Discovering, FrontendEvent::NothingFound]
+            ),
+            "the ending is the last event, with no abort; got {events:?}"
         );
     }
 }

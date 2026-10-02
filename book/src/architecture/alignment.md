@@ -1,7 +1,7 @@
 # Alignment
 
 **Status:** Current
-**Last modified:** 2026-09-28 16:31 EDT
+**Last modified:** 2026-10-02 06:50 EDT
 
 Alignment in the toolchain operates at two structural layers, plus a
 separate overlap-marker pass. Tier alignment is structural (counting and
@@ -33,10 +33,9 @@ an extraction takes (`count_tier_positions`, `collect_tier_items`,
 `TierCountable`, `AlignableTier::DOMAIN`, `extract_words`), and it has no
 `Wor` on purpose: the `%wor` count and pairing are
 `WorMainTierProjection`'s (`MainTier::wor_projection`, then `bind_timing`
-for the count and `corroborate_wor_timing` for the words). Until 2026-09-08
-the count and extraction functions carried their own `Wor` arms, a second
-implementation of that count that agreed with the projection only by test.
-The overlap-marker position walk in `alignment/helpers/overlap.rs` is on
+for the count and `corroborate_wor_timing` for the words), so the count and
+extraction functions carry no second implementation of that count. The
+overlap-marker position walk in `alignment/helpers/overlap.rs` is on
 the shared walker at the `%wor` domain, the projection's own leaf set.
 `PositionalDomain` converts into `TierDomain` infallibly; the reverse is a
 `TryFrom` that refuses `Wor`.
@@ -254,8 +253,7 @@ CA overlap markers (⌈⌉⌊⌋) appear at three content levels,
 `WordContent` (intra-word, `butt⌈er⌉`). One API in
 `talkbank-model/src/alignment/helpers/overlap.rs`, on the shared
 `walk_content` at the `%wor` domain, so its word positions are the `%wor`
-projection's slot indices (a visitor API with no caller, and two private
-walkers of the file's own, went on 2026-09-08).
+projection's slot indices.
 
 ### `extract_overlap_info`, region-based
 
@@ -292,6 +290,100 @@ speakers B, C, etc. Used by E347 and `chatter debug overlap-audit`.
 `chatter debug overlap-audit <path>` reports per-file statistics
 (groups, bottoms, orphans, temporal consistency) in TSV format. Use
 `--database <path.jsonl>` for a persistent JSON-lines database.
+
+## Coordinated `%mor` / `%gra` replacement
+
+`MorTier::splice_range_coordinated` (and the single-item
+`splice_coordinated`) replace a contiguous range of `%mor` items and the
+matching `%gra` relations in one atomic edit. Morphotag's L2 pass uses it
+once per `@s` span: the span's words, reparsed in their own language,
+replace the primary parse's items, and the replacement can change chunk
+counts (`it's` becomes `it~'s`).
+
+The replacement is a `SplicedBlock`, built by `SplicedBlock::new(mors,
+relations)` from the items and one relation per chunk in block-relative form.
+Building it is the only route to a block, and it parses the relations once:
+head `0` becomes the span root and every other head a `BlockChunk` (the
+block's own 1-based numbering, a different space from the host's
+`SemanticWordIndex1`). A block is a tree with exactly one root; a count
+mismatch, a relation out of chunk order, a head outside the block, no root or
+two, or a cycle is a `SplicedBlockError`, so the splice never sees one.
+`SplicedBlock::root_chunk()` returns that admitted root as a `BlockChunk`.
+Callers can use it for an explicit host redirect without inspecting or
+validating the block's relations again. The root and relations are immutable
+after admission.
+
+The host is admitted first: each of its relations must carry its own chunk as
+its index (relation `k` of the tier, from 1, has index `k`), because every
+head is read as a chunk number; a host numbered otherwise is refused
+(`HostIndexOutOfOrder`). Inside the splice, the numberings it moves between
+are separate private types (`host_chunks.rs` beside the splice): a host chunk
+before the splice (`PreChunk`), after it (`PostChunk`), a block chunk
+(`BlockChunk`), and a chunk or item of the replaced range. `Geometry::locate`
+sorts a pre-splice chunk into kept or replaced, and `Geometry::translate`,
+which takes only a kept chunk, is the one route from the pre-splice numbering
+to the post-splice one; `Geometry::place` is the one route from a block chunk.
+A post-splice number is never made from a bare integer, so a pre-splice index
+cannot be written into the result. The whole new `%gra` is built from shared
+borrows before either tier is written, which is what makes a refusal atomic.
+
+Four kinds of `%gra` head are rewritten, each by its own rule:
+
+- A head inside the block becomes the block chunk placed after the host
+  chunks before the range.
+- The span root attaches where the caller's `SpanRoot` says:
+  `UtteranceRoot` (head `0`, relation `ROOT`), or `HostChunk { chunk,
+  relation }`, a host chunk named by its index BEFORE the splice, which the
+  splice translates like any host head (shifted when it lies after the
+  range), with the relation the span root takes under it. That relation is
+  an `AttachmentRelation`, which refuses a root label, so `ROOT` under a host
+  head cannot be written. `SpanRoot::from_gra_head(head, relation)` reads the
+  anchor off a host relation's `GraHeadRef`.
+- A host head past the replaced range shifts by `new_chunks - old_chunks`.
+- A host head INTO the replaced range depended on a word, so it must land on
+  the chunk of the block that stands for that word. Only the caller knows how
+  old items correspond to new ones, so it states that as a `HostRedirects`
+  value, and the splice validates the statement against the admitted host
+  range and the block before it changes anything.
+
+```mermaid
+flowchart TD
+    plan["HostRedirects"] --> by{"ByItem or PerItem?"}
+    by -->|"ByItem (equal item counts)"| counterpart["every item: ItemTarget::Counterpart"]
+    by -->|"PerItem(targets)"| each{"targets[k]"}
+    each -->|"Chunk(c)"| stated["every old chunk of item k -> block chunk c"]
+    each -->|Counterpart| counterpart
+    counterpart --> shape{"old item k and block item k\nhave the same chunk count?"}
+    shape -->|yes| chunkwise["old chunk j -> new chunk j"]
+    shape -->|no| head{"exactly one chunk of block item k\nheaded outside it?"}
+    head -->|yes| headchunk["every old chunk -> that head chunk"]
+    head -->|no| ambiguous["no target: refused if a host\nrelation depends on item k"]
+```
+
+`HostRedirects::ByItem` refuses unequal item counts
+(`RedirectItemCountsDiffer`). `PerItem` with the wrong number of targets, a
+`Chunk` target outside the block, or a `Counterpart` for an item the block
+does not have is refused (`RedirectCountMismatch`, `RedirectOutOfBlock`,
+`NoCounterpart`). A dependent of an item with no unique head chunk is refused
+(`NoUniqueHeadChunk`), but only when such a dependent exists. The validated
+form, one target per replaced old chunk, is private to the splice and built
+from the admitted host, so it cannot be validated against one range and
+applied to another.
+
+### What the splice guarantees
+
+The splice adds no cycle and no second root: if the host `%gra` was a tree,
+the result is a tree. The block is a one-rooted tree by construction; the
+span root attaches to the utterance's root only when no host relation outside
+the replaced range is already a root (`UtteranceRootTaken`), and to a host
+chunk only when that chunk lies outside the range (`SpanRootInReplacedRange`),
+within the host (`SpanRootOutOfHost`), and its own chain of heads does not
+reach the range (`SpanRootDependsOnSpan`: with `x@s y@s z .` and `z -> x`,
+the span `x y` cannot hang under `z`). Every refusal leaves both tiers
+unchanged. The method's rustdoc carries a worked L2 example: in `dont@s:eng
+mal geh .`, the span `dont` becomes `do~n't`, `mal` (a dependent of `dont`)
+moves to the span root `do`, and the span root keeps depending on `geh`,
+chunk 3 before the splice and 4 after it.
 
 ## Design Principles
 

@@ -10,15 +10,17 @@ export function createClanCapability(
     },
 
     async openInClan({ file, error }) {
+      // One request value, the Rust command's `OpenInClanRequest`.
       await transport.invoke(DESKTOP_COMMANDS.openInClan, {
-        file,
-        line: error.location.line ?? 0,
-        col: error.location.column ?? 0,
-        byteOffset: error.location.start,
-        // Bare message, matching the CLI/TUI. CLAN locates the highlight from
-        // this text, so prefixing it with the error code (the old behavior)
-        // diverged from the working CLI.
-        msg: error.message,
+        request: {
+          file,
+          line: error.location.line ?? 0,
+          col: error.location.column ?? 0,
+          byteOffset: error.location.start,
+          // Bare message, matching the CLI/TUI: CLAN locates the highlight
+          // from this text.
+          msg: error.message,
+        },
       });
     },
   };

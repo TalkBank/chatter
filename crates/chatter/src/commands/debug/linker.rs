@@ -26,13 +26,7 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
         std::io::BufWriter::new(file)
     });
 
-    // The tree-sitter CHAT grammar is compiled into the binary and
-    // structurally validated by CI, so construction is infallible
-    // in practice (matches the pattern used in
-    // `crates/chatter/src/lib.rs` chat_parser()).
-    #[allow(clippy::expect_used)]
-    let parser = talkbank_parser::TreeSitterParser::new().expect("grammar loads");
-    let cha_files = collect_cha_files(paths);
+    let (cha_files, parser) = super::transcripts_and_parser(paths);
     let total_files = cha_files.len();
     eprintln!("Analyzing {total_files} .cha files...");
 
@@ -529,124 +523,124 @@ pub fn run_linker_audit(paths: &[PathBuf], anomalies_path: Option<&Path>) {
     }
 
     // ── Print summary ──────────────────────────────────────────────
-    println!("=== LINKER AUDIT RESULTS ===");
-    println!();
-    println!("Files analyzed:                   {files_processed}");
-    println!("Files with linkers/special terms: {files_with_linkers}");
-    println!("Files with anomalies:             {files_with_anomalies}");
+    outln!("=== LINKER AUDIT RESULTS ===");
+    outln!();
+    outln!("Files analyzed:                   {files_processed}");
+    outln!("Files with linkers/special terms: {files_with_linkers}");
+    outln!("Files with anomalies:             {files_with_anomalies}");
 
-    println!();
-    println!("--- Linker Frequencies ---");
+    outln!();
+    outln!("--- Linker Frequencies ---");
     let mut sorted_linkers: Vec<_> = linker_totals.iter().collect();
     sorted_linkers.sort_by(|a, b| b.1.cmp(a.1));
     for (label, count) in &sorted_linkers {
-        println!("  {label:<30} {count:>8}");
+        outln!("  {label:<30} {count:>8}");
     }
 
-    println!();
-    println!("--- Special Terminator Frequencies ---");
+    outln!();
+    outln!("--- Special Terminator Frequencies ---");
     let mut sorted_terms: Vec<_> = term_totals.iter().collect();
     sorted_terms.sort_by(|a, b| b.1.cmp(a.1));
     for (label, count) in &sorted_terms {
-        println!("  {label:<30} {count:>8}");
+        outln!("  {label:<30} {count:>8}");
     }
 
     let pp_total = pp_correct + pp_same_speaker + pp_wrong_term + pp_first;
-    println!();
-    println!("--- ++ (Other Completion) Pairing ---");
-    println!("  Total:                          {pp_total:>8}");
-    println!(
+    outln!();
+    outln!("--- ++ (Other Completion) Pairing ---");
+    outln!("  Total:                          {pp_total:>8}");
+    outln!(
         "  Correct (diff spk + +...):      {pp_correct:>8} ({})",
         pct(pp_correct, pp_total)
     );
-    println!(
+    outln!(
         "  ANOMALY: same speaker:          {pp_same_speaker:>8} ({})",
         pct(pp_same_speaker, pp_total)
     );
-    println!(
+    outln!(
         "  ANOMALY: wrong terminator:      {pp_wrong_term:>8} ({})",
         pct(pp_wrong_term, pp_total)
     );
-    println!("  ANOMALY: first utterance:       {pp_first:>8}");
-    println!("  Preceding terminator distribution:");
+    outln!("  ANOMALY: first utterance:       {pp_first:>8}");
+    outln!("  Preceding terminator distribution:");
     let mut sorted_pp: Vec<_> = pp_prev_term_dist.iter().collect();
     sorted_pp.sort_by(|a, b| b.1.cmp(a.1));
     for (label, count) in &sorted_pp {
-        println!("    {label:<28} {count:>8}");
+        outln!("    {label:<28} {count:>8}");
     }
 
     let sc_total = sc_correct + sc_wrong_term + sc_no_prior;
-    println!();
-    println!("--- +, (Self Completion) Pairing ---");
-    println!("  Total:                          {sc_total:>8}");
-    println!(
+    outln!();
+    outln!("--- +, (Self Completion) Pairing ---");
+    outln!("  Total:                          {sc_total:>8}");
+    outln!(
         "  Correct (same spk + +/.):       {sc_correct:>8} ({})",
         pct(sc_correct, sc_total)
     );
-    println!(
+    outln!(
         "  ANOMALY: wrong terminator:      {sc_wrong_term:>8} ({})",
         pct(sc_wrong_term, sc_total)
     );
-    println!("  ANOMALY: no prior same-speaker:  {sc_no_prior:>8}");
-    println!("  Preceding same-speaker terminator distribution:");
+    outln!("  ANOMALY: no prior same-speaker:  {sc_no_prior:>8}");
+    outln!("  Preceding same-speaker terminator distribution:");
     let mut sorted_sc: Vec<_> = sc_prev_term_dist.iter().collect();
     sorted_sc.sort_by(|a, b| b.1.cmp(a.1));
     for (label, count) in &sorted_sc {
-        println!("    {label:<28} {count:>8}");
+        outln!("    {label:<28} {count:>8}");
     }
 
     let qf_total = qf_correct + qf_chained + qf_wrong_term + qf_no_prior;
-    println!();
-    println!("--- +\" (Quotation) Pairing ---");
-    println!("  Total:                          {qf_total:>8}");
-    println!(
+    outln!();
+    outln!("--- +\" (Quotation) Pairing ---");
+    outln!("  Total:                          {qf_total:>8}");
+    outln!(
         "  Correct (same spk + +\"/.)       {qf_correct:>8} ({})",
         pct(qf_correct, qf_total)
     );
-    println!(
+    outln!(
         "  Chained (same spk + +\"):        {qf_chained:>8} ({})",
         pct(qf_chained, qf_total)
     );
-    println!(
+    outln!(
         "  ANOMALY: wrong terminator:      {qf_wrong_term:>8} ({})",
         pct(qf_wrong_term, qf_total)
     );
-    println!("  ANOMALY: no prior same-speaker:  {qf_no_prior:>8}");
+    outln!("  ANOMALY: no prior same-speaker:  {qf_no_prior:>8}");
 
-    println!();
-    println!("--- +< (Lazy Overlap) Blocks ---");
-    println!("  Total blocks:                   {lo_blocks:>8}");
-    println!("  Isolated (size 1):              {lo_isolated:>8}");
-    println!("  Pairs (size 2):                 {lo_pairs:>8}");
-    println!("  Large (size 3+):                {lo_large:>8}");
-    println!("  Same-speaker block start:       {lo_same_spk_start:>8}");
-    println!("  Combined with other linker:     {lo_combined:>8}");
+    outln!();
+    outln!("--- +< (Lazy Overlap) Blocks ---");
+    outln!("  Total blocks:                   {lo_blocks:>8}");
+    outln!("  Isolated (size 1):              {lo_isolated:>8}");
+    outln!("  Pairs (size 2):                 {lo_pairs:>8}");
+    outln!("  Large (size 3+):                {lo_large:>8}");
+    outln!("  Same-speaker block start:       {lo_same_spk_start:>8}");
+    outln!("  Combined with other linker:     {lo_combined:>8}");
 
-    println!();
-    println!("--- +^ (Quick Uptake) ---");
-    println!("  Same speaker:                   {qu_same:>8}");
-    println!("  Different speaker:              {qu_diff:>8}");
+    outln!();
+    outln!("--- +^ (Quick Uptake) ---");
+    outln!("  Same speaker:                   {qu_same:>8}");
+    outln!("  Different speaker:              {qu_diff:>8}");
 
     if tcu_tech_same + tcu_tech_diff + tcu_nb_same + tcu_nb_diff > 0 {
-        println!();
-        println!("--- CA TCU Linkers ---");
-        println!("  +≋ same speaker:                {tcu_tech_same:>8}");
-        println!("  +≋ diff speaker:                {tcu_tech_diff:>8}");
-        println!("  +≈ same speaker:                {tcu_nb_same:>8}");
-        println!("  +≈ diff speaker:                {tcu_nb_diff:>8}");
+        outln!();
+        outln!("--- CA TCU Linkers ---");
+        outln!("  +≋ same speaker:                {tcu_tech_same:>8}");
+        outln!("  +≋ diff speaker:                {tcu_tech_diff:>8}");
+        outln!("  +≈ same speaker:                {tcu_nb_same:>8}");
+        outln!("  +≈ diff speaker:                {tcu_nb_diff:>8}");
     }
 
-    println!();
-    println!("--- Orphaned Special Terminators ---");
-    println!("  +... total:                     {trailing_off_total:>8}");
-    println!("  +... followed by ++/+,:         {trailing_off_followed:>8}");
-    println!(
+    outln!();
+    outln!("--- Orphaned Special Terminators ---");
+    outln!("  +... total:                     {trailing_off_total:>8}");
+    outln!("  +... followed by ++/+,:         {trailing_off_followed:>8}");
+    outln!(
         "  +... orphaned:                  {:>8}",
         trailing_off_total - trailing_off_followed
     );
-    println!("  +/. total:                      {interruption_total:>8}");
-    println!("  +/. followed by +,:             {interruption_followed:>8}");
-    println!(
+    outln!("  +/. total:                      {interruption_total:>8}");
+    outln!("  +/. followed by +,:             {interruption_followed:>8}");
+    outln!(
         "  +/. orphaned:                   {:>8}",
         interruption_total - interruption_followed
     );

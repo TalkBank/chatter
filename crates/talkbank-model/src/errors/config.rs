@@ -16,6 +16,19 @@
 /// cross-utterance linker validation is on.
 const STRICT_LINKERS_FRAGMENT: &str = "+strict-linkers";
 
+/// Whether the opt-in cross-utterance linker checks run: the quotation
+/// linkers (`+"`, `+"/. `, `+".`) and the completion linkers (`+,`, `++`)
+/// checked for correct pairing with the terminators they continue.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum LinkerChecks {
+    /// Not run (the default): many existing corpora do not follow these
+    /// strict conventions.
+    #[default]
+    Lenient,
+    /// Run (`--strict-linkers`).
+    Strict,
+}
+
 /// The set of validation rules that will actually run.
 ///
 /// # The defining property
@@ -47,14 +60,10 @@ const STRICT_LINKERS_FRAGMENT: &str = "+strict-linkers";
 /// than a rendering of it, and no presentation preference can invalidate it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RuleSelection {
-    /// Run strict cross-utterance linker validation.
+    /// Whether strict cross-utterance linker validation runs.
     ///
-    /// When true, the quotation linkers (`+"`, `+"/. `, `+".`) and the
-    /// completion linkers (`+,`, `++`) are checked for correct pairing with
-    /// the terminators they continue. Off by default because many existing
-    /// corpora do not follow these strict conventions. This is rule
-    /// SELECTION, not presentation: with it off, the checks never execute and
-    /// the diagnostics do not exist to be shown or hidden.
+    /// This is rule SELECTION, not presentation: when lenient, the checks
+    /// never execute and the diagnostics do not exist to be shown or hidden.
     ///
     /// Which codes it turns on is deliberately not written here. This doc said
     /// "(E351-E355)" and omitted E341, E344 and E346, which the same option
@@ -62,26 +71,36 @@ pub struct RuleSelection {
     /// something different and also wrong. The list that cannot drift is the
     /// generated error index, where each such code's page states the option it
     /// requires, derived from the spec example that demonstrates it.
-    strict_linkers: bool,
+    linkers: LinkerChecks,
 }
 
 impl RuleSelection {
     /// The default rule set: every always-on check, and no opt-in check.
     pub fn new() -> Self {
         Self {
-            strict_linkers: false,
+            linkers: LinkerChecks::Lenient,
         }
     }
 
     /// Enable strict cross-utterance linker validation.
-    pub fn with_strict_linkers(mut self) -> Self {
-        self.strict_linkers = true;
+    pub fn with_strict_linkers(self) -> Self {
+        self.with_linkers(LinkerChecks::Strict)
+    }
+
+    /// Run the linker checks as `linkers` says: the one way a caller holding
+    /// a [`LinkerChecks`] (the CLI's `--strict-linkers`, a desktop request)
+    /// selects them, with no branch of its own.
+    pub fn with_linkers(mut self, linkers: LinkerChecks) -> Self {
+        self.linkers = linkers;
         self
     }
 
     /// Whether strict cross-utterance linker validation will run.
     pub fn strict_linkers_enabled(&self) -> bool {
-        self.strict_linkers
+        match self.linkers {
+            LinkerChecks::Strict => true,
+            LinkerChecks::Lenient => false,
+        }
     }
 
     /// How many independent options this type carries.
@@ -106,7 +125,7 @@ impl RuleSelection {
     /// `status = "not_implemented"` on eight codes that fire.
     #[must_use]
     pub fn option_count(&self) -> usize {
-        let Self { strict_linkers: _ } = self;
+        let Self { linkers: _ } = self;
         1
     }
 
@@ -135,13 +154,14 @@ impl RuleSelection {
     /// visit [`Self::option_count`], whose number decides whether the spec
     /// system can demonstrate the new rule at all.
     pub fn cache_key_fragment(&self) -> String {
-        let Self { strict_linkers } = self;
+        let Self { linkers } = self;
 
         let mut fragment = String::new();
         // Turns on checks a lenient run never reaches at all, so a lenient
         // verdict is not an answer for a strict run.
-        if *strict_linkers {
-            fragment.push_str(STRICT_LINKERS_FRAGMENT);
+        match linkers {
+            LinkerChecks::Strict => fragment.push_str(STRICT_LINKERS_FRAGMENT),
+            LinkerChecks::Lenient => {}
         }
         fragment
     }

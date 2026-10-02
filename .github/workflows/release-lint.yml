@@ -23,7 +23,7 @@ jobs:
         with:
           tool: just
       - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@1.98.0
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
       # THE FIX for the v0.16.0 tag failure. `just release-lint` clippies the

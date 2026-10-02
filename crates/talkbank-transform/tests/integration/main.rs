@@ -26,6 +26,9 @@ mod book_library_usage_examples;
 // The three suites below exercise the validation runner / result cache and
 // only compile with the default-on `validation-runner` feature.
 #[cfg(feature = "validation-runner")]
+#[path = "../../../talkbank-cache/tests/integration/shim.rs"]
+mod cache_shim;
+#[cfg(feature = "validation-runner")]
 mod cache_tests;
 #[cfg(feature = "validation-runner")]
 mod concurrent_tests;
