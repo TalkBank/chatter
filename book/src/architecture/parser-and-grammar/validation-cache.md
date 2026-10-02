@@ -209,6 +209,14 @@ and `cache_hit_rate()` is `None` when nothing was consulted.
 
 ## Identity and handle states
 
+Every cache scope offers `close(self)`: a consuming transition that waits for
+the pool's connections and SQLite workers to shut down. Ordinary drop may
+leave background cleanup in flight. Close all handles you own before removing
+their database; the consumed handle cannot be queried again. This does not
+close another pool or process's handles or establish exclusive ownership of a
+filesystem path. Fresh inspection, not the closed handle, admits the resulting
+directory state; filesystem operations remain fallible.
+
 `CachePool::new(identity)` returns `Result<CachePool, CacheError>`. Callers handle
 that result before wrapping a successful pool in `Arc`. The CLI keeps the concrete
 opening error until presentation. A failed cache open leaves validation active

@@ -501,6 +501,24 @@ impl CachePool {
 }
 
 impl<S> CachePool<S> {
+    /// Consume this handle and wait for its pooled connections to close.
+    ///
+    /// Ordinary drop may leave SQLite worker cleanup running in the
+    /// background. Use this transition before removing a database whose
+    /// handles you own. This closes only this pool, not handles held by
+    /// other pools or processes, and establishes no filesystem exclusivity.
+    /// No query capability remains after the transition.
+    ///
+    /// ```compile_fail
+    /// # fn example(cache: talkbank_cache::CachePool) {
+    /// cache.close();
+    /// cache.stats(); // The open handle was consumed.
+    /// # }
+    /// ```
+    pub fn close(self) {
+        self.rt.block_on(self.pool.close());
+    }
+
     /// How many entries the scope covers, from the database alone: no
     /// filesystem read, so a caller that needs only a count cannot fail on
     /// the database file's metadata.

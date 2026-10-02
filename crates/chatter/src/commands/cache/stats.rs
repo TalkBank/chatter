@@ -295,7 +295,9 @@ mod tests {
             serde_json::json!({ "database": "older_schema", "cache_dir": unmigrated.path() })
         );
 
-        drop(CachePool::with_directory(dir.path().to_path_buf(), identity).expect("create"));
+        CachePool::with_directory(dir.path().to_path_buf(), identity)
+            .expect("create")
+            .close();
         let CacheOnDisk::Current(cache) =
             CacheOnDisk::inspect_directory(dir.path().to_path_buf()).expect("inspect")
         else {
@@ -311,10 +313,12 @@ mod tests {
         );
         assert!(present["last_modified"].is_string());
 
-        // Consume the query capability before deleting its backing file.
+        // Consume the query capability and await SQLite shutdown before
+        // deleting its backing file. Ordinary drop does not wait for SQLx's
+        // background connection cleanup.
         // Ownership prevents using this handle after the state transition;
         // only fresh inspection can admit the directory's new state.
-        drop(cache);
+        cache.close();
         std::fs::remove_file(talkbank_transform::cache_db_path(dir.path())).expect("remove");
         let CacheOnDisk::Absent(absent) =
             CacheOnDisk::inspect_directory(dir.path().to_path_buf()).expect("inspect")

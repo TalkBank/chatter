@@ -18,6 +18,14 @@ command silently ignoring something; each such change is marked.
 
 ### Changed
 
+- Cache handles offer `close(self)`, which consumes the query capability and
+  waits for pooled connections and SQLite workers to shut down. Callers that
+  remove an owned database can close every owned handle explicitly instead
+  of relying on background destructor timing. Cache lifecycle tests close
+  both writer and inspector before deletion, then obtain `Absent` by fresh
+  inspection; they no longer query an unlinked database or assume it can be
+  removed while open on Windows.
+
 - **Breaking (Rust API):** `RunEnding::Complete` requires producer-admitted
   `CompleteStats`; `Stopped` and `Incomplete` require `PartialStats`.
   Read counts through `snapshot()` and shortfalls through `missing_files()`;
