@@ -171,12 +171,12 @@ fn canonical_cache_write_failure_preserves_results_and_forces_revalidation() {
     assert_eq!(first.stats.roundtrip_passed(), 1);
     let per_run = [
         Attempt::Roundtrip(
-            good.clone(),
+            cached(&good),
             config.alignment,
             talkbank_cache::RoundtripOutcome::Passed,
         ),
-        Attempt::Validation(good, config.alignment, CacheOutcome::Valid),
-        Attempt::Validation(bad, config.alignment, CacheOutcome::Invalid),
+        Attempt::Validation(cached(&good), config.alignment, CacheOutcome::Valid),
+        Attempt::Validation(cached(&bad), config.alignment, CacheOutcome::Invalid),
     ];
     assert_eq!(
         cache.attempts(),

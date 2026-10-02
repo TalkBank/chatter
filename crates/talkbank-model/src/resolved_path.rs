@@ -31,8 +31,9 @@ pub struct ResolvedDirectory(PathBuf);
 impl ResolvedDirectory {
     /// Resolve `path`. A missing directory is resolved through its deepest
     /// existing ancestor (what `cache clear --prefix` needs for a corpus
-    /// already deleted); a `..` among the missing components cannot be
-    /// resolved and is refused, as is an empty path.
+    /// already deleted). Native absolute-path conversion runs first: Windows
+    /// normalizes `..` in ordinary paths; POSIX retains it. A `..` still among
+    /// missing components cannot be resolved and is refused, as is an empty path.
     pub fn resolve(path: &Path) -> io::Result<Self> {
         let mut existing = std::path::absolute(path)?;
         let mut missing = Vec::new();
@@ -181,7 +182,7 @@ mod tests {
 
     /// A prefix names an existing directory (resolved whole) or anything
     /// else (resolved as a file), and a missing directory is resolved
-    /// through its deepest existing ancestor, never through a missing `..`.
+    /// through its deepest existing ancestor.
     #[test]
     fn prefixes_resolve_directories_files_and_missing_paths() {
         let dir = tempfile::tempdir().unwrap();
@@ -198,8 +199,25 @@ mod tests {
                 .as_path(),
             resolved_root.as_path().join("gone/deeper")
         );
-        assert!(ResolvedPrefix::of(&root.join("gone/../x")).is_err());
         assert!(resolved_root.file(OsStr::new("a/b")).is_err());
         assert!(resolved_root.file(OsStr::new("..")).is_err());
+    }
+
+    /// Native path semantics are external facts, not guaranteed by a proof
+    /// type: POSIX retains a missing `..`; ordinary Windows paths normalize it.
+    #[test]
+    fn missing_parent_components_follow_native_path_semantics() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gone").join("..").join("x");
+        #[cfg(unix)]
+        assert!(ResolvedPrefix::of(&path).is_err());
+        #[cfg(windows)]
+        assert_eq!(
+            ResolvedPrefix::of(&path).unwrap().as_path(),
+            ResolvedDirectory::resolve(dir.path())
+                .unwrap()
+                .as_path()
+                .join("x")
+        );
     }
 }

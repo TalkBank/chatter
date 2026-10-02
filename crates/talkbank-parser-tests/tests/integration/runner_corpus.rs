@@ -449,12 +449,12 @@ fn reference_completion_survives_cache_write_failures() {
         cache.attempts(),
         [
             Attempt::Roundtrip(
-                path.clone(),
+                crate::cache_shim::cached(&path),
                 AlignmentValidation::IncludeTierAlignment,
                 talkbank_cache::RoundtripOutcome::Passed,
             ),
             Attempt::Validation(
-                path,
+                crate::cache_shim::cached(&path),
                 AlignmentValidation::IncludeTierAlignment,
                 CacheOutcome::Valid,
             ),

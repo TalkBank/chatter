@@ -18,6 +18,15 @@ command silently ignoring something; each such change is marked.
 
 ### Changed
 
+- Closed-stdout subprocess tests construct a pipe with its reader already
+  closed before launching the child. A consuming endpoint capability removes
+  the parent/child scheduling race without sleeps, retries or weaker assertions.
+
+- Cache-write test doubles retain `ResolvedPath` instead of erasing it to a
+  raw path, so unresolved spellings cannot construct expected cache identities.
+  Path-resolution contracts explicitly follow native Windows and POSIX rules
+  for `..` through missing directories; no platform's semantics are emulated.
+
 - Workspace tests and native-platform CI collect all failing test binaries
   with `--no-fail-fast`. Failures still fail the command; no tests are retried
   or ignored to obtain a passing result.

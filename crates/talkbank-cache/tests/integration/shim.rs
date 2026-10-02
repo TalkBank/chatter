@@ -9,7 +9,7 @@
 //! target uses part of it.
 #![allow(dead_code)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 use talkbank_cache::{
     CacheError, CacheLookup, CacheOutcome, CachePool, ContentHash, ResolvedPath, RoundtripOutcome,
@@ -87,9 +87,9 @@ pub fn refused(reason: &str) -> CacheError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Attempt {
     /// A validation verdict for this file, coverage and outcome.
-    Validation(PathBuf, AlignmentValidation, CacheOutcome),
+    Validation(ResolvedPath, AlignmentValidation, CacheOutcome),
     /// A roundtrip verdict for this file, coverage and outcome.
-    Roundtrip(PathBuf, AlignmentValidation, RoundtripOutcome),
+    Roundtrip(ResolvedPath, AlignmentValidation, RoundtripOutcome),
 }
 
 /// A cache that has no verdict for anything and refuses every write,
@@ -150,11 +150,7 @@ impl ValidationCache for RefusingCache {
         self.attempts
             .lock()
             .expect("attempt log")
-            .push(Attempt::Validation(
-                path.as_path().to_owned(),
-                alignment,
-                outcome,
-            ));
+            .push(Attempt::Validation(path.clone(), alignment, outcome));
         Err(refused("test storage refuses persistence"))
     }
 
@@ -168,11 +164,7 @@ impl ValidationCache for RefusingCache {
         self.attempts
             .lock()
             .expect("attempt log")
-            .push(Attempt::Roundtrip(
-                path.as_path().to_owned(),
-                alignment,
-                outcome,
-            ));
+            .push(Attempt::Roundtrip(path.clone(), alignment, outcome));
         Err(refused("test storage refuses persistence"))
     }
 }

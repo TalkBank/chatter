@@ -6,22 +6,29 @@
 
 use std::process::{Command, Output, Stdio};
 
-/// Run `chatter args` with standard output closed by its reader before the
-/// command writes anything, and collect how it ended.
-fn with_stdout_closed(args: &[&str]) -> Output {
-    let cache = tempfile::tempdir().expect("cache directory");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_chatter"))
-        .args(args)
-        .current_dir(crate::common::reference_fixture(""))
-        .env("TALKBANK_CHAT_CACHE_DIR", cache.path())
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("chatter starts");
-    // The reader stops at once, as `head` does once it has its lines.
-    drop(child.stdout.take());
-    child.wait_with_output().expect("chatter ends")
+/// A write endpoint whose sole reader was closed before any child can start.
+struct ClosedStdout(std::io::PipeWriter);
+
+impl ClosedStdout {
+    fn new() -> Self {
+        let (reader, writer) = std::io::pipe().expect("stdout pipe");
+        drop(reader);
+        Self(writer)
+    }
+
+    /// Consume the closed-reader endpoint when launching the command.
+    fn run(self, args: &[&str]) -> Output {
+        let cache = tempfile::tempdir().expect("cache directory");
+        Command::new(env!("CARGO_BIN_EXE_chatter"))
+            .args(args)
+            .current_dir(crate::common::reference_fixture(""))
+            .env("TALKBANK_CHAT_CACHE_DIR", cache.path())
+            .stdin(Stdio::null())
+            .stdout(self.0)
+            .stderr(Stdio::piped())
+            .output()
+            .expect("chatter ends")
+    }
 }
 
 #[test]
@@ -36,7 +43,7 @@ fn a_closed_stdout_ends_every_text_writer_with_status_one() {
         ],
         &["validate", "corpus/reference/core", "--format", "json"],
     ] {
-        let output = with_stdout_closed(args);
+        let output = ClosedStdout::new().run(args);
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert_eq!(output.status.code(), Some(1), "{args:?}: {stderr}");
         assert!(!stderr.contains("panicked"), "{args:?}: {stderr}");

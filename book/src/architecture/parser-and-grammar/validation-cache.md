@@ -90,6 +90,15 @@ component is never resolved: a link to a transcript is a transcript under
 its own name, which validation compares with `@Media`. Its only constructors
 read the filesystem, so no caller can mint one from a spelling of its own.
 
+Resolution uses the operating system's path rules, not a portable POSIX
+interpretation. Windows normalizes `..` in ordinary paths during native
+absolute-path conversion; POSIX retains it and refuses traversal through a
+missing parent. Windows canonicalization can also produce an extended-length
+path prefix. Cache identities and test doubles retain `ResolvedPath`, rather
+than comparing its native spelling against an unresolved argument. These
+types enforce admission and identity flow; platform-specific filesystem
+behavior still requires native-platform tests.
+
 A `StoredTranscript` makes its `ResolvedPath` when it is admitted (by the
 walk that found it, from one resolution per directory, or by the argument
 resolver, from one per parent), so the validation worker keys by it,
