@@ -21,18 +21,50 @@ description: >-
 # workspace build, which ci.yml's own comment has proposed since before this
 # happened.
 
+# BOUNDED, because a mirror can stall without failing. On the v0.29.0 release
+# tag `apt-get update` stopped after an index fetch, printed nothing more, and
+# held the Linux desktop job for over two hours until it was cancelled. The
+# same day a healthy but slow mirror made this step take 954 s, so a tight
+# wall-clock cap alone would fail good runs. Three layers, innermost first:
+#
+#   1. apt's own stall detection: a connection with no data for 60 s fails,
+#      and apt retries each download up to three times.
+#   2. A wall-clock bound per command (update 5 min, install 15 min), above
+#      the slowest healthy run observed.
+#   3. One retry of the whole sequence after `dpkg --configure -a`, which
+#      repairs a package configuration interrupted by the bound.
+#
+# A composite action's steps cannot carry `timeout-minutes`; each calling step
+# sets one as the outer backstop.
 runs:
   using: composite
   steps:
     - name: apt-get install
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          libwebkit2gtk-4.1-dev \
-          libgtk-3-dev \
-          libayatana-appindicator3-dev \
-          librsvg2-dev \
-          libsoup-3.0-dev \
-          libjavascriptcoregtk-4.1-dev \
+        set -euo pipefail
+        packages=(
+          libwebkit2gtk-4.1-dev
+          libgtk-3-dev
+          libayatana-appindicator3-dev
+          librsvg2-dev
+          libsoup-3.0-dev
+          libjavascriptcoregtk-4.1-dev
           pkg-config
+        )
+        apt_options=(
+          -o Acquire::Retries=3
+          -o Acquire::http::Timeout=60
+          -o Acquire::https::Timeout=60
+          -o DPkg::Lock::Timeout=120
+        )
+        install_packages() {
+          sudo timeout --kill-after=30 300 apt-get "${apt_options[@]}" update &&
+            sudo timeout --kill-after=30 900 apt-get "${apt_options[@]}" install -y "${packages[@]}"
+        }
+        if install_packages; then
+          exit 0
+        fi
+        echo "::warning::apt-get failed or exceeded its time bound; retrying once"
+        sudo dpkg --configure -a
+        install_packages

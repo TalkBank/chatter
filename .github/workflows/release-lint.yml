@@ -12,6 +12,12 @@ on:
 permissions:
   contents: read
 
+# Every step that installs over the network carries `timeout-minutes`, so a
+# stalled mirror fails the job in minutes instead of holding it for the
+# six-hour default: on the v0.29.0 tag an apt index fetch stalled silently and
+# held the Linux desktop job for over two hours. The limits are several times
+# the longest healthy duration measured on that release. The apt step's own
+# stall detection and single retry live in `.github/actions/tauri-linux-deps`.
 jobs:
   release-lint:
     name: clippy + feature-off (release time)
@@ -19,10 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install just
+        timeout-minutes: 10
         uses: taiki-e/install-action@v2
         with:
           tool: just
       - name: Set up Rust toolchain
+        timeout-minutes: 10
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -30,6 +38,7 @@ jobs:
       # whole default workspace, chatter-desktop included, so this Linux job
       # needs the same system libraries every other Linux job does.
       - name: Install Tauri Linux system dependencies
+        timeout-minutes: 50
         uses: ./.github/actions/tauri-linux-deps
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@v2

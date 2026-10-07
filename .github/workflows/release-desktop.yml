@@ -52,6 +52,12 @@ env:
   DESKTOP_DIR: apps/chatter-desktop
   RELEASE_TAG: ${{ inputs.plan && fromJson(inputs.plan).announcement_tag || '' }}
 
+# Every step that installs over the network carries `timeout-minutes`, so a
+# stalled mirror fails the job in minutes instead of holding it for the
+# six-hour default: on the v0.29.0 tag an apt index fetch stalled silently and
+# held the Linux desktop job for over two hours. The limits are several times
+# the longest healthy duration measured on that release. The apt step's own
+# stall detection and single retry live in `.github/actions/tauri-linux-deps`.
 jobs:
   # Fail closed BEFORE any expensive build if the desktop versions are not in
   # sync. On a tag push the bundle version (tauri.conf.json) MUST equal the tag,
@@ -111,11 +117,13 @@ jobs:
 
       # The current stable release, same as ci.yml and rust-toolchain.toml.
       - name: Install Rust toolchain
+        timeout-minutes: 10
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
       - uses: actions/setup-node@v7
+        timeout-minutes: 10
         with:
           node-version: '24'
           cache: 'npm'
@@ -127,6 +135,7 @@ jobs:
           shared-key: release-desktop-${{ matrix.target }}
 
       - name: Install frontend dependencies
+        timeout-minutes: 15
         working-directory: ${{ env.DESKTOP_DIR }}
         run: npm ci
 
@@ -271,9 +280,11 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
+        timeout-minutes: 10
         uses: dtolnay/rust-toolchain@stable
 
       - uses: actions/setup-node@v7
+        timeout-minutes: 10
         with:
           node-version: '24'
           cache: 'npm'
@@ -285,6 +296,7 @@ jobs:
           shared-key: release-desktop-windows
 
       - name: Install frontend dependencies
+        timeout-minutes: 15
         working-directory: ${{ env.DESKTOP_DIR }}
         run: npm ci
 
@@ -363,15 +375,18 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
+        timeout-minutes: 10
         uses: dtolnay/rust-toolchain@stable
 
       - uses: actions/setup-node@v7
+        timeout-minutes: 10
         with:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: apps/chatter-desktop/package-lock.json
 
       - name: Install Tauri Linux system dependencies
+        timeout-minutes: 50
         uses: ./.github/actions/tauri-linux-deps
 
       - name: Cache cargo registry + target
@@ -380,6 +395,7 @@ jobs:
           shared-key: release-desktop-linux
 
       - name: Install frontend dependencies
+        timeout-minutes: 15
         working-directory: ${{ env.DESKTOP_DIR }}
         run: npm ci
 
@@ -452,6 +468,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
+        timeout-minutes: 10
         with:
           node-version: '24'
 
