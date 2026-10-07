@@ -21,8 +21,47 @@ mod checks;
 use checks::{
     check_cross_header_consistency, check_media_filename_match, check_media_linkage_has_timing,
     check_media_unlinked_has_no_timing, check_separator_trailing_space, check_timing_has_media,
-    check_utterance_language_declared, file_uses_ca_mode,
+    check_utterance_language_declared, file_uses_ca_mode, report_missing_media_timing,
 };
+
+/// What the check sequence does with a linked-media declaration that has no
+/// timing evidence (the E544 condition), and what it hands back for it.
+///
+/// The phase is a type, so each caller receives exactly what its phase
+/// produces: complete validation reports E544 and returns nothing, while
+/// timing regeneration reports nothing and returns the declaration as an
+/// outstanding obligation. Neither can drop the other's result.
+trait MediaTimingPhase {
+    /// What the check sequence returns under this phase.
+    type Outcome;
+    /// Settle the E544 observation: `untimed` is the declaration's span when
+    /// linked media has no timing evidence. `errors` is the sequence's own
+    /// sink, so a finding cannot go anywhere else.
+    fn settle(self, untimed: Option<crate::Span>, errors: &impl ErrorSink) -> Self::Outcome;
+}
+
+/// Complete admission: an untimed linked-media declaration is E544.
+struct CompleteMediaTiming;
+
+impl MediaTimingPhase for CompleteMediaTiming {
+    type Outcome = ();
+    fn settle(self, untimed: Option<crate::Span>, errors: &impl ErrorSink) {
+        if let Some(span) = untimed {
+            report_missing_media_timing(span, errors);
+        }
+    }
+}
+
+/// Timing regeneration: the declaration is an obligation, not an error.
+struct RegeneratingMediaTiming;
+
+impl MediaTimingPhase for RegeneratingMediaTiming {
+    type Outcome = Option<crate::Span>;
+    /// Reports nothing: the declaration is handed back, not judged.
+    fn settle(self, untimed: Option<crate::Span>, _errors: &impl ErrorSink) -> Option<crate::Span> {
+        untimed
+    }
+}
 
 fn unknown_alignment_warning(
     alignment_name: &str,
@@ -106,12 +145,13 @@ fn build_validation_context(
 /// Factoring the sequence into one function makes that class of drift
 /// structurally impossible: there is only one place to add a new file-level
 /// check.
-fn run_validation_checks(
+fn run_validation_checks<P: MediaTimingPhase>(
     file: &ChatFile,
     context: &crate::validation::ValidationContext,
     errors: &impl crate::ErrorSink,
     name: TranscriptName<'_>,
-) {
+    timing: P,
+) -> P::Outcome {
     use crate::validation::cross_utterance;
 
     let headers_with_spans: Vec<(&Header, crate::Span)> = file.headers_with_spans().collect();
@@ -153,7 +193,9 @@ fn run_validation_checks(
     // final bullets alone.
     let timing_bullets = main_tier_timing_bullets(file);
     // E544: @Media declares linkage but transcript has no timing evidence.
-    check_media_linkage_has_timing(&headers_with_spans, file, &timing_bullets, errors);
+    let untimed_media =
+        check_media_linkage_has_timing(&headers_with_spans, file, timing_bullets.first().copied());
+    let outcome = timing.settle(untimed_media, errors);
 
     // E552: the inverse, @Media declares `unlinked` but the transcript has
     // timing bullets, so the media is in fact linked (CLAN CHECK 124).
@@ -178,6 +220,7 @@ fn run_validation_checks(
 
     // E701, E704: Validate temporal constraints on media bullets.
     crate::validation::temporal::validate_temporal_constraints(file, errors);
+    outcome
 }
 
 /// The header half of validation: the header set (duplicates, required
@@ -401,7 +444,7 @@ impl ChatFile {
             RuleSelection::new(),
         );
 
-        run_validation_checks(self, &context, errors, name);
+        run_validation_checks(self, &context, errors, name, CompleteMediaTiming);
 
         tracing::debug!("Streaming validation complete");
     }
@@ -463,7 +506,7 @@ impl ChatFile {
             self.participants.keys().cloned().collect();
         let context = build_validation_context(participant_ids, &self.languages, &headers, rules);
 
-        run_validation_checks(self, &context, errors, name);
+        run_validation_checks(self, &context, errors, name, CompleteMediaTiming);
 
         tracing::debug!("Streaming validation with rule selection complete");
     }
@@ -576,6 +619,26 @@ impl ChatFile {
             }
         }
     }
+
+    /// The regeneration phase runs the complete default rule/alignment set,
+    /// but returns an outstanding timing requirement instead of claiming that
+    /// linked media without timing is a complete document.
+    pub(crate) fn validate_regenerating_timing(
+        &mut self,
+        errors: &impl crate::ErrorSink,
+        name: TranscriptName<'_>,
+    ) -> Option<crate::Span> {
+        self.precompute_alignments();
+        let headers: Vec<&Header> = self.headers().collect();
+        let participant_ids = self.participants.keys().cloned().collect();
+        let context = build_validation_context(
+            participant_ids,
+            &self.languages,
+            &headers,
+            RuleSelection::new(),
+        );
+        run_validation_checks(self, &context, errors, name, RegeneratingMediaTiming)
+    }
 }
 
 // Implement Validate trait for ChatFile (all states)
@@ -594,17 +657,70 @@ impl Validate for ChatFile {
 /// every bullet inside the utterance, at any depth, which is the timing
 /// evidence the media-consistency family (E544, E552, E752) reads.
 fn main_tier_timing_bullets(file: &ChatFile) -> Vec<&crate::model::Bullet> {
-    use crate::alignment::helpers::{ContentItem, walk_content};
     let mut bullets = Vec::new();
-    for utt in file.utterances() {
-        walk_content(&utt.main.content.content, None, &mut |item| {
-            if let ContentItem::InternalBullet(bullet) = item {
-                bullets.push(bullet);
-            }
-        });
-        if let Some(bullet) = utt.main.content.bullet.as_ref() {
-            bullets.push(bullet);
-        }
-    }
+    visit_main_tier_timing_bullets(file, &mut |bullet| bullets.push(bullet));
     bullets
+}
+
+/// Every main-tier bullet of the file in document order.
+fn visit_main_tier_timing_bullets<'file>(
+    file: &'file ChatFile,
+    visit: &mut impl FnMut(&'file crate::model::Bullet),
+) {
+    for utt in file.utterances() {
+        visit_utterance_timing_bullets(utt, visit);
+    }
+}
+
+/// The file's first main-tier bullet in document order. The search stops at
+/// the first utterance carrying one; only that utterance's content is walked
+/// to completion, and no bullet collection is allocated.
+fn first_main_tier_timing_bullet(file: &ChatFile) -> Option<&crate::model::Bullet> {
+    file.utterances().find_map(|utt| {
+        let mut first = None;
+        visit_utterance_timing_bullets(utt, &mut |bullet| {
+            first.get_or_insert(bullet);
+        });
+        first
+    })
+}
+
+/// One traversal owner for one utterance's final and recursively nested
+/// main-tier bullets: the internal ones in content order, then the final one.
+fn visit_utterance_timing_bullets<'file>(
+    utt: &'file crate::model::Utterance,
+    visit: &mut impl FnMut(&'file crate::model::Bullet),
+) {
+    use crate::alignment::helpers::{ContentItem, walk_content};
+    walk_content(&utt.main.content.content, None, &mut |item| {
+        if let ContentItem::InternalBullet(bullet) = item {
+            visit(bullet);
+        }
+    });
+    if let Some(bullet) = utt.main.content.bullet.as_ref() {
+        visit(bullet);
+    }
+}
+
+impl ChatFile {
+    /// The linked-media declaration E544 would report, if any: an `@Media`
+    /// expecting a recording, with no status, in a document with no timing
+    /// evidence. Shared by complete validation and by
+    /// [`PendingTimingChatFile::discharge`](crate::validation::PendingTimingChatFile::discharge).
+    pub(crate) fn untimed_media_declaration(&self) -> Option<crate::Span> {
+        let headers_with_spans: Vec<(&Header, crate::Span)> = self.headers_with_spans().collect();
+        check_media_linkage_has_timing(
+            &headers_with_spans,
+            self,
+            first_main_tier_timing_bullet(self),
+        )
+    }
+
+    /// Observe timing presence using the same owner as E544. This does not
+    /// validate the interval, document, recovery state or media declaration,
+    /// and cannot authorize output. The witness borrows this exact structure.
+    /// The search stops at the first utterance carrying a main-tier bullet.
+    pub fn timing_evidence(&self) -> super::TranscriptTimingEvidence<'_> {
+        checks::observe_transcript_timing(self, first_main_tier_timing_bullet(self))
+    }
 }

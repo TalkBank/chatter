@@ -188,7 +188,7 @@ fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
     // for the recovery `blank_line` node covering the malformed line's own
     // trailing newline; that diagnostic was removed 2026-07-30 (E747 now
     // requires the newline to sit at a line boundary, i.e. an actually
-    // blank line; IISRP-residue finding 3).
+    // blank line).
     let codes: Vec<&str> = diags.iter().map(|(c, _, _, _)| c.as_str()).collect();
     assert_eq!(
         codes,

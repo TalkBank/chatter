@@ -97,10 +97,10 @@ fn speaker_id_holistic_writes_llm_stamped_pending() {
 /// (4-pipe @ID role field).
 const DONOR: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tPAR0 Participant, PAR1 Participant\n@ID:\teng|frog|PAR0|||||Participant|||\n@ID:\teng|frog|PAR1|||||Participant|||\n@Media:\tsmoke, audio\n*PAR0:\twhere did the frog go . \u{15}0_2000\u{15}\n*PAR1:\ttell me about the picture . \u{15}2000_2500\u{15}\n*PAR0:\tthe frog fell in the jar . \u{15}2500_4500\u{15}\n@End\n";
 
-/// Session-context JSON for session `NF201-3` exercising all four optional
+/// Session-context JSON for session `S01-1` exercising all four optional
 /// fields (free vocabulary by design; surfaced verbatim to the LLM).
 const SESSION_CONTEXT_JSON: &str = r#"{
-  "NF201-3": {
+  "S01-1": {
     "sample_type": "clinician interview",
     "declared_roles": ["Investigator"],
     "consent_tier": "video+audio",
@@ -146,7 +146,7 @@ fn speaker_id_holistic_session_context_labels_reach_judgment_request() {
     let tmp = tempfile::tempdir().expect("tempdir");
     // Session ID is the donor basename stem, so the file name must match
     // the context key.
-    let donor = tmp.path().join("NF201-3.cha");
+    let donor = tmp.path().join("S01-1.cha");
     let context = tmp.path().join("session-context.json");
     let pending = tmp.path().join("pending.toml");
     std::fs::write(&donor, DONOR).expect("write donor");

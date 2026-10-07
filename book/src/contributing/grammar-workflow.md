@@ -83,6 +83,13 @@ a changed generator. Fallible extraction uses `Result`'s must-use contract;
 source projections have explicit must-use annotations. Admission remains sealed
 against caller-supplied projections, with a narrowly documented private-bound
 allowance rather than a public escape hatch.
+The audited compiled-metadata FFI boundary and grammar-specific admission
+scaffolding also carry narrowly justified warning allowances in the generator's
+runtime source. Keep those allowances at their owner; do not suppress warnings
+across handwritten parser consumers or remove source/language admission checks.
+Borrowed uninhabited recovery arms do not dereference their payloads: they fail
+explicitly if reached, without fabricating a recoverable CHAT state. Source-bound
+accessors may be constant functions, but that does not establish new admission.
 
 For a generator API change, first implement and verify the change in TSGU,
 then commit that reviewed generator change locally so regeneration has clean

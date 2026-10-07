@@ -98,6 +98,43 @@ fn reference_wor_generation_preserves_projection_without_inventing_word_timing()
     );
 }
 
+/// Presence is a borrowed structural observation, not whole-file admission.
+/// The main-only, word-only and absent states derive from one canonical source.
+#[test]
+fn transcript_timing_presence_retains_its_document_binding() {
+    use talkbank_model::model::{DependentTier, Line, TranscriptTimingEvidence};
+    use talkbank_parser_tests::test_error::strict_parse;
+    let parser = TreeSitterParser::new().expect("parser");
+    let source = include_str!("../../../../corpus/reference/tiers/wor.cha");
+    let mut file = strict_parse(parser.parse_chat_file(source)).expect("canonical source parses");
+    let TranscriptTimingEvidence::Recorded(recorded) = file.timing_evidence() else {
+        panic!("canonical main-tier timing must be observed");
+    };
+    assert!(std::ptr::eq(recorded.document(), &file));
+    assert_eq!(recorded.bullet().timing.end_ms, 600);
+    for line in file.lines.as_mut_slice() {
+        if let Line::Utterance(utterance) = line {
+            utterance.main.content.bullet = None;
+        }
+    }
+    let TranscriptTimingEvidence::Recorded(recorded) = file.timing_evidence() else {
+        panic!("actual word-only timing is still evidence");
+    };
+    assert!(std::ptr::eq(recorded.document(), &file));
+    assert_eq!(recorded.bullet().timing.end_ms, 300);
+    for line in file.lines.as_mut_slice() {
+        if let Line::Utterance(utterance) = line {
+            utterance
+                .dependent_tiers
+                .retain(|entry| !matches!(&entry.tier, DependentTier::Wor(_)));
+        }
+    }
+    assert!(matches!(
+        file.timing_evidence(),
+        TranscriptTimingEvidence::Absent
+    ));
+}
+
 #[test]
 fn canonical_wor_sequences_require_positive_complete_timing_before_exposing_hulls() {
     use talkbank_model::model::WriteChat;

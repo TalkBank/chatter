@@ -203,6 +203,30 @@ log, archived, holds the full record).
 - **Revisit**: Only when CLAN CHECK adds a repeated-`@Date` rule. Chatter
   then follows it for parity, under a new code.
 
+### Decision 10: `%wor` word intervals, reversed rejected, zero-duration legal
+
+- **Behaviour**: A `%wor` word bullet that ends before it starts
+  (`300_100`) is `E362` (`check_word_interval`). A zero-duration word bullet
+  (`100_100`) is legal, and word bullets may overlap or start out of order.
+- **Relation to CHECK**: CLAN CHECK `21-Sep-2026` checks no `%wor` bullets:
+  it accepts both cases above, and reports its error 82 ("BEG mark of bullet
+  must be smaller than END mark") only for main-tier bullets. Measured with
+  the `E362` spec examples renamed to match `@Media`. Chatter goes beyond
+  CHECK for the reversed case only.
+- **Why**: the maintainer, 2026-10-06: "do what actually makes sense. CHECK is not
+  God and neither are we." A reversed interval contradicts itself and has no
+  reading as timing; no corpus file was found with one, so rejecting it costs
+  nothing. A zero-duration interval places a word at an instant; at least
+  185,540 such bullets in 1,102 corpus files pass today, and rejecting them
+  would invalidate those files for no reader's benefit. A consumer that needs
+  a positive interval for each word refuses it at its own boundary
+  (`assess_wor_timing_sequence` yields `Rejected` with the slot named).
+- **Planned**: zero-duration word bullets in existing files are aligner
+  artifacts (words that were not located, recorded as instants). Once the
+  affected files are regenerated, a zero-duration word bullet becomes `E362`
+  as well, as a zero-duration main-tier bullet already is: a bullet that
+  covers no time locates nothing.
+
 ---
 
 ## Validation Gap Roadmap

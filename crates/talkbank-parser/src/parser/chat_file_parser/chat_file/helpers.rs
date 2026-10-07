@@ -13,12 +13,14 @@ use crate::error::{
     TeeErrorSink,
 };
 use crate::model::Line;
+use crate::parser::CstNodeId;
 use crate::parser::TreeSitterParser;
 use crate::parser::document_root::DocumentRoot;
-use crate::parser::tree_parsing::parser_helpers::collect_recovery_nodes;
+use crate::parser::tree_parsing::parser_helpers::error_checking::collect_recovery_nodes_retaining;
 use tracing::{debug, info, trace};
 
 use super::document_lowering::DocumentLowering;
+use super::tier_plan::{PlanEntry, RetainAll, TierRouting};
 
 /// Parse all lines from `input` and stream diagnostics to `errors`.
 pub(super) fn parse_lines(
@@ -73,6 +75,30 @@ pub(super) fn parse_lines_with_source<'source>(
 ) -> (
     Vec<Line>,
     Option<crate::generated_traversal::ParsedSource<'source>>,
+) {
+    let (lines, lowered) = parse_lines_with_removal(
+        parser,
+        input,
+        old_tree,
+        errors,
+        PlanEntry::Decided(RetainAll),
+    );
+    (lines, lowered.map(|(source, RetainAll)| source))
+}
+
+/// One source producer and lowering path for retained and complete documents.
+///
+/// Returns the decided plan beside the producing source: both exist exactly
+/// when lowering ran, so a plan can never be read before its decision.
+pub(super) fn parse_lines_with_removal<'source, P: TierRouting>(
+    parser: &TreeSitterParser,
+    input: &'source str,
+    old_tree: Option<&tree_sitter::Tree>,
+    errors: &impl ErrorSink,
+    entry: PlanEntry<'_, P>,
+) -> (
+    Vec<Line>,
+    Option<(crate::generated_traversal::ParsedSource<'source>, P)>,
 ) {
     debug!("Parsing CHAT file ({} bytes)", input.len());
 
@@ -154,7 +180,7 @@ pub(super) fn parse_lines_with_source<'source>(
     // nothing document-shaped in it at all; the recovery backstop below still
     // runs over the node, and the "no valid lines recovered" path still reports
     // it.
-    let lines = DocumentLowering::lower(root, errors);
+    let (lines, plan) = DocumentLowering::lower(root, errors, entry);
 
     // When the root IS an ERROR node and the loop couldn't recover any valid
     // lines, the file is completely unparsable.  Report this so the strict caller
@@ -183,7 +209,14 @@ pub(super) fn parse_lines_with_source<'source>(
     if syntax_root.has_error() {
         let reported = collector.to_vec();
         let mut candidates = Vec::new();
-        collect_recovery_nodes(syntax_root, input, &mut candidates);
+        // Exclusion is by exact node identity, never diagnostic code/span.
+        // The lookup is built once, only when the backstop must traverse
+        // recovery: scanning every withheld tier per CST node would be
+        // quadratic.
+        let withheld: std::collections::HashSet<CstNodeId> = plan.withheld_nodes().collect();
+        collect_recovery_nodes_retaining(syntax_root, input, &mut candidates, &|node| {
+            !withheld.contains(&CstNodeId::of(node))
+        });
         for candidate in candidates {
             // Widen a zero-width MISSING span to one byte so it can intersect a
             // reported span that merely touches its point. A candidate already
@@ -213,5 +246,5 @@ pub(super) fn parse_lines_with_source<'source>(
 
     info!("Parsed {} lines", lines.len());
 
-    (lines, Some(tree))
+    (lines, Some((tree, plan)))
 }

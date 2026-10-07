@@ -10,11 +10,15 @@
 
 mod document_lowering;
 mod helpers;
+mod lowering_lines;
 pub(crate) mod normalize;
 mod parse;
 mod product;
+pub(crate) mod replacement;
 mod streaming;
 #[cfg(test)]
 mod tests;
+pub(crate) mod tier_plan;
+pub(crate) mod word_timing_plan;
 
 pub use product::ParseProduct;

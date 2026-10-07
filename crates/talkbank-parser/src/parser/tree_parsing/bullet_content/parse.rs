@@ -2,8 +2,8 @@
 use crate::error::ErrorSink;
 use crate::generated_traversal::{Absence, Never, NodeSlot};
 use crate::generated_traversal::{
-    AsRawNode, BulletNode, ContinuationNode, InlinePicNode, KindSlot, Positioned, SourceBound,
-    SourceBoundKind, SourceField, SourceSlotView, SpaceNode, TextSegmentNode,
+    AsRawNode, BulletNode, ContinuationNode, InlinePicNode, Positioned, SourceBound,
+    SourceBoundKind, SourceField, SourceRecovery, SourceSlotView, SpaceNode, TextSegmentNode,
     TextWithBulletsAndPicsChild0Choice, TextWithBulletsAndPicsChild0ChoiceSourceView,
     TextWithBulletsAndPicsChild1Choice, TextWithBulletsAndPicsChild1ChoiceSourceView,
     TextWithBulletsChild0Choice, TextWithBulletsChild0ChoiceSourceView,
@@ -11,6 +11,7 @@ use crate::generated_traversal::{
 };
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::AnyKindSlot;
 use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{BulletContent, BulletContentSegment};
@@ -141,11 +142,19 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
         Ok(())
     }
 
-    fn leaf<'tree, 'source, T: SourceBoundKind<'tree>>(
+    /// Push a leaf slot's node, reading a MISSING placeholder of the leaf's
+    /// kind as that kind (its text is empty). Generic over the `Missing`
+    /// payload, bounded by exactly that reading: a placeholder whose source
+    /// view is a field of `T`, which a plain kind slot and a narrowed one read
+    /// under the broad kind proof both provide.
+    fn leaf<'value, 'tree: 'value, 'source, T: SourceBoundKind<'tree>, M>(
         &mut self,
-        slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
+        slot: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, T, M>>,
         push: impl FnOnce(&mut Self, SourceBound<'tree, 'source, T>) -> Result<(), crate::CstFailure>,
-    ) -> Result<(), crate::CstFailure> {
+    ) -> Result<(), crate::CstFailure>
+    where
+        M: SourceRecovery<'value, 'tree, 'source, View = SourceField<'value, 'tree, 'source, T>>,
+    {
         match slot.view() {
             SourceSlotView::Present(node) | SourceSlotView::Missing(node) => {
                 push(self, node.read()?)?;

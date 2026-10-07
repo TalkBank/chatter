@@ -1,19 +1,19 @@
 # Merge Robustness: Dedupe-on-Insert, @Languages Subset Matching, Multi-Adult-Speaker
 
 **Status:** Draft
-**Last modified:** 2026-07-01 13:51 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/superpowers/specs/2026-07-01-merge-robustness-design.md)
 
 ## Context
 
-The IISRP corpus merge (donor ASR re-transcription merged into 805 reference
-sessions, `docs/investigations/2026-06-24-iisrp-brian-merge-request-assessment.md`
-in the meta-repo) surfaced three genuine gaps in `chatter`'s merge/speaker-id
-pipeline, not one-off bugs specific to that corpus. This spec designs the
-long-term, principled fix for each. There is no deadline; the goal is the
-correct general mechanism, not a patch scoped to IISRP's specific data.
+A corpus-scale merge (donor ASR re-transcriptions merged into hand-made
+reference transcripts, session by session) surfaced three genuine gaps in
+`chatter`'s merge/speaker-id pipeline, not one-off bugs specific to that
+corpus. This spec designs the long-term, principled fix for each. There is
+no deadline; the goal is the correct general mechanism, not a patch scoped
+to one corpus's data.
 
 All three gaps were traced to exact file/line locations in this repo (not
-inferred from the investigation doc's summary), and all three approaches
+inferred from a summary of the merge run), and all three approaches
 below were worked out with the maintainer question-by-question before being
 written up here.
 
@@ -30,7 +30,7 @@ file1 vestigially declares a participant (e.g. `INV`, zero utterances,
 a placeholder header row) and the donor also uses that code with real
 content, the merge emits two `@Participants`/`@ID` declarations for the
 same code, invalid CHAT (E549 "speaker declared more than once").
-Observed on `CWNS-264-4` and `CWNS-265-4`.
+Observed on real sessions in the merge.
 
 **New behavior.** Before assembling the two `Vec`s, for each donor
 participant code not in `--retain`, look up whether that code is
@@ -83,7 +83,7 @@ headers):
   whether that code's header was newly inserted or already present.
 
 **TDD (write first, red/green).** Top-level test = a real `merge_chats()`
-call on two fixture strings reproducing the `CWNS-264-4` shape:
+call on two fixture strings reproducing that shape:
 
 - file1 has `@Participants: ... INV Investigator ...` and zero `*INV:`
   utterances; file2 has real `*INV:` utterances and its own `@Participants`/`@ID`
@@ -107,8 +107,8 @@ call on two fixture strings reproducing the `CWNS-264-4` shape:
 over the full declared `@Languages` code list. Refuses whenever the
 two lists differ in any way.
 
-**Empirical grounding (from the IISRP run, not guessed).** All 8
-observed mismatches have the same shape: donor (ASR, run in a fixed
+**Empirical grounding (from the merge run, not guessed).** Every
+observed mismatch had the same shape: donor (ASR, run in a fixed
 monolingual mode) declares a strict subset of reference's (typically
 hand-coded, multilingual) set, e.g. donor `[eng]` vs. reference
 `[eng, spa]`. The donor never over-claims relative to the reference in
@@ -224,11 +224,11 @@ awareness (this spec *is* that awareness).
    should be able to correct one speaker's role without needing to
    re-specify all of them).
 
-**Backward compatibility, decided explicitly.** The live 345-session
-`pending.toml` from the overnight IISRP run uses the old
-single-`inserted_role` schema and has had **zero** entries adjudicated
-yet (`chatter adjudicate` has not been run against it). Given nothing
-would be lost, this is a clean breaking change: bump
+**Backward compatibility, decided explicitly.** The only existing
+`pending.toml` at the time used the old single-`inserted_role` schema
+and had **zero** entries adjudicated (`chatter adjudicate` had not been
+run against it). Given nothing would be lost, this is a clean breaking
+change: bump
 `schema_version` to `2`, change both types' shapes directly, and
 regenerate `pending.toml` by re-running `chatter batch`'s judgment pass
 after the code lands. No migration code, no dual-shape support carried
@@ -255,10 +255,10 @@ forward.
 
 ## Open items deliberately left alone (out of scope for this spec)
 
-- The 3 mono-speaker-donor sessions (diarization limitation, no donor
-  fix available) are not a merge-tooling gap; nothing in this spec
+- Sessions whose donor has a single speaker (diarization limitation, no
+  donor fix available) are not a merge-tooling gap; nothing in this spec
   addresses them.
-- The 288 pending holistic-judgment suggestions themselves (accepting/
+- The pending holistic-judgment suggestions themselves (accepting/
   overriding via `chatter adjudicate`) are a human-review workload, not
   a design gap; this spec changes the *shape* `chatter adjudicate`
   will present for multi-adult sessions once they stop being refused,
@@ -271,8 +271,7 @@ forward.
 `judgment/output.rs`'s module doc comment cites
 `docs/superpowers/specs/2026-06-04-llm-in-the-loop-merge-design.md` as
 the design spec for the holistic judgment call's JSON contract. That
-file does not exist anywhere in this repo or the broader workspace
-(checked directly, not inferred). Either it was written and later
-lost, or the comment was aspirational and the doc was never created.
+file does not exist in this repo (checked directly, not inferred). Either
+it was written and later lost, or the comment was aspirational and the doc was never created.
 Not investigated further here since it's tangential to this spec;
 flagged for awareness, not fixed as part of this work.

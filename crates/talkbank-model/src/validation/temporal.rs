@@ -109,7 +109,7 @@ fn collect_bullets(file: &ChatFile) -> Vec<BulletInfo<'_>> {
 /// eligibility predicate: untranscribed speech still occupies time, and every
 /// collected bullet participates in same-speaker temporal validation.
 ///
-/// Classifying through [`ContentStructure`] means this predicate cannot hold a
+/// Classifying through [`ContentStructure`](crate::model::content::ContentStructure) means this predicate cannot hold a
 /// different opinion about which variants are containers than the traversals
 /// around it, which is the drift that produced both bugs.
 pub fn has_transcribed_content(content: &[UtteranceContent]) -> bool {

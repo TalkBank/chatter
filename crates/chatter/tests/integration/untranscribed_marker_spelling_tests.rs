@@ -20,10 +20,9 @@
 //! was not, and of the miscased full forms only the all-caps ones were. Nobody
 //! had written down a reason, because there was none.
 //!
-//! Brian MacWhinney ruled on 2026-08-15, asked directly: `ww` is not legal,
-//! `www` is canonical, and `yy` against `yyy` likewise, "for consistency".
-//! `docs/decisions/2026-08-15-brian-ruling-ww-and-yy.md` in the private
-//! workspace records the ruling and its limits.
+//! The CHAT maintainer ruled on 2026-08-15, asked directly: `ww` is not
+//! legal, `www` is canonical, and `yy` against `yyy` likewise, "for
+//! consistency".
 //!
 //! The rule this file pins is therefore about the VOCABULARY, not about three
 //! separate tokens: a shortened or miscased spelling of any marker is rejected.

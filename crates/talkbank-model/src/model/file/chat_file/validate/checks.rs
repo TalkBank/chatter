@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use crate::Header;
 use crate::model::{RecordedWorTiming, WorTimingEvidence};
 
+use super::super::{RecordedTranscriptTiming, TranscriptTimingEvidence};
 use super::ChatFile;
 
 /// The `@Media` headers in this file, each with its span.
@@ -42,6 +43,21 @@ fn first_wor_timing(file: &ChatFile) -> Option<RecordedWorTiming<'_>> {
     })
 }
 
+/// Shared observation used by E544 and read-only regeneration planning.
+pub(super) fn observe_transcript_timing<'file>(
+    file: &'file ChatFile,
+    main_bullet: Option<&'file crate::model::Bullet>,
+) -> TranscriptTimingEvidence<'file> {
+    let bullet = main_bullet.or_else(|| first_wor_timing(file).map(|timing| timing.bullet()));
+    match bullet {
+        Some(bullet) => TranscriptTimingEvidence::Recorded(RecordedTranscriptTiming {
+            document: file,
+            bullet,
+        }),
+        None => TranscriptTimingEvidence::Absent,
+    }
+}
+
 /// Return whether any `@Options` header carries the `CA` flag.
 ///
 /// This is the presence of the FLAG, propagated into the shared validation
@@ -64,14 +80,17 @@ pub(super) fn file_uses_ca_mode(headers: &[&Header]) -> bool {
 /// (i.e., not one of `unlinked` / `missing` / `notrans`), AND the file
 /// carries no timing evidence. Timing evidence is the union of:
 /// - main-tier bullets, utterance-final AND inside the utterance at any
-///   depth (collected once by the caller and passed as `main_bullets`;
+///   depth (the caller passes the first one in document order as
+///   `first_main_bullet`;
 ///   internal bullets joined the union on 2026-09-08, the day it was
 ///   measured that a bullet between two words satisfied neither this rule
 ///   nor E752 while CLAN CHECK 112 fires on it)
 /// - any actual `%wor` word bullet on any utterance
 ///
 /// The caller collects the main-tier bullets once (`main_tier_timing_bullets`
-/// in `validate.rs`) and shares them with E552 and E752; E362 keeps its own
+/// in `validate.rs`), passes the first here, and shares the collection with
+/// E552 and E752; only presence matters here, so a caller with no collection
+/// passes the first bullet it finds and stops. E362 keeps its own
 /// final-bullet collection because monotonicity is a different question. All
 /// other timing surfaces are discovered here.
 ///
@@ -79,11 +98,8 @@ pub(super) fn file_uses_ca_mode(headers: &[&Header]) -> bool {
 pub(super) fn check_media_linkage_has_timing(
     headers: &[(&Header, crate::Span)],
     file: &ChatFile,
-    main_bullets: &[&crate::model::Bullet],
-    errors: &impl crate::ErrorSink,
-) {
-    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
-
+    first_main_bullet: Option<&crate::model::Bullet>,
+) -> Option<crate::Span> {
     // Find the first expected recording with no status. A missing medium
     // declares absence, not linkage, even without a separate status token.
     // Multiple @Media headers
@@ -95,21 +111,17 @@ pub(super) fn check_media_linkage_has_timing(
     });
     let Some((_media, span)) = unqualified_media else {
         // No @Media, or @Media has a status, check does not apply.
-        return;
+        return None;
     };
 
-    if !main_bullets.is_empty() {
-        // Main-tier bullets satisfy the timing requirement.
-        return;
+    match observe_transcript_timing(file, first_main_bullet) {
+        TranscriptTimingEvidence::Recorded(_) => None,
+        TranscriptTimingEvidence::Absent => Some(span),
     }
+}
 
-    // Forced-alignment output typically has %wor bullets even when the main
-    // tier does not. Count correspondence alone is not timing evidence.
-    let has_wor_timing = first_wor_timing(file).is_some();
-    if has_wor_timing {
-        return;
-    }
-
+pub(super) fn report_missing_media_timing(span: crate::Span, errors: &impl crate::ErrorSink) {
+    use crate::{ErrorCode, ErrorContext, ParseError, Severity, SourceLocation};
     errors.report(ParseError::new(
         ErrorCode::MediaLinkageWithoutTiming,
         Severity::Error,

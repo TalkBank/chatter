@@ -54,7 +54,6 @@ pub fn parse_gra_tier<'tree>(
             let (relations, completeness) = parse_gra_relations(contents.read()?, errors)?;
             GraTier::lowered_from(relations, completeness).with_span(span)
         }
-        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
@@ -196,7 +195,6 @@ fn push_gra_relation<'tree>(
             }
             return Ok(1);
         }
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(
                 raw.raw_node(),

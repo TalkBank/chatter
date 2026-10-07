@@ -10,10 +10,9 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AdmittedFullDocumentChild1Choice as FullDocumentChild1Choice,
-    AdmittedFullDocumentChild1ChoiceBoundView as FullDocumentChild1ChoiceBoundView, AsRawNode,
-    ColorWordsHeaderNode, FontHeaderNode, FreeTextNode, KindSlot, NamedKind, NoChild, SourceBound,
-    SourceField, SourceSlotView, WindowHeaderNode,
+    AsRawNode, ColorWordsHeaderNode, FontHeaderNode, FreeTextNode, FullDocumentChild1Choice,
+    FullDocumentChild1ChoiceBoundView, NamedKind, NoChild, SourceBound, SourceField,
+    SourceRecovery, SourceSlotView, WindowHeaderNode,
 };
 use crate::model::{self, Header, Line};
 use tree_sitter::Node;
@@ -21,6 +20,7 @@ use tree_sitter::Node;
 use super::helpers::header_separator;
 use crate::parser::tree_parsing::header::parse_pid_header;
 use crate::parser::tree_parsing::parser_helpers::{surface_displaced, unknown_header_from_node};
+use crate::parser::typed_cst::AnyKindSlot;
 
 /// Parse and append one pre-`@Begin` header line.
 ///
@@ -34,7 +34,7 @@ use crate::parser::tree_parsing::parser_helpers::{surface_displaced, unknown_hea
 pub fn handle_pre_begin_header<'tree>(
     choice: SourceBound<'tree, '_, FullDocumentChild1Choice<'tree>>,
     errors: &impl ErrorSink,
-    lines: &mut Vec<Line>,
+    append: impl FnOnce(Line),
 ) {
     let input = choice.source();
     let span = Span::new(
@@ -56,7 +56,7 @@ pub fn handle_pre_begin_header<'tree>(
     ) else {
         return;
     };
-    lines.push(Line::header_with_separator(header, span, separator));
+    append(Line::header_with_separator(header, span, separator));
 }
 
 /// Decode the generated pre-begin choice for either document or fragment APIs.
@@ -156,13 +156,18 @@ struct FreeText {
 /// present position; for any other state (a MISSING placeholder, an ERROR,
 /// or absent text) the header is reported malformed and lowered as
 /// `Header::Unknown`. A source-binding failure is instead an internal fault.
-fn free_text_header<'tree>(
-    text: SourceField<'_, 'tree, '_, KindSlot<'tree, FreeTextNode<'tree>>>,
+/// Generic over the text slot's `Missing` payload: a placeholder is only ever
+/// "not a value", so one body serves either kind proof.
+fn free_text_header<'value, 'tree: 'value, 'source, M>(
+    text: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, FreeTextNode<'tree>, M>>,
     header_node: Node,
     words: FreeText,
     errors: &impl ErrorSink,
     build: impl FnOnce(String) -> Header,
-) -> Result<Header, crate::parser::typed_cst::CstFailure> {
+) -> Result<Header, crate::parser::typed_cst::CstFailure>
+where
+    M: SourceRecovery<'value, 'tree, 'source>,
+{
     let input = text.source();
     // What the position holds. An EMPTY text is no value: a line with
     // nothing after the tab leaves the position present with zero-width

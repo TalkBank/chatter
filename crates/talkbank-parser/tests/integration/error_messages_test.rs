@@ -170,7 +170,7 @@ fn test_error_spans_point_to_problem_locations() {
 
 /// A diagnostic caused by a defect on one line must be LOCATED on that line.
 ///
-/// Regression for the IISRP-residue finding (2026-07-30): an unparsable main
+/// Regression for a real-transcript finding: an unparsable main
 /// tier (`&- um and .`, the split filler prefix) produced an E305 whose span
 /// was `0..line_len`, i.e. fragment-local coordinates never rebased onto the
 /// file, so the diagnostic rendered on line 1 over the header block. The
@@ -213,7 +213,7 @@ fn test_recovery_diagnostics_are_located_on_the_offending_line() {
 /// A parse-recovered main tier must not cascade into structural claims
 /// about content the parser never saw.
 ///
-/// Regression for the IISRP-residue findings 2 and 4 (2026-07-30):
+/// Regression for a real-transcript finding:
 /// `*INV:\t&- um and .` (the split filler prefix) reported, besides the
 /// correct E316, both "Utterance is empty (no content after speaker)"
 /// (E306, false: `um and .` is right there) and the model-side E305
@@ -249,7 +249,7 @@ fn test_recovered_main_tier_does_not_cascade_e306_or_model_e305() {
 /// E747 "blank lines are not allowed" must fire only on lines that are
 /// actually blank.
 ///
-/// Regression for IISRP-residue finding 3 (2026-07-30): a speaker-less
+/// Regression for a real-transcript finding: a speaker-less
 /// main tier (`*:` alone, or `*:` with a bullet) parses under recovery
 /// with a `blank_line` node covering just its trailing newline, so the
 /// file was told it contains a blank line it does not have. The real

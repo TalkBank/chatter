@@ -29,11 +29,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Working_with_Media>
 
 use crate::generated_traversal::{
-    AdmittedWorTierBodyChild1Child0Choice as WorTierBodyChild1Child0Choice,
-    AdmittedWorTierBodyChild1Child0ChoiceBoundView as WorTierBodyChild1Child0ChoiceBoundView,
     AsRawNode, BulletNode, ChoiceSlot, KindSlot, LangcodeNode, NoChild, NodeSlot, SlotView,
     SourceBound, SourceBoundKind, SourceField, SourceSlotView, WhitespacesNode,
-    WorDependentTierNode, WorTierBodyNode,
+    WorDependentTierNode, WorTierBodyChild1Child0Choice, WorTierBodyChild1Child0ChoiceBoundView,
+    WorTierBodyNode,
 };
 use crate::parser::node_span::span_of;
 use talkbank_model::ErrorSink;
@@ -91,7 +90,6 @@ pub fn parse_wor_tier<'tree>(
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
             WorTier::new(Vec::new()).with_span(span)
         }
-        SourceSlotView::Missing(never) => match never {},
     })
 }
 
@@ -124,7 +122,6 @@ fn parse_wor_tier_body<'tree>(
             match group.child_0.slot().view() {
                 SlotView::Present(langcode) => extract_langcode(*langcode, source, errors),
                 SlotView::Error(_) | SlotView::Absent(NoChild) => None,
-                SlotView::Missing(never) => match never {},
             }
         }
         Some(SlotView::Missing(_) | SlotView::Error(_)) | None => None,
@@ -274,7 +271,6 @@ fn push_wor_item<'tree>(
                                 items.push(WorItem::Word(Box::new(word)));
                             }
                         }
-                        SourceSlotView::Missing(never) => match never {},
                         SourceSlotView::Error(bad) => {
                             errors.report(unexpected_node_error(
                                 bad.raw_node(),
@@ -359,24 +355,23 @@ fn parse_inline_bullet<'tree>(
     use crate::parser::tree_parsing::media_bullet::BulletRejection;
     // Alignment owns ordinary timestamp rejection, but a producer fault must
     // remain an internal failure rather than become an absent timing value.
-    let (start_ms, end_ms) =
-        match crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps(node, errors)
-        {
-            Ok(times) => times,
-            Err(BulletRejection::Producer(fault)) => {
-                crate::parser::typed_cst::report_cst_failure(
-                    node.raw_node(),
-                    node.source(),
-                    fault,
-                    errors,
-                );
-                return None;
-            }
-            Err(
-                BulletRejection::ContainsRecoveryNode
-                | BulletRejection::TimeFieldAbsent { .. }
-                | BulletRejection::TimeNotRepresentable { .. },
-            ) => return None,
-        };
-    Some(Bullet::new(start_ms, end_ms))
+    // The bullet carries its own source span, so E362 about it is located
+    // inside this `%wor` tier.
+    match crate::parser::tree_parsing::media_bullet::parse_bullet_node(node, errors) {
+        Ok(bullet) => Some(bullet),
+        Err(BulletRejection::Producer(fault)) => {
+            crate::parser::typed_cst::report_cst_failure(
+                node.raw_node(),
+                node.source(),
+                fault,
+                errors,
+            );
+            None
+        }
+        Err(
+            BulletRejection::ContainsRecoveryNode
+            | BulletRejection::TimeFieldAbsent { .. }
+            | BulletRejection::TimeNotRepresentable { .. },
+        ) => None,
+    }
 }

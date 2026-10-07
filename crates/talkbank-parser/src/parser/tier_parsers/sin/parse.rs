@@ -54,7 +54,6 @@ pub fn parse_sin_tier<'tree>(
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
             SinTier::new(Vec::new()).with_span(span)
         }
-        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
     })
 }
 
@@ -117,7 +116,6 @@ fn push_sin_group<'tree>(
         SourceSlotView::Present(group_node) => {
             items.extend(extract_sin_group_items(group_node.read()?, errors)?);
         }
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(raw.raw_node(), source, "sin_groups"));
         }

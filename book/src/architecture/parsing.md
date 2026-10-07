@@ -168,6 +168,18 @@ terminators still retain their recovery states; Error, Absent and displaced
 children remain explicit. The admitted terminator choice uses the same exhaustive
 mapping as other tiers. No clean-tier assumption substitutes for those types,
 and no timing, empty-tier or public API policy changes follow from this proof.
+The free-text dependent tiers (the nine bullet-payload tiers, the fifteen
+raw-text tiers and `%x` user-defined tiers) also extract under compiled
+canonical-grammar admission. Each body is a named nonterminal, so its slot is a
+`SelectedNonMissingKindSlot` and the body readers have no Missing arm: before
+the proof reached them they read a placeholder body's empty text as content, a
+path the grammar can never take. Their `tier_sep` slot is narrowed too, and the
+separator reader accepts it under either kind proof because it reads only a
+present separator. Error, an absent optional body and displaced children keep
+their diagnostics. Header and field readers whose callers hold both narrowed
+and plain kind slots stay generic over the slot's Missing payload
+(`AnyKindSlot`); a placeholder there only refuses, so one body serves every
+reading.
 Misplaced-linker diagnostics likewise retain source-bound token text instead of
 substituting a grammar name. Recovery collectors and main-tier language precodes
 report unreadable coordinates as internal failures; an unreadable word-recovery

@@ -108,8 +108,8 @@ fn an_error_code_after_the_marker_stays_after_it() -> Result<(), TestError> {
     assert_main_tier_preserved("error_after.cha", "dog [/] [* p:w] dog .")
 }
 
-/// The one occurrence anywhere in the IISRP workstream, kept as a fixture so
-/// the corpus we actually ship has a named regression guard.
+/// A rare shape that does occur in real transcripts, kept as a fixture so
+/// real data has a named regression guard.
 #[test]
 fn a_percent_comment_before_the_marker_stays_before_it() -> Result<(), TestError> {
     assert_main_tier_preserved("percent_before.cha", "then [% pause] [//] and .")

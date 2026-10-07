@@ -1,0 +1,9 @@
+---
+source: crates/talkbank-transform/src/utterance_split.rs
+expression: text
+---
+*CHI:	hello . 100_300
+%wor:	hello 100_300 .
+
+*CHI:	world . 300_600
+%wor:	world 300_600 .

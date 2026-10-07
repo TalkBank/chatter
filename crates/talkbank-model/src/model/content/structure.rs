@@ -121,8 +121,8 @@ pub enum ContentStructure<'a> {
 /// `&annotated.inner`, DISCARDING the annotations that follow the marker. That
 /// is this module's own Shape C: a total function silently dropping
 /// information, in the type whose job is to be the one owner. It is also why
-/// `iisrp_session_profile` had to hand-roll a `carries_annotations` walker in
-/// August 2026: the owner could not answer the question.
+/// a downstream session profiler had to hand-roll a `carries_annotations`
+/// walker in August 2026: the owner could not answer the question.
 #[derive(Debug, Clone, Copy)]
 pub enum RetraceRef<'a> {
     /// `<a b> [/]`

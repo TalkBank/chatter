@@ -73,6 +73,7 @@ pub use config::RuleSelection;
 pub use context::{SharedValidationData, ValidationContext, language_allows_numbers};
 pub use lexical::report_control_characters;
 pub use state::{AlignmentValidation, ValidChatFile, ValidationFailure, ValidationPolicy};
+pub use state::{MediaTimingObligation, PendingTimingChatFile, TimingRegenerationAdmission};
 pub use temporal::{SPEAKER_OVERLAP_TOLERANCE_MS, has_transcribed_content};
 pub use r#trait::Validate;
 
@@ -85,8 +86,8 @@ pub use word::language::LanguageResolution;
 pub use word::{GoverningMark, GoverningMarkKind, LanguageResolutionOutcome};
 
 // Public bullet validation function
-pub(crate) use bullet::check_bullet;
 pub use bullet::check_bullet_monotonicity;
+pub(crate) use bullet::{check_bullet, check_word_interval};
 pub use speaker::check_speaker_id;
 pub(crate) use unparsed_tier::check_dependent_tier_content;
 

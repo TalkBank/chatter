@@ -83,8 +83,8 @@ pub use intern::{
 // Re-export file types
 pub use file::{
     ChatFile, ChatFileLines, FileStem, FileStemError, Line, OwnedFileStem, OwnedTranscriptName,
-    ParseHealth, ParseHealthState, ParseHealthTier, TranscriptName, Utterance, UtteranceLanguage,
-    UtteranceLanguageMetadata,
+    ParseHealth, ParseHealthState, ParseHealthTier, RecordedTranscriptTiming, TranscriptName,
+    TranscriptTimingEvidence, Utterance, UtteranceLanguage, UtteranceLanguageMetadata,
 };
 
 // Re-export participant type

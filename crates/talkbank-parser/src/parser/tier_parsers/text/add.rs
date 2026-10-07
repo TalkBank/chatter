@@ -29,7 +29,7 @@ pub fn parse_add_tier<'tree>(
 ) -> Result<AddTier, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
-    let children = typed.extract()?;
+    let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
     let content = parse_optional_text_tier_content(
         typed,
         children.field_child_2().slot(),

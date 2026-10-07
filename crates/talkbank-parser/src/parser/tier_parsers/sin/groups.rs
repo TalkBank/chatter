@@ -96,9 +96,6 @@ pub(super) fn extract_sin_group_items<'tree>(
                     // Fallback: preserve the entire group as a single token.
                     fallback_group_as_token(typed)
                 }
-                SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => {
-                    match never {}
-                }
             }
         }
     })
@@ -228,7 +225,6 @@ fn push_sin_token<'tree>(
                 tokens.push(token);
             }
         }
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(
                 raw.raw_node(),

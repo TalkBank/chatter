@@ -10,9 +10,9 @@
 //!
 //! This is the mechanism that lets a fixer repair one healthy utterance in a
 //! transcript whose OTHER utterances are broken, rather than refusing the
-//! whole file the way whole-file repair does: `IISRP 049-1.cha` had a clean
-//! utterance at line 106 and an unrelated parse error at line 502, and the
-//! whole file was refused for want of exactly this gate.
+//! whole file the way whole-file repair does: a real transcript had a clean
+//! utterance near its top and an unrelated parse error hundreds of lines
+//! later, and the whole file was refused for want of exactly this gate.
 
 use talkbank_model::model::{ChatFile, ParseHealthState, Utterance};
 

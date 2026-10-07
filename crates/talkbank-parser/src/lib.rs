@@ -124,6 +124,11 @@ pub(crate) mod parser;
 mod participant_words;
 pub use participant_words::{MissingParticipantRole, ParticipantWordRoles};
 
+pub use parser::chat_file_parser::chat_file::replacement::{
+    AdmittedDisposition, AdmittedPreservation, AdmittedReplacement, AdmittedTimingRegeneration,
+    RemovalCause, RemovedTier, ReplacementFailure, ReplacementTiers, WordTimingAdmission,
+    WordTimingPlan,
+};
 /// Main parser type, initialization error, and the strict whole-file parse
 /// product type.
 pub use parser::document_root::DocumentRoot;

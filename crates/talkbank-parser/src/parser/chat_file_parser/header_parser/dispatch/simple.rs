@@ -16,30 +16,36 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    ActivitiesHeaderNode, AsRawNode, BckHeaderNode, DateHeaderNode, KindSlot, LocationHeaderNode,
-    NamedKind, PageHeaderNode, RoomLayoutHeaderNode, SourceBound, SourceBoundKind, SourceField,
-    THeaderNode, TapeLocationHeaderNode, TimeDurationHeaderNode, TimeStartHeaderNode,
-    TranscriberHeaderNode, VideosHeaderNode, WarningHeaderNode,
+    ActivitiesHeaderNode, AsRawNode, BckHeaderNode, DateHeaderNode, LocationHeaderNode, NamedKind,
+    PageHeaderNode, RoomLayoutHeaderNode, SourceBound, SourceBoundKind, SourceField,
+    SourceRecovery, THeaderNode, TapeLocationHeaderNode, TimeDurationHeaderNode,
+    TimeStartHeaderNode, TranscriberHeaderNode, VideosHeaderNode, WarningHeaderNode,
 };
 use crate::model::{self, Header};
 use crate::parser::tree_parsing::parser_helpers::{
     ContentSlot, HeaderSite, read_source_content, surface_displaced, unknown_header_from_node,
 };
+use crate::parser::typed_cst::AnyKindSlot;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
 /// One header with one content slot: read the slot, build the header from
 /// its text with `build`, or hand back the recovery the slot produced, then
 /// surface the carrier's own unexpected sink. The one owner of the two arms
-/// every simple header used to write.
-pub(super) fn simple_header<'tree, 'source, T: SourceBoundKind<'tree> + NamedKind>(
+/// every simple header used to write. Generic over the content slot's
+/// `Missing` payload, as [`read_source_content`] is.
+pub(super) fn simple_header<'value, 'tree: 'value, 'source, T, M>(
     site: &HeaderSite<'tree, '_>,
-    content_slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
+    content_slot: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, T, M>>,
     unexpected: &[Node<'tree>],
     words: &ContentSlot<'_>,
     errors: &impl ErrorSink,
     build: impl FnOnce(&'source str) -> Header,
-) -> ParseOutcome<Header> {
+) -> ParseOutcome<Header>
+where
+    T: SourceBoundKind<'tree> + NamedKind,
+    M: SourceRecovery<'value, 'tree, 'source>,
+{
     let header = read_source_content(site, content_slot, words, errors).map_or_else(
         |failure| failure.into_outcome(site, errors),
         |text| ParseOutcome::parsed(build(text)),

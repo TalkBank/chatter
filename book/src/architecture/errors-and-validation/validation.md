@@ -12,7 +12,21 @@ All validation logic is Rust. `talkbank-model::validation` owns CHAT-core
 validation; `talkbank_transform::validate` owns the gate functions
 `validate_to_level` and `validate_output`.
 
-## Validity levels
+## Timing presence is not admission
+
+`ChatFile::timing_evidence()` observes main-tier bullets (including recursively
+nested internal bullets) and actual `%wor` timing through the same owner as
+E544. Its recorded witness borrows both the document and its actual bullet;
+callers cannot construct a witness from unrelated values. The observation does
+not validate intervals, recovery, headers or alignments, and grants no write
+permission. Regeneration consumers can distinguish restored timing from an
+outstanding linkage obligation while still requiring complete output admission.
+
+## Legacy workflow validity levels
+
+These levels are partial workflow checks, not complete CHAT-validity or output
+certificates. Complete source admission and checked construction remain the
+boundaries for retained input and writable output.
 
 `ValidityLevel` (in `talkbank-model::pipeline`) is cumulative: each level
 includes every check below it.
@@ -52,11 +66,10 @@ flowchart TD
     check -->|"yes"| proceed
 ```
 
-**Choosing a level is a judgement about the stage, not about the data.** Work
-that reads word content needs `MainTierValid`; work that only needs speakers
-and utterance boundaries needs `StructurallyComplete`; work that must cope with
-messy real-world files, such as forced alignment, deliberately requires only
-`Parseable`.
+**A selected level cannot waive invalid retained input.** A command may tolerate
+defective generated tiers only through an admitted replacement plan that
+actually discards and regenerates them. Forced alignment does not acquire
+complete admission merely because a file is parseable.
 
 ## Post-serialization validation
 

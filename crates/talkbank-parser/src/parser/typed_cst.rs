@@ -20,11 +20,31 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, CanonicalLanguage, CompiledLanguage, GrammarBindingError, ReconstructionFault,
-    SourceBindingError, SourceBound, SourceBoundKind, SourceField,
+    AsRawNode, CanonicalLanguage, CompiledLanguage, Extract, GrammarBindingError, KindAdmitted,
+    Never, NoChild, NodeSlot, ReconstructionFault, SourceBindingError, SourceBound,
+    SourceBoundKind, SourceField,
 };
 use std::str::Utf8Error;
 use talkbank_model::ParseOutcome;
+
+/// A kind slot (a child taken by its kind, never `Unexpected`) whatever its
+/// `Missing` payload `M` is.
+///
+/// The generator spells that payload two ways: `KindMissing<T>` at a slot
+/// whose kind can be MISSING, and `NarrowedMissing<K, KindMissing<T>>` at a
+/// slot the compiled grammar proves never MISSING, which holds the placeholder
+/// under the `Broad` kind proof and is uninhabited under `KindAdmitted`. A
+/// helper several kinds of position share is generic over `M` and asks of it
+/// only what it reads: the projection `view()` needs (`SourceRecovery` or
+/// `RecoveryNode`) when it merely matches `Missing(_)`, a source view of the
+/// expected kind when it reads the placeholder's text. A helper whose
+/// every caller holds the admitted reading names `NonMissingKindSlot` instead,
+/// and has no `Missing` arm at all.
+pub(crate) type AnyKindSlot<'tree, T, M> = NodeSlot<'tree, T, M, Never, NoChild>;
+
+/// [`AnyKindSlot`] for a retained repeat element or a present optional: never
+/// `Absent`.
+pub(crate) type AnySelectedKindSlot<'tree, T, M> = NodeSlot<'tree, T, M, Never, Never>;
 
 /// Admit the statically linked CHAT producer once, retaining failures as tool
 /// faults. No consumer may substitute a kind-name or source-read assertion.
@@ -47,6 +67,16 @@ pub(in crate::parser) fn canonical_grammar()
         })
         .as_ref()
         .map_err(|error| ReconstructionFault::GrammarBinding(*error))
+}
+
+/// Extract `node` under the admitted kind proof, with the canonical grammar as
+/// its evidence: the reading in which every slot the compiled grammar narrows
+/// is never MISSING, so its `Missing` state is uninhabited and a consumer's
+/// match has no arm for it.
+pub(in crate::parser) fn extract_admitted<'tree, W: Extract<'tree>>(
+    node: W,
+) -> Result<W::Children<KindAdmitted>, ReconstructionFault> {
+    node.extract_admitted(canonical_grammar()?)
 }
 
 /// Producer failures, distinct from source recovery evidence. Both alternatives

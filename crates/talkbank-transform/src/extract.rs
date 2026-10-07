@@ -8,7 +8,9 @@ use talkbank_model::alignment::helpers::{
     counts_for_tier, is_tag_marker_separator, should_align_replaced_word_in_pho_sin,
     walk_words_scoped,
 };
-use talkbank_model::model::{ChatFile, LanguageCode, Line, ReplacedWord, UtteranceContent, Word};
+use talkbank_model::model::{
+    ChatFile, LanguageCode, Line, ReplacedWord, Separator, UtteranceContent, Word,
+};
 use talkbank_model::validation::{GoverningMark, GoverningMarkKind, LanguageResolutionOutcome};
 use talkbank_model::{ChatCleanedText, ChatRawText, SpeakerCode, UtteranceIdx, WordIdx};
 
@@ -130,30 +132,64 @@ pub fn collect_utterance_content(
     domain: PositionalDomain,
     out: &mut Vec<ExtractedWord>,
 ) {
+    visit_extractable(content, domain, &mut |item| match item {
+        Extractable::Word(word, scope) => push_word(out, word, scope),
+        Extractable::TagSeparator(sep, scope) => push_extracted(
+            out,
+            ChatCleanedText::from_separator(sep),
+            ChatRawText::from_separator(sep),
+            None,
+            // A tag separator is not a word, so there is no precedence
+            // question: only the enclosing scope to record.
+            GoverningMark::of_separator(sep, scope.span()),
+        ),
+    });
+}
+
+/// How many items [`collect_utterance_content`] pushes for `content` in
+/// `domain`, without building any of them.
+///
+/// The same walk as extraction, with a counter for its sink, so the count is
+/// extraction's by construction rather than by agreement with another walk's
+/// rules. Building each item costs two owned strings, which a caller that
+/// needs only the number should not pay for.
+#[must_use]
+pub fn count_utterance_content(content: &[UtteranceContent], domain: PositionalDomain) -> usize {
+    let mut count = 0usize;
+    visit_extractable(content, domain, &mut |_| count += 1);
+    count
+}
+
+/// One item extraction emits, before it is built.
+enum Extractable<'a> {
+    /// An alignable word, with the language scope enclosing it.
+    Word(&'a Word, LanguageScope<'a>),
+    /// A tag-marker separator, which `%mor` aligns as a position.
+    TagSeparator(&'a Separator, LanguageScope<'a>),
+}
+
+/// Hand `sink` every item extraction emits for `content` in `domain`, in
+/// document order. The one owner of WHICH leaves are extracted; building and
+/// counting are its two sinks.
+fn visit_extractable<'a>(
+    content: &'a [UtteranceContent],
+    domain: PositionalDomain,
+    sink: &mut impl FnMut(Extractable<'a>),
+) {
     // The SCOPED walk. `walk_words` discards the enclosing `<...> [@s]` span,
-    // and this function's whole output is what downstream NLP sees, so
+    // and extraction's whole output is what downstream NLP sees, so
     // discarding it here is where the information was actually lost.
     walk_words_scoped(
         content,
         Some(domain.into()),
         &mut |leaf, scope| match leaf {
-            WordItem::Word(word) => {
-                collect_alignable_word(word, domain, scope, out);
-            }
+            WordItem::Word(word) => visit_alignable_word(word, domain, scope, sink),
             WordItem::ReplacedWord(replaced) => {
-                collect_replaced_word(replaced, domain, scope, out);
+                visit_replaced_word(replaced, domain, scope, sink);
             }
             WordItem::Separator(sep) => {
                 if domain == PositionalDomain::Mor && is_tag_marker_separator(sep) {
-                    push_extracted(
-                        out,
-                        ChatCleanedText::from_separator(sep),
-                        ChatRawText::from_separator(sep),
-                        None,
-                        // A tag separator is not a word, so there is no
-                        // precedence question: only the enclosing scope to record.
-                        GoverningMark::of_separator(sep, scope.span()),
-                    );
+                    sink(Extractable::TagSeparator(sep, scope));
                 }
             }
         },
@@ -208,11 +244,11 @@ fn push_word(out: &mut Vec<ExtractedWord>, word: &Word, scope: LanguageScope<'_>
     );
 }
 
-fn collect_alignable_word(
-    word: &Word,
+fn visit_alignable_word<'a>(
+    word: &'a Word,
     domain: PositionalDomain,
-    scope: LanguageScope<'_>,
-    out: &mut Vec<ExtractedWord>,
+    scope: LanguageScope<'a>,
+    sink: &mut impl FnMut(Extractable<'a>),
 ) {
     // The scoped walk owns annotated-word exclusion before yielding this leaf.
     // Replacement annotations travel on ReplacedWord and are checked separately.
@@ -220,14 +256,14 @@ fn collect_alignable_word(
         return;
     }
 
-    push_word(out, word, scope);
+    sink(Extractable::Word(word, scope));
 }
 
-fn collect_replaced_word(
-    entry: &ReplacedWord,
+fn visit_replaced_word<'a>(
+    entry: &'a ReplacedWord,
     domain: PositionalDomain,
-    scope: LanguageScope<'_>,
-    out: &mut Vec<ExtractedWord>,
+    scope: LanguageScope<'a>,
+    sink: &mut impl FnMut(Extractable<'a>),
 ) {
     if domain == PositionalDomain::Mor
         && annotations_have_alignment_ignore(&entry.scoped_annotations)
@@ -239,13 +275,13 @@ fn collect_replaced_word(
         PositionalDomain::Mor => {
             for word in &entry.replacement.words {
                 if counts_for_tier(word, TierDomain::Mor) {
-                    push_word(out, word, scope);
+                    sink(Extractable::Word(word, scope));
                 }
             }
         }
         PositionalDomain::Pho | PositionalDomain::Sin => {
             if should_align_replaced_word_in_pho_sin(entry) {
-                push_word(out, &entry.word, scope);
+                sink(Extractable::Word(&entry.word, scope));
             }
         }
     }
@@ -275,6 +311,43 @@ mod tests {
              *CHI:\t{main_tier}\n\
              @End\n"
         )
+    }
+
+    /// Counting is extraction's own walk with a counter for a sink: on reference
+    /// CHAT carrying replacements, retraces, groups and tag-marker separators,
+    /// every item in every domain counts exactly what collecting it pushes.
+    #[test]
+    fn counting_matches_what_extraction_pushes_item_by_item() {
+        let sources = [
+            include_str!("../../../corpus/reference/annotation/errors-and-replacements.cha"),
+            include_str!("../../../corpus/reference/annotation/retrace.cha"),
+            include_str!("../../../corpus/reference/annotation/groups-regular.cha"),
+            include_str!("../../../corpus/reference/content/separators.cha"),
+        ];
+        let mut tag_separators = 0;
+        for source in sources {
+            let chat = parse_chat(source);
+            for utterance in chat.utterances() {
+                for item in &utterance.main.content.content {
+                    let item = std::slice::from_ref(item);
+                    for domain in [
+                        PositionalDomain::Mor,
+                        PositionalDomain::Pho,
+                        PositionalDomain::Sin,
+                    ] {
+                        let mut words = Vec::new();
+                        collect_utterance_content(item, domain, &mut words);
+                        assert_eq!(count_utterance_content(item, domain), words.len());
+                        tag_separators += words
+                            .iter()
+                            .filter(|word| word.raw_text.as_str() == "\u{201E}")
+                            .count();
+                    }
+                }
+            }
+        }
+        // The corpus reaches the separator branch, not only the word branches.
+        assert!(tag_separators > 0);
     }
 
     // -----------------------------------------------------------------------

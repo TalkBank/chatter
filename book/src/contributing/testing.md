@@ -543,8 +543,11 @@ placeholders and doubled-comma ERROR groups; source association does not justify
 removing them. Generator reconstruction tests separately verify source-bound
 choices, groups, extras and ERROR-root extraction against real parsed trees.
 
-Conformance inventory admission distinguishes concrete positional carriers from
-generic runtime wrappers by their declared shape, not a `Children` name suffix.
+Conformance inventory admission distinguishes generated positional carriers
+from generic runtime wrappers by their declared shape, not a `Children` name
+suffix. A carrier or choice may declare the tree lifetime followed by the
+defaulted range-phase and kind-proof axes, and is inspected as `X<'tree>`, the
+reading the dispatch produces; any other generics are refused, never skipped.
 The boundary regression also retains collision-suffixed carrier names. This
 generator-input check is not a new CHAT specimen or a canonical coverage gain.
 

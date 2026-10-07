@@ -76,7 +76,6 @@ pub(crate) fn parse_word_content<'tree>(
             );
             ParseOutcome::rejected()
         }
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
@@ -96,7 +95,6 @@ pub(crate) fn parse_word_content<'tree>(
                         None => ParseOutcome::rejected(),
                     }
                 }
-                SourceSlotView::Missing(never) => match never {},
                 SourceSlotView::Error(bad) => {
                     errors.report(unexpected_node_error(
                         bad.raw_node(),

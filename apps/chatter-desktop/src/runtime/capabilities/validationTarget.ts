@@ -1,10 +1,11 @@
 import type { DesktopTransport, ValidationTargetCapability } from "./contracts";
+import { DESKTOP_COMMANDS } from "../../protocol/desktopProtocol";
 import { disposeOnce, singlePathSelection } from "./shared";
 
 export function createValidationTargetCapability(
   transport: Pick<
     DesktopTransport,
-    "chooseValidationFile" | "chooseValidationFolder" | "onValidationDragDrop"
+    "invoke" | "chooseValidationFile" | "chooseValidationFolder" | "onValidationDragDrop"
   >,
 ): ValidationTargetCapability {
   return {
@@ -14,6 +15,10 @@ export function createValidationTargetCapability(
 
     async chooseValidationFolder() {
       return singlePathSelection(await transport.chooseValidationFolder());
+    },
+
+    async revealFile(path) {
+      await transport.invoke(DESKTOP_COMMANDS.revealInFileManager, { path });
     },
 
     async onValidationDragDrop(listener) {

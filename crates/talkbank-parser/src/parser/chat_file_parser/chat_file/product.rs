@@ -5,7 +5,7 @@
 //! (`Result<ChatFile, ParseErrors>`) that discarded a successfully built
 //! [`ChatFile`] whenever any error-severity diagnostic fired anywhere in the
 //! document, even when the diagnostic's region had nothing to do with the
-//! content the caller actually needed. `chatter debug fix-s` on a real IISRP
+//! content the caller actually needed. `chatter debug fix-s` on a real
 //! transcript had its target utterance parsed and healthy, then threw the
 //! whole file away over an unrelated error hundreds of lines later.
 //!

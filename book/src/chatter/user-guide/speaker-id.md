@@ -108,7 +108,7 @@ below.
 ```bash
 chatter speaker-id input.cha \
   --override-file batch-2026-05-27.overrides.toml \
-  --session-id NF203-2 \
+  --session-id S01-1 \
   -o relabeled.cha
 ```
 
@@ -471,7 +471,7 @@ Later, if anyone re-runs the batch, they use override-file mode:
 ```bash
 chatter speaker-id asr-anonymous.cha \
   --override-file batch.overrides.toml \
-  --session-id NF204-2 \
+  --session-id S02-1 \
   -o asr-labeled.cha
 ```
 

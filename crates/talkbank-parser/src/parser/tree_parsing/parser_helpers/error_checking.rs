@@ -129,6 +129,20 @@ pub(crate) fn check_for_errors_recursive_with_context(
 /// itself. The caller owns `out` (mirroring [`check_for_errors_recursive_with_context`]) so
 /// it can dedup against already-reported spans before emitting.
 pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<ParseError>) {
+    collect_recovery_nodes_retaining(node, source, out, &|_| true);
+}
+
+/// The same backstop, excluding only subtrees removed by their typed producer.
+/// Ancestor/unclassified errors are still reported; no diagnostic is filtered.
+pub(crate) fn collect_recovery_nodes_retaining<'tree>(
+    node: Node<'tree>,
+    source: &str,
+    out: &mut Vec<ParseError>,
+    retain: &impl Fn(Node<'tree>) -> bool,
+) {
+    if !retain(node) {
+        return;
+    }
     if node.is_error() {
         // A structural-incompleteness ERROR wraps the recovered document: when a
         // top-level element is missing (for example no @End), the whole
@@ -140,7 +154,7 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
         // wrapper itself. A leaf/content ERROR (a stray token, a malformed code)
         // wraps no document structure and is reported normally below.
         if let Some(wrapper) = DocumentRecoveryWrapper::admit(node, source) {
-            wrapper.collect_nested(source, out);
+            wrapper.collect_nested(source, out, retain);
             return;
         }
 
@@ -232,7 +246,7 @@ pub(crate) fn collect_recovery_nodes(node: Node, source: &str, out: &mut Vec<Par
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_recovery_nodes(child, source, out);
+        collect_recovery_nodes_retaining(child, source, out, retain);
     }
 }
 
@@ -341,10 +355,15 @@ impl<'tree> DocumentRecoveryWrapper<'tree> {
         has_structure.then_some(Self(node))
     }
 
-    fn collect_nested(self, source: &str, out: &mut Vec<ParseError>) {
+    fn collect_nested(
+        self,
+        source: &str,
+        out: &mut Vec<ParseError>,
+        retain: &impl Fn(Node<'tree>) -> bool,
+    ) {
         let mut cursor = self.0.walk();
         for child in self.0.children(&mut cursor) {
-            collect_recovery_nodes(child, source, out);
+            collect_recovery_nodes_retaining(child, source, out, retain);
         }
     }
 }

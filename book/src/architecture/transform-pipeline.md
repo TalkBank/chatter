@@ -32,6 +32,108 @@ This:
 2. Runs validation (alignment checks, header consistency, etc.)
 3. Collects all errors and warnings into the `ErrorSink`
 
+### Source-bound preservation versus replacement
+
+`TreeSitterParser::admit_planned_tiers` selects a tier-removal policy from the
+headers of the same producing parse. It fully validates the retained document;
+this does not certify original bytes when replacement was selected.
+`AdmittedReplacement::into_disposition` consumes that result and distinguishes:
+
+- `AdmittedDisposition::Preserved(AdmittedPreservation)`: no replacement was
+  selected and no concrete tier was removed. The capability binds complete
+  admission to the exact original source, including its formatting.
+- `AdmittedDisposition::Replaced(AdmittedReplacement)`: only the retained
+  document is admitted. Even a selected replacement that matched no tier cannot
+  manufacture original-source admission through this transition.
+
+`AdmittedSourceChat::from_preservation` transfers the opaque preservation
+capability directly to an unchanged-output proof without parsing again or
+accepting independently supplied source/model arguments. Editing still consumes
+admission and requires fresh checked construction before output. Recovery and
+internal failures cannot produce either successful admission state.
+
+`TreeSitterParser::admit_word_timing_plan` additionally supports
+`WordTimingPlan::PreferRetained`. Its producer defers concrete `%wor` candidates
+and their own diagnostics while lowering every other component normally.
+Complete original admission retains valid timing, including partial timing and
+legal stale sidecars; reusability is a separate downstream decision. If original
+admission fails, the plan physically omits only the concrete word tiers the
+evidence names (their own lowering failed, or a validation error lies inside
+their source span), binds those diagnostics to each removal receipt, and
+validates the reduced document again; errors located in no word tier remove
+every remaining word tier. It requires complete retained admission before
+returning a word-timing replacement receipt, never clears recovered-model taint
+and never filters diagnostic codes. Internal producer failures cannot select
+regeneration. `book/src/architecture/wor-timing.md` describes the loop.
+
+Components parse and lower once. Word-tier entries move into the document
+rather than being copied, and a rejected attempt returns the document with its
+diagnostics (`ValidationFailure::into_rejection`), so no model copy is made;
+removal finds each entry again by its own source span. `WordTimingPlan::Preserve`
+gives no exemption and is appropriate for actual pass-through or preservation
+policies.
+
+The plan's phases are types. Lowering consumes a `PlanEntry`, either already
+decided or a header callback, and hands back the decided plan beside the
+producing source, so nothing can route a tier or read a selection before the
+decision. Each decided plan implements `TierRouting`: `RetainAll` (plain
+parsing) and `TierRemoval` (nothing, or a fixed selection with its removal
+receipts) never defer a tier, and their deferred type is uninhabited, so their
+utterances carry no word candidates by type;
+`WordTimingDecision::PreferRetained` defers word tiers and makes no removal
+receipt during lowering. Removal receipts and deferred candidates therefore
+never coexist in one plan.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Decided: admit_replacing_tiers, plain parsing
+    [*] --> AfterHeaders: admit_planned_tiers, admit_word_timing_plan
+    AfterHeaders --> Decided: every header lowered, callback runs once
+    Decided --> RetainAll: plain parsing, every tier lowers
+    Decided --> TierRemoval: route removes selected domains
+    Decided --> WordTimingDecision: route defers word tiers
+    TierRemoval --> AdmittedReplacement: complete validation
+    WordTimingDecision --> AdmittedReplacement: Preserve, complete validation
+    WordTimingDecision --> WordTimingAdmission: PreferRetained, candidate loop
+```
+
+### Source-bound utterance partitions
+
+`utterance_split::UtteranceSplitPlan` selects morphology-domain or original-word
+timing-domain assignments against one borrowed utterance. Execution accepts no
+second model or assignment vector. It refuses count drift, disjoint child runs,
+boundaries inside indivisible groups/replacements and separator-stranding
+boundaries. Child-label magnitudes do not determine allocation sizes.
+Execution returns `SplitOutcome::Unchanged` when every slot names one child, so
+the caller keeps the utterance it holds and nothing is copied; only
+`SplitOutcome::Split` rebuilds children.
+
+The shared partition policy retains free-text dependent tiers on the first
+child, preserves only count- and lexically corroborated `%wor`, and derives a
+child's main timing only from complete measured word timing. Original-turn
+analysis and uncorroborated word timing are returned as explicit, source-bound
+invalidation receipts, not merely logged. No full parent interval is assigned
+to a partial child. Rebuilt children still need checked construction before
+output; structural partition admission is not whole-file validity.
+
+`utterance_split::WordSpeakerSource` admits complete source timing before
+requesting acoustic inference and keeps its immutable source borrow through
+that request. `bind_timeline` then establishes `WordSpeakerSplitPlan`, without
+rematching timing or accepting another source. The convenience split-plan
+constructor performs those same transitions when evidence already exists.
+
+The split plan adds measured word-level speaker ownership to that same partition
+owner. It requires complete, lexically corroborated `%wor`, uses
+union-of-held-time attribution from `rediarize`, and refuses uncovered or tied
+words. It never picks the nearest turn or carries a previous speaker through a
+gap. Returning to a prior speaker creates a new contiguous child run rather than
+reordering words. A single run is `WordSpeakerPartition::Relabeled`, which names
+the owning track and leaves the source for the caller to relabel; only several
+runs rebuild children. Execution retains ownership evidence and invalidation
+receipts; participant identities, headers and final output admission remain the
+caller's responsibility. The existing whole-turn rediarization API and its
+contestation reporting are unchanged.
+
 ### CHAT → JSON
 
 Convert a CHAT file to its JSON representation:

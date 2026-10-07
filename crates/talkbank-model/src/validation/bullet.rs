@@ -33,6 +33,32 @@ pub(crate) fn check_bullet(bullet: &Bullet, errors: &impl ErrorSink) {
     }
 }
 
+/// Validate one `%wor` word bullet: its end must not precede its start.
+///
+/// Narrower than [`check_bullet`] on purpose. A reversed interval contradicts
+/// itself and is `E362`, although CLAN CHECK does not check word bullets at
+/// all. A zero-duration word interval is legitimate: it places a word at an
+/// instant, and existing corpus files carry many such bullets, so it is not an
+/// error (a consumer that needs positive durations refuses it itself).
+pub(crate) fn check_word_interval(bullet: &Bullet, errors: &impl ErrorSink) {
+    if bullet.timing.start_ms > bullet.timing.end_ms {
+        let bullet_text = bullet.to_chat_string();
+        errors.report(
+            ParseError::new(
+                ErrorCode::TimestampBackwards,
+                Severity::Error,
+                SourceLocation::new(bullet.span),
+                ErrorContext::from_reconstructed(&bullet_text, bullet.span),
+                format!(
+                    "Word timing ends ({}ms) before it starts ({}ms)",
+                    bullet.timing.end_ms, bullet.timing.start_ms
+                ),
+            )
+            .with_suggestion("Swap or correct the word bullet's start and end times"),
+        );
+    }
+}
+
 /// Validate chronological ordering across a sequence of bullets.
 ///
 /// Emits `E362` when a bullet starts before the previous bullet's start time

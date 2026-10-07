@@ -89,7 +89,6 @@ pub fn parse_participants_header<'tree>(
     let contents_node = match header_children.field_child_2().slot().view() {
         SourceSlotView::Present(node) => Some(node),
         SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
-        SourceSlotView::Missing(never) => match never {},
     };
     let Some(contents_node) = contents_node else {
         errors.report(ParseError::new(
@@ -322,7 +321,6 @@ fn parse_participant_slot<'tree>(
             Some(participant) => parse_participant_entry(participant, errors),
             None => ParseOutcome::rejected(),
         },
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(bad) => {
             ParticipantFault::Entry {
                 node: bad.raw_node(),

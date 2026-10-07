@@ -15,10 +15,8 @@
 use super::content::report_tree_shape;
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AdmittedStandaloneWordChild0Choice as StandaloneWordChild0Choice,
-    AdmittedStandaloneWordChild2Choice as StandaloneWordChild2Choice,
-    AdmittedWordBodyChoiceSourceView as WordBodyChoiceSourceView, AsRawNode, NodeSlot,
-    RecoveryNode, SourceBound, SourceSlotView, StandaloneWordNode, WordBodyNode,
+    AsRawNode, NodeSlot, RecoveryNode, SourceBound, SourceSlotView, StandaloneWordChild0Choice,
+    StandaloneWordChild2Choice, StandaloneWordNode, WordBodyChoiceSourceView, WordBodyNode,
 };
 use crate::model::Word;
 use crate::parser::tree_parsing::parser_helpers::{
@@ -106,7 +104,6 @@ pub fn convert_word_node<'tree>(
             }
         }
         SourceSlotView::Unexpected(never) => match never {},
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {}
     }
 

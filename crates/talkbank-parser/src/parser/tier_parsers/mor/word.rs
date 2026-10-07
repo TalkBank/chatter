@@ -79,7 +79,6 @@ pub fn parse_mor_word<'tree>(
                     features.push(feature);
                 }
             }
-            SourceSlotView::Missing(never) => match never {},
             SourceSlotView::Error(bad) => {
                 errors.report(unexpected_node_error(bad.raw_node(), source, "mor_word"))
             }

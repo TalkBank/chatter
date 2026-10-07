@@ -87,7 +87,6 @@ fn read_body<'tree, 'source>(
     match slot.view() {
         SourceSlotView::Present(body) => Ok(Some(body.read()?)),
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => Ok(None),
-        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
     }
 }
 
@@ -132,7 +131,6 @@ fn push_pho_group<'tree>(
         SourceSlotView::Present(group) => {
             items.extend(extract_pho_group_items(group.read()?, errors)?);
         }
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(raw.raw_node(), source, "pho_groups"));
         }

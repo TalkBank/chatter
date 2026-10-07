@@ -29,7 +29,7 @@ impl WorSlotMembershipPolicy {
     /// Whether one main-tier word is a `%wor` slot under this policy.
     ///
     /// The ONE owner of `%wor` membership, and public on purpose.
-    /// [`WorMainTierProjection::from_main`] admits its slots through it, and
+    /// `WorMainTierProjection::from_main` admits its slots through it, and
     /// a consumer that needs the answer for a single word (a per-content-item
     /// count in an utterance splitter, a per-token check in a diarizer) asks
     /// here instead of restating `counts_for_tier(word, TierDomain::Wor)`

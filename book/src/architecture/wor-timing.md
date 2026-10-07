@@ -1,7 +1,7 @@
 # `%wor` Timing Semantics
 
 **Status:** Current
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** {{git-dates:page}}
 
 ## Purpose
 
@@ -30,6 +30,43 @@ remains timing evidence even when counts drift. Alignment processing is not
 required to observe a bullet already in the typed CHAT model. A `%wor` tier
 cannot carry a trailing tier-level bullet: the grammar does not permit that
 state, and `WorTier` cannot construct or serialize it.
+
+Complete CHAT admission rejects a word bullet that ends before it starts
+(E362). A zero-duration word bullet is legal, as are untimed words, and there is
+no cross-word monotonicity, word-overlap or cross-speaker restriction (see the
+leniency policy, Decision 10). A consumer that needs positive intervals, such as
+`assess_wor_timing_sequence`, refuses them at its own boundary. Each word bullet
+carries its own source span, so E362 is located inside its `%wor` tier.
+
+The adaptive source-bound replacement plan (`WordTimingPlan::PreferRetained`)
+discards only the word tiers that are actually wrong, and keeps the rest:
+
+```mermaid
+flowchart TD
+    L[Lower each %wor once] -->|own lowering failed| R1[Removed: OwnLowering]
+    L -->|clean| I[Move entry into the document]
+    I --> V{Validate the candidate}
+    V -->|valid| A[Admit; removed tiers decide the disposition]
+    V -->|errors inside word tiers| R2[Remove those tiers: LocatedValidation]
+    R2 --> V
+    V -->|errors in no word tier| R3[Remove every remaining tier: UnattributedValidation]
+    R3 --> V
+    V -->|rejected, no word tier left| F[Refuse: a retained fault]
+```
+
+A validation diagnostic belongs to a tier when its span lies inside that tier's
+source span; the tiers holding an error are removed with every diagnostic
+inside them bound to the receipt (`RemovedTier::cause`), and the reduced
+document is validated again. Errors located in no word tier remove every word
+tier still retained, recorded as unattributed with the shared diagnostics; any
+retained fault then still refuses. That fallback is the old remove-all
+behaviour: when removal makes such an error go away, it shows only that the
+error depended on word tiers, not which one, so the receipt says
+"unattributed" rather than naming a cause. If a removed tier carried a recorded word
+bullet, the next validation runs in the timing-regeneration phase, so a file
+whose only timing was in removed tiers becomes a pending regeneration (E544
+obligation), while one that keeps some timing is a complete replacement. A
+preservation plan has no exemption of any kind.
 
 ## Current membership policy
 
@@ -237,7 +274,8 @@ questions include:
 
 - whether the proposed policy reduces human correction time;
 - whether every additional slot can receive defensible acoustic boundaries;
-- whether changed timing improves MichiganChild and IISRP merge placement;
+- whether changed timing improves the placement of manual transcripts merged
+  onto automatic ones;
 - whether confidence and provenance improve decisions without becoming public
   transcript clutter;
 - whether a new policy can coexist with legacy `%wor` data without ambiguous

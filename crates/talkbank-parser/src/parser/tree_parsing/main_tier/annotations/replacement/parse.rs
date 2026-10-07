@@ -114,7 +114,6 @@ fn push_word<'tree>(
                 words.push(word);
             }
         }
-        SourceSlotView::Missing(never) => match never {},
         // An ERROR at the word position is the whole-tree pass's to name.
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {}
     }

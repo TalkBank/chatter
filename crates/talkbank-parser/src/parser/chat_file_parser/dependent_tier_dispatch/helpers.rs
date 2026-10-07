@@ -7,7 +7,8 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NodeSlot, SelectedKindSlot, SlotView, TierSepNode, extract_tier_sep,
+    AsRawNode, KindProof, NarrowedKindSlot, NodeSlot, Raw, SelectedNonMissingKindSlot, SlotView,
+    TierSepNode, extract_tier_sep,
 };
 use crate::model::TextTier;
 use crate::model::{NonEmptyString, TierSeparator};
@@ -37,14 +38,15 @@ use tree_sitter::Node;
 /// `free_text` / `text_with_bullets` / `text_with_bullets_and_pics`. Behavior is
 /// preserved byte for byte:
 ///
-/// - `Present` / `Missing`: the removed loop matched the body BY KIND, and a
-///   tree-sitter MISSING node still carries that expected kind, so a MISSING
-///   body was ALSO "found" and its (empty) text read; both are handled here by
-///   reading the raw node's text (`Present` via [`AsRawNode::raw_node`],
-///   `Missing` directly, since the NEW backend's `NodeSlot::Missing` carries the
-///   raw `tree_sitter::Node`, not the typed wrapper). A non-empty text yields
+/// - `Present`: the body node's raw text is decoded. A non-empty text yields
 ///   `Parsed`; an empty text reports "Tier has empty content" at the tier-node
 ///   span; a UTF-8 error reports at the body-node span, exactly as before.
+/// - `Missing` has no arm, because it cannot occur. The body is a named
+///   nonterminal, which the compiled grammar proves tree-sitter never inserts as
+///   a MISSING placeholder, and every caller extracts its tier under that proof
+///   ([`SelectedNonMissingKindSlot`]), so the state is uninhabited. Until the
+///   kind proof reached this slot the type admitted it, and this function read
+///   a placeholder's (empty) text as the removed hand-walk had.
 /// - `Error`: the recovery node is reported first, in the dependent-tier
 ///   analyzer's words (E316 for text nothing could parse), then "Tier is
 ///   missing content node" at the tier-node span: E330.md's pair. Until
@@ -61,7 +63,7 @@ use tree_sitter::Node;
 /// every caller's own `extract_<kind>_dependent_tier`.
 fn read_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &SelectedKindSlot<'tree, T>,
+    body: &SelectedNonMissingKindSlot<'tree, T>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -72,11 +74,7 @@ where
     surface_displaced(unexpected, tier_node.kind(), source, errors);
 
     match body.view() {
-        // Decodes to empty text for a placeholder, exactly as the removed
-        // kind-scan did: a MISSING node satisfied a kind filter and its text
-        // was read.
         SlotView::Present(text) => decode_body_text(tier_node, text.raw_node(), source, errors),
-        SlotView::Missing(text) => decode_body_text(tier_node, text, source, errors),
         SlotView::Error(node) => {
             errors.report(analyze_dependent_tier_error(node, source));
             report_missing_content_node(tier_node, source, errors);
@@ -116,7 +114,7 @@ fn report_missing_content_node(tier_node: Node, source: &str, errors: &impl Erro
 /// constructor's doc asks for.
 pub(crate) fn read_optional_tier_body_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &Option<SelectedKindSlot<'tree, T>>,
+    body: &Option<SelectedNonMissingKindSlot<'tree, T>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -155,7 +153,7 @@ where
 /// (E756 versus a parse error).
 pub(crate) fn read_optional_tier_body_raw_text<'tree, T>(
     tier_node: Node<'tree>,
-    body: &Option<SelectedKindSlot<'tree, T>>,
+    body: &Option<SelectedNonMissingKindSlot<'tree, T>>,
     unexpected: &[Node<'tree>],
     source: &str,
     errors: &impl ErrorSink,
@@ -219,8 +217,12 @@ fn decode_body_text(
 /// parse-time). A recovered child can occur between the tab and that space;
 /// both positions must come from this carrier and remain adjacent. Otherwise
 /// the space belongs to content, not the line separator.
-pub(crate) fn dependent_tier_separator(
-    slot: &KindSlot<'_, TierSepNode<'_>>,
+///
+/// `tier_sep` is a slot the compiled grammar narrows (it is never MISSING), so
+/// the slot is a [`NarrowedKindSlot`] under whichever kind proof the caller
+/// extracted its tier with; only `Present` is read, so either serves.
+pub(crate) fn dependent_tier_separator<K: KindProof>(
+    slot: &NarrowedKindSlot<'_, TierSepNode<'_>, Raw, K>,
 ) -> Result<TierSeparator, crate::generated_traversal::ReconstructionFault> {
     let NodeSlot::Present(tier_sep) = slot else {
         return Ok(TierSeparator::CLEAN);

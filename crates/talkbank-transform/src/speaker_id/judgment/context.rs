@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn record_fills_labels_and_age() {
         let file = file_with(
-            "NF201-3",
+            "S01-1",
             SessionContextRecord {
                 sample_type: Some(
                     SampleTypeLabel::try_from("clinician interview".to_string())
@@ -120,7 +120,7 @@ mod tests {
             },
         );
         let chat = chat_with_id_age("3;06.");
-        let ctx = session_context(Some(&file), "NF201-3", &chat);
+        let ctx = session_context(Some(&file), "S01-1", &chat);
         assert_eq!(
             ctx.sample_type,
             Some(
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn falls_back_to_id_age_when_record_age_absent() {
         let file = file_with(
-            "NF201-3",
+            "S01-1",
             SessionContextRecord {
                 sample_type: None,
                 declared_roles: Vec::new(),
@@ -154,7 +154,7 @@ mod tests {
             },
         );
         let chat = chat_with_id_age("8;05."); // 8*12 + 5 = 101 months
-        let ctx = session_context(Some(&file), "NF201-3", &chat);
+        let ctx = session_context(Some(&file), "S01-1", &chat);
         assert_eq!(
             ctx.consent_tier,
             Some(ConsentTierLabel::try_from("audio only".to_string()).expect("nonblank label"))
@@ -166,7 +166,7 @@ mod tests {
     fn absent_session_yields_unknown_but_keeps_id_age() {
         let file = file_with("OTHER", SessionContextRecord::default());
         let chat = chat_with_id_age("3;06.");
-        let ctx = session_context(Some(&file), "NF201-3", &chat);
+        let ctx = session_context(Some(&file), "S01-1", &chat);
         assert_eq!(ctx.sample_type, None);
         assert!(ctx.declared_roles.is_empty());
         assert_eq!(ctx.consent_tier, None);
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn no_context_file_uses_id_age_only() {
         let chat = chat_with_id_age("3;06.");
-        let ctx = session_context(None, "NF201-3", &chat);
+        let ctx = session_context(None, "S01-1", &chat);
         assert_eq!(ctx.sample_type, None);
         assert!(ctx.declared_roles.is_empty());
         assert_eq!(ctx.consent_tier, None);

@@ -9,6 +9,171 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-07
+
+This release lets a program rewrite part of a transcript (regenerate
+`%mor`/`%gra` or `%wor`, or split an utterance) while everything it keeps is
+still checked against the source it came from. Each of these operations parses
+once, never reparses its own output, and never certifies more than it checked.
+One validation rule changes: a `%wor` word bullet that ends before it starts is
+E362. The typed CST traversal is regenerated, which is breaking for code that
+names its types.
+
+### Added
+
+#### Dependent-tier replacement (`talkbank-parser`)
+
+- `TreeSitterParser::admit_replacing_tiers` parses once, removes the selected
+  dependent tiers (`ReplacementTiers::Morphosyntax`: `%mor` with `%gra`;
+  `ReplacementTiers::WordTiming`: `%wor`) before lowering, and validates every
+  retained domain with the normal rules and tier-alignment checks. Headers,
+  main tiers, retained dependent tiers and unclassified parser recovery still
+  refuse. The result, `AdmittedReplacement`, retains the producing parse and a
+  `RemovedTier` receipt (tier, span, syntax recovery) for every concrete tier
+  it removed, without declaring the original source valid. Refusals are
+  `ReplacementFailure` (`Internal`, `SourceUnavailable`, `RetainedParse`,
+  `Validation`); an internal tool failure is never reported as invalid CHAT.
+
+- `TreeSitterParser::admit_planned_tiers` decides the removal from the
+  document's own typed headers (all of them, misplaced ones included) within
+  the same parse; headers and utterances each lower once. Selecting nothing
+  preserves and validates every tier. `AdmittedDisposition` distinguishes
+  `Preserved` (an `AdmittedPreservation`, which carries the original bytes
+  together with the `ValidChatFile` admitted from them), `Replaced` and
+  `Regenerating`.
+
+- `TreeSitterParser::admit_word_timing_plan` chooses, per document, between
+  `WordTimingPlan::Preserve` and `WordTimingPlan::PreferRetained`. Under
+  `PreferRetained`, valid word timing is kept, partial timing included. When
+  complete admission fails, only the `%wor` tiers the evidence names are
+  removed (a tier whose own lowering fails, or that holds a validation error
+  inside its source span, such as a reversed word bullet or a duplicate
+  `%wor`), and the reduced document is validated again; errors located in no
+  word tier remove every remaining word tier, and retained faults still
+  refuse. `RemovedTier::cause` returns the `RemovalCause` (`Selected`,
+  `OwnLowering`, `LocatedValidation`, `UnattributedValidation`) with the
+  diagnostics that cost the tier. When removing recorded word timing leaves
+  linked media without timing, the result is
+  `WordTimingAdmission::Regenerating`, an `AdmittedTimingRegeneration` that
+  holds a `PendingTimingChatFile` and can never become a `ValidChatFile`.
+
+#### Timing regeneration (`talkbank-model`)
+
+- `ChatFile::validate_for_timing_regeneration` admits retained structure for an
+  operation that will produce timing. It returns
+  `TimingRegenerationAdmission::Ready` when every requirement is already met,
+  or `Pending` with a `PendingTimingChatFile` whose `MediaTimingObligation`
+  names the linked-media declaration (E544) still awaiting timing. A pending
+  file cannot be converted to a `ValidChatFile`.
+  `PendingTimingChatFile::document_mut` writes regenerated timing into the
+  document without separating it from its obligation, and
+  `PendingTimingChatFile::discharge` checks that document with the rule that
+  issued the obligation: it hands the document back once E544 no longer fires,
+  and the payload back while it would. Complete admission of the returned
+  document still runs every rule.
+
+- `ChatFile::timing_evidence` returns `TranscriptTimingEvidence`: `Absent`, or
+  `Recorded` with a `RecordedTranscriptTiming` witness bound to the actual
+  bullet and its document. E544 asks the same question through the same code.
+  Presence of a bullet does not certify that the timing is valid.
+
+- `ValidationFailure::into_rejection` returns the rejected document and the
+  diagnostics that rejected it, both by move, or hands an internal tool
+  failure back unchanged, since that is no evidence about the document.
+
+- `InternalFailure::tool_fault` records a fault a tool detected in itself as
+  one internal-error diagnostic.
+
+#### Source-bound admission and utterance splitting (`talkbank-transform`)
+
+- `parse_source_with_parser` parses once and returns `ParsedSourceChat`, which
+  keeps the source bytes and the parse product together so a policy can
+  inspect the parsed model before deciding. `ParsedSourceChat::admit` admits
+  that same parse, tier alignment included and without reparsing, into an
+  `AdmittedSourceChat`: the original bytes with the `ValidChatFile` admitted
+  from them. No constructor pairs separately supplied text and model;
+  `AdmittedSourceChat::from_preservation` takes the parser's
+  `AdmittedPreservation`.
+
+- `utterance_split::UtteranceSplitPlan` admits a child assignment against the
+  very utterance it will rebuild, in the morphology/extraction word domain
+  (`for_morphology`) or the `%wor` word domain (`for_word_timing`). It refuses
+  (`SplitRefusal`) a slot-count mismatch, a child that reappears after
+  another, a boundary inside one indivisible content item (such as a
+  multi-word replacement), and a boundary that would strand a separator at
+  the start of a child. `execute` returns
+  `SplitOutcome::Unchanged` when nothing splits, so the caller keeps the
+  utterance it already holds and nothing is copied, or
+  `SplitOutcome::Split(SplitChildren)`: the rebuilt children, with an
+  `InvalidatedTier` receipt (`TierInvalidationReason`) for every dependent
+  tier that could not be carried over. Children are not validity proof: a
+  document holding them must still pass complete admission before it is
+  written.
+
+- `utterance_split::WordSpeakerSplitPlan` splits an utterance by the measured
+  speaker ownership of each word. A diarization timeline is projected through
+  complete, count-matched, lexically corroborated `%wor` timing, with the same
+  held-time policy as whole-turn rediarization; a tie or an uncovered word
+  refuses (`WordSpeakerSplitRefusal`) instead of inventing a track.
+  `WordSpeakerSource::admit` admits the source timing before any acoustic
+  inference is run, and `WordSpeakerSource::bind_timeline` later binds the
+  timeline to that same utterance without rematching it. The outcome's
+  `WordSpeakerPartition` is `Relabeled { speaker }` when one track owns every
+  word, or `Split` with relabeled children and their tier-loss receipts;
+  `ownership` reports every word's measured distribution. Track labels are not
+  claims of personal identity; participants and IDs remain the caller's
+  responsibility.
+
+- `utterance_split::build_word_to_content_map` maps each extracted word to the
+  main-tier content item it came from, and `extract::count_utterance_content`
+  counts what `collect_utterance_content` would extract, through the same walk,
+  without building the words.
+
+### Changed
+
+- **Breaking:** `talkbank_parser::generated_traversal` is regenerated from
+  tree-sitter-grammar-utils' redesigned carriers. Each carrier and choice is
+  declared once, generic over a range phase `R` (default `Raw`) and, when it
+  reaches a slot the compiled grammar proves is never MISSING, a kind proof `K`
+  (default `Broad`) before it, so `X<'tree>` still names the reading
+  `extract_<rule>` returns. `AdmittedX` is now an alias of the `KindAdmitted`
+  reading, emitted only for a shape with the kind axis; for any other shape,
+  and for every `AdmittedXBoundView`, write `X` / `XBoundView`, which is the
+  same type under both proofs. A narrowed slot is a `NarrowedKindSlot` whose
+  `Missing` payload is `NarrowedMissing<K, KindMissing<T>>`: the placeholder
+  under `Broad`, uninhabited under `KindAdmitted`, so a by-value match on an
+  admitted slot omits the arm. Code generic over a kind slot bounds the
+  payload by what it reads (`KindPlaceholder<T>`, `RecoveryNode`,
+  `SourceRecovery`) rather than naming `KindMissing<T>`. A placeholder at a
+  narrowed slot under the admitted proof is the new
+  `ReconstructionFault::ContradictedKindProof`. Parsing, validation and
+  serialization are unchanged.
+
+- The runtime that `generated_traversal` embeds no longer contributes its
+  examples as `talkbank-parser` doctests: they are written against
+  tree-sitter-grammar-utils' own crate path, so in a consumer one failed to
+  compile and the `compile_fail` ones passed only because their import did
+  not resolve. They are now `ignore` examples; the generator's own crate
+  still runs them.
+
+- A `%wor` word bullet that ends before it starts is now E362, reported at the
+  bullet's own source span. A transcript containing one, which validated
+  before, is now rejected. Zero-duration, overlapping and out-of-order word
+  bullets remain legal (CLAN CHECK checks no word bullets; chatter rejects only
+  the self-contradictory case); timing consumers refuse zero-duration word
+  intervals at their own boundary.
+
+- The free-text dependent tiers (the nine bullet-payload tiers, the fifteen
+  raw-text tiers and `%x` tiers) read their body under the admitted kind
+  proof. The body is a nonterminal tree-sitter never inserts as a MISSING
+  placeholder, so the reader no longer has a branch that parsed a
+  placeholder's empty text as content.
+
+- Dependency updates: comrak 0.56, cc 1.6 and insta 1.49; for the desktop
+  application's tooling, WebdriverIO 10, `@vitejs/plugin-react` 6.1.2 and
+  Vite 8.3.3. The desktop's "reveal in file manager" action goes through its
+  typed desktop capability instead of a component-local Tauri import.
+
 ## [0.28.0] - 2026-10-02
 
 This release is about telling the truth about a validation run: how it ended,
@@ -3714,7 +3879,7 @@ on a fixed rule set.
   width with no dummy-span guard either (corrupting the `@UTF8` header had
   one ever fired at offset 0), and detected no overlap between fixes. An
   audit found zero production callers (no `talkbank-tools` reference, no
-  workspace script, no IISRP pipeline usage; only its own tests and the
+  workspace script, no downstream pipeline usage; only its own tests and the
   book mentioned it). `chatter fix` is its successor; see Added above.
 
 - **Five `ErrorCode` variants**, each unreachable or redundant:
@@ -3849,7 +4014,7 @@ on a fixed rule set.
   `talkbank_transform::paths` (still re-exported from `validation_runner`),
   since the corpus walk and CLI walks need it on every build.
 
-- **E766, a linker placed after utterance content** (`yeah that go +" okay .`).
+- **E766, a linker placed after utterance content** (`the dog ran +" away .`).
   Linkers connect an utterance to the previous one, so they are
   utterance-initial by definition; a misplaced one used to surface as generic
   unparsable content (E316), which gave the transcriber nothing to act on.
@@ -4927,7 +5092,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/TalkBank/chatter/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/TalkBank/chatter/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/TalkBank/chatter/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/TalkBank/chatter/compare/v0.25.0...v0.26.0

@@ -150,9 +150,16 @@ pub(super) fn apply_x_tier<'tree>(
     // x_tier_prefix is a single token matching /%x[a-zA-Z][a-zA-Z0-9]*/
     let tier_node = node.raw_node();
     let input = node.source();
-    let Ok(associated) =
-        crate::parser::typed_cst::report_reconstruction(node.extract(), tier_node, input, errors)
-    else {
+    // Extracted under the admitted kind proof: the body is a named nonterminal
+    // the compiled grammar proves is never MISSING, so its slot has no
+    // `Missing` state to read below.
+    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| node.extract_admitted(grammar)),
+        tier_node,
+        input,
+        errors,
+    ) else {
         return;
     };
     let children = associated.children();
@@ -223,7 +230,7 @@ pub(super) fn apply_x_tier<'tree>(
     // node of another kind there (none is generated today) is reported by
     // its kind.
     let body = match body_slot.view() {
-        SourceSlotView::Present(n) | SourceSlotView::Missing(n) => {
+        SourceSlotView::Present(n) => {
             let Some(bound) = crate::parser::typed_cst::read_source_field(n, errors) else {
                 return;
             };

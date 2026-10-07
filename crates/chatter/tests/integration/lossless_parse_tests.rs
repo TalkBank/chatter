@@ -14,8 +14,8 @@
 //! (`ParseProduct`, `crates/talkbank-parser/src/parser/chat_file_parser/chat_file/product.rs`):
 //! parsing never discards a model it built.
 //!
-//! Real consequence this closes (measured 2026-07-30): `chatter debug fix-s`
-//! on IISRP `049-1.cha` had the target utterance parsed and healthy, and
+//! Real consequence this closes: `chatter debug fix-s` on a real transcript
+//! had the target utterance parsed and healthy, and
 //! threw the whole file away over an unrelated `&-` error hundreds of lines
 //! later, then `die()`d the entire run. These tests exercise the real CLI
 //! subprocess boundary, not an in-process parser call, because the bug lived
@@ -87,10 +87,11 @@ fn fix_s_qualifying_body() -> String {
 }
 
 /// `chatter debug fix-s` over TWO paths, the first of which produces a
-/// diagnostic partway through (mirroring the real IISRP `049-1.cha`
-/// incident). The second path must still be processed and rewritten; the
-/// first must be reported, not silently skipped, and neither file may
-/// abort the run (the `die()` behaviour this closes).
+/// diagnostic partway through (mirroring a real transcript whose unrelated
+/// error sat far below the target utterance). The second path must still be
+/// processed and rewritten; the first must be reported, not silently
+/// skipped, and neither file may abort the run (the `die()` behaviour this
+/// closes).
 #[test]
 fn fix_s_processes_the_second_file_after_a_diagnostic_in_the_first() -> Result<(), TestError> {
     let harness = CliHarness::new()?;

@@ -50,14 +50,14 @@ use std::sync::OnceLock;
 /// ```
 ///
 /// Missing message:
-/// ```compile_fail
-/// use talkbank_model::{ParseError, ErrorCode};
+/// ```compile_fail,E0599
+/// # use talkbank_model::{ParseError, ErrorCode};
 /// ParseError::build(ErrorCode::ParseFailed).at(0, 1).finish();
 /// ```
 ///
 /// Missing location:
-/// ```compile_fail
-/// use talkbank_model::{ParseError, ErrorCode};
+/// ```compile_fail,E0599
+/// # use talkbank_model::{ParseError, ErrorCode};
 /// ParseError::build(ErrorCode::ParseFailed).message("Rejected").finish();
 /// ```
 #[derive(Debug)]

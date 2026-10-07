@@ -131,7 +131,11 @@ pub(super) fn parse_gra_relation<'tree>(
 
 /// Each role carries only its own generated slot type: a head cannot be read
 /// or diagnosed as an index. Recovery never supplies fabricated field text.
-enum RelationField<'slot, 'tree, 'source> {
+///
+/// `'tree: 'slot` is stated because the slot type is a projection of the range
+/// phase, through which rustc does not infer the outlives bound a borrowed
+/// field needs.
+enum RelationField<'slot, 'tree: 'slot, 'source> {
     Index(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraIndexNode<'tree>>>),
     Head(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraHeadNode<'tree>>>),
     Label(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraRelationNameNode<'tree>>>),

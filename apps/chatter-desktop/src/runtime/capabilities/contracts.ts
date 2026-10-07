@@ -57,6 +57,7 @@ export interface ValidationRunnerCapability {
 export interface ValidationTargetCapability {
   chooseValidationFile(): Promise<string | null>;
   chooseValidationFolder(): Promise<string | null>;
+  revealFile(path: string): Promise<void>;
   onValidationDragDrop(
     listener: (event: ValidationDragDropEvent) => void,
   ): Promise<() => void>;

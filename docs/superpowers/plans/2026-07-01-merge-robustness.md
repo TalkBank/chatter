@@ -1,8 +1,10 @@
 # Merge Robustness Implementation Plan
 
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/superpowers/plans/2026-07-01-merge-robustness.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix three independent gaps in chatter's merge/speaker-id pipeline found via the IISRP corpus merge: silent-dedupe an already-declared participant on merge insert, relax `@Languages` matching to a subset check, and let the LLM holistic-judgment path represent multiple distinct adult speakers instead of refusing.
+**Goal:** Fix three independent gaps in chatter's merge/speaker-id pipeline found during a corpus-scale merge: silent-dedupe an already-declared participant on merge insert, relax `@Languages` matching to a subset check, and let the LLM holistic-judgment path represent multiple distinct adult speakers instead of refusing.
 
 **Architecture:** Three independently committable phases, in ascending order of blast radius. Phase 1 and 2 are precondition/algorithm changes confined to one function in `crates/talkbank-transform/src/transcript_merge.rs`. Phase 3 threads a new `adult_roles: BTreeMap<String, InsertedRoleSpec>` shape through six files (judgment consumption, the pending-adjudication schema, the on-disk override/replay format, the CLI's operator-decision types, the writers, and the interactive/scripted rendering), replacing the current single `inserted_role: InsertedRoleSpec` field everywhere it appears.
 
@@ -54,7 +56,7 @@ Append to `crates/talkbank-transform/tests/transcript_merge_tests.rs`:
 
 /// File 1 fixture: reference transcript that vestigially declares `INV`
 /// (a placeholder header row) but has zero `*INV:` utterances. Reproduces
-/// the `CWNS-264-4` / `CWNS-265-4` shape from the IISRP merge.
+/// a shape observed on real sessions in a corpus merge.
 const FIX_REF_VESTIGIAL_INV: &str = "@UTF8
 @Begin
 @Languages:\teng

@@ -7,7 +7,7 @@
 //!
 //! ```json
 //! {
-//!   "NF201-3": {
+//!   "S01-1": {
 //!     "sample_type": "clinician interview",
 //!     "declared_roles": ["Investigator"],
 //!     "consent_tier": "video+audio",
@@ -312,7 +312,7 @@ mod tests {
     fn parses_full_record() {
         let file = temp_json(
             r#"{
-              "NF201-3": {
+              "S01-1": {
                 "sample_type": "clinician interview",
                 "declared_roles": ["Investigator", "Mother"],
                 "consent_tier": "video+audio",
@@ -321,7 +321,7 @@ mod tests {
             }"#,
         );
         let parsed = SessionContextFile::read_json(file.path()).expect("parse full record");
-        let record = parsed.get("NF201-3").expect("record present");
+        let record = parsed.get("S01-1").expect("record present");
         assert_eq!(
             record.sample_type,
             Some(
@@ -345,15 +345,15 @@ mod tests {
 
     #[test]
     fn parses_empty_record_as_all_unknown() {
-        let file = temp_json(r#"{ "NF201-3": {} }"#);
+        let file = temp_json(r#"{ "S01-1": {} }"#);
         let parsed = SessionContextFile::read_json(file.path()).expect("parse empty record");
-        let record = parsed.get("NF201-3").expect("record present");
+        let record = parsed.get("S01-1").expect("record present");
         assert_eq!(record, &SessionContextRecord::default());
     }
 
     #[test]
     fn absent_session_returns_none() {
-        let file = temp_json(r#"{ "NF201-3": {} }"#);
+        let file = temp_json(r#"{ "S01-1": {} }"#);
         let parsed = SessionContextFile::read_json(file.path()).expect("parse");
         assert!(parsed.get("OTHER-9").is_none());
     }
@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn unknown_record_field_is_shape_error() {
-        let file = temp_json(r#"{ "NF201-3": { "sample_typ": "typo" } }"#);
+        let file = temp_json(r#"{ "S01-1": { "sample_typ": "typo" } }"#);
         let err = SessionContextFile::read_json(file.path())
             .expect_err("unknown field must be a shape error, not silently dropped");
         assert!(matches!(err, SessionContextError::Shape { .. }));
@@ -379,7 +379,7 @@ mod tests {
 
     #[test]
     fn negative_age_is_shape_error() {
-        let file = temp_json(r#"{ "NF201-3": { "age_months": -3 } }"#);
+        let file = temp_json(r#"{ "S01-1": { "age_months": -3 } }"#);
         let err = SessionContextFile::read_json(file.path())
             .expect_err("negative age must be a shape error");
         assert!(matches!(err, SessionContextError::Shape { .. }));
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn wrong_field_type_is_shape_error() {
-        let file = temp_json(r#"{ "NF201-3": { "age_months": "fifty-two" } }"#);
+        let file = temp_json(r#"{ "S01-1": { "age_months": "fifty-two" } }"#);
         let err = SessionContextFile::read_json(file.path())
             .expect_err("string age must be a shape error");
         assert!(matches!(err, SessionContextError::Shape { .. }));
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn empty_sample_type_label_is_shape_error() {
-        let file = temp_json(r#"{ "NF201-3": { "sample_type": "" } }"#);
+        let file = temp_json(r#"{ "S01-1": { "sample_type": "" } }"#);
         let err = SessionContextFile::read_json(file.path())
             .expect_err("empty sample_type label must be a shape error");
         assert!(
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn whitespace_only_declared_role_is_shape_error() {
-        let file = temp_json(r#"{ "NF201-3": { "declared_roles": ["   "] } }"#);
+        let file = temp_json(r#"{ "S01-1": { "declared_roles": ["   "] } }"#);
         let err = SessionContextFile::read_json(file.path())
             .expect_err("whitespace-only role label must be a shape error");
         assert!(
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn whitespace_only_consent_tier_is_shape_error() {
-        let file = temp_json("{ \"NF201-3\": { \"consent_tier\": \" \\t \" } }");
+        let file = temp_json("{ \"S01-1\": { \"consent_tier\": \" \\t \" } }");
         let err = SessionContextFile::read_json(file.path())
             .expect_err("whitespace-only consent tier label must be a shape error");
         assert!(

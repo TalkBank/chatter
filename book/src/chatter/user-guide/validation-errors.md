@@ -347,7 +347,7 @@ should forbid trailing glue is unresolved.
 
 Linkers (`+"`, `++`, `+<`, `+^`, `+,`, `+≈`, `+≋`) tie an utterance to the
 PREVIOUS one, so they may only open the utterance. One placed after content
-(`yeah that go +" okay .`) is meaningless and is named here, at the exact
+(`the dog ran +" away .`) is meaningless and is named here, at the exact
 token, instead of surfacing as generic unparsable content (E316).
 
 One deliberate carve-out: a `++` glued to words on both sides (`un++do`) is

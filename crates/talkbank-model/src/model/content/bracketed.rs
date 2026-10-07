@@ -139,7 +139,7 @@ pub enum BracketedItem {
     /// Internal bullet/timestamp within group
     #[serde(rename = "internal_bullet")]
     InternalBullet(super::Bullet),
-    /// Freecode - free-form inline annotation (e.g., "[^ comment]")
+    /// Freecode - free-form inline annotation (e.g., `[^ comment]`)
     Freecode(super::Freecode),
     /// Long feature begin marker (&{l=LABEL)
     #[serde(rename = "long_feature_begin")]

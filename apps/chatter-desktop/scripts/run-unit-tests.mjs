@@ -27,6 +27,7 @@ try {
     [
       "--test",
       "tests/unit/validationRunner.test.cjs",
+      "tests/unit/validationTarget.test.cjs",
       "tests/unit/validationState.test.cjs",
       "tests/unit/clan.test.cjs",
       "tests/unit/updates.test.cjs",

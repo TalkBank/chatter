@@ -250,6 +250,15 @@ impl WorTier {
         self.items.iter().filter_map(WorItem::as_word)
     }
 
+    /// Reject each recorded word bullet whose end precedes its start (`E362`).
+    /// Zero-duration, overlapping and out-of-order word bullets are legal, and
+    /// untimed words remain legitimate partial alignment.
+    pub(crate) fn validate_word_intervals(&self, errors: &impl crate::ErrorSink) {
+        for bullet in self.words().filter_map(|word| word.inline_bullet.as_ref()) {
+            crate::validation::check_word_interval(bullet, errors);
+        }
+    }
+
     /// Count of words only (excludes separators). Used for alignment.
     ///
     /// This mirrors `words().count()` and intentionally ignores tag-marker

@@ -2,7 +2,7 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{AsRawNode, BulletNode, SourceBound};
-use crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps;
+use crate::parser::tree_parsing::media_bullet::parse_bullet_node;
 use talkbank_model::ParseOutcome;
 
 /// Inline-tier policy excludes the all-zero pair, independently of time ordering.
@@ -29,8 +29,10 @@ pub(super) fn parse_inline_bullet<'tree>(
 ) -> Result<ParseOutcome<(u64, u64)>, crate::CstFailure> {
     let node = typed.raw_node();
     let source = typed.source();
-    let (start_ms, end_ms) = match parse_bullet_node_timestamps(typed, errors) {
-        Ok(times) => times,
+    // Text-tier bullet content keeps only the times; its own span is the
+    // enclosing segment's.
+    let (start_ms, end_ms) = match parse_bullet_node(typed, errors) {
+        Ok(bullet) => (bullet.timing.start_ms, bullet.timing.end_ms),
         Err(crate::parser::tree_parsing::media_bullet::BulletRejection::Producer(fault)) => {
             return Err(fault);
         }

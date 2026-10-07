@@ -173,7 +173,7 @@ pub struct PoolRun<R> {
 ///
 /// `requested` is the job count (`--jobs`): the pool runs that many workers,
 /// or the machine's parallelism when it is `None`, never zero and never more
-/// than the items' upper bound (see [`worker_count`]). Each worker
+/// than the items' upper bound (see `worker_count`). Each worker
 /// runs `worker` on its own [`WorkQueue`] view of the shared queue, on a
 /// [`CHAT_THREAD_STACK_BYTES`] stack. The calling thread feeds the items and then
 /// joins every worker, so this returns only when all are done.

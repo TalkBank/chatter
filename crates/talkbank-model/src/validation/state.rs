@@ -47,13 +47,14 @@ impl ValidationPolicy {
 /// the proof through [`Self::into_unchecked`]. Serialization preserves the existing
 /// CHAT/JSON representation without serializing the evidence as transcript content.
 ///
-/// ```compile_fail
-/// use talkbank_model::validation::ValidChatFile;
-/// fn edit(file: &mut ValidChatFile) { file.document().lines = Vec::new().into(); }
+/// ```compile_fail,E0594
+/// # fn edit(file: &mut talkbank_model::validation::ValidChatFile) {
+/// file.document().lines = Vec::new().into();
+/// # }
 /// ```
 ///
-/// ```compile_fail
-/// use talkbank_model::validation::ValidChatFile;
+/// ```compile_fail,E0277
+/// # use talkbank_model::validation::ValidChatFile;
 /// let forged: ValidChatFile = serde_json::from_str("{}").unwrap();
 /// ```
 #[derive(Debug, Clone)]
@@ -109,6 +110,107 @@ impl serde::Serialize for ValidChatFile {
     }
 }
 
+/// An outstanding linked-media requirement, issued only by regeneration
+/// validation. This is not document validity or output permission.
+///
+/// It is discharged only through the [`PendingTimingChatFile`] that carries
+/// it, against the document that payload holds and hands back: the
+/// obligation alone has no discharge, so its verdict cannot concern a
+/// document other than the one a consumer goes on to admit.
+///
+/// ```compile_fail,E0599
+/// # fn judge(
+/// #     pending: &talkbank_model::validation::PendingTimingChatFile,
+/// #     other: &talkbank_model::ChatFile,
+/// # ) {
+/// let _ = pending.obligation().clone().discharge(other);
+/// # }
+/// ```
+#[derive(Debug, Clone)]
+pub struct MediaTimingObligation {
+    header_span: crate::Span,
+}
+
+impl MediaTimingObligation {
+    /// The retained declaration that still requires actual timing evidence.
+    pub fn header_span(&self) -> crate::Span {
+        self.header_span
+    }
+}
+
+/// Retained structure accepted for timing regeneration, not complete CHAT.
+/// It cannot be serialized as an accepted document or converted to ValidChatFile.
+///
+/// ```compile_fail,E0599
+/// # fn certify(pending: talkbank_model::validation::PendingTimingChatFile) {
+/// let _ = pending.into_valid_file();
+/// # }
+/// ```
+#[derive(Debug)]
+pub struct PendingTimingChatFile {
+    document: ChatFile,
+    obligation: MediaTimingObligation,
+    diagnostics: Vec<ParseError>,
+}
+
+impl PendingTimingChatFile {
+    /// Inspect the retained working structure without asserting validity.
+    pub fn document(&self) -> &ChatFile {
+        &self.document
+    }
+    /// Mutate the working document, for instance to write regenerated timing
+    /// into it, while the obligation stays attached to this same document.
+    pub fn document_mut(&mut self) -> &mut ChatFile {
+        &mut self.document
+    }
+    /// Outstanding requirement associated with this payload.
+    pub fn obligation(&self) -> &MediaTimingObligation {
+        &self.obligation
+    }
+    /// Warnings from retained-structure admission, not filtered errors.
+    pub fn diagnostics(&self) -> &[ParseError] {
+        &self.diagnostics
+    }
+    /// Discharge the obligation against this payload's document, through the
+    /// very check that issued it (E544's): it is discharged exactly when that
+    /// check no longer applies, because the document now carries timing
+    /// evidence or no longer declares linked media without a status. The
+    /// document judged is the document handed back, so the verdict always
+    /// concerns the document a consumer goes on to admit. It does not prove
+    /// that document derives from the original: [`Self::document_mut`]
+    /// permits any edit, a whole replacement included.
+    ///
+    /// The retained-structure warnings ([`Self::diagnostics`]) are dropped on
+    /// success: complete admission of the returned document produces its own.
+    ///
+    /// # Errors
+    /// Hands the payload back, unchanged and boxed (it holds a whole
+    /// document), while E544 would still fire. Complete admission of the
+    /// returned document still re-runs every rule; this is the obligation's
+    /// own verdict, not output permission.
+    pub fn discharge(self) -> Result<ChatFile, Box<Self>> {
+        match self.document.untimed_media_declaration() {
+            None => Ok(self.document),
+            Some(_) => Err(Box::new(self)),
+        }
+    }
+}
+
+/// Regeneration may start from a complete retained document or from a checked
+/// working document with an explicit remaining media/timing obligation.
+#[derive(Debug)]
+pub enum TimingRegenerationAdmission {
+    /// All requirements are already satisfied.
+    Ready(ValidChatFile),
+    /// Timing must be established before complete output admission.
+    Pending(PendingTimingChatFile),
+}
+
+enum AdmissionPhase {
+    Complete,
+    RegeneratingTiming,
+}
+
 /// Rejected model and its evidence, retained for inspection or repair.
 #[derive(Debug)]
 pub struct ValidationFailure {
@@ -137,6 +239,19 @@ impl ValidationFailure {
     /// Recover ownership of the rejected model for repair.
     pub fn into_unchecked(self) -> ChatFile {
         *self.document
+    }
+
+    /// Recover the rejected model together with the diagnostics that rejected
+    /// it, both moved rather than copied, for a repair that must keep the
+    /// evidence bound to what it removes. A tool failure is not evidence
+    /// about the model, so it is handed back unchanged as `Err`.
+    pub fn into_rejection(self) -> Result<(ChatFile, Vec<ParseError>), Self> {
+        match self.reason {
+            ValidationFailureReason::InternalFailure => Err(self),
+            ValidationFailureReason::IncompleteParse | ValidationFailureReason::Invalidity => {
+                Ok((*self.document, self.diagnostics))
+            }
+        }
     }
 
     /// All diagnostics, including warnings, emitted during the attempt.
@@ -250,11 +365,59 @@ impl ChatFile {
     /// cannot change rejection into success. Unknown/recovered tier provenance
     /// also rejects, because validation may have skipped checks on those tiers.
     pub fn validate_with_policy(
-        mut self,
+        self,
         policy: ValidationPolicy,
         errors: &impl ErrorSink,
         name: TranscriptName<'_>,
     ) -> Result<ValidChatFile, ValidationFailure> {
+        let (document, diagnostics, _) =
+            self.validate_owned(policy, errors, name, AdmissionPhase::Complete)?;
+        Ok(ValidChatFile {
+            document,
+            policy,
+            name: name.to_owned_name(),
+            diagnostics,
+        })
+    }
+
+    /// Admit retained structure for a timing-producing operation, without
+    /// treating an outstanding linked-media requirement as complete validity.
+    /// All default structure, alignment, provenance and internal-failure checks
+    /// remain mandatory. Source-dependent eligibility belongs to the parser's
+    /// source-bound removal plan, not to this generic model operation.
+    pub fn validate_for_timing_regeneration(
+        self,
+        errors: &impl ErrorSink,
+        name: TranscriptName<'_>,
+    ) -> Result<TimingRegenerationAdmission, ValidationFailure> {
+        let policy = ValidationPolicy::new(
+            RuleSelection::new(),
+            AlignmentValidation::IncludeTierAlignment,
+        );
+        let (document, diagnostics, pending) =
+            self.validate_owned(policy, errors, name, AdmissionPhase::RegeneratingTiming)?;
+        Ok(match pending {
+            Some(header_span) => TimingRegenerationAdmission::Pending(PendingTimingChatFile {
+                document,
+                diagnostics,
+                obligation: MediaTimingObligation { header_span },
+            }),
+            None => TimingRegenerationAdmission::Ready(ValidChatFile {
+                document,
+                diagnostics,
+                policy,
+                name: name.to_owned_name(),
+            }),
+        })
+    }
+
+    fn validate_owned(
+        mut self,
+        policy: ValidationPolicy,
+        errors: &impl ErrorSink,
+        name: TranscriptName<'_>,
+        phase: AdmissionPhase,
+    ) -> Result<(ChatFile, Vec<ParseError>, Option<crate::Span>), ValidationFailure> {
         let collected = ErrorCollector::new();
         let sink = RecordingSink {
             collected: &collected,
@@ -263,7 +426,13 @@ impl ChatFile {
         let incomplete_parse = self
             .utterances()
             .any(|u| !u.parse_health().permits_validation());
-        self.validate_at(policy, &sink, name);
+        let pending = match phase {
+            AdmissionPhase::Complete => {
+                self.validate_at(policy, &sink, name);
+                None
+            }
+            AdmissionPhase::RegeneratingTiming => self.validate_regenerating_timing(&sink, name),
+        };
         let has_errors = collected.has_errors();
         let (diagnostics, reason) = match CompletedDiagnostics::admit(collected.into_vec()) {
             Err(failure) => (
@@ -291,12 +460,7 @@ impl ChatFile {
                 reason,
             })
         } else {
-            Ok(ValidChatFile {
-                document: self,
-                policy,
-                name,
-                diagnostics,
-            })
+            Ok((self, diagnostics, pending))
         }
     }
 }

@@ -5,17 +5,20 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NamedKind, OtherSpokenEventNode, extract_other_spoken_event,
+    AsRawNode, NamedKind, OtherSpokenEventNode, RecoveryNode, extract_other_spoken_event,
 };
 use crate::model::{OtherSpokenEvent, UtteranceContent};
 use crate::parser::tree_parsing::parser_helpers::{
     SlotState, expect_present, extract_utf8_text, surface_displaced,
 };
+use crate::parser::typed_cst::AnyKindSlot;
 use talkbank_model::ParseOutcome;
 
 /// A required event child, with kind supplied by the generated wrapper type.
-fn required<'a, 'tree, T: NamedKind + AsRawNode<'tree> + Copy>(
-    slot: &'a KindSlot<'tree, T>,
+/// Generic over the slot's `Missing` payload: the event's children include
+/// kinds the compiled grammar narrows and kinds it does not.
+fn required<'a, 'tree, T: NamedKind + AsRawNode<'tree> + Copy, M: RecoveryNode<'tree>>(
+    slot: &'a AnyKindSlot<'tree, T, M>,
     event: OtherSpokenEventNode<'tree>,
     source: &str,
     errors: &impl ErrorSink,

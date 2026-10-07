@@ -244,7 +244,7 @@ impl ValidationTally {
 
 /// A run's counts over the files it discovered, made only by the runner.
 ///
-/// The counts are the run's own [`ValidationTally`], read through accessors:
+/// The counts are the run's own `ValidationTally`, read through accessors:
 /// there is no public constructor and no public field, so a consumer (or a
 /// test) cannot assert a clean run from numbers it chose. `total_files` is
 /// non-zero because a run that found nothing ends [`RunEnding::NothingFound`]
@@ -261,11 +261,11 @@ pub struct ValidationStatsSnapshot {
 /// proof. Consumers can inspect or clone admitted counts, but cannot promote
 /// partial counts to a complete run.
 ///
-/// ```compile_fail
-/// use talkbank_transform::{RunEnding, ValidationStatsSnapshot};
-/// fn promote_partial(stats: ValidationStatsSnapshot) -> RunEnding {
-///     RunEnding::Complete(stats)
-/// }
+/// ```compile_fail,E0308
+/// # use talkbank_transform::{RunEnding, ValidationStatsSnapshot};
+/// # fn promote_partial(stats: ValidationStatsSnapshot) -> RunEnding {
+/// RunEnding::Complete(stats)
+/// # }
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompleteStats {
@@ -388,7 +388,7 @@ impl ValidationStatsSnapshot {
     /// Files that produced a per-file result of any kind.
     ///
     /// Exactly one of these three counters is incremented per completed file
-    /// ([`ValidationTally::record`] folds roundtrip failures and read errors
+    /// (`ValidationTally::record` folds roundtrip failures and read errors
     /// into `invalid_files`), so this is a count of files, not of events.
     pub fn files_accounted_for(&self) -> usize {
         self.valid_files()
@@ -418,7 +418,7 @@ impl ValidationStatsSnapshot {
 }
 
 /// The diagnostics a file showed (after suppression), with the source text
-/// they point into. Never empty, and made only by [`Shown::of`], which
+/// they point into. Never empty, and made only by `Shown::of`, which
 /// decides from the same list whether the file is invalid.
 #[derive(Debug, Clone)]
 pub struct FileDiagnostics {

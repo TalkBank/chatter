@@ -59,12 +59,13 @@
 //! Structural pipes and whitespace carry no model payload.
 
 use crate::generated_traversal::{
-    AsRawNode, IdContentsNode, IdHeaderNode, KindSlot, SelectedKindSlot, SourceBound,
-    SourceBoundKind, SourceField, SourceSlotView,
+    AsRawNode, IdContentsNode, IdHeaderNode, SourceBound, SourceBoundKind, SourceField,
+    SourceRecovery, SourceSlotView,
 };
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::{AnyKindSlot, AnySelectedKindSlot};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::{Header, Sex};
 
@@ -73,13 +74,17 @@ use talkbank_model::model::{Header, Sex};
 /// Non-present recovery states retain the field's empty-field diagnostic and
 /// rejection. A present field must additionally admit its source range; failure
 /// propagates as `CstFailure` rather than being classified as invalid CHAT.
-fn required_field<'tree, T: SourceBoundKind<'tree>>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, T>>,
+fn required_field<'value, 'tree: 'value, 'source, T, M>(
+    slot: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, T, M>>,
     contents: SourceBound<'tree, '_, IdContentsNode<'tree>>,
     errors: &impl ErrorSink,
     error_code: ErrorCode,
     error_message: &str,
-) -> Result<ParseOutcome<String>, crate::CstFailure> {
+) -> Result<ParseOutcome<String>, crate::CstFailure>
+where
+    T: SourceBoundKind<'tree>,
+    M: SourceRecovery<'value, 'tree, 'source>,
+{
     let id_contents = contents.raw_node();
     let source = contents.source();
     let SourceSlotView::Present(field) = slot.view() else {
@@ -106,9 +111,17 @@ fn required_field<'tree, T: SourceBoundKind<'tree>>(
 /// and whole-tree recovery reporting. Only a present field is read. Its range
 /// failure is an internal error, so no independent `ParseOutcome::Rejected`
 /// state is needed alongside the optional payload.
-fn optional_field<'tree, T: SourceBoundKind<'tree>>(
-    slot: SourceField<'_, 'tree, '_, Option<SelectedKindSlot<'tree, T>>>,
-) -> Result<Option<String>, crate::CstFailure> {
+///
+/// Both field readers are generic over the slot's `Missing` payload: some
+/// `@ID` fields are kinds the compiled grammar narrows and some are not, and
+/// either reader reads only `Present`.
+fn optional_field<'value, 'tree: 'value, 'source, T, M>(
+    slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<'tree, T, M>>>,
+) -> Result<Option<String>, crate::CstFailure>
+where
+    T: SourceBoundKind<'tree>,
+    M: SourceRecovery<'value, 'tree, 'source>,
+{
     if let Some(slot) = slot.optional()
         && let SourceSlotView::Present(field) = slot.view()
     {

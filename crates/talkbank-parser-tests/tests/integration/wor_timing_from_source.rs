@@ -346,12 +346,17 @@ fn empty_count_matched_sequence_is_distinct_from_complete_timing() -> Result<(),
 }
 
 /// A missing bullet and a zero-duration bullet each reject the sequence,
-/// naming the slot. `30_30` is a bullet the parser ACCEPTS, so this state is
-/// reachable from a transcript.
+/// naming the slot. `30_30` is valid CHAT (CLAN CHECK accepts it, so no E362);
+/// the timing consumer is what refuses it, at its own boundary.
 #[test]
 fn incomplete_and_nonpositive_timings_are_rejected_with_slot_identity() -> Result<(), TestError> {
     let wor = format!("one {} two three {} .", bullet(10, 20), bullet(30, 30));
-    let utterance = utterance("one two three .", Some(&wor))?;
+    let lines = format!("*CHI:\tone two three .\n%wor:\t{wor}");
+    let utterance = SingleSpeaker {
+        media: Media::Declared,
+        ..SingleSpeaker::english(&lines)
+    }
+    .utterance(&[])?;
     let bound = corroborated(&utterance)?;
     let WorTimingSequence::Rejected(rejected) = assess_wor_timing_sequence(bound) else {
         return Err(TestError::Failure(

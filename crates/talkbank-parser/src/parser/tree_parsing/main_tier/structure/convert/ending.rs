@@ -26,14 +26,14 @@ use crate::generated_traversal::{
     SourceField, SourceSlotView, UtteranceEndNode,
 };
 use crate::model::{Bullet, Postcode, Terminator};
-use crate::parser::tree_parsing::media_bullet::parse_bullet_node_timestamps;
+use crate::parser::tree_parsing::media_bullet::parse_bullet_node;
 use crate::parser::tree_parsing::postcode::parse_postcode_node;
 use talkbank_model::ParseOutcome;
 
 use super::super::super::content::{
     MainTierBodyCarrier, MainTierRegion, classify_main_tier_recovery, surface_main_tier_sink,
 };
-use super::super::terminator::{span_of, terminator_from_new_choice};
+use super::super::terminator::terminator_from_new_choice;
 
 /// The utterance-end tail parsed from an `utterance_end` node: the optional
 /// terminator, the ordered postcodes, and the optional trailing media bullet. The
@@ -145,7 +145,6 @@ pub(super) fn parse_utterance_end<'tree>(
             surface_main_tier_sink(codes, source, errors);
         }
         Some(SourceSlotView::Error(_)) | None => {}
-        Some(SourceSlotView::Missing(never)) => match never {},
     }
 
     // child_2 (`bullet`, optional). The NEW backend groups the trailing
@@ -174,10 +173,8 @@ pub(super) fn parse_utterance_end<'tree>(
                 SourceSlotView::Present(bullet_node) => {
                     let bullet_node = bullet_node.read()?;
                     let raw = bullet_node.raw_node();
-                    match parse_bullet_node_timestamps(bullet_node, errors) {
-                        Ok((start_ms, end_ms)) => {
-                            Some(Bullet::new(start_ms, end_ms).with_span(span_of(raw)))
-                        }
+                    match parse_bullet_node(bullet_node, errors) {
+                        Ok(bullet) => Some(bullet),
                         Err(
                             crate::parser::tree_parsing::media_bullet::BulletRejection::Producer(
                                 fault,
@@ -263,6 +260,5 @@ fn decode_postcode_slot<'tree>(
             ParseOutcome::Rejected => None,
         },
         SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
-        SourceSlotView::Missing(never) => match never {},
     })
 }

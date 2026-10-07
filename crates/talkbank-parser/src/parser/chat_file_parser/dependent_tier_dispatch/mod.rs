@@ -14,3 +14,4 @@ mod raw;
 mod user_defined;
 
 pub(crate) use parse::parse_and_attach_dependent_tier;
+pub(crate) use parsed::{LoweredWorTier, parse_wor_entry};

@@ -46,7 +46,6 @@ pub(crate) fn contents_of<'tree, 'source>(
             None
         }
         SourceSlotView::Absent(NoChild) => None,
-        SourceSlotView::Missing(never) => match never {},
     }
 }
 

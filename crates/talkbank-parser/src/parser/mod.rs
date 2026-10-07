@@ -35,6 +35,10 @@ pub(crate) use child_capacity::ChildCapacity;
 /// The one `Node` to [`talkbank_model::Span`] conversion, shared by every region.
 mod node_span;
 
+/// A node's identity in its parse tree, as a type rather than a bare `usize`.
+mod node_identity;
+pub(crate) use node_identity::CstNodeId;
+
 /// Region-neutral typed-CST seam shared by every parser region: the single
 /// content-child decode helper (`decode_present_child`). Structure now comes
 /// from the NEW backend's free `extract_*` functions, not a trait receiver.

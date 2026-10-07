@@ -24,6 +24,7 @@
 // Shared harness, declared ONCE for the whole binary. Modules below
 // reach it as `crate::common::...`.
 mod common;
+mod replacement_admission;
 
 mod chat_parser_trait;
 mod context_public_api;

@@ -489,7 +489,7 @@ impl Validate for TierContentItems {
             // exempt: recovery empties the content list even when the source
             // line plainly has content, and "utterance is empty" on such a
             // line sends the reader hunting for a defect that does not exist
-            // (IISRP-residue finding 2: 3 of 4 wild E306s were this shape).
+            // (in real transcripts, most spurious E306s had this shape).
             if context.main_parse_tainted {
                 return;
             }

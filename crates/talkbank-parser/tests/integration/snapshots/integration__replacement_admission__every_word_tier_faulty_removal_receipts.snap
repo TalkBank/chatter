@@ -1,0 +1,7 @@
+---
+source: crates/talkbank-parser/tests/integration/replacement_admission.rs
+expression: receipt_inventory(pending.removed_tiers())
+---
+Wor 716..756 recovery=true OwnLowering ["E316"]
+Wor 776..829 recovery=false LocatedValidation ["E362"]
+Wor 849..885 recovery=false LocatedValidation ["E362"]

@@ -11,8 +11,14 @@
 )]
 
 use talkbank_model::ErrorCollector;
-use talkbank_model::model::{Bullet, ParseHealthState, WordCategory};
+use talkbank_model::model::{MediaTiming, ParseHealthState, WordCategory};
 use talkbank_parser::TreeSitterParser;
+
+/// A word's inline bullet timing. The bullet's source span is real and
+/// fixture-dependent, so it is not part of the comparison.
+fn timing(word: &talkbank_model::model::Word) -> Option<MediaTiming> {
+    word.inline_bullet.as_ref().map(|bullet| bullet.timing)
+}
 
 fn parsed_filler_fixture(main_filler: &str, wor_token: &str) -> talkbank_model::model::ChatFile {
     let bullet1 = "\u{0015}0_120\u{0015}";
@@ -243,7 +249,7 @@ fn parsed_wor_filler_keeps_category_and_timing() {
     assert_eq!(words[0].raw_text(), "&-dt");
     assert_eq!(words[0].cleaned_text(), "dt");
     assert_eq!(words[0].category, Some(WordCategory::Filler));
-    assert_eq!(words[0].inline_bullet, Some(Bullet::new(0, 120)));
+    assert_eq!(timing(words[0]), Some(MediaTiming::new(0, 120)));
 }
 
 #[test]
@@ -278,7 +284,7 @@ fn validate_alignments_accepts_ocsc_4009_fragment_timing() {
 
     assert_eq!(words[1].raw_text(), "&+ss");
     assert_eq!(words[1].category, Some(WordCategory::PhonologicalFragment));
-    assert_eq!(words[1].inline_bullet, Some(Bullet::new(321148, 321368)));
+    assert_eq!(timing(words[1]), Some(MediaTiming::new(321148, 321368)));
 
     let errors = file.validate_alignments();
     assert!(
@@ -416,7 +422,7 @@ fn validate_alignments_accepts_ocsc_4026_retraced_xxx_timing() {
 
     assert_eq!(words[9].raw_text(), "xxx");
     assert!(words[9].untranscribed().is_some());
-    assert_eq!(words[9].inline_bullet, Some(Bullet::new(944122, 944463)));
+    assert_eq!(timing(words[9]), Some(MediaTiming::new(944122, 944463)));
 
     let errors = file.validate_alignments();
     assert!(

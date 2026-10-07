@@ -3649,6 +3649,29 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E362.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E362"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E362.md",
+      "example": 5,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E362.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E363.md",
       "example": 1,
       "parse": [

@@ -1,9 +1,130 @@
 //! Required-validation entry point. Recovery remains available through ParseProduct.
 
+use std::borrow::Cow;
 use talkbank_model::model::TranscriptName;
 use talkbank_model::validation::{ValidChatFile, ValidationFailure, ValidationPolicy};
 use talkbank_model::{CompletedDiagnostics, ErrorSink, InternalFailure};
 use talkbank_parser::{ParseProduct, TreeSitterParser};
+
+/// One source parse, before its admission or release for editing.
+/// The source and product can only be paired by the parser entry point.
+#[derive(Debug)]
+pub struct ParsedSourceChat<'source> {
+    source: &'source str,
+    product: ParseProduct,
+}
+
+impl<'source> ParsedSourceChat<'source> {
+    /// Inspect the producer's model without mutation or admission authority.
+    pub fn document(&self) -> Option<&talkbank_model::ChatFile> {
+        match &self.product {
+            ParseProduct::Built { file, .. } => Some(file),
+            ParseProduct::Unbuildable { .. } => None,
+        }
+    }
+
+    /// Admit this exact parse, including tier alignment, without reparsing.
+    /// Callers cannot select a weaker policy for unchanged-output authority.
+    pub fn admit(
+        self,
+        name: TranscriptName<'_>,
+        errors: &impl ErrorSink,
+    ) -> Result<AdmittedSourceChat<'source>, ValidatedParseError> {
+        let file = admit_product(
+            self.product,
+            ValidationPolicy::new(
+                talkbank_model::RuleSelection::new(),
+                talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+            ),
+            name,
+            errors,
+        )?;
+        Ok(AdmittedSourceChat {
+            source: Cow::Borrowed(self.source),
+            file,
+        })
+    }
+
+    /// Release the unchecked producer outcome, discarding source admission
+    /// authority. Recovery remains available to callers that inspect it.
+    pub fn into_product(self) -> ParseProduct {
+        self.product
+    }
+}
+
+/// Immutable source bytes coupled to the complete admission of their parse.
+/// There is no constructor accepting a separately supplied model and text.
+///
+/// ```compile_fail,E0451
+/// # fn forge(source: &str, file: talkbank_model::validation::ValidChatFile) {
+/// let _ = talkbank_transform::AdmittedSourceChat { source: source.into(), file };
+/// # }
+/// ```
+#[derive(Debug, Clone)]
+pub struct AdmittedSourceChat<'source> {
+    source: Cow<'source, str>,
+    file: ValidChatFile,
+}
+
+impl<'source> AdmittedSourceChat<'source> {
+    /// Retain complete source admission from the same producer-selected plan.
+    /// Replacement admission alone cannot enter this unchanged-output boundary.
+    ///
+    /// ```compile_fail,E0308
+    /// # use talkbank_transform::AdmittedSourceChat;
+    /// # fn preserve(replacement: talkbank_parser::AdmittedReplacement<'_>) {
+    /// let _ = AdmittedSourceChat::from_preservation(replacement);
+    /// # }
+    /// ```
+    pub fn from_preservation(admitted: talkbank_parser::AdmittedPreservation<'source>) -> Self {
+        let (file, source) = admitted.into_parts();
+        Self {
+            source: Cow::Borrowed(source),
+            file,
+        }
+    }
+
+    /// Original bytes, not a serialization of the admitted model.
+    pub fn source(&self) -> &str {
+        self.source.as_ref()
+    }
+
+    /// The admitted model, without mutation authority.
+    pub fn document(&self) -> &talkbank_model::ChatFile {
+        self.file.document()
+    }
+
+    /// Own the source for storage or an asynchronous output boundary.
+    pub fn into_owned(self) -> AdmittedSourceChat<'static> {
+        AdmittedSourceChat {
+            source: Cow::Owned(self.source.into_owned()),
+            file: self.file,
+        }
+    }
+
+    /// Consume the source binding and retain only model admission.
+    pub fn into_valid_file(self) -> ValidChatFile {
+        self.file
+    }
+
+    /// Consume the proof and return its original bytes, reusing owned storage.
+    /// Callers needing write authority must retain the proof until that boundary.
+    pub fn into_source(self) -> String {
+        self.source.into_owned()
+    }
+}
+
+/// Parse source once, retaining an opaque source/product pair for policy
+/// selection before admission. This does not certify validity or recovery.
+pub fn parse_source_with_parser<'source>(
+    parser: &TreeSitterParser,
+    source: &'source str,
+) -> ParsedSourceChat<'source> {
+    ParsedSourceChat {
+        source,
+        product: parser.parse_chat_file(source),
+    }
+}
 
 /// A failed source-to-valid-model transition retains every model that was built.
 #[derive(Debug, thiserror::Error)]
@@ -35,8 +156,7 @@ pub fn parse_validated_with_parser(
     name: TranscriptName<'_>,
     errors: &impl ErrorSink,
 ) -> Result<ValidChatFile, ValidatedParseError> {
-    let product = parser.parse_chat_file(content);
-    admit_product(product, policy, name, errors)
+    admit_product(parser.parse_chat_file(content), policy, name, errors)
 }
 
 /// One admission boundary for every complete parse attempt, before severity
@@ -73,6 +193,27 @@ mod tests {
 
     const SOURCE: &str =
         include_str!("../../../../corpus/reference/languages/eng-conversation.cha");
+
+    #[test]
+    fn producer_preservation_handoff_keeps_source_bytes_and_model_without_reparsing() {
+        let source = SOURCE.replace('\n', "\r\n");
+        let parser = TreeSitterParser::new().expect("grammar loads");
+        let admitted = parser
+            .admit_planned_tiers(&source, TranscriptName::Anonymous, |_| None)
+            .expect("complete source is valid");
+        let talkbank_parser::AdmittedDisposition::Preserved(preserved) =
+            admitted.into_disposition()
+        else {
+            panic!("no replacement was selected");
+        };
+        let output = AdmittedSourceChat::from_preservation(preserved);
+        assert_eq!(output.source(), source);
+        assert_eq!(output.document().to_chat_string(), SOURCE);
+        let owned = output.into_owned();
+        drop(source);
+        assert_eq!(owned.source(), SOURCE.replace('\n', "\r\n"));
+        assert_eq!(owned.document().to_chat_string(), SOURCE);
+    }
 
     #[test]
     fn internal_failure_retains_product_and_blocks_admission_even_at_warning_severity() {
@@ -129,6 +270,35 @@ mod tests {
             &NullErrorSink,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn source_admission_preserves_exact_bytes_and_can_own_them() {
+        let source = SOURCE.replace("@End", "@Comment:\tkept   \n@End");
+        let parsed = parse_source_with_parser(&TreeSitterParser::new().unwrap(), &source);
+        assert!(parsed.document().is_some());
+        let admitted = parsed
+            .admit(TranscriptName::Anonymous, &NullErrorSink)
+            .expect("the reference and ordinary comment are valid");
+        assert_eq!(admitted.source(), source);
+        let owned = admitted.into_owned();
+        drop(source);
+        assert!(owned.source().contains("kept   \n"));
+        assert!(owned.document().utterances().next().is_some());
+        assert!(owned.into_source().contains("kept   \n"));
+    }
+
+    #[test]
+    fn invalid_source_cannot_acquire_unchanged_output_authority() {
+        let source = SOURCE.replace("@Languages:\teng", "@Languages:\teng\n@Languages:\teng");
+        assert_ne!(source, SOURCE, "the deliberate duplicate must be inserted");
+        let parsed = parse_source_with_parser(&TreeSitterParser::new().unwrap(), &source);
+        assert!(parsed.document().is_some(), "recovery is not admission");
+        assert!(
+            parsed
+                .admit(TranscriptName::Anonymous, &NullErrorSink)
+                .is_err()
+        );
     }
 
     #[test]

@@ -601,7 +601,7 @@ flat tables keyed by session ID (as shown in the
 ```toml
 schema_version = 2
 
-[NF203-2]
+[S01-1]
 mode = "auto"
 adult_roles = { PAR0 = { code = "INV", tag = "Investigator" } }
 # ...

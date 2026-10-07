@@ -161,11 +161,11 @@ fn group_without_annotation_is_rejected_via_cli() -> Result<(), TestError> {
 /// by definition, so the construct is invalid, but "unparsable content"
 /// (E316) gives the transcriber nothing to act on. It must surface as the
 /// named rule E766 (linker not utterance-initial), and the generic E316
-/// must not also fire for the same construct. (IISRP residue finding 5,
-/// 2026-07-30; wild instance 059-1:155.)
+/// must not also fire for the same construct. (The construct occurs in real
+/// transcripts.)
 const MID_UTTERANCE_LINKER: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
     @Participants:\tINV Investigator\n@ID:\teng|corpus|INV|||||Investigator|||\n\
-    *INV:\tyeah that go +\" okay .\n@End\n";
+    *INV:\tthe dog ran +\" away .\n@End\n";
 
 /// Assert `chatter validate` (with `parser_args`) rejects inline `content`
 /// with `expected` and does NOT report `unexpected`, through the real CLI.
@@ -203,9 +203,9 @@ fn mid_utterance_linker_is_named_e766_by_re2c() -> Result<(), TestError> {
 /// The line is skipped as unsupported (E326, correct as far as it goes), but
 /// the message must SAY the line looks like a dependent tier that must begin
 /// at column 1, so the transcriber knows the fix is deleting one space, not
-/// hunting for junk. (IISRP residue finding 6, 2026-07-30; wild instance
-/// 222-3:733, where the mirror-image assumption in a tier stripper let a
-/// legacy %mor survive a strip.)
+/// hunting for junk. (Seen in a real transcript, where the mirror-image
+/// assumption in a tier stripper let an indented legacy %mor survive a
+/// strip.)
 const INDENTED_DEPENDENT_TIER: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
     @Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n\
     *CHI:\thello .\n%com:\tfine .\n %mor:\tadj|good .\n@End\n";

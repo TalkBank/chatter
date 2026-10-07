@@ -173,10 +173,15 @@ impl Validate for Utterance {
         // cascade this replaced.
         self.validate_gra_structure(errors);
 
-        // E711: `%mor` content validation (stems/suffixes/POS categories).
+        // Tier-local content and interval invariants, independent of alignment:
+        // E711 `%mor` content; E362 for a `%wor` bullet that ends before it
+        // starts (zero-duration word bullets are legal; leniency policy,
+        // Decision 10).
         for entry in &self.dependent_tiers {
-            if let DependentTier::Mor(marker) = &entry.tier {
-                marker.validate_content(errors);
+            match &entry.tier {
+                DependentTier::Mor(marker) => marker.validate_content(errors),
+                DependentTier::Wor(tier) => tier.validate_word_intervals(errors),
+                _ => {}
             }
         }
 

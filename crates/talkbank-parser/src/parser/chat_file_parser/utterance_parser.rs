@@ -14,15 +14,15 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
+use super::chat_file::tier_plan::{TierRoute, TierRouting};
+use super::chat_file::word_timing_plan::{LoweredUtterance, PlacedTier};
 use super::dependent_tier_dispatch::parse_and_attach_dependent_tier;
 use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation,
 };
 use crate::generated_traversal::{
-    AdmittedUtteranceChild1Choice as UtteranceChild1Choice,
-    AdmittedUtteranceChild1ChoiceBoundView as UtteranceChild1ChoiceBoundView, AsRawNode,
-    MainTierNode, NoChild, SourceBound, SourceField, SourceSlotView, UtteranceNode,
-    XDependentTierNode,
+    AsRawNode, MainTierNode, NoChild, SourceBound, SourceField, SourceSlotView,
+    UtteranceChild1Choice, UtteranceChild1ChoiceBoundView, UtteranceNode, XDependentTierNode,
 };
 use crate::model::{ParseHealth, ParseHealthTier, Utterance};
 use crate::parser::tree_parsing::helpers::ReadableRecovery;
@@ -38,13 +38,15 @@ use talkbank_model::ParseOutcome;
 /// owner's source association; callers cannot supply a separate source string.
 /// Internal leaf adapters still receive this same source while their generated
 /// field projections are migrated. Recovery states are not removed by binding.
-pub fn parse_utterance_node<'tree>(
+pub fn parse_utterance_node<'tree, P: TierRouting>(
     typed: SourceBound<'tree, '_, UtteranceNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<Utterance> {
+    routing: &mut P,
+) -> ParseOutcome<LoweredUtterance<P::Deferred>> {
     let input = typed.source();
     let mut utterance_builder: Option<UtteranceUnderConstruction> = None;
     let mut parse_health = ParseHealth::untainted();
+    let mut deferred_words = Vec::new();
 
     // Drive dispatch through the generated, exhaustive typed visitor instead of a
     // `node.kind()` hand-walk. `extract_utterance` exposes the utterance's two
@@ -78,7 +80,6 @@ pub fn parse_utterance_node<'tree>(
                 None => parse_health.taint(ParseHealthTier::Main),
             }
         }
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(error_node) => {
             // An ERROR at the main-tier position routes to the same recovery
             // analysis the old hand-walk ran for any ERROR utterance child.
@@ -105,11 +106,14 @@ pub fn parse_utterance_node<'tree>(
                     tier_choice,
                     errors,
                     &mut parse_health,
+                    routing,
+                    &mut deferred_words,
                 );
             }
-            // Every selected dependent tier is a proven nonterminal. ERROR
-            // recovery still conservatively taints the affected alignment.
-            SourceSlotView::Missing(never) => match never {},
+            // Every selected dependent tier is a proven nonterminal, so under
+            // the admitted reading the slot has no Missing state and no arm
+            // for one. ERROR recovery still conservatively taints the affected
+            // alignment.
             SourceSlotView::Error(error_node) => {
                 handle_utterance_error_node(error_node, errors, &mut parse_health);
             }
@@ -130,7 +134,10 @@ pub fn parse_utterance_node<'tree>(
     // The phase ends here: the construction wrapper is unwrapped exactly once,
     // where the finished utterance leaves this function.
     match utterance_builder {
-        Some(utterance) => ParseOutcome::parsed(utterance.finish(parse_health)),
+        Some(utterance) => ParseOutcome::parsed(LoweredUtterance {
+            utterance: utterance.finish(parse_health),
+            words: deferred_words,
+        }),
         None => ParseOutcome::rejected(),
     }
 }
@@ -215,16 +222,34 @@ impl UtteranceUnderConstruction {
 /// [`parse_and_attach_dependent_tier`] (only once a main tier has been built),
 /// and taints the matching alignment domain when the attach reported an
 /// error.
-fn attach_dependent_tier_child<'tree>(
+fn attach_dependent_tier_child<'tree, P: TierRouting>(
     utterance: Option<UtteranceUnderConstruction>,
     choice: SourceField<'_, 'tree, '_, UtteranceChild1Choice<'tree>>,
     errors: &impl ErrorSink,
     parse_health: &mut ParseHealth,
+    routing: &mut P,
+    deferred_words: &mut Vec<PlacedTier<P::Deferred>>,
 ) -> Option<UtteranceUnderConstruction> {
     let Some(choice) = crate::parser::typed_cst::read_source_field(choice, errors) else {
         parse_health.taint_all_alignment_dependents();
         return utterance;
     };
+    // Removed and deferred content never enters the retained model or its
+    // parse health. Unclassified recovery never reaches this concrete
+    // source-bound choice.
+    match routing.route(choice) {
+        TierRoute::Removed => return utterance,
+        TierRoute::Deferred(tier) => {
+            // With no main tier the utterance is rejected, and every tier it
+            // held goes with it, deferred or not.
+            if let Some(builder) = &utterance {
+                let placed = PlacedTier::after(&builder.0, deferred_words, tier);
+                deferred_words.push(placed);
+            }
+            return utterance;
+        }
+        TierRoute::Lower => {}
+    }
     let mut tier_had_parse_errors = false;
     let dependent_tier = match parse_health_tier_for(choice, errors) {
         Ok(tier) => tier,

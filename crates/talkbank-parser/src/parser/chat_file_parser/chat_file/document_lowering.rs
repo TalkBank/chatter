@@ -49,15 +49,16 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
+use super::lowering_lines::{DirectLines, HeldLines, LineSink};
+use super::tier_plan::{PlanEntry, TierRouting};
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AdmittedFullDocumentChild1Choice as FullDocumentChild1Choice,
-    AdmittedFullDocumentChildren as FullDocumentChildren,
-    AdmittedLineChoiceSourceView as LineChoiceSourceView, AsRawNode, BeginHeaderNode,
-    EndHeaderNode, FromNodeKind, LineNode, MainTierNode, NoChild, NonMissingKindSlot as KindSlot,
-    SlotView, SourceBound, SourceChildren, SourceField, SourceSlotView, Utf8HeaderNode,
+    AdmittedFullDocumentChildren as FullDocumentChildren, AsRawNode, BeginHeaderNode,
+    EndHeaderNode, FromNodeKind, FullDocumentChild1Choice, LineChoiceSourceView, LineNode,
+    MainTierNode, NoChild, NonMissingKindSlot as KindSlot, SlotView, SourceBound, SourceChildren,
+    SourceField, SourceSlotView, Utf8HeaderNode,
 };
 use crate::model::{Header, Line, Utterance};
 use crate::node_types::{BLANK_LINE, UNSUPPORTED_LINE};
@@ -65,9 +66,7 @@ use crate::parser::ChildCapacity;
 use crate::parser::chat_file_parser::header_parser::{
     handle_pre_begin_header, helpers::header_separator, parse_header_node,
 };
-use crate::parser::chat_file_parser::utterance_parser::{
-    parse_recovered_main_tier, parse_utterance_node,
-};
+use crate::parser::chat_file_parser::utterance_parser::parse_recovered_main_tier;
 use crate::parser::terminal_main_tier::TerminalMainTier;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{analyze_error_node, collect_recovery_nodes};
@@ -93,33 +92,57 @@ fn bind_recovery<'tree, 'source>(
 ///
 /// Carries the source text (needed by the line/error helpers that read node text
 /// by byte offset) and the error sink that recovery diagnostics stream to. The
-/// accumulated [`Line`] values are owned here during the walk and handed back via
-/// [`Self::lower`].
+/// accumulated [`Line`] values are owned by a [`LineSink`] during the walk and
+/// handed back via [`Self::lower`].
 ///
 /// Generic over `S: ErrorSink` so it composes with the entry point's
 /// `TeeErrorSink` (which records diagnostics for the backstop's span-dedup)
 /// without boxing.
-pub(super) struct DocumentLowering<'a, S: ErrorSink> {
+pub(super) struct DocumentLowering<'a, 'l, S: ErrorSink> {
     /// Tree and source association supplied by the parse producer.
     parsed: &'a crate::generated_traversal::ParsedSource<'a>,
     /// Diagnostic sink that recovery diagnostics are reported to.
     errors: &'a S,
     /// File-order `Line` values accumulated during the walk.
-    lines: Vec<Line>,
+    lines: &'l mut dyn LineSink<'a>,
 }
 
-impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
-    /// Consume the producer-bound root. Source text and child capacity are
-    /// derived here; callers cannot supply either independently of its tree.
-    pub(super) fn lower(
+impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
+    /// Consume the producer-bound root and the plan entry. Source text and
+    /// child capacity are derived here; callers cannot supply either
+    /// independently of its tree. The decided plan comes back with the lines:
+    /// an entry needing headers is decided here, once, after the last header
+    /// is lowered, and only then are its held utterances lowered.
+    pub(super) fn lower<P: TierRouting>(
         root: crate::parser::document_root::DocumentRoot<'a>,
         errors: &'a S,
-    ) -> Vec<Line> {
+        entry: PlanEntry<'_, P>,
+    ) -> (Vec<Line>, P) {
         let capacity = ChildCapacity::for_node(root.node());
-        let mut lowering = Self {
+        match entry {
+            PlanEntry::Decided(plan) => {
+                let mut direct = DirectLines::new(capacity.into_vec(), errors, plan);
+                DocumentLowering::walk(root, errors, &mut direct);
+                direct.into_parts()
+            }
+            PlanEntry::AfterHeaders(select) => {
+                let mut held = HeldLines::new(capacity.into_vec());
+                DocumentLowering::walk(root, errors, &mut held);
+                held.lower(errors, select)
+            }
+        }
+    }
+
+    /// Walk the document once, putting every line into `lines`.
+    fn walk(
+        root: crate::parser::document_root::DocumentRoot<'a>,
+        errors: &'a S,
+        lines: &mut dyn LineSink<'a>,
+    ) {
+        let mut lowering = DocumentLowering {
             parsed: root.parsed_source(),
             errors,
-            lines: capacity.into_vec(),
+            lines,
         };
         let root_node = root.node();
         if let Err(error) = root.for_each_part(|part| match part {
@@ -137,7 +160,6 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 errors,
             );
         }
-        lowering.lines
     }
 
     /// Drive the free function [`extract_full_document`] on the `full_document`
@@ -158,7 +180,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// carries no meaning here, because a document reconstructed from the ERROR
     /// standing in for one has the same type and the same content as a complete
     /// one. There were briefly two public entry points differing only in name.
-    fn lower_document(&mut self, associated: SourceChildren<'_, '_, FullDocumentChildren<'_>>) {
+    fn lower_document(&mut self, associated: SourceChildren<'a, 'a, FullDocumentChildren<'a>>) {
         let children = associated.children();
         // Every field of the NEW `FullDocumentChildren` carrier is a
         // `Positioned<..>`: the position's `leading_extras` (whitespace/comments,
@@ -242,10 +264,10 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// and the validation layer plus the whole-tree backstop cover that case;
     /// emitting one here would be a new diagnostic (regression). An `Error` here
     /// is still surfaced because the backstop walks the whole tree.
-    fn lower_utf8_anchor(
+    fn lower_utf8_anchor<'tree>(
         &mut self,
         slot: &Option<
-            crate::generated_traversal::SelectedNonMissingKindSlot<'_, Utf8HeaderNode<'_>>,
+            crate::generated_traversal::SelectedNonMissingKindSlot<'tree, Utf8HeaderNode<'tree>>,
         >,
     ) {
         let Some(slot) = slot else {
@@ -255,34 +277,31 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         };
         match slot.view() {
             SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::Utf8),
-            SlotView::Missing(never) => match never {},
             SlotView::Error(error_node) => self.handle_top_level_error(error_node),
         }
     }
 
     /// Lower the `@Begin` anchor slot (`child_2`). See [`Self::lower_utf8_anchor`]
     /// for the recovery rationale; this mirrors the `BEGIN_HEADER` arm.
-    fn lower_begin_anchor(&mut self, slot: &KindSlot<'_, BeginHeaderNode<'_>>) {
+    fn lower_begin_anchor<'tree>(&mut self, slot: &KindSlot<'tree, BeginHeaderNode<'tree>>) {
         match slot.view() {
             SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::Begin),
             SlotView::Absent(NoChild) => {
                 // Backstop + validation (missing @Begin) cover this.
             }
             SlotView::Error(error_node) => self.handle_top_level_error(error_node),
-            SlotView::Missing(never) => match never {},
         }
     }
 
     /// Lower the `@End` anchor slot (`child_4`). See [`Self::lower_utf8_anchor`]
     /// for the recovery rationale; this mirrors the `END_HEADER` arm.
-    fn lower_end_anchor(&mut self, slot: &KindSlot<'_, EndHeaderNode<'_>>) {
+    fn lower_end_anchor<'tree>(&mut self, slot: &KindSlot<'tree, EndHeaderNode<'tree>>) {
         match slot.view() {
             SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::End),
             SlotView::Absent(NoChild) => {
                 // Backstop + validation (missing @End) cover this.
             }
             SlotView::Error(error_node) => self.handle_top_level_error(error_node),
-            SlotView::Missing(never) => match never {},
         }
     }
 
@@ -312,11 +331,10 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 else {
                     return;
                 };
-                handle_pre_begin_header(choice, self.errors, &mut self.lines);
+                handle_pre_begin_header(choice, self.errors, |line| self.lines.push(line));
             }
             SourceSlotView::Error(error_node) => self.handle_top_level_error(error_node.raw_node()),
             SourceSlotView::Unexpected(never) => match never {},
-            SourceSlotView::Missing(never) => match never {},
         }
     }
 
@@ -325,13 +343,13 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     /// `Present` dispatches the `line` node to `dispatch_line`, which now drives
     /// the typed `extract_line` visitor (Task 2a). `Error` routes through the
     /// shared top-level error path. Compiled admission rules out Missing here.
-    fn lower_line_slot<'tree>(
+    fn lower_line_slot(
         &mut self,
         slot: SourceField<
             '_,
-            'tree,
-            '_,
-            crate::generated_traversal::SelectedNonMissingKindSlot<'tree, LineNode<'tree>>,
+            'a,
+            'a,
+            crate::generated_traversal::SelectedNonMissingKindSlot<'a, LineNode<'a>>,
         >,
     ) {
         match slot.view() {
@@ -351,7 +369,6 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                     self.errors,
                 ),
             },
-            SourceSlotView::Missing(never) => match never {},
         }
     }
 
@@ -369,12 +386,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     ) {
         // No parsed tier identity survives at this slot. Do not narrow taint
         // by reparsing a percent prefix; any preceding alignment may be affected.
-        if let Some(utterance) = self.lines.iter_mut().rev().find_map(|line| match line {
-            Line::Utterance(utterance) => Some(utterance),
-            _ => None,
-        }) {
-            utterance.mark_all_dependent_alignment_taint();
-        }
+        self.lines.taint_previous_utterance();
         analyze_error_node(bound, self.errors);
     }
 
@@ -411,7 +423,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
     ///
     /// After the content match, the carrier's `unexpected` sink is surfaced (see
     /// [`Self::surface_displaced`]).
-    fn dispatch_line<'tree>(&mut self, line: SourceBound<'tree, '_, LineNode<'tree>>) {
+    fn dispatch_line(&mut self, line: SourceBound<'a, 'a, LineNode<'a>>) {
         let associated = match crate::parser::typed_cst::canonical_grammar()
             .and_then(|grammar| line.extract_admitted(grammar))
         {
@@ -475,9 +487,9 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         self.surface_displaced(&children.unexpected, "line");
     }
     /// Lower the present choice separately so range refusal cannot skip the line's sink.
-    fn dispatch_present_line<'tree>(
+    fn dispatch_present_line(
         &mut self,
-        choice: SourceField<'_, 'tree, '_, crate::generated_traversal::AdmittedLineChoice<'tree>>,
+        choice: SourceField<'_, 'a, 'a, crate::generated_traversal::LineChoice<'a>>,
     ) {
         match choice.view() {
             LineChoiceSourceView::ActivitiesHeader(header_choice) => {
@@ -516,9 +528,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 else {
                     return;
                 };
-                if let ParseOutcome::Parsed(utt) = parse_utterance_node(utterance, self.errors) {
-                    self.lines.push(Line::utterance(utt));
-                }
+                self.lines.utterance(utterance);
             }
             LineChoiceSourceView::UnsupportedLine(unsupported) => {
                 let node = unsupported.raw_node();
@@ -538,7 +548,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
                 // (CLAN CHECK 91: blank lines are not allowed). Under error
                 // recovery, though, the node can cover just the trailing
                 // newline of a NON-blank malformed line (a speaker-less
-                // `*:` tier, IISRP-residue finding 3), and "blank lines are
+                // `*:` tier, as seen in real transcripts), and "blank lines are
                 // not allowed" on a visibly non-blank line sends the reader
                 // hunting for a line that does not exist. A genuine blank
                 // line's newline sits at a line boundary: the node starts
@@ -572,7 +582,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, S> {
         // begins with one of those is a recognisable CHAT line pushed
         // off column 1 by leading whitespace. Say so: "Unsupported
         // line skipped" alone sends the reader hunting for junk when
-        // the fix is deleting one space (IISRP residue finding 6).
+        // the fix is deleting one space.
         // This is a diagnostic hint derived from the already-reported
         // line text, not model construction.
         let report = |message: String| {

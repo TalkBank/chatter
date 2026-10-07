@@ -973,8 +973,7 @@ pub enum ErrorCode {
     /// (same strict+catch-all pattern as [`IllegalCurlyQuote`]) so this
     /// named rule can locate it precisely; before that, the construct
     /// fell into ERROR-node recovery and surfaced as a generic `E316`
-    /// that gave the transcriber nothing to act on (IISRP residue
-    /// finding 5, 2026-07-30).
+    /// that gave the transcriber nothing to act on.
     ///
     /// [`IllegalCurlyQuote`]: Self::IllegalCurlyQuote
     #[code("E766")]

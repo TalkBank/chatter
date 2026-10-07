@@ -136,7 +136,7 @@ pub enum UtteranceContent {
     /// Action WITH scoped annotations, e.g. `0 [= ! whining]`.
     #[serde(rename = "annotated_action")]
     AnnotatedAction(Annotated<Action>),
-    /// Freecode - free-form inline annotation (e.g., "[^ comment]")
+    /// Freecode - free-form inline annotation (e.g., `[^ comment]`)
     Freecode(Freecode),
     /// CA separator (e.g., Comma, Semicolon, Colon, intonation markers)
     /// Can appear between content items or at end of utterance in CA mode

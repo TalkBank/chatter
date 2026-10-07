@@ -549,7 +549,10 @@ impl TrackHold {
 
 impl TrackOwnership {
     /// The distribution for one bullet, or `None` when no turn overlaps it.
-    fn of(bullet: &talkbank_model::model::Bullet, timeline: &DiarizationTimeline) -> Option<Self> {
+    pub(crate) fn of(
+        bullet: &talkbank_model::model::Bullet,
+        timeline: &DiarizationTimeline,
+    ) -> Option<Self> {
         // Through the checked constructor, not a struct literal. The accessor
         // docs above say "the fields are private so that `Self::new` is the
         // only route in and an inverted span cannot be built"; a literal here
@@ -598,7 +601,10 @@ impl TrackOwnership {
         // Different tracks remain independent: simultaneous speakers each hold
         // the shared media interval, which is exactly the crosstalk evidence the
         // distribution is meant to retain.
-        let mut held: Vec<TrackHold> = Vec::new();
+        // Inline for the common handful of overlapping tracks: this runs once
+        // per bullet, and once per WORD under word-level attribution, so the
+        // accumulator must not cost a heap allocation of its own.
+        let mut held: smallvec::SmallVec<[TrackHold; 4]> = smallvec::SmallVec::new();
         for turn in &turns[first..] {
             // Sorted by start, so once a turn begins at or after the bullet
             // ends, so does every turn after it.

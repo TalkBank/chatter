@@ -59,7 +59,6 @@ pub fn parse_mor_content<'tree>(
             SourceSlotView::Error(raw) => {
                 errors.report(unexpected_node_error(raw.raw_node(), source, "mor_content"));
             }
-            SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
             SourceSlotView::Absent(never) => match never {},
         }
     }
@@ -93,7 +92,6 @@ fn decode_main_word<'tree>(
             errors.report(unexpected_node_error(raw.raw_node(), source, "mor_content"));
             None
         }
-        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
         SourceSlotView::Absent(NoChild) => None,
     })
 }
@@ -139,7 +137,6 @@ fn parse_mor_post_clitic<'tree>(
                 "mor_post_clitic",
             ));
         }
-        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
         SourceSlotView::Absent(NoChild) => {}
     }
 

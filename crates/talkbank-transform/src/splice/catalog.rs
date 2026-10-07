@@ -208,12 +208,12 @@ pub struct CatalogFix {
 ///
 /// An independent string cannot substitute for the parse capability:
 ///
-/// ```compile_fail
-/// use talkbank_model::ParseError;
-/// use talkbank_transform::splice::catalog_fix;
-/// fn disconnected(error: &ParseError, source: &str) {
-///     let _ = catalog_fix(error, source);
-/// }
+/// ```compile_fail,E0308
+/// # use talkbank_model::ParseError;
+/// # use talkbank_transform::splice::catalog_fix;
+/// # fn disconnected(error: &ParseError, source: &str) {
+/// let _ = catalog_fix(error, source);
+/// # }
 /// ```
 pub fn catalog_fix(
     error: &ParseError,

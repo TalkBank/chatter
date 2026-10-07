@@ -117,7 +117,7 @@ pub enum Separator {
         span: Span,
     },
 
-    /// [^c] - CA continuation marker - Conversation Analysis
+    /// `[^c]` - CA continuation marker - Conversation Analysis
     /// Reference: <https://talkbank.org/0info/manuals/CHAT.html#CA_Continuation>
     #[serde(rename = "ca_continuation")]
     CaContinuation {

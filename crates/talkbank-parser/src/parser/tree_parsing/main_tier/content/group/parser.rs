@@ -154,7 +154,6 @@ pub(crate) fn parse_group_content<'tree>(
             Err(_) => return ParseOutcome::Rejected,
         },
         SlotView::Absent(NoChild) => Vec::new(),
-        SlotView::Missing(never) => match never {},
         SlotView::Error(bad) => {
             report_tree_shape(
                 bad,

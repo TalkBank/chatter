@@ -281,9 +281,8 @@ impl Validate for NonEmptyString {
 /// assert_eq!(non_empty_literal!("lemma").as_str(), "lemma");
 /// ```
 ///
-/// ```compile_fail
-/// use talkbank_model::non_empty_literal;
-///
+/// ```compile_fail,E0080
+/// # use talkbank_model::non_empty_literal;
 /// let _ = non_empty_literal!("");
 /// ```
 #[macro_export]

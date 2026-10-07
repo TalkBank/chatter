@@ -16,6 +16,7 @@ import {
   useClanCapability,
   useExportCapability,
   useUpdatesCapability,
+  useValidationTargetCapability,
 } from "./runtime/DesktopRuntimeContext";
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
   const exportCapability = useExportCapability();
   const updates = useUpdatesCapability();
   const about = useAboutCapability();
+  const validationTarget = useValidationTargetCapability();
   const { state, startValidation, cancelValidation, reset, backendSilent } = useValidation();
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -201,12 +203,11 @@ export default function App() {
 
   const handleRevealFile = useCallback(async (path: string) => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("reveal_in_file_manager", { path });
+      await validationTarget.revealFile(path);
     } catch (err) {
       console.error("reveal_in_file_manager failed:", err);
     }
-  }, []);
+  }, [validationTarget]);
 
   const handleExport = useCallback(async () => {
     // Guard explicitly rather than relying solely on the Export button's own

@@ -33,10 +33,10 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, CommentHeaderNode, KindSlot,
-    L1OfHeaderNode, NamedKind, NoChild, NumberHeaderNode, OptionNameNode, OptionsContentsNode,
+    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, CommentHeaderNode, L1OfHeaderNode,
+    NamedKind, NarrowedKindSlot, NoChild, NumberHeaderNode, OptionNameNode, OptionsContentsNode,
     OptionsHeaderNode, RecordingQualityHeaderNode, SourceBound, SourceBoundKind, SourceField,
-    SourceSlotView, SpeakerNode, TranscriptionHeaderNode, extract_options_contents,
+    SourceRecovery, SourceSlotView, SpeakerNode, TranscriptionHeaderNode, extract_options_contents,
     extract_options_header,
 };
 use crate::model::{self, ChatOptionFlag, Header};
@@ -49,6 +49,7 @@ use talkbank_model::ParseOutcome;
 
 use super::simple::simple_header;
 use crate::parser::tree_parsing::parser_helpers::{ContentSlot, read_source_content};
+use crate::parser::typed_cst::AnyKindSlot;
 
 /// `@Comment` -> `Header::Comment`. All bullet content is accepted.
 pub(super) fn comment<'tree>(
@@ -201,14 +202,20 @@ struct ParticipantValue<'source> {
 
 /// Read speaker first; refusal returns without reading the value, preserving
 /// diagnostic order. Only the generated speaker kind can supply participant text.
-fn two_slots<'tree, 'source, 'w, V: SourceBoundKind<'tree> + NamedKind>(
+/// Generic over each slot's `Missing` payload, as `read_source_content` is.
+fn two_slots<'value, 'tree: 'value, 'source, 'w, V, MS, MV>(
     site: &HeaderSite<'tree, '_>,
-    speaker: SourceField<'_, 'tree, 'source, KindSlot<'tree, SpeakerNode<'tree>>>,
+    speaker: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, SpeakerNode<'tree>, MS>>,
     speaker_words: &'w ContentSlot<'w>,
-    value: SourceField<'_, 'tree, 'source, KindSlot<'tree, V>>,
+    value: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, V, MV>>,
     value_words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<ParticipantValue<'source>, ContentReadError<'w>> {
+) -> Result<ParticipantValue<'source>, ContentReadError<'w>>
+where
+    V: SourceBoundKind<'tree> + NamedKind,
+    MS: SourceRecovery<'value, 'tree, 'source>,
+    MV: SourceRecovery<'value, 'tree, 'source>,
+{
     let speaker = read_source_content(site, speaker, speaker_words, errors)?;
     let value = read_source_content(site, value, value_words, errors)?;
     Ok(ParticipantValue {
@@ -419,7 +426,7 @@ fn option_flags(
 ) -> Result<ParseOutcome<Vec<ChatOptionFlag>>, crate::generated_traversal::ReconstructionFault> {
     let children = extract_options_contents(options_contents)?;
     let mut flags = Vec::new();
-    let mut admit = |slot: &KindSlot<'_, OptionNameNode<'_>>| -> ParseOutcome<()> {
+    let mut admit = |slot: &NarrowedKindSlot<'_, OptionNameNode<'_>>| -> ParseOutcome<()> {
         if let Some(name) = present(slot) {
             let ParseOutcome::Parsed(text) =
                 extract_utf8_text(name.raw_node(), input, errors, "option name")

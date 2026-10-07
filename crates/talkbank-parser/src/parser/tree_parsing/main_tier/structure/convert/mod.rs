@@ -211,7 +211,7 @@ impl<'tree> MainTierRecovery<'tree> {
             .children(&mut cursor)
             .filter(tree_sitter::Node::is_error);
         for candidate in direct.chain(sink.iter().copied().filter(tree_sitter::Node::is_error)) {
-            if !unreported.iter().any(|seen| seen.id() == candidate.id()) {
+            if !unreported.contains(&candidate) {
                 unreported.push(candidate);
             }
         }
@@ -221,10 +221,7 @@ impl<'tree> MainTierRecovery<'tree> {
     /// Take `node` for reporting, or `None` if it is not ours to report: either
     /// something already took it, or it is not a recovery node under this tier.
     fn take(&mut self, node: tree_sitter::Node<'tree>) -> Option<tree_sitter::Node<'tree>> {
-        let at = self
-            .unreported
-            .iter()
-            .position(|held| held.id() == node.id())?;
+        let at = self.unreported.iter().position(|held| *held == node)?;
         Some(self.unreported.remove(at))
     }
 
@@ -335,7 +332,6 @@ pub fn convert_main_tier_node<'tree>(
             MainTierRegion::Body,
         )),
         SlotView::Absent(NoChild) => {}
-        SlotView::Missing(never) | SlotView::Unexpected(never) => match never {},
     }
 
     let tier = match located.body {
@@ -532,8 +528,8 @@ fn sep_from_slot(main: &AdmittedMainTierChildren<'_>) -> TierSeparator {
 /// diagnostic lands on the offending line. Until 2026-07-30 this helper used
 /// `0..original_input.len()`, a fragment-local span: correct for the
 /// standalone fragment entry points, but in whole-file parsing it rendered
-/// every such diagnostic at line 1 over the header block (the IISRP-residue
-/// finding; same family as the annotated-word wrapper span).
+/// every such diagnostic at line 1 over the header block (found on a real
+/// transcript; same family as the annotated-word wrapper span).
 pub(super) fn report_missing_child(
     carrier: std::ops::Range<usize>,
     original_input: &str,

@@ -40,6 +40,15 @@ impl CompletedDiagnostics {
 }
 
 impl InternalFailure {
+    /// A fault the tool detected in itself, such as two of its own values
+    /// disagreeing, recorded as one internal-error diagnostic at `span`.
+    /// [`ErrorCode::InternalError`](super::ErrorCode::InternalError) is an
+    /// internal-failure kind, so this is exactly what admission would decide
+    /// for that diagnostic.
+    pub fn tool_fault(message: impl Into<String>, span: crate::Span) -> Self {
+        Self(vec![ParseError::internal(message, span)])
+    }
+
     /// All findings from the failed attempt, without filtering or relabeling.
     pub fn diagnostics(&self) -> &[ParseError] {
         &self.0
@@ -88,5 +97,18 @@ mod tests {
         assert_eq!(failure.diagnostics().len(), 2);
         assert_eq!(failure.diagnostics()[1].code, ErrorCode::InternalError);
         assert!(failure.to_string().contains("validity was not determined"));
+    }
+
+    /// The direct constructor agrees with admission: a tool fault re-admitted
+    /// is refused as an internal failure, never completed diagnostics.
+    #[test]
+    fn a_tool_fault_is_what_admission_would_refuse() {
+        let fault = InternalFailure::tool_fault("plan and document disagree", Span::new(3, 9));
+        let [diagnostic] = fault.diagnostics() else {
+            panic!("one diagnostic")
+        };
+        assert_eq!(diagnostic.code, ErrorCode::InternalError);
+        assert_eq!(diagnostic.location.span, Span::new(3, 9));
+        assert!(CompletedDiagnostics::admit(fault.into_diagnostics()).is_err());
     }
 }

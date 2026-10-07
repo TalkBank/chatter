@@ -28,12 +28,10 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AdmittedUtteranceChild1Choice as UtteranceChild1Choice,
-    AdmittedUtteranceChild1ChoiceBoundView as UtteranceChild1ChoiceBoundView, AsRawNode,
-    SourceBound, extract_act_dependent_tier, extract_add_dependent_tier,
-    extract_cod_dependent_tier, extract_com_dependent_tier, extract_exp_dependent_tier,
-    extract_gpx_dependent_tier, extract_int_dependent_tier, extract_sit_dependent_tier,
-    extract_spa_dependent_tier,
+    AsRawNode, SourceBound, UtteranceChild1Choice, UtteranceChild1ChoiceBoundView,
+    extract_act_dependent_tier, extract_add_dependent_tier, extract_cod_dependent_tier,
+    extract_com_dependent_tier, extract_exp_dependent_tier, extract_gpx_dependent_tier,
+    extract_int_dependent_tier, extract_sit_dependent_tier, extract_spa_dependent_tier,
 };
 use crate::model::Utterance;
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};

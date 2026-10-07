@@ -46,12 +46,12 @@ pub struct LineMap {
 /// enhance_errors_with_index(&mut [], &index);
 /// ```
 ///
-/// ```compile_fail
-/// use talkbank_model::{SourceIndex, enhance_errors_with_index};
-/// let mut text = String::from("first\nsecond");
-/// let index = SourceIndex::new(&text);
+/// ```compile_fail,E0502
+/// # use talkbank_model::{SourceIndex, enhance_errors_with_index};
+/// # let mut text = String::from("first\nsecond");
+/// # let index = SourceIndex::new(&text);
 /// text.clear();
-/// enhance_errors_with_index(&mut [], &index);
+/// # enhance_errors_with_index(&mut [], &index);
 /// ```
 #[derive(Debug)]
 pub struct SourceIndex<'source> {

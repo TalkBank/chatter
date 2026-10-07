@@ -1,7 +1,7 @@
 # Panic audit
 
 **Status:** Reference
-**Last updated:** 2026-06-13 21:07 EDT
+**Last updated:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/panic-audit/README.md)
 
 The CHAT-core crates hold a **no-panics-in-production** discipline. This
 directory records, per crate, how that discipline is enforced and which
@@ -57,9 +57,9 @@ rg -n --glob '!**/tests/**' --glob '!**/*_tests.rs' \
   crates/<crate>/src
 ```
 
-To check that every site is justified (a comment sits immediately above each
-allow), the audit script lives in the private workspace, not this public
-repo.
+Checking that every site is justified (a comment sits immediately above each
+allow) is done by a separate audit script that is not part of this
+repository.
 
 ## Per-crate pages
 

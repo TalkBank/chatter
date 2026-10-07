@@ -1,0 +1,7 @@
+---
+source: crates/talkbank-transform/src/utterance_split.rs
+expression: text
+---
+*206:	dunque 0subj si buffa [*] di: [/] di lui uh perché: vuole [/] &=bouche vuole &~don &~don donarlo [*] .
+
+*206:	ma: [/] ma [/] ma [/] &~n ma è solo: un [/] uh un buffo [*] .

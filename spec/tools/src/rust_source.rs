@@ -24,11 +24,10 @@
 //! call this one. It already differs, passing no `--quiet`. Only porting those
 //! generators into this crate would remove it.
 //!
-//! The genuinely separate copy is `talkbank-parser-tests`'s
-//! `conformance_inventory::format_rust_source`, which lives in the OTHER cargo
-//! workspace. That one stays: `spec/` deliberately depends on no root crate but
-//! the grammar, and a cross-workspace path dependency to share twenty lines
-//! would cost more than it saves.
+//! The root workspace's conformance inventory generator
+//! (`talkbank-parser-tests`'s `conformance_inventory`) runs no formatter: it
+//! writes its final layout itself, so its currency test depends on no
+//! installed tool.
 //!
 //! The edition is pinned here and owned by `Cargo.toml`. If the workspace moves
 //! edition, `just fmt` and every generator will format differently and the

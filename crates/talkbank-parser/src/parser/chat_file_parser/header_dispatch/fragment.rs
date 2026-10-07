@@ -7,9 +7,7 @@ use crate::error::{
     ErrorCode, ErrorCollector, ErrorContext, ErrorSink, ParseError, ParseErrors, ParseResult,
     Severity, SourceLocation,
 };
-use crate::generated_traversal::{
-    AdmittedFullDocumentChild1Choice as FullDocumentChild1Choice, AsRawNode,
-};
+use crate::generated_traversal::{AsRawNode, FullDocumentChild1Choice};
 use crate::model::Header;
 use crate::node_types::*;
 use talkbank_model::ParseOutcome;

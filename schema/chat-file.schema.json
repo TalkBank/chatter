@@ -893,7 +893,7 @@
         },
         {
           "$ref": "#/$defs/Freecode",
-          "description": "Freecode - free-form inline annotation (e.g., \"[^ comment]\")",
+          "description": "Freecode - free-form inline annotation (e.g., `[^ comment]`)",
           "properties": {
             "type": {
               "const": "freecode",
@@ -3264,7 +3264,7 @@
         },
         {
           "const": "E766",
-          "description": "A linker (`+\"`, `++`, `+<`, `+^`, `+,`, `+≈`, `+≋`) placed after\nutterance content. Linkers are utterance-initial by definition\n(they connect this utterance to the PREVIOUS one), so a linker in\ncontent position is meaningless.\n\nThe grammar deliberately parses the misplaced linker into the CST\n(same strict+catch-all pattern as [`IllegalCurlyQuote`]) so this\nnamed rule can locate it precisely; before that, the construct\nfell into ERROR-node recovery and surfaced as a generic `E316`\nthat gave the transcriber nothing to act on (IISRP residue\nfinding 5, 2026-07-30).\n\n[`IllegalCurlyQuote`]: Self::IllegalCurlyQuote",
+          "description": "A linker (`+\"`, `++`, `+<`, `+^`, `+,`, `+≈`, `+≋`) placed after\nutterance content. Linkers are utterance-initial by definition\n(they connect this utterance to the PREVIOUS one), so a linker in\ncontent position is meaningless.\n\nThe grammar deliberately parses the misplaced linker into the CST\n(same strict+catch-all pattern as [`IllegalCurlyQuote`]) so this\nnamed rule can locate it precisely; before that, the construct\nfell into ERROR-node recovery and surfaced as a generic `E316`\nthat gave the transcriber nothing to act on.\n\n[`IllegalCurlyQuote`]: Self::IllegalCurlyQuote",
           "type": "string"
         },
         {
@@ -5866,7 +5866,7 @@
           "type": "object"
         },
         {
-          "description": "[^c] - CA continuation marker - Conversation Analysis\nReference: <https://talkbank.org/0info/manuals/CHAT.html#CA_Continuation>",
+          "description": "`[^c]` - CA continuation marker - Conversation Analysis\nReference: <https://talkbank.org/0info/manuals/CHAT.html#CA_Continuation>",
           "properties": {
             "kind": {
               "const": "ca_continuation",
@@ -6900,7 +6900,7 @@
         },
         {
           "$ref": "#/$defs/Freecode",
-          "description": "Freecode - free-form inline annotation (e.g., \"[^ comment]\")",
+          "description": "Freecode - free-form inline annotation (e.g., `[^ comment]`)",
           "properties": {
             "type": {
               "const": "freecode",

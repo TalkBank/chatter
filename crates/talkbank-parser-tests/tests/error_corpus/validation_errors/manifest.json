@@ -3798,6 +3798,30 @@
       "source_spec": "spec/errors/E362.md"
     },
     {
+      "fixture": "E362_4.cha",
+      "transcript_name": "anonymous",
+      "code": "E362",
+      "claim": "violates",
+      "status": "implemented",
+      "source_spec": "spec/errors/E362.md"
+    },
+    {
+      "fixture": "E362_5.cha",
+      "transcript_name": "anonymous",
+      "code": "E362",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E362.md"
+    },
+    {
+      "fixture": "E362_6.cha",
+      "transcript_name": "anonymous",
+      "code": "E362",
+      "claim": "legal",
+      "status": "implemented",
+      "source_spec": "spec/errors/E362.md"
+    },
+    {
       "fixture": "E363_1.cha",
       "transcript_name": "anonymous",
       "code": "E363",

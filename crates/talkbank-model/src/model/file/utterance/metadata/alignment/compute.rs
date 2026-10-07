@@ -148,7 +148,7 @@ impl Utterance {
             }
         }
 
-        if let Some(wor) = self.wor_tier().cloned() {
+        if let Some(wor) = self.wor_tier() {
             // `%wor` is a timing sidecar, not a `TierAlignmentResult`. On
             // parse-taint (`!can_resolve_wor_timing_sidecar()`) we leave the slot as
             // `None`; unlike the structural alignments above there is no
@@ -157,7 +157,7 @@ impl Utterance {
             // per-tier taint context should consult `ParseHealth` directly.
             if health.can_resolve_wor_timing_sidecar() {
                 metadata.wor_timings = Some(crate::alignment::resolve_wor_timing_sidecar(
-                    &self.main, &wor,
+                    &self.main, wor,
                 ));
             }
         }

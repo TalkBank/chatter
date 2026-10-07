@@ -9,10 +9,10 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    Absence, AdmittedMorContentsChild0ChoiceSourceView,
-    AdmittedMorContentsChild0MorContentChild2Child1Choice, AsRawNode, KindMissing, KindSlot,
-    MorContentNode, MorContentsNode, MorDependentTierNode, Never, NoChild, NodeSlot,
-    NonMissingKindSlot, SourceBound, SourceBoundKind, SourceField, SourceSlotView, WhitespacesNode,
+    Absence, AdmittedMorContentsChild0ChoiceSourceView, AsRawNode, KindMissing, KindSlot,
+    MorContentNode, MorContentsChild0MorContentChild2Child1Choice, MorContentsNode,
+    MorDependentTierNode, Never, NoChild, NodeSlot, NonMissingKindSlot, SourceBound,
+    SourceBoundKind, SourceField, SourceSlotView, WhitespacesNode,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::structure::terminator::terminator_from_new_choice;
@@ -90,7 +90,6 @@ pub fn parse_mor_tier_inner<'tree>(
                 None => ParseOutcome::Rejected,
             }
         }
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
@@ -346,7 +345,6 @@ fn push_mor_content_item<'tree>(
             items.reject();
             return;
         }
-        SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
         SourceSlotView::Absent(NoChild) => return,
     };
     match parse_mor_content(item_node, errors) {
@@ -396,7 +394,7 @@ fn decode_mor_terminator<'tree>(
         '_,
         'tree,
         '_,
-        KindSlot<'tree, AdmittedMorContentsChild0MorContentChild2Child1Choice<'tree>>,
+        KindSlot<'tree, MorContentsChild0MorContentChild2Child1Choice<'tree>>,
     >,
     errors: &impl ErrorSink,
     items: &mut MorItems,

@@ -20,6 +20,7 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{AsRawNode, BulletNode, NoChild, SourceBound, SourceSlotView};
+use talkbank_model::model::Bullet;
 use tree_sitter::Node;
 
 /// Closed timestamp roles shared by field admission and diagnostics.
@@ -158,6 +159,20 @@ pub(crate) fn report_bullet_rejection(
     ));
 }
 
+/// Lower a structured `bullet` CST node to a [`Bullet`] carrying the node's
+/// own source span, so every diagnostic about it (E362, E701, E704) is
+/// located at the bullet. The only route from a bullet node to a value:
+/// every structured-bullet consumer (main tier, `%wor`, endings, bullet
+/// content) flows through this function, so none can omit the span.
+pub(crate) fn parse_bullet_node<'tree>(
+    typed: SourceBound<'tree, '_, BulletNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<Bullet, BulletRejection> {
+    let span = crate::parser::node_span::span_of(typed.raw_node());
+    let (start_ms, end_ms) = parse_bullet_node_timestamps(typed, errors)?;
+    Ok(Bullet::new(start_ms, end_ms).with_span(span))
+}
+
 /// Extract `(start_ms, end_ms)` from a structured `bullet` CST node.
 ///
 /// The grammar's `bullet` rule has field names `start_time` and `end_time`.
@@ -165,10 +180,8 @@ pub(crate) fn report_bullet_rejection(
 /// Reports E748 (leading-zero time representation, CHECK 90) through
 /// `errors` while still returning the parsed values: the numeric value
 /// is unambiguous, so the bullet is kept and the diagnostic alone makes
-/// the file invalid. Centralized here because every structured-bullet
-/// consumer (main tier, `%wor`, endings, bullet content) flows through
-/// this function.
-pub(crate) fn parse_bullet_node_timestamps<'tree>(
+/// the file invalid.
+fn parse_bullet_node_timestamps<'tree>(
     typed: SourceBound<'tree, '_, BulletNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<(u64, u64), BulletRejection> {

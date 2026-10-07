@@ -91,19 +91,27 @@ enum WorItemRepr {
     Word {
         /// The word's display text (`cleaned_text`).
         text: String,
-        /// The paired inline timing bullet, if any.
-        bullet: Option<Bullet>,
+        /// The paired inline timing bullet, if any: its start and end in
+        /// milliseconds and the source text its span covers.
+        bullet: Option<(u64, u64, String)>,
     },
     /// `WorItem::Separator` rendered as its literal marker text.
     Separator(String),
 }
 
-/// Render one `WorItem` into the stable [`WorItemRepr`] used by assertions.
-fn item_repr(item: &WorItem) -> WorItemRepr {
+/// Render one `WorItem` of `source` into the stable [`WorItemRepr`] used by
+/// assertions. A bullet with no source span renders as empty text.
+fn item_repr(source: &str, item: &WorItem) -> WorItemRepr {
     match item {
         WorItem::Word(word) => WorItemRepr::Word {
             text: word.cleaned_text().to_string(),
-            bullet: word.inline_bullet.clone(),
+            bullet: word.inline_bullet.as_ref().map(|bullet: &Bullet| {
+                (
+                    bullet.timing.start_ms,
+                    bullet.timing.end_ms,
+                    source[bullet.span.to_range()].to_string(),
+                )
+            }),
         },
         WorItem::Separator { text, .. } => WorItemRepr::Separator(text.clone()),
     }
@@ -162,7 +170,7 @@ fn parse_wor(input: &str) -> WorParse {
                 if let DependentTier::Wor(t) = &dt.tier {
                     saw_wor_tier = true;
                     language_code = t.language_code.as_ref().map(|lc| lc.to_string());
-                    items.extend(t.items.iter().map(item_repr));
+                    items.extend(t.items.iter().map(|item| item_repr(input, item)));
                     terminator = t.terminator.as_ref().map(term_label);
                 }
             }
@@ -213,7 +221,7 @@ fn valid_wor_tier_parses_byte_identical_with_zero_diagnostics() {
         vec![
             WorItemRepr::Word {
                 text: "one".to_string(),
-                bullet: Some(Bullet::new(0, 120)),
+                bullet: Some((0, 120, "\u{15}0_120\u{15}".to_string())),
             },
             WorItemRepr::Word {
                 text: "two".to_string(),
@@ -222,7 +230,7 @@ fn valid_wor_tier_parses_byte_identical_with_zero_diagnostics() {
             WorItemRepr::Separator(",".to_string()),
             WorItemRepr::Word {
                 text: "three".to_string(),
-                bullet: Some(Bullet::new(120, 260)),
+                bullet: Some((120, 260, "\u{15}120_260\u{15}".to_string())),
             },
         ],
         "every %wor item must decode in order, with each bullet paired to its preceding word"

@@ -79,6 +79,11 @@ or relaunch. Installer and updater artifacts require separate release evidence.
 
 ### Stored Unicode identity
 
+Reveal-in-file-manager travels through the validation-target capability and the
+typed command protocol, not a component-local Tauri import. Transport-double
+tests retain the exact Unicode path and propagate native failures. They do not
+launch or certify the operating system's file manager.
+
 The runtime bridge test copies the canonical W109 media specimen into an owned
 temporary directory, then validates it through stored NFD, NFC alias (where the
 filesystem supports it), and directory targets from inside Tauri's runtime.

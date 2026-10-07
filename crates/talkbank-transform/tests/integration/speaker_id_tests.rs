@@ -481,21 +481,21 @@ fn legacy_override_without_engine_reads_as_deterministic() {
     let toml = r#"
 schema_version = 2
 
-[NF203-2]
+[S01-1]
 mode = "auto"
 operator = "reference-mode"
 decided_at = "2026-05-01T00:00:00Z"
 
-[NF203-2.adult_roles.PAR0]
+[S01-1.adult_roles.PAR0]
 code = "INV"
 tag = "Investigator"
 
-[NF203-2.mapping]
+[S01-1.mapping]
 PAR0 = "rename"
 PAR1 = "drop"
 "#;
     let file: OverrideFile = toml::from_str(toml).unwrap();
-    let entry = file.get("NF203-2").expect("entry present");
+    let entry = file.get("S01-1").expect("entry present");
     assert_eq!(entry.engine, DecisionEngine::Deterministic);
     assert!(entry.judgment.is_none());
 }

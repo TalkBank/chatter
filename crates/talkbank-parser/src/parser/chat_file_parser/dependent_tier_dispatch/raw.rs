@@ -35,16 +35,12 @@ use crate::generated_traversal::{
     EngDependentTierNode, ErrDependentTierNode, FacDependentTierNode, FloDependentTierNode,
     GlsDependentTierNode, ModsylDependentTierNode, OrtDependentTierNode, ParDependentTierNode,
     PhoalnDependentTierNode, PhosylDependentTierNode, TimDependentTierNode,
-    XphointDependentTierNode, extract_alt_dependent_tier, extract_coh_dependent_tier,
-    extract_def_dependent_tier, extract_eng_dependent_tier, extract_err_dependent_tier,
-    extract_fac_dependent_tier, extract_flo_dependent_tier, extract_gls_dependent_tier,
-    extract_modsyl_dependent_tier, extract_ort_dependent_tier, extract_par_dependent_tier,
-    extract_phoaln_dependent_tier, extract_phosyl_dependent_tier, extract_tim_dependent_tier,
-    extract_xphoint_dependent_tier,
+    XphointDependentTierNode,
 };
 use crate::model::Utterance;
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::parser::node_span::span_of;
+use crate::parser::typed_cst::extract_admitted;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::dependent_tier::{
     PhoalnTier, SylTier, SylTierType, XphointTier, parse_phoaln_content, parse_syl_content,
@@ -60,14 +56,19 @@ use super::helpers::{read_optional_tier_body_raw_text, read_optional_tier_body_t
 ///
 /// Generates the ten tiers whose whole lowering is "read the optional body as
 /// text, wrap it in a `TextTier`, push it under this tier's variant". Each entry
-/// is the (typed node type, `extract_*`, `DependentTier` variant) triple, and
-/// the three are checked against each other by the compiler: an `extract_*` that
-/// does not accept that node type, or a variant that does not accept a
-/// `TextTier`, is a build error rather than a tier populated from the wrong line.
+/// is the (typed node type, `DependentTier` variant) pair, and the compiler
+/// checks them against each other: a variant that does not accept a `TextTier`
+/// is a build error. The extraction is the node type's own (its `Extract`
+/// impl), so it cannot be paired with another tier's: entries used to name an
+/// `extract_*` beside the node type, a second statement of the same fact.
+///
+/// Every applier here extracts under the admitted kind proof, because the body
+/// readers take the reading in which the body slot is never MISSING (see
+/// `read_tier_body_text`).
 macro_rules! plain_text_tier_appliers {
     ($(
         $(#[$meta:meta])*
-        $name:ident : $node:ident via $extract:ident => $variant:ident;
+        $name:ident : $node:ident => $variant:ident;
     )*) => {
         $(
             $(#[$meta])*
@@ -81,7 +82,7 @@ macro_rules! plain_text_tier_appliers {
                 let raw = node.raw_node();
                 let span = span_of(raw);
                 let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-                    $extract(node), raw, input, errors,
+                    extract_admitted(node), raw, input, errors,
                 ) else { return; };
                 let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
                     super::helpers::dependent_tier_separator(children.child_1.slot()),
@@ -107,16 +108,16 @@ macro_rules! plain_text_tier_appliers {
 }
 
 plain_text_tier_appliers! {
-    apply_ort: OrtDependentTierNode via extract_ort_dependent_tier => Ort;
-    apply_eng: EngDependentTierNode via extract_eng_dependent_tier => Eng;
-    apply_gls: GlsDependentTierNode via extract_gls_dependent_tier => Gls;
-    apply_alt: AltDependentTierNode via extract_alt_dependent_tier => Alt;
-    apply_coh: CohDependentTierNode via extract_coh_dependent_tier => Coh;
-    apply_def: DefDependentTierNode via extract_def_dependent_tier => Def;
-    apply_err: ErrDependentTierNode via extract_err_dependent_tier => Err;
-    apply_fac: FacDependentTierNode via extract_fac_dependent_tier => Fac;
-    apply_flo: FloDependentTierNode via extract_flo_dependent_tier => Flo;
-    apply_par: ParDependentTierNode via extract_par_dependent_tier => Par;
+    apply_ort: OrtDependentTierNode => Ort;
+    apply_eng: EngDependentTierNode => Eng;
+    apply_gls: GlsDependentTierNode => Gls;
+    apply_alt: AltDependentTierNode => Alt;
+    apply_coh: CohDependentTierNode => Coh;
+    apply_def: DefDependentTierNode => Def;
+    apply_err: ErrDependentTierNode => Err;
+    apply_fac: FacDependentTierNode => Fac;
+    apply_flo: FloDependentTierNode => Flo;
+    apply_par: ParDependentTierNode => Par;
 }
 
 /// Generates `%modsyl` and `%phosyl`, which differ only in the [`SylTierType`]
@@ -124,7 +125,7 @@ plain_text_tier_appliers! {
 /// RAW text rather than as a `TextTier` because they lower it themselves.
 macro_rules! syl_tier_appliers {
     ($(
-        $name:ident : $node:ident via $extract:ident => $variant:ident as $syl_type:ident;
+        $name:ident : $node:ident => $variant:ident as $syl_type:ident;
     )*) => {
         $(
             /// Read this tier's optional body, parse it into syllable words, and
@@ -140,7 +141,7 @@ macro_rules! syl_tier_appliers {
                 let raw = node.raw_node();
                 let span = span_of(raw);
                 let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-                    $extract(node), raw, input, errors,
+                    extract_admitted(node), raw, input, errors,
                 ) else { return; };
                 let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
                     super::helpers::dependent_tier_separator(children.child_1.slot()),
@@ -172,8 +173,8 @@ macro_rules! syl_tier_appliers {
 }
 
 syl_tier_appliers! {
-    apply_modsyl: ModsylDependentTierNode via extract_modsyl_dependent_tier => Modsyl as Modsyl;
-    apply_phosyl: PhosylDependentTierNode via extract_phosyl_dependent_tier => Phosyl as Phosyl;
+    apply_modsyl: ModsylDependentTierNode => Modsyl as Modsyl;
+    apply_phosyl: PhosylDependentTierNode => Phosyl as Phosyl;
 }
 
 /// Generates `%phoaln` and `%xphoint`, the two whose content parser can FAIL.
@@ -183,7 +184,7 @@ syl_tier_appliers! {
 /// malformed-content error, so the absent case never reaches the content parser.
 macro_rules! fallible_content_tier_appliers {
     ($(
-        $name:ident : $node:ident via $extract:ident => $variant:ident
+        $name:ident : $node:ident => $variant:ident
             using $parse:ident into $tier:ident labelled $label:literal;
     )*) => {
         $(
@@ -199,7 +200,7 @@ macro_rules! fallible_content_tier_appliers {
                 let raw = node.raw_node();
                 let span = span_of(raw);
                 let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-                    $extract(node), raw, input, errors,
+                    extract_admitted(node), raw, input, errors,
                 ) else { return; };
                 let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
                     super::helpers::dependent_tier_separator(children.child_1.slot()),
@@ -246,9 +247,9 @@ macro_rules! fallible_content_tier_appliers {
 }
 
 fallible_content_tier_appliers! {
-    apply_phoaln: PhoalnDependentTierNode via extract_phoaln_dependent_tier => Phoaln
+    apply_phoaln: PhoalnDependentTierNode => Phoaln
         using parse_phoaln_content into PhoalnTier labelled "%phoaln";
-    apply_xphoint: XphointDependentTierNode via extract_xphoint_dependent_tier => Xphoint
+    apply_xphoint: XphointDependentTierNode => Xphoint
         using parse_xphoint_content into XphointTier labelled "%xphoint";
 }
 
@@ -266,12 +267,9 @@ pub(super) fn apply_tim(
 ) {
     let raw = node.raw_node();
     let span = span_of(raw);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_tim_dependent_tier(node),
-        raw,
-        input,
-        errors,
-    ) else {
+    let Ok(children) =
+        crate::parser::typed_cst::report_reconstruction(extract_admitted(node), raw, input, errors)
+    else {
         return;
     };
     let Ok(separator) = crate::parser::typed_cst::report_reconstruction(

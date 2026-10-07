@@ -101,6 +101,17 @@ for utt in chat_file.utterances() {
 `parse_and_validate` returns a mutable `ChatFile` and may skip validation
 according to its options. Use `parse_validated_with_parser` for an immutable
 `ValidChatFile` whose policy cannot skip validation.
+When original bytes must be returned unchanged, use `parse_source_with_parser`.
+Its opaque `ParsedSourceChat` permits read-only inspection before `admit`
+validates that same parse with complete rules and tier alignment; this
+unchanged-output admission has no caller-selected policy. Success returns
+`AdmittedSourceChat`, coupling
+original bytes with their immutable model proof; `into_owned` keeps the binding
+across asynchronous storage. No constructor accepts separate text and model
+evidence. `into_product` relinquishes admission authority for recovery work,
+and `into_valid_file` relinquishes the original-byte binding before editing.
+Removing and regenerating tiers requires the separate replacement admission
+below; an unchanged source cannot claim a removal exemption.
 `chat_file.utterances()` returns an iterator over `&Utterance` derived
 from the file's `lines` (utterances are interleaved with headers and
 comments in source order).
@@ -139,6 +150,77 @@ and
 `with_strict_linkers()` (enables the
 opt-in cross-utterance quotation and completion checks; `chatter
 validate --list-checks` marks each code it turns on as `[Opt-in]`).
+
+## Admission for dependent-tier regeneration
+
+`TreeSitterParser::admit_replacing_tiers` is a separate input boundary for a
+transform that will actually remove and regenerate dependent tiers.
+`ReplacementTiers::Morphosyntax` removes `%mor` and `%gra` together;
+`ReplacementTiers::WordTiming` removes `%wor` while retaining morphology.
+
+For header-dependent policies, `admit_planned_tiers` supplies immutable references
+to all typed headers to a one-shot callback. Returning `None` preserves every
+tier and requires whole-document validity; returning a replacement selection
+physically removes only that domain. Header lowering happens once, before
+pending source-bound utterances lower once. The callback sees misplaced headers
+too, but cannot excuse header faults. `AdmittedReplacement::selection` records
+the actual optional removal selection; an unfinished producer plan is a tool
+failure, never CHAT invalidity or validation success.
+
+The parser parses once. Its generated, source-bound traversal selects concrete
+tier nodes and omits them before lowering the retained model. The recovery
+backstop excludes those exact discarded subtrees, not diagnostic codes or
+overlapping byte spans. Headers, main-tier/retrace errors, retained dependent
+tiers, unclassified recovery and global forbidden-control checks remain subject
+to refusal. The retained model must pass normal validation and tier alignment.
+
+The resulting `AdmittedReplacement` owns both immutable `ValidChatFile` evidence
+for the retained document and the original `ParsedSource`. Its removal receipt
+records each selected tier's original span and whether it contained syntax
+recovery. Absence of syntax recovery does not prove that discarded content was
+semantically valid. This API does **not** certify the original bytes as valid
+CHAT and never repairs or marks recovered content clean.
+
+A pass-through, keep-tier or incremental preservation path must validate what
+it will retain; it cannot use whole-file tier removal to excuse faults in copied
+content. After admission, transformations still need completion and output
+validation before writing. `into_valid_file` explicitly consumes the
+source/removal association; `ValidChatFile::into_unchecked` consumes validity
+before editing. No serialized CHAT is reparsed to establish these states.
+
+### Adaptive word-timing regeneration
+
+`admit_word_timing_plan` returns `WordTimingAdmission`, not unconditional
+`AdmittedReplacement`. Its disposition is preserved, replaced with a completely
+valid retained document, or `Regenerating(AdmittedTimingRegeneration)`.
+The last branch is possible only when concrete discarded source-bound `%wor`
+tiers contain recorded timing and their removal leaves the linked-media timing
+requirement outstanding. The model and original source remain bound to the
+removal receipt; no original-byte output proof is issued.
+
+Only the word tiers actually at fault are removed; the others are retained.
+Each `RemovedTier` carries a `RemovalCause` naming why: `OwnLowering` (the
+tier itself did not lower cleanly), `LocatedValidation` (validation errors
+inside its source span), `UnattributedValidation` (errors in no word tier, so
+every remaining word tier was removed, sharing those diagnostics) or
+`Selected` (a fixed `ReplacementTiers` request). `RemovalCause::diagnostics`
+returns the diagnostics that cost the tier, so a consumer can report which
+codes cost which tier.
+
+`PendingTimingChatFile` is checked working structure, **not valid CHAT**.
+The payload has no `into_valid_file`, accepted-document serialization or
+validity constructor. It keeps its document and its `MediaTimingObligation`
+together: write the regenerated timing through `document_mut`, then
+`discharge` checks the payload's document with the very rule that issued the
+obligation (E544), handing that document out once the rule no longer fires
+and the payload back while it would. The obligation alone has no discharge,
+so the verdict always concerns the document the consumer goes on to admit.
+UTR/FA must establish actual timing, and final output must still pass
+complete checked construction, including E544. No header is
+changed and no emitted diagnostic is filtered. Normal validation still reports
+E544; unrelated retained faults, internal failures and preservation/NoAlign
+paths still refuse. Missing timing without concrete discarded timing is not
+eligible for this adaptive state.
 
 ## Working with the Model
 

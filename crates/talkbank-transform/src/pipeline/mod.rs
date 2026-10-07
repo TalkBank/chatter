@@ -10,7 +10,10 @@ mod error;
 mod io;
 mod parse;
 mod validated;
-pub use validated::{ValidatedParseError, parse_validated_with_parser};
+pub use validated::{
+    AdmittedSourceChat, ParsedSourceChat, ValidatedParseError, parse_source_with_parser,
+    parse_validated_with_parser,
+};
 pub(crate) mod rewrite;
 
 pub use convert::{

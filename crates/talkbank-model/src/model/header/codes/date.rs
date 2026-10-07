@@ -137,18 +137,16 @@ pub enum ChatDate {
 /// and the day range 01–31, not calendar or leap-year validity.
 /// Components cannot be changed independently of the stored text.
 ///
-/// ```compile_fail
-/// use talkbank_model::model::ChatDate;
-/// if let ChatDate::Valid(mut date) = ChatDate::from_text("01-JAN-2024") {
-///     date.day = 0;
-/// }
+/// ```compile_fail,E0616
+/// # use talkbank_model::model::ChatDate;
+/// # if let ChatDate::Valid(mut date) = ChatDate::from_text("01-JAN-2024") {
+/// date.day = 0;
+/// # }
 /// ```
 ///
-/// ```compile_fail
-/// use talkbank_model::model::{CheckedChatDate, Month};
-/// let date = CheckedChatDate {
-///     day: 0, month: Month::Jan, year: 2024, raw: "01-JAN-2024".into(),
-/// };
+/// ```compile_fail,E0451
+/// # use talkbank_model::model::{CheckedChatDate, Month};
+/// let date = CheckedChatDate { day: 0, month: Month::Jan, year: 2024, raw: "01-JAN-2024".into() };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SemanticEq, SpanShift)]
 pub struct CheckedChatDate {

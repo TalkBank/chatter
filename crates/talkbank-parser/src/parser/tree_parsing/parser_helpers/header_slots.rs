@@ -5,10 +5,11 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NamedKind, Never, NoChild, ReadableSlot, SourceBindingError, SourceBound,
-    SourceBoundKind, SourceField, SourceSlotView,
+    AsRawNode, NamedKind, Never, NoChild, ReadableSlot, SourceBindingError, SourceBound,
+    SourceBoundKind, SourceField, SourceRecovery, SourceSlotView,
 };
 use crate::model::{Header, WarningText};
+use crate::parser::typed_cst::AnyKindSlot;
 use crate::parser::typed_cst::CstFailure;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
@@ -219,12 +220,21 @@ impl<'w> ContentSlot<'w> {
 /// Read an associated payload without accepting independently selected text.
 /// Range admission remains fallible, and every non-present slot retains the
 /// family's recovery policy. Source association does not certify valid syntax.
-pub(crate) fn read_source_content<'tree, 'source, 'w, T: SourceBoundKind<'tree> + NamedKind>(
+///
+/// Generic over the slot's `Missing` payload `M` (see [`AnyKindSlot`]): a
+/// placeholder refuses like any other non-present state and is never read, so
+/// one body serves a slot that can be MISSING and a narrowed one under either
+/// kind proof.
+pub(crate) fn read_source_content<'value, 'tree: 'value, 'source, 'w, T, M>(
     site: &HeaderSite<'tree, '_>,
-    content_slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
+    content_slot: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, T, M>>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
-) -> Result<&'source str, ContentReadError<'w>> {
+) -> Result<&'source str, ContentReadError<'w>>
+where
+    T: SourceBoundKind<'tree> + NamedKind,
+    M: SourceRecovery<'value, 'tree, 'source>,
+{
     match content_slot.view() {
         SourceSlotView::Present(content) => content
             .read()
@@ -242,16 +252,18 @@ pub(crate) fn read_source_content<'tree, 'source, 'w, T: SourceBoundKind<'tree> 
 
 /// Read a range-admitted lexical slot. Only structural recovery can refuse;
 /// the producer-failure transition has already completed for this carrier.
-pub(crate) fn read_admitted_content<'tree, 'source, 'w, T: SourceBoundKind<'tree> + NamedKind>(
+///
+/// Generic over the `Missing` payload `M` for the reason
+/// [`read_source_content`] is: a placeholder only refuses.
+pub(crate) fn read_admitted_content<
+    'tree,
+    'source,
+    'w,
+    T: SourceBoundKind<'tree> + NamedKind,
+    M,
+>(
     site: &HeaderSite<'tree, '_>,
-    slot: &ReadableSlot<
-        'tree,
-        'source,
-        SourceBound<'tree, 'source, T>,
-        SourceBound<'tree, 'source, T>,
-        Never,
-        NoChild,
-    >,
+    slot: &ReadableSlot<'tree, 'source, SourceBound<'tree, 'source, T>, M, Never, NoChild>,
     words: &'w ContentSlot<'w>,
     errors: &impl ErrorSink,
 ) -> Result<&'source str, Refused<'w>> {

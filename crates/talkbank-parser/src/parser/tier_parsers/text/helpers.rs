@@ -3,7 +3,7 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::generated_traversal::{AsRawNode, NamedKind, SelectedKindSlot};
+use crate::generated_traversal::{AsRawNode, NamedKind, SelectedNonMissingKindSlot};
 use crate::parser::tree_parsing::bullet_content::{BulletTextNode, parse_bullet_content};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
@@ -80,10 +80,15 @@ fn tier_label(kind: &str) -> &str {
 /// Parse an extracted text-tier body without erasing its generated kind.
 ///
 /// Only the two bullet-text carriers implement conversion to `BulletTextNode`.
-/// Present nodes and kind-admitted MISSING placeholders retain that identity;
-/// an unclassified placeholder or ERROR reports the tier fault and no-content
-/// diagnostic. Absent required content reports no-content alone. The enclosing
-/// optional-body transition handles author-written empty tiers separately.
+/// A present node retains that identity; an ERROR reports the tier fault and
+/// the no-content diagnostic. The enclosing optional-body transition handles
+/// author-written empty tiers separately.
+///
+/// The body slot has no `Missing` state: the body is a named nonterminal the
+/// compiled grammar proves is never MISSING, and every caller extracts its
+/// tier under that proof, so the slot is a [`SelectedNonMissingKindSlot`].
+/// Until the proof reached this slot, a placeholder body was parsed as though
+/// it were present content.
 ///
 /// Surface displaced children before lowering, preserving the recovery backstop.
 fn parse_text_tier_content<'tree, 'source, Tier, Body>(
@@ -92,7 +97,7 @@ fn parse_text_tier_content<'tree, 'source, Tier, Body>(
         '_,
         'tree,
         'source,
-        SelectedKindSlot<'tree, Body>,
+        SelectedNonMissingKindSlot<'tree, Body>,
     >,
     unexpected: &[Node<'tree>],
     errors: &impl ErrorSink,
@@ -108,9 +113,7 @@ where
 
     use crate::generated_traversal::SourceSlotView;
     match body.view() {
-        SourceSlotView::Present(text) | SourceSlotView::Missing(text) => {
-            parse_bullet_content(text.read()?.into(), errors)
-        }
+        SourceSlotView::Present(text) => parse_bullet_content(text.read()?.into(), errors),
         SourceSlotView::Error(node) => {
             errors.report(unexpected_node_error(node.raw_node(), source, Tier::KIND));
             report_missing_text_content::<Tier>(tier_node, source, errors);
@@ -144,7 +147,7 @@ pub(crate) fn parse_optional_text_tier_content<'tree, 'source, Tier, Body>(
         '_,
         'tree,
         'source,
-        Option<SelectedKindSlot<'tree, Body>>,
+        Option<SelectedNonMissingKindSlot<'tree, Body>>,
     >,
     unexpected: &[Node<'tree>],
     errors: &impl ErrorSink,

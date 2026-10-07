@@ -63,7 +63,6 @@ pub(super) fn parse_tier_body<'tree>(
     let linkers = match body.linkers.slot().as_ref().map(NodeSlot::view) {
         Some(SlotView::Present(linkers_node)) => parse_linkers(*linkers_node, source, errors)?,
         Some(SlotView::Error(_)) | None => Vec::new(),
-        Some(SlotView::Missing(never)) => match never {},
     };
 
     // Optional language-switch token (the `[- code]` precode) plus its source
@@ -89,7 +88,6 @@ pub(super) fn parse_tier_body<'tree>(
             Vec::new()
         }
         SourceSlotView::Absent(NoChild) => Vec::new(),
-        SourceSlotView::Missing(never) => match never {},
     };
 
     // Ending: the `utterance_end` block (terminator, postcodes, trailing bullet).
@@ -130,7 +128,6 @@ pub(super) fn parse_tier_body<'tree>(
             );
             UtteranceEndTail::default()
         }
-        SourceSlotView::Missing(never) => match never {},
     };
 
     // Surface the carrier's own `unexpected` sink (R2).

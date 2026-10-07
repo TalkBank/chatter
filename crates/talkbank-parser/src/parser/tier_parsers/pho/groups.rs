@@ -54,9 +54,6 @@ pub(super) fn extract_pho_group_items<'tree>(
                 SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
                     fallback_group_as_text(typed)
                 }
-                SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => {
-                    match never {}
-                }
             }
         }
     })
@@ -140,7 +137,6 @@ fn push_pho_word<'tree, 'source>(
                 words.push(text);
             }
         }
-        SourceSlotView::Missing(never) => match never {},
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(
                 raw.raw_node(),
