@@ -458,7 +458,7 @@ const E370_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Ta
 /// cache regression this project has actually shipped was a change in how many
 /// files got re-validated, which is an exact integer the summary already
 /// prints, whereas a wall-clock threshold is machine-dependent and goes flaky.
-fn cache_hits(output: &std::process::Output) -> Result<usize, TestError> {
+pub(crate) fn cache_hits(output: &std::process::Output) -> Result<usize, TestError> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     stdout
         .lines()

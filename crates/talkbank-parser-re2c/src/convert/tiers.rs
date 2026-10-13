@@ -100,8 +100,13 @@ pub fn utterance_to_model(
         .dependent_tiers
         .iter()
         .filter_map(|entry| {
-            dependent_tier_to_model(&entry.tier, source, errors, &mut parse_health)
-                .map(|tier| DependentTierEntry::with_separator(tier, entry.separator))
+            dependent_tier_to_model(&entry.tier, source, errors, &mut parse_health).map(|tier| {
+                let mut lowered = DependentTierEntry::with_separator(tier, entry.separator);
+                if let Some(body) = entry.content_range {
+                    lowered.record_content_span(body);
+                }
+                lowered
+            })
         })
         .collect();
     let mut utterance = talkbank_model::model::Utterance::new(main);

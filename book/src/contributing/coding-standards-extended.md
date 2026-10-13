@@ -1,7 +1,7 @@
 # Coding Standards and Engineering Practices
 
 **Status:** Current
-**Last updated:** 2026-05-21 08:38 EDT
+**Last modified:** {{git-dates:page}}
 
 ## Objective
 Set enforceable, language-specific standards that reduce ambiguity and improve long-term maintainability.
@@ -18,16 +18,28 @@ Set enforceable, language-specific standards that reduce ambiguity and improve l
 - Minimize `#[allow(clippy::...)]`; each allowance needs rationale.
 - Prefer small focused modules with clear ownership.
 - Public APIs require doc comments with examples and error behavior.
+- Field derives admit metadata before emission. `#[semantic_eq(skip)]` and
+  `#[span_shift(skip)]` are field-only, single-argument controls; malformed,
+  duplicate or misplaced annotations are errors. Equality and structured diff
+  share one admitted semantic field plan; span movement has a separate typed
+  policy. Preserve recursive bounds, diff paths/context and skipped payloads;
+  generate enum locals independently of user field names.
 - In parser code, disallow `ErrorSink` + `Option<T>` signatures for fallible parse operations.
   - Use explicit outcome enums or `Result` with structured diagnostics.
   - Guardrail script: `scripts/check-errorsink-option-signatures.sh`.
 - For model enums that encode validation state, require `ValidationTagged` derive.
   - Explicit annotation: `#[validation_tag(error|warning|clean)]`.
-  - Naming-convention fallback (per
-    `crates/talkbank-derive/src/validation_tagged.rs:118-123`):
+  - Flags are variant-only and strictly parsed before emission; generic payloads
+    do not acquire validation trait bounds.
+  - Naming-convention fallback (in `talkbank-derive/src/validation_tagged.rs`):
     variants ending in `Error` → `Error`; variants ending in
     `Warning` OR `Unsupported`, plus a variant named exactly
     `Unsupported`, → `Warning`; otherwise → `Clean`.
+- `error_code_enum` consumes an admitted, ordered, UnknownError-complete registry,
+  never unchecked attributes. Code literals and exclusive Active/Planned/OptIn
+  states have one producer. Reject malformed or duplicate metadata, nonempty
+  macro arguments and unsupported generic/where-clause/discriminant declarations;
+  preserve exact wire strings, numeric code ordering and generated status policy.
 
 ## Grammar Standards
 - Grammar rules must map to documented token/category semantics.

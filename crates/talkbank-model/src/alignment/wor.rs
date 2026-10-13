@@ -68,13 +68,16 @@ pub enum WorTimingSidecar {
 }
 
 mod projection;
-pub use projection::{WorMainTierProjection, WorSlotMembershipPolicy};
+pub use projection::{WorMainTierProjection, WorSlotMembershipPolicy, WorSourceContent};
 
 mod correspondence;
 pub use correspondence::{
     CorroboratedWorTimingSlot, CorroboratedWorTimings, UncorroboratedWorTimings,
     WorLexicalMismatch, WorTimingCorrespondence, corroborate_wor_timing,
 };
+
+mod complete_slots;
+pub use complete_slots::CompleteWorTimingSlots;
 
 /// Number of main-tier slots admitted by the selected `%wor` policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -177,7 +180,7 @@ impl WorTimingDrift {
 #[derive(Debug, PartialEq)]
 pub struct CountMatchedWorTimings<'main> {
     policy: WorSlotMembershipPolicy,
-    main_slots: Vec<&'main Word>,
+    main_slots: Vec<projection::ProjectedWorWord<'main>>,
     wor_slots: Vec<&'main Word>,
 }
 
@@ -195,7 +198,7 @@ impl<'main> CountMatchedWorTimings<'main> {
     pub fn pairs(&self) -> impl Iterator<Item = (&'main Word, &'main Word)> + '_ {
         self.main_slots
             .iter()
-            .copied()
+            .map(|slot| slot.word())
             .zip(self.wor_slots.iter().copied())
     }
 
@@ -433,7 +436,7 @@ pub enum WorAdjacentTimingRelation {
 #[derive(Debug, PartialEq)]
 pub struct CompleteWorTimings<'main> {
     policy: WorSlotMembershipPolicy,
-    slots: Vec<CompleteWorTimingSlot<'main>>,
+    slots: CompleteWorTimingSlots<'main>,
     adjacencies: Vec<WorAdjacentTimingRelation>,
     hull: WorTimingHull,
 }
@@ -444,8 +447,8 @@ impl<'main> CompleteWorTimings<'main> {
         self.policy
     }
 
-    /// Complete timed slots in main-tier order.
-    pub fn slots(&self) -> &[CompleteWorTimingSlot<'main>] {
+    /// Nonempty complete timed slots in main-tier order.
+    pub fn slots(&self) -> &CompleteWorTimingSlots<'main> {
         &self.slots
     }
 
@@ -463,19 +466,24 @@ impl<'main> CompleteWorTimings<'main> {
 /// One main-tier word whose `%wor` timing passed completeness assessment.
 #[derive(Debug, PartialEq)]
 pub struct CompleteWorTimingSlot<'main> {
-    main_word: &'main Word,
+    main_slot: projection::ProjectedWorWord<'main>,
     timing: WorRecordedInterval,
 }
 
 impl<'main> CompleteWorTimingSlot<'main> {
     /// Typed main-tier word that owns lexical identity.
     pub fn main_word(&self) -> &'main Word {
-        self.main_word
+        self.main_slot.word()
+    }
+
+    /// Producing root content retained through every timing-admission phase.
+    pub fn source_content(&self) -> WorSourceContent<'main> {
+        self.main_slot.source_content()
     }
 
     /// Cleaned lexical text from the main-tier word.
     pub fn main_text(&self) -> &str {
-        self.main_word.cleaned_text()
+        self.main_word().cleaned_text()
     }
 
     /// Positive `%wor` timing observation.
@@ -554,9 +562,12 @@ pub fn assess_wor_timing_sequence(
         end: first_complete.timing.end,
     };
     let mut previous = (first_index, first_complete.timing);
-    let mut complete_slots = Vec::with_capacity(slot_count.get());
-    complete_slots.push(first_complete);
-    let mut adjacencies = Vec::with_capacity(slot_count.get().saturating_sub(1));
+    let following_count = indexed_slots.len();
+    let mut complete_slots = CompleteWorTimingSlots {
+        first: first_complete,
+        following: Vec::with_capacity(following_count),
+    };
+    let mut adjacencies = Vec::with_capacity(following_count);
     let mut issues = Vec::new();
 
     for (raw_index, slot) in indexed_slots {
@@ -573,7 +584,7 @@ pub fn assess_wor_timing_sequence(
                     hull.start = hull.start.min(complete.timing.start);
                     hull.end = hull.end.max(complete.timing.end);
                     previous = (index, complete.timing);
-                    complete_slots.push(complete);
+                    complete_slots.following.push(complete);
                 }
             }
             Err(issue) => issues.push(issue),
@@ -613,7 +624,7 @@ fn assess_wor_timing_slot(
     }
 
     Ok(CompleteWorTimingSlot {
-        main_word: slot.main_word,
+        main_slot: slot.main_slot,
         timing: interval,
     })
 }

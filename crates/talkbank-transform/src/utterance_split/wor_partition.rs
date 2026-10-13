@@ -4,26 +4,25 @@ use talkbank_model::alignment::{
     bind_wor_timing, corroborate_wor_timing,
 };
 use talkbank_model::model::dependent_tier::wor::WorItem;
-use talkbank_model::model::{Bullet, MainTier, Utterance, WorTier};
+use talkbank_model::model::{Bullet, MainTier, WorTier};
 
-/// Build a per-child `%wor` from the parent tier by walking main-tier words
-/// in lockstep with `%wor` Word-items.
+use super::content_groups::{ContentItemGroups, RebuiltChildren};
+
+/// Build a per-child `%wor` from canonical, source-rooted timing slots.
 ///
 /// Returns `None` unless chatter proves both equal policy-selected counts and
 /// canonical lexical correspondence. On `None`, the caller drops the tier
 /// from all children, matching the existing stale-`%wor`-is-fine behavior,
 /// never raising a validation error.
 ///
-/// `main_word_groups` is the per-main-tier-word child-group assignment, in
-/// main-tier word order, restricted to `%wor`-eligible words (the same
-/// filtering `TierDomain::Wor` uses: untranscribed, fragments, and nonwords
-/// are excluded; fillers are included).
-pub(super) fn partition_wor_tier(
-    main: &MainTier,
+/// Projection retains each selected word's root content position. That
+/// position consumes the admitted groups' source-ordered content iterator;
+/// no separate word walk or membership-agreement check can drift from it.
+pub(super) fn partition_wor_tier<Affiliation>(
     parent: &WorTier,
-    main_word_groups: &[usize],
-    num_groups: usize,
+    content_groups: &ContentItemGroups<'_, Affiliation>,
 ) -> Option<PartitionedWorTiers> {
+    let main = &content_groups.source().main;
     let count_matched = match bind_wor_timing(main, Some(parent)) {
         WorTimingBinding::CountMatched(count_matched) => count_matched,
         WorTimingBinding::Drifted(drift) => {
@@ -49,36 +48,40 @@ pub(super) fn partition_wor_tier(
             return None;
         }
     };
-    if corroborated.slots().len() != main_word_groups.len() {
-        tracing::debug!(
-            chatter_projection_words = corroborated.slots().len(),
-            batchalign_projection_words = main_word_groups.len(),
-            "%wor membership implementations disagree on split, dropping timing tier"
-        );
-        return None;
-    }
-
-    // Walk parent items, tracking which main-tier word index we're on for
-    // Word items. Separators have no main-tier counterpart; we attach them
-    // to the same child as the most recent Word, falling back to group 0
-    // if we haven't seen any Word yet.
-    let mut per_child: Vec<Vec<WorItem>> = vec![Vec::new(); num_groups];
-    let mut next_word_idx = 0usize;
-    let mut last_seen_group: Option<usize> = None;
-    for item in &parent.items {
-        match item {
-            WorItem::Word(_) => {
-                let group = main_word_groups[next_word_idx];
-                last_seen_group = Some(group);
-                per_child[group].push(item.clone());
-                next_word_idx += 1;
-            }
-            WorItem::Separator { .. } => {
-                let group = last_seen_group.unwrap_or(0);
-                per_child[group].push(item.clone());
+    // Both binding and grouping originate from content_groups.source().
+    // Canonical root positions are nondecreasing, including repeated positions
+    // for nested words, so this is one linear content scan without word walks
+    // or a second independently indexed word/group vector.
+    let mut per_child: Vec<Vec<WorItem>> = vec![Vec::new(); content_groups.group_count()];
+    let mut by_content = content_groups.items_with_groups().enumerate().peekable();
+    let mut source_group = content_groups.first_group();
+    let mut last_seen_group = content_groups.first_group();
+    let mut parent_items = parent.items.iter();
+    for slot in corroborated.slots() {
+        while let Some((_, (_, group))) =
+            by_content.next_if(|(index, _)| *index <= slot.source_content().index())
+        {
+            source_group = group;
+        }
+        // Count matching proved one parent Word-item for each slot. Consume
+        // its preceding separators using the last actual word affiliation;
+        // leading separators retain the source's admitted first child.
+        for item in parent_items.by_ref() {
+            match item {
+                WorItem::Word(_) => {
+                    per_child[source_group].push(item.clone());
+                    last_seen_group = source_group;
+                    break;
+                }
+                WorItem::Separator { .. } => {
+                    per_child[last_seen_group].push(item.clone());
+                }
             }
         }
     }
+    // Every Word-item was consumed above. Remaining items are separators,
+    // including the all-separator case when the canonical slot set was empty.
+    per_child[last_seen_group].extend(parent_items.cloned());
 
     // Build a WorTier for each child. Children with empty item lists get an
     // empty WorTier; the caller filters those out (we don't emit empty
@@ -105,14 +108,9 @@ pub(super) fn partition_wor_tier(
 pub(super) struct PartitionedWorTiers(Vec<WorTier>);
 
 impl PartitionedWorTiers {
-    pub(super) fn get(&self, group_idx: usize) -> Option<&WorTier> {
-        self.0.get(group_idx)
-    }
-
-    /// Consume the partition: every per-child tier with its group index, in
-    /// group order, moved rather than copied.
-    pub(super) fn into_groups(self) -> impl Iterator<Item = (usize, WorTier)> {
-        self.0.into_iter().enumerate()
+    /// Consume every tier in the admitted group's dense order, moving it once.
+    pub(super) fn into_groups(self) -> impl Iterator<Item = WorTier> {
+        self.0.into_iter()
     }
 }
 
@@ -162,25 +160,18 @@ fn complete_wor_timing_hull(main: &MainTier, wor: &WorTier) -> Option<Bullet> {
     Some(Bullet::new(hull.start().get(), hull.end().get()))
 }
 
-pub(super) fn split_main_timing_evidence(
-    partitioned_wor: Option<&PartitionedWorTiers>,
-    children: &[(usize, Utterance)],
-) -> SplitMainTimingEvidence {
-    // One route into the complete state: a partitioned tier, a hull for EVERY
-    // kept child, and at least one child. The three refusals used to be three
-    // early returns that each named the fallback, which is how the fallback
-    // came to be spelled out three times over.
-    let complete = partitioned_wor.and_then(|per_group| {
-        children
-            .iter()
-            .map(|(group_idx, child)| {
-                per_group
-                    .get(*group_idx)
-                    .and_then(|wor| complete_wor_timing_hull(&child.main, wor))
-            })
-            .collect::<Option<Vec<_>>>()
-            .filter(|bullets| !bullets.is_empty())
-    });
+pub(super) fn split_main_timing_evidence(children: &RebuiltChildren) -> SplitMainTimingEvidence {
+    // RebuiltChildren already retains two or more children. Timing comes from
+    // the actual attached tiers, not a second independently indexed partition.
+    let complete = children
+        .as_slice()
+        .iter()
+        .map(|child| {
+            child
+                .wor_tier()
+                .and_then(|wor| complete_wor_timing_hull(&child.main, wor))
+        })
+        .collect::<Option<Vec<_>>>();
     match complete {
         Some(bullets) => {
             SplitMainTimingEvidence::CompletePerChild(CompletePerChildMainTiming { bullets })

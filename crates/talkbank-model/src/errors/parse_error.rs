@@ -35,7 +35,11 @@ pub(crate) struct SourceCodeWithOffset {
 
 impl SourceCodeWithOffset {
     /// Create a source wrapper with a 1-indexed starting line offset.
-    fn new(name: impl Into<String>, source: impl Into<String>, line_offset: usize) -> Self {
+    pub(super) fn new(
+        name: impl Into<String>,
+        source: impl Into<String>,
+        line_offset: usize,
+    ) -> Self {
         Self {
             name: name.into(),
             source: source.into(),
@@ -400,7 +404,9 @@ impl Diagnostic for ParseError {
             ctx.span,
         ));
 
-        // Secondary labels, spans are relative to source_text (set by enhance_errors_with_source)
+        // Compatibility rendering of producer-supplied context. Full-source
+        // rendering uses SourceDiagnostic, which admits absolute labels and
+        // owns their separate display-local projection without mutating these.
         for label in &self.labels {
             labels.push(miette::LabeledSpan::new_with_span(
                 Some(label.message.clone()),

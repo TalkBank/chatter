@@ -12,6 +12,9 @@ so no caller can omit a required origin sentinel. Display events consume source
 bytes monotonically, preserving UTF-8 byte-coordinate mapping.
 Display-span normalization bounds incoming source coordinates before offset
 arithmetic, so even extreme out-of-source spans clamp safely to display EOF.
+That low-level map policy is not diagnostic source admission:
+`SourceDiagnostic` rejects unreadable primary or label ranges and retains the
+original evidence, instead of repairing those ranges into display coordinates.
 Source-span overlap uses half-open byte ranges: an empty insertion span never
 overlaps another span, even when its point is inside it. Containment of an
 insertion point is a separate operation. Recovery deduplication retains its
@@ -62,8 +65,29 @@ Standalone-word and word-body extraction also carry canonical grammar admission
 through prefix, form-marker and segment/overlap-initial piece choices. The required
 composite word-body slot cannot itself be Missing. Its contents remain a mixed
 choice, so Missing, Error and Absent handling still applies there and to lexical
-pieces. The shared piece conversions, suffix policies and source-read failures
-are unchanged; admission does not certify a recovered word as valid.
+pieces. Prefix, form, repeated-form and POS projections select the producer's
+source-bound choice and retain it through conversion. No token adapter takes
+an independently chosen source. Form-registry policy, opaque POS labels and
+source-read failures remain separate; admission does not certify a recovered
+word as valid. Repeated and undeclared form payloads remain verbatim with E203,
+not rewritten into a declared marker.
+The standalone-word root consumes `admit_ranges()` before decoding its five
+positions. The kind proof survives this transition, and present prefix/body/
+form/language/POS fields retain readable slices instead of five independent
+fallible reads. A range failure rejects the word with an internal diagnostic;
+it cannot turn an unreadable optional field into an omitted marker. Displaced
+recovery remains reported on failure and after successful field lowering.
+Nested word-body extraction, lexical/nonempty admission and recovery are
+unchanged. This is a selected-carrier transition, not a whole-tree prepass or
+a claim of faster parsing; its larger transient layout is measured separately.
+The language suffix is deliberately one immediate token, not a structured
+code-list CST. Its adapter takes only the source-bound `WordLangSuffixNode`;
+spelling admission retains that owner through atomic candidate conversion.
+Every authored component survives into registry validation or the conversion
+is refused with a diagnostic on that token. There is no candidate filtering
+or invented `und` fallback. Shortcut, explicit, mixed and ambiguous model/JSON
+forms are unchanged, including the existing interpretation of mixed separators;
+this admission change does not settle a new syntax or validity policy.
 Replacement extraction uses the same proof for its first and repeated word
 slots. No word-position counter is needed to describe an impossible
 composite Missing state. Zero-width words, unreadable source, delimiter recovery,
@@ -76,16 +100,32 @@ diagnostics but cannot revive it. Finalization handles that rejection before
 checking for an absent terminator, preserving diagnostic precedence. Source
 failures and lexical/structural recovery remain explicit.
 
+Within each MOR word, the generated selected-range transition retains the
+compiled kind proof before POS, lemma and repeated features are decoded.
+Each feature separately admits its hyphen/value positions. Lexical decoding
+therefore receives checked slices rather than performing fallible source reads.
+Displaced children are reported before each consuming transition, preserving
+their diagnostic order without cloning recovery. Range failure still propagates
+as internal failure to the item boundary. Missing POS/lemma, the pipe's local
+missing report, the hyphen's recovery-backstop policy and the feature value's
+shared Present/Missing empty-text refusal remain separate. This is neither a
+nonempty-token proof nor a whole-tree prepass. Delimiter checks and larger
+transient carriers are additional costs, not a parsing-speed claim.
+
 The low-level `@ID` header entrypoint likewise takes a
 `SourceBound<IdHeaderNode>` rather than an independently supplied node and text.
 Header, contents and required/optional field projections retain that source
-association. Each present field still admits its readable range; failure flows
-as an internal producer error rather than an empty field or invalid CHAT.
+association. The contents consume generated selected-range admission once,
+including structural positions, before required or optional payload decoding.
+Those readers accept only readable slots and no longer return a source-read
+failure: text comes from their checked fields. Admission failure flows as an
+internal producer error rather than an empty field or invalid CHAT.
 Required-field rejection, omitted optional values, displaced-node reporting and
-the whole-tree recovery backstop retain their policies. Optional field reading
-returns `Result<Option<String>, CstFailure>`: it cannot separately claim a
-CHAT rejection after a successful read. This is not a new grammar, a whole-tree
+the whole-tree recovery backstop retain their policies. Required field policy
+has one speaker/role owner; optional reading returns only `Option<String>`.
+Language components retain their own source-bound lowering. This is not a new grammar, a whole-tree
 range prepass, or a change to the public `ChatParser` trait's ID-fragment API.
+Checking the wider selected carrier is not a parsing-speed claim.
 
 All six dedicated structured-header dispatch paths (`Languages`, `Participants`,
 `ID`, `Media`, `Situation`, `Types`) retain source-bound nodes through one
@@ -100,31 +140,66 @@ The low-level `%mor` tier entrypoint takes
 `SourceBound<MorDependentTierNode>` from the existing parse owner, with no
 independent source argument. Dependent-tier dispatch retains this capability
 through tier/contents extraction, choice and repeat projection, and item
-admission. A private admission type separates readable items, absence and
-reported failures; displaced nodes still use the shared recovery collector.
+admission. Each tier, contents, item and post-clitic carrier consumes generated
+range admission before lowering. Present leaves retain checked source slices;
+there is no parallel selected-field read path or private read-admission wrapper.
+Displaced nodes still use the shared recovery collector in their existing order.
 Word, post-clitic and feature decoding also retain source-bound nodes, and
 POS/lemma/feature text comes from admitted fields rather than a second UTF-8
-decode. Source-binding/reconstruction faults propagate as `CstFailure` to the
+decode. Source-binding and grammar/kind-admission faults propagate as `CstFailure` to the
 owning item boundary, without becoming missing POS/lemma diagnostics.
 String-based fragment APIs are unchanged. Tier-body, main morphology-word,
 post-clitic, contents-item and repeated feature boundaries consume canonical-grammar admission: their
 composite-node Missing state is uninhabited in the generated slot type. This
 does not prove that required children exist or lexical payloads are nonempty.
 Error, absent-child, displaced-node and lexical missing-placeholder recovery
-remain. Structural delimiter recovery still uses the shared slot helpers with
+remain. Structural delimiter recovery uses the retained slot evidence with
 the owner's source. POS, lemma and feature-value tokens still permit Missing;
 the enclosing composite feature does not. Source ownership alone would not
 justify this narrowing.
 The contents alternative remains a mixed choice with its own Missing/Error/Absent
 handling. Both admitted terminator choices use the shared exhaustive terminator
 conversion; admission does not invent a new terminator or whitespace policy.
+One exhaustive variant table supports the actual raw main/WOR and ranged MOR
+terminator carriers, deriving spans from their concrete leaves. Checked source
+projection is emitted only for the ranged lexical MOR choice's missing slot;
+unused carrier phases and speculative projection implementations are absent.
+Admitting prefix, separator, newline and clitic-tilde ranges adds checks and enlarges transient
+carriers; it does not add lexical policy or establish a speed improvement.
 
 The low-level `%gra` entry likewise requires a source-bound node. Dispatch,
 tier/contents extraction, repeated pairs, relations and field text retain the
-same source owner. Index, head and label admission retains its existing order
-and numeric/empty checks; source faults propagate as `CstFailure` to dispatch
+same source owner. A single root reading derives separator provenance before
+consuming selected range admission; its private range phase retains both until
+the tier/separator result is consumed into document attachment. The contents
+transition also admits its inline repeat pairs; relation roles project only
+their matching field and diagnostic parent from the whole admitted relation.
+There is no separately pairable field/context input. Index, head and label
+admission retains its existing order and numeric/empty checks; source faults
+propagate as `CstFailure` to dispatch
 instead of dropping a relation and misclassifying a producer failure as CHAT
 invalidity. Recovery and declared-versus-lowered completeness remain explicit.
+`GraLowering` records each Present relation's actual parsed/rejected outcome,
+then consumes the mutable phase into `GraLoweringReceipt`. That immutable
+receipt owns the retained relations and their derived completeness; consuming
+it constructs the tier without a separate vector, declaration counter or
+caller-supplied Whole/Truncated claim. Whole-contents recovery has a named
+lost-contents receipt and invents no relation. Error/Absent recovery siblings
+keep their existing classification rather than becoming extra declarations.
+Both parsers use this owner; re2c also retains the receipt until its consuming
+utterance attachment derives the coarser parse-health taint from the same fact.
+Public hand-built tiers and JSON readback remain Unknown, which is judged rather
+than withheld. Recorded retention is not source-origin or CHAT-validity proof.
+Document `has_error` recovery retains its separate Unknown, real-span placeholder
+and summary report; it does not become native lost-contents evidence. A private,
+consumed recovery capability admits only source-bound tiers with `has_error`.
+The whole-tier reporter preserves concrete recovery diagnostics; if the native
+flag has no individually reportable ERROR/MISSING child, it reports E316 at the
+actual tier range. Thus a zero-width recovered GRA index cannot silently become
+a clean placeholder or a successful strict fragment. Root/body
+displacement order and lexical recovery remain explicit. Range failure refuses
+the owner as `CstFailure`/E001, not empty CHAT. Native APIs explicitly consume
+only the tier; document attachment consumes the shared `ParsedDependentTier`.
 String-based grammar-tier and relation fragment APIs are unchanged.
 Compiled-grammar admission narrows the tier-body and repeated relation
 carriers: composite `gra_contents` and `gra_relation` cannot be Missing.
@@ -134,9 +209,22 @@ relation accounting still comes from the same traversal and is not inferred
 from this composite-node proof.
 
 The low-level `%sin` entry carries source ownership through group choices,
-repeats, tokens and whole-group fallback. Internal source failures propagate to
+repeats, tokens and whole-group fallback. Its root reading derives separator
+metadata once and consumes selected range admission before lowering; document
+attachment consumes the shared `ParsedDependentTier` rather than re-extracting
+and independently pairing a separator. Groups, the flat/bracketed choice with
+its inline sequence, and grouped contents with token repeats admit their whole
+selected carriers before decoding. Whole-group fallback receives that admitted
+group, whose retained parent supplies text; no unrelated group/context can be
+paired with a choice. The explicit `EmptyText` constructor verdict retains
+empty-token omission without discarding an unrelated error.
+Internal source failures propagate to
 dispatch as `CstFailure`; they cannot become an empty token list or trigger
 recovery fallback. Existing empty-token and whole-group recovery policies remain.
+Document `has_error` still reports and drops Sin; it does not attach a recovery
+placeholder. Native root Error/Absent retains its existing empty-tier policy,
+distinct from document routing. These source/range facts do not prove CHAT
+validity, universal recovery reachability or a speed improvement.
 This does not alter `%phoaln`/`%phoint` or the string fragment APIs.
 
 The shared `%pho`/`%mod` decoder also retains source ownership through tier
@@ -169,9 +257,9 @@ children remain explicit. The admitted terminator choice uses the same exhaustiv
 mapping as other tiers. No clean-tier assumption substitutes for those types,
 and no timing, empty-tier or public API policy changes follow from this proof.
 The free-text dependent tiers (the nine bullet-payload tiers, the fifteen
-raw-text tiers and `%x` user-defined tiers) also extract under compiled
+simple text-like tiers and `%x` user-defined tiers) also extract under compiled
 canonical-grammar admission. Each body is a named nonterminal, so its slot is a
-`SelectedNonMissingKindSlot` and the body readers have no Missing arm: before
+`SelectedNonMissingKindSlot` and no inhabited Missing arm: before
 the proof reached them they read a placeholder body's empty text as content, a
 path the grammar can never take. Their `tier_sep` slot is narrowed too, and the
 separator reader accepts it under either kind proof because it reads only a
@@ -180,6 +268,55 @@ their diagnostics. Header and field readers whose callers hold both narrowed
 and plain kind slots stay generic over the slot's Missing payload
 (`AnyKindSlot`); a placeholder there only refuses, so one body serves every
 reading.
+
+The fifteen simple text-like appliers retain their concrete `SourceBound`
+through dispatch rather than reducing it to a node and an independent source
+string. They consume the generated selected carrier's range admission before
+decoding any body. Their common optional-body reader accepts the whole
+`RangeAdmittedChildren`, so the parent and body cannot be paired independently.
+Its body projection is emitted beside each concrete applier, not maintained
+as a second tier catalogue. The same admission covers `%x` prefix/body fields
+and unsupported-tier anonymous bodies. It checks selected prefix, separator,
+newline, recovery and extra ranges as well as the body; no speed or peak-memory
+improvement follows from moving those checks. Kind/source/reconstruction failure
+refuses the owner as E001 before lexical decoding, never as empty CHAT content.
+Separator metadata is derived from the same selected carrier before consuming
+it, and displaced recovery is reported first. Optional absence, empty-content
+validation, recovery-body diagnostic order and the existing timing/Phon content
+parsers keep their separate policies. These root transitions do not certify
+every parser field or prove CHAT validity.
+
+Dependent-tier entries also retain optional, producer-owned content-range
+provenance. Tree-sitter selects the interval between the source-bound separator
+end and newline start (nested inside the `%wor` body); re2c retains the same
+boundaries from its lexer/token/span owner. The range includes original body
+whitespace and continuations, excludes the actual line ending, and can be known
+empty. It is never inferred from label length, rendered text or newline width.
+Unknown boundaries, programmatic construction and JSON imports return `None`
+from `content_span()`. Recorded geometry participates in span shifting but not
+JSON, schema or semantic equality. It locates original source and does not
+certify valid recovery content or the spelling of a subsequently modified model.
+Re2c token exhaustion alone does not prove physical EOF: an early lexical stop
+leaves ending geometry unknown instead of inventing the unconsumed buffer end.
+
+The nine bullet-payload tier parsers likewise consume selected root range
+admission before lowering the body. Their common reader accepts a whole
+`RangeAdmittedChildren`, with the body projection emitted from the existing
+per-tier policy catalogue, including `%com`'s picture-capable carrier. The same
+selected extraction supplies separator metadata and displaced recovery before
+admission; document dispatch no longer repeats a broad extraction for the
+separator. `ParsedDependentTier` retains tier and separator until attachment,
+while the existing low-level public APIs explicitly request only the tier. These
+`api::tiers` entry points require a concrete `SourceBound` from the native parse
+owner, unlike `ChatParser`'s string-based content fragments. The existing
+dependent reference contract exercises both paths and compares actual models,
+source spans and diagnostics; a fragment adapter alone does not test the CST API.
+Optional
+empty bodies, malformed-body reporting, label policy and wire formats remain
+separate. The nested bullet/inline-picture parsers retain their existing
+source-bound reads; selected root admission is not a claim that every nested
+field is range-admitted or that recovered content is valid. Larger admitted
+carriers and counted selected checks are costs, not a speed or peak-memory claim.
 Misplaced-linker diagnostics likewise retain source-bound token text instead of
 substituting a grammar name. Recovery collectors and main-tier language precodes
 report unreadable coordinates as internal failures; an unreadable word-recovery
@@ -234,10 +371,10 @@ as empty content for validation, and malformed slots retain recovery diagnostics
 Nested segment reads use the same fallible transition: text, leaf and missing-node
 source admission must succeed before accumulation can return `BulletContent`.
 A failed read rejects that content instead of silently omitting a segment.
-Inline bullet lowering likewise propagates reconstruction failure separately
+Inline bullet lowering likewise propagates source-binding failure separately
 from malformed timestamp rejection; ordinary bullet recovery is unchanged.
 The `%wor` timing adapter preserves its existing alignment-owned rejection
-policy for malformed timestamps, but explicitly reports reconstruction faults
+policy for malformed timestamps, but explicitly reports admission faults
 as internal failures instead of silently discarding them with `.ok()`.
 Main-tier body lowering preserves its source-bound ending through extraction.
 Failure to read the body content or ending propagates as `CstFailure`; it cannot
@@ -587,13 +724,15 @@ placeholders retain their MissingSpeaker diagnostic; unreadable source ranges
 reject with TreeParsingError. This compatibility boundary does not establish
 tree/source identity.
 
-Unsupported dependent-tier lowering retains the dispatcher's
-`SourceBound<UnsupportedDependentTierNode>` instead of separating the node from
-its source. Both unsupported and user-defined prefix decoding consume generated
-source-associated fields, so callers cannot supply independent text for those
-slots. Missing, error, and absent prefix states retain their diagnostics; marker,
-nonempty-label, and anonymous body-range checks remain. Parent source admission
-does not prove that a generated leaf span fits UTF-8 boundaries.
+Unsupported and user-defined tier lowering consume generated range admission
+while retaining the dispatcher's concrete `SourceBound`. Prefix decoders read
+checked token slices instead of accepting independent nodes and text; Missing,
+Error and absent prefix states retain their diagnostics, as do marker and
+nonempty-label policies. Unsupported bodies retain the generated
+`ReadableLeafSpan`: its parent, bounds and UTF-8 slice are checked together, and
+the body read is infallible. No failed slice becomes an empty tier. Parent source
+admission alone is not this child-range proof, and readable recovery is not
+validity.
 
 Prefix decoding retains kind-proven placeholders for star, speaker, colon and
 tab through the generated `KindSlotValue` projection. Speaker and colon
@@ -701,17 +840,17 @@ preconditions are in [Grammar Workflow](../contributing/grammar-workflow.md).
 It is never edited by hand: generator defects are fixed in
 `tree-sitter-grammar-utils` and regenerated.
 
-The generated cursor owns its remaining-child iterator. Selection retains a
-source-bound match plan, and extraction consumes that plan without rematching.
-`PositionAdmission` distinguishes a selected position from an unmatched cursor;
-only successful carrier construction commits cursor movement and recovery.
-Absolute indices refer to the stable child slice. Exhaustion stays at EOF and
-the final sweep visits actual remaining children. A `ReconstructionFault`
-reports a producer invariant failure, not malformed CHAT. A selected choice
-therefore has an uninhabited `Unexpected` payload: it cannot independently
-rematch and disagree with selection. Missing, Error, Absent and displaced-node
-recovery remain intact, as does Unexpected for supertype classification. This
-is a producer-construction invariant, not an inference from corpus coverage.
+The generated cursor owns its remaining-child iterator. Lookahead memoizes
+answers and construction uses the same typed decision functions, including
+choice selections that carry their selected terminal child. This removes the
+separately interpreted plan arena and its self-disagreement failures. Broad
+extraction returns a carrier directly; only compiled-grammar, source-range and
+kind-proof admission can fail. A selected choice has an uninhabited `Unexpected`
+payload. Missing, Error, Absent and displaced-node recovery remain intact, as
+does Unexpected for supertype classification. These are producer-construction
+invariants, not inferences from corpus coverage; extraction does not certify
+CHAT validity. Real admission failures remain E001 internal failures, never
+missing-field or invalid-source diagnostics.
 
 The fold also retains selected presence for repeat elements and the `Some`
 payload of optional positions. Their extraction consumes a retained element,
@@ -862,9 +1001,14 @@ decoder. Missing/error/absent positions and displaced children retain their
 existing recovery handling. Source admission does not prove nonempty lexical
 content or valid marker semantics, so those checks remain.
 
-Word suffix and CA adapters, nonword and annotation leaves, and `%wor`
-language/bullet/separator payload decoders still have transitional interfaces.
-Their child-range checks are not removed by the outer word's admission.
+Inline CA element and delimiter conversion likewise takes a source-bound
+token. Its private kind-to-registry association selects the correct model;
+callers cannot supply another source, decoder or label. Foreign tree membership
+is refused at source admission even when the two parses have identical bytes.
+Lexical and registry checks remain because source ownership is not validity.
+Nonword and annotation leaves, `%wor` language/bullet/separator payloads and
+user-tier prefix decoders still have transitional interfaces. Model constructors
+and mutable annotations are not globally restricted by this parser boundary.
 
 Utterance-level recovery consumes `ReadableRecovery` too, forwarding that
 admitted value directly into dependent-tier classification when appropriate.
@@ -1016,10 +1160,11 @@ Participant recovery follows the same pattern with `ParticipantFault`: list
 comma/whitespace/entry expectations retain E506 and list context, while malformed
 entry structure retains E316 and entry context. Sharing the reporter does not
 merge those policies or remove unobserved recovery states.
-Sign-tier token decoding retains either a generated word or whole recovery-group
-node in `SinTokenSource`, which selects its diagnostic context and shares checked
-text admission. Whole-group fallback preserves the complete source text as one
-token; an incompatible source reports a read failure. Its direct boundary test
+Sign-tier token decoding retains either a generated word or the whole admitted
+recovery-group carrier in `SinTokenSource`, which retains its checked source text.
+Whole-group fallback derives complete text from that carrier's own parent,
+preserving one token; an incompatible source is refused before lowering.
+Its direct boundary test
 does not claim that the fixture itself enters recovery during normal parsing.
 Morphology feature-value decoding similarly accepts only its generated node
 type, including kind-proven MISSING placeholders, and uses shared checked text
@@ -1190,6 +1335,20 @@ and repeated list fields. Present language codes become model values only after
 source-bound leaf admission; missing codes and malformed separators retain
 their existing recovery diagnostics. A producer fault is an internal failure,
 not an empty language code or a successful partial validation.
+The `@ID` language field has its own typed component list: compact and spaced
+commas are supported without relaxing the whitespace rule for `@Languages`.
+Its decoder uses the same language-code admission for strict code leaves and
+preserves opaque nonempty components for model validation. Empty components
+retain their existing omission policy; no comma-splitting text parser mirrors
+the grammar. An omitted entire field builds an empty model list (E510), while
+recovery and source-binding failures cannot become successful omissions.
+Date, birth-date and time headers likewise use optional grammar payloads.
+Their reader distinguishes omission, a recovered slot and a source-read failure.
+An omission uses the existing model constructor and retains the empty spelling,
+including the established empty-time representation on the JSON boundary.
+Validation still reports empty Date as E516 and permits the
+existing empty Birth/Time forms. Strict date/time tokens win equal-length ties;
+a longer malformed value stays whole for validation.
 Participant-header contents likewise distinguish a missing structural slot
 from a failed source read. The latter propagates as an internal failure and
 rejects header construction, without adding an empty-participants diagnostic.

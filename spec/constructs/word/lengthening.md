@@ -24,9 +24,9 @@ Word-internal lengthening, trailing colons indicate prolonged sound.
             (standalone_word
               (word_body
                 (word_segment)
-                (lengthening)))))))
+                (lengthening))))))
+      (whitespaces))
     (utterance_end
-      (whitespaces)
       (period)
       (newline))))
 ```

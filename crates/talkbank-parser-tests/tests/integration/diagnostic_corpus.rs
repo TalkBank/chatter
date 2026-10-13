@@ -938,20 +938,75 @@ fn nested_comma_specs_require_prior_spoken_content_at_the_actual_comma() {
     }
 }
 
-/// Numeric date admission is a wire-format rule, not Rust integer syntax.
+/// Month spelling and unsigned numeric admission retain canonical source text.
 #[test]
 fn date_specs_reject_signed_components_without_rewriting_source() {
     use talkbank_model::ErrorCode;
     use talkbank_model::model::{ChatDate, Header, WriteChat};
     use talkbank_model::validation::{Validate, ValidationContext};
+
+    fn check_date(date: &ChatDate, valid: bool, months: &mut std::collections::BTreeSet<String>) {
+        assert_eq!(matches!(date, ChatDate::Valid(_)), valid);
+        let encoded = serde_json::to_string(date).expect("date wire value");
+        assert_eq!(encoded, serde_json::to_string(date.as_str()).unwrap());
+        assert_eq!(ChatDate::new(date.as_str()), *date);
+        assert_eq!(ChatDate::from(date.as_str()), *date);
+        assert_eq!(ChatDate::from(date.as_str().to_owned()), *date);
+        assert_eq!(date.to_chat_string(), date.as_str());
+        if let ChatDate::Valid(checked) = date {
+            assert_eq!(checked.as_str(), date.as_str());
+            assert_eq!(
+                format!(
+                    "{:02}-{}-{:04}",
+                    checked.day(),
+                    checked.month().as_str(),
+                    checked.year()
+                ),
+                date.as_str(),
+                "admitted components and preserved text agree"
+            );
+            months.insert(checked.month().as_str().to_owned());
+        }
+        let decoded: ChatDate = serde_json::from_str(&encoded).expect("date wire decoding");
+        assert_eq!(&decoded, date, "wire admission and spelling");
+        // A standalone imported value has neither a header role nor
+        // document coordinates. Full-file validation below retains both.
+        let value_errors = ErrorCollector::new();
+        decoded.validate(&ValidationContext::default(), &value_errors);
+        let value_errors = value_errors.into_vec();
+        if valid {
+            assert!(value_errors.is_empty());
+        } else {
+            assert_eq!(value_errors.len(), 1);
+            assert_eq!(value_errors[0].code, ErrorCode::InvalidDateFormat);
+            assert_eq!(value_errors[0].severity, talkbank_model::Severity::Error);
+            assert_eq!(
+                value_errors[0].location.span,
+                talkbank_model::Span::from_usize(0, 0)
+            );
+            assert!(value_errors[0].message.contains(date.as_str()));
+        }
+    }
+
+    let mut months = std::collections::BTreeSet::new();
     let parser = TreeSitterParser::new().expect("parser");
     let corpus =
         workspace_root().join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors");
-    for (spec, control, invalid, code) in [
-        ("E518", 7, &[8, 9, 10, 11][..], ErrorCode::InvalidDateFormat),
-        ("E545", 5, &[6, 7][..], ErrorCode::InvalidBirthDateFormat),
+    for (spec, controls, invalid, code) in [
+        (
+            "E518",
+            &[7, 12, 13, 14, 15, 17, 18, 19, 20][..],
+            &[8, 9, 10, 11][..],
+            ErrorCode::InvalidDateFormat,
+        ),
+        (
+            "E545",
+            &[5][..],
+            &[6, 7][..],
+            ErrorCode::InvalidBirthDateFormat,
+        ),
     ] {
-        for example in std::iter::once(control).chain(invalid.iter().copied()) {
+        for example in controls.iter().chain(invalid) {
             let source = std::fs::read_to_string(corpus.join(format!("{spec}_{example}.cha")))
                 .expect("canonical date component spec");
             let errors = ErrorCollector::new();
@@ -970,57 +1025,12 @@ fn date_specs_reject_signed_components_without_rewriting_source() {
                 .collect();
             assert_eq!(dates.len(), 1, "{spec}_{example}: date-bearing header");
             for date in dates {
-                assert_eq!(
-                    matches!(date, ChatDate::Valid(_)),
-                    example == control,
-                    "{spec}_{example}: parsed date admission"
-                );
-                let encoded = serde_json::to_string(date).expect("date wire value");
-                assert_eq!(encoded, serde_json::to_string(date.as_str()).unwrap());
-                assert_eq!(ChatDate::new(date.as_str()), *date);
-                assert_eq!(ChatDate::from(date.as_str()), *date);
-                assert_eq!(ChatDate::from(date.as_str().to_owned()), *date);
-                assert_eq!(date.to_chat_string(), date.as_str());
-                if let ChatDate::Valid(checked) = date {
-                    assert_eq!(checked.as_str(), date.as_str());
-                    assert_eq!(
-                        format!(
-                            "{:02}-{}-{:04}",
-                            checked.day(),
-                            checked.month().as_str(),
-                            checked.year()
-                        ),
-                        date.as_str(),
-                        "admitted components and preserved text agree"
-                    );
-                }
-                let decoded: ChatDate = serde_json::from_str(&encoded).expect("date wire decoding");
-                assert_eq!(
-                    &decoded, date,
-                    "{spec}_{example}: wire admission and spelling"
-                );
-                // A standalone imported value has neither a header role nor
-                // document coordinates. Full-file validation below retains both.
-                let value_errors = ErrorCollector::new();
-                decoded.validate(&ValidationContext::default(), &value_errors);
-                let value_errors = value_errors.into_vec();
-                if example == control {
-                    assert!(value_errors.is_empty());
-                } else {
-                    assert_eq!(value_errors.len(), 1);
-                    assert_eq!(value_errors[0].code, ErrorCode::InvalidDateFormat);
-                    assert_eq!(value_errors[0].severity, talkbank_model::Severity::Error);
-                    assert_eq!(
-                        value_errors[0].location.span,
-                        talkbank_model::Span::from_usize(0, 0)
-                    );
-                    assert!(value_errors[0].message.contains(date.as_str()));
-                }
+                check_date(date, controls.contains(example), &mut months);
             }
             let errors = ErrorCollector::new();
             file.validate_with_alignment(&errors, TranscriptName::Anonymous);
             let diagnostics = errors.into_vec();
-            if example == control {
+            if controls.contains(example) {
                 assert!(diagnostics.is_empty(), "{spec}_{example}: {diagnostics:?}");
             } else {
                 assert_eq!(diagnostics.len(), 1, "{spec}_{example}: {diagnostics:?}");
@@ -1041,6 +1051,32 @@ fn date_specs_reject_signed_components_without_rewriting_source() {
             );
         }
     }
+    for (name, expected_dates) in [("headers-metadata", 1), ("headers-speaker-info", 2)] {
+        let source = std::fs::read_to_string(
+            workspace_root().join(format!("corpus/reference/core/{name}.cha")),
+        )
+        .expect("canonical date-bearing reference");
+        let errors = ErrorCollector::new();
+        let mut file = parser.parse_chat_file_streaming(&source, &errors);
+        assert!(errors.into_vec().is_empty(), "{name}: clean syntax");
+        let mut dates = 0;
+        for header in file.headers() {
+            if let Header::Date { date } | Header::Birth { date, .. } = header {
+                check_date(date, true, &mut months);
+                dates += 1;
+            }
+        }
+        assert_eq!(dates, expected_dates, "{name}: date-bearing headers");
+        let errors = ErrorCollector::new();
+        file.validate_with_alignment(&errors, TranscriptName::Anonymous);
+        assert!(errors.into_vec().is_empty(), "{name}: clean validation");
+        assert_eq!(file.to_chat_string(), source, "{name}: preserved source");
+    }
+    assert_eq!(
+        months.len(),
+        12,
+        "all month spellings have canonical witnesses"
+    );
     for invalid_wire in ["null", "0", "[]", "{}"] {
         assert!(
             serde_json::from_str::<ChatDate>(invalid_wire).is_err(),
@@ -2785,7 +2821,6 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
         let (labels, contexts) = assert_fragment_projection(&original, fixture.source());
         projected_labels += labels;
         projected_large_contexts += contexts;
-        let mut rendered = original.clone();
         let index = SourceIndex::new(fixture.source());
         // Source-aware API admission is separate from display enrichment:
         // it must preserve real diagnostic spans, not clamp malformed input.
@@ -2842,7 +2877,7 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
         assert!(SourceLocation::from_offset_in_source(end + 1, fixture.source()).is_err());
         assert!(SourceLocation::from_offsets_in_source(1, 0, fixture.source()).is_err());
         assert!(SourceLocation::from_offsets_in_source(0, end + 1, fixture.source()).is_err());
-        enhance_errors_with_index(&mut rendered, &index);
+        let rendered: Vec<_> = enhance_errors_with_index(&original, &index).collect();
         assert_eq!(original.len(), rendered.len());
         let shared_source =
             miette::NamedSource::new("spec.cha", std::sync::Arc::new(fixture.source().to_owned()));
@@ -2853,11 +2888,16 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
             let standalone = talkbank_transform::render_error_with_miette(enhanced);
             let shared_raw =
                 talkbank_transform::render_error_with_miette_with_named_source(raw, &shared_source);
-            let shared_enhanced = talkbank_transform::render_error_with_miette_with_named_source(
-                enhanced,
-                &shared_source,
+            let colored_raw = talkbank_transform::render_error_with_miette_with_source_colored(
+                raw,
+                "spec.cha",
+                fixture.source(),
             );
-            for text in [&standalone, &shared_raw, &shared_enhanced] {
+            assert_eq!(
+                colored_raw, standalone,
+                "raw-source admission must preserve the checked ANSI presentation"
+            );
+            for text in [&standalone, &shared_raw, &colored_raw] {
                 assert!(
                     text.contains(&raw.code.to_string()),
                     "diagnostic code lost: {text}"
@@ -2872,18 +2912,9 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
                 ),
                 "shared ownership must not change source resolution"
             );
-            assert_eq!(
-                shared_enhanced,
-                talkbank_transform::render_error_with_miette_with_source(
-                    enhanced,
-                    "spec.cha",
-                    fixture.source(),
-                ),
-                "embedded display context must win over fallback source"
-            );
         }
-        // The public renderer accepts raw diagnostics and owns enhancement of
-        // its clone. Never feed its display-coordinate result back as raw input.
+        // Rendering accepts only raw evidence or an already checked display
+        // diagnostic. The types prohibit interpreting display labels as raw.
         let untouched = original.clone();
         for mode in [
             talkbank_transform::RenderMode::Plain,
@@ -2906,7 +2937,7 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
                     !report.text.is_empty(),
                     "plain rendering must not disappear"
                 );
-                assert!(report.text.contains(&expected.code.to_string()));
+                assert!(report.text.contains(&expected.original().code.to_string()));
                 match mode {
                     talkbank_transform::RenderMode::Plain => assert!(report.ansi.is_none()),
                     talkbank_transform::RenderMode::Ansi => {
@@ -2916,15 +2947,24 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
             }
         }
         for (before, after) in original.iter().zip(&rendered) {
-            assert_eq!(before.code, after.code);
-            assert_eq!(before.severity, after.severity);
-            assert_eq!(before.message, after.message);
-            assert_eq!(before.suggestion, after.suggestion);
-            assert_eq!(before.help_url, after.help_url);
-            assert_eq!(before.labels.len(), after.labels.len());
+            assert_eq!(
+                before,
+                after.original(),
+                "all original evidence remains in absolute coordinates"
+            );
+            let presentation = after
+                .presentation()
+                .expect("canonical diagnostic ranges admitted");
+            assert_eq!(before.labels.len(), presentation.labels().len());
+            let standalone = talkbank_transform::render_error_with_miette(after);
+            assert_eq!(
+                standalone,
+                talkbank_transform::render_error_with_miette(after),
+                "display rendering is repeatable without re-projection"
+            );
             // Coordinates are bytes, not Unicode scalar or display columns.
             // Count source newlines independently of the indexed lookup.
-            let offset = (after.location.span.start as usize).min(fixture.source().len());
+            let offset = presentation.location().span.start as usize;
             let prefix = &fixture.source().as_bytes()[..offset];
             let line = prefix.iter().filter(|byte| **byte == b'\n').count() + 1;
             let column = offset
@@ -2934,37 +2974,30 @@ fn spec_diagnostics_preserve_meaning_and_gain_source_coordinates() {
                     .map_or(0, |position| position + 1)
                 + 1;
             assert_eq!(
-                after.location.line,
+                presentation.location().line,
                 Some(line),
                 "{}",
                 fixture.path().display()
             );
             assert_eq!(
-                after.location.column,
+                presentation.location().column,
                 Some(column),
                 "{}",
                 fixture.path().display()
             );
-            let context = after.context.as_ref().expect("rendered source context");
+            let context = presentation.context();
+            assert!(context.first_line() > 0 && context.first_line() <= line);
             assert!(
                 context
-                    .line_offset
-                    .is_some_and(|first| first > 0 && first <= line)
-            );
-            assert!(
-                context
-                    .source_text
-                    .get(context.span.start as usize..context.span.end as usize)
+                    .source_text()
+                    .get(context.span().to_range())
                     .is_some(),
                 "invalid display span: {} {after:?}",
                 fixture.path().display()
             );
-            for label in &after.labels {
+            for label in presentation.labels() {
                 assert!(
-                    context
-                        .source_text
-                        .get(label.span.start as usize..label.span.end as usize)
-                        .is_some(),
+                    context.source_text().get(label.span().to_range()).is_some(),
                     "invalid display label: {} {after:?}",
                     fixture.path().display()
                 );

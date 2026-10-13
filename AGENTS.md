@@ -41,7 +41,9 @@ dates still require real `date` output on edits. See
 `just test` is the inner loop. Changes to grammar, spec, registries or generated
 inputs require `just regen`, then tests. Review the final diff for reuse,
 simplicity, efficiency, abstraction boundaries and typestate before committing.
-Preserve the production-Rust evidence and breaking-changelog hooks.
+Review production-change evidence and breaking-change notes explicitly.
+Commit hooks only chain to optional contributor-owned local hooks; do not
+reintroduce automatic date, evidence or changelog commit gates.
 
 Before an authorized push, run `just gate` on final content. Reuse its receipt
 only while the checked inputs/tooling remain valid. `just test` omits doctests

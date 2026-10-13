@@ -1,0 +1,17 @@
+error: #[validation_tag(...)] is only supported on variants
+ --> tests/ui/fail_validation_tag_placement.rs:5:1
+  |
+5 | #[validation_tag(error)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: #[validation_tag(...)] is only supported on variants
+  --> tests/ui/fail_validation_tag_placement.rs:13:9
+   |
+13 |         #[validation_tag(error)]
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: #[validation_tag(...)] is only supported on variants
+  --> tests/ui/fail_validation_tag_placement.rs:20:11
+   |
+20 |     Clean(#[validation_tag(error)] u32),
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^

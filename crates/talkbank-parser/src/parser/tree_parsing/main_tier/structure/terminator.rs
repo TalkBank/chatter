@@ -9,8 +9,8 @@
 
 use crate::generated_traversal::{
     AsRawNode, MorContentsChild0BreakForCodingChoice,
-    MorContentsChild0MorContentChild2Child1Choice, TerminatorChoice, UtteranceEndChild0Choice,
-    WorTierBodyChild2Choice,
+    MorContentsChild0MorContentChild2Child1Choice, Ranged, Raw, SourceSlice, TerminatorChoice,
+    UtteranceEndChild0Choice, WorTierBodyChild2Choice,
 };
 use crate::model::Terminator;
 
@@ -34,11 +34,16 @@ use crate::model::Terminator;
 /// Task C's `tier_parsers/mor/tier.rs` receives the two `mor_contents` choice
 /// types above, so all embeddings now flow through this one path and the
 /// OLD-backend `terminator_from_choice` is retired.
-pub(crate) trait NewTerminatorChoice<'tree>: AsRawNode<'tree> {
+pub(crate) trait NewTerminatorChoice {
     /// Map this exhaustively-classified terminator subtype to its [`Terminator`]
     /// model variant, computing the source span from the concrete terminator
     /// node ([`AsRawNode::raw_node`]).
     fn to_terminator(&self) -> Terminator;
+}
+
+/// Checked source projection exists only after generated range admission.
+pub(crate) trait RangedTerminatorChoice<'tree, 'source>: NewTerminatorChoice {
+    fn source_slice(&self) -> SourceSlice<'tree, 'source>;
 }
 
 /// Implement [`NewTerminatorChoice`] for one generated terminator-choice enum.
@@ -52,41 +57,55 @@ pub(crate) trait NewTerminatorChoice<'tree>: AsRawNode<'tree> {
 /// is a compile error in EACH expansion (compiler-enforced instead of routed
 /// through a `node.kind()` string dispatch, the point of the visitor migration).
 macro_rules! impl_new_terminator_choice {
-    ($choice_enum:ident) => {
-        impl<'tree> NewTerminatorChoice<'tree> for $choice_enum<'tree> {
-            fn to_terminator(&self) -> Terminator {
-                let span = span_of(self.raw_node());
+    ($choice_enum:ident, $phase:ident) => {
+        impl_new_terminator_choice!(@variants $choice_enum, $phase;
+            Period, Question, Exclamation, TrailingOff, Interruption,
+            SelfInterruption, InterruptedQuestion, BrokenQuestion, QuotedNewLine,
+            QuotedPeriodSimple, SelfInterruptedQuestion, TrailingOffQuestion,
+            BreakForCoding
+        );
+    };
+    (@variants $choice_enum:ident, Raw; $($variant:ident),+) => {
+        impl_new_terminator_choice!(@phase $choice_enum, ['tree], Raw; $($variant),+);
+    };
+    (@variants $choice_enum:ident, Ranged; $($variant:ident),+) => {
+        impl_new_terminator_choice!(@phase $choice_enum, ['tree, 'source], Ranged<'source>; $($variant),+);
+    };
+    (@variants $choice_enum:ident, RangedWithSource; $($variant:ident),+) => {
+        impl_new_terminator_choice!(@variants $choice_enum, Ranged; $($variant),+);
+        impl<'tree, 'source> RangedTerminatorChoice<'tree, 'source>
+            for $choice_enum<'tree, Ranged<'source>>
+        {
+            fn source_slice(&self) -> SourceSlice<'tree, 'source> {
                 match self {
-                    $choice_enum::Period(_) => Terminator::Period { span },
-                    $choice_enum::Question(_) => Terminator::Question { span },
-                    $choice_enum::Exclamation(_) => Terminator::Exclamation { span },
-                    $choice_enum::TrailingOff(_) => Terminator::TrailingOff { span },
-                    $choice_enum::Interruption(_) => Terminator::Interruption { span },
-                    $choice_enum::SelfInterruption(_) => Terminator::SelfInterruption { span },
-                    $choice_enum::InterruptedQuestion(_) => {
-                        Terminator::InterruptedQuestion { span }
-                    }
-                    $choice_enum::BrokenQuestion(_) => Terminator::BrokenQuestion { span },
-                    $choice_enum::QuotedNewLine(_) => Terminator::QuotedNewLine { span },
-                    $choice_enum::QuotedPeriodSimple(_) => Terminator::QuotedPeriodSimple { span },
-                    $choice_enum::SelfInterruptedQuestion(_) => {
-                        Terminator::SelfInterruptedQuestion { span }
-                    }
-                    $choice_enum::TrailingOffQuestion(_) => {
-                        Terminator::TrailingOffQuestion { span }
-                    }
-                    $choice_enum::BreakForCoding(_) => Terminator::BreakForCoding { span },
+                    $($choice_enum::$variant(node) => node.source_slice(),)+
+                }
+            }
+        }
+    };
+    (@phase $choice_enum:ident, [$($lifetime:lifetime),+], $phase:ty; $($variant:ident),+) => {
+        impl<$($lifetime),+> NewTerminatorChoice for $choice_enum<'tree, $phase> {
+            fn to_terminator(&self) -> Terminator {
+                match self {
+                    $($choice_enum::$variant(node) => Terminator::$variant {
+                        span: span_of(node.raw_node()),
+                    },)+
                 }
             }
         }
     };
 }
 
-impl_new_terminator_choice!(UtteranceEndChild0Choice);
-impl_new_terminator_choice!(TerminatorChoice);
-impl_new_terminator_choice!(WorTierBodyChild2Choice);
-impl_new_terminator_choice!(MorContentsChild0MorContentChild2Child1Choice);
-impl_new_terminator_choice!(MorContentsChild0BreakForCodingChoice);
+// Emit only the phases actually supplied by each embedding's producer. The
+// lexical MOR choice alone needs checked projection for its missing slot.
+impl_new_terminator_choice!(UtteranceEndChild0Choice, Raw);
+impl_new_terminator_choice!(TerminatorChoice, Raw);
+impl_new_terminator_choice!(WorTierBodyChild2Choice, Raw);
+impl_new_terminator_choice!(
+    MorContentsChild0MorContentChild2Child1Choice,
+    RangedWithSource
+);
+impl_new_terminator_choice!(MorContentsChild0BreakForCodingChoice, Ranged);
 
 /// Map any NEW-backend terminator supertype choice (see [`NewTerminatorChoice`])
 /// to its [`Terminator`] model variant.
@@ -98,9 +117,7 @@ impl_new_terminator_choice!(MorContentsChild0BreakForCodingChoice);
 /// [`MorContentsChild0MorContentChild2Child1Choice`] trailing the items
 /// alternative or [`MorContentsChild0BreakForCodingChoice`] standing alone);
 /// all share the single mapping in [`impl_new_terminator_choice`].
-pub(crate) fn terminator_from_new_choice<'tree, C: NewTerminatorChoice<'tree>>(
-    choice: &C,
-) -> Terminator {
+pub(crate) fn terminator_from_new_choice<C: NewTerminatorChoice>(choice: &C) -> Terminator {
     choice.to_terminator()
 }
 

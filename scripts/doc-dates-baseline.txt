@@ -5,7 +5,6 @@
 # what is wrong, update its header from real `date` output, and delete
 # the line. Do not bulk-stamp dates on pages nobody has read; that
 # manufactures confidence, which is the failure this check exists for.
-.claude/skills/regen-json-schema/SKILL.md
 .claude/skills/regen-spec-artifacts/SKILL.md
 SECURITY.md
 book/src/architecture/crate-reference.md
@@ -20,7 +19,6 @@ book/src/chat-format/untranscribed-markers.md
 book/src/chat-format/utterances.md
 book/src/chatter/user-guide/chat-processing-playbook.md
 book/src/chatter/user-guide/clan-line-numbering.md
-book/src/contributing/coding-standards-extended.md
 book/src/release-notes.md
 crates/send2clan/README.md
 crates/talkbank-parser-tests/clan-check-reference/check-error-codes.md

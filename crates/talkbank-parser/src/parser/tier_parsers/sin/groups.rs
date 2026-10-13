@@ -9,38 +9,51 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Sign_Group>
 
 use crate::generated_traversal::{
-    AdmittedSinGroupChoiceSourceView, AsRawNode, KindSlot, NoChild, NonMissingKindSlot,
-    SinGroupNode, SinGroupedContentNode, SinWordNode, SourceBound, SourceField, SourceSlotView,
-    WhitespacesNode,
+    AdmittedSinGroupChildren, AdmittedSinGroupedContentChildren, AsRawNode, KindSlot, NoChild,
+    NonMissingKindSlot, RangeAdmittedChildren, Ranged, ReadableSlot, SinGroupChoice, SinGroupNode,
+    SinGroupedContentNode, SinWordNode, SourceBound, SourceSlice, WhitespacesNode,
 };
 use talkbank_model::ErrorSink;
-use talkbank_model::model::{SinGroupGestures, SinItem, SinToken};
+use talkbank_model::model::{EmptyText, SinGroupGestures, SinItem, SinToken};
 
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_displaced};
 
 /// The token's grammatical origin owns its read context. Recovery preserves
-/// the entire typed group; ordinary tokens retain their generated word kind.
-enum SinTokenSource<'tree, 'source> {
+/// the entire admitted group; ordinary tokens retain their generated word kind.
+enum SinTokenSource<'reading, 'tree, 'source> {
     Word(SourceBound<'tree, 'source, SinWordNode<'tree>>),
-    RecoveryGroup(SourceBound<'tree, 'source, SinGroupNode<'tree>>),
+    RecoveryGroup(
+        &'reading RangeAdmittedChildren<
+            'tree,
+            'source,
+            AdmittedSinGroupChildren<'tree, Ranged<'source>>,
+        >,
+    ),
 }
 
-impl SinTokenSource<'_, '_> {
+impl SinTokenSource<'_, '_, '_> {
+    #[allow(
+        clippy::manual_ok_err,
+        reason = "Only the EmptyText policy may omit a token"
+    )]
     fn decode(self) -> Option<SinToken> {
         let text = match self {
             Self::Word(word) => word.text(),
-            Self::RecoveryGroup(group) => group.text(),
+            Self::RecoveryGroup(group) => group.parent().text(),
         };
         // Preserve the existing empty-token omission policy; source admission
         // occurred before constructing this source-bound token capability.
-        SinToken::new(text).ok()
+        match SinToken::new(text) {
+            Ok(token) => Some(token),
+            Err(EmptyText) => None,
+        }
     }
 }
 
 /// Extracts `SinItem` values from a `sin_group` node.
 ///
-/// The generated [`AdmittedSinGroupChoiceSourceView`] retains ownership while selecting
+/// The generated [`SinGroupChoice`] retains ownership while selecting
 /// a flat token or bracketed group. Present grouped content is decoded normally;
 /// inner recovery retains the whole-group fallback. Outer Missing/Error also
 /// preserve that fallback, Absent emits no items, and Unexpected is uninhabited.
@@ -58,44 +71,54 @@ pub(super) fn extract_sin_group_items<'tree>(
     let source = typed.source();
     let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
     surface_displaced(&children.children().unexpected, "sin_group", source, errors);
-    let choice = match children.field_content().slot().view() {
-        SourceSlotView::Present(choice) => choice,
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) => {
-            return Ok(fallback_group_as_token(typed));
+    let children = children.admit_ranges()?;
+    lower_sin_group_items(&children, errors)
+}
+
+/// The choice, inline bracketed sequence and recovery parent have one owner.
+fn lower_sin_group_items<'tree, 'source>(
+    children: &RangeAdmittedChildren<
+        'tree,
+        'source,
+        AdmittedSinGroupChildren<'tree, Ranged<'source>>,
+    >,
+    errors: &impl ErrorSink,
+) -> Result<Vec<SinItem>, crate::CstFailure> {
+    let choice = match &children.children().content.slot {
+        ReadableSlot::Present(choice) => choice,
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) => {
+            return Ok(fallback_group_as_token(children));
         }
-        SourceSlotView::Unexpected(never) => match never {},
-        SourceSlotView::Absent(NoChild) => return Ok(Vec::new()),
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => return Ok(Vec::new()),
     };
-    Ok(match choice.view() {
-        AdmittedSinGroupChoiceSourceView::SinWord(sin_word) => {
-            SinTokenSource::Word(sin_word.read()?)
-                .decode()
-                .into_iter()
-                .map(SinItem::Token)
-                .collect()
-        }
-        AdmittedSinGroupChoiceSourceView::SinBeginGroup(seq) => {
+    Ok(match choice {
+        SinGroupChoice::SinWord(sin_word) => SinTokenSource::Word(*sin_word)
+            .decode()
+            .into_iter()
+            .map(SinItem::Token)
+            .collect(),
+        SinGroupChoice::SinBeginGroup(seq) => {
             // The bracketed group is a plain `seq`, so its interior positions are
             // the un-named `child_0` (`〔`), `child_1` (`sin_grouped_content`),
             // `child_2` (`〕`); only `child_1` carries content. Surface the seq's
             // own `unexpected` sink (R2) before descending.
-            for node in seq.field_unexpected().iter() {
-                surface_displaced(&[node.raw_node()], "sin_group", node.source(), errors);
-            }
-            match seq.field_child_1().slot().view() {
-                SourceSlotView::Present(grouped_content) => {
-                    let gestures =
-                        extract_sin_grouped_content_tokens(grouped_content.read()?, errors)?;
+            surface_source_displaced(&seq.unexpected, "sin_group", errors);
+            match &seq.child_1.slot {
+                ReadableSlot::Present(grouped_content) => {
+                    let gestures = extract_sin_grouped_content_tokens(*grouped_content, errors)?;
                     if !gestures.is_empty() {
                         vec![SinItem::SinGroup(SinGroupGestures::new(gestures))]
                     } else {
                         vec![]
                     }
                 }
-                SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
+                ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => {
                     // Fallback: preserve the entire group as a single token.
-                    fallback_group_as_token(typed)
+                    fallback_group_as_token(children)
                 }
+                ReadableSlot::Missing(never) => match never.0 {},
+                ReadableSlot::Unexpected(never) => match *never {},
             }
         }
     })
@@ -106,10 +129,14 @@ pub(super) fn extract_sin_group_items<'tree>(
 /// This is the removed outer `_` arm, extracted so the outer and inner
 /// recovery arms share ONE preservation path. The whole group node's
 /// text is decoded and emitted as one `SinItem::Token`, or nothing when empty.
-fn fallback_group_as_token<'tree>(
-    node: SourceBound<'tree, '_, SinGroupNode<'tree>>,
+fn fallback_group_as_token<'tree, 'source>(
+    children: &RangeAdmittedChildren<
+        'tree,
+        'source,
+        AdmittedSinGroupChildren<'tree, Ranged<'source>>,
+    >,
 ) -> Vec<SinItem> {
-    SinTokenSource::RecoveryGroup(node)
+    SinTokenSource::RecoveryGroup(children)
         .decode()
         .into_iter()
         .map(SinItem::Token)
@@ -135,46 +162,49 @@ fn extract_sin_grouped_content_tokens<'tree>(
     typed: SourceBound<'tree, '_, SinGroupedContentNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<Vec<SinToken>, crate::CstFailure> {
-    let source = typed.source();
-    let contents = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
-    let mut tokens: Vec<SinToken> =
-        Vec::with_capacity(contents.field_child_1().slot().iter().len() + 1);
+    let contents = typed
+        .extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?
+        .admit_ranges()?;
+    Ok(lower_sin_grouped_content_tokens(&contents, errors))
+}
 
-    push_sin_token(contents.field_child_0().slot(), errors, &mut tokens)?;
-    for element in contents.field_child_1().slot().iter() {
-        match element.slot().view() {
-            SourceSlotView::Present(pair) => {
-                push_sin_separator(pair.field_child_0().slot(), errors, "sin_grouped_content");
-                push_sin_token(pair.field_child_1().slot(), errors, &mut tokens)?;
-                for node in pair.field_unexpected().iter() {
-                    surface_displaced(
-                        &[node.raw_node()],
-                        "sin_grouped_content",
-                        node.source(),
-                        errors,
-                    );
-                }
+fn lower_sin_grouped_content_tokens<'tree, 'source>(
+    contents: &RangeAdmittedChildren<
+        'tree,
+        'source,
+        AdmittedSinGroupedContentChildren<'tree, Ranged<'source>>,
+    >,
+    errors: &impl ErrorSink,
+) -> Vec<SinToken> {
+    let mut tokens = Vec::with_capacity(contents.children().child_1.slot.len() + 1);
+
+    push_sin_token(&contents.children().child_0.slot, errors, &mut tokens);
+    for element in &contents.children().child_1.slot {
+        match &element.slot {
+            ReadableSlot::Present(pair) => {
+                push_sin_separator(&pair.child_0.slot, errors, "sin_grouped_content");
+                push_sin_token(&pair.child_1.slot, errors, &mut tokens);
+                surface_source_displaced(&pair.unexpected, "sin_grouped_content", errors);
             }
             // An inline sequence is never MISSING or displaced; `SeqSlot` says so.
-            SourceSlotView::Error(raw) => {
+            ReadableSlot::Error(raw) => {
                 errors.report(unexpected_node_error(
                     raw.raw_node(),
-                    source,
+                    raw.source(),
                     "sin_grouped_content",
                 ));
             }
-            SourceSlotView::Absent(never) => match never {},
-            SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
+            ReadableSlot::Absent(never) => match *never {},
+            ReadableSlot::Missing(never) | ReadableSlot::Unexpected(never) => match *never {},
         }
     }
 
-    surface_displaced(
+    surface_source_displaced(
         &contents.children().unexpected,
         "sin_grouped_content",
-        source,
         errors,
     );
-    Ok(tokens)
+    tokens
 }
 
 /// Handle the separating `whitespaces` token the NEW backend models as its own
@@ -190,21 +220,20 @@ fn extract_sin_grouped_content_tokens<'tree>(
 /// do not. An error-free containing tier alone proves neither property.
 /// `context` is the enclosing rule name, so the
 /// diagnostic matches the sibling content-slot diagnostics.
-pub(super) fn push_sin_separator<'tree>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, WhitespacesNode<'tree>>>,
+pub(super) fn push_sin_separator<'tree, 'source>(
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, WhitespacesNode<'tree>>, Ranged<'source>>,
     errors: &impl ErrorSink,
     context: &str,
 ) {
-    let source = slot.source();
-    match slot.view() {
-        SourceSlotView::Present(_) | SourceSlotView::Absent(NoChild) => {}
-        SourceSlotView::Missing(raw) => {
-            check_not_missing(raw.raw_node(), source, errors, context);
+    match slot {
+        ReadableSlot::Present(_) | ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Missing(raw) => {
+            check_not_missing(raw.raw_node(), raw.source(), errors, context);
         }
-        SourceSlotView::Error(raw) => {
-            errors.report(unexpected_node_error(raw.raw_node(), source, context));
+        ReadableSlot::Error(raw) => {
+            errors.report(unexpected_node_error(raw.raw_node(), raw.source(), context));
         }
-        SourceSlotView::Unexpected(never) => match never {},
+        ReadableSlot::Unexpected(never) => match *never {},
     }
 }
 
@@ -213,29 +242,42 @@ pub(super) fn push_sin_separator<'tree>(
 /// Compiled-grammar admission proves this named composite carrier cannot be
 /// missing. Present text retains empty-token admission; Error is diagnosed and
 /// Absent emits nothing. This does not prove its lexical children are complete.
-fn push_sin_token<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, SinWordNode<'tree>>>,
+fn push_sin_token<'tree, 'source>(
+    slot: &NonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, SinWordNode<'tree>>,
+        Ranged<'source>,
+    >,
     errors: &impl ErrorSink,
     tokens: &mut Vec<SinToken>,
-) -> Result<(), crate::CstFailure> {
-    let source = slot.source();
-    match slot.view() {
-        SourceSlotView::Present(sin_word) => {
-            if let Some(token) = SinTokenSource::Word(sin_word.read()?).decode() {
+) {
+    match slot {
+        ReadableSlot::Present(sin_word) => {
+            if let Some(token) = SinTokenSource::Word(*sin_word).decode() {
                 tokens.push(token);
             }
         }
-        SourceSlotView::Error(raw) => {
+        ReadableSlot::Error(raw) => {
             errors.report(unexpected_node_error(
                 raw.raw_node(),
-                source,
+                raw.source(),
                 "sin_grouped_content",
             ));
         }
-        SourceSlotView::Absent(NoChild) => {}
-        SourceSlotView::Unexpected(never) => match never {},
+        ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) => match *never {},
     }
-    Ok(())
+}
+
+pub(super) fn surface_source_displaced(
+    unexpected: &[SourceSlice<'_, '_>],
+    context: &str,
+    errors: &impl ErrorSink,
+) {
+    for node in unexpected {
+        surface_displaced(&[node.raw_node()], context, node.source(), errors);
+    }
 }
 
 #[cfg(test)]
@@ -264,7 +306,12 @@ mod tests {
                 continue;
             };
             groups += 1;
-            let items = fallback_group_as_token(group);
+            let children = group
+                .extract_admitted(crate::parser::typed_cst::canonical_grammar().expect("binding"))
+                .expect("kind-admitted group")
+                .admit_ranges()
+                .expect("whole selected group");
+            let items = fallback_group_as_token(&children);
             let [SinItem::Token(token)] = items.as_slice() else {
                 panic!("whole group must remain one token");
             };

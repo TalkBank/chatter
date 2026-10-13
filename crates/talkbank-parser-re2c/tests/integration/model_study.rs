@@ -555,12 +555,11 @@ fn multi_token_words_are_placed_too() {
 
 /// No diagnostic is reported TWICE by the re2c backend.
 ///
-/// # The gate that cannot see this
+/// # A separate native-quality question
 ///
-/// `backends_diverge_only_where_recorded` stores each side's codes as
-/// `Codes(BTreeSet<ErrorCode>)`, so multiplicity is structurally
-/// unrepresentable there: a rule reported once and a rule reported twice are
-/// the same value. Nothing else in the tree compares counts either.
+/// The one-way error comparison retains complete findings but does not require
+/// diagnostic count identity. This native regression separately forbids a
+/// redundant diagnostic from two producers for the same fault.
 ///
 /// # Why that mattered
 ///

@@ -67,6 +67,29 @@ fn path_arg(path: &std::path::Path) -> Result<&str, TestError> {
         .ok_or_else(|| TestError::Failure(format!("non-UTF8 test path: {}", path.display())))
 }
 
+/// Naming E305 is not permission to choose one of its authored alternatives.
+#[test]
+fn an_explicit_ambiguous_code_is_reported_and_never_written() -> Result<(), TestError> {
+    let source = include_str!(
+        "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E305_standard_terminator_deletions_2.cha"
+    );
+    let (harness, path) = harness_with_fixture("alternatives.cha", source)?;
+    let output = harness.run_output(&["fix", path_arg(&path)?, "--apply", "--code", "E305"])?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(&path)?, source);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("skip E305: ambiguous, several valid fixes"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("0 fix(es) applied"), "{stdout}");
+    Ok(())
+}
+
 /// The ruling, at the CLI boundary: a broken region must not block a fix
 /// elsewhere, and must itself come out byte-identical.
 #[test]

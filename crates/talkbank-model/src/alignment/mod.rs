@@ -126,12 +126,13 @@ pub use sin::{SinAlignment, align_main_to_sin};
 pub use traits::{AlignableTier, IndexPair, TierAlignmentResult, TierCountable, positional_align};
 pub use types::AlignmentPair;
 pub use wor::{
-    CompleteWorTimingSlot, CompleteWorTimings, CorroboratedWorTimingSlot, CorroboratedWorTimings,
-    CountMatchedWorTimings, EmptyWorTimingSequence, MainWorSlotCount, MissingWorTimings,
-    RejectedWorTimingSequence, UncorroboratedWorTimings, WorAdjacentTimingRelation, WorDurationMs,
-    WorLexicalMismatch, WorMainTierProjection, WorMediaOffsetMs, WorRecordedInterval, WorSlotIndex,
-    WorSlotMembershipPolicy, WorSlotTiming, WorTierSlotCount, WorTimingBinding,
-    WorTimingCorrespondence, WorTimingDrift, WorTimingHull, WorTimingSequence,
-    WorTimingSequenceIssue, WorTimingSidecar, assess_wor_timing_sequence, bind_wor_timing,
-    corroborate_wor_timing, resolve_wor_timing_sidecar,
+    CompleteWorTimingSlot, CompleteWorTimingSlots, CompleteWorTimings, CorroboratedWorTimingSlot,
+    CorroboratedWorTimings, CountMatchedWorTimings, EmptyWorTimingSequence, MainWorSlotCount,
+    MissingWorTimings, RejectedWorTimingSequence, UncorroboratedWorTimings,
+    WorAdjacentTimingRelation, WorDurationMs, WorLexicalMismatch, WorMainTierProjection,
+    WorMediaOffsetMs, WorRecordedInterval, WorSlotIndex, WorSlotMembershipPolicy, WorSlotTiming,
+    WorSourceContent, WorTierSlotCount, WorTimingBinding, WorTimingCorrespondence, WorTimingDrift,
+    WorTimingHull, WorTimingSequence, WorTimingSequenceIssue, WorTimingSidecar,
+    assess_wor_timing_sequence, bind_wor_timing, corroborate_wor_timing,
+    resolve_wor_timing_sidecar,
 };

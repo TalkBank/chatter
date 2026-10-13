@@ -629,6 +629,25 @@ Compound word content delegates output to its typed marker's writer rather
 than duplicating the delimiter. Reference word-wire and output-refusal contracts
 check its spelling, preserved spans and propagation of sink failure.
 
+The word-root carrier contract uses four existing reference files and the E203
+repeated-form specimen. It admits selected root ranges while retaining the
+compiled kind proof, requires witnesses for all five positions and checks
+canonical source slices through repeated reads. Equal-text foreign parses
+cannot supply the owner. Counted admission and transient carrier sizes are
+reported separately; they establish neither peak memory nor a speedup. The
+word spelling/JSON, fragment, replacement and WOR workflows retain their own
+semantic and recovery assertions after this internal transition.
+
+The MOR carrier contract uses the existing morphology/grammar and
+clitics-and-compounds references. Word POS/pipe/lemma and zero/nonzero feature
+lists retain compiled kind and source ownership; feature hyphen/value fields
+retain their own readable slices. Counts distinguish word-root admission from
+each feature's two-position admission, including the additional delimiter
+checks. Inline word/feature and repeated-element layouts are reported, not
+heap/peak-memory or throughput. Existing fragment, clitic, lexical-recovery and
+document semantics remain independently checked; this finite carrier sample
+does not certify every recovery state or supported platform.
+
 The reference group traversal also checks the public bracket-content writer
 directly, apart from each enclosing group's spacing and decoration. Existing
 grouped actions and annotations supply its inputs; every observed write can
@@ -864,6 +883,13 @@ inside keys and values. Container traversal consumes paired borrowed entries
 from zipped iterators, so an indexed lookup cannot silently abort an otherwise
 complete comparison. Sequence tail differences remain reported after value
 differences unless the report has actually been truncated.
+Tuple projections additionally change each field independently, preserving
+preceding fields so a later mismatch cannot hide behind an earlier refusal.
+Participant equality is checked alongside report prefixes for changed map
+lengths, keys and same-key metadata values. Metadata replacements come from
+another parsed reference record with the same speaker key and preserve map
+insertion order; these comparison projections are not modified-document
+validity or source-origin certificates.
 An authored speaker-removal workflow also parses the transformed reference CHAT
 and pins the unmatched sequence tail in both comparison directions. Exact and
 smaller report budgets preserve the full report's prefix; a filled budget alone
@@ -1064,7 +1090,8 @@ change earns the same scrutiny as one that looks worse.
 
 | Gate | Command | What it protects |
 |---|---|---|
-| Experimental backend comparison | `cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus` | Compares re2c and tree-sitter reference models using `SemanticEq`. re2c is experimental and incomplete, not a specification oracle. Investigate disagreements against independent specs; canonical-suite success does not prove cross-backend equivalence. Completing re2c is lower priority than CHECK parity and representative spec/reference coverage. |
+| Valid backend comparison | `cargo test -p talkbank-parser-re2c --test integration equivalence_reference_corpus` | Requires error-free acceptance and shared-model semantics for every readable reference. Recovery and diagnostic identity are not requirements; canonical-suite success does not establish cross-backend acceptance. |
+| One-way backend error detection | `cargo test -p talkbank-parser-re2c --test integration error_parity::backends_report_every_tree_sitter_error` | Measures every authored error-spec example, including legal/deferred claims. A tree-sitter error requires some re2c error; warning-only output and silence fail, and internal failure refuses measurement. Codes and rejection stage may differ. This is finite file-level evidence, not fragment or specification completeness. |
 | Reference corpus parses | `cargo test -p talkbank-parser-tests --tests reference_corpus_parses` | Every reference file parses cleanly with the tree-sitter parser. Checks parser acceptance, not cross-parser equivalence. |
 | Reference transform workflows | `cargo test -p talkbank-parser-tests --test integration transform_corpus::` | Public normalization admits a loss-checked `Rewrite`, preserves typed semantics and is idempotent. Compact and pretty CHAT-to-JSON output deserialize into semantically equivalent typed models. These wire tests do not imply optional model validation or JSON-schema admission. |
 | Roundtrip idempotency, and reference coverage | `cargo test -p talkbank-parser-tests --tests roundtrip_reference_corpus` | parse, serialize, re-parse yields a semantically identical AST (`SemanticEq`) for EVERY reference file. One test carries both guarantees: it iterates the whole corpus (coverage) and checks semantic equality on each (idempotency). |
@@ -1659,6 +1686,11 @@ or year is interpreted numerically; the corpus still owns the 01-31 policy and
 wire-format behavior. These tests do not certify full calendar validation.
 The same canonical fixtures require invalid spellings to remain `Unsupported`
 through parsing and JSON roundtrip, not merely receive a validation diagnostic.
+The date contract also reconstructs admitted day/month/year components from
+E518 legal controls and the metadata/speaker-info references. All twelve
+distinct month spellings must retain their original CHAT and JSON strings;
+recording and birth headers both pass document validation without rewriting.
+This finite spelling contract does not introduce calendar or leap-year policy.
 
 Timed-pause boundary specs distinguish admitted CHAT spelling from a bounded
 numeric projection. Minutes-to-seconds multiplication and addition are checked
@@ -1698,6 +1730,17 @@ while reporting the learned hits. No cache verdicts are preloaded as answers.
 Validation-only entries first demonstrate that no roundtrip result exists;
 requesting roundtrips then performs and stores the missing work, followed by a
 warm roundtrip reuse pass. Validation success alone cannot certify roundtrips.
+
+The same producer-issued events also exercise the public reporting contract.
+Per-file `failed` agrees with the independently expected verdict, and typed
+diagnostic payloads preserve the exact source and findings. `RunEnding::passed`
+and `stats` distinguish complete success from invalid or unreadable files,
+empty selection, cancellation and worker loss. A clean processed prefix cannot
+certify an unfinished run. Cache-write refusals retain successful validation
+and count both failed writes; an unwound worker retains its typed cause and
+honest user-facing report without acquiring a per-file validity verdict.
+These strengthen the existing workflows and scheduling controls, not a new
+test population or an artificial successful ending.
 
 The file-pipeline corpus checks disk parsing against the typed reference models
 and compares spec-file admission/refusal evidence with the named in-memory
@@ -1952,6 +1995,16 @@ integration binary can retain its previous case list. An explicit fixture
 dependency and a nonzero named test witness prevent mistaking that old list for
 verification of the new specimen.
 
+`tiers/comment-media-segments.cha` is an authored combination control: pictures
+can lead and repeat in `@Comment` and `%com`, with timing bullets and wrapped
+text between them. Its public admission contract retains exact source/output
+and an insta snapshot of the parsed header/comment/action segment sequences.
+Independent picture, timing and continuation checks precede snapshot acceptance.
+The parser retains the checked picture-filename proof until consuming it into
+the owned picture segment; no intermediate plain string erases that proof.
+This local producer guarantee does not certify arbitrary model construction or
+remove recovery checks.
+
 Fragment-coordinate limits belong to the API-boundary track. Small UTF-8 inputs
 at boundary origins exercise checked byte extents without allocating enormous
 CHAT files. The public-boundary tests require exactly one rejection diagnostic,
@@ -2029,12 +2082,76 @@ error instead of claiming schema invalidity. Generic intermediate arrays are
 permitted by unchecked export but refused by the CHAT schema; malformed JSON
 retains its decoding error and position. These are generic wire/API contracts,
 not extra CHAT fixtures or evidence of embedded-schema load failure.
+
+The scalar semantic-equality boundary module checks the public `SemanticEq`
+implementations for `char`, `i8`, `i16`, `i32` and `i64`. Distinct case/accent
+scalars, Unicode boundary scalars, signed extrema and values around zero
+must remain distinct; every selected value must equal itself. These are direct
+downstream API contracts, not fabricated AST fields or additional CHAT fixtures.
+Their execution belongs only to the boundary and combined tracks, never the
+canonical spec/reference totals or a claim of generic-instantiation completeness.
+
+The filesystem boundary module owns public discovery and resolved-location
+contracts previously tested inside the libraries. It preserves argument
+expansion, stable identity/deduplication, relative paths, link-follow/skip/cycle
+policy and explicit missing/dangling-link failures. Temporary empty files are
+filesystem witnesses, not CHAT specimens; their profiles belong only to the
+boundary and combined tracks. Native Windows path behavior remains a separate
+platform obligation when these tests execute elsewhere.
+
+The canonical `transform_corpus::discovery_contracts` workflow copies an
+unchanged authored media-spec control into a temporary directory tree. Public
+discovery and argument expansion select each distinct stored location once,
+then named admission retains the source, its normalization warning and stored
+spelling through ownership transfer to valid CHAT. Directory selection excludes
+sidecars and non-transcript extensions; an explicitly requested extension is
+still admitted. Unix link traversal covers linked files, linked directories
+and cycle termination. This is a source-positive workflow, distinct from the
+empty-file filesystem boundary witnesses; native Windows link behavior is not
+established by its Unix-specific assertions.
+
+The word-only regeneration contract also carries the W110 named-media warning
+through pending admission and a refused discharge. The existing reference's
+timing-removal derivative remains the input; naming it with different ASCII
+case does not excuse its outstanding timing obligation. Refusal returns the
+same working document and the located warning, not writable CHAT.
+
 The failure-evidence consumer contract carries an explicitly injected producer
 fault through diagnostic admission, ownership transfer and the public pipeline
 error. Its user-facing text must state that validity was not determined; the
 original diagnostic and source location survive recovery of the error payload.
+The model-admission boundary also injects diagnostics through the public mutable
+alignment-evidence field of an otherwise admitted reference document. Under
+structure-only policy, E001 remains a tool failure regardless of severity or
+diagnostic ordering. Reporting and refused `into_rejection` preserve the working
+document, policy, stored name and all diagnostics; a truncated report remains a
+failed write. Warning-only admission and ordinary input rejection are distinct
+controls. These injected findings are not source gold or extra invalid CHAT
+specimens, and do not prove fault production under alignment recomputation.
 Keep existing canonical tests in their original population, including public
 output-refusal and cache/lifecycle workflows already measured there.
+
+The `transform_corpus::utterance_split_contracts` family owns the public
+reference-backed split workflow contracts: word-timing and morphology admission,
+atomic annotations, source-bound tier-loss receipts, and timeline-bound speaker
+ownership. Its snapshot retains the authored child timing and `%wor` output.
+Private group representation, the private retrace helper, and constructed empty
+word-timing controls remain unit tests; those profiles do not enter canonical
+coverage. The speaker-replacement contract compares authored reference utterances
+with and without replacements, requires exact spoken-original support on both
+sides, preserves confidence/wire evidence, and verifies neither input changes.
+
+The `replacement_admission_contracts` family owns the existing public fixed,
+planned and adaptive tier-removal contracts. Reference word timing and generated
+error-spec fixtures exercise preservation, selective removal, source-bound loss
+receipts, retained-source refusal and pending word-timing discharge. Its receipt
+snapshot preserves the original source spans and recovery/validation causes.
+The connected `source_admission_contracts` family carries complete producer
+preservation into borrowed/owned source output, retains authored whitespace,
+refuses duplicate-language source and preserves admitted policy/JSON semantics.
+Synthetic producer faults, constructed empty output, forgotten parse provenance
+and arbitrary non-CHAT input remain separate unit/boundary controls. Relocation
+does not turn these controls into new CHAT specimens or change removal policy.
 
 Measure the combined track with both populations in the same pinned runner,
 source revision, feature configuration and instrumentation. LLVM then counts
@@ -2095,7 +2212,7 @@ cargo.
 | Grammar (`grammar.js`) | the whole [Grammar Workflow](grammar-workflow.md), including the typed-traversal regeneration |
 | Parser (CST to model) | `cargo test -p talkbank-parser`, plus parser equivalence and roundtrip |
 | Model (types, validation, alignment) | `cargo test -p talkbank-model`, plus roundtrip |
-| CLI | `cargo test -p chatter` |
+| CLI | `cargo test -p talkbank-chatter` |
 | LSP | `cargo test -p talkbank-lsp` |
 | Spec files | regenerate per [Spec Workflow](spec-workflow.md), then `just test-spec` and the gate registry |
 | Either registry (symbols, form markers) | `just test-spec`, which includes the drift gates |

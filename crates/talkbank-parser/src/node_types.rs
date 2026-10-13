@@ -8,7 +8,7 @@
 //! node scripts/generate-node-types.js > crates/talkbank-parser/src/node_types.rs
 //! ```
 //!
-//! All 382 named node types from the tree-sitter CHAT grammar
+//! All 384 named node types from the tree-sitter CHAT grammar
 //! are available as compile-time `&str` constants.
 //!
 //! # Example
@@ -71,6 +71,8 @@ pub const ID_EDUCATION: &str = "id_education";
 pub const ID_GROUP: &str = "id_group";
 /// `@ID` header line for participant metadata.
 pub const ID_HEADER: &str = "id_header";
+/// CST node type: `id_language`.
+pub const ID_LANGUAGE: &str = "id_language";
 /// Languages field in `@ID` header.
 pub const ID_LANGUAGES: &str = "id_languages";
 /// `@ID` header prefix.
@@ -809,6 +811,8 @@ pub const FREE_TEXT: &str = "free_text";
 pub const FULL_DOCUMENT: &str = "full_document";
 /// CST node type: `generic_date`.
 pub const GENERIC_DATE: &str = "generic_date";
+/// CST node type: `generic_id_language`.
+pub const GENERIC_ID_LANGUAGE: &str = "generic_id_language";
 /// CST node type: `generic_id_ses`.
 pub const GENERIC_ID_SES: &str = "generic_id_ses";
 /// CST node type: `generic_id_sex`.
@@ -866,4 +870,4 @@ pub const WORD_LANG_SUFFIX: &str = "word_lang_suffix";
 /// CST node type: `word_segment`.
 pub const WORD_SEGMENT: &str = "word_segment";
 
-// Total node types: 382
+// Total node types: 384

@@ -415,14 +415,18 @@ impl TreeSitterParser {
         offset: usize,
         errors: &impl ErrorSink,
     ) -> ParseOutcome<MorWord> {
-        let ParseOutcome::Parsed(fragment_source) =
-            talkbank_model::FragmentSource::admit(input, offset, errors)
-        else {
-            return ParseOutcome::rejected();
+        // The companion terminator is synthetic too. Its owner must project
+        // diagnostics and snippets before they reach the original caller.
+        let wrapper = match super::fragment::WrappedFragment::new(&[], input, " .", offset) {
+            Ok(wrapper) => wrapper,
+            Err(found) => {
+                errors.report_vec(found.into_error_vec());
+                return ParseOutcome::rejected();
+            }
         };
-        let document_sink = fragment_source.error_sink(errors);
+        let document_sink = wrapper.error_sink(errors);
         let Some(tier) = self
-            .parse_mor_tier_fragment(&format!("{} .", input), 0, &document_sink)
+            .parse_mor_tier_fragment(wrapper.source(), 0, &document_sink)
             .into_option()
         else {
             return ParseOutcome::rejected();
@@ -439,7 +443,7 @@ impl TreeSitterParser {
                 return reject_item_shape(input, &document_sink, message);
             }
         };
-        ParseOutcome::parsed(fragment_source.rebase(word))
+        ParseOutcome::parsed(wrapper.rebase(word))
     }
 
     // =========================================================================

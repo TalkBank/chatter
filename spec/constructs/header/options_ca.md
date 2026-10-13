@@ -11,7 +11,14 @@
 ## Expected CST
 
 ```cst
-(options_header ...)
+(options_header
+  (options_prefix)
+  (header_sep
+    (colon)
+    (tab))
+  (options_contents
+    (option_name))
+  (newline))
 ```
 
 ## Metadata

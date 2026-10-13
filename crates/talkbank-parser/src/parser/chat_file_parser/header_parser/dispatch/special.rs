@@ -10,9 +10,9 @@
 //!   words and a typed `from_text` constructor, exactly like the simple family.
 //! - `@Birth of` / `@Birthplace of` / `@L1 of`: TWO content children, a
 //!   `speaker` at `child_2` and the value at `child_4` (both model an optional
-//!   `header_gap` at `child_1`). [`two_slots`] reads them IN ORDER, speaker
-//!   first, and a failed speaker returns its recovery without reading the value
-//!   slot, which keeps the diagnostic order the family always had.
+//!   `header_gap` at `child_1`). Read speaker first; a failed speaker returns
+//!   its recovery before reading the value. [`two_slots`] owns the two required
+//!   payloads for Birthplace/L1; Birth has an explicitly optional date payload.
 //! - `@Comment`: the `text_with_bullets_and_pics` content child (`child_2`) fed
 //!   to `parse_bullet_content`. A missing content child reports no diagnostic
 //!   of its own and builds `Header::Unknown`, as it always did.
@@ -48,7 +48,9 @@ use crate::parser::tree_parsing::parser_helpers::{
 use talkbank_model::ParseOutcome;
 
 use super::simple::simple_header;
-use crate::parser::tree_parsing::parser_helpers::{ContentSlot, read_source_content};
+use crate::parser::tree_parsing::parser_helpers::{
+    ContentSlot, read_optional_source_content, read_source_content,
+};
 use crate::parser::typed_cst::AnyKindSlot;
 
 /// `@Comment` -> `Header::Comment`. All bullet content is accepted.
@@ -61,14 +63,7 @@ pub(super) fn comment<'tree>(
     // child reported no diagnostic before the typed traversal either (it fell
     // through to `Header::Unknown` silently), so the non-Present path is
     // likewise silent.
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     let header = match children.field_child_2().slot().view() {
         SourceSlotView::Present(content) => {
             match crate::parser::typed_cst::read_source_field(content, errors) {
@@ -110,14 +105,7 @@ pub(super) fn number<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -140,14 +128,7 @@ pub(super) fn recording_quality<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -170,14 +151,7 @@ pub(super) fn transcription<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -230,35 +204,36 @@ pub(super) fn birth_of<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
+    let children = typed.extract();
+    let read = || {
+        let participant = read_source_content(
+            &site,
+            children.field_child_2().slot(),
+            &ContentSlot {
+                missing: "Missing participant code in @Birth of header",
+                suggested_fix: None,
+            },
+            errors,
+        )?;
+        let date = read_optional_source_content(
+            &site,
+            children.field_child_4().slot(),
+            &ContentSlot {
+                missing: "Missing date value in @Birth of header",
+                suggested_fix: None,
+            },
+            errors,
+        )?;
+        Ok::<_, ContentReadError<'_>>(Header::Birth {
+            participant: model::SpeakerCode::new(participant),
+            date: match date {
+                Some(text) => model::ChatDate::new(text),
+                None => model::ChatDate::Unsupported(String::new()),
+            },
+        })
     };
-    let header = match two_slots(
-        &site,
-        children.field_child_2().slot(),
-        &ContentSlot {
-            missing: "Missing participant code in @Birth of header",
-            suggested_fix: None,
-        },
-        children.field_child_4().slot(),
-        &ContentSlot {
-            missing: "Missing date value in @Birth of header",
-            suggested_fix: None,
-        },
-        errors,
-    ) {
-        Ok(ParticipantValue {
-            participant,
-            value: date,
-        }) => ParseOutcome::parsed(Header::Birth {
-            participant,
-            date: model::ChatDate::new(date),
-        }),
+    let header = match read() {
+        Ok(header) => ParseOutcome::parsed(header),
         Err(failure) => failure.into_outcome(&site, errors),
     };
     surface_displaced(
@@ -276,14 +251,7 @@ pub(super) fn birthplace_of<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     let header = match two_slots(
         &site,
         children.field_child_2().slot(),
@@ -322,14 +290,7 @@ pub(super) fn l1_of<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     let participant_words = ContentSlot {
         missing: "Missing participant code in @L1 of header",
         suggested_fix: None,
@@ -387,23 +348,11 @@ pub(super) fn options(
     // a MISSING node has no children (also empty), so every non-Present state
     // yields an empty list. Validation reports E533 on the resulting empty
     // @Options list downstream.
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_options_header(typed),
-        typed.raw_node(),
-        input,
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = extract_options_header(typed);
     let flags = match present(children.child_2.slot()) {
-        Some(contents) => match crate::parser::typed_cst::report_reconstruction(
-            option_flags(*contents, input, errors),
-            typed.raw_node(),
-            input,
-            errors,
-        ) {
-            Ok(ParseOutcome::Parsed(flags)) => flags,
-            Ok(ParseOutcome::Rejected) | Err(_) => return ParseOutcome::Rejected,
+        Some(contents) => match option_flags(*contents, input, errors) {
+            ParseOutcome::Parsed(flags) => flags,
+            ParseOutcome::Rejected => return ParseOutcome::Rejected,
         },
         None => Vec::new(),
     };
@@ -423,8 +372,8 @@ fn option_flags(
     options_contents: OptionsContentsNode<'_>,
     input: &str,
     errors: &impl ErrorSink,
-) -> Result<ParseOutcome<Vec<ChatOptionFlag>>, crate::generated_traversal::ReconstructionFault> {
-    let children = extract_options_contents(options_contents)?;
+) -> ParseOutcome<Vec<ChatOptionFlag>> {
+    let children = extract_options_contents(options_contents);
     let mut flags = Vec::new();
     let mut admit = |slot: &NarrowedKindSlot<'_, OptionNameNode<'_>>| -> ParseOutcome<()> {
         if let Some(name) = present(slot) {
@@ -440,18 +389,18 @@ fn option_flags(
         ParseOutcome::parsed(())
     };
     if admit(children.child_0.slot()).is_none() {
-        return Ok(ParseOutcome::Rejected);
+        return ParseOutcome::Rejected;
     }
     for element in children.child_1.slot() {
         if let Some(sequence) = present(element.slot()) {
             if admit(sequence.child_2.slot()).is_none() {
-                return Ok(ParseOutcome::Rejected);
+                return ParseOutcome::Rejected;
             }
             surface_displaced(&sequence.unexpected, OPTIONS_CONTENTS, input, errors);
         }
     }
     surface_displaced(&children.unexpected, OPTIONS_CONTENTS, input, errors);
-    Ok(ParseOutcome::parsed(flags))
+    ParseOutcome::parsed(flags)
 }
 
 #[cfg(test)]
@@ -478,18 +427,10 @@ mod option_admission_tests {
                 continue;
             };
             let errors = talkbank_model::ErrorCollector::new();
-            assert!(
-                option_flags(contents, source, &errors)
-                    .expect("producer")
-                    .is_some()
-            );
+            assert!(option_flags(contents, source, &errors).is_some());
             assert!(errors.into_vec().is_empty());
             let errors = talkbank_model::ErrorCollector::new();
-            assert!(
-                option_flags(contents, "", &errors)
-                    .expect("producer")
-                    .is_none()
-            );
+            assert!(option_flags(contents, "", &errors).is_none());
             let findings = errors.into_vec();
             assert_eq!(findings.len(), 1);
             assert_eq!(findings[0].code, talkbank_model::ErrorCode::InternalError);

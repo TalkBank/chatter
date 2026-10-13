@@ -1,33 +1,19 @@
-//! What one spec case looks like once both backends have been run over it.
+//! Source observations and the one-way error-detection contract.
 //!
-//! Split out of `error_parity.rs` when that file passed the workspace's 800
-//! line hard limit. The types travel together because every one of them exists
-//! to make some illegal state unrepresentable in [`CaseReport`], and the
-//! reasoning for each is in its own doc comment.
+//! Diagnostic identity is a measurement, not an acceptance condition. Keep
+//! actual severity and stage; a warning cannot stand in for a missed error.
 
 use std::collections::BTreeSet;
 use std::fmt;
 
-use talkbank_model::ErrorCode;
+use talkbank_model::errors::diagnostic_kind::{DiagnosticKind, kind_of};
+use talkbank_model::{ErrorCode, ErrorCollector, ParseError, Severity};
 
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
-
-/// Which example of a spec file a measurement is about, numbered from ONE.
-///
-/// A newtype rather than a `usize` because this project numbers examples in two
-/// bases at once, and converting between them is the whole bug: `enumerate`
-/// counts from zero, while the observation snapshot (`"example": 3`) and the
-/// generated fixture filenames (`e313_3.txt`) both count from one. A parity
-/// label reading `E313.md#2` for the case those two call 3 sends a reader
-/// opening the fixture to the wrong file. There is exactly one constructor and
-/// it performs the conversion, so no call site is in a position to pick a base.
+/// Specification examples are numbered from one, independently of siblings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct ExampleOrdinal(usize);
 
 impl ExampleOrdinal {
-    /// From the position `enumerate` yields.
     pub(super) fn from_zero_based(index: usize) -> Self {
         Self(index + 1)
     }
@@ -39,35 +25,14 @@ impl fmt::Display for ExampleOrdinal {
     }
 }
 
-/// Which spec case a measurement is about: a file, and which of its examples.
-///
-/// A type rather than a formatted string so the rendering lives at ONE site. It
-/// had two, and the second existed only to re-derive labels for a debug pass.
-///
-/// # The ordinal is unconditional, and that is the fix rather than the style
-///
-/// It used to be an `Option`, omitted when the file held exactly one example,
-/// so `E231.md` named that file's only case and `E231.md#0` named the first of
-/// several. The label is the KEY of the parity baseline, and under that rule a
-/// case's key was a function of how many SIBLINGS it had: adding a second
-/// example to `E231.md` renamed the first, which retired its baseline entry as
-/// STALE and re-raised the identical divergence as a NEW one under another
-/// name. That fired on 2026-09-07, on E231 and E710, and cost a red gate.
-///
-/// The residual hazard is smaller and is stated rather than hidden: an example
-/// INSERTED ahead of another still shifts it. Closing that needs an identity
-/// the spec itself declares, which is a spec-format change, not a rename.
+/// The source specification and its unconditional, one-based example ordinal.
 #[derive(Clone, Debug)]
 pub(super) struct SpecLabel {
-    pub(super) file: String,
-    pub(super) case: ExampleOrdinal,
+    file: String,
+    case: ExampleOrdinal,
 }
 
 impl SpecLabel {
-    /// Label one example of `file`.
-    ///
-    /// Takes the ordinal rather than a bare index, so a caller holding an
-    /// `enumerate` counter cannot reach this at all without converting.
     pub(super) fn new(file: &str, case: ExampleOrdinal) -> Self {
         Self {
             file: file.to_owned(),
@@ -82,305 +47,253 @@ impl fmt::Display for SpecLabel {
     }
 }
 
-/// A set of diagnostic codes that CANNOT be empty.
-///
-/// One non-emptiness proof with two holders ([`Expected`] and
-/// [`Reported::Spoke`]), because the first draft re-proved it in each with its
-/// own `.first()?`. It had a third holder, `Conformance::Misses { absent }`,
-/// which could hold the empty set: not "missed some expected codes" but exactly
-/// [`Conformance::Meets`], one state with two representations. That payload has
-/// since gone, for the separate reason that nothing read it.
-///
-/// # Every way to obtain one
-///
-/// [`Codes::new`] is the only constructor, the field is never written from
-/// outside it, and there is no `Default`: an empty `Codes` is unrepresentable
-/// rather than merely discouraged. That is what lets its `Display` have no empty
-/// case and lets every holder skip the "and what if it is empty" branch.
-#[derive(Clone, Debug)]
-pub(super) struct Codes(BTreeSet<ErrorCode>);
+/// Findings captured before model validation starts.
+pub(super) struct ParsingFindings(Vec<ParseError>);
 
-impl Codes {
-    /// `None` for the empty set, which is a different fact and gets a different
-    /// type at every call site: no expectation, or a silent backend.
-    pub(super) fn new(codes: BTreeSet<ErrorCode>) -> Option<Self> {
-        codes.first()?;
-        Some(Self(codes))
-    }
-
-    pub(super) fn as_set(&self) -> &BTreeSet<ErrorCode> {
-        &self.0
+impl ParsingFindings {
+    pub(super) fn from_sink(sink: ErrorCollector) -> Self {
+        Self(sink.into_vec())
     }
 }
 
-/// For an operator to read, never for a machine to read back.
-impl fmt::Display for Codes {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(
-            &self
-                .0
-                .iter()
-                .map(|code| code.as_str())
-                .collect::<Vec<_>>()
-                .join(", "),
-        )
+/// Findings captured by the shared validator, not by the parser.
+pub(super) struct ValidationFindings(Vec<ParseError>);
+
+impl ValidationFindings {
+    pub(super) fn from_sink(sink: ErrorCollector) -> Self {
+        Self(sink.into_vec())
     }
 }
 
-/// The codes a spec says its input must produce.
-///
-/// A wrapper over [`Codes`] for two reasons, and the swap-safety one DOES hold,
-/// contrary to an earlier draft of this comment. `Reported` is an enum, but
-/// `Reported::Spoke(codes)` hands out a `&Codes`, so without this wrapper
-/// [`Conformance::of`] would take two interchangeable `&Codes` and the compiler
-/// could not tell the expectation from the observation.
-///
-/// Second: [`Expected::new`] returns `Option`, which is how "this block
-/// declares no codes, so it is untestable" travels from the spec reader to the
-/// UNTESTED line of the report instead of becoming a case that passes by
-/// expecting nothing.
-#[derive(Clone, Debug)]
-pub(super) struct Expected(Codes);
-
-impl Expected {
-    /// `None` when the spec declared no codes. An expectation of nothing is not
-    /// a test, so such a block is reported as untested rather than counted as
-    /// a pass.
-    pub(super) fn new(codes: BTreeSet<ErrorCode>) -> Option<Self> {
-        Codes::new(codes).map(Self)
-    }
+/// An immutable observation; the two phase types cannot be interchanged.
+pub(super) struct BackendReport {
+    parsing: ParsingFindings,
+    validation: ValidationFindings,
 }
 
-impl fmt::Display for Expected {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-/// What one backend actually said about one input.
-///
-/// Silence is a VARIANT, not an empty collection, so "reported nothing" cannot
-/// be forgotten by a caller who only inspects the codes it finds.
-#[derive(Clone, Debug)]
-pub(super) enum Reported {
-    /// No diagnostic at all, on input a spec says is invalid.
-    Silent,
-    /// At least one diagnostic.
-    Spoke(Codes),
-}
-
-impl Reported {
-    pub(super) fn of(codes: BTreeSet<ErrorCode>) -> Self {
-        match Codes::new(codes) {
-            None => Self::Silent,
-            Some(codes) => Self::Spoke(codes),
+impl BackendReport {
+    pub(super) fn new(parsing: ParsingFindings, validation: ValidationFindings) -> Self {
+        Self {
+            parsing,
+            validation,
         }
     }
+
+    pub(super) fn diagnostics(&self) -> impl Iterator<Item = &ParseError> {
+        self.parsing.0.iter().chain(&self.validation.0)
+    }
+
+    /// Code-set equality remains informative, but never determines acceptance.
+    pub(super) fn codes(&self) -> BTreeSet<ErrorCode> {
+        self.diagnostics().map(|finding| finding.code).collect()
+    }
+
+    fn first_error(&self) -> Option<ErrorFinding<'_>> {
+        self.diagnostics()
+            .find(|finding| finding.severity == Severity::Error)
+            .map(ErrorFinding)
+    }
+
+    fn internal_failure(&self) -> Option<&ParseError> {
+        self.diagnostics()
+            .find(|finding| kind_of(finding.code) == DiagnosticKind::InternalFailure)
+    }
 }
 
-impl fmt::Display for Reported {
+impl fmt::Display for BackendReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Silent => f.write_str("(silent)"),
-            Self::Spoke(codes) => codes.fmt(f),
-        }
-    }
-}
-
-/// What one backend did about one spec's expectation.
-///
-/// Three states, not two booleans. The previous version carried
-/// `has_expected` and `has_any_error` side by side, which admits the impossible
-/// pair (`has_expected` true, `has_any_error` false) and took a five-branch
-/// `if`/`else` chain ending in a catch-all to read back out.
-#[derive(Clone, Debug)]
-pub(super) enum Conformance {
-    /// Reported every expected code.
-    Meets,
-    /// Reported diagnostics, but not all the expected ones.
-    ///
-    /// This variant used to carry the absent set, on the argument that "missed
-    /// the expectation" and "missed E316 specifically" are different amounts of
-    /// information and the second was free. Nothing ever read it, and the only
-    /// thing that made it look used was a derived `PartialEq` that nothing read
-    /// either; dropping that derive turned the field into a compiler warning
-    /// within the minute. The information is not lost: `CaseReport::detail`
-    /// prints both backends' full code sets beside the expectation, which is
-    /// strictly more than the absent set and is what an operator reads.
-    Misses,
-    /// Reported nothing at all.
-    Silent,
-}
-
-impl Conformance {
-    pub(super) fn of(expected: &Expected, reported: &Reported) -> Self {
-        match reported {
-            Reported::Silent => Self::Silent,
-            // The set difference decides the variant directly, so there is no
-            // separate emptiness test that could disagree with it.
-            Reported::Spoke(codes) => match expected.0.as_set().difference(codes.as_set()).next() {
-                None => Self::Meets,
-                Some(_) => Self::Misses,
-            },
-        }
-    }
-}
-
-/// How ONE backend fared against the whole spec suite.
-///
-/// This replaced an `Outcome` enum that collapsed the nine
-/// `(Conformance, Conformance)` pairs into five joint buckets. Two of those
-/// five, `Re2cSilent` and `TreeSitterSilent`, were the SAME predicate as the
-/// [`Divergence`] variants of the same names, computed a second time from the
-/// same fields, and the summary duly printed "11" on two adjacent lines. One
-/// fact, two owners.
-///
-/// Splitting the axes costs less code and says more: how each backend does
-/// against the spec on its own is a question the joint buckets could not
-/// answer, and "how often does tree-sitter fail its OWN spec" is worth knowing.
-#[derive(Clone, Copy, Debug, Default)]
-pub(super) struct ConformanceTally {
-    pub(super) meets: usize,
-    pub(super) misses: usize,
-    pub(super) silent: usize,
-}
-
-impl ConformanceTally {
-    /// Fold conformances into counts. The exhaustive match is the ONLY place a
-    /// field is incremented, so three same-typed counters cannot be crossed
-    /// without editing the arm that names them.
-    pub(super) fn of(conformances: impl Iterator<Item = Conformance>) -> Self {
-        let mut tally = Self::default();
-        for conformance in conformances {
-            match conformance {
-                Conformance::Meets => tally.meets += 1,
-                Conformance::Misses => tally.misses += 1,
-                Conformance::Silent => tally.silent += 1,
+        for (name, findings) in [
+            ("parse", &self.parsing.0),
+            ("validation", &self.validation.0),
+        ] {
+            write!(f, "{name} [")?;
+            for (index, finding) in findings.iter().enumerate() {
+                if index > 0 {
+                    f.write_str(", ")?;
+                }
+                write!(
+                    f,
+                    "{} {:?} {:?}",
+                    finding.code, finding.severity, finding.location.span
+                )?;
             }
+            f.write_str("] ")?;
         }
-        tally
+        Ok(())
     }
 }
 
-impl fmt::Display for ConformanceTally {
+/// Only observing actual error severity can issue this evidence.
+pub(super) struct ErrorFinding<'report>(&'report ParseError);
+
+impl ErrorFinding<'_> {
+    pub(super) fn diagnostic(&self) -> &ParseError {
+        self.0
+    }
+}
+
+/// A backend identity, not an interchangeable display string.
+pub(super) enum Backend {
+    TreeSitter,
+    Re2c,
+}
+
+impl fmt::Display for Backend {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{:>4} meet the spec, {:>3} miss it, {:>3} SILENT on invalid input",
-            self.meets, self.misses, self.silent
-        )
+        f.write_str(match self {
+            Self::TreeSitter => "tree-sitter",
+            Self::Re2c => "re2c",
+        })
     }
 }
 
-/// How the two backends differ on one case. `None` from
-/// [`CaseReport::divergence`] means they produced identical diagnostics, the
-/// only result this gate accepts without a baseline entry.
-///
-/// The three "both spoke" variants are separated because they are three
-/// different jobs, and a single `DifferentCodes` bucket hid that: 88 of the 99
-/// divergences found on 2026-08-09 were in it, spanning "re2c has not
-/// implemented this rule", "re2c over-reports" and "re2c names a different
-/// code for the same fault", which no reader could tell apart from the entry.
-///
-/// Deliberately payload-free: this value is written by hand into
-/// [`super::baseline::KNOWN_DIVERGENCES`], so it has to stay short enough to
-/// type. The codes
-/// themselves go in the printed detail line, where a reader wants them and no
-/// maintainer has to keep them current.
-///
-/// Rendered through the derived `Debug`, which for a fieldless enum already
-/// emits the variant's own identifier. A hand-written `Display` did the same
-/// job by listing all five names again, which is a second place to make a typo
-/// and produce a baseline line that does not compile when pasted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) enum Divergence {
-    /// re2c reported nothing where tree-sitter reported something.
-    Re2cSilent,
-    /// tree-sitter reported nothing where re2c reported something.
-    TreeSitterSilent,
-    /// re2c reported a strict subset: tree-sitter caught more.
-    Re2cIncomplete,
-    /// re2c reported everything tree-sitter did, and more besides.
-    Re2cExtra,
-    /// Each backend reported something the other did not.
-    Conflicting,
+/// Derived from immutable observations, with no baseline exemption route.
+pub(super) enum Detection<'report> {
+    /// Tree-sitter emitted no error; the implication has no antecedent.
+    NotRequired,
+    /// Both emitted an error, regardless of code or recovery stage.
+    Reported,
+    /// Tree-sitter's error has no error-severity counterpart in re2c.
+    Missing(ErrorFinding<'report>),
+    /// Tool failure is broken measurement, never successful rejection proof.
+    ToolFailure {
+        backend: Backend,
+        finding: &'report ParseError,
+    },
 }
 
-/// One spec case, run through both backends.
-///
-/// Four recorded facts and no stored verdict: everything the report says about
-/// a case is a method over these fields.
+/// One source example, measured through both native backends.
 pub(super) struct CaseReport {
     pub(super) label: SpecLabel,
-    pub(super) expected: Expected,
-    pub(super) tree_sitter: Reported,
-    pub(super) re2c: Reported,
+    pub(super) tree_sitter: BackendReport,
+    pub(super) re2c: BackendReport,
 }
 
 impl CaseReport {
-    pub(super) fn tree_sitter_conformance(&self) -> Conformance {
-        Conformance::of(&self.expected, &self.tree_sitter)
-    }
-
-    pub(super) fn re2c_conformance(&self) -> Conformance {
-        Conformance::of(&self.expected, &self.re2c)
-    }
-
-    /// The question this crate exists to answer, and the one the old audit
-    /// never asked: did the two backends produce the SAME diagnostics?
-    ///
-    /// The both-spoke arm reads the two set differences rather than an equality
-    /// test, so the four ways they can relate fall out as an exhaustive match
-    /// and the identical case needs no separate pre-check.
-    pub(super) fn divergence(&self) -> Option<Divergence> {
-        match (&self.tree_sitter, &self.re2c) {
-            (Reported::Silent, Reported::Silent) => None,
-            (Reported::Spoke(_), Reported::Silent) => Some(Divergence::Re2cSilent),
-            (Reported::Silent, Reported::Spoke(_)) => Some(Divergence::TreeSitterSilent),
-            (Reported::Spoke(tree_sitter), Reported::Spoke(re2c)) => {
-                let only_tree_sitter = tree_sitter.as_set().difference(re2c.as_set()).next();
-                let only_re2c = re2c.as_set().difference(tree_sitter.as_set()).next();
-                match (only_tree_sitter, only_re2c) {
-                    (None, None) => None,
-                    (Some(_), None) => Some(Divergence::Re2cIncomplete),
-                    (None, Some(_)) => Some(Divergence::Re2cExtra),
-                    (Some(_), Some(_)) => Some(Divergence::Conflicting),
-                }
+    pub(super) fn detection(&self) -> Detection<'_> {
+        for (backend, report) in [
+            (Backend::TreeSitter, &self.tree_sitter),
+            (Backend::Re2c, &self.re2c),
+        ] {
+            if let Some(finding) = report.internal_failure() {
+                return Detection::ToolFailure { backend, finding };
             }
+        }
+        match (self.tree_sitter.first_error(), self.re2c.first_error()) {
+            (None, None | Some(_)) => Detection::NotRequired,
+            (Some(_), Some(_)) => Detection::Reported,
+            (Some(finding), None) => Detection::Missing(finding),
         }
     }
 
-    /// The operator-facing detail line for a diverging case.
     pub(super) fn detail(&self) -> String {
         format!(
-            "tree-sitter [{}] vs re2c [{}]; spec expects [{}]",
-            self.tree_sitter, self.re2c, self.expected,
+            "{}: tree-sitter {}; re2c {}",
+            self.label, self.tree_sitter, self.re2c
         )
     }
 }
 
-/// A case that DOES diverge, and the shape of its divergence.
-///
-/// # Every way to obtain one
-///
-/// [`DivergingCase::of`] is the only constructor, and it can only succeed by
-/// asking the report itself, so the shape cannot disagree with the case it
-/// describes and no downstream code has to re-handle the `None` that would mean
-/// "this agreeing case is in the divergence list".
-///
-/// It borrows the report rather than copying a rendered detail line beside the
-/// shape, which is what the first draft did: two representations of one fact,
-/// the second able to go stale the moment anything about the case changed.
-pub(super) struct DivergingCase<'a> {
-    pub(super) report: &'a CaseReport,
-    pub(super) shape: Divergence,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use talkbank_model::{ErrorSink, Span};
 
-impl<'a> DivergingCase<'a> {
-    pub(super) fn of(report: &'a CaseReport) -> Option<Self> {
-        Some(Self {
-            shape: report.divergence()?,
-            report,
-        })
+    fn findings(code: ErrorCode, severity: Severity) -> ErrorCollector {
+        let sink = ErrorCollector::new();
+        sink.report(ParseError::at_span(
+            code,
+            severity,
+            Span::DUMMY,
+            "instrument policy control",
+        ));
+        sink
+    }
+
+    fn observed(parse: ErrorCollector, validation: ErrorCollector) -> BackendReport {
+        BackendReport::new(
+            ParsingFindings::from_sink(parse),
+            ValidationFindings::from_sink(validation),
+        )
+    }
+
+    fn case(tree_sitter: BackendReport, re2c: BackendReport) -> CaseReport {
+        CaseReport {
+            label: SpecLabel::new("instrument", ExampleOrdinal::from_zero_based(0)),
+            tree_sitter,
+            re2c,
+        }
+    }
+
+    fn canonical_error() -> BackendReport {
+        observed(
+            findings(ErrorCode::UnparsableContent, Severity::Error),
+            ErrorCollector::new(),
+        )
+    }
+
+    /// Survives: asymmetric policy, not diagnostic identity or implementation.
+    #[test]
+    fn different_error_codes_and_stages_satisfy_detection() {
+        let report = case(
+            canonical_error(),
+            observed(
+                ErrorCollector::new(),
+                findings(ErrorCode::UnparsableUtterance, Severity::Error),
+            ),
+        );
+        assert!(matches!(report.detection(), Detection::Reported));
+        assert_ne!(report.tree_sitter.codes(), report.re2c.codes());
+    }
+
+    /// Survives: planted silence and warning-only output must both fail.
+    #[test]
+    fn silence_and_warning_only_output_cannot_satisfy_an_error() {
+        for sink in [
+            ErrorCollector::new(),
+            findings(ErrorCode::UnparsableContent, Severity::Warning),
+            findings(
+                ErrorCode::MediaFilenameNonCanonicalUnicode,
+                Severity::Warning,
+            ),
+        ] {
+            let report = case(canonical_error(), observed(sink, ErrorCollector::new()));
+            let Detection::Missing(finding) = report.detection() else {
+                panic!("{}", report.detail());
+            };
+            assert_eq!(finding.diagnostic().code, ErrorCode::UnparsableContent);
+        }
+    }
+
+    /// Survives: warnings and reverse-direction errors create no obligation.
+    #[test]
+    fn no_tree_sitter_error_has_no_one_way_obligation() {
+        for sink in [
+            ErrorCollector::new(),
+            findings(
+                ErrorCode::MediaFilenameNonCanonicalUnicode,
+                Severity::Warning,
+            ),
+        ] {
+            let report = case(observed(sink, ErrorCollector::new()), canonical_error());
+            assert!(matches!(report.detection(), Detection::NotRequired));
+        }
+    }
+
+    /// Survives: internal failure is not detection of an input error.
+    #[test]
+    fn internal_failure_refuses_measurement_in_either_backend() {
+        let failed = || {
+            observed(
+                findings(ErrorCode::InternalError, Severity::Error),
+                ErrorCollector::new(),
+            )
+        };
+        for report in [
+            case(failed(), canonical_error()),
+            case(canonical_error(), failed()),
+        ] {
+            assert!(matches!(report.detection(), Detection::ToolFailure { .. }));
+        }
     }
 }

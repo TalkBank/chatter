@@ -13,6 +13,9 @@ use talkbank_parser_tests::test_error::strict_parse;
 #[path = "word_spelling_corpus.rs"]
 mod word_spelling_contracts;
 
+#[path = "word_combination_batch_corpus.rs"]
+mod word_combination_batch_contracts;
+
 #[path = "json_sink_corpus.rs"]
 mod json_sink_contracts;
 
@@ -27,6 +30,126 @@ mod bullet_body_contracts;
 
 #[path = "event_display_corpus.rs"]
 mod event_display_contracts;
+
+/// Ordered positions are grammatical choices, not permission to lose payloads
+/// or move their scope. The reference fixture also supplies real overlap and
+/// retrace context so syntax acceptance is not substituted for validity.
+#[test]
+fn authored_annotation_positions_preserve_scope_payload_order_and_wire() {
+    use talkbank_model::model::{ChatFile, ContentStructure, Descend};
+    use talkbank_model::{ErrorCollector, SemanticEq};
+
+    let source = std::fs::read_to_string(
+        workspace_root().join("corpus/reference/annotation/ordered-positions.cha"),
+    )
+    .expect("authored reference fixture");
+    let parser = TreeSitterParser::new().expect("parser");
+    let file = strict_parse(parser.parse_chat_file(&source)).expect("clean reference syntax");
+    // Scope spelling and semantic annotation spelling are separate expectations.
+    // A retrace owns the marker but keeps preceding annotations on its payload.
+    let cases: &[(&str, &[&str], Option<&str>)] = &[
+        (
+            "bird [=? lark] [% guess]",
+            &["[=? lark]", "[% guess]"],
+            None,
+        ),
+        (
+            "<casa azul> [% color] [@s:spa]",
+            &["[% color]", "[@s:spa]"],
+            None,
+        ),
+        ("<casa verde> [% color] [@s]", &["[% color]", "[@s]"], None),
+        ("noise [% aside] [e]", &["[% aside]", "[e]"], None),
+        (
+            "xxx [% heard] [= blue bird]",
+            &["[% heard]", "[= blue bird]"],
+            None,
+        ),
+        ("yes [% reply] [>]", &["[% reply]", "[>]"], None),
+        ("no [<]", &["[<]"], None),
+        (
+            "there [= pointing] [% near window]",
+            &["[= pointing]", "[% near window]"],
+            None,
+        ),
+        ("old [% retry] [///]", &["[% retry]"], Some("[///]")),
+        ("start [% retry] [/-]", &["[% retry]"], Some("[/-]")),
+        ("mine [% reply] [!!]", &["[% reply]", "[!!]"], None),
+        ("ready [% reply] [!]", &["[% reply]", "[!]"], None),
+        ("maybe [% guess] [?]", &["[% guess]", "[?]"], None),
+    ];
+    let utterances: Vec<_> = file.utterances().collect();
+    let source_tiers: Vec<_> = source
+        .lines()
+        .filter(|line| line.starts_with('*'))
+        .collect();
+    assert_eq!(
+        utterances.len(),
+        cases.len(),
+        "every authored case is checked"
+    );
+    assert_eq!(source_tiers.len(), cases.len());
+    for ((utterance, &(scope_text, annotations, marker)), source_tier) in
+        utterances.iter().zip(cases).zip(source_tiers)
+    {
+        assert_eq!(utterance.main.to_chat_string().trim_end(), source_tier);
+        let owner = utterance
+            .main
+            .content
+            .content
+            .first()
+            .expect("scope owner")
+            .structure();
+        let span = owner.span().expect("word, group or retrace source span");
+        assert_eq!(
+            source.get(span.start as usize..span.end as usize),
+            Some(scope_text),
+            "annotations stay in their producing scope"
+        );
+        let mut observed = Vec::new();
+        owner.walk(&mut |structure| {
+            observed.extend(
+                structure
+                    .scoped_annotations()
+                    .iter()
+                    .map(ToString::to_string),
+            );
+            Descend::Into
+        });
+        assert_eq!(observed, annotations, "{scope_text}");
+        match (owner, marker) {
+            (ContentStructure::Retrace(retrace), Some(spelling)) => {
+                let span = retrace.inner().marker_span.expect("native marker location");
+                assert_eq!(
+                    source.get(span.start as usize..span.end as usize),
+                    Some(spelling)
+                );
+            }
+            (ContentStructure::Retrace(_), None) | (_, Some(_)) => {
+                panic!("unexpected retrace ownership: {scope_text}");
+            }
+            (_, None) => {}
+        }
+    }
+    let wire = serde_json::to_string(&file).expect("all annotation payloads serialize");
+    let imported: ChatFile = serde_json::from_str(&wire).expect("wire admission");
+    assert!(
+        file.semantic_eq(&imported),
+        "wire retains payloads and order"
+    );
+    let reparsed = strict_parse(parser.parse_chat_file(&imported.to_chat_string()))
+        .expect("wire CHAT reparses cleanly");
+    assert!(
+        file.semantic_eq(&reparsed),
+        "CHAT roundtrip retains semantic scopes"
+    );
+    let diagnostics = ErrorCollector::new();
+    file.validate_into(
+        &diagnostics,
+        talkbank_model::model::TranscriptName::Anonymous,
+    )
+    .expect("authored controls have valid overlap, retrace and language context");
+}
 
 #[test]
 fn reference_group_construction_preserves_payload_spans_and_output() {

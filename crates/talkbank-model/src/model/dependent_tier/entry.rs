@@ -19,6 +19,35 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use talkbank_derive::{SemanticEq, SpanShift};
 
+/// A producer's exact body range, checked against its containing source tier.
+///
+/// This records source geometry, not syntax validity or the spelling of a
+/// subsequently modified model. A known empty body has a zero-width range.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, SpanShift)]
+pub struct DependentTierContentSpan(crate::Span);
+
+/// The supplied body range is not contained in the supplied tier range.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("dependent-tier content range must lie inside its source tier")]
+pub struct InvalidDependentTierContentSpan;
+
+impl DependentTierContentSpan {
+    /// Admit ranges selected by a parser from the same source tier.
+    ///
+    /// This checks containment and ordering; the producer owns the evidence
+    /// that the boundaries really are its separator and line ending.
+    pub fn try_new(
+        tier: crate::Span,
+        body: crate::Span,
+    ) -> Result<Self, InvalidDependentTierContentSpan> {
+        if tier.start <= body.start && body.start <= body.end && body.end <= tier.end {
+            Ok(Self(body))
+        } else {
+            Err(InvalidDependentTierContentSpan)
+        }
+    }
+}
+
 /// One dependent-tier source line: a [`DependentTier`] plus the separator
 /// between its `%label:` and its content.
 ///
@@ -41,6 +70,11 @@ pub struct DependentTierEntry {
     #[schemars(skip)]
     #[semantic_eq(skip)]
     pub separator: TierSeparator,
+    // No wire payload can manufacture parser-produced source geometry.
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[semantic_eq(skip)]
+    source_content: Option<DependentTierContentSpan>,
 }
 
 impl DependentTierEntry {
@@ -69,43 +103,20 @@ impl DependentTierEntry {
 
     /// The span of the tier's CONTENT: no `%label:`, no separator, no newline.
     ///
-    /// [`Self::span`] covers the whole line, so a consumer wanting the tier
-    /// text has been slicing that and then splitting on `:` to drop the prefix
-    /// (upstream request, rustling, 2026-07-31). That split is a small parser
-    /// in every consumer, and gets the trailing newline wrong besides.
-    ///
-    /// DERIVED, not recorded, and the distinction matters if this ever
-    /// disagrees with the source. The prefix is `%` + [`Self::kind`] + `:`,
-    /// whose lengths are known exactly; the separator is a single tab unless
-    /// the entry recorded illegal trailing whitespace, in which case that
-    /// span's end IS where the content begins; and a trailing newline is
-    /// dropped if present. The parser knows all of this precisely and could
-    /// record it instead, which would be the better shape; deriving it here
-    /// avoids adding a provenance field to every one of the twenty-odd tier
-    /// types for a papercut.
-    ///
-    /// Returns `None` when the tier carries no real span, which is every tier
-    /// from the re2c front end (it has no byte offsets at all) and any
-    /// synthesised tier.
+    /// Recorded by the owning parser, never inferred from the label, payload
+    /// or a presumed one-byte newline. It preserves continuation and trailing
+    /// body whitespace while excluding the actual LF, CRLF or CR ending.
+    /// `Some` may describe an empty body and does not certify valid syntax.
+    /// Constructed and JSON-imported entries have unknown evidence (`None`),
+    /// even when their payload happens to carry a nonempty source span.
+    /// This locates the original source, not newly rendered model text.
     pub fn content_span(&self) -> Option<crate::Span> {
-        let whole = self.span();
-        if whole.start == whole.end {
-            return None;
-        }
-        // `%` + label + `:`
-        let after_label = whole.start + 1 + self.kind().len() as u32 + 1;
-        let start = match self.separator.trailing_space() {
-            Some(space) => space.end,
-            None => after_label + 1, // the tab
-        };
-        let mut end = whole.end;
-        if end > start {
-            end -= 1; // the newline the whole-line span includes
-        }
-        if start >= end {
-            return None;
-        }
-        Some(crate::Span::new(start, end))
+        self.source_content.map(|body| body.0)
+    }
+
+    /// Retain body geometry produced while lowering this original source tier.
+    pub fn record_content_span(&mut self, body: DependentTierContentSpan) {
+        self.source_content = Some(body);
     }
 
     /// Wraps `tier` with a clean separator (single tab, no trailing spaces).
@@ -113,12 +124,17 @@ impl DependentTierEntry {
         Self {
             tier,
             separator: TierSeparator::CLEAN,
+            source_content: None,
         }
     }
 
     /// Wraps `tier` with an explicit `separator` (parser provenance).
     pub fn with_separator(tier: DependentTier, separator: TierSeparator) -> Self {
-        Self { tier, separator }
+        Self {
+            tier,
+            separator,
+            source_content: None,
+        }
     }
 }
 

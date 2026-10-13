@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	Independently authored lexical controls for combinations of shortening with other word features.
+@Comment:	Constructs: repeated shortening, form_marker, language_marker, replacement, lengthening, multibyte word text.
+@Comment:	Suffixes and replacement annotations do not replace the spoken segments of a shortened word.
+*CHI:	ca(f)é(s) (a)mi(go) (a)mi(g)o ca(f)é(s)ito .
+*CHI:	chir(p)@o (bu)ba@b ca(f)é@c pla(n)@s (a)migo@s ami(g)o@s .
+*CHI:	chir(p)@o [: chirp] ca(f)é [: café] (a)migo [: amigo] .
+*CHI:	ca:(fé) (a)ga:in ca(f)é: .
+@End

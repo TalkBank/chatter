@@ -21,10 +21,15 @@ The colon is part of the event segment text, not a structural delimiter.
     (contents
       (content_item
         (base_content_item
-          (event
-            (event_marker)
-            (event_segment)))))
-  (utterance_end ...)))
+          (nonword_with_optional_annotations
+            (nonword
+              (event
+                (event_marker)
+                (event_segment))))))
+      (whitespaces))
+    (utterance_end
+      (period)
+      (newline))))
 ```
 
 ## Metadata

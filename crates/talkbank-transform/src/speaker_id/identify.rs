@@ -434,11 +434,10 @@ fn jaccard(a: &HashMap<String, u32>, b: &HashMap<String, u32>) -> LexicalMatchEv
 
 /// Build the content-token bag for `speaker` across `chat`. Uses
 /// `walk_words` to traverse each utterance's AST and collect Word
-/// leaves' cleaned text. Separators and replaced-word annotations are
-/// skipped (they carry no lexical content). Tokens are lowercased and
-/// filtered to alphabetic-only forms of length ≥ 2, matching the
-/// validated Python prototype's cleaner so the algorithm carries over
-/// the same empirical recall guarantee.
+/// leaves' cleaned text. A replaced word contributes its spoken original,
+/// never the annotation's replacement targets. Separators carry no lexical
+/// content. Tokens are lowercased and filtered to alphabetic-only forms of
+/// length ≥ 2. This lexical policy is not an empirical identity guarantee.
 ///
 /// A speaker with no utterances, or whose utterances contain no
 /// qualifying tokens after filtering, yields an empty bag, that
@@ -451,9 +450,12 @@ fn speaker_bag(chat: &ChatFile, speaker: &SpeakerCode) -> HashMap<String, u32> {
             && &u.main.speaker == speaker
         {
             walk_words(&u.main.content.content, None, &mut |item| {
-                if let WordItem::Word(w) = item
-                    && let Some(token) = clean_token(w.cleaned_text())
-                {
+                let word = match item {
+                    WordItem::Word(word) => word,
+                    WordItem::ReplacedWord(replaced) => &replaced.word,
+                    WordItem::Separator(_) => return,
+                };
+                if let Some(token) = clean_token(word.cleaned_text()) {
                     *bag.entry(token).or_insert(0) += 1;
                 }
             });

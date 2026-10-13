@@ -9,7 +9,7 @@
 //! )
 //!
 //! id_contents: $ => seq(
-//!     $.id_languages,        // Position 0
+//!     optional($.id_languages), // Position 0; model validation requires nonempty
 //!     '|',                   // Position 1
 //!     optional($.id_corpus), // Position 2
 //!     '|',                   // Position 3

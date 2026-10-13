@@ -18,7 +18,7 @@
 //!
 //! The `full_document` production is
 //! `seq(optional(utf8_header), repeat(pre_begin_header), begin_header, repeat(line),
-//! end_header)`. A stray top-level `@Date:` that tree-sitter cannot parse as a
+//! end_header)`. A stray top-level `@Date!` that tree-sitter cannot parse as a
 //! date header is recovered as an `ERROR` node sitting INSIDE the `repeat(line)`
 //! run, BEFORE the real `@End`:
 //!
@@ -26,13 +26,13 @@
 //! full_document children (flat):
 //!   utf8_header, begin_header,
 //!   line(languages), line(participants), line(id),
-//!   ERROR(@Date:), line(blank_line), end_header(@End)
+//!   ERROR(@Date!), line(blank_line), end_header(@End)
 //! ```
 //!
 //! An EARLIER NEW-backend build (generator 98e5f53) sized the `repeat(line)` run
 //! purely by the element kind, so the count STOPPED at the `ERROR` (3 line
 //! elements), the following required `end_header` slot then eagerly ate the
-//! `@Date:` ERROR via its `is_error()`-first classification, and the trailing
+//! `@Date!` ERROR via its `is_error()`-first classification, and the trailing
 //! valid `line(blank_line)` PLUS the real `end_header` were stranded in the
 //! carrier's `unexpected` sink. A faithful consumer would have DROPPED the `@End`
 //! line from the model and lost the E747 blank-line diagnostic: a catastrophic
@@ -45,7 +45,7 @@
 //! regression can never silently return:
 //!
 //! - `child_3` (the `repeat(line)`) holds FIVE elements: three `Present(line)`,
-//!   then the `@Date:` as `NodeSlot::Error` (absorbed, NOT stranded), then the
+//!   then the `@Date!` as `NodeSlot::Error` (absorbed, NOT stranded), then the
 //!   trailing `Present(line)` blank line.
 //! - `child_4` (the `end_header` slot) is `NodeSlot::Present(end_header)` at the
 //!   real `@End`, NOT `Error`.
@@ -60,9 +60,9 @@ use talkbank_parser::generated_traversal::{
 };
 use talkbank_parser_tests::classify;
 
-/// The stray-top-level-`@Date:` fixture, byte-identical to the
+/// The stray-top-level-`@Date!` fixture, byte-identical to the
 /// `STRAY_TOP_LEVEL_DATE` characterization fixture in
-/// `visitor_entrypoint_migration.rs`. The `@Date:` (empty value) drives
+/// `document_entrypoint_characterization.rs`. The invalid separator in `@Date!` drives
 /// tree-sitter into a document-level `ERROR` recovery node mid-`repeat(line)`.
 const STRAY_TOP_LEVEL_DATE: &str = "\
 @UTF8
@@ -70,7 +70,7 @@ const STRAY_TOP_LEVEL_DATE: &str = "\
 @Languages:\teng
 @Participants:\tCHI Child
 @ID:\teng|corpus|CHI|||||Child|||
-@Date:
+@Date!
 @End
 ";
 
@@ -104,8 +104,7 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
         "the fixture must navigate to a full_document node"
     );
 
-    let children = extract_full_document(classify::<FullDocumentNode>(full_doc))
-        .expect("producer reconstruction");
+    let children = extract_full_document(classify::<FullDocumentNode>(full_doc));
 
     // child_3: repeat(line). The recovery-aware engine absorbs the mid-repeat
     // ERROR as an element and keeps consuming the trailing valid line, so the
@@ -114,7 +113,7 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
     assert_eq!(
         line_elements.len(),
         5,
-        "repeat(line) must hold 5 elements (3 lines, the @Date: ERROR, the blank line), \
+        "repeat(line) must hold 5 elements (3 lines, the @Date! ERROR, the blank line), \
          got {}: the engine stopped early and stranded the tail",
         line_elements.len()
     );
@@ -128,19 +127,19 @@ fn stray_top_level_error_is_absorbed_as_a_repeat_element_not_stranded() {
         );
     }
 
-    // Element 3 is the @Date: ERROR, ABSORBED as a repeat element (NodeSlot::Error),
-    // at the exact @Date: span (87..93). Before the fix this ERROR was stranded
+    // Element 3 is the @Date! ERROR, ABSORBED as a repeat element (NodeSlot::Error),
+    // at the exact @Date! span (87..93). Before the fix this ERROR was stranded
     // into the following required slot / the unexpected sink.
     match &line_elements[3].slot() {
         NodeSlot::Error(node) => {
             assert_eq!(
                 (node.start_byte() as u32, node.end_byte() as u32),
                 (87, 93),
-                "the absorbed ERROR must be the @Date: node at span 87..93"
+                "the absorbed ERROR must be the @Date! node at span 87..93"
             );
         }
         other => {
-            panic!("line element 3 must be NodeSlot::Error (the absorbed @Date:), got {other:?}")
+            panic!("line element 3 must be NodeSlot::Error (the absorbed @Date!), got {other:?}")
         }
     }
 

@@ -8,15 +8,16 @@
 use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
-use crate::generated_traversal::{AsRawNode, CaDelimiterNode, CaElementNode};
+use crate::generated_traversal::{
+    AsRawNode, CaDelimiterNode, CaElementNode, SourceBound, SourceBoundKind,
+};
 use crate::model::{CADelimiter, CADelimiterType, CAElement, CAElementType};
-use crate::parser::typed_cst::decode_present_child;
 use talkbank_model::ParseOutcome;
 
 /// Closed within this module: a generated CA kind determines both the symbol
 /// registry and the output model. A caller cannot mix element and delimiter
 /// labels, decoders or model constructors.
-trait CaToken<'tree>: AsRawNode<'tree> {
+trait CaToken<'tree>: SourceBoundKind<'tree> {
     type Output;
     const LABEL: &'static str;
     fn from_char(ch: char, span: Span) -> Option<Self::Output>;
@@ -41,26 +42,23 @@ impl<'tree> CaToken<'tree> for CaDelimiterNode<'tree> {
 }
 
 /// Converts a generated CA element through checked source admission.
-pub(crate) fn parse_ca_element_node(
-    node: CaElementNode<'_>,
-    source: &str,
+pub(crate) fn parse_ca_element_node<'tree>(
+    node: SourceBound<'tree, '_, CaElementNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<CAElement> {
-    parse_ca_token(node, source, errors)
+    parse_ca_token(node, errors)
 }
 
 /// Converts a generated CA delimiter through checked source admission.
-pub(crate) fn parse_ca_delimiter_node(
-    node: CaDelimiterNode<'_>,
-    source: &str,
+pub(crate) fn parse_ca_delimiter_node<'tree>(
+    node: SourceBound<'tree, '_, CaDelimiterNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<CADelimiter> {
-    parse_ca_token(node, source, errors)
+    parse_ca_token(node, errors)
 }
 
 fn parse_ca_token<'tree, T: CaToken<'tree>>(
-    typed: T,
-    source: &str,
+    typed: SourceBound<'tree, '_, T>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<T::Output> {
     let node = typed.raw_node();
@@ -68,12 +66,9 @@ fn parse_ca_token<'tree, T: CaToken<'tree>>(
     if node.is_missing() {
         return ParseOutcome::rejected();
     }
-    let ParseOutcome::Parsed(text) = decode_present_child(&typed, source, errors, "", |err| {
-        format!("Failed to extract CA {} text: {err}", T::LABEL)
-    }) else {
-        return ParseOutcome::rejected();
-    };
-    let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
+    let text = typed.text();
+    let source = typed.source();
+    let span = Span::from_usize(node.start_byte(), node.end_byte());
     // Present CA tokens are single symbols from the shared generated registry.
     // Empty or unknown text means a producer or source-association fault;
     // actual MISSING recovery was handled above.
@@ -107,10 +102,10 @@ mod tests {
     use super::*;
     use crate::TreeSitterParser;
     use crate::error::ErrorCollector;
-    use crate::generated_traversal::FromNodeKind;
+    use crate::generated_traversal::{FromNodeKind, ParsedSource, SourceBindingError};
 
-    /// Real typed tokens retain their registry and reject incompatible sources
-    /// at the boundary, rather than indexing past them or inventing symbols.
+    /// Real tokens retain their registries and canonical tree identity.
+    /// A foreign parse with identical bytes is not the producing owner.
     #[test]
     fn reference_ca_tokens_keep_typed_registries_and_checked_source_reads() {
         let parser = TreeSitterParser::new().expect("grammar");
@@ -124,17 +119,19 @@ mod tests {
             let parsed = parser
                 .parse_source_incremental(source, None)
                 .expect("parse");
-            let wrong_symbols = "x".repeat(source.len());
+            let foreign = parser
+                .parse_source_incremental(source, None)
+                .expect("foreign parse");
             let mut pending = vec![parsed.root_node()];
             while let Some(node) = pending.pop() {
                 let mut cursor = node.walk();
                 pending.extend(node.children(&mut cursor));
                 if let Some(typed) = CaElementNode::from_node(node) {
-                    check_sources(typed, source, &wrong_symbols);
+                    check_sources(typed, &parsed, &foreign);
                     elements += 1;
                 }
                 if let Some(typed) = CaDelimiterNode::from_node(node) {
-                    check_sources(typed, source, &wrong_symbols);
+                    check_sources(typed, &parsed, &foreign);
                     delimiters += 1;
                 }
             }
@@ -143,24 +140,18 @@ mod tests {
         assert!(delimiters > 0);
     }
 
-    fn check_sources<'tree, T: CaToken<'tree> + Copy>(typed: T, source: &str, wrong: &str) {
+    fn check_sources<'tree, T: CaToken<'tree>>(
+        typed: T,
+        parsed: &'tree ParsedSource<'_>,
+        foreign: &'tree ParsedSource<'_>,
+    ) {
+        assert!(matches!(
+            foreign.bind_typed(typed),
+            Err(SourceBindingError::ForeignTree)
+        ));
+        let bound = parsed.bind_typed(typed).expect("canonical CA token");
         let errors = ErrorCollector::new();
-        assert!(
-            parse_ca_token(typed, source, &errors)
-                .into_option()
-                .is_some()
-        );
+        assert!(parse_ca_token(bound, &errors).into_option().is_some());
         assert!(errors.into_vec().is_empty());
-        for incompatible in ["", wrong] {
-            let errors = ErrorCollector::new();
-            assert!(
-                parse_ca_token(typed, incompatible, &errors)
-                    .into_option()
-                    .is_none()
-            );
-            let diagnostics = errors.into_vec();
-            assert_eq!(diagnostics.len(), 1);
-            assert_eq!(diagnostics[0].code, ErrorCode::InternalError);
-        }
     }
 }

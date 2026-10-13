@@ -23,45 +23,20 @@ Utterance with a word containing overlap markers
           (word_with_optional_annotations
             (standalone_word
               (word_body
-                (initial_word_segment)
-              )
-            )
-          )
-        )
-      )
-      (whitespaces
-        (whitespace
-          (space)
-        )
-      )
+                (word_segment))))))
+      (whitespaces)
       (content_item
         (base_content_item
           (word_with_optional_annotations
             (standalone_word
               (word_body
-                (word_content_nontext
-                  (overlap_point))
-                (word_content
-                  (word_segment))
-                (word_content
-                  (overlap_point))
-              )
-            )
-          )
-        )
-      )
-    )
+                (overlap_point)
+                (word_segment)
+                (overlap_point))))))
+      (whitespaces))
     (utterance_end
-      (whitespaces
-        (whitespace
-          (space)
-        )
-      )
       (question)
-      (newline)
-    )
-  )
-)
+      (newline))))
 ```
 
 ## Metadata

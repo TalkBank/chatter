@@ -38,8 +38,8 @@ pub struct WordWithAnnotations<'a> {
     pub category: Option<WordCategory>,
     /// Word body content, mirrors model WordContent.
     pub body: Vec<WordBodyItem<'a>>,
-    /// Form marker suffix: tag-extracted content (e.g., "f", "z:grm"). None if absent.
-    pub form_marker: Option<&'a str>,
+    /// Declared form marker, admitted by the shared registry before lowering.
+    pub form_marker: Option<talkbank_model::model::FormType>,
     /// Language suffix. None if absent.
     pub lang: Option<ParsedLangSuffix<'a>>,
     /// POS tag: tag-extracted content (e.g., "n", "adj"). None if absent.

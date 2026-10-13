@@ -15,6 +15,9 @@ mod adjudication_contracts;
 #[path = "speaker_identification_corpus.rs"]
 mod speaker_identification_contracts;
 
+#[path = "speaker_replacement_corpus.rs"]
+mod speaker_replacement_contracts;
+
 #[path = "alignment_diagnostic_corpus.rs"]
 mod alignment_diagnostic_contracts;
 #[path = "build_chat_corpus.rs"]
@@ -25,10 +28,14 @@ mod cache_contracts;
 mod catalog_contracts;
 #[path = "channel_corpus.rs"]
 mod channel_contracts;
+#[path = "comment_media_corpus.rs"]
+mod comment_media_contracts;
 #[path = "coordinated_corpus.rs"]
 mod coordinated_contracts;
 #[path = "diagnostic_corpus.rs"]
 mod diagnostic_contracts;
+#[path = "discovery_corpus.rs"]
+mod discovery_contracts;
 #[path = "transform_file_corpus.rs"]
 mod file_contracts;
 #[path = "gem_merge_corpus.rs"]
@@ -43,10 +50,14 @@ mod language_contracts;
 mod legacy_validation_contracts;
 #[path = "merge_corpus.rs"]
 mod merge_contracts;
+#[path = "overlap_sibling_corpus.rs"]
+mod overlap_sibling_contracts;
 #[path = "pseudonymizer_corpus.rs"]
 mod pseudonymizer_contracts;
 #[path = "rediarize_corpus.rs"]
 mod rediarize_contracts;
+#[path = "replacement_admission_corpus.rs"]
+mod replacement_admission_contracts;
 #[path = "retrace_join_corpus.rs"]
 mod retrace_join_contracts;
 #[path = "runner_corpus.rs"]
@@ -57,10 +68,16 @@ mod sanitize_contracts;
 mod semantic_diff_contracts;
 #[path = "serialization_sink_corpus.rs"]
 mod serialization_sink_contracts;
+#[path = "source_admission_corpus.rs"]
+mod source_admission_contracts;
 #[path = "splice_corpus.rs"]
 mod splice_contracts;
+#[path = "split_metadata_corpus.rs"]
+mod split_metadata_contracts;
 #[path = "transform_tier_corpus.rs"]
 mod tier_contracts;
+#[path = "utterance_split_corpus.rs"]
+mod utterance_split_contracts;
 #[path = "validation_corpus.rs"]
 mod validation_contracts;
 #[path = "wor_timing_corpus.rs"]

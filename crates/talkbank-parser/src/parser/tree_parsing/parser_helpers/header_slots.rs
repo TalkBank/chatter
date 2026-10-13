@@ -9,8 +9,8 @@ use crate::generated_traversal::{
     SourceBoundKind, SourceField, SourceRecovery, SourceSlotView,
 };
 use crate::model::{Header, WarningText};
-use crate::parser::typed_cst::AnyKindSlot;
 use crate::parser::typed_cst::CstFailure;
+use crate::parser::typed_cst::{AnyKindSlot, AnySelectedKindSlot};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -247,6 +247,33 @@ where
                 errors,
             )))
         }
+    }
+}
+
+/// Read a grammar-optional payload. Only the outer `None` means omission;
+/// ERROR/MISSING slots refuse, and source-binding faults remain producer failures.
+pub(crate) fn read_optional_source_content<'value, 'tree: 'value, 'source, 'w, T, M>(
+    site: &HeaderSite<'tree, '_>,
+    content_slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<'tree, T, M>>>,
+    words: &'w ContentSlot<'w>,
+    errors: &impl ErrorSink,
+) -> Result<Option<&'source str>, ContentReadError<'w>>
+where
+    T: SourceBoundKind<'tree> + NamedKind,
+    M: SourceRecovery<'value, 'tree, 'source>,
+{
+    let Some(slot) = content_slot.optional() else {
+        return Ok(None);
+    };
+    match slot.view() {
+        SourceSlotView::Present(content) => content
+            .read()
+            .map(|bound| Some(bound.text()))
+            .map_err(|error| ContentReadError::Producer(error.into())),
+        SourceSlotView::Missing(_) | SourceSlotView::Error(_) => Err(ContentReadError::Recovery(
+            words.refuse(site, T::KIND, errors),
+        )),
+        SourceSlotView::Absent(never) | SourceSlotView::Unexpected(never) => match never {},
     }
 }
 

@@ -13,8 +13,8 @@ Discovered by re2c parser parity testing (2026-03-30).
 ## Input
 
 ```main_tier
-*PAT:	I think you could use new clothes→ 0_2633
-	(1.0) 2633_4026
+*PAT:	I think you could use new clothes→ 0_2633
+	(1.0) 2633_4026
 ```
 
 ## Expected CST
@@ -27,18 +27,77 @@ Discovered by re2c parser parity testing (2026-03-30).
   (tab)
   (tier_body
     (contents
-      (content_item (base_content_item (word_with_optional_annotations ...)))
-      (content_item (base_content_item (word_with_optional_annotations ...)))
-      (content_item (base_content_item (word_with_optional_annotations ...)))
-      (content_item (base_content_item (word_with_optional_annotations ...)))
-      (content_item (base_content_item (word_with_optional_annotations ...)))
-      (content_item (base_content_item (word_with_optional_annotations ...)))
-      (content_item (base_content_item (word_with_optional_annotations ...)))
-      (separator ...)
-      (content_item (base_content_item (media_url ...)))
-      (content_item (base_content_item (pause_token ...)))
-      (content_item (base_content_item (media_url ...))))
-    (utterance_end ...)))
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (separator
+        (non_colon_separator
+          (level_pitch)))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (bullet
+            (bullet_start)
+            (bullet_timestamp)
+            (bullet_timestamp)
+            (bullet_end))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (pause_token))))
+    (utterance_end
+      (whitespaces)
+      (bullet
+        (bullet_start)
+        (bullet_timestamp)
+        (bullet_timestamp)
+        (bullet_end))
+      (newline))))
 ```
 
 ## Metadata

@@ -1,19 +1,11 @@
-//! `ValidationTagged` derive expansion logic for enums.
-//!
-//! This derive turns enum variants into severity tags used by validation
-//! pipelines (`Clean`, `Warning`, `Error`).
-//!
-//! # Related CHAT Manual Sections
-//!
-//! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
-//! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
+//! Validation tag syntax is admitted before any implementation is emitted.
 
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Variant};
 
-/// Internal severity tags used while generating `ValidationTagged` impls.
+use crate::metadata;
+
 #[derive(Clone, Copy)]
 enum DerivedTag {
     Clean,
@@ -22,7 +14,6 @@ enum DerivedTag {
 }
 
 impl DerivedTag {
-    /// Convert a resolved tag to generated `ValidationTag` code.
     fn to_tokens(self) -> TokenStream {
         match self {
             Self::Clean => quote! { crate::model::ValidationTag::Clean },
@@ -32,94 +23,139 @@ impl DerivedTag {
     }
 }
 
-/// Expand `ValidationTagged` for one enum input.
-pub fn impl_validation_tagged(input: &DeriveInput) -> TokenStream {
-    let name = &input.ident;
-    let generics = &input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+enum VariantShape {
+    Unit,
+    Tuple,
+    Named,
+}
 
-    let data_enum = match &input.data {
-        Data::Enum(data_enum) => data_enum,
-        Data::Struct(_) | Data::Union(_) => {
-            return syn::Error::new_spanned(
-                input,
+struct TaggedVariant {
+    name: syn::Ident,
+    shape: VariantShape,
+    tag: DerivedTag,
+}
+
+/// A complete tagging enum owns the actual generics and admitted variant policy.
+pub(crate) struct TaggedEnum {
+    name: syn::Ident,
+    generics: syn::Generics,
+    variants: Vec<TaggedVariant>,
+}
+
+impl TaggedEnum {
+    pub(crate) fn admit(input: DeriveInput) -> syn::Result<Self> {
+        let Data::Enum(data) = &input.data else {
+            return Err(syn::Error::new_spanned(
+                &input,
                 "ValidationTagged can only be derived for enums",
-            )
-            .to_compile_error();
-        }
-    };
-
-    let mut arms = Vec::new();
-    for variant in &data_enum.variants {
-        let tag = match resolve_variant_tag(variant) {
-            Ok(tag) => tag,
-            Err(err) => return err.to_compile_error(),
+            ));
         };
-        let variant_name = &variant.ident;
-        let tag_tokens = tag.to_tokens();
-        let arm = match &variant.fields {
-            Fields::Unit => quote! { Self::#variant_name => #tag_tokens },
-            Fields::Unnamed(_) => quote! { Self::#variant_name(..) => #tag_tokens },
-            Fields::Named(_) => quote! { Self::#variant_name { .. } => #tag_tokens },
-        };
-        arms.push(arm);
+        metadata::require_variant_location(&input.attrs, "validation_tag")?;
+        let variants = data
+            .variants
+            .iter()
+            .map(|variant| {
+                for field in &variant.fields {
+                    metadata::require_variant_location(&field.attrs, "validation_tag")?;
+                }
+                let tag = resolve_variant_tag(variant)?;
+                let shape = match variant.fields {
+                    Fields::Unit => VariantShape::Unit,
+                    Fields::Unnamed(_) => VariantShape::Tuple,
+                    Fields::Named(_) => VariantShape::Named,
+                };
+                Ok(TaggedVariant {
+                    name: variant.ident.clone(),
+                    shape,
+                    tag,
+                })
+            })
+            .collect::<syn::Result<Vec<_>>>()?;
+        Ok(Self {
+            name: input.ident,
+            generics: input.generics,
+            variants,
+        })
     }
+}
 
+/// Emission cannot accept raw syntax or resolve an annotation a second time.
+pub(crate) fn emit_tagged_enum(input: &TaggedEnum) -> TokenStream {
+    let name = &input.name;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let arms = input.variants.iter().map(|variant| {
+        let name = &variant.name;
+        let tag = variant.tag.to_tokens();
+        match variant.shape {
+            VariantShape::Unit => quote! { Self::#name => #tag },
+            VariantShape::Tuple => quote! { Self::#name(..) => #tag },
+            VariantShape::Named => quote! { Self::#name { .. } => #tag },
+        }
+    });
     quote! {
         impl #impl_generics crate::model::ValidationTagged for #name #ty_generics #where_clause {
-            /// Return the validation severity tag for this enum variant.
             fn validation_tag(&self) -> crate::model::ValidationTag {
-                match self {
-                    #(#arms),*
-                }
+                match self { #(#arms,)* }
             }
         }
     }
 }
 
-/// Resolve the tag for one enum variant from attributes or naming rules.
 fn resolve_variant_tag(variant: &Variant) -> syn::Result<DerivedTag> {
-    let mut explicit: Option<DerivedTag> = None;
-
-    for attr in &variant.attrs {
-        if !attr.path().is_ident("validation_tag") {
-            continue;
-        }
-
-        if explicit.is_some() {
-            return Err(syn::Error::new_spanned(
-                attr,
-                "duplicate #[validation_tag(...)] attribute",
-            ));
-        }
-
+    if let Some(attr) = metadata::unique(&variant.attrs, "validation_tag")? {
         let ident = attr.parse_args::<syn::Ident>()?;
-        explicit = Some(match ident.to_string().as_str() {
-            "clean" => DerivedTag::Clean,
-            "warning" => DerivedTag::Warning,
-            "error" => DerivedTag::Error,
-            _ => {
-                return Err(syn::Error::new_spanned(
-                    ident,
-                    "expected one of: clean, warning, error",
-                ));
-            }
-        });
+        return match ident.to_string().as_str() {
+            "clean" => Ok(DerivedTag::Clean),
+            "warning" => Ok(DerivedTag::Warning),
+            "error" => Ok(DerivedTag::Error),
+            _ => Err(syn::Error::new_spanned(
+                ident,
+                "expected one of: clean, warning, error",
+            )),
+        };
     }
-
-    if let Some(tag) = explicit {
-        return Ok(tag);
-    }
-
-    // Naming convention fallback:
-    // - *Error       => ValidationTag::Error
-    // - *Warning / *Unsupported / == "Unsupported" => ValidationTag::Warning
     let name = variant.ident.to_string();
+    // Absence selects the documented naming policy, not an error fallback.
     if name.ends_with("Error") {
         Ok(DerivedTag::Error)
-    } else if name.ends_with("Warning") || name.ends_with("Unsupported") || name == "Unsupported" {
+    } else if name.ends_with("Warning") || name.ends_with("Unsupported") {
         Ok(DerivedTag::Warning)
     } else {
         Ok(DerivedTag::Clean)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tags_reject_malformed_duplicate_and_misplaced_owned_attributes() {
+        for flag in [
+            "",
+            "()",
+            "(urgent)",
+            " = \"error\"",
+            "(error,)",
+            "(error, clean)",
+            "(error = true)",
+        ] {
+            let syntax =
+                syn::parse_str(&format!("enum Tags {{ #[validation_tag{flag}] Good }}")).unwrap();
+            assert!(TaggedEnum::admit(syntax).is_err(), "{flag}");
+        }
+        for source in [
+            "enum Tags { #[validation_tag(error)] #[validation_tag(clean)] Good }",
+            "#[validation_tag(error)] enum Tags { Good }",
+            "enum Tags { Good { #[validation_tag(error)] value: u32 } }",
+            "enum Tags { Good(#[validation_tag(error)] u32) }",
+            "struct Tags;",
+            "union Tags { value: u32 }",
+        ] {
+            assert!(
+                TaggedEnum::admit(syn::parse_str(source).unwrap()).is_err(),
+                "{source}"
+            );
+        }
     }
 }

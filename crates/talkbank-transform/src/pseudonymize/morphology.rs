@@ -318,14 +318,14 @@ fn lemma_sources<'input>(
         let Some(item) = descendant.map_err(|_| refused)?.typed::<MorContentNode>() else {
             continue;
         };
-        let item = item.extract().map_err(|_| refused)?;
+        let item = item.extract();
         let main = match item.field_main().slot().view() {
             SourceSlotView::Present(field) => field.read().map_err(|_| refused)?,
             SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {
                 return Err(refused);
             }
         };
-        let main = main.extract().map_err(|_| refused)?;
+        let main = main.extract();
         let lemma = match main.field_child_2().slot().view() {
             SourceSlotView::Present(field) => field.read().map_err(|_| refused)?,
             SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {

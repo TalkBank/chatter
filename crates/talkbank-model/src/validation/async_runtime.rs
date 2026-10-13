@@ -9,24 +9,35 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Format>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#File_Headers>
 //!
-//! # Example with tokio
+//! Enable the crate's `async` feature and call these functions from a Tokio
+//! runtime. Complete validation returns [`crate::validation::ValidChatFile`];
+//! selecting individual rules reports findings without producing that proof.
 //!
-//! ```ignore
-//! use talkbank_model::{ChatFile};
-//! use talkbank_model::validation::validate_async;
-//! use talkbank_model::ErrorCollector;
+//! # Example with a caller-supplied document
 //!
-//! #[tokio::main]
-//! async fn main() {
-//!     let file: ChatFile = parse_file(content);
-//!     let errors = ErrorCollector::new();
+//! ```no_run
+//! use talkbank_model::{AsyncChannelErrorSink, ChatFile, ParseError};
+//! use talkbank_model::model::OwnedTranscriptName;
+//! use talkbank_model::validation::{AsyncValidationError, ValidChatFile, validate_async};
 //!
-//!     // Run validation on blocking thread pool
-//!     let _validated = validate_async(file, errors.clone(), OwnedTranscriptName::Anonymous).await;
+//! async fn validate_document(
+//!     file: ChatFile,
+//! ) -> (Result<ValidChatFile, AsyncValidationError>, Vec<ParseError>) {
+//!     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 //!
-//!     let error_vec = errors.into_vec();
-//!     println!("Found {} errors", error_vec.len());
+//!     // The task owns the sink. Its sender is dropped when the task completes.
+//!     let result = validate_async(
+//!         file, AsyncChannelErrorSink::new(sender), OwnedTranscriptName::Anonymous,
+//!     ).await;
+//!
+//!     // Retain even partial findings if the result reports a task failure.
+//!     let mut diagnostics = Vec::new();
+//!     while let Some(diagnostic) = receiver.recv().await {
+//!         diagnostics.push(diagnostic);
+//!     }
+//!     (result, diagnostics)
 //! }
+//! # fn main() {}
 //! ```
 
 use crate::ErrorSink;
@@ -52,24 +63,28 @@ pub enum AsyncValidationError {
 ///
 /// # Parameters
 ///
-/// * `file` - The ChatFile to validate (consumed, returns Validated)
-/// * `errors` - Error sink for collecting validation errors (must be Send + Sync + Clone)
+/// * `file` - The `ChatFile` to validate (consumed, success returns `ValidChatFile`)
+/// * `errors` - Owned error sink (`ErrorSink + Send + 'static`); no `Clone` bound
 /// * `name` - The transcript's name, for the rules about it (`@Media`)
 ///
 /// # Returns
 ///
-/// A `ValidChatFile` after validation completes
+/// A `ValidChatFile` after complete validation succeeds. Semantic refusal is
+/// [`AsyncValidationError::Validation`]; task failure is [`AsyncValidationError::Join`].
 ///
 /// # Example
 ///
-/// ```ignore
-/// use talkbank_model::validation::validate_async;
-/// use talkbank_model::ErrorCollector;
+/// ```no_run
+/// use talkbank_model::{ChatFile, ErrorCollector};
 /// use talkbank_model::model::{OwnedFileStem, OwnedTranscriptName};
+/// use talkbank_model::validation::{ValidChatFile, validate_async};
 ///
-/// let errors = ErrorCollector::new();
-/// let name = OwnedTranscriptName::Named(OwnedFileStem::new("myfile")?);
-/// let validated = validate_async(file, errors.clone(), name).await?;
+/// async fn validate_named(file: ChatFile) -> Result<ValidChatFile, Box<dyn std::error::Error>> {
+///     let errors = ErrorCollector::new();
+///     let name = OwnedTranscriptName::Named(OwnedFileStem::new("sample")?);
+///     Ok(validate_async(file, errors, name).await?)
+/// }
+/// # fn main() {}
 /// ```
 #[cfg(feature = "async")]
 pub async fn validate_async<S>(
@@ -93,23 +108,41 @@ where
 ///
 /// # Parameters
 ///
-/// * `file` - The ChatFile to validate (cloned for async task)
+/// * `file` - The `ChatFile` to inspect (consumed by the async task)
 /// * `rules` - Which validation rules to run
 /// * `errors` - Error sink for collecting validation errors (must be Send + 'static)
 /// * `name` - The transcript's name, for the rules about it (`@Media`)
 ///
+/// # Returns
+///
+/// Successful task completion, not proof that the document is valid. Selected
+/// rules can report findings through `errors` while this function returns `Ok(())`.
+/// Use [`validate_async`] when a complete `ValidChatFile` proof is required.
+///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
+/// use talkbank_model::{AsyncChannelErrorSink, ChatFile, ParseError};
+/// use talkbank_model::model::OwnedTranscriptName;
 /// use talkbank_model::validation::{validate_with_rules_async, RuleSelection};
-/// use talkbank_model::ErrorCollector;
-/// use talkbank_model::model::{OwnedFileStem, OwnedTranscriptName};
+/// use talkbank_model::validation::AsyncValidationError;
 ///
-/// let rules = RuleSelection::new().with_strict_linkers();
+/// async fn collect_strict_linker_findings(
+///     file: ChatFile,
+/// ) -> (Result<(), AsyncValidationError>, Vec<ParseError>) {
+///     let rules = RuleSelection::new().with_strict_linkers();
+///     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 ///
-/// let errors = ErrorCollector::new();
-/// let name = OwnedTranscriptName::Named(OwnedFileStem::new("myfile")?);
-/// validate_with_rules_async(file.clone(), rules, errors.clone(), name).await?;
+///     let result = validate_with_rules_async(
+///         file, rules, AsyncChannelErrorSink::new(sender), OwnedTranscriptName::Anonymous,
+///     ).await;
+///     let mut diagnostics = Vec::new();
+///     while let Some(diagnostic) = receiver.recv().await {
+///         diagnostics.push(diagnostic);
+///     }
+///     (result, diagnostics)
+/// }
+/// # fn main() {}
 /// ```
 #[cfg(feature = "async")]
 pub async fn validate_with_rules_async<S>(
@@ -142,7 +175,7 @@ mod tests {
         ])
     }
 
-    /// Ensures async validation completes and returns a validated file.
+    /// Ensures semantic refusal remains distinct from task failure.
     #[tokio::test]
     async fn test_validate_async() -> Result<(), AsyncValidationError> {
         let file = make_test_file();

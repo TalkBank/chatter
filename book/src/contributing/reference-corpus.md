@@ -20,7 +20,73 @@ covered by small handcrafted files in the corpus rather than left uncovered.
 The language files are real conversations morphotagged with `%mor`/`%gra`, one
 per language, drawn from the corpus data.
 
+Node incidence is necessary, not sufficient: a word with a shortening and a
+word with a suffix do not witness their combination. Review ordered typed
+content, category, suffix and annotation context together. The authored
+`word-features/shortening-combinations.cha` reference covers repeated omissions,
+suffixes, replacement wrappers and neighboring lengthening; its E209 specs pair
+legal spoken segments with suffix-bearing words that contain only omitted
+sounds. Existing source/wire controls consume the whole reference, while
+targeted assertions pin the combinations rather than just counting words.
+
+The authored `ca/word-boundary-combinations.cha` reference similarly preserves
+leading inhalation and pitch, attached overlap points, partial-word underline
+boundaries and adjacent lengthening in their exact typed order. Its E356/E357
+controls remove only one underline marker pair beside pitch: a pitch shift
+cannot replace an underline opener or closer. Existing overlap rules remain
+distinct from utterance-wide underline balancing.
+
+The authored `ca/delimiter-stretches.cha` adds selected paired prosodic
+stretches across word boundaries and their overlap/lengthening combinations.
+E230 controls pair each selected type and delete just one source-bound marker.
+Different delimiter types pair independently across the utterance; an overlap
+point cannot supply a prosodic boundary. These examples complement, rather than
+repeat, the registry's symbol-incidence controls.
+
+The authored `word-features/phonological-fragments.cha` reference combines the
+`&+` category with lengthening, segment repetition and phonetic `@u` form.
+These remain fragments: `%mor` and `%wor` exclude them, while `%pho` and `%sin`
+count them. E387 feature controls add only a replacement annotation to an
+otherwise valid fragment; word-internal features do not relax that rule.
+
+The authored sound-category, CA-omission and segment-metadata combination
+references extend this approach to fillers/nonwords, attached omission markers,
+repeated clitic/compound/syllable boundaries, stress, longer lengthening and
+form/language/POS context. CA parentheses surround the omitted lexical text,
+not adjacent overlap or prosodic markers. Their policy controls retain the
+single-shortening normalization boundary and keep parser-stage suffix/stress
+rejection separate from validation-stage material and replacement rules.
+
+The authored main-tier recovery control adds Unicode context, neighboring turns
+and source-owned comment tiers. Its prefix/word mutations distinguish whole-file
+recovery from strict fragment rejection; retained native carriers and their
+models are checked independently. The grouped bare-ampersand case pins native
+absorption of the next turn separately from retention of later healthy carriers.
+Stacked marker controls travel repeated leading
+overlap/underline and continuation CA, clitic, pause and stress choices. E252
+edge-pause cases preserve their structured words for validation, while E245
+marker-only words are rejected without inventing spoken material.
+
+Real-data comparisons need explicit selection limits, source identities and
+separate parse/validation exclusions. A recovered model is not a valid witness,
+and physical filename checks and anonymous-input checks have different context.
+Observed frequency in a bounded sample is not population prevalence. Review a
+missing combination against its rule before adding an independently authored
+control; retain derived material's source relationship and permissions instead
+of calling renamed text synthetic. Language-marker shape alone does not prove
+resolved word language. Such comparisons guide curation, not validity rulings
+or claims of complete execution coverage.
+
 ## Tools
+
+The authored `tiers/mor-gra-combinations.cha` control combines repeated
+post-clitics, POS subcategories, ordered flat/keyed features, a multivalue
+feature, Unicode and a compound lemma. Its source-owned boundary variants keep
+MOR item counts separate from expanded word chunks and GRA relations. Feature
+emptiness remains an independent validation policy; internal morphology
+recovery retains distinct document and strict-fragment behavior. The neighboring
+turns and comments make attachment and source preservation observable.
+This is a selected interaction matrix, not exhaustive morphology or coverage.
 
 | Tool | Path | Purpose |
 |------|------|---------|

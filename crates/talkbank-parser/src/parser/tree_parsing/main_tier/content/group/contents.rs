@@ -33,13 +33,7 @@ pub(crate) fn contents_of<'tree, 'source>(
     match slot.view() {
         SourceSlotView::Present(contents) => {
             let bound = crate::parser::typed_cst::read_source_field(contents, errors)?;
-            crate::parser::typed_cst::report_reconstruction(
-                bound.extract(),
-                bound.raw_node(),
-                bound.source(),
-                errors,
-            )
-            .ok()
+            Some(bound.extract())
         }
         SourceSlotView::Error(bad) => {
             on_bad(bad.raw_node());

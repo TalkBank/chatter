@@ -15,87 +15,40 @@ Example %pho tier: entar X tante nggak
   (pho_tier_prefix)
   (tier_sep
     (colon)
-    (tab)
-  )
+    (tab))
   (pho_groups
     (pho_group
       (pho_words
-        (pho_word)
-      )
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+        (pho_word)))
+    (whitespaces)
     (pho_group
       (pho_words
-        (pho_word)
-      )
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+        (pho_word)))
+    (whitespaces)
     (pho_group
       (pho_words
-        (pho_word)
-      )
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+        (pho_word)))
+    (whitespaces)
     (pho_group
       (pho_words
-        (pho_word)
-      )
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+        (pho_word)))
+    (whitespaces)
     (pho_group
       (pho_words
-        (pho_word)
-      )
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+        (pho_word)))
+    (whitespaces)
     (pho_group
       (pho_words
-        (pho_word)
-      )
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+        (pho_word)))
+    (whitespaces)
     (pho_group
       (pho_words
-        (pho_word)
-      )
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+        (pho_word)))
+    (whitespaces)
     (pho_group
       (pho_words
-        (pho_word)
-      )
-    )
-  )
-  (newline)
-)
+        (pho_word))))
+  (newline))
 ```
 
 ## Metadata

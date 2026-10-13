@@ -425,7 +425,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
     /// [`Self::surface_displaced`]).
     fn dispatch_line(&mut self, line: SourceBound<'a, 'a, LineNode<'a>>) {
         let associated = match crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| line.extract_admitted(grammar))
+            .and_then(|grammar| line.extract_admitted(grammar).map_err(Into::into))
         {
             Ok(children) => children,
             Err(fault) => {
@@ -510,14 +510,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
                 };
                 if let ParseOutcome::Parsed(header) = parse_header_node(bound, self.errors) {
                     let span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-                    let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
-                        header_separator(node),
-                        node,
-                        bound.source(),
-                        self.errors,
-                    ) else {
-                        return;
-                    };
+                    let separator = header_separator(node);
                     self.lines
                         .push(Line::header_with_separator(header, span, separator));
                 }

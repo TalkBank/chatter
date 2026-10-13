@@ -31,7 +31,7 @@
 //! behavior-preserving: the model and the recovery diagnostics must not change.
 //!
 //! The diagnostic values below were captured by RUNNING the pre-migration
-//! parser (not guessed): a file with a stray top-level `@Date:` drives
+//! parser (not guessed): a file with a stray top-level `@Date!` drives
 //! tree-sitter into a document-level ERROR recovery node and produces exactly
 //! the recovered-line structure plus the E316 backstop diagnostic and the E747
 //! blank-line diagnostic, at the exact spans pinned here.
@@ -39,7 +39,7 @@
 //! The valid-minimal-file case this module used to also carry lives in
 //! `line_dispatch_characterization.rs`, which held a byte-identical copy of it.
 //!
-//! WATCH-ITEM (double-emission): the document-level ERROR for `@Date:` is
+//! WATCH-ITEM (double-emission): the document-level ERROR for `@Date!` is
 //! recovered into a `Header::Date` line by the entry point AND flagged E316 by
 //! the still-present whole-tree `collect_recovery_nodes` backstop. The migrated
 //! handler must emit any document-level recovery diagnostic at the EXACT node
@@ -53,7 +53,7 @@ use talkbank_parser::TreeSitterParser;
 /// One diagnostic: (code, span start, span end, message).
 type Diag = (String, u32, u32, String);
 
-/// A file with a stray top-level `@Date:` (empty value). Tree-sitter cannot
+/// A file with a stray top-level `@Date!` (invalid separator). Tree-sitter cannot
 /// parse this as a date header, so it emits an `ERROR` node that is a DIRECT
 /// child of `full_document`, sitting between the recovered header lines and
 /// `@End`. The entry point recovers it into a `Header::Date` line, and the
@@ -66,7 +66,7 @@ const STRAY_TOP_LEVEL_DATE: &str = "\
 @Languages:\teng
 @Participants:\tCHI Child
 @ID:\teng|corpus|CHI|||||Child|||
-@Date:
+@Date!
 @End
 ";
 
@@ -164,6 +164,23 @@ fn parse_lines_and_diags(input: &str) -> (Vec<String>, Vec<Diag>) {
 }
 
 #[test]
+fn omitted_date_payload_does_not_hide_a_missing_separator() {
+    // Optional payloads let the grammar recover a typed Date header here.
+    // The missing TAB is still source recovery, not a legal empty header.
+    let source = STRAY_TOP_LEVEL_DATE.replace("@Date!", "@Date:");
+    let (tags, diags) = parse_lines_and_diags(&source);
+    assert_eq!(tags[5], "Header(Date)");
+    assert_eq!(tags[6], "Header(End)");
+    assert_eq!(diags.len(), 1, "missing separator: {diags:?}");
+    assert_eq!(diags[0].0, "E303");
+    assert_eq!((diags[0].1, diags[0].2), (93, 93));
+    assert_eq!(
+        diags[0].3,
+        "Header colon must be followed by a TAB; tree-sitter inserted the missing separator"
+    );
+}
+
+#[test]
 fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
     let (tags, diags) = parse_lines_and_diags(STRAY_TOP_LEVEL_DATE);
 
@@ -179,10 +196,10 @@ fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
             "Header(ID)",
             "Header(End)",
         ],
-        "unstructured @Date: must not manufacture a Date header"
+        "unstructured @Date! must not manufacture a Date header"
     );
 
-    // EXACTLY one diagnostic: E316 unparsable content for the @Date: ERROR
+    // EXACTLY one diagnostic: E316 unparsable content for the @Date! ERROR
     // node (span 87..93), emitted once by the whole-tree backstop (NOT
     // duplicated). The pre-migration parser also emitted a spurious E747
     // for the recovery `blank_line` node covering the malformed line's own
@@ -193,7 +210,7 @@ fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
     assert_eq!(
         codes,
         vec!["E316"],
-        "stray @Date: must emit exactly E316, got: {diags:?}"
+        "stray @Date! must emit exactly E316, got: {diags:?}"
     );
 
     let e316: Vec<&(String, u32, u32, String)> =
@@ -207,10 +224,10 @@ fn stray_top_level_error_line_emits_exact_recovery_diagnostics() {
     assert_eq!(
         (e316.1, e316.2),
         (87, 93),
-        "E316 must be at the exact @Date: ERROR node span (87..93)"
+        "E316 must be at the exact @Date! ERROR node span (87..93)"
     );
     assert_eq!(
-        e316.3, "Unparsable content at file level: '@Date:'",
+        e316.3, "Unparsable content at file level: '@Date!'",
         "E316 message must match the backstop's exact wording"
     );
 }

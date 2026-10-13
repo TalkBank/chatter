@@ -20,21 +20,36 @@ use super::helpers::{parse_optional_text_tier_content, span_of};
 /// ```
 ///
 /// Driven by the generated typed visitor: `extract_spa_dependent_tier` yields the
-/// body as `child_2.slot`, matched exhaustively by the shared
-/// `parse_optional_text_tier_content`, which also surfaces the carrier's `unexpected`
-/// sink (R2).
+/// body as `child_2.slot`. The concrete owner surfaces displaced recovery and
+/// consumes selected range admission before the shared whole-carrier reader.
 pub fn parse_spa_tier<'tree>(
     typed: SourceBound<'tree, '_, SpaDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<SpaTier, crate::CstFailure> {
+    parse_spa_tier_with_separator(typed, errors)
+        .map(crate::parser::tier_parsers::ParsedDependentTier::into_tier)
+}
+
+/// Retain the tier and its separator from one selected extraction.
+pub(crate) fn parse_spa_tier_with_separator<'tree>(
+    typed: SourceBound<'tree, '_, SpaDependentTierNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<crate::parser::tier_parsers::ParsedDependentTier<SpaTier>, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
     let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
-    let content = parse_optional_text_tier_content(
-        typed,
-        children.field_child_2().slot(),
+    let separator =
+        crate::parser::tier_parsers::dependent_tier_separator(children.children().child_1.slot());
+    crate::parser::tree_parsing::parser_helpers::surface_displaced(
         &children.children().unexpected,
+        node.kind(),
+        typed.source(),
         errors,
-    )?;
-    Ok(SpaTier::new(content).with_span(span))
+    );
+    let children = children.admit_ranges()?;
+    let content = parse_optional_text_tier_content(&children, errors)?;
+    Ok(crate::parser::tier_parsers::ParsedDependentTier::new(
+        SpaTier::new(content).with_span(span),
+        separator,
+    ))
 }

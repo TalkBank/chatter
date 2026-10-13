@@ -197,6 +197,70 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E203_feature_suffixes.md",
+      "example": 1,
+      "parse": [
+        "E203"
+      ],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E203_feature_suffixes.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E203_feature_suffixes.md",
+      "example": 3,
+      "parse": [
+        "E203"
+      ],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E203_feature_suffixes.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E203_feature_suffixes.md",
+      "example": 5,
+      "parse": [
+        "E203"
+      ],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E203_feature_suffixes.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E203_feature_suffixes.md",
+      "example": 7,
+      "parse": [
+        "E203"
+      ],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E203_feature_suffixes.md",
+      "example": 8,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E207.md",
       "example": 1,
       "parse": [
@@ -330,6 +394,107 @@
     {
       "spec": "E209_ca_shortening.md",
       "example": 4,
+      "parse": [],
+      "validation": [
+        "E209"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_marker_omissions.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E209"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_marker_omissions.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_marker_omissions.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E209"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_marker_omissions.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_marker_omissions.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E209"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_marker_omissions.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_shortening_combinations.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_shortening_combinations.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_shortening_combinations.md",
+      "example": 3,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_shortening_combinations.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_shortening_combinations.md",
+      "example": 5,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_shortening_combinations.md",
+      "example": 6,
+      "parse": [],
+      "validation": [
+        "E209"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E209_shortening_combinations.md",
+      "example": 7,
       "parse": [],
       "validation": [
         "E209"
@@ -587,6 +752,222 @@
     {
       "spec": "E230.md",
       "example": 3,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 6,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 7,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 8,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 9,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 10,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 11,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 12,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 13,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 14,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 15,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 16,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 17,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 18,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 19,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 20,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 21,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 22,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 23,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 24,
+      "parse": [],
+      "validation": [
+        "E230"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 25,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E230_delimiter_stretches.md",
+      "example": 26,
       "parse": [],
       "validation": [
         "E230"
@@ -1115,6 +1496,65 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E244_word_recovery.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E244_word_recovery.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E244",
+        "E247"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E244_word_recovery.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E244_word_recovery.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E244",
+        "E247"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E244_word_recovery.md",
+      "example": 5,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E244_word_recovery.md",
+      "example": 6,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E244",
+        "E247"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E245.md",
       "example": 1,
       "parse": [
@@ -1122,6 +1562,47 @@
       ],
       "validation": [],
       "roundtrip": "diverged"
+    },
+    {
+      "spec": "E245_main_tier_recovery.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E245_main_tier_recovery.md",
+      "example": 2,
+      "parse": [
+        "E245"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E245_main_tier_recovery.md",
+      "example": 3,
+      "parse": [
+        "E245"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E245_secondary_stress.md",
+      "example": 1,
+      "parse": [
+        "E245"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E245_secondary_stress.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
     },
     {
       "spec": "E246.md",
@@ -1194,6 +1675,70 @@
     {
       "spec": "E246_lengthening_categories.md",
       "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E246_multiple_lengthening.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E246"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E246_multiple_lengthening.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E246_multiple_lengthening.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E246"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E246_multiple_lengthening.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E246_multiple_lengthening.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E246"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E246_multiple_lengthening.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E246_multiple_lengthening.md",
+      "example": 7,
+      "parse": [],
+      "validation": [
+        "E246"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E246_multiple_lengthening.md",
+      "example": 8,
       "parse": [],
       "validation": [],
       "roundtrip": "byte_exact"
@@ -1308,6 +1853,49 @@
       "example": 3,
       "parse": [],
       "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E252_stacked_pauses.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E252_stacked_pauses.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E252"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E252_stacked_pauses.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E252"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E252_stacked_pauses.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E252"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E252_stacked_pauses.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E252"
+      ],
       "roundtrip": "byte_exact"
     },
     {
@@ -1804,6 +2392,22 @@
       "parse": [],
       "validation": [],
       "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E305_body_ending.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E305_body_ending.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E305"
+      ],
+      "roundtrip": "diverged"
     },
     {
       "spec": "E305_bullet_retention.md",
@@ -2686,6 +3290,119 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E316_body_ending.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 2,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 5,
+      "parse": [
+        "E316",
+        "E750"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 6,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E305"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 7,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E305"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 8,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E305"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 9,
+      "parse": [
+        "E342"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 10,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 11,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_body_ending.md",
+      "example": 12,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E316_inline_picture.md",
       "example": 1,
       "parse": [],
@@ -2713,6 +3430,258 @@
     {
       "spec": "E316_inline_picture.md",
       "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 2,
+      "parse": [
+        "E326"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 5,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 6,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 7,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 8,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 9,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 10,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 11,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 12,
+      "parse": [
+        "E316",
+        "E342"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_main_tier_recovery.md",
+      "example": 13,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_metadata_headers.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E316_metadata_headers.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_metadata_headers.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_metadata_headers.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_metadata_headers.md",
+      "example": 5,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_metadata_headers.md",
+      "example": 6,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 2,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 5,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 7,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 8,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 9,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E316_prelude.md",
+      "example": 10,
       "parse": [
         "E316"
       ],
@@ -2936,6 +3905,134 @@
         "E330"
       ],
       "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 2,
+      "parse": [
+        "E702"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 3,
+      "parse": [
+        "E702"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 5,
+      "parse": [
+        "E709"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 6,
+      "parse": [
+        "E708"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 7,
+      "parse": [
+        "E316",
+        "E330"
+      ],
+      "validation": [
+        "E600",
+        "E756"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 8,
+      "parse": [
+        "E316",
+        "E330"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 9,
+      "parse": [
+        "E316",
+        "E330"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 10,
+      "parse": [],
+      "validation": [
+        "E756"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 11,
+      "parse": [],
+      "validation": [
+        "E756"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E330_dependent_composition.md",
+      "example": 12,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E600"
+      ],
       "roundtrip": "diverged"
     },
     {
@@ -3424,6 +4521,22 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E356_ca_word_boundaries.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E356_ca_word_boundaries.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E356"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E357.md",
       "example": 1,
       "parse": [],
@@ -3467,6 +4580,22 @@
     {
       "spec": "E357.md",
       "example": 6,
+      "parse": [],
+      "validation": [
+        "E357"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E357_ca_word_boundaries.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E357_ca_word_boundaries.md",
+      "example": 2,
       "parse": [],
       "validation": [
         "E357"
@@ -3603,6 +4732,31 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E360_body_ending.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E360_body_ending.md",
+      "example": 2,
+      "parse": [
+        "E360"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E360_body_ending.md",
+      "example": 3,
+      "parse": [
+        "E360"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E361.md",
       "example": 1,
       "parse": [
@@ -3661,7 +4815,9 @@
       "spec": "E362.md",
       "example": 5,
       "parse": [],
-      "validation": [],
+      "validation": [
+        "E362"
+      ],
       "roundtrip": "byte_exact"
     },
     {
@@ -4232,6 +5388,137 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E375.md",
+      "example": 26,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E375.md",
+      "example": 27,
+      "parse": [
+        "E375"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375.md",
+      "example": 28,
+      "parse": [
+        "E375"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375.md",
+      "example": 29,
+      "parse": [
+        "E375"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375.md",
+      "example": 30,
+      "parse": [
+        "E375"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375.md",
+      "example": 31,
+      "parse": [
+        "E375"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375.md",
+      "example": 32,
+      "parse": [
+        "E375"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375.md",
+      "example": 33,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "E519"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375.md",
+      "example": 34,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375.md",
+      "example": 35,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E375_body_ending.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E375_body_ending.md",
+      "example": 2,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375_body_ending.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375_body_ending.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E375_body_ending.md",
+      "example": 5,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E375_repetition_recovery.md",
       "example": 1,
       "parse": [],
@@ -4263,6 +5550,53 @@
     {
       "spec": "E376.md",
       "example": 1,
+      "parse": [
+        "E342",
+        "E376"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E376_body_ending.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E376_body_ending.md",
+      "example": 2,
+      "parse": [
+        "E342",
+        "E376"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E376_body_ending.md",
+      "example": 3,
+      "parse": [
+        "E342",
+        "E376"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E376_body_ending.md",
+      "example": 4,
+      "parse": [
+        "E342",
+        "E376"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E376_body_ending.md",
+      "example": 5,
       "parse": [
         "E342",
         "E376"
@@ -4381,6 +5715,70 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E387_fragment_features.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E387"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E387_fragment_features.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E387_fragment_features.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E387"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E387_fragment_features.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E387_fragment_features.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E387"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E387_fragment_features.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E387_fragment_features.md",
+      "example": 7,
+      "parse": [],
+      "validation": [
+        "E387"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E387_fragment_features.md",
+      "example": 8,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E388.md",
       "example": 1,
       "parse": [],
@@ -4397,6 +5795,118 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E388_sound_features.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E388"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E388"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E388"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 7,
+      "parse": [],
+      "validation": [
+        "E388"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 8,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 9,
+      "parse": [],
+      "validation": [
+        "E388"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 10,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 11,
+      "parse": [],
+      "validation": [
+        "E388"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 12,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 13,
+      "parse": [],
+      "validation": [
+        "E388"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E388_sound_features.md",
+      "example": 14,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E389.md",
       "example": 1,
       "parse": [],
@@ -4408,6 +5918,70 @@
     {
       "spec": "E389.md",
       "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E389_sound_features.md",
+      "example": 1,
+      "parse": [],
+      "validation": [
+        "E389"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E389_sound_features.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E389_sound_features.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E389"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E389_sound_features.md",
+      "example": 4,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E389_sound_features.md",
+      "example": 5,
+      "parse": [],
+      "validation": [
+        "E389"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E389_sound_features.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E389_sound_features.md",
+      "example": 7,
+      "parse": [],
+      "validation": [
+        "E389"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E389_sound_features.md",
+      "example": 8,
       "parse": [],
       "validation": [],
       "roundtrip": "byte_exact"
@@ -4894,6 +6468,15 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E510.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E510"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E511.md",
       "example": 1,
       "parse": [
@@ -4911,6 +6494,19 @@
       "example": 2,
       "parse": [],
       "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E511.md",
+      "example": 3,
+      "parse": [
+        "E522",
+        "E523"
+      ],
+      "validation": [
+        "E511",
+        "E522"
+      ],
       "roundtrip": "byte_exact"
     },
     {
@@ -4981,6 +6577,20 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E514.md",
+      "example": 2,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E514.md",
+      "example": 3,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E515.md",
       "example": 1,
       "parse": [
@@ -4996,6 +6606,15 @@
       "example": 2,
       "parse": [],
       "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E515.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E515"
+      ],
       "roundtrip": "byte_exact"
     },
     {
@@ -5269,6 +6888,34 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E518.md",
+      "example": 17,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E518.md",
+      "example": 18,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E518.md",
+      "example": 19,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E518.md",
+      "example": 20,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E519.md",
       "example": 1,
       "parse": [],
@@ -5381,6 +7028,29 @@
         "E519"
       ],
       "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E519.md",
+      "example": 15,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E519.md",
+      "example": 16,
+      "parse": [],
+      "validation": [
+        "E519"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E519.md",
+      "example": 17,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "diverged"
     },
     {
       "spec": "E522.md",
@@ -6560,7 +8230,9 @@
       "spec": "E544.md",
       "example": 7,
       "parse": [],
-      "validation": [],
+      "validation": [
+        "E362"
+      ],
       "roundtrip": "byte_exact"
     },
     {
@@ -7027,6 +8699,68 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E702_mor_gra_combinations.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E702_mor_gra_combinations.md",
+      "example": 2,
+      "parse": [
+        "E702"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E702_mor_gra_combinations.md",
+      "example": 3,
+      "parse": [
+        "E702"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E702_mor_gra_combinations.md",
+      "example": 4,
+      "parse": [
+        "E702"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E702_mor_gra_combinations.md",
+      "example": 5,
+      "parse": [
+        "E702"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E702_mor_gra_combinations.md",
+      "example": 6,
+      "parse": [
+        "E702"
+      ],
+      "validation": [
+        "E600"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E704.md",
       "example": 1,
       "parse": [],
@@ -7106,6 +8840,22 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E705_mor_gra_combinations.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E705_mor_gra_combinations.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E705"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E706.md",
       "example": 1,
       "parse": [],
@@ -7142,6 +8892,22 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E706_mor_gra_combinations.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E706_mor_gra_combinations.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E706"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E707.md",
       "example": 1,
       "parse": [
@@ -7164,7 +8930,9 @@
     {
       "spec": "E708.md",
       "example": 1,
-      "parse": [],
+      "parse": [
+        "E316"
+      ],
       "validation": [
         "E604"
       ],
@@ -7239,6 +9007,49 @@
     {
       "spec": "E711.md",
       "example": 3,
+      "parse": [],
+      "validation": [
+        "E711"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E711_mor_gra_combinations.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E711_mor_gra_combinations.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E711"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E711_mor_gra_combinations.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E711"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E711_mor_gra_combinations.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E711"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E711_mor_gra_combinations.md",
+      "example": 5,
       "parse": [],
       "validation": [
         "E711"
@@ -7469,6 +9280,40 @@
     },
     {
       "spec": "E720.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E720"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E720_mor_gra_combinations.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E720_mor_gra_combinations.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E720"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E720_mor_gra_combinations.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E720"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E720_mor_gra_combinations.md",
       "example": 4,
       "parse": [],
       "validation": [
@@ -8285,6 +10130,116 @@
       "roundtrip": "byte_exact"
     },
     {
+      "spec": "E755_prelude.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E755"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 3,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 4,
+      "parse": [],
+      "validation": [
+        "E755"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 5,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 6,
+      "parse": [],
+      "validation": [
+        "E755"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 7,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 8,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 9,
+      "parse": [],
+      "validation": [
+        "E755"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 10,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 11,
+      "parse": [],
+      "validation": [
+        "E755"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 12,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 13,
+      "parse": [],
+      "validation": [
+        "E755"
+      ],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E755_prelude.md",
+      "example": 14,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E756.md",
       "example": 1,
       "parse": [],
@@ -8657,6 +10612,70 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E758_prelude.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E758_prelude.md",
+      "example": 2,
+      "parse": [],
+      "validation": [
+        "E758"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E758_prelude.md",
+      "example": 3,
+      "parse": [],
+      "validation": [
+        "E758"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E758_prelude.md",
+      "example": 4,
+      "parse": [
+        "E370"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E758_prelude.md",
+      "example": 5,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E758_prelude.md",
+      "example": 6,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E758_prelude.md",
+      "example": 7,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E758_prelude.md",
+      "example": 8,
+      "parse": [
+        "E370"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
       "spec": "E759.md",
       "example": 1,
       "parse": [
@@ -9022,6 +11041,124 @@
       "roundtrip": "diverged"
     },
     {
+      "spec": "E766_prelude.md",
+      "example": 1,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 2,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 3,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 4,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 5,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 6,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 7,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 8,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 9,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 10,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 11,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 12,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 13,
+      "parse": [
+        "E766"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "E766_prelude.md",
+      "example": 14,
+      "parse": [],
+      "validation": [],
+      "roundtrip": "byte_exact"
+    },
+    {
       "spec": "E767.md",
       "example": 1,
       "parse": [],
@@ -9227,6 +11364,46 @@
         "E531"
       ],
       "roundtrip": "byte_exact"
+    },
+    {
+      "spec": "W109_recovery.md",
+      "example": 1,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "W109_recovery.md",
+      "example": 2,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "W109"
+      ],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "W109_recovery.md",
+      "example": 3,
+      "parse": [
+        "E316"
+      ],
+      "validation": [],
+      "roundtrip": "diverged"
+    },
+    {
+      "spec": "W109_recovery.md",
+      "example": 4,
+      "parse": [
+        "E316"
+      ],
+      "validation": [
+        "W109"
+      ],
+      "roundtrip": "diverged"
     },
     {
       "spec": "W110.md",

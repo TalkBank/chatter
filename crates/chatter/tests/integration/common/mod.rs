@@ -18,6 +18,78 @@ use tempfile::{TempDir, tempdir};
 /// Created once per test binary and kept alive for its whole run.
 static SHARED_CACHE_DIR: std::sync::OnceLock<TempDir> = std::sync::OnceLock::new();
 
+/// An explicitly selected program path, admitted before constructing a command.
+/// Admission is a filesystem observation; spawning still checks executability.
+struct TestProgram(PathBuf);
+
+impl TestProgram {
+    fn at(path: PathBuf) -> std::io::Result<Self> {
+        if !path.is_absolute() || !fs::metadata(&path)?.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "the test program must be an absolute regular-file path",
+            ));
+        }
+        Ok(Self(path))
+    }
+
+    fn selected() -> std::io::Result<Self> {
+        let path = match std::env::var_os("TALKBANK_CHATTER_TEST_BINARY") {
+            Some(path) => {
+                let path = PathBuf::from(path);
+                eprintln!("CLI test program: {}", path.display());
+                path
+            }
+            None => PathBuf::from(env!("CARGO_BIN_EXE_chatter")),
+        };
+        Self::at(path)
+    }
+
+    fn command(self) -> assert_cmd::Command {
+        assert_cmd::Command::new(self.0)
+    }
+}
+
+#[test]
+fn native_program_selection_refuses_relative_directory_and_missing_paths() {
+    assert!(matches!(
+        TestProgram::at(PathBuf::from("chatter")),
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidInput
+    ));
+    let directory = tempdir().expect("isolated program admission");
+    assert!(matches!(
+        TestProgram::at(directory.path().to_owned()),
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidInput
+    ));
+    assert!(matches!(
+        TestProgram::at(directory.path().join("missing-program")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    ));
+    assert!(TestProgram::at(PathBuf::from(env!("CARGO_BIN_EXE_chatter"))).is_ok());
+}
+
+/// A supplied missing program must fail the real child contract, never silently
+/// substitute the otherwise working Cargo-produced executable.
+#[test]
+fn native_program_selection_missing_override_never_falls_back() {
+    let directory = tempdir().expect("isolated missing program");
+    let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+        .args([
+            "cache_identity_recovery::file_identity_recovery_cli_file_ancestor_refusal_preserves_cache",
+            "--exact",
+            "--nocapture",
+        ])
+        .env("TALKBANK_CHATTER_TEST_BINARY", directory.path().join("missing-program"))
+        .output()
+        .expect("actual test subprocess");
+    assert!(
+        !output.status.success(),
+        "missing override must not fall back"
+    );
+    let output = combined_output(&output);
+    assert!(output.contains("admitted CLI test program"), "{output}");
+}
+
 /// Build a `chatter` command whose cache CANNOT be the developer's real one.
 ///
 /// # Why this exists rather than `cargo_bin_cmd!` at each call site
@@ -34,7 +106,9 @@ pub fn chatter_cmd() -> assert_cmd::Command {
     let cache_dir = SHARED_CACHE_DIR
         .get_or_init(|| tempdir().expect("create shared test cache dir"))
         .path();
-    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("chatter");
+    let mut cmd = TestProgram::selected()
+        .expect("admitted CLI test program")
+        .command();
     cmd.env("TALKBANK_CHAT_CACHE_DIR", cache_dir);
     cmd
 }
@@ -72,7 +146,9 @@ impl CliHarness {
     /// `TALKBANK_CHAT_CACHE_DIR` is the explicit override that makes
     /// the isolation deterministic on every platform.
     pub fn chatter_cmd(&self) -> assert_cmd::Command {
-        let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("chatter");
+        let mut cmd = TestProgram::selected()
+            .expect("admitted CLI test program")
+            .command();
         cmd.env("HOME", self.home_dir());
         cmd.env("XDG_CACHE_HOME", self.xdg_cache_home());
         cmd.env("TALKBANK_CHAT_CACHE_DIR", self.cache_dir());

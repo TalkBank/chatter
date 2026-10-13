@@ -65,6 +65,13 @@ const INVALID_BY_CONSTRUCTION: &[(&str, &str)] = &[
 const NOT_YET_IN_CORPUS: &[&str] = &[
     // Generic fallbacks preserve unrecognised values for downstream validation.
     // Their presence alone certifies neither acceptance nor invalidity.
+    // Canonical dates/times and separated ID language codes now select their
+    // strict alternatives. Do not add malformed fallback specimens to the
+    // valid corpus merely to exercise those lexical nodes (E518/E540/E541
+    // and language-code admission retain their separate error controls).
+    "generic_date",
+    "generic_time",
+    "generic_id_language",
     "generic_id_sex",
     "generic_media_status",
     "generic_media_type",
@@ -72,8 +79,6 @@ const NOT_YET_IN_CORPUS: &[&str] = &[
     "generic_option_name",
     "generic_recording_quality",
     "generic_transcription",
-    "strict_date",
-    "strict_time",
     // Parser-recovery concession: `;` is a `non_colon_separator` choice so
     // malformed input parses gracefully, but in well-formed CHAT semicolons
     // appear only inside `age_format` tokens (2;06.), never standalone.

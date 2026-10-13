@@ -350,7 +350,7 @@ fn test_miette_output_uses_line_offset() -> Result<(), String> {
         .ok_or_else(|| "Expected 'error' in source".to_string())?;
     let error_end = error_start + "error".len();
 
-    let mut errors = vec![ParseError::new(
+    let errors = vec![ParseError::new(
         ErrorCode::UnknownError,
         Severity::Error,
         SourceLocation::from_offsets(error_start, error_end),
@@ -358,7 +358,7 @@ fn test_miette_output_uses_line_offset() -> Result<(), String> {
         "Test error".to_string(),
     )];
 
-    enhance_errors_with_source(&mut errors, source);
+    let errors: Vec<_> = enhance_errors_with_source(&errors, source).collect();
 
     let output = format!("{:?}", miette::Report::new(errors[0].clone()));
     assert!(

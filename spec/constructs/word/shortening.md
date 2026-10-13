@@ -25,9 +25,9 @@ Word-internal shortening, parenthesized text within a word.
               (word_body
                 (shortening
                   (word_segment))
-                (word_segment)))))))
+                (word_segment))))))
+      (whitespaces))
     (utterance_end
-      (whitespaces)
       (period)
       (newline))))
 ```

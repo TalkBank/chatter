@@ -33,6 +33,8 @@ try {
       "tests/unit/updates.test.cjs",
       "tests/unit/updaterConfig.test.cjs",
       "tests/unit/latestJson.test.mjs",
+      "tests/unit/desktopSmokeBinary.test.mjs",
+      ".test-dist/tests/unit/renderedResults.test.js",
     ],
     {
       cwd: desktopDir,

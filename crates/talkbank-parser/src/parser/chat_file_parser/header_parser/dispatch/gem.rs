@@ -10,7 +10,7 @@ use crate::generated_traversal::{
 };
 use crate::model::Header;
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use crate::parser::typed_cst::{read_source_field, report_reconstruction};
+use crate::parser::typed_cst::read_source_field;
 use talkbank_model::ParseOutcome;
 
 use super::super::helpers::parse_optional_gem_label;
@@ -24,11 +24,7 @@ macro_rules! gem_header {
             errors: &impl ErrorSink,
         ) -> ParseOutcome<Header> {
             let input = typed.source();
-            let Ok(children) =
-                report_reconstruction(typed.extract(), typed.raw_node(), input, errors)
-            else {
-                return ParseOutcome::Rejected;
-            };
+            let children = typed.extract();
             let label = match children.field_child_1().slot().optional() {
                 None => ParseOutcome::Parsed(None),
                 Some(slot) => match slot.view() {

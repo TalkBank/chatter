@@ -7,8 +7,9 @@
 # model, CLI or LSP takes down something long-lived. Nothing here is long
 # lived: `tools` and `runtime-tools` are build-time generators run by
 # `just spec-gen`, and `vocabulary` is a library whose only consumers are those
-# generators and two TEST crates. Measured 2026-08-26:
-# `cargo tree -p chatter --edges normal | grep spec-vocabulary` finds nothing,
+# generators and two TEST crates. Measured 2026-08-26, before the CLI package
+# rename; the equivalent current query is:
+# `cargo tree -p talkbank-chatter --edges normal | grep spec-vocabulary` finds nothing,
 # so none of this reaches a shipped binary.
 #
 # Denying the family here would mean 77 findings, almost all `expect()` in a
@@ -54,7 +55,7 @@ toml = "1.0"
 toml_edit = "0.25"
 
 # Tree-sitter (for template generation - spec tools CAN use tree-sitter for parsing examples)
-tree-sitter = "0.27.0"
+tree-sitter = "0.27.1"
 tree-sitter-talkbank = { path = "../grammar" }
 walkdir = "2.5"
 oxc_allocator = "0.116.0"

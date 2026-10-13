@@ -73,7 +73,7 @@ use talkbank_model::ParseOutcome;
 pub fn parse_wor_tier<'tree>(
     typed: SourceBound<'tree, '_, WorDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<WorTier, crate::generated_traversal::ReconstructionFault> {
+) -> Result<WorTier, crate::CstFailure> {
     let source = typed.source();
     let node = typed.node().raw_node();
     let span = span_of(node);
@@ -101,7 +101,7 @@ pub fn parse_wor_tier<'tree>(
 fn parse_wor_tier_body<'tree>(
     typed: SourceBound<'tree, '_, WorTierBodyNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<WorTier, crate::generated_traversal::ReconstructionFault> {
+) -> Result<WorTier, crate::CstFailure> {
     let source = typed.source();
     let associated = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
     let children = associated.children();
@@ -251,9 +251,10 @@ fn push_wor_item<'tree>(
             };
             match item.view() {
                 WorTierBodyChild1Child0ChoiceBoundView::WorWordItem(word_item) => {
-                    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
-                        crate::parser::typed_cst::canonical_grammar()
-                            .and_then(|grammar| word_item.extract_admitted(grammar)),
+                    let Ok(associated) = crate::parser::typed_cst::report_admission(
+                        crate::parser::typed_cst::canonical_grammar().and_then(|grammar| {
+                            word_item.extract_admitted(grammar).map_err(Into::into)
+                        }),
                         word_item.raw_node(),
                         source,
                         errors,

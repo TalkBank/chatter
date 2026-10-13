@@ -2564,7 +2564,7 @@
         },
         {
           "const": "E362",
-          "description": "Timestamp end is before start (backwards range).",
+          "description": "Timestamp end is at or before start, or a media bullet starts before its predecessor.",
           "type": "string"
         },
         {

@@ -274,3 +274,144 @@ fn collect_run(
         stats: terminal.expect("complete terminal receipt"),
     }
 }
+
+/// Cache maintenance must still address a deleted canonical subtree, without
+/// recreating its directories or touching an adjacent prefix's learned facts.
+#[test]
+fn file_identity_recovery_deleted_subtree_retains_exact_cache_scope() {
+    use talkbank_cache::CacheScope;
+    use talkbank_model::ResolvedPrefix;
+    use talkbank_parser_tests::repo_paths::workspace_root;
+
+    let fixture = workspace_root().join("corpus/reference/core/basic-conversation.cha");
+    let directory = tempfile::tempdir().expect("isolated canonical copies");
+    let removed = directory.path().join("corpus");
+    let nested = removed.join("deeper");
+    let sibling = directory.path().join("corpus-other");
+    std::fs::create_dir_all(&nested).expect("nested subtree");
+    std::fs::create_dir(&sibling).expect("sibling subtree");
+    let paths = [
+        removed.join("basic-conversation.cha"),
+        nested.join("basic-conversation.cha"),
+        sibling.join("basic-conversation.cha"),
+    ];
+    for path in &paths {
+        std::fs::copy(&fixture, path).expect("original canonical bytes and basename");
+    }
+    let config = ValidationConfig {
+        jobs: Some(std::num::NonZeroUsize::MIN),
+        ..Default::default()
+    };
+    let cache = Arc::new(CachePool::in_memory(config.cache_identity()).expect("isolated cache"));
+    let cold = collect_run(
+        &paths,
+        &config,
+        RunCache::ReadWrite(cache.clone()),
+        &BTreeSet::new(),
+    );
+    assert_eq!(cold.stats.valid_files(), 3);
+    assert!(cold.diagnostics.is_empty());
+    assert_eq!(cache.count(&CacheScope::All).expect("all rows"), 3);
+    let prefix = ResolvedPrefix::of(&removed).expect("existing directory prefix");
+    let file_prefix = CacheScope::Under(ResolvedPrefix::of(&paths[0]).expect("file prefix"));
+    assert_eq!(cache.count(&file_prefix).expect("one file"), 1);
+    for path in &paths[..2] {
+        std::fs::remove_file(path).expect("remove only test copies");
+    }
+    std::fs::remove_dir(&nested).expect("empty nested test directory");
+    std::fs::remove_dir(&removed).expect("empty parent test directory");
+    let after = ResolvedPrefix::of(&removed).expect("deleted directory prefix");
+    assert_eq!(prefix, after);
+    let scope = CacheScope::Under(after);
+    for _ in 0..2 {
+        assert_eq!(cache.count(&scope).expect("read-only preview"), 2);
+        assert_eq!(
+            cache.count(&CacheScope::All).expect("preview leaves rows"),
+            3
+        );
+        assert!(!removed.exists(), "preview must not recreate inputs");
+    }
+    assert_eq!(cache.clear(&scope).expect("clear deleted subtree"), 2);
+    assert_eq!(cache.clear(&scope).expect("repeat clear"), 0);
+    assert_eq!(cache.count(&CacheScope::All).expect("sibling retained"), 1);
+    let retained = vec![paths[2].clone()];
+    let warm = collect_run(
+        &retained,
+        &config,
+        RunCache::ReadOnly(cache.clone()),
+        &retained.iter().cloned().collect(),
+    );
+    assert_eq!(warm.stats.valid_files(), 1);
+    assert_eq!(warm.stats.cache_hits(), 1);
+    assert_eq!(
+        std::fs::read(&paths[2]).expect("sibling source"),
+        std::fs::read(&fixture).expect("fixture")
+    );
+    assert!(!removed.exists());
+}
+
+/// A file link has its own named validation/cache location. Removing and
+/// clearing it must leave both its target's bytes and its learned verdict.
+#[cfg(unix)]
+#[test]
+fn file_identity_recovery_deleted_link_keeps_target_verdict_and_media_name() {
+    use talkbank_cache::CacheScope;
+    use talkbank_model::ResolvedPrefix;
+    use talkbank_parser_tests::repo_paths::workspace_root;
+
+    let fixture = workspace_root()
+        .join("crates/talkbank-parser-tests/tests/error_corpus/validation_errors/W109_4.cha");
+    let directory = tempfile::tempdir().expect("isolated named copies");
+    let target_directory = directory.path().join("target");
+    let link_directory = directory.path().join("linked");
+    std::fs::create_dir(&target_directory).expect("target directory");
+    std::fs::create_dir(&link_directory).expect("link directory");
+    let target = target_directory.join("Schlüssel.cha");
+    let link = link_directory.join("Schlüssel.cha");
+    std::fs::copy(&fixture, &target).expect("canonical media bytes");
+    std::os::unix::fs::symlink(&target, &link).expect("named link");
+    let config = ValidationConfig {
+        jobs: Some(std::num::NonZeroUsize::MIN),
+        ..Default::default()
+    };
+    let cache = Arc::new(CachePool::in_memory(config.cache_identity()).expect("isolated cache"));
+    let cold = collect_run(
+        &[target.clone(), link.clone()],
+        &config,
+        RunCache::ReadWrite(cache.clone()),
+        &BTreeSet::new(),
+    );
+    assert_eq!(
+        cold.stats.valid_files(),
+        2,
+        "both stored names match @Media"
+    );
+    assert!(cold.diagnostics.is_empty());
+    let prefix = ResolvedPrefix::of(&link).expect("file link prefix");
+    assert_ne!(prefix, ResolvedPrefix::of(&target).expect("target prefix"));
+    std::fs::remove_file(&link).expect("only the test link");
+    assert_eq!(
+        ResolvedPrefix::of(&link).expect("deleted file prefix"),
+        prefix
+    );
+    let scope = CacheScope::Under(prefix);
+    assert_eq!(cache.count(&scope).expect("link row"), 1);
+    assert_eq!(cache.clear(&scope).expect("link-only clear"), 1);
+    assert_eq!(
+        cache.count(&CacheScope::All).expect("target row survives"),
+        1
+    );
+    let retained = vec![target.clone()];
+    let warm = collect_run(
+        &retained,
+        &config,
+        RunCache::ReadOnly(cache.clone()),
+        &retained.iter().cloned().collect(),
+    );
+    assert_eq!(warm.stats.cache_hits(), 1);
+    assert_eq!(
+        std::fs::read(&target).expect("target retained"),
+        std::fs::read(&fixture).expect("fixture")
+    );
+    assert!(!link.exists());
+}

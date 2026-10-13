@@ -26,6 +26,9 @@
 
 use std::path::Path;
 
+mod file_kind;
+use file_kind::RegularFileKind;
+
 pub use talkbank_model::{ResolvedDirectory, ResolvedPath};
 
 /// A transcript path whose basename was obtained from its parent directory,
@@ -36,6 +39,8 @@ pub use talkbank_model::{ResolvedDirectory, ResolvedPath};
 /// Every constructor resolves the path when it admits the transcript, so a
 /// transcript whose directory cannot be resolved is refused here, as an
 /// unreadable input, and no consumer meets the failure later.
+/// Native regular-file kind is checked at admission (following file links),
+/// not promised forever: later replacement or read failure remains an I/O error.
 #[derive(Debug, Clone)]
 pub struct StoredTranscript {
     path: std::path::PathBuf,
@@ -54,13 +59,24 @@ impl StoredTranscript {
     /// Admit an actual directory entry without another directory scan.
     pub fn from_entry(entry: std::fs::DirEntry) -> std::io::Result<Self> {
         let path = entry.path();
+        let file_type = entry.file_type()?;
+        let file_type = if file_type.is_symlink() {
+            std::fs::metadata(&path)?.file_type()
+        } else {
+            file_type
+        };
+        let kind = RegularFileKind::admit(file_type)?;
         let resolved = ResolvedPath::of_file(&path)?;
-        Self::admit(path, resolved)
+        Self::admit(path, resolved, kind)
     }
 
     /// A transcript at `path`, stored under its last component, whose
     /// location is `resolved`.
-    fn admit(path: std::path::PathBuf, resolved: ResolvedPath) -> std::io::Result<Self> {
+    fn admit(
+        path: std::path::PathBuf,
+        resolved: ResolvedPath,
+        _kind: RegularFileKind,
+    ) -> std::io::Result<Self> {
         let stem = Self::stem_of(&path)?;
         Ok(Self {
             path,
@@ -126,8 +142,13 @@ impl DirectoryNames {
     }
 
     /// Admit the stored entry `name` at `path`.
-    fn admit(&self, name: &std::ffi::OsStr, path: &Path) -> std::io::Result<StoredTranscript> {
-        StoredTranscript::admit(path.to_path_buf(), self.resolved.file(name)?)
+    fn admit(
+        &self,
+        name: &std::ffi::OsStr,
+        path: &Path,
+        kind: RegularFileKind,
+    ) -> std::io::Result<StoredTranscript> {
+        StoredTranscript::admit(path.to_path_buf(), self.resolved.file(name)?, kind)
     }
 }
 
@@ -143,7 +164,7 @@ impl StoredNameResolver {
     pub fn resolve(&mut self, requested: &Path) -> std::io::Result<StoredTranscript> {
         use std::io::{Error, ErrorKind};
         use unicode_normalization::UnicodeNormalization;
-        requested.metadata()?;
+        let kind = RegularFileKind::admit(requested.metadata()?.file_type())?;
         let wanted = requested
             .file_name()
             .and_then(|s| s.to_str())
@@ -173,7 +194,7 @@ impl StoredNameResolver {
             }
         };
         if let Some(path) = names.entries.get(std::ffi::OsStr::new(wanted)) {
-            return names.admit(std::ffi::OsStr::new(wanted), path);
+            return names.admit(std::ffi::OsStr::new(wanted), path, kind);
         }
         // Falls back to a spelling that differs in Unicode form or ASCII case,
         // so a transcript is found under the name actually stored. That is
@@ -199,7 +220,7 @@ impl StoredNameResolver {
                 "ambiguous stored transcript spelling",
             ));
         }
-        names.admit(name, path)
+        names.admit(name, path, kind)
     }
 }
 
@@ -225,6 +246,7 @@ pub fn is_chat_transcript_path(path: &Path) -> bool {
 pub struct FoundFile {
     path: std::path::PathBuf,
     relative: std::path::PathBuf,
+    kind: RegularFileKind,
 }
 
 impl FoundFile {
@@ -407,11 +429,16 @@ pub fn walk_transcripts(root: &Path) -> TranscriptWalk {
     // (sorting by relative path interleaves a directory's files with its
     // subdirectories').
     let mut directories = std::collections::HashMap::new();
-    for FoundFile { path, relative } in found {
+    for FoundFile {
+        path,
+        relative,
+        kind,
+    } in found
+    {
         // The path's last component is the listing's own entry name, so it
         // is the stored name: no second listing is needed to learn it.
         match admit_found(&path, &mut directories)
-            .and_then(|resolved| StoredTranscript::admit(path.clone(), resolved))
+            .and_then(|resolved| StoredTranscript::admit(path.clone(), resolved, kind))
         {
             Ok(stored) => transcripts.push(FoundTranscript { stored, relative }),
             Err(error) => failures.push(WalkFailure { path, error }),
@@ -617,8 +644,18 @@ fn directory_identity(
 /// nothing the walk will touch.
 enum EntryKind {
     Directory(std::fs::Metadata),
-    File,
+    File(RegularFileKind),
+    Refused(std::io::Error),
     Ignored,
+}
+
+impl EntryKind {
+    fn file(file_type: std::fs::FileType) -> Self {
+        match RegularFileKind::admit(file_type) {
+            Ok(kind) => Self::File(kind),
+            Err(error) => Self::Refused(error),
+        }
+    }
 }
 
 /// The settings every level of one walk shares.
@@ -690,7 +727,7 @@ fn walk_directory<K: Fn(&Path) -> bool>(
                 // number of transcripts.
                 Links::Follow => match std::fs::metadata(directory.join(&name)) {
                     Ok(metadata) if metadata.is_dir() => EntryKind::Directory(metadata),
-                    Ok(_) => EntryKind::File,
+                    Ok(metadata) => EntryKind::file(metadata.file_type()),
                     Err(error) => {
                         fail(walk, directory.join(&name), error);
                         continue;
@@ -698,7 +735,7 @@ fn walk_directory<K: Fn(&Path) -> bool>(
                 },
             }
         } else {
-            EntryKind::File
+            EntryKind::file(file_type)
         };
         match kind {
             EntryKind::Directory(metadata) => walk_directory(
@@ -710,174 +747,20 @@ fn walk_directory<K: Fn(&Path) -> bool>(
                 walk,
             ),
             EntryKind::Ignored => {}
-            EntryKind::File => {
+            EntryKind::Refused(error) => {
+                if (policy.keep)(Path::new(&name)) {
+                    fail(walk, directory.join(&name), error);
+                }
+            }
+            EntryKind::File(kind) => {
                 if (policy.keep)(Path::new(&name)) {
                     walk.found.push(FoundFile {
                         path: directory.join(&name),
                         relative: relative.join(&name),
+                        kind,
                     });
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod walk_tests {
-    use super::*;
-
-    /// The walk keeps transcripts at every depth with their relative paths
-    /// and skips AppleDouble sidecars.
-    #[test]
-    fn walk_finds_transcripts_with_relative_paths() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("sub/deeper")).unwrap();
-        for name in [
-            "a.cha",
-            "._a.cha",
-            "notes.txt",
-            "sub/b.cha",
-            "sub/deeper/c.cha",
-        ] {
-            std::fs::write(root.join(name), "").unwrap();
-        }
-        let walk = walk_transcripts(root);
-        assert!(walk.failures().is_empty(), "{:?}", walk.failures());
-        let relative: Vec<_> = walk.found().iter().map(FoundTranscript::relative).collect();
-        assert_eq!(
-            relative,
-            [
-                Path::new("a.cha"),
-                Path::new("sub/b.cha"),
-                Path::new("sub/deeper/c.cha")
-            ]
-        );
-        for found in walk.found() {
-            assert_eq!(found.path(), root.join(found.relative()));
-        }
-    }
-
-    /// A root that cannot be read is a failure in the result, not an empty
-    /// corpus.
-    #[test]
-    fn an_unreadable_root_is_reported() {
-        let dir = tempfile::tempdir().unwrap();
-        let walk = walk_transcripts(&dir.path().join("missing"));
-        assert!(walk.found().is_empty());
-        assert_eq!(walk.failures().len(), 1);
-    }
-
-    /// A file argument is kept whatever its extension, a directory argument
-    /// contributes its transcripts, and a missing argument is a failure.
-    #[test]
-    fn arguments_expand_files_directories_and_report_missing() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("corpus")).unwrap();
-        std::fs::write(root.join("corpus/a.cha"), "").unwrap();
-        std::fs::write(root.join("named.txt"), "").unwrap();
-        let expanded = expand_transcript_arguments(&[
-            root.join("named.txt"),
-            root.join("corpus"),
-            root.join("missing.cha"),
-        ]);
-        let files: Vec<_> = expanded
-            .files()
-            .iter()
-            .map(StoredTranscript::path)
-            .collect();
-        assert_eq!(files, [root.join("corpus/a.cha"), root.join("named.txt")]);
-        assert_eq!(expanded.failures().len(), 1);
-        assert_eq!(expanded.failures()[0].path, root.join("missing.cha"));
-    }
-
-    /// A transcript named by a file argument and again by its directory is
-    /// one transcript, however the argument spells it (`corpus/sub/../a.cha`
-    /// included): the dedup compares resolved locations, not spellings.
-    #[test]
-    fn a_transcript_named_twice_is_expanded_once() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("corpus/sub")).unwrap();
-        std::fs::write(root.join("corpus/a.cha"), "").unwrap();
-        let expanded = expand_transcript_arguments(&[
-            root.join("corpus/a.cha"),
-            root.join("corpus"),
-            root.join("corpus/sub/../a.cha"),
-        ]);
-        let files: Vec<_> = expanded
-            .files()
-            .iter()
-            .map(StoredTranscript::path)
-            .collect();
-        assert_eq!(files, [root.join("corpus/a.cha")]);
-    }
-
-    /// A link cycle is walked once, and a linked transcript is found.
-    #[cfg(unix)]
-    #[test]
-    fn a_link_cycle_is_walked_once() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("sub")).unwrap();
-        std::fs::write(root.join("sub/a.cha"), "").unwrap();
-        std::os::unix::fs::symlink(root, root.join("sub/loop")).unwrap();
-        let walk = walk_transcripts(root);
-        assert!(walk.failures().is_empty(), "{:?}", walk.failures());
-        assert_eq!(walk.found().len(), 1);
-    }
-
-    /// `Links::Skip` neither walks into a linked directory nor keeps a
-    /// linked file; `Links::Follow` does both.
-    #[cfg(unix)]
-    #[test]
-    fn skipped_links_are_neither_walked_nor_kept() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("root");
-        let outside = dir.path().join("outside");
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::create_dir_all(&outside).unwrap();
-        std::fs::write(outside.join("x.cha"), "").unwrap();
-        std::fs::write(root.join("own.cha"), "").unwrap();
-        std::os::unix::fs::symlink(&outside, root.join("linked")).unwrap();
-        std::os::unix::fs::symlink(outside.join("x.cha"), root.join("y.cha")).unwrap();
-        let skipped = walk_files(&root, Links::Skip, is_chat_transcript_path);
-        let skipped: Vec<_> = skipped.found().iter().map(FoundFile::relative).collect();
-        assert_eq!(skipped, [Path::new("own.cha")]);
-        let followed = walk_transcripts(&root);
-        let followed: Vec<_> = followed
-            .found()
-            .iter()
-            .map(FoundTranscript::relative)
-            .collect();
-        assert_eq!(
-            followed,
-            [
-                Path::new("linked/x.cha"),
-                Path::new("own.cha"),
-                Path::new("y.cha")
-            ]
-        );
-    }
-
-    /// A dangling link is a failure whatever its name: a link to an
-    /// unmounted subcorpus (`Eng -> /Volumes/gone/Eng`) hides every
-    /// transcript under it, so it can never vanish from a run in silence.
-    #[cfg(unix)]
-    #[test]
-    fn a_dangling_link_fails_whatever_its_name() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        std::os::unix::fs::symlink(root.join("gone/Eng"), root.join("Eng")).unwrap();
-        std::os::unix::fs::symlink(root.join("gone.cha"), root.join("a.cha")).unwrap();
-        let walk = walk_transcripts(root);
-        let mut failed: Vec<_> = walk
-            .failures()
-            .iter()
-            .map(|failure| &failure.path)
-            .collect();
-        failed.sort();
-        assert_eq!(failed, [&root.join("Eng"), &root.join("a.cha")]);
     }
 }

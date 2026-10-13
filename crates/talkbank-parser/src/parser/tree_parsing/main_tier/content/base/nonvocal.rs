@@ -31,14 +31,7 @@ pub(crate) fn parse_nonvocal(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_nonvocal(typed),
-        typed.raw_node(),
-        source,
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = extract_nonvocal(typed);
     surface_displaced(&children.unexpected, "nonvocal", source, errors);
     let SlotState::Present(choice) =
         expect_present(children.content.slot(), "nonvocal", source, errors)
@@ -47,14 +40,7 @@ pub(crate) fn parse_nonvocal(
     };
     let built = match choice {
         NonvocalChoice::NonvocalBegin(node) => {
-            let Ok(inner) = crate::parser::typed_cst::report_reconstruction(
-                extract_nonvocal_begin(*node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::Rejected;
-            };
+            let inner = extract_nonvocal_begin(*node);
             surface_displaced(&inner.unexpected, "nonvocal_begin", source, errors);
             // Every delimiter is checked (and reported) before the verdict;
             // a marker whose shape is not intact is not built.
@@ -89,14 +75,7 @@ pub(crate) fn parse_nonvocal(
             })
         }
         NonvocalChoice::NonvocalEnd(node) => {
-            let Ok(inner) = crate::parser::typed_cst::report_reconstruction(
-                extract_nonvocal_end(*node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::Rejected;
-            };
+            let inner = extract_nonvocal_end(*node);
             surface_displaced(&inner.unexpected, "nonvocal_end", source, errors);
             // Every delimiter is checked (and reported) before the verdict;
             // a marker whose shape is not intact is not built.
@@ -125,14 +104,7 @@ pub(crate) fn parse_nonvocal(
             })
         }
         NonvocalChoice::NonvocalSimple(node) => {
-            let Ok(inner) = crate::parser::typed_cst::report_reconstruction(
-                extract_nonvocal_simple(*node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::Rejected;
-            };
+            let inner = extract_nonvocal_simple(*node);
             surface_displaced(&inner.unexpected, "nonvocal_simple", source, errors);
             // Every delimiter is checked (and reported) before the verdict;
             // a marker whose shape is not intact is not built.

@@ -240,6 +240,12 @@ export default grammar({
     space: $ => ' ',
     tab: $ => '\t',
 
+    // Strict date/time tokens precede the shared catch-all token so equal-length
+    // matches select the structured kind. Keep equal lexical precedence: a
+    // longer malformed suffix must remain one generic value for validation.
+    strict_date: $ => token(/(?:0[1-9]|[1-2][0-9]|3[0-1])-(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)-[1-2][0-9]{3}/),
+    strict_time: $ => token(/[0-9:\-;,]+/),
+
     // Matches all non-newline characters to end of line.
     // Used as a building block for free-text header values and catch-all content.
     rest_of_line: $ => /[^\r\n]+/,
@@ -578,7 +584,7 @@ export default grammar({
       optional($.header_gap),
       $.speaker,
       $.header_sep,
-      $.date_contents,  // Structured date parsing, not free_text
+      optional($.date_contents),  // Unknown birth date is a real omission, not a missing node
       $.newline
     ),
 
@@ -623,10 +629,10 @@ export default grammar({
     tape_location_header: $ => seq($.tape_location_prefix, $.header_sep, $.free_text, $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Time_Duration_Header
-    time_duration_header: $ => seq($.time_duration_prefix, $.header_sep, $.time_duration_contents, $.newline),
+    time_duration_header: $ => seq($.time_duration_prefix, $.header_sep, optional($.time_duration_contents), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Time_Start_Header
-    time_start_header: $ => seq($.time_start_prefix, $.header_sep, $.time_duration_contents, $.newline),
+    time_start_header: $ => seq($.time_start_prefix, $.header_sep, optional($.time_duration_contents), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Transcriber_Header
     transcriber_header: $ => seq($.transcriber_prefix, $.header_sep, $.free_text, $.newline),
@@ -653,7 +659,7 @@ export default grammar({
     comment_header: $ => seq($.comment_prefix, $.header_sep, $.text_with_bullets_and_pics, $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Date_Header
-    date_header: $ => seq($.date_prefix, $.header_sep, $.date_contents, $.newline),
+    date_header: $ => seq($.date_prefix, $.header_sep, optional($.date_contents), $.newline),
 
     // Reference: https://talkbank.org/0info/manuals/CHAT.html#Eg_Header
     eg_header: $ => seq($.eg_prefix, optional(seq($.header_sep, $.free_text)), $.newline),
@@ -2268,7 +2274,6 @@ export default grammar({
     // Strict match for valid DD-MMM-YYYY dates; generic catch-all for malformed dates
     // that the validator flags as E518.
     date_contents: $ => choice($.strict_date, $.generic_date),
-    strict_date: $ => token(/(?:0[1-9]|[1-2][0-9]|3[0-1])-(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)-[1-2][0-9]{3}/),
     generic_date: $ => /[^\r\n]+/,
 
     // Age format: years;months or years;months.days
@@ -2286,7 +2291,6 @@ export default grammar({
     // values that the validator flags as E540/E541. Lexical shape alone does
     // not prove a legal clock value or a legal pattern for either header.
     time_duration_contents: $ => choice($.strict_time, $.generic_time),
-    strict_time: $ => token(/[0-9:\-;,]+/),
     generic_time: $ => /[^\r\n]+/,
 
     // Header substructure
@@ -2305,7 +2309,7 @@ export default grammar({
     // optional($.whitespaces) around optional fields so the grammar consumes
     // leading/trailing spaces instead of including them in field text.
     _id_identity_fields: $ => seq(
-      $.id_languages,
+      optional($.id_languages),
       $.pipe,
       optional($.whitespaces), optional($.id_corpus), optional($.whitespaces),
       $.pipe,
@@ -2335,11 +2339,18 @@ export default grammar({
       $.pipe
     ),
 
-    // More flexible patterns for ID fields that can contain various characters
-    id_languages: $ => choice(
-      $.languages_contents,              // Reuse structured comma-separated language codes
-      /[^|\r\n]*/                       // Fallback for other formats
+    // ID lists accept compact as well as spaced commas, unlike @Languages.
+    // Retain empty comma segments and whitespace as structure; the model's
+    // established policy ignores empty segments and validates nonempty codes.
+    // No nullable fallback token: an omitted entire field is the outer Option.
+    id_languages: $ => repeat1(choice($.id_language, $.comma, $.space, $.tab)),
+    id_language: $ => choice(
+      $.language_code,
+      $.generic_id_language
     ),
+    // Long malformed components stay whole; valid codes win equal-length ties.
+    // Whitespace around components belongs to space/tab nodes, not a second decoder.
+    generic_id_language: $ => /[^ \t,|\r\n]([^,|\r\n]*[^ \t,|\r\n])?/,
     // Optional fields use a trimming regex that requires at least one non-space
     // character and does not match leading/trailing whitespace.  This lets the
     // surrounding optional($.whitespaces) consume spaces while the field captures

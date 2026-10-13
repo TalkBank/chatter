@@ -16,16 +16,17 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    ActivitiesHeaderNode, AsRawNode, BckHeaderNode, DateHeaderNode, LocationHeaderNode, NamedKind,
+    ActivitiesHeaderNode, BckHeaderNode, DateHeaderNode, LocationHeaderNode, NamedKind,
     PageHeaderNode, RoomLayoutHeaderNode, SourceBound, SourceBoundKind, SourceField,
     SourceRecovery, THeaderNode, TapeLocationHeaderNode, TimeDurationHeaderNode,
     TimeStartHeaderNode, TranscriberHeaderNode, VideosHeaderNode, WarningHeaderNode,
 };
 use crate::model::{self, Header};
 use crate::parser::tree_parsing::parser_helpers::{
-    ContentSlot, HeaderSite, read_source_content, surface_displaced, unknown_header_from_node,
+    ContentSlot, HeaderSite, read_optional_source_content, read_source_content, surface_displaced,
+    unknown_header_from_node,
 };
-use crate::parser::typed_cst::AnyKindSlot;
+use crate::parser::typed_cst::{AnyKindSlot, AnySelectedKindSlot};
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -54,6 +55,28 @@ where
     header
 }
 
+/// Optional payloads preserve omission separately from recovery and source faults.
+/// The header-specific constructor owns how the model represents an omission.
+fn optional_header<'value, 'tree: 'value, 'source, T, M>(
+    site: &HeaderSite<'tree, '_>,
+    content_slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<'tree, T, M>>>,
+    unexpected: &[Node<'tree>],
+    words: &ContentSlot<'_>,
+    errors: &impl ErrorSink,
+    build: impl FnOnce(Option<&'source str>) -> Header,
+) -> ParseOutcome<Header>
+where
+    T: SourceBoundKind<'tree> + NamedKind,
+    M: SourceRecovery<'value, 'tree, 'source>,
+{
+    let header = read_optional_source_content(site, content_slot, words, errors).map_or_else(
+        |failure| failure.into_outcome(site, errors),
+        |text| ParseOutcome::parsed(build(text)),
+    );
+    surface_displaced(unexpected, site.kind(), site.input(), errors);
+    header
+}
+
 /// `@Date` -> `Header::Date`. `date_contents` is `choice(strict_date,
 /// generic_date)`; the text is kept and `ChatDate::new` classifies it, and the
 /// validator reports E518 for a malformed date.
@@ -62,15 +85,8 @@ pub(super) fn date<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
+    let children = typed.extract();
+    optional_header(
         &site,
         children.field_child_2().slot(),
         &children.children().unexpected,
@@ -80,7 +96,10 @@ pub(super) fn date<'tree>(
         },
         errors,
         |content| Header::Date {
-            date: model::ChatDate::new(content),
+            date: match content {
+                Some(text) => model::ChatDate::new(text),
+                None => model::ChatDate::Unsupported(String::new()),
+            },
         },
     )
 }
@@ -91,14 +110,7 @@ pub(super) fn tape_location<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -120,15 +132,8 @@ pub(super) fn time_duration<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
+    let children = typed.extract();
+    optional_header(
         &site,
         children.field_child_2().slot(),
         &children.children().unexpected,
@@ -138,7 +143,10 @@ pub(super) fn time_duration<'tree>(
         },
         errors,
         |duration| Header::TimeDuration {
-            duration: model::TimeDurationValue::new(duration),
+            duration: match duration {
+                Some(text) => model::TimeDurationValue::new(text),
+                None => model::TimeDurationValue::new(""),
+            },
         },
     )
 }
@@ -149,15 +157,8 @@ pub(super) fn time_start<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
-    simple_header(
+    let children = typed.extract();
+    optional_header(
         &site,
         children.field_child_2().slot(),
         &children.children().unexpected,
@@ -167,7 +168,10 @@ pub(super) fn time_start<'tree>(
         },
         errors,
         |start| Header::TimeStart {
-            start: model::TimeStartValue::new(start),
+            start: match start {
+                Some(text) => model::TimeStartValue::new(text),
+                None => model::TimeStartValue::new(""),
+            },
         },
     )
 }
@@ -178,14 +182,7 @@ pub(super) fn location<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -207,14 +204,7 @@ pub(super) fn room_layout<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -236,14 +226,7 @@ pub(super) fn transcriber<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -265,14 +248,7 @@ pub(super) fn warning<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -294,14 +270,7 @@ pub(super) fn activities<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -323,14 +292,7 @@ pub(super) fn bck<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -352,14 +314,7 @@ pub(super) fn page<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -381,14 +336,7 @@ pub(super) fn videos<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),
@@ -410,14 +358,7 @@ pub(super) fn t<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Header> {
     let site = HeaderSite::bound(typed);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        typed.source(),
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     simple_header(
         &site,
         children.field_child_2().slot(),

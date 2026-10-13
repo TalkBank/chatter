@@ -9,6 +9,190 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Fixed
+
+- Test-hygiene admission recognizes generic assertion-helper calls without
+  treating function items as calls, and blanks escaped string content without
+  leaving invalid escape sequences in its token input.
+- Field derives support raw-identifier enum fields and prevent `SpanShift`
+  fields named `offset` or `delta` from shadowing movement parameters.
+- Dependent-tier `content_span()` records exact native body boundaries instead
+  of assuming a one-byte newline. LF, CRLF, CR, continuations, trailing body
+  whitespace and known empty bodies preserve their source coordinates in both
+  parsers; deferred word-tier retention keeps the same provenance.
+  Early lexer termination leaves the ending unknown instead of adding an
+  internal range error to malformed caller input.
+- Resolved directory admission refuses existing files, and the file-name
+  constructor rejects trailing separators and normalized multi-component
+  spellings. Deleted input prefixes remain addressable for scoped cache
+  preview/clear without recreating inputs or clearing adjacent locations.
+- Fragment context is honored by re2c word, main-tier and utterance APIs through
+  the shared CA-omission shape owner. Native token controls, missing roles,
+  empty structured tiers and text-grammar refusal reach diagnostics. Canonical
+  body metadata excludes synthetic labels; MOR-word diagnostics exclude the
+  companion terminator, supplied line endings remain caller-owned, and empty
+  caller diagnostics retain their origin.
+
+### Changed
+
+- **Breaking: enum macro input admission is strict.** `error_code_enum` refuses
+  duplicate, malformed or misplaced code/status attributes, conflicting status,
+  nonempty macro arguments, generics, where clauses and explicit discriminants
+  instead of ignoring or erasing them. `ValidationTagged` refuses container/field
+  annotations. Registry ordering/completeness and variant tag policy are owned
+  before emission. Valid code strings, generated APIs including documentation
+  URLs, serde, severity conventions and check-status behavior are unchanged.
+- **Breaking: field skip annotations are strictly admitted.**
+  `SemanticEq` / `SpanShift` reject unknown flags, malformed arguments,
+  duplicates and annotations on containers or enum variants, rather than
+  silently including fields. Equality and diff consume one shared field plan.
+  Valid exclusions, generic bounds, diff paths/context and CHAT/JSON are unchanged.
+- **Breaking: catalog and splice phases have opaque owning results.**
+  `CatalogFix` no longer has independently writable safety/kind fields; use
+  `safety()` or the consuming `into_kind()` raw view.
+  `FixKind` distinguishes Mechanical, Semantic and Alternatives.
+  `Admission` exposes immutable getters and consumes into `AdmittedEdits`.
+  `mapped_edit_sites` returns a source-owning `MappedPlan` with read-only sites;
+  `apply_verified()` carries `ByteVerifiedSplice` into the CLI post-check without
+  remapping. Source, replacement and output extents use checked `u32` conversion.
+  The raw splice/comparison and byte-verified plain-text conveniences remain
+  intentional low-level APIs, not catalog, health or post-check receipts.
+  Repair policies, CHAT/JSON formats and CLI flags are unchanged.
+- **Breaking: repair application owns one actual diagnosis.**
+  Replace independent `catalog_fix(error, parsed)` calls with
+  `FixDiagnosis::observe(...).findings()` and `FixFinding::catalog()`.
+  Resolution distinguishes Offered, Unsupported, Ineligible, SourceUnavailable
+  and Fault. Owner-local `select(&FixCodeSelection)` replaces per-proposal
+  selection and public accumulation. Its consuming `SelectedRepairs::admit()`
+  and `AdmittedRepairs::apply_verified()` accept no substitute model/source.
+  `VerifiedRepairs` retains the complete original findings, validation policy
+  and transcript name into the CLI post-check. Raw byte verification cannot
+  construct this application context. Diagnosis is not validity; existing
+  recovery, repair/write policy, CLI flags and wire formats are unchanged.
+- **Breaking: dependent-tier entries own private optional content-range
+  provenance.** Use the existing entry constructors rather than struct
+  literals. Constructed and JSON-imported entries return `None` from
+  `content_span()` even when payload spans are present; native producers attach
+  validated ranges explicitly. JSON/schema and semantic equality are unchanged.
+  The re2c intermediate dependent entry likewise retains producer-only geometry.
+- Re2c error detection is a 1.0 requirement: every tree-sitter error must have
+  some error through the corresponding supported re2c API and validation
+  policy. Diagnostic identity and recovered-model equality are not required.
+- **Breaking: re2c parsed word form markers hold admitted `FormType` values**
+  rather than unchecked suffix strings. Invalid suffixes cannot silently
+  disappear during lowering; high-level model JSON remains unchanged.
+- Commit hooks no longer run automatic publication-date, production-evidence
+  or breaking-changelog gates. Optional contributor-owned hooks still receive
+  their original arguments and control their own verdicts. Explicit review,
+  standalone tools and publication checks remain available.
+
+- `%sin` selected root, groups, flat/bracketed choice and grouped token repeats
+  now consume range admission before decoding. Document attachment consumes
+  the same root's tier and separator; whole-group fallback reads its admitted
+  carrier's parent. Explicit empty-token omission, document error-tier dropping,
+  recovery, diagnostics and JSON formats remain unchanged.
+- `%gra` selected root, contents/repeats and relation fields now consume range
+  admission before decoding. One source-owned root also retains separator
+  provenance until document attachment; field diagnostics use the whole
+  admitted relation rather than a separately supplied parent. Native and
+  document recovery policies, numeric rules, retention and JSON formats remain
+  unchanged. The internal tier/separator owner is shared with bullet tiers.
+- **Breaking: `%gra` completeness is derived from owned lowering outcomes.**
+  Replace `GraTier::lowered_from(Vec, GraCompleteness)` with `GraLowering`:
+  record parsed/rejected relation outcomes, finalize a read-only
+  `GraLoweringReceipt`, then consume it with `into_tier`. Neither relations nor
+  completeness can be supplied independently. Both parser backends use the
+  same receipt; re2c derives its own-tier recovery taint only at consumption.
+  Bare model construction and JSON readback remain Unknown. Existing
+  validation, recovery, CHAT serialization and JSON formats are unchanged.
+- **Breaking: diagnostic enhancement no longer mutates `ParseError`.** Both
+  source-enhancement helpers take an immutable slice and return an iterator of
+  `SourceDiagnostic`. Original spans, labels and context remain untouched;
+  checked `DiagnosticPresentation` owns separate display spans and labels.
+  Invalid ranges, including split UTF-8, expose `DiagnosticSourceError` rather
+  than invented EOF coordinates. The standalone miette renderer takes a
+  checked diagnostic; source-taking helpers perform admission themselves.
+  Desktop diagnostics add `sourceContext` for checked coordinates or explicit
+  unavailable context. TUI/desktop CLAN actions use admitted locations, not
+  stale producer positions. CHAT validity and CLI validation JSON are unchanged.
+- First/repeated generated annotation-choice conversions now implement `From`
+  for their source-bound views, replacing the raw-choice conversions. This is
+  a breaking Rust traversal API change; admit the producing choice and call
+  `.view().into()`. High-level model APIs and CHAT/JSON formats are unchanged.
+- Canonical `%wor` projection retains each selected word's producing main-tier
+  root content through count matching, corroboration and complete timing.
+  `WorSourceContent` has no public constructor and keeps its source immutable;
+  split consumers use those locations instead of independent word walks and
+  membership-agreement checks. Existing word/timing accessors and CHAT remain.
+  Timing-binding equality additionally requires the same producing main-tier
+  object and root position; comparison and debug output do not walk that source.
+  This changes Rust comparison behavior, not CHAT serialization.
+- Complete word timing and word-speaker ownership retain mandatory first
+  elements through admission, execution and consumed output. Their collection
+  accessors now expose `CompleteWorTimingSlots` and `WordSpeakerOwnership`, not
+  slices or mutable vectors; use `first`, `following` and ordered iteration.
+  This is a breaking Rust API change. CHAT and ownership JSON arrays are unchanged.
+- Rename the CLI Cargo package to `talkbank-chatter`; the executable remains
+  `chatter`. Cargo package selectors use the new name. Legacy installer URLs
+  retain the current installer payload and translate legacy environment settings;
+  self-update accepts current or legacy official receipts bound to the running
+  installation. Registry publication and released upgrade acceptance are separate.
+- Zero-duration `%wor` word bullets now fail validation with E362, like
+  reversed word intervals. Untimed words remain legal partial timing; source
+  replacement admission removes only affected word tiers when requested.
+- Typed CST date/time payloads and the ID-language payload are now optional
+  slots, distinguishing omission from recovery. ID language components have
+  their own typed list supporting compact commas; this changes the generated
+  Rust carrier API. Existing model validation and empty-component policy remain.
+- Regenerate the typed CST traversal from the current TSGU carrier design.
+  Broad extraction now returns carriers directly, without `ReconstructionFault`;
+  kind-admitted extraction retains explicit `AdmittedRefusal` errors. This is a
+  breaking Rust API change. `CstFailure` now distinguishes source binding,
+  compiled-grammar binding and kind admission. Parser and transform consumers
+  remove obsolete refusal paths while retaining structural recovery.
+
+### Fixed
+
+- The re2c shared ID-header API admits the complete header without including
+  its prefix in the language field. Single-participant parsing refuses multiple
+  entries, and direct participant/text APIs report forbidden caller control
+  bytes before legacy sentinel handling. The opt-in trait-test fixtures use
+  current checked conversions and read-only model accessors.
+
+- Re2c reports errors for demonstrated malformed word, annotation, header,
+  morphology, phonology and text-tier carriers. Sink-bearing fragment adapters
+  preserve native rejection and caller coordinates; comment pictures use the
+  comment grammar and dependent-tier fragments no longer need a synthetic
+  main tier. Valid numeric page headers remain accepted.
+
+- Nonword and scoped-annotation decoding preserve the producing source through
+  word, event/action, group and quotation callers. Token policy and retrace
+  locations no longer accept detached node/source pairs; code-switch languages
+  use typed associated fields, and recovered explicit codes cannot become the
+  bare shortcut. Ordered markers and existing CHAT/JSON formats remain.
+- Construct specifications now describe their complete current named CSTs.
+  The two media-bullet examples restore their missing NAK delimiters; model,
+  source-span, CHAT and JSON controls distinguish real bullets from plain text.
+- Word prefix, form/POS suffix and inline CA decoding retain the producing
+  token's admitted source instead of accepting detached node/source pairs.
+  Registry policy, repeated/undeclared form spelling, diagnostics and wire
+  formats remain unchanged.
+- Word-language suffix admission retains the producing CST source through
+  candidate conversion. A failed component refuses the conversion instead of
+  silently dropping a language or inventing `und`. Existing candidate order,
+  registry validation, CHAT spelling and JSON variants are unchanged.
+- Reference-mode speaker matching counts a replaced word's original spoken
+  form, never its replacement targets, on both sides of the comparison. The
+  input transcripts and their annotations remain unchanged.
+- Valid dates and ID language lists select their structured grammar forms;
+  longer malformed values remain intact for validation. ID lowering no longer
+  splits an opaque comma-separated string independently of the grammar.
+- Regenerate typed CST lookahead to avoid stack growth across ERROR runs
+  separated by extras, preserving displaced errors and comment ownership.
+- Upgrade Tree-sitter to 0.27.1 for upstream error-recovery and query fixes;
+  regenerate the parser to retain jump tables when compiled with GCC.
+  Grammar/node-type schemas are unchanged by the runtime upgrade.
+
 ## [0.29.0] - 2026-10-07
 
 This release lets a program rewrite part of a transcript (regenerate

@@ -84,10 +84,10 @@ fn canonical_checked_construction_is_distinct_from_parser_provenance() {
                             );
                             let admission = admit_edits(proof.document(), vec![edit]);
                             assert!(
-                                admission.admitted.is_empty(),
+                                admission.admitted().is_empty(),
                                 "construction cannot certify inherited source spans"
                             );
-                            assert_eq!(admission.skipped[0].reason, SkipReason::UnknownHealth);
+                            assert_eq!(admission.skipped()[0].reason, SkipReason::UnknownHealth);
                             let mut changed = utterance.clone();
                             changed.mark_parse_taint(talkbank_model::model::ParseHealthTier::Main);
                             assert!(changed.parse_health().is_unknown());

@@ -1,7 +1,7 @@
 //! Implementation of `chatter validate --list-checks`.
 //!
 //! Prints every known error code together with its implementation status
-//! (Active vs Planned). This gives users and successors a machine-readable
+//! (Active, Opt-in or Planned). This gives users and successors a human-readable
 //! view of which validation checks the running binary enforces and which
 //! are only documented in `spec/errors/`.
 //!
@@ -95,7 +95,7 @@ mod tests {
     // than a test failure. The type obsoleted the test.
 
     /// SURVIVES: wiring. It asserts that `check_status` reads the emitted
-    /// attribute at all, i.e. that BOTH arms are reachable, which no type
+    /// attributes at all, i.e. that all enforcement states are reachable, which no type
     /// states.
     ///
     /// It used to name three codes and their statuses, under a docstring

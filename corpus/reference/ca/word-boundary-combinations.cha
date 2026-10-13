@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	SPK Speaker
+@Options:	CA
+@ID:	eng|sample|SPK|||||Speaker|||
+@Comment:	Independently authored controls for ordered CA word-boundary combinations.
+@Comment:	Inhalation, pitch and overlap attachments coexist with partial-word underlining and lengthening.
+@Comment:	Overlap points need not pair within one utterance; underline begin/end markers do.
+*SPK:	⌈garden ∙café sunrise moonlight .
+*SPK:	↑harbor lantern↓ ↓meadow ⌈∙willow .
+*SPK:	wave:let ri:ver sea:side ↑rainbow .
+@End

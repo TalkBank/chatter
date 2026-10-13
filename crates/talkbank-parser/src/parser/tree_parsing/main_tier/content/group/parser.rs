@@ -10,7 +10,7 @@ use crate::error::{
 };
 use crate::generated_traversal::{
     AsRawNode, ContentsChild0Choice, ContentsChild1Choice, ContentsChildren,
-    GroupWithAnnotationsNode, NoChild, NodeSlot, SlotView, SourceBound,
+    GroupWithAnnotationsNode, NoChild, NodeSlot, SourceBound, SourceSlotView,
 };
 use crate::model::{BracketedContent, Group, UtteranceContent};
 use talkbank_model::ParseOutcome;
@@ -88,9 +88,9 @@ pub(crate) fn parse_group_content<'tree>(
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
     let source = typed.source();
-    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar)),
+            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -143,18 +143,16 @@ pub(crate) fn parse_group_content<'tree>(
 
     // The composite annotations are required and cannot be Missing under the
     // compiled grammar proof. Error and absence still mean unusable content.
-    let markers = match children.annotations.slot().view() {
-        SlotView::Present(annotations) => match crate::parser::typed_cst::report_reconstruction(
-            parse_scoped_annotations(*annotations, source, errors),
-            annotations.raw_node(),
-            source,
-            errors,
-        ) {
-            Ok(markers) => markers,
-            Err(_) => return ParseOutcome::Rejected,
-        },
-        SlotView::Absent(NoChild) => Vec::new(),
-        SlotView::Error(bad) => {
+    let markers = match associated.field_annotations().slot().view() {
+        SourceSlotView::Present(annotations) => {
+            match crate::parser::typed_cst::read_source_field(annotations, errors) {
+                Some(annotations) => parse_scoped_annotations(annotations, errors),
+                None => Vec::new(),
+            }
+        }
+        SourceSlotView::Absent(NoChild) => Vec::new(),
+        SourceSlotView::Error(bad) => {
+            let bad = bad.raw_node();
             report_tree_shape(
                 bad,
                 format!(

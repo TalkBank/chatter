@@ -1,0 +1,112 @@
+---
+source: crates/talkbank-parser-tests/tests/integration/overlap_sibling_corpus.rs
+assertion_line: 81
+expression: groups
+---
+[
+  {
+    "bottoms": [
+      {
+        "begin_at_word": 1,
+        "bullet": [
+          100,
+          400
+        ],
+        "end_at_word": 2,
+        "index": 2,
+        "kind": "Bottom",
+        "speaker": "LSN",
+        "utterance": 1
+      }
+    ],
+    "top": {
+      "begin_at_word": 0,
+      "bullet": [
+        0,
+        1000
+      ],
+      "end_at_word": 1,
+      "index": 2,
+      "kind": "Top",
+      "speaker": "SPK",
+      "utterance": 0
+    }
+  },
+  {
+    "bottoms": [
+      {
+        "begin_at_word": 0,
+        "bullet": [
+          100,
+          400
+        ],
+        "end_at_word": 1,
+        "index": 2,
+        "kind": "Bottom",
+        "speaker": "LSN",
+        "utterance": 1
+      },
+      {
+        "begin_at_word": 0,
+        "bullet": null,
+        "end_at_word": 1,
+        "index": 2,
+        "kind": "Bottom",
+        "speaker": "OBS",
+        "utterance": 2
+      },
+      {
+        "begin_at_word": 0,
+        "bullet": [
+          700,
+          900
+        ],
+        "end_at_word": 1,
+        "index": 2,
+        "kind": "Bottom",
+        "speaker": "LSN",
+        "utterance": 3
+      }
+    ],
+    "top": {
+      "begin_at_word": 1,
+      "bullet": [
+        0,
+        1000
+      ],
+      "end_at_word": 2,
+      "index": 2,
+      "kind": "Top",
+      "speaker": "SPK",
+      "utterance": 0
+    }
+  },
+  {
+    "bottoms": [
+      {
+        "begin_at_word": 0,
+        "bullet": [
+          1000,
+          2000
+        ],
+        "end_at_word": 1,
+        "index": 2,
+        "kind": "Bottom",
+        "speaker": "LSN",
+        "utterance": 5
+      }
+    ],
+    "top": {
+      "begin_at_word": 0,
+      "bullet": [
+        1000,
+        2000
+      ],
+      "end_at_word": 1,
+      "index": 2,
+      "kind": "Top",
+      "speaker": "SPK",
+      "utterance": 4
+    }
+  }
+]

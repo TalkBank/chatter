@@ -3,13 +3,48 @@
 
 use talkbank_model::ErrorCollector;
 use talkbank_model::alignment::{
-    WorAdjacentTimingRelation, WorSlotMembershipPolicy, WorSlotTiming, WorTimingBinding,
-    WorTimingCorrespondence, WorTimingSequence, WorTimingSequenceIssue, WorTimingSidecar,
-    assess_wor_timing_sequence, bind_wor_timing, corroborate_wor_timing,
+    WorAdjacentTimingRelation, WorSlotMembershipPolicy, WorSlotTiming, WorSourceContent,
+    WorTimingBinding, WorTimingCorrespondence, WorTimingSequence, WorTimingSequenceIssue,
+    WorTimingSidecar, assess_wor_timing_sequence, bind_wor_timing, corroborate_wor_timing,
     resolve_wor_timing_sidecar,
 };
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_tests::{chat_corpus::ChatCorpus, repo_paths::workspace_root};
+
+/// Source binding is identity, not matching display text or a shared lifetime.
+/// Check root membership using the actual typed node and its recursive leaves.
+fn assert_source_content(
+    location: WorSourceContent<'_>,
+    main: &talkbank_model::model::MainTier,
+    word: &talkbank_model::model::Word,
+) {
+    use talkbank_model::alignment::helpers::{TierDomain, WordItem, walk_words};
+
+    assert!(std::ptr::eq(location.source(), main));
+    assert!(std::ptr::eq(
+        location.content(),
+        &main.content.content[location.index()],
+    ));
+    let mut owns_word = false;
+    walk_words(
+        std::slice::from_ref(location.content()),
+        Some(TierDomain::Wor),
+        &mut |item| {
+            let candidate = match item {
+                WordItem::Word(word) => Some(word),
+                WordItem::ReplacedWord(replaced) => Some(&replaced.word),
+                WordItem::Separator(_) => None,
+            };
+            if candidate.is_some_and(|candidate| std::ptr::eq(candidate, word)) {
+                owns_word = true;
+            }
+        },
+    );
+    assert!(
+        owns_word,
+        "a timing slot must retain its actual producing root"
+    );
+}
 
 /// Generated display tiers use the same projection owner as timing binding.
 /// Utterance-level timing must not be distributed into invented word intervals.
@@ -25,6 +60,8 @@ fn reference_wor_generation_preserves_projection_without_inventing_word_timing()
     let mut empty_projections = 0;
     let mut timed_turns_without_word_timing = 0;
     let mut separators = 0;
+    let mut shared_roots = 0;
+    let mut source_identity_controls = 0;
     for fixture in corpus.fixtures() {
         let file =
             strict_parse(parser.parse_chat_file(fixture.source())).expect("reference parses");
@@ -36,6 +73,33 @@ fn reference_wor_generation_preserves_projection_without_inventing_word_timing()
             );
             let count = projection.slot_count();
             assert_eq!(count.to_string(), count.get().to_string());
+            let roots: Vec<_> = projection.source_content().collect();
+            assert_eq!(roots.len(), count.get());
+            for pair in roots.windows(2) {
+                assert!(pair[0].index() <= pair[1].index());
+                shared_roots += usize::from(pair[0].index() == pair[1].index());
+                assert_eq!(pair[0] == pair[1], pair[0].index() == pair[1].index());
+            }
+            if source_identity_controls == 0
+                && let Some(root) = roots.first()
+            {
+                let copied_main = utterance.main.clone();
+                assert_eq!(copied_main, utterance.main);
+                let copied_projection = copied_main.wor_projection();
+                let copied_root = copied_projection
+                    .source_content()
+                    .next()
+                    .expect("equal main content retains its nonempty slot population");
+                assert_eq!(copied_root.index(), root.index());
+                assert_ne!(copied_root, *root, "a copied model is not the same source");
+                // The public debug projection contains only its index summary,
+                // not the whole main tier repeated for every timing slot.
+                assert_eq!(
+                    format!("{root:?}"),
+                    format!("WorSourceContent {{ index: {}, .. }}", root.index()),
+                );
+                source_identity_controls += 1;
+            }
             let generated = projection.generate_tier();
             assert_eq!(generated.word_count(), count.get());
             assert_eq!(
@@ -66,7 +130,13 @@ fn reference_wor_generation_preserves_projection_without_inventing_word_timing()
             };
             assert_eq!(corroborated.slots().len(), count.get());
             let mut all_unaligned = true;
-            for slot in corroborated.slots() {
+            for (slot, root) in corroborated.slots().iter().zip(&roots) {
+                assert_source_content(slot.source_content(), &utterance.main, slot.main_word());
+                assert_eq!(slot.source_content().index(), root.index());
+                assert!(std::ptr::eq(
+                    slot.source_content().content(),
+                    root.content()
+                ));
                 assert_eq!(slot.wor_word().cleaned_text(), slot.main_text());
                 assert_eq!(
                     slot.wor_word().inline_bullet,
@@ -88,6 +158,11 @@ fn reference_wor_generation_preserves_projection_without_inventing_word_timing()
         }
     }
     assert!(word_slots > 0 && empty_projections > 0);
+    assert!(
+        shared_roots > 0,
+        "nested words must share real root content"
+    );
+    assert_eq!(source_identity_controls, 1);
     assert!(
         timed_turns_without_word_timing > 0,
         "utterance timing is not word timing"
@@ -318,12 +393,12 @@ fn canonical_wor_sequences_require_positive_complete_timing_before_exposing_hull
                 let expected: Vec<_> = corroborated
                     .slots()
                     .iter()
-                    .map(|slot| (slot.main_word(), slot.timing()))
+                    .map(|slot| (slot.main_word(), slot.timing(), slot.source_content()))
                     .collect();
                 let issues: Vec<_> = expected
                     .iter()
                     .enumerate()
-                    .filter_map(|(index, (_, timing))| match timing {
+                    .filter_map(|(index, (_, timing, _))| match timing {
                         WorSlotTiming::Unaligned => Some((index, None)),
                         WorSlotTiming::Timed(interval)
                             if interval.end().get() <= interval.start().get() =>
@@ -377,7 +452,20 @@ fn canonical_wor_sequences_require_positive_complete_timing_before_exposing_hull
                         );
                         assert_eq!(complete.membership_policy(), policy);
                         assert_eq!(complete.slots().len(), expected.len());
-                        for (actual, (word, timing)) in complete.slots().iter().zip(&expected) {
+                        assert_eq!(complete.slots().is_empty(), expected.is_empty());
+                        assert!(std::ptr::eq(
+                            complete.slots().first().main_word(),
+                            expected.first().expect("independent nonempty projection").0,
+                        ));
+                        for (actual, (word, timing, root)) in
+                            complete.slots().into_iter().zip(&expected)
+                        {
+                            assert_source_content(actual.source_content(), &utterance.main, word);
+                            assert_eq!(actual.source_content().index(), root.index());
+                            assert!(std::ptr::eq(
+                                actual.source_content().content(),
+                                root.content()
+                            ));
                             assert!(
                                 std::ptr::eq(actual.main_word(), *word),
                                 "main tier retains lexical ownership"
@@ -411,14 +499,14 @@ fn canonical_wor_sequences_require_positive_complete_timing_before_exposing_hull
                             (end - start).to_string()
                         );
                         assert_eq!(complete.adjacencies().len(), complete.slots().len() - 1);
-                        for (index, (pair, adjacency)) in complete
+                        for (index, ((previous_slot, current_slot), adjacency)) in complete
                             .slots()
-                            .windows(2)
+                            .adjacent_pairs()
                             .zip(complete.adjacencies())
                             .enumerate()
                         {
-                            let previous = pair[0].timing();
-                            let current = pair[1].timing();
+                            let previous = previous_slot.timing();
+                            let current = current_slot.timing();
                             let (left, right) = match adjacency {
                                 WorAdjacentTimingRelation::Gap {
                                     previous_slot,

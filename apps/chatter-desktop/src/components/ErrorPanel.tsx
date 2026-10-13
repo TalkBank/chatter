@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
-import type { FileEntry, ParseError } from "../types";
+import type { FileEntry, ParseError, RenderedDiagnostic } from "../types";
 import { fileOutcome, fileStatusLabel } from "../hooks/validationState";
 
 type SeverityFilter = "all" | "Error" | "Warning";
@@ -15,7 +15,7 @@ type SeverityFilter = "all" | "Error" | "Warning";
 interface Props {
   file: FileEntry | null;
   clanAvailable: boolean;
-  onOpenInClan: (file: string, error: ParseError) => void;
+  onOpenInClan: (file: string, diagnostic: RenderedDiagnostic) => void;
   onRevealFile?: (path: string) => void;
 }
 
@@ -151,8 +151,8 @@ export default function ErrorPanel({
           error={diagnostic.error}
           renderedHtml={diagnostic.renderedHtml}
           renderedText={diagnostic.renderedText}
-          clanAvailable={clanAvailable}
-          onOpenInClan={() => onOpenInClan(file.path, diagnostic.error)}
+          clanAvailable={clanAvailable && diagnostic.sourceContext.kind === "available"}
+          onOpenInClan={() => onOpenInClan(file.path, diagnostic)}
           collapsed={collapsedCards.has(i)}
           onToggle={() => toggleCard(i)}
         />

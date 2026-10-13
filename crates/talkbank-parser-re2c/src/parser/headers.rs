@@ -39,12 +39,31 @@ pub fn languages_header_parser<'tokens, 'a: 'tokens>()
 
     ws().ignore_then(
         code.separated_by(ws().then(comma).then(ws()))
-            .allow_trailing()
+            .at_least(1)
             .collect::<Vec<_>>(),
     )
     .then_ignore(ws())
     .then_ignore(opt_newline())
     .map(|codes| LanguagesHeaderParsed { codes })
+}
+
+/// Validate media field structure without dropping commas or empty slots.
+pub(super) fn media_header_parser<'tokens, 'a: 'tokens>()
+-> impl Parser<'tokens, Tokens<'tokens, 'a>, ()> + Clone {
+    let field = select! { Token::MediaWord(_) => (), Token::MediaFilename(_) => () };
+    let comma = select! { Token::Comma(_) => () };
+    ws().ignore_then(field)
+        .then_ignore(ws())
+        .then_ignore(comma)
+        .then_ignore(ws())
+        .then_ignore(field)
+        .then_ignore(
+            ws().ignore_then(comma)
+                .ignore_then(ws())
+                .ignore_then(field)
+                .or_not(),
+        )
+        .then_ignore(ws())
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -128,7 +147,9 @@ pub(crate) fn parse_participants_tokens<'tokens, 'source: 'tokens>(
                     }
                 };
             }
-            Token::Whitespace(_) | Token::Newline(_) => {}
+            // Continuations are lexer-owned separators, not participant words
+            // or recovery faults. They preserve the pending entry/comma state.
+            Token::Whitespace(_) | Token::Newline(_) | Token::Continuation(_) => {}
             _ => report_participant_syntax(
                 span,
                 ErrorCode::UnparsableContent,

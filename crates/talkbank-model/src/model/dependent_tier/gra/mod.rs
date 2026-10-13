@@ -56,12 +56,14 @@
 //!  NSUBJ    OBJ     PUNCT
 //! ```
 
+mod lowering;
 mod relation;
 mod relation_type;
 mod tier;
 mod tier_type;
 
 // Re-export all public types
+pub use lowering::{GraLowering, GraLoweringReceipt};
 pub use relation::GrammaticalRelation;
 pub use relation_type::GrammaticalRelationType;
 pub use tier::{GraCompleteness, GraTier, WholeGra};

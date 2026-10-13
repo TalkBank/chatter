@@ -13,14 +13,9 @@ Word enclosed in overlap markers
 ```cst
 (standalone_word
   (word_body
-    (word_content_nontext
-      (overlap_point))
-    (word_content
-      (word_segment))
-    (word_content
-      (overlap_point))
-  )
-)
+    (overlap_point)
+    (word_segment)
+    (overlap_point)))
 ```
 
 ## Metadata

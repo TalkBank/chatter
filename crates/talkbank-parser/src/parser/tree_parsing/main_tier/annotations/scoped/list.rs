@@ -6,13 +6,13 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Retracing_and_Repetition>
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use crate::generated_traversal::{Absence, Never};
 use crate::generated_traversal::{
-    AsRawNode, BaseAnnotationChoice, BaseAnnotationsNode, NodeSlot, RecoveryNode, SlotView,
-    extract_base_annotations,
+    Absence, AsRawNode, BaseAnnotationChoiceBoundView, BaseAnnotationsNode, KindSlot, Never,
+    NodeSlot, SourceBound, SourceBoundKind, SourceField, SourceSlotView, WhitespacesNode,
 };
 use crate::parser::ChildCapacity;
-use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
+use crate::parser::typed_cst::read_source_field;
 use talkbank_model::ParseOutcome;
 use tree_sitter::Node;
 
@@ -53,41 +53,45 @@ use super::single::{ParsedAnnotation, parse_single_annotation};
 /// and `kind()` string.
 ///
 /// Callers retain the generated `base_annotations` wrapper through dispatch.
-pub(crate) fn parse_scoped_annotations(
-    typed: BaseAnnotationsNode<'_>,
-    source: &str,
+pub(crate) fn parse_scoped_annotations<'tree>(
+    typed: SourceBound<'tree, '_, BaseAnnotationsNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<Vec<ParsedAnnotation>, crate::generated_traversal::ReconstructionFault> {
+) -> Vec<ParsedAnnotation> {
     let node = typed.raw_node();
-    let children = extract_base_annotations(typed)?;
-    let repeat = children.child_1.slot();
+    let associated = typed.extract();
+    let children = associated.children();
     let mut markers = ChildCapacity::for_pairs_of(node).into_vec();
-    if let Some(first) = pair(children.child_0.slot(), 0, source, errors) {
+    if let Some(first) = pair(associated.field_child_0().slot(), 0, errors) {
         push_annotation(
-            &first.unexpected,
-            first.child_0.slot(),
-            first.child_1.slot(),
+            first.field_unexpected(),
+            first.field_child_0().slot(),
+            first.field_child_1().slot(),
             0,
-            source,
+            |choice| choice.view().into(),
             errors,
             &mut markers,
         );
     }
-    for (index, element) in repeat.iter().enumerate() {
-        if let Some(next) = pair(element.slot(), index + 1, source, errors) {
+    for (index, element) in associated.field_child_1().slot().iter().enumerate() {
+        if let Some(next) = pair(element.slot(), index + 1, errors) {
             push_annotation(
-                &next.unexpected,
-                next.child_0.slot(),
-                next.child_1.slot(),
+                next.field_unexpected(),
+                next.field_child_0().slot(),
+                next.field_child_1().slot(),
                 index + 1,
-                source,
+                |choice| choice.view().into(),
                 errors,
                 &mut markers,
             );
         }
     }
-    surface_displaced(&children.unexpected, "base_annotations", source, errors);
-    Ok(markers)
+    surface_displaced(
+        &children.unexpected,
+        "base_annotations",
+        typed.source(),
+        errors,
+    );
+    markers
 }
 
 /// The pair at `index` in the run: `None` for a sequence that did not match
@@ -95,25 +99,23 @@ pub(crate) fn parse_scoped_annotations(
 /// the old walk reported it, which expected a `whitespaces` child where the
 /// pair begins. A sequence is never MISSING or displaced, and the slot's
 /// type says so.
-fn pair<'a, 'tree, T, A: Absence>(
-    slot: &'a NodeSlot<'tree, T, Never, Never, A>,
+fn pair<'value, 'tree: 'value, 'source, T, A: Absence>(
+    slot: SourceField<'value, 'tree, 'source, NodeSlot<'tree, T, Never, Never, A>>,
     index: usize,
-    source: &str,
     errors: &impl ErrorSink,
-) -> Option<&'a T> {
+) -> Option<SourceField<'value, 'tree, 'source, T>> {
     match slot.view() {
-        SlotView::Present(element) => Some(element),
-        SlotView::Error(bad) => {
+        SourceSlotView::Present(element) => Some(element),
+        SourceSlotView::Error(bad) => {
             report_mismatch(
                 bad,
                 "'whitespaces'",
                 whitespace_child_position(index),
-                source,
                 errors,
             );
             None
         }
-        SlotView::Absent(_) => None,
+        SourceSlotView::Absent(_) => None,
     }
 }
 
@@ -132,12 +134,13 @@ fn annotation_child_position(pair_index: usize) -> usize {
 /// The one `ContentAnnotationParseError` wording, shared by the three
 /// positions that can hold an ERROR node.
 fn report_mismatch(
-    bad: Node,
+    bad: SourceField<'_, '_, '_, Node<'_>>,
     expected: &str,
     position: usize,
-    source: &str,
     errors: &impl ErrorSink,
 ) {
+    let source = bad.source();
+    let bad = bad.raw_node();
     errors.report(ParseError::new(
         ErrorCode::ContentAnnotationParseError,
         Severity::Error,
@@ -155,43 +158,42 @@ fn report_mismatch(
 /// and either child that holds an ERROR is reported as the old walk reported
 /// it, numbered by child (see [`whitespace_child_position`]). `C` is the
 /// generated choice at this position, lowered into the one annotation set.
-fn push_annotation<'tree, W, M, U, A, C>(
-    unexpected: &[Node],
-    whitespace: &NodeSlot<'tree, W, M, U, A>,
-    annotation: &crate::generated_traversal::KindSlot<'tree, C>,
+fn push_annotation<'value, 'tree: 'value, 'source: 'value, C: SourceBoundKind<'tree>>(
+    unexpected: SourceField<'value, 'tree, 'source, Vec<Node<'tree>>>,
+    whitespace: SourceField<'value, 'tree, 'source, KindSlot<'tree, WhitespacesNode<'tree>>>,
+    annotation: SourceField<'value, 'tree, 'source, KindSlot<'tree, C>>,
     pair_index: usize,
-    source: &str,
+    lower: impl FnOnce(SourceBound<'tree, 'source, C>) -> BaseAnnotationChoiceBoundView<'tree, 'source>,
     errors: &impl ErrorSink,
     markers: &mut Vec<ParsedAnnotation>,
-) where
-    U: RecoveryNode<'tree>,
-    C: Copy + crate::generated_traversal::AsRawNode<'tree> + Into<BaseAnnotationChoice<'tree>>,
-{
-    surface_displaced(unexpected, "base_annotations", source, errors);
-    expect_delimiter(whitespace, |bad| {
+) {
+    for bad in unexpected.iter() {
+        surface_displaced(&[bad.raw_node()], "base_annotations", bad.source(), errors);
+    }
+    if let SourceSlotView::Error(bad) = whitespace.view() {
         report_mismatch(
             bad,
             "'whitespaces'",
             whitespace_child_position(pair_index),
-            source,
             errors,
         );
-    });
+    }
     match annotation.view() {
-        SlotView::Present(choice) => {
-            let choice: BaseAnnotationChoice<'tree> = (*choice).into();
-            if let ParseOutcome::Parsed(parsed) = parse_single_annotation(&choice, source, errors) {
+        SourceSlotView::Present(choice) => {
+            let Some(choice) = read_source_field(choice, errors) else {
+                return;
+            };
+            if let ParseOutcome::Parsed(parsed) = parse_single_annotation(lower(choice), errors) {
                 markers.push(parsed);
             }
         }
         // A MISSING annotation is the whole-tree pass's to report (E342), and
         // its kind names nothing to decode: see the decoder's doc.
-        SlotView::Missing(_) | SlotView::Absent(_) => {}
-        SlotView::Error(bad) => report_mismatch(
+        SourceSlotView::Missing(_) | SourceSlotView::Absent(_) => {}
+        SourceSlotView::Error(bad) => report_mismatch(
             bad,
             "annotation",
             annotation_child_position(pair_index),
-            source,
             errors,
         ),
     }

@@ -69,7 +69,7 @@ word_markers: two @ suffixes, form marker then language suffix (the ruled case)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -173,7 +173,7 @@ word_markers: two @ suffixes, both form markers
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -263,7 +263,7 @@ word_markers: doubled @ sigil, empty first run
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -353,7 +353,7 @@ word_markers: two @ suffixes, second not a language suffix
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)

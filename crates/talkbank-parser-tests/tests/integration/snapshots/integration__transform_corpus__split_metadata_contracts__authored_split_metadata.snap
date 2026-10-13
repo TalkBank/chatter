@@ -1,0 +1,13 @@
+---
+source: crates/talkbank-parser-tests/tests/integration/split_metadata_corpus.rs
+assertion_line: 119
+expression: "text.join(\"\\n\")"
+---
+*CHI:	+^ [- spa] hola , . 100_300
+%com:	first-child comment
+%xtra:	first-child custom annotation
+%act:	pointing
+%wor:	[- spa] , hola 100_300 , .
+
+*CHI:	[- spa] mundo ? [+ ask] [+ context demo] 300_600
+%wor:	[- spa] mundo 300_600 ?

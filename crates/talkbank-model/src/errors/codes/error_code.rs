@@ -17,7 +17,7 @@ use super::generated_error_code::ErrorCode;
 
 /// Whether a check is enforced by this binary, or only documented.
 ///
-/// A closed two-state fact about an [`ErrorCode`], living beside the code
+/// A closed enforcement state for an [`ErrorCode`], living beside the code
 /// itself. It used to live in the CLI as a hand-maintained list of 43 code
 /// STRINGS whose own doc said it "must be kept in sync" with
 /// `spec/errors/*.md`. It was not in sync: 15 of 225 codes were reported
@@ -44,6 +44,83 @@ pub enum CheckStatus {
     OptIn,
     /// Documented in `spec/errors/` but not yet enforced.
     Planned,
+}
+
+#[cfg(test)]
+mod registry_contract_tests {
+    use super::*;
+
+    // Independent native metadata/wire specimen; not a CHAT error registry.
+    #[talkbank_derive::error_code_enum]
+    enum WireCode {
+        #[code("E001")]
+        Active,
+        #[code("E002")]
+        #[status(planned)]
+        Planned,
+        #[code("E003")]
+        #[status(opt_in)]
+        OptIn,
+        #[code("E999")]
+        UnknownError,
+    }
+
+    #[test]
+    fn native_registry_wire_and_status_contracts_preserve_exact_codes() {
+        let cases = [
+            (WireCode::Active, "E001"),
+            (WireCode::Planned, "E002"),
+            (WireCode::OptIn, "E003"),
+            (WireCode::UnknownError, "E999"),
+        ];
+        for (value, code) in cases {
+            assert_eq!(
+                serde_json::to_string(&value).unwrap(),
+                format!("\"{code}\"")
+            );
+            assert_eq!(
+                serde_json::from_str::<WireCode>(&format!("\"{code}\"")).unwrap(),
+                value
+            );
+            assert_eq!(WireCode::parse_exact(code), Some(value));
+            assert_eq!(value.to_string(), code);
+            assert_eq!(value.as_str(), code);
+            assert_eq!(
+                value.documentation_url(),
+                format!("https://talkbank.org/errors/{code}")
+            );
+        }
+        assert_eq!(WireCode::all(), &cases.map(|(value, _)| value));
+        assert_eq!(
+            WireCode::iter().copied().collect::<Vec<_>>(),
+            cases.map(|(value, _)| value)
+        );
+        assert_eq!(WireCode::planned(), &[WireCode::Planned]);
+        assert_eq!(WireCode::opt_in(), &[WireCode::OptIn]);
+        for unknown in ["E1", "E0001", "E004", "", " E001", "E001 "] {
+            assert_eq!(WireCode::parse_exact(unknown), None);
+            assert!(serde_json::from_str::<WireCode>(&format!("\"{unknown}\"")).is_err());
+        }
+    }
+
+    #[test]
+    fn actual_generated_registry_roundtrips_and_status_lists_partition_codes() {
+        for code in ErrorCode::iter() {
+            let wire = serde_json::to_string(code).unwrap();
+            assert_eq!(serde_json::from_str::<ErrorCode>(&wire).unwrap(), *code);
+            assert_eq!(ErrorCode::parse_exact(code.as_str()), Some(*code));
+            let expected = match (
+                ErrorCode::planned().contains(code),
+                ErrorCode::opt_in().contains(code),
+            ) {
+                (false, false) => CheckStatus::Active,
+                (true, false) => CheckStatus::Planned,
+                (false, true) => CheckStatus::OptIn,
+                (true, true) => panic!("generated status lists overlap: {code}"),
+            };
+            assert_eq!(code.check_status(), expected);
+        }
+    }
 }
 
 /// The Phon `%x` dependent-tier validation codes, as one group.

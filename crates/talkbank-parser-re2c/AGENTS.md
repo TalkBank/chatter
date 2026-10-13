@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-parser-re2c/AGENTS.md)
 
 This file provides guidance to coding agents working in this crate.
 
@@ -165,15 +165,19 @@ Use a name filter for the boundary being changed:
 
 ```sh
 cargo test -p talkbank-parser-re2c --test integration word_equivalence_lengthening
-cargo test -p talkbank-parser-re2c --test integration error_parity::backends_diverge_only_where_recorded -- --nocapture
+cargo test -p talkbank-parser-re2c --test integration error_parity::backends_report_every_tree_sitter_error -- --exact --nocapture
 ```
 
 `lexer_tests`, `golden_parse`, `parser_fixtures`, `model_study`, and the
 source-provenance modules cover focused behavior. `equivalence_tests` covers
-the repository reference fixtures. The spec-parity ratchet compares diagnostic
-sets and declared expectations separately; see `docs/parity-report.md`.
+the repository reference fixtures. The one-way comparison includes every
+declared error-spec example, retaining actual severity and parse/validation
+stages. A tree-sitter error requires some re2c error for 1.0; warnings, silence
+and baseline exemptions do not satisfy it. Diagnostic/recovery identity is not
+required. See `docs/parity-report.md` for finite scope and fragment limits.
 
-**When a test fails, STOP and ask.** CHAT semantics are domain-specific.
+Diagnose failures and repair demonstrated defects within the authorized task.
+Ask only when CHAT semantics or a material architecture decision is unresolved.
 
 A failure needs diagnosis and CHAT-rule adjudication, not a new baseline entry
 or an invented recovery rule. Model equality, source spans, emitted diagnostics
@@ -230,4 +234,6 @@ Key integration points:
 
 ## Equivalence Status
 
-The checked-in reference-fixture gate and the invalid-spec ratchet provide different evidence. See `docs/parity-report.md` for the measured scope and unresolved gaps; passing one does not establish complete backend equivalence.
+The reference comparison and one-way error comparison provide different evidence.
+See `docs/parity-report.md` for measured scope and unresolved gaps; passing one
+does not establish the other or complete backend equivalence.

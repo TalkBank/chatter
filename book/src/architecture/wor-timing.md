@@ -31,12 +31,17 @@ required to observe a bullet already in the typed CHAT model. A `%wor` tier
 cannot carry a trailing tier-level bullet: the grammar does not permit that
 state, and `WorTier` cannot construct or serialize it.
 
-Complete CHAT admission rejects a word bullet that ends before it starts
-(E362). A zero-duration word bullet is legal, as are untimed words, and there is
+Complete CHAT admission rejects a word bullet that ends at or before it starts
+(E362). Untimed words remain legal partial timing, and there is
 no cross-word monotonicity, word-overlap or cross-speaker restriction (see the
 leniency policy, Decision 10). A consumer that needs positive intervals, such as
-`assess_wor_timing_sequence`, refuses them at its own boundary. Each word bullet
+`assess_wor_timing_sequence`, additionally requires every slot to be timed. Each word bullet
 carries its own source span, so E362 is located inside its `%wor` tier.
+
+These are word-level rules, not the main-tier timeline rules. See
+[Bullet Validation](bullet-validation.md#current-policy-by-timing-surface)
+for the global E362 start-order check, per-speaker E701/E704, media linkage,
+and the distinction between overlapping words and overlapping utterances.
 
 The adaptive source-bound replacement plan (`WordTimingPlan::PreferRetained`)
 discards only the word tiers that are actually wrong, and keeps the rest:
@@ -115,6 +120,8 @@ Each corroborated slot has:
 
 - a borrowed typed main-tier `Word` and its `cleaned_text`, which remain the
   only lexical identity;
+- `WorSourceContent`, retaining the producing main tier and that word's
+  top-level content position, including the whole root of a nested word;
 - the exact corroborating `%wor` `Word`, exposed by `wor_word()` for
   source-bound display-token updates that preserve timing and metadata;
 - `Timed(WorRecordedInterval)` when the corresponding `%wor` entry has an
@@ -205,6 +212,19 @@ to obtain lexical slots. There is no independent counter or generator whose
 agreement must be tested at runtime. Count drift between a parsed legacy tier
 and its main tier remains a real `Drifted` data state.
 
+The projection also issues `WorSourceContent` for each selected word. Its
+private construction binds the root index to the immutable producing main tier;
+`source()`, `index()` and `content()` read that association. Locations compare
+by producing main-tier identity and position, not semantic equality of copied
+models; comparison and debug formatting do not traverse that main tier.
+These stronger source comparisons also apply to timing-binding equality.
+Locations can be inspected without claiming timing. The lexical slot carries the same
+location through count matching, corroboration and complete timing rather than
+asking a downstream consumer to reconstruct it. Ordinary and speaker splits
+use these positions to travel their source-bound content groups, retaining
+indivisible roots and the spoken originals of replacements. This main-tier
+association does not establish a legacy `%wor` tier's immutable common origin.
+
 ```mermaid
 flowchart LR
     Main[Typed MainTier] --> Projection[WorMainTierProjection]
@@ -213,14 +233,14 @@ flowchart LR
     Parsed[Parsed legacy WorTier] --> Binding
     Binding --> Missing
     Binding --> Drifted
-    Binding --> CountMatched
+    Binding --> CountMatched[CountMatched, source roots retained]
     CountMatched --> Correspondence{Canonical token correspondence}
     Correspondence --> Uncorroborated
-    Correspondence --> Corroborated
+    Correspondence --> Corroborated[Corroborated, source roots retained]
     Corroborated --> Sequence{Sequence assessment}
     Sequence --> Empty
     Sequence --> Rejected
-    Sequence --> Complete
+    Sequence --> Complete[Complete, source roots retained]
 ```
 
 ## Generation and parsing

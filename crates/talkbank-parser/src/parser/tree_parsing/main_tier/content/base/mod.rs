@@ -57,14 +57,7 @@ pub(crate) fn parse_base_content<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let source = typed.source();
-    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        source,
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let associated = typed.extract();
     let children = associated.children();
     let content = match associated.field_content().slot().view() {
         SourceSlotView::Present(choice) => {
@@ -80,7 +73,7 @@ pub(crate) fn parse_base_content<'tree>(
                     parse_pause_node(node.node(), source, errors).map(UtteranceContent::Pause)
                 }
                 BaseContentItemChoiceBoundView::NonwordWithOptionalAnnotations(node) => {
-                    parse_nonword_content(node.node(), source, errors)
+                    parse_nonword_content(node, errors)
                 }
                 BaseContentItemChoiceBoundView::Freecode(node) => {
                     parse_freecode(node.node(), source, errors)

@@ -27,12 +27,16 @@ See: https://talkbank.org/0info/manuals/CHAT.html#TrailingOff_Terminator
       (content_item
         (base_content_item
           (word_with_optional_annotations
-            (standalone_word))))
+            (standalone_word
+              (word_body
+                (word_segment))))))
       (whitespaces)
       (content_item
         (base_content_item
           (word_with_optional_annotations
-            (standalone_word)))))
+            (standalone_word
+              (word_body
+                (word_segment)))))))
     (utterance_end
       (trailing_off)
       (newline))))

@@ -228,7 +228,6 @@ const UNCOVERED_PAIRS: &[(&str, &str)] = &[
     ("mor_contents", "interruption"),
     ("mor_contents", "self_interruption"),
     ("main_tier", "sep_trailing_space"),
-    ("text_with_bullets", "continuation"),
     ("mor_contents", "trailing_off_question"),
     ("mor_contents", "interrupted_question"),
     ("mor_contents", "self_interrupted_question"),

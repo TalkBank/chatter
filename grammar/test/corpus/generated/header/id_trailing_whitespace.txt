@@ -5,4 +5,4 @@ id_trailing_whitespace - @ID header with trailing whitespace in the custom field
 
 --------------------------------------------------------------------------------
 
-(source_file (id_header (id_prefix) (header_sep (colon) (tab)) (id_contents (id_languages (languages_contents (language_code))) (pipe) (id_corpus) (pipe) (id_speaker) (pipe) (id_age) (pipe) (id_sex (male_value)) (pipe) (id_group) (pipe) (pipe) (id_role) (pipe) (pipe) (id_custom_field) (whitespaces) (pipe)) (newline)))
+(source_file (id_header (id_prefix) (header_sep (colon) (tab)) (id_contents (id_languages (id_language (language_code))) (pipe) (id_corpus) (pipe) (id_speaker) (pipe) (id_age) (pipe) (id_sex (male_value)) (pipe) (id_group) (pipe) (pipe) (id_role) (pipe) (pipe) (id_custom_field) (whitespaces) (pipe)) (newline)))

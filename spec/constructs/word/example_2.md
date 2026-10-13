@@ -11,8 +11,7 @@ Standalone overlap point without index
 ## Expected CST
 
 ``` cst
-(overlap_point
-  (overlap_point_top_begin))
+(overlap_point)
 ```
 
 ## Metadata

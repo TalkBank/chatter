@@ -1,0 +1,13 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|sample|CHI|||||Child|||
+@Media:	wor-replacements, audio
+@Comment:	Authored word-timing controls: replacements retain the spoken
+	original's timing whether the target contains one or several words.
+*CHI:	this is child [: children] speaking . 100_500
+%wor:	this 100_200 is 200_300 child 300_400 speaking 400_500 .
+*CHI:	this is child [: younger child] speaking . 500_900
+%wor:	this 500_600 is 600_700 child 700_800 speaking 800_900 .
+@End

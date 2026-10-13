@@ -208,20 +208,20 @@ fn record_file(state: &mut TuiState, complete: FileCompleteEvent) {
             Some(FileFailure::ToolFailed(failure.to_string()))
         }
     };
-    let (mut errors, source) = match (complete.status.shown(), &failure) {
-        (Some(shown), _) => (shown.errors.to_vec(), std::sync::Arc::from(shown.source)),
+    let (errors, source) = match (complete.status.shown(), &failure) {
+        (Some(shown), _) => (
+            talkbank_model::enhance_errors_with_source(shown.errors, shown.source).collect(),
+            std::sync::Arc::from(shown.source),
+        ),
         (None, None) => return,
         (None, Some(_)) => (Vec::new(), std::sync::Arc::from("")),
     };
-    // Full line context for miette-style display.
-    talkbank_model::enhance_errors_with_source(&mut errors, &source);
-    let mut file = FileErrors {
+    let file = FileErrors {
         path: complete.path,
         errors,
         source,
         failure,
     };
-    file.ensure_line_columns();
     state.add_file(file);
 }
 
@@ -395,5 +395,38 @@ mod tests {
         let (message, color) = empty_state_message(&state, &phase);
         assert!(message.contains("No .cha files found"), "{message}");
         assert_eq!(color, state.theme.header_err);
+    }
+
+    /// Producer faults keep their evidence and status. Failed presentation is
+    /// visible and cannot invoke CLAN with fabricated source coordinates.
+    #[test]
+    fn unavailable_source_context_is_retained_and_cannot_open_in_clan() {
+        let raw = talkbank_model::ParseError::build(talkbank_model::ErrorCode::InternalError)
+            .at(1, 4)
+            .message("producer coordinate fault")
+            .finish();
+        let failure = talkbank_model::CompletedDiagnostics::admit(vec![raw.clone()]).unwrap_err();
+        let (state, _) = drain(vec![ValidationEvent::FileComplete(FileCompleteEvent {
+            path: "sample.cha".into(),
+            status: FileStatus::InternalFailure {
+                failure,
+                attempt: talkbank_transform::validation_runner::FailedAttempt::Validation {
+                    source: "é🙂".to_owned(),
+                },
+            },
+            cache: talkbank_transform::CacheUse::NotConsulted,
+        })]);
+        assert_eq!(state.files.len(), 1);
+        let shown = state.current_error().expect("retained finding");
+        assert_eq!(shown.original(), &raw);
+        assert!(shown.presentation().is_err());
+        assert!(matches!(
+            state.files[0].failure,
+            Some(FileFailure::ToolFailed(_))
+        ));
+        assert!(matches!(
+            state.open_in_clan(),
+            Err(super::state::OpenInClanError::SourceContext(_))
+        ));
     }
 }

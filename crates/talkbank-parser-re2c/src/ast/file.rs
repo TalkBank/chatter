@@ -35,6 +35,9 @@ pub struct DependentTierEntryParsed<'a> {
     pub tier: DependentTierParsed<'a>,
     #[serde(skip)]
     pub separator: talkbank_model::model::TierSeparator,
+    #[serde(skip)]
+    pub(crate) content_range:
+        Option<talkbank_model::model::dependent_tier::DependentTierContentSpan>,
 }
 
 /// Source extent and separator carried together from a lexed header line.

@@ -11,7 +11,7 @@ cargo-dist-version = "0.33.0"
 # the verified v7.0.1 commit (the floating v7 tag resolves to the same commit).
 github-action-commits = { "actions/checkout" = "3d3c42e5aac5ba805825da76410c181273ba90b1" }
 
-# Build each dist-able package on its own (cargo build -p chatter), not the
+# Build each dist-able package on its own (cargo build -p talkbank-chatter), not the
 # whole workspace. Without this, cargo-dist's default workspace build also
 # compiles the chatter-desktop (Tauri) crate, which pulls glib-sys on Linux and
 # fails the static musl builds; the CLI itself has no GTK/glib dependency.
@@ -41,9 +41,11 @@ github-custom-job-permissions = { release-desktop = { contents = "write" }, rele
 # Do NOT ship a standalone self-updater binary. `chatter update` self-updates
 # IN-PROCESS: it embeds axoupdater as a library, reads the cargo-dist install
 # receipt (keyed by the package name), and replaces the running binary in place
-# from GitHub Releases. That removed the separate `chatter-update` program and
-# the package-name coupling that made `chatter update` report "not installed"
-# on a correct install. No new signing key: the in-process updater downloads the
+# from GitHub Releases. Legacy `chatter` receipts remain readable. The desktop
+# publication prerequisite wraps the new installers under the legacy asset
+# names, preserving payloads and legacy settings, and verifies the uploaded
+# wrappers before announcement, so older binaries can migrate forward.
+# No new signing key: the updater downloads the
 # same codesigned release artifacts the installer uses. See
 # docs/strategy/distribution-and-signing.md "Auto-update".
 install-updater = false

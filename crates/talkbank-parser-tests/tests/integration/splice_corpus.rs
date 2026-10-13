@@ -39,10 +39,10 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
                 let span = Span::new(utterance.main.span.start, last.tier.span().end);
                 let accepted = admit_edits(&file, vec![identity_edit(source, span)]);
                 assert!(
-                    accepted.skipped.is_empty(),
+                    accepted.skipped().is_empty(),
                     "multiple tiers of the same utterance remain one scope"
                 );
-                assert_eq!(accepted.admitted.len(), 1);
+                assert_eq!(accepted.admitted().len(), 1);
                 within_tier_boundaries += 1;
             }
         }
@@ -54,11 +54,11 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
             );
             let refused = admit_edits(&file, vec![crossing]);
             assert!(
-                refused.admitted.is_empty(),
+                refused.admitted().is_empty(),
                 "a clean start cannot license a cross-utterance replacement"
             );
-            assert_eq!(refused.skipped.len(), 1);
-            assert_eq!(refused.skipped[0].reason, SkipReason::OutsideAnyUtterance);
+            assert_eq!(refused.skipped().len(), 1);
+            assert_eq!(refused.skipped()[0].reason, SkipReason::OutsideAnyUtterance);
             crossing_refusals += 1;
         }
         let mut proposed: Vec<_> = file
@@ -68,17 +68,17 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         proposed.reverse();
         let admission = admit_edits(&file, proposed);
         assert!(
-            admission.skipped.is_empty(),
+            admission.skipped().is_empty(),
             "reference main tiers have clean parser provenance"
         );
-        assert_eq!(admission.admitted.len(), file.utterances().count());
-        let mapped = mapped_edit_sites(source, &admission.admitted)
+        assert_eq!(admission.admitted().len(), file.utterances().count());
+        let mapped = mapped_edit_sites(source, admission.admitted())
             .expect("source-derived nonoverlapping spans");
-        assert_eq!(mapped.len(), admission.admitted.len());
+        assert_eq!(mapped.len(), admission.admitted().len());
         for ((site, utterance), proposed) in mapped
             .iter()
             .zip(file.utterances())
-            .zip(admission.admitted.iter().rev())
+            .zip(admission.admitted().iter().rev())
         {
             assert_eq!(
                 site.original(),
@@ -96,12 +96,12 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
             );
             assert_eq!(site.provenance(), proposed.provenance());
         }
-        let output = apply_edits_verified(source, &admission.admitted).expect("verified splice");
+        let output = apply_edits_verified(source, admission.admitted()).expect("verified splice");
         assert_eq!(
             output, source,
             "identity edits preserve every byte, including outside all main tiers"
         );
-        verify_splice(source, &output, &admission.admitted).expect("external output verification");
+        verify_splice(source, &output, admission.admitted()).expect("external output verification");
         let reparsed =
             strict_parse(parser.parse_chat_file(&output)).expect("spliced reference parses");
         assert!(file.semantic_eq(&reparsed));
@@ -186,9 +186,14 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
             })
             .collect();
         let normalization = admit_edits(&file, normalized);
-        assert!(normalization.skipped.is_empty());
-        let normalized = apply_edits_verified(source, &normalization.admitted)
+        assert!(normalization.skipped().is_empty());
+        let normalized = normalization
+            .into_admitted()
+            .map(source)
+            .expect("canonical normalization mapping")
+            .apply_verified()
             .expect("canonical main-tier splice");
+        assert_eq!(normalized.plan().source(), source);
         let normalized_model =
             strict_parse(parser.parse_chat_file(&normalized)).expect("canonical splice parses");
         assert!(
@@ -196,22 +201,20 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
             "canonical splice semantics: {}",
             fixture.path().display()
         );
-        for site in
-            mapped_edit_sites(source, &normalization.admitted).expect("normalization mapping")
-        {
+        for site in normalized.plan().sites() {
             assert_eq!(
                 &normalized[site.spliced().start as usize..site.spliced().end as usize],
                 site.replacement().as_str(),
                 "replacement resides at its mapped coordinate"
             );
         }
-        normalized_changes += usize::from(normalized != source);
+        normalized_changes += usize::from(normalized.text() != source);
 
         let mut extra = output.clone();
         extra.push('\n');
         assert!(
             matches!(
-                verify_splice(source, &extra, &admission.admitted),
+                verify_splice(source, &extra, admission.admitted()),
                 Err(GateError::UnexpectedChangeOutsideSpans { .. })
             ),
             "unrecorded extra tail must refuse"
@@ -220,12 +223,12 @@ fn reference_splice_mapping_preserves_source_and_refuses_coordinate_corruption()
         truncated.pop().expect("nonempty CHAT source");
         assert!(
             matches!(
-                verify_splice(source, &truncated, &admission.admitted),
+                verify_splice(source, &truncated, admission.admitted()),
                 Err(GateError::UnexpectedChangeOutsideSpans { .. })
             ),
             "unrecorded truncation must refuse"
         );
-        if let Some(first) = admission.admitted.first() {
+        if let Some(first) = admission.admitted().first() {
             let duplicate = [first.clone(), first.clone()];
             assert!(matches!(
                 mapped_edit_sites(source, &duplicate),

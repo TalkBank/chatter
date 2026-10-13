@@ -181,7 +181,7 @@ fn run_path_command(
     Ok(cmd.output()?)
 }
 
-fn run_prefix_clear(
+pub(crate) fn run_prefix_clear(
     harness: &CliHarness,
     prefix: &Path,
     dry_run: bool,
@@ -198,7 +198,7 @@ fn run_prefix_clear(
     Ok(harness.chatter_cmd().args(args).output()?)
 }
 
-fn cache_stats_json(harness: &CliHarness) -> Result<Value, TestError> {
+pub(crate) fn cache_stats_json(harness: &CliHarness) -> Result<Value, TestError> {
     let stats = run_command(harness, &["cache", "stats", "--format", "json"])?;
     assert_success(&stats, "cache stats --format json");
     parse_json(&stats)

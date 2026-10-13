@@ -27,8 +27,8 @@ use Unix shell syntax; on Windows use PowerShell or Git Bash.
 
 | You are changing | You also need |
 |---|---|
-| the grammar (`grammar/grammar.js`) | Node.js at `grammar/.nvmrc`, then `cd grammar && npm ci` for the locked Tree-sitter CLI 0.27.0 |
-| the grammar, so the typed traversal must be regenerated | a local checkout of `tree-sitter-grammar-utils`, which is not yet published (see [Grammar Workflow](grammar-workflow.md)) |
+| the grammar (`grammar/grammar.js`) | Node.js at `grammar/.nvmrc`, then `cd grammar && npm ci` for the locked Tree-sitter CLI |
+| the grammar, so the typed traversal must be regenerated | Python 3.11 or later and a clean maintainer-provided `tree-sitter-grammar-utils` checkout at `tsgu-revision`; its source is not yet publicly available (see [Grammar Workflow](grammar-workflow.md)) |
 | the re2c lexer (`crates/talkbank-parser-re2c/src/lexer.re`) | `re2c` at the exact version in `re2c-version.toml`, which provides the `re2rust` binary; `just verify-vendored-lexer` rejects drift |
 | the book | `just book-install-tools` (installs mdBook and lychee into `.tooling/`) |
 

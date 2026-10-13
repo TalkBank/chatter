@@ -15,29 +15,20 @@ Example %wor tier
   (wor_tier_prefix)
   (tier_sep
     (colon)
-    (tab)
-  )
+    (tab))
   (wor_tier_body
     (wor_word_item
-      (standalone_word)
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+      (standalone_word
+        (word_body
+          (word_segment))))
+    (whitespaces)
     (wor_word_item
-      (standalone_word)
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+      (standalone_word
+        (word_body
+          (word_segment))))
+    (whitespaces)
     (period)
-    (newline)
-  )
-)
+    (newline)))
 ```
 
 ## Metadata

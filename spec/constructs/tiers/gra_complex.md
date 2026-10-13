@@ -15,55 +15,36 @@ Example %gra tier with complex structure (NSUBJ, ROOT, OBJ, PUNCT)
   (gra_tier_prefix)
   (tier_sep
     (colon)
-    (tab)
-  )
+    (tab))
   (gra_contents
     (gra_relation
       (gra_index)
       (pipe)
       (gra_head)
       (pipe)
-      (gra_relation_name)
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+      (gra_relation_name))
+    (whitespaces)
     (gra_relation
       (gra_index)
       (pipe)
       (gra_head)
       (pipe)
-      (gra_relation_name)
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+      (gra_relation_name))
+    (whitespaces)
     (gra_relation
       (gra_index)
       (pipe)
       (gra_head)
       (pipe)
-      (gra_relation_name)
-    )
-    (whitespaces
-      (whitespace
-        (space)
-      )
-    )
+      (gra_relation_name))
+    (whitespaces)
     (gra_relation
       (gra_index)
       (pipe)
       (gra_head)
       (pipe)
-      (gra_relation_name)
-    )
-  )
-  (newline)
-)
+      (gra_relation_name)))
+  (newline))
 ```
 
 ## Metadata

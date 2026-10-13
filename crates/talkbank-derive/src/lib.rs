@@ -27,7 +27,7 @@
 //! | `#[derive(SemanticEq)]` | `SemanticEq` + `SemanticDiff` | Compare AST nodes ignoring spans and metadata |
 //! | `#[derive(SpanShift)]` | `SpanShift` | Shift byte-offset spans after edits |
 //! | `#[derive(ValidationTagged)]` | `ValidationTagged` | Map enum variants to `ValidationTag::{Clean,Warning,Error}` |
-//! | `#[error_code_enum]` | (attribute) | Generate `as_str()`, `new()`, `Display`, and serde glue for error code enums |
+//! | `#[error_code_enum]` | (attribute) | Generate exact code parsing, ordered enumeration, status lists and serde glue |
 //!
 //! # Contract with consuming crates
 //!
@@ -105,10 +105,10 @@
 //! ## `error_code_enum` -- error code string/serde/display glue
 //!
 //! Annotate each variant with `#[code("E###")]` to get serde rename
-//! attributes, `as_str()`, `new()`, `Display`, and `documentation_url()`
+//! attributes, `as_str()`, `parse_exact()`, `Display`, and `documentation_url()`
 //! from a single source of truth:
 //!
-//! ```ignore
+//! ```rust
 //! use talkbank_derive::error_code_enum;
 //!
 //! #[error_code_enum]
@@ -119,13 +119,15 @@
 //!     InvalidLineFormat,
 //!     #[code("E201")]
 //!     MissingBeginHeader,
+//!     #[code("E999")]
+//!     UnknownError,
 //! }
 //!
 //! // Generated methods:
 //! // ErrorCode::InternalError.as_str()           -> "E001"
 //! // ErrorCode::parse_exact("E101")              -> Some(ErrorCode::InvalidLineFormat)
 //! // format!("{}", ErrorCode::MissingBeginHeader) -> "E201"
-//! // ErrorCode::InternalError.documentation_url() -> "https://..."
+//! assert_eq!(ErrorCode::InternalError.documentation_url(), "https://talkbank.org/errors/E001");
 //! ```
 //!
 //! # Related CHAT Manual Sections
@@ -139,7 +141,10 @@ use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
 mod error_code_enum;
+mod field_plan;
 mod helpers;
+mod metadata;
+mod registry;
 mod semantic_diff;
 mod semantic_eq;
 mod span_shift;
@@ -150,6 +155,8 @@ mod validation_tagged;
 /// Generates a field-by-field semantic equality check. By default all fields are
 /// compared. Mark fields with `#[semantic_eq(skip)]` to exclude them -- typically
 /// `span`, `parse_health`, or other runtime metadata that differs between parsers.
+/// The field-only control accepts exactly one `skip` identifier; malformed,
+/// duplicate or misplaced annotations are compile errors.
 ///
 /// Also emits the companion `SemanticDiff` implementation so both equality and
 /// structured diffing stay in lock-step. `SemanticDiff` produces a `Vec<Difference>`
@@ -184,6 +191,10 @@ mod validation_tagged;
 #[proc_macro_derive(SemanticEq, attributes(semantic_eq))]
 pub fn derive_semantic_eq(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+    let input = match field_plan::InputPlan::<field_plan::Semantic>::admit(input) {
+        Ok(input) => input,
+        Err(error) => return error.to_compile_error().into(),
+    };
 
     let semantic_eq_impl = semantic_eq::impl_semantic_eq(&input);
     let semantic_diff_impl = semantic_diff::impl_semantic_diff(&input);
@@ -206,6 +217,8 @@ pub fn derive_semantic_eq(input: TokenStream) -> TokenStream {
 ///
 /// Use `#[span_shift(skip)]` to exclude fields that should not be shifted
 /// (e.g., cached hashes, indices into external data).
+/// The field-only control accepts exactly one `skip` identifier; malformed,
+/// duplicate or misplaced annotations are compile errors.
 ///
 /// Works on structs and enums. For container types (`Vec<T>`, `Option<T>`),
 /// the generated code recurses into each element.
@@ -234,6 +247,10 @@ pub fn derive_semantic_eq(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(SpanShift, attributes(span_shift))]
 pub fn derive_span_shift(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+    let input = match field_plan::InputPlan::<field_plan::Shift>::admit(input) {
+        Ok(input) => input,
+        Err(error) => return error.to_compile_error().into(),
+    };
     let expanded = span_shift::impl_span_shift(&input);
     TokenStream::from(expanded)
 }
@@ -244,6 +261,8 @@ pub fn derive_span_shift(input: TokenStream) -> TokenStream {
 /// variant to one of `ValidationTag::Clean`, `ValidationTag::Warning`, or
 /// `ValidationTag::Error`. Validation code uses this to decide whether a resolved
 /// state needs an error/warning diagnostic.
+/// `validation_tag` is variant-only; malformed, duplicate or misplaced
+/// annotations are compile errors. Payloads acquire no additional trait bounds.
 ///
 /// # Resolution order
 ///
@@ -282,7 +301,11 @@ pub fn derive_span_shift(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ValidationTagged, attributes(validation_tag))]
 pub fn derive_validation_tagged(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let expanded = validation_tagged::impl_validation_tagged(&input);
+    let admitted = match validation_tagged::TaggedEnum::admit(input) {
+        Ok(admitted) => admitted,
+        Err(error) => return error.to_compile_error().into(),
+    };
+    let expanded = validation_tagged::emit_tagged_enum(&admitted);
     TokenStream::from(expanded)
 }
 
@@ -301,9 +324,16 @@ pub fn derive_validation_tagged(input: TokenStream) -> TokenStream {
 /// This eliminates the fragile double-maintenance pattern where code strings,
 /// serde renames, and display impls must be kept in sync manually.
 ///
+/// This macro accepts no arguments and supports unit variants without generic
+/// parameters, where clauses or explicit discriminants. Each variant needs one
+/// `code` string and at most one `status(planned)` or `status(opt_in)` annotation.
+/// Absence means Active; malformed or duplicate metadata is a compile error.
+/// Codes must ascend by their existing parsed prefix/numeric key, and the enum
+/// must contain `UnknownError`. Code spelling is never normalized.
+///
 /// # Example
 ///
-/// ```ignore
+/// ```rust
 /// use talkbank_derive::error_code_enum;
 ///
 /// #[error_code_enum]
@@ -311,12 +341,15 @@ pub fn derive_validation_tagged(input: TokenStream) -> TokenStream {
 ///     /// Internal error (unexpected condition).
 ///     #[code("E001")]
 ///     InternalError,
-///     /// Missing @Begin header.
-///     #[code("E201")]
-///     MissingBeginHeader,
 ///     /// Invalid line format.
 ///     #[code("E101")]
 ///     InvalidLineFormat,
+///     /// Missing @Begin header.
+///     #[code("E201")]
+///     MissingBeginHeader,
+///     /// Known sentinel variant, not a coercing string constructor.
+///     #[code("E999")]
+///     UnknownError,
 /// }
 ///
 /// // Generated API:
@@ -325,8 +358,16 @@ pub fn derive_validation_tagged(input: TokenStream) -> TokenStream {
 /// assert_eq!(format!("{}", ErrorCode::InvalidLineFormat), "E101");
 /// ```
 #[proc_macro_attribute]
-pub fn error_code_enum(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let expanded = error_code_enum::impl_error_code_enum(item.into());
+pub fn error_code_enum(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let admitted = registry::RegistrySyntax::parse(attr.into(), item.into())
+        .and_then(registry::RegistrySyntax::admit)
+        .and_then(registry::AdmittedVariants::order)
+        .and_then(registry::OrderedVariants::complete);
+    let registry = match admitted {
+        Ok(registry) => registry,
+        Err(error) => return error.to_compile_error().into(),
+    };
+    let expanded = error_code_enum::emit_registry(&registry);
     TokenStream::from(expanded)
 }
 

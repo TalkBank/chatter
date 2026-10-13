@@ -1,0 +1,53 @@
+error: error_code_enum does not accept arguments
+ --> tests/ui/fail_registry_admission.rs:3:19
+  |
+3 | #[error_code_enum(unexpected)]
+  |                   ^^^^^^^^^^
+
+error: duplicate #[code(...)] attribute
+  --> tests/ui/fail_registry_admission.rs:12:5
+   |
+12 |     #[code("E002")]
+   |     ^^^^^^^^^^^^^^^
+
+error: duplicate #[code(...)] attribute
+  --> tests/ui/fail_registry_admission.rs:19:5
+   |
+19 |     #[code("E001")]
+   |     ^^^^^^^^^^^^^^^
+
+error: expected one of: planned, opt_in
+  --> tests/ui/fail_registry_admission.rs:26:14
+   |
+26 |     #[status(typo)]
+   |              ^^^^
+
+error: duplicate #[status(...)] attribute
+  --> tests/ui/fail_registry_admission.rs:34:5
+   |
+34 |     #[status(planned)]
+   |     ^^^^^^^^^^^^^^^^^^
+
+error: duplicate #[status(...)] attribute
+  --> tests/ui/fail_registry_admission.rs:42:5
+   |
+42 |     #[status(opt_in)]
+   |     ^^^^^^^^^^^^^^^^^
+
+error: error_code_enum does not support generic parameters
+  --> tests/ui/fail_registry_admission.rs:47:21
+   |
+47 | enum GenericRegistry<const N: usize> {
+   |                     ^^^^^^^^^^^^^^^^
+
+error: error_code_enum does not support where clauses
+  --> tests/ui/fail_registry_admission.rs:53:26
+   |
+53 | enum RegistryWhereClause where (): Clone {
+   |                          ^^^^^^^^^^^^^^^
+
+error: error_code_enum does not support explicit discriminants
+  --> tests/ui/fail_registry_admission.rs:62:20
+   |
+62 |     UnknownError = 7,
+   |                    ^

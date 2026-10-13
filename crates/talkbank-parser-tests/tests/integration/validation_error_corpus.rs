@@ -52,6 +52,205 @@ fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/error_corpus/validation_errors")
 }
 
+/// Recovery carrier choice is a native producer observation. The policy
+/// boundary is that an ERROR optional group never becomes the bare shortcut.
+#[test]
+fn code_switch_annotation_recovery_specs_preserve_native_refusal_and_source() {
+    use talkbank_model::ErrorCode;
+    use talkbank_model::model::{ContentAnnotation, Descend};
+    use talkbank_parser::generated_traversal::{CodeSwitchAnnotationNode, SourceSlotView};
+
+    #[derive(Debug)]
+    enum Native {
+        Explicit(&'static str),
+        Shortcut,
+        OptionalError(&'static str),
+        OutsideAnnotation,
+    }
+    enum Verdict {
+        Clean,
+        Scoped(&'static str),
+        GrammarOnly,
+    }
+    let cases = [
+        (26, Native::Explicit("spa"), Verdict::Clean),
+        (27, Native::OptionalError(":"), Verdict::Scoped("[@s:]")),
+        (28, Native::OptionalError(":"), Verdict::Scoped("[@s:]")),
+        (
+            29,
+            Native::OptionalError("::spa"),
+            Verdict::Scoped("[@s::spa]"),
+        ),
+        (30, Native::OptionalError(":"), Verdict::Scoped("[@s:]")),
+        (31, Native::OptionalError(":"), Verdict::Scoped("[@s:]")),
+        (32, Native::OptionalError(":"), Verdict::Scoped("[@s:]")),
+        (33, Native::Explicit("sp"), Verdict::GrammarOnly),
+        (34, Native::OutsideAnnotation, Verdict::GrammarOnly),
+        (35, Native::Shortcut, Verdict::Clean),
+    ];
+    let parser = TreeSitterParser::new().expect("parser");
+    let mut failures = Vec::new();
+    for (index, native, verdict) in cases {
+        let source = fs::read_to_string(corpus_dir().join(format!("E375_{index}.cha")))
+            .expect("canonical code-switch recovery spec");
+        let parsed = parser
+            .parse_source_incremental(&source, None)
+            .expect("native parse");
+        let root = parsed.root().expect("producing source");
+        let mut carriers = Vec::new();
+        for source_node in root.descendants() {
+            let source_node = source_node.expect("native readable range");
+            let Some(annotation) = source_node.typed::<CodeSwitchAnnotationNode>() else {
+                continue;
+            };
+            let associated = annotation.extract();
+            let observed = match associated.field_child_1().slot().optional() {
+                None => "shortcut".to_owned(),
+                Some(group) => match group.view() {
+                    SourceSlotView::Present(group) => match group.field_code().slot().view() {
+                        SourceSlotView::Present(code) => {
+                            format!("explicit:{}", code.read().expect("own source").text())
+                        }
+                        other => format!("code-recovery:{other:?}"),
+                    },
+                    SourceSlotView::Error(error) => {
+                        format!(
+                            "optional-error:{}",
+                            error.read_raw().expect("own ERROR source").text()
+                        )
+                    }
+                    SourceSlotView::Absent(never) => match never {},
+                },
+            };
+            carriers.push(observed);
+        }
+        let expected_carriers = match native {
+            Native::Explicit(code) => vec![format!("explicit:{code}")],
+            Native::Shortcut => vec!["shortcut".to_owned()],
+            Native::OptionalError(text) => vec![format!("optional-error:{text}")],
+            Native::OutsideAnnotation => Vec::new(),
+        };
+        if carriers != expected_carriers {
+            failures.push(format!("E375_{index}: native {native:?}, got {carriers:?}"));
+        }
+
+        let sink = ErrorCollector::new();
+        let file = parser.parse_chat_file_streaming(&source, &sink);
+        let diagnostics = sink.into_vec();
+        let diagnostic_codes: Vec<_> = diagnostics.iter().map(|error| error.code).collect();
+        let expected_diagnostics: &[ErrorCode] = match verdict {
+            Verdict::Clean => &[],
+            Verdict::Scoped(_) => &[ErrorCode::ContentAnnotationParseError],
+            Verdict::GrammarOnly => &[ErrorCode::UnparsableContent],
+        };
+        if diagnostic_codes != expected_diagnostics {
+            failures.push(format!(
+                "E375_{index}: parse diagnostics {diagnostic_codes:?}"
+            ));
+        }
+        let scoped: Vec<_> = diagnostics
+            .iter()
+            .filter(|error| error.code == ErrorCode::ContentAnnotationParseError)
+            .collect();
+        match verdict {
+            Verdict::Clean => {
+                if !diagnostics.is_empty() {
+                    failures.push(format!("E375_{index}: clean control {diagnostics:?}"));
+                }
+                file.clone()
+                    .validate_into(&ErrorCollector::new(), TranscriptName::Anonymous)
+                    .expect("clean control admits the real language scope");
+            }
+            Verdict::Scoped(spelling) => {
+                let labels: Vec<_> = scoped
+                    .iter()
+                    .map(|error| {
+                        let span = error.location.span;
+                        source.get(span.start as usize..span.end as usize)
+                    })
+                    .collect();
+                if labels != [Some(spelling)] {
+                    failures.push(format!("E375_{index}: scoped source labels {labels:?}"));
+                }
+            }
+            Verdict::GrammarOnly => {
+                if !scoped.is_empty() {
+                    failures.push(format!(
+                        "E375_{index}: broader recovery invented E375: {scoped:?}"
+                    ));
+                }
+            }
+        }
+        if !matches!(verdict, Verdict::Clean) {
+            if matches!(verdict, Verdict::GrammarOnly)
+                && !diagnostics
+                    .iter()
+                    .any(|error| error.code == ErrorCode::UnparsableContent)
+            {
+                failures.push(format!(
+                    "E375_{index}: grammar recovery lost: {diagnostics:?}"
+                ));
+            }
+            if talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(&source))
+                .is_ok()
+            {
+                failures.push(format!(
+                    "E375_{index}: strict source workflow accepted recovery"
+                ));
+            }
+        }
+        let validation = ErrorCollector::new();
+        file.validate(&validation, TranscriptName::Anonymous);
+        let validation_errors = validation.into_vec();
+        let validation_sites: Vec<_> = validation_errors
+            .iter()
+            .map(|error| {
+                let span = error.location.span;
+                (
+                    error.code.to_string(),
+                    source.get(span.start as usize..span.end as usize),
+                )
+            })
+            .collect();
+        // A group's language governs each word: validation diagnoses the
+        // two affected word spans, not one annotation-level registry fault.
+        let expected_validation = match native {
+            Native::Explicit("sp") => vec![
+                ("E519".to_owned(), Some("casa")),
+                ("E519".to_owned(), Some("azul")),
+            ],
+            _ => Vec::new(),
+        };
+        if validation_sites != expected_validation {
+            failures.push(format!(
+                "E375_{index}: registry/validation source sites {validation_sites:?}"
+            ));
+        }
+        let mut switches = Vec::new();
+        for utterance in file.utterances() {
+            for item in &utterance.main.content.content {
+                item.structure().walk(&mut |structure| {
+                    for annotation in structure.scoped_annotations() {
+                        if let ContentAnnotation::CodeSwitch(_) = annotation {
+                            switches.push(annotation.to_string());
+                        }
+                    }
+                    Descend::Into
+                });
+            }
+        }
+        let expected_switches = match native {
+            Native::Explicit(code) => vec![format!("[@s:{code}]")],
+            Native::Shortcut => vec!["[@s]".to_owned()],
+            Native::OptionalError(_) | Native::OutsideAnnotation => Vec::new(),
+        };
+        if switches != expected_switches {
+            failures.push(format!("E375_{index}: recovered scopes {switches:?}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// Independent syntax faults must survive both recovery and typed validation.
 #[test]
 fn speaker_boundary_specs_report_length_and_ascii_faults_independently() {

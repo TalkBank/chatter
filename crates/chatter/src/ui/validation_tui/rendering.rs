@@ -20,7 +20,6 @@ use unicode_width::UnicodeWidthStr;
 use super::state::{DetailMetrics, Focus, TuiState};
 use super::text_processing::{process_source_line_for_display, process_text_for_display};
 use crate::commands::RunPhase;
-use talkbank_model::SourceLocation;
 use talkbank_transform::validation_runner::RunEnding;
 
 /// Render header for streaming validation.
@@ -233,9 +232,8 @@ pub fn render_error_details(
 
             error_line_starts.push((all_lines.len()).min(u16::MAX as usize) as u16);
 
-            let code = error.code.as_str();
-            let message = &error.message;
-            let (line, column) = error_line_column(error, &file.source);
+            let code = error.original().code.as_str();
+            let message = &error.original().message;
 
             let message_lines: Vec<&str> = message.split('\n').collect();
 
@@ -270,24 +268,26 @@ pub fn render_error_details(
             // Location line
             all_lines.push(
                 Line::from(vec![Span::styled(
-                    format!("    Line {}:{}", line, column),
+                    match error.presentation() {
+                        Ok(presentation) => {
+                            format!("    Line {}:{}", presentation.line(), presentation.column())
+                        }
+                        Err(reason) => format!("    Source context unavailable: {reason}"),
+                    },
                     Style::default().fg(color_location),
                 )])
                 .style(bg_style),
             );
 
             // Source context (miette-style)
-            if let Some(ctx) = &error.context
-                && !ctx.source_text.is_empty()
+            if let Ok(ctx) = error.context()
+                && !ctx.source_text().is_empty()
             {
-                let context_line = match ctx.line_offset {
-                    Some(offset) => offset,
-                    None => line,
-                };
+                let context_line = ctx.first_line();
 
-                let span_start = ctx.span.start as usize;
-                let span_end = ctx.span.end as usize;
-                let source_lines: Vec<&str> = ctx.source_text.split('\n').collect();
+                let span_start = ctx.span().start() as usize;
+                let span_end = ctx.span().end() as usize;
+                let source_lines: Vec<&str> = ctx.source_text().split('\n').collect();
 
                 all_lines.push(Line::from(""));
 
@@ -333,7 +333,7 @@ pub fn render_error_details(
             }
 
             // Suggestion
-            if let Some(ref suggestion) = error.suggestion {
+            if let Some(ref suggestion) = error.original().suggestion {
                 all_lines.push(Line::from(vec![
                     Span::styled("    💡 ", Style::default().fg(color_suggestion)),
                     Span::raw(suggestion),
@@ -365,14 +365,6 @@ pub fn render_error_details(
         total_lines,
         error_line_starts,
     })
-}
-
-/// Resolve line and column for an error, computing from byte span when needed.
-fn error_line_column(error: &talkbank_model::ParseError, source: &str) -> (usize, usize) {
-    match (error.location.line, error.location.column) {
-        (Some(line), Some(column)) => (line, column),
-        _ => SourceLocation::calculate_line_column(error.location.span.start as usize, source),
-    }
 }
 
 /// Build the prominent action row that tells users about Enter → CLAN,

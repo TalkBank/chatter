@@ -41,8 +41,9 @@ ordinary commit. With the default worktree snapshot, `--prospective` checks
 changes since the configured upstream for a future squash, falling back to
 HEAD without an upstream (including detached CI). That worktree mode includes
 new and unstaged documents; deleted documents do not participate in either mode.
-The gate and commit hook use these distinct scopes: a content-only gate receipt cannot
-prove a history-dependent date check after a later commit. CI still checks the
+Explicit staged review and release checks use these distinct scopes: a
+content-only gate receipt cannot prove a history-dependent date check after
+a later commit. CI still checks the
 actual committed dates. No dates are automatically rewritten.
 """
 

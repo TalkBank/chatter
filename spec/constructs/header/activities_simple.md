@@ -11,7 +11,14 @@
 ## Expected CST
 
 ```cst
-(activities_header ...)
+(activities_header
+  (activities_prefix)
+  (header_sep
+    (colon)
+    (tab))
+  (free_text
+    (rest_of_line))
+  (newline))
 ```
 
 ## Metadata

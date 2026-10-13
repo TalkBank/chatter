@@ -36,6 +36,15 @@ mod catalog_api_boundaries;
 #[path = "json_api_boundaries.rs"]
 mod json_api_boundaries;
 
+#[path = "filesystem_api_boundaries.rs"]
+mod filesystem_api_boundaries;
+
+#[path = "validation_failure_boundaries.rs"]
+mod validation_failure_boundaries;
+
+#[path = "semantic_eq_api_boundaries.rs"]
+mod semantic_eq_api_boundaries;
+
 /// Naming `T` in a turbofish forces its path to resolve at compile time, so
 /// a type that becomes `pub(crate)` or loses its re-export breaks this test.
 /// No trait bound: the bug is about NAMEABILITY. The stronger property (the
@@ -73,33 +82,120 @@ fn diagnostic_builder_preserves_fields_in_either_order() {
 }
 
 /// A downstream producer's out-of-range location is API-failure evidence, not
-/// a new CHAT error specimen. Presentation fallback must not split UTF-8.
+/// a new CHAT error specimen. Admission must preserve evidence, not repair it.
 #[test]
-fn diagnostic_source_fallback_preserves_utf8_and_inclusive_eof() {
-    use talkbank_model::{ErrorCode, ParseError, SourceIndex, Span, enhance_errors_with_index};
+fn diagnostic_source_admission_preserves_evidence_and_inclusive_eof() {
+    use talkbank_model::{
+        DiagnosticSourceError, ErrorCode, ParseError, SourceIndex, Span, enhance_errors_with_index,
+    };
 
     for source in ["ascii", "é", "字", "🙂", "a\né", "a\n"] {
         let end = u32::try_from(source.len()).expect("small boundary source");
         let index = SourceIndex::new(source);
-        for (input, expected) in [
-            (Span::new(end, end), Span::new(end, end)),
-            (Span::new(end + 1, end + 2), Span::new(end, end)),
-            (Span::new(0, end + 1), Span::new(0, end)),
+        for input in [
+            Span::new(0, 0),
+            Span::new(end, end),
+            Span::new(end + 1, end + 2),
+            Span::new(0, end + 1),
+            Span::new(end, 0),
         ] {
-            let mut errors = [ParseError::build(ErrorCode::InternalError)
+            let errors = [ParseError::build(ErrorCode::InternalError)
                 .message("downstream location boundary")
                 .at_span(input)
                 .finish()];
-            enhance_errors_with_index(&mut errors, &index);
-            let error = &errors[0];
-            assert_eq!(error.location.span, expected, "{source:?}: {input:?}");
-            assert!(source.get(error.location.span.to_range()).is_some());
-            let context = error.context.as_ref().expect("source context");
-            assert!(context.source_text.get(context.span.to_range()).is_some());
-            assert_eq!(error.code, ErrorCode::InternalError);
-            assert_eq!(error.message, "downstream location boundary");
+            let rendered: Vec<_> = enhance_errors_with_index(&errors, &index).collect();
+            let error = &rendered[0];
+            assert_eq!(error.original(), &errors[0]);
+            match error.presentation() {
+                Ok(presentation) => {
+                    assert!(
+                        input == Span::new(0, 0) || input == Span::new(end, end),
+                        "only real source boundaries are admitted"
+                    );
+                    assert_eq!(presentation.location().span, input);
+                    let context = presentation.context();
+                    assert_eq!(
+                        context.span().start(),
+                        context.span().end(),
+                        "insertion points stay zero-width even before Unicode"
+                    );
+                    assert!(
+                        context
+                            .source_text()
+                            .get(context.span().to_range())
+                            .is_some()
+                    );
+                }
+                Err(reason) => {
+                    assert!(
+                        matches!(reason, DiagnosticSourceError::PrimaryRange { span, .. } if *span == input)
+                    );
+                    assert!(error.location().is_err());
+                    assert!(error.context().is_err());
+                }
+            }
+        }
+        for middle in 0..end {
+            if source.is_char_boundary(middle as usize) {
+                continue;
+            }
+            for span in [Span::new(middle, end), Span::new(0, middle)] {
+                let raw = ParseError::build(ErrorCode::InternalError)
+                    .at_span(span)
+                    .message("UTF-8 boundary")
+                    .finish();
+                let shown = talkbank_model::SourceDiagnostic::with_index(raw.clone(), &index);
+                assert_eq!(shown.original(), &raw);
+                assert!(matches!(
+                    shown.presentation(),
+                    Err(DiagnosticSourceError::PrimaryRange { .. })
+                ));
+            }
         }
     }
+}
+
+/// Invalid secondary evidence invalidates the whole presentation, not the CHAT
+/// finding. No partial relabeling or stale producer line can survive admission.
+#[test]
+fn diagnostic_source_labels_are_admitted_atomically() {
+    use talkbank_model::{
+        DiagnosticSourceError, ErrorCode, ErrorLabel, ParseError, SourceDiagnostic, SourceIndex,
+        SourceLocation, Span,
+    };
+    let source = "first\né🙂\n";
+    let index = SourceIndex::new(source);
+    for span in [
+        Span::new(1, 0),
+        Span::new(0, 100),
+        Span::new(7, 8),
+        Span::new(8, 9),
+    ] {
+        let raw = ParseError::build(ErrorCode::UnparsableContent)
+            .location(SourceLocation::new(Span::new(0, 5)).with_position(99, 88))
+            .message("original finding")
+            .label(ErrorLabel::new(Span::new(0, 5), "valid label"))
+            .label(ErrorLabel::new(span, "invalid label"))
+            .finish();
+        let shown = SourceDiagnostic::with_index(raw.clone(), &index);
+        assert_eq!(shown.original(), &raw);
+        assert!(
+            matches!(shown.presentation(), Err(DiagnosticSourceError::LabelRange { index: 1, span: rejected, .. }) if *rejected == span)
+        );
+        assert!(shown.location().is_err());
+        assert!(!shown.to_string().contains("line 99"));
+        assert!(shown.to_string().contains("source context unavailable"));
+    }
+    let raw = ParseError::build(ErrorCode::MissingEndHeader)
+        .at_span(Span::new(0, 0))
+        .message("empty buffer finding")
+        .finish();
+    let shown = SourceDiagnostic::with_index(raw.clone(), &SourceIndex::new(""));
+    assert_eq!(shown.original(), &raw);
+    assert_eq!(
+        shown.presentation().expect_err("no source window"),
+        &DiagnosticSourceError::EmptySource
+    );
 }
 
 /// The canonical downstream shape: a domain error carrying the upstream

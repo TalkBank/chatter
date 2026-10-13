@@ -72,7 +72,7 @@ pub(super) fn fields<'input>(
     if word_node.text() != word.raw_text() {
         return Err(refused);
     }
-    let word_node = word_node.extract().map_err(|_| refused)?;
+    let word_node = word_node.extract();
     let body = match word_node.field_child_1().slot().view() {
         SourceSlotView::Present(field) => field.read().map_err(|_| refused)?,
         SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {
@@ -92,7 +92,7 @@ pub(super) fn fields<'input>(
             continue;
         }
         if let Some(shortening) = source.typed::<ShorteningNode>() {
-            let shortening = shortening.extract().map_err(|_| refused)?;
+            let shortening = shortening.extract();
             let inner = match shortening.field_child_1().slot().view() {
                 SourceSlotView::Present(field) => field.read().map_err(|_| refused)?,
                 SourceSlotView::Missing(_)

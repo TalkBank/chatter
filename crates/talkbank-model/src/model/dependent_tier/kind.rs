@@ -159,11 +159,54 @@ impl DependentTier {
         }
     }
 
-    /// Returns the source span associated with this dependent-tier value.
-    ///
-    /// This is used for diagnostics and provenance tracking; it does not affect
-    /// semantic equality or serialization output. All variants expose spans
-    /// through this accessor so caller code can stay enum-shape agnostic.
+    /// Replace only enclosing source metadata; payload and child spans remain
+    /// unchanged. Fragment owners use this after projecting wrapper-owned labels
+    /// out of the caller range, just as each concrete tier's `with_span` does.
+    pub fn with_span(self, span: crate::Span) -> Self {
+        match self {
+            Self::Mor(t) => Self::Mor(t.with_span(span)),
+            Self::Gra(t) => Self::Gra(t.with_span(span)),
+            Self::Pho(t) => Self::Pho(t.with_span(span)),
+            Self::Mod(t) => Self::Mod(t.with_span(span)),
+            Self::Sin(t) => Self::Sin(t.with_span(span)),
+            Self::Act(t) => Self::Act(t.with_span(span)),
+            Self::Cod(t) => Self::Cod(t.with_span(span)),
+            Self::Add(t) => Self::Add(t.with_span(span)),
+            Self::Com(t) => Self::Com(t.with_span(span)),
+            Self::Exp(t) => Self::Exp(t.with_span(span)),
+            Self::Gpx(t) => Self::Gpx(t.with_span(span)),
+            Self::Int(t) => Self::Int(t.with_span(span)),
+            Self::Sit(t) => Self::Sit(t.with_span(span)),
+            Self::Spa(t) => Self::Spa(t.with_span(span)),
+            Self::Alt(t) => Self::Alt(t.with_span(span)),
+            Self::Coh(t) => Self::Coh(t.with_span(span)),
+            Self::Def(t) => Self::Def(t.with_span(span)),
+            Self::Eng(t) => Self::Eng(t.with_span(span)),
+            Self::Err(t) => Self::Err(t.with_span(span)),
+            Self::Fac(t) => Self::Fac(t.with_span(span)),
+            Self::Flo(t) => Self::Flo(t.with_span(span)),
+            Self::Modsyl(t) => Self::Modsyl(t.with_span(span)),
+            Self::Phosyl(t) => Self::Phosyl(t.with_span(span)),
+            Self::Phoaln(t) => Self::Phoaln(t.with_span(span)),
+            Self::Xphoint(t) => Self::Xphoint(t.with_span(span)),
+            Self::Gls(t) => Self::Gls(t.with_span(span)),
+            Self::Ort(t) => Self::Ort(t.with_span(span)),
+            Self::Par(t) => Self::Par(t.with_span(span)),
+            Self::Tim(t) => Self::Tim(t.with_span(span)),
+            Self::Wor(t) => Self::Wor(t.with_span(span)),
+            Self::UserDefined(mut t) => {
+                t.span = span;
+                Self::UserDefined(t)
+            }
+            Self::Unsupported(mut t) => {
+                t.span = span;
+                Self::Unsupported(t)
+            }
+        }
+    }
+
+    /// Returns enclosing source metadata without affecting semantic equality
+    /// or serialization. All variants expose it through this owner.
     pub fn span(&self) -> crate::Span {
         match self {
             DependentTier::Mor(t) => t.span,

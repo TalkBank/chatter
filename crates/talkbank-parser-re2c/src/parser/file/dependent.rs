@@ -1,6 +1,6 @@
 //! Dependent-tier prefix admission and tier-specific recovery.
 
-use super::{report_error, skip_to_newline};
+use super::skip_to_newline;
 use crate::ast::*;
 use crate::parser::{LexedSource, dependent_tiers};
 use crate::token::{DependentBodyKind, Token};
@@ -12,7 +12,7 @@ use talkbank_model::{ErrorSink, ParseError, Span};
 /// When a tier-specific chumsky parser fails, the error is reported
 /// and raw content is retained for inspection. Rejected morphology has its
 /// own recovery state, distinct from a valid generic text tier.
-pub(super) fn parse_dependent_tiers<'a>(
+pub(in crate::parser) fn parse_dependent_tiers<'a>(
     lexed: &LexedSource<'a>,
     pos: &mut usize,
     errors: &impl ErrorSink,
@@ -21,8 +21,13 @@ pub(super) fn parse_dependent_tiers<'a>(
     let mut dep_tiers = Vec::new();
 
     while *pos < tokens.len() {
+        let line_start = *pos;
         let (prefix, prefix_span) = lexed.token_at(*pos);
         // Classify the token before consuming anything from the next line.
+        #[allow(
+            clippy::wildcard_enum_match_arm,
+            reason = "a non-dependent prefix belongs to the next line and must remain unconsumed"
+        )]
         let (kind, separator) = match prefix {
             Token::TierPrefix(prefix) => (Some(prefix.kind()), prefix.separator()),
             Token::IncompleteTierPrefix(_) => (None, talkbank_model::model::TierSeparator::CLEAN),
@@ -30,7 +35,6 @@ pub(super) fn parse_dependent_tiers<'a>(
         };
         let prefix = prefix.clone();
         let prefix_text = prefix.text();
-        let mut push = |tier| dep_tiers.push(DependentTierEntryParsed { tier, separator });
         *pos += 1;
 
         let content_start = *pos;
@@ -39,6 +43,34 @@ pub(super) fn parse_dependent_tiers<'a>(
         if *pos < tokens.len() {
             *pos += 1; // consume newline
         }
+
+        let content_range = if kind.is_some() {
+            match lexed.dependent_content_span(line_start..*pos, content_end) {
+                Ok(body) => body,
+                Err(fault) => {
+                    errors.report(ParseError::new(
+                        talkbank_model::ErrorCode::InternalError,
+                        talkbank_model::Severity::Error,
+                        talkbank_model::SourceLocation::from_offsets(
+                            prefix_span.start,
+                            prefix_span.end,
+                        ),
+                        None,
+                        fault.to_string(),
+                    ));
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let mut push = |tier| {
+            dep_tiers.push(DependentTierEntryParsed {
+                tier,
+                separator,
+                content_range,
+            })
+        };
 
         let tier_tokens = &tokens[content_start..content_end];
 
@@ -91,12 +123,11 @@ pub(super) fn parse_dependent_tiers<'a>(
                                 ),
                             );
                         } else {
-                            report_error(
-                                errors,
-                                talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                                talkbank_model::Severity::Error,
-                                tier_tokens,
+                            lexed.report_error(
+                                line_start..content_end,
+                                talkbank_model::ErrorCode::UnparsableContent,
                                 &format!("failed to parse {prefix_text} tier content"),
+                                errors,
                             );
                         }
                         if kind == DependentBodyKind::Mor {
@@ -120,12 +151,11 @@ pub(super) fn parse_dependent_tiers<'a>(
                 {
                     Ok(tier) => push(DependentTierParsed::Pho(tier)),
                     Err(_) => {
-                        report_error(
-                            errors,
-                            talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                            talkbank_model::Severity::Error,
-                            tier_tokens,
+                        lexed.report_error(
+                            line_start..content_end,
+                            talkbank_model::ErrorCode::UnparsableContent,
                             &format!("failed to parse {prefix_text} tier content"),
+                            errors,
                         );
                         push(fallback_text_tier(prefix, tier_tokens));
                     }
@@ -138,12 +168,11 @@ pub(super) fn parse_dependent_tiers<'a>(
                 {
                     Ok(tier) => push(DependentTierParsed::Mod(tier)),
                     Err(_) => {
-                        report_error(
-                            errors,
-                            talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                            talkbank_model::Severity::Error,
-                            tier_tokens,
+                        lexed.report_error(
+                            line_start..content_end,
+                            talkbank_model::ErrorCode::UnparsableContent,
                             &format!("failed to parse {prefix_text} tier content"),
+                            errors,
                         );
                         push(fallback_text_tier(prefix, tier_tokens));
                     }
@@ -156,12 +185,11 @@ pub(super) fn parse_dependent_tiers<'a>(
                 {
                     Ok(tier) => push(DependentTierParsed::Gra(tier)),
                     Err(_) => {
-                        report_error(
-                            errors,
-                            talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                            talkbank_model::Severity::Error,
-                            tier_tokens,
+                        lexed.report_error(
+                            line_start..content_end,
+                            talkbank_model::ErrorCode::UnparsableContent,
                             &format!("failed to parse {prefix_text} tier content"),
+                            errors,
                         );
                         push(fallback_text_tier(prefix, tier_tokens));
                     }
@@ -174,12 +202,11 @@ pub(super) fn parse_dependent_tiers<'a>(
                 {
                     Ok(tier) => push(DependentTierParsed::Sin(tier)),
                     Err(_) => {
-                        report_error(
-                            errors,
-                            talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                            talkbank_model::Severity::Error,
-                            tier_tokens,
+                        lexed.report_error(
+                            line_start..content_end,
+                            talkbank_model::ErrorCode::UnparsableContent,
                             &format!("failed to parse {prefix_text} tier content"),
+                            errors,
                         );
                         push(fallback_text_tier(prefix, tier_tokens));
                     }
@@ -192,12 +219,11 @@ pub(super) fn parse_dependent_tiers<'a>(
                 {
                     Ok(wor) => push(DependentTierParsed::Wor(wor)),
                     Err(_) => {
-                        report_error(
-                            errors,
-                            talkbank_model::errors::codes::ErrorCode::UnparsableContent,
-                            talkbank_model::Severity::Error,
-                            tier_tokens,
+                        lexed.report_error(
+                            line_start..content_end,
+                            talkbank_model::ErrorCode::UnparsableContent,
                             &format!("failed to parse {prefix_text} tier content"),
+                            errors,
                         );
                         push(fallback_text_tier(prefix, tier_tokens));
                     }

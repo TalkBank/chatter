@@ -675,7 +675,7 @@ status = "not_implemented"
 [[code]]
 code = "E362"
 variant = "TimestampBackwards"
-summary = "Timestamp end is before start (backwards range)."
+summary = "Timestamp end is at or before start, or a media bullet starts before its predecessor."
 kind = "Invalidity"
 status = "implemented"
 

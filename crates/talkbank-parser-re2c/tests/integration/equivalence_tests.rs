@@ -13,11 +13,11 @@
 //! Parser equivalence tests: Re2cParser vs TreeSitterParser.
 //!
 //! Parse the same input with both parsers and compare output using
-//! `SemanticEq`. This is the gold standard for validating our parser
-//! as a drop-in replacement.
+//! `SemanticEq` for accepted valid inputs. Recovered models and diagnostic
+//! identity are not cross-backend contracts; see the backend compatibility mandate.
 
 use talkbank_model::errors::ErrorCollector;
-use talkbank_model::{ChatParser, ParseOutcome, SemanticDiff, SemanticEq};
+use talkbank_model::{ChatParser, ParseOutcome, SemanticDiff, SemanticEq, Severity};
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser_re2c::Re2cParser;
 
@@ -32,28 +32,6 @@ fn both_parsers() -> (TreeSitterParser, Re2cParser) {
 // Reference corpus equivalence
 // ═══════════════════════════════════════════════════════════════
 
-/// Reference files on which the two backends report DIFFERENT diagnostics.
-///
-/// A RATCHET: entries may only be removed, in the commit that makes the file
-/// agree. Adding one is an admission of a new divergence and wants a sentence
-/// saying why it ships.
-///
-/// The list exists because the test below used to fill two `ErrorCollector`s
-/// and never look at either. It compared recovered ASTs with `semantic_eq`,
-/// which is a real property and not this one: two parsers can agree exactly on
-/// the model and disagree about whether the input was valid, and on the
-/// reference corpus one pair does. `chatter validate --parser re2c
-/// corpus/reference` reports 1 invalid file where the default backend reports
-/// 0, and no gate in this repository could see it.
-const DIAGNOSTIC_DIVERGENCES: &[(&str, &str)] = &[(
-    "multiline-continuation.cha",
-    "re2c reports E316 on the continuation lines of a multi-line \
-     `@Participants` header; tree-sitter accepts it. The ASTs agree, which is \
-     why the model-level half of this test passes. re2c's header lexing does \
-     not carry the continuation rule into `@Participants`, so this is a real \
-     gap in the oracle backend rather than a disagreement about CHAT.",
-)];
-
 #[test]
 fn equivalence_reference_corpus() {
     let corpus = talkbank_parser_tests::chat_corpus::ChatCorpus::reference()
@@ -64,13 +42,6 @@ fn equivalence_reference_corpus() {
     let mut total = 0;
     let mut passed = 0;
     let mut failed_files = Vec::new();
-    let mut diagnostic_divergences = Vec::new();
-    // Which recorded entries the walk actually reached. An entry naming a file
-    // that is not in the corpus is invisible to the per-file arms below, so a
-    // rename or a deletion would leave it standing for ever. Found by planting
-    // one: the first version of this ratchet accepted `("basic.cha", ...)`,
-    // a file this corpus does not contain, and reported clean.
-    let mut visited = vec![false; DIAGNOSTIC_DIVERGENCES.len()];
 
     for fixture in corpus.fixtures() {
         total += 1;
@@ -82,22 +53,25 @@ fn equivalence_reference_corpus() {
             .to_string_lossy()
             .to_string();
 
-        // Use the streaming variant on both sides; it always returns
-        // a (recovered) ChatFile and accumulates diagnostics into the
-        // error sink. This matches what `categorize_divergences` does
-        // on the wild corpus, so the parity oracle here measures the
-        // same thing: model-level semantic_eq on recovered ASTs. The
-        // non-streaming `parse_chat_file()` Err path silently dropped
-        // every fixture that exercises tree-sitter's MISSING-token
-        // recovery (because TS converts each MISSING into a
-        // Severity::Error diagnostic and refuses to return Ok).
+        // Inspect both outcomes and both sinks. A recovered model with an
+        // error is not a valid semantic pass, even if both models agree.
+        // Keep every fixture in the inventory; no recovery-output equality
+        // or exact diagnostic-set requirement is imposed on either backend.
         let ts_errors = ErrorCollector::new();
-        let ts_file = ts.parse_chat_file_streaming(content, &ts_errors);
+        let ts_result = ChatParser::parse_chat_file(&ts, content, 0, &ts_errors);
         let re2c_errors = ErrorCollector::new();
         let re2c_result = re2c.parse_chat_file(content, 0, &re2c_errors);
+        let ts_faults = error_codes_of(&ts_errors);
+        let re2c_faults = error_codes_of(&re2c_errors);
+        if !ts_faults.is_empty() || !re2c_faults.is_empty() {
+            failed_files.push(format!(
+                "{filename}: valid reference has parse errors: ts {ts_faults:?}, re2c {re2c_faults:?}"
+            ));
+            continue;
+        }
 
-        match re2c_result {
-            ParseOutcome::Parsed(re2c_file) => {
+        match (ts_result, re2c_result) {
+            (ParseOutcome::Parsed(ts_file), ParseOutcome::Parsed(re2c_file)) => {
                 if ts_file.semantic_eq(&re2c_file) {
                     passed += 1;
                 } else {
@@ -107,43 +81,12 @@ fn equivalence_reference_corpus() {
                     ));
                 }
             }
-            ParseOutcome::Rejected => {
-                failed_files.push(format!("{filename}: re2c rejected, ts parsed"));
-            }
-        }
-
-        // The second half, and it used to be missing entirely: the two
-        // sinks above were filled and never read.
-        let ts_codes = codes_of(&ts_errors);
-        let re2c_codes = codes_of(&re2c_errors);
-        let recorded = match DIAGNOSTIC_DIVERGENCES
-            .iter()
-            .position(|(name, _)| *name == filename)
-        {
-            Some(at) => {
-                visited[at] = true;
-                true
-            }
-            None => false,
-        };
-        // All four cells written out. The compiler refused an earlier
-        // draft that grouped them wrongly, which is what an exhaustive
-        // match over the cross-product is for.
-        match (ts_codes == re2c_codes, recorded) {
-            // Agreeing and not recorded: the ordinary case.
-            (true, false) => {}
-            // Diverging and recorded: the ratchet's own entries.
-            (false, true) => {}
-            (false, false) => diagnostic_divergences.push(format!(
-                "{filename}: ts {ts_codes:?} vs re2c {re2c_codes:?}"
+            (ParseOutcome::Rejected, _) => failed_files.push(format!(
+                "{filename}: tree-sitter rejected the valid reference"
             )),
-            // Recorded but now agreeing. Retiring the entry is the
-            // deliverable of whatever fixed it; leaving it makes the
-            // list a permanent exemption.
-            (true, true) => diagnostic_divergences.push(format!(
-                "{filename}: RECORDED as diverging, but the backends now \
-                 agree. Delete it from DIAGNOSTIC_DIVERGENCES."
-            )),
+            (_, ParseOutcome::Rejected) => {
+                failed_files.push(format!("{filename}: re2c rejected the valid reference"))
+            }
         }
     }
 
@@ -157,40 +100,19 @@ fn equivalence_reference_corpus() {
 
     assert!(
         failed_files.is_empty(),
-        "{} reference-corpus file(s) diverge between TreeSitterParser and \
-         Re2cParser; full list above. Reference corpus is the parity oracle, \
-         every file must round-trip with semantic equality.",
+        "{} valid reference-corpus file(s) fail error-free acceptance or \
+         semantic equality between the backends; full list above.",
         failed_files.len()
     );
-    for (at, (name, _)) in DIAGNOSTIC_DIVERGENCES.iter().enumerate() {
-        if !visited[at] {
-            diagnostic_divergences.push(format!(
-                "{name}: RECORDED as diverging, and no such file is in the \
-                 corpus. Renamed, deleted, or misspelled; delete the entry."
-            ));
-        }
-    }
-
-    assert!(
-        diagnostic_divergences.is_empty(),
-        "{} reference-corpus file(s) disagree about DIAGNOSTICS between the \
-         backends, which `semantic_eq` above cannot see:\n  {}\nFix the \
-         backend, or record the file in DIAGNOSTIC_DIVERGENCES with a sentence \
-         saying why it ships.",
-        diagnostic_divergences.len(),
-        diagnostic_divergences.join("\n  ")
-    );
+    assert_eq!(passed, total, "every admitted reference must be compared");
 }
 
-/// The distinct diagnostic codes a sink collected, sorted and deduplicated.
-///
-/// Codes rather than messages: a message carries spans and quoted source, so
-/// comparing them would fail on wording the two backends have no reason to
-/// share, and this gate is about which RULES each one names.
-fn codes_of(errors: &ErrorCollector) -> Vec<String> {
+/// Error codes are failure detail, not a cross-backend equality requirement.
+fn error_codes_of(errors: &ErrorCollector) -> Vec<String> {
     let mut codes: Vec<String> = errors
         .to_vec()
         .iter()
+        .filter(|error| error.severity == Severity::Error)
         .map(|error| error.code.as_str().to_owned())
         .collect();
     codes.sort_unstable();

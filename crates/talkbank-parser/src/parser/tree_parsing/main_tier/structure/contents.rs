@@ -99,8 +99,8 @@ impl<'tree> ContentsItem<'tree> for ContentsChild1Choice<'tree> {
 pub fn parse_main_tier_contents<'tree>(
     typed: SourceBound<'tree, '_, ContentsNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<Vec<UtteranceContent>, crate::generated_traversal::ReconstructionFault> {
-    Ok(parse_contents(&typed.extract()?, errors))
+) -> Vec<UtteranceContent> {
+    parse_contents(&typed.extract(), errors)
 }
 
 /// Parse source-associated `contents` children, wherever they sit.
@@ -236,14 +236,7 @@ fn parse_content_item<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let source = typed.source();
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        typed.extract(),
-        typed.raw_node(),
-        source,
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     let outcome = match children.field_content().slot().view() {
         SourceSlotView::Present(choice) => match read_source_field(choice, errors) {
             Some(choice) => parse_content_item_choice(choice, errors),

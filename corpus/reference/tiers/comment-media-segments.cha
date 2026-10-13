@@ -1,0 +1,15 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child
+@ID:	eng|example|CHI|||||Target_Child|||
+@Media:	comment-media-segments, audio
+@Comment:	Authored control for pictures, timing, text and wrapped comments.
+@Comment:	%pic:"images/frame-01.png" header caption 100_200
+	header continuation %pic:"images/frame-02.png"
+*CHI:	look at this . 100_400
+%com:	%pic:"images/frame-01.png" %pic:"images/frame-02.png" two views 100_200
+	then 200_300 another view %pic:"images/frame-03.png"
+%act:	points 100_200
+	then waves 200_300
+@End

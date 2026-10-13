@@ -4,8 +4,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Types_Header>
 
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, SourceBound, SourceBoundKind, SourceField, SourceSlotView,
-    TypesHeaderNode,
+    AsRawNode, KindSlot, NamedKind, NoChild, SourceBound, SourceBoundKind, SourceField,
+    SourceSlotView, TypesHeaderNode,
 };
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
@@ -48,14 +48,10 @@ pub fn parse_types_header<'tree>(
     // through source-bound extraction. The design->activity->group order and
     // short-circuit on the first missing field are preserved. Present fields
     // separately admit readable source ranges; failures remain producer faults.
-    let children = typed.extract()?;
+    let children = typed.extract();
 
-    let ParseOutcome::Parsed(design) = read_types_field(
-        children.field_child_2().slot(),
-        typed,
-        errors,
-        "types_design",
-    )?
+    let ParseOutcome::Parsed(design) =
+        read_types_field(children.field_child_2().slot(), typed, errors)?
     else {
         surface_displaced(
             &children.children().unexpected,
@@ -72,12 +68,8 @@ pub fn parse_types_header<'tree>(
         );
     };
 
-    let ParseOutcome::Parsed(activity) = read_types_field(
-        children.field_child_6().slot(),
-        typed,
-        errors,
-        "types_activity",
-    )?
+    let ParseOutcome::Parsed(activity) =
+        read_types_field(children.field_child_6().slot(), typed, errors)?
     else {
         surface_displaced(
             &children.children().unexpected,
@@ -94,12 +86,8 @@ pub fn parse_types_header<'tree>(
         );
     };
 
-    let ParseOutcome::Parsed(group) = read_types_field(
-        children.field_child_10().slot(),
-        typed,
-        errors,
-        "types_group",
-    )?
+    let ParseOutcome::Parsed(group) =
+        read_types_field(children.field_child_10().slot(), typed, errors)?
     else {
         surface_displaced(
             &children.children().unexpected,
@@ -136,11 +124,10 @@ pub fn parse_types_header<'tree>(
 /// The slot match is EXHAUSTIVE over every `NodeSlot` variant; there is
 /// deliberately no `_` catch-all that could silently drop a recovery slot.
 /// Source-read failures propagate separately from authored missing-field errors.
-fn read_types_field<'tree, T: SourceBoundKind<'tree>>(
+fn read_types_field<'tree, T: SourceBoundKind<'tree> + NamedKind>(
     slot: SourceField<'_, 'tree, '_, KindSlot<'tree, T>>,
     header: SourceBound<'tree, '_, TypesHeaderNode<'tree>>,
     errors: &impl ErrorSink,
-    label: &str,
 ) -> Result<ParseOutcome<String>, crate::CstFailure> {
     let node = header.raw_node();
     let source = header.source();
@@ -156,7 +143,7 @@ fn read_types_field<'tree, T: SourceBoundKind<'tree>>(
                 Severity::Error,
                 SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
                 ErrorContext::new(source, node.start_byte()..node.end_byte(), "types_header"),
-                format!("Missing {} in @Types header", label),
+                format!("Missing {} in @Types header", T::KIND),
             ));
             Ok(ParseOutcome::rejected())
         }

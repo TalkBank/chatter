@@ -1,12 +1,13 @@
 //! Word-level speaker attribution: measured ownership of each source word,
 //! admitted against the same source as the partition it produces.
 use talkbank_model::alignment::{
-    CompleteWorTimings, WorTimingBinding, WorTimingCorrespondence, WorTimingSequence,
-    assess_wor_timing_sequence, bind_wor_timing, corroborate_wor_timing,
+    CompleteWorTimingSlot, CompleteWorTimings, WorTimingBinding, WorTimingCorrespondence,
+    WorTimingSequence, assess_wor_timing_sequence, bind_wor_timing, corroborate_wor_timing,
 };
 use talkbank_model::model::{Bullet, Utterance};
 
-use super::{SplitChildren, SplitOutcome, SplitRefusal, UtteranceSplitPlan};
+use super::content_groups::ContentItemGroups;
+use super::{SplitChildren, SplitRefusal, WordSpeakerOwnership, execute_split};
 use crate::rediarize::{DiarizationTimeline, TrackOwnership};
 
 /// Why measured word-level attribution cannot establish a structural split.
@@ -55,7 +56,8 @@ pub enum WordSpeakerSplitRefusal {
     /// The proposed speaker boundary crosses indivisible CHAT structure.
     #[error(transparent)]
     Partition(#[from] SplitRefusal),
-    /// Internal producer inconsistency, never a claim of invalid CHAT.
+    /// Legacy producer-inconsistency receipt, retained for API compatibility.
+    /// Source-bound affiliated groups now prevent this execution state.
     #[error("partition producer returned {children} children for {runs} speaker runs")]
     ProducerChildCount {
         /// Actual structural children returned by the producer.
@@ -82,7 +84,7 @@ pub enum WordSpeakerPartition<'source> {
 #[must_use]
 pub struct WordSpeakerSplitOutcome<'source> {
     partition: WordSpeakerPartition<'source>,
-    ownership: Vec<TrackOwnership>,
+    ownership: WordSpeakerOwnership,
 }
 
 impl<'source> WordSpeakerSplitOutcome<'source> {
@@ -92,7 +94,7 @@ impl<'source> WordSpeakerSplitOutcome<'source> {
     }
 
     /// Source-word distributions, including minority held time.
-    pub fn ownership(&self) -> &[TrackOwnership] {
+    pub fn ownership(&self) -> &WordSpeakerOwnership {
         &self.ownership
     }
 
@@ -111,7 +113,7 @@ pub struct WordSpeakerSplitParts<'source> {
     /// admission, with their source-bound dependent-tier losses.
     pub partition: WordSpeakerPartition<'source>,
     /// Measured distributions for every original word.
-    pub ownership: Vec<TrackOwnership>,
+    pub ownership: WordSpeakerOwnership,
 }
 
 /// Measured word ownership and its partition, admitted together against one source.
@@ -136,8 +138,17 @@ pub struct WordSpeakerSplitParts<'source> {
 /// ```
 #[must_use]
 pub struct WordSpeakerSplitPlan<'source> {
-    partition: UtteranceSplitPlan<'source>,
-    ownership: Vec<TrackOwnership>,
+    partition: SpeakerPartitionPlan<'source>,
+    ownership: WordSpeakerOwnership,
+}
+
+/// Affiliation travels with the source partition, not a parallel speaker list.
+enum SpeakerPartitionPlan<'source> {
+    Relabeled {
+        _source: &'source Utterance,
+        speaker: talkbank_model::SpeakerCode,
+    },
+    Split(ContentItemGroups<'source, talkbank_model::SpeakerCode>),
 }
 
 /// Complete source word timing admitted before acoustic inference is requested.
@@ -234,38 +245,45 @@ impl<'source> WordSpeakerSource<'source> {
             source,
             timing: complete,
         } = self;
-        let mut ownership = Vec::with_capacity(complete.slots().len());
+        let mut ownership = WordSpeakerOwnership {
+            first: measure_word_ownership(0, complete.slots().first(), timeline)?,
+            following: Vec::with_capacity(complete.slots().following().len()),
+        };
         let mut assignments = Vec::with_capacity(complete.slots().len());
+        assignments.push(0);
         let mut run = 0usize;
-        for (slot, word) in complete.slots().iter().enumerate() {
-            let timing = word.timing();
-            let measured = Bullet::new(timing.start().get(), timing.end().get());
-            let held = TrackOwnership::of(&measured, timeline)
-                .ok_or(WordSpeakerSplitRefusal::UncoveredWord { slot })?;
-            // `shares` is never empty and is sorted by held time, descending,
-            // so a tie for the lead is exactly a runner-up holding as much.
-            if let [(_, lead), (_, runner_up), ..] = held.shares()
-                && lead == runner_up
-            {
-                let lead = *lead;
-                let tracks = held
-                    .shares()
-                    .iter()
-                    .take_while(|(_, duration)| *duration == lead)
-                    .map(|(track, _)| track.clone())
-                    .collect();
-                return Err(WordSpeakerSplitRefusal::TiedWord { slot, tracks });
-            }
-            if ownership
-                .last()
-                .is_some_and(|previous: &TrackOwnership| previous.winner() != held.winner())
-            {
+        for (following_index, word) in complete.slots().following().iter().enumerate() {
+            let held = measure_word_ownership(following_index + 1, word, timeline)?;
+            if ownership.last().winner() != held.winner() {
                 run += 1;
             }
             assignments.push(run);
-            ownership.push(held);
+            ownership.following.push(held);
         }
-        let partition = UtteranceSplitPlan::for_word_timing(source, &assignments)?;
+        let source_positions: Vec<_> = complete
+            .slots()
+            .iter()
+            .map(|word| word.source_content().index())
+            .collect();
+        let groups = ContentItemGroups::admit_with_affiliation(
+            source,
+            &source_positions,
+            &assignments,
+            |slot| {
+                if slot == 0 {
+                    ownership.first().winner().clone()
+                } else {
+                    ownership.following()[slot - 1].winner().clone()
+                }
+            },
+        )?;
+        let partition = match groups {
+            Some(groups) => SpeakerPartitionPlan::Split(groups),
+            None => SpeakerPartitionPlan::Relabeled {
+                _source: source,
+                speaker: ownership.first().winner().clone(),
+            },
+        };
         Ok(WordSpeakerSplitPlan {
             partition,
             ownership,
@@ -289,7 +307,7 @@ impl<'source> WordSpeakerSplitPlan<'source> {
     }
 
     /// The source-word distributions underlying the admitted speaker runs.
-    pub fn ownership(&self) -> &[TrackOwnership] {
+    pub fn ownership(&self) -> &WordSpeakerOwnership {
         &self.ownership
     }
 
@@ -299,40 +317,17 @@ impl<'source> WordSpeakerSplitPlan<'source> {
     /// are not a claim of personal identity. Complete construction is still
     /// required before writing a document containing the children.
     ///
-    /// # Errors
-    /// Reports a producer inconsistency rather than silently truncating a zip.
+    /// The fallible signature is retained for compatibility; admitted groups
+    /// already own the speaker used to construct each child.
     pub fn execute(self) -> Result<WordSpeakerSplitOutcome<'source>, WordSpeakerSplitRefusal> {
-        let mut tracks = Vec::new();
-        for held in &self.ownership {
-            if tracks.last() != Some(held.winner()) {
-                tracks.push(held.winner().clone());
-            }
-        }
-        let partition = match self.partition.execute() {
-            SplitOutcome::Unchanged => {
-                // One run is the only population that splits nothing.
-                let speaker = match <[_; 1]>::try_from(tracks) {
-                    Ok([speaker]) => speaker,
-                    Err(tracks) => {
-                        return Err(WordSpeakerSplitRefusal::ProducerChildCount {
-                            children: 1,
-                            runs: tracks.len(),
-                        });
-                    }
-                };
+        let partition = match self.partition {
+            SpeakerPartitionPlan::Relabeled { speaker, .. } => {
                 WordSpeakerPartition::Relabeled { speaker }
             }
-            SplitOutcome::Split(mut split) => {
-                if split.children.len() != tracks.len() {
-                    return Err(WordSpeakerSplitRefusal::ProducerChildCount {
-                        children: split.children.len(),
-                        runs: tracks.len(),
-                    });
-                }
-                for (child, track) in split.children.iter_mut().zip(tracks) {
-                    child.main.speaker = track;
-                }
-                WordSpeakerPartition::Split(split)
+            SpeakerPartitionPlan::Split(groups) => {
+                WordSpeakerPartition::Split(execute_split(&groups, |group| {
+                    group.affiliation().clone()
+                }))
             }
         };
         Ok(WordSpeakerSplitOutcome {
@@ -340,4 +335,30 @@ impl<'source> WordSpeakerSplitPlan<'source> {
             ownership: self.ownership,
         })
     }
+}
+
+/// Measure one admitted positive slot; missing and tied acoustic evidence remain
+/// genuine external refusals, including for the mandatory first source word.
+fn measure_word_ownership(
+    slot: usize,
+    word: &CompleteWorTimingSlot<'_>,
+    timeline: &DiarizationTimeline,
+) -> Result<TrackOwnership, WordSpeakerSplitRefusal> {
+    let timing = word.timing();
+    let measured = Bullet::new(timing.start().get(), timing.end().get());
+    let held = TrackOwnership::of(&measured, timeline)
+        .ok_or(WordSpeakerSplitRefusal::UncoveredWord { slot })?;
+    if let [(_, lead), (_, runner_up), ..] = held.shares()
+        && lead == runner_up
+    {
+        let lead = *lead;
+        let tracks = held
+            .shares()
+            .iter()
+            .take_while(|(_, duration)| *duration == lead)
+            .map(|(track, _)| track.clone())
+            .collect();
+        return Err(WordSpeakerSplitRefusal::TiedWord { slot, tracks });
+    }
+    Ok(held)
 }

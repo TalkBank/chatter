@@ -1,0 +1,20 @@
+@UTF8
+@Begin
+@Languages:	eng, zho
+@Participants:	SPK Speaker
+@ID:	eng, zho|sample|SPK|||||Speaker|||
+@Media:	prelude-controls, audio
+@Comment:	Préface café
+*SPK:	café opening .
+%com:	opening note
+*SPK:	+< +^ [- zho] bamboo forest . [+ bch] 100_200
+%com:	combined note
+*SPK:	+, [- zho] birch grove ? [+ second] 200_300
+%com:	completion note
+*SPK:	[- zho] cedar tree . [+ third] 300_400
+%com:	language note
+*SPK:	+^ +< fern garden ! [+ fourth] 400_500
+%com:	linkers note
+*SPK:	finch closing .
+%com:	closing note
+@End

@@ -13,15 +13,9 @@ foo^bar
 ``` cst
 (standalone_word
   (word_body
-    (initial_word_segment)
-    (word_content
-      (caret)
-    )
-    (word_content
-      (word_segment)
-    )
-  )
-)
+    (word_segment)
+    (syllable_pause)
+    (word_segment)))
 ```
 
 ## Metadata

@@ -16,7 +16,7 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, KindSlot, NoChild, SourceBindingError, SourceBound, SourceField, SourceSlotView,
+    AsRawNode, KindSlot, NoChild, Ranged, ReadableSlot, SourceBound, SourceBoundKind, SourceSlice,
     UnsupportedDependentTierNode, XDependentTierNode,
 };
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
@@ -25,7 +25,7 @@ use crate::node_types::{UNSUPPORTED_TIER_PREFIX, X_TIER_PREFIX};
 
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{
-    after_marker, analyze_dependent_tier_error, check_not_missing, surface_displaced,
+    analyze_dependent_tier_error, check_not_missing, surface_displaced,
 };
 use tree_sitter::Node;
 
@@ -67,9 +67,9 @@ const UNSUPPORTED_PREFIX: PrefixKind = PrefixKind {
 /// so no tier is built from a prefix that is not there: a MISSING
 /// placeholder (E342) or an ERROR through the associated slot; a position
 /// holding nothing, as the old walk reported it; a Present token that is
-/// not UTF-8 or does not fit its own grammar, through [`after_marker`], or
-/// that names nothing after its marker, reported rather than assumed (no
-/// CHAT input reaches any of the three). Until 2026-09-09 both dispatchers read
+/// does not fit its declared marker, or names nothing after it, is reported
+/// rather than assumed. Selected ranges are already checked; a failed range
+/// admission refuses the owner before this helper runs. Both dispatchers once read
 /// the MISSING placeholder's empty text and built the tier, through an
 /// unchecked constructor, with a label the program had invented (`x`, or
 /// nothing at all). Recovery is not validity, and the recovery node stays
@@ -77,16 +77,17 @@ const UNSUPPORTED_PREFIX: PrefixKind = PrefixKind {
 /// model's tier requires one), so the line lowers to nothing here rather
 /// than to a tier the parser named. Should the state ever be reached, the
 /// change is a label-less tier variant in the model, not a default here.
-fn tier_name<'tree, T: AsRawNode<'tree> + Copy>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, T>>,
+fn tier_name<'tree, 'source, T: SourceBoundKind<'tree>>(
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, T>, Ranged<'source>>,
     kind: &PrefixKind,
-    tier_node: Node,
+    tier: SourceSlice<'tree, 'source>,
     errors: &impl ErrorSink,
 ) -> Option<NonEmptyString> {
-    let input = slot.source();
-    let prefix = match slot.view() {
-        SourceSlotView::Present(prefix) => prefix.raw_node(),
-        SourceSlotView::Absent(NoChild) => {
+    let input = tier.source();
+    let tier_node = tier.raw_node();
+    let prefix = match slot {
+        ReadableSlot::Present(prefix) => *prefix,
+        ReadableSlot::Absent(NoChild) => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
@@ -96,11 +97,11 @@ fn tier_name<'tree, T: AsRawNode<'tree> + Copy>(
             ));
             return None;
         }
-        SourceSlotView::Missing(missing) => {
+        ReadableSlot::Missing(missing) => {
             check_not_missing(missing.raw_node(), missing.source(), errors, kind.context);
             return None;
         }
-        SourceSlotView::Error(bad) => {
+        ReadableSlot::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
                 bad.source(),
@@ -108,11 +109,23 @@ fn tier_name<'tree, T: AsRawNode<'tree> + Copy>(
             ));
             return None;
         }
+        ReadableSlot::Unexpected(never) => match *never {},
     };
-    let name = after_marker(prefix, kind.marker, kind.what, input, errors)?;
+    let Some(name) = prefix.text().strip_prefix(kind.marker) else {
+        let raw = prefix.raw_node();
+        errors.report(ParseError::new(
+            ErrorCode::TreeParsingError,
+            Severity::Error,
+            SourceLocation::from_offsets(raw.start_byte(), raw.end_byte()),
+            ErrorContext::new(prefix.source(), raw.byte_range(), kind.node_kind),
+            format!("{} does not begin with '{}'", kind.what, kind.marker),
+        ));
+        return None;
+    };
     match NonEmptyString::new(name) {
         Ok(name) => Some(name),
         Err(_) => {
+            let prefix = prefix.raw_node();
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
@@ -153,9 +166,9 @@ pub(super) fn apply_x_tier<'tree>(
     // Extracted under the admitted kind proof: the body is a named nonterminal
     // the compiled grammar proves is never MISSING, so its slot has no
     // `Missing` state to read below.
-    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| node.extract_admitted(grammar)),
+            .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into)),
         tier_node,
         input,
         errors,
@@ -163,20 +176,22 @@ pub(super) fn apply_x_tier<'tree>(
         return;
     };
     let children = associated.children();
-    let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
-        super::helpers::dependent_tier_separator(children.child_1.slot()),
+    let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
+    surface_displaced(&children.unexpected, "x_dependent_tier", input, errors);
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
+        associated.admit_ranges().map_err(Into::into),
         tier_node,
         input,
         errors,
     ) else {
         return;
     };
-    surface_displaced(&children.unexpected, "x_dependent_tier", input, errors);
+    let children = associated.children();
 
     let Some(name) = tier_name(
-        associated.field_child_0().slot(),
+        &children.child_0.slot,
         &X_PREFIX,
-        tier_node,
+        associated.parent(),
         errors,
     ) else {
         return;
@@ -206,7 +221,7 @@ pub(super) fn apply_x_tier<'tree>(
     // not validity: the parser says what the file contains, and
     // `DependentTier::empty_content_span` hands it to E756 exactly as it does
     // for every other tier kind.
-    let body_slot = match associated.field_child_2().slot().optional() {
+    let body_slot = match &children.child_2.slot {
         Some(slot) => slot,
         None => {
             let span =
@@ -229,19 +244,15 @@ pub(super) fn apply_x_tier<'tree>(
     // walk used to report the recovery node; it is gone since 2026-09-08. A
     // node of another kind there (none is generated today) is reported by
     // its kind.
-    let body = match body_slot.view() {
-        SourceSlotView::Present(n) => {
-            let Some(bound) = crate::parser::typed_cst::read_source_field(n, errors) else {
-                return;
-            };
-            bound
-        }
-        SourceSlotView::Error(n) => {
+    let body = match body_slot {
+        ReadableSlot::Present(n) => *n,
+        ReadableSlot::Error(n) => {
             errors.report(analyze_dependent_tier_error(n.raw_node(), n.source()));
             report_missing_x_content(tier_node, tier_label, input, errors);
             return;
         }
-        SourceSlotView::Absent(never) => match never {},
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
     };
     let content_text = body.text();
 
@@ -308,31 +319,35 @@ pub(super) fn apply_unsupported_tier<'tree>(
 ) {
     let tier_node = node.raw_node();
     let input = node.source();
+    let extraction = crate::parser::typed_cst::canonical_grammar()
+        .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
     let Ok(associated) =
-        crate::parser::typed_cst::report_reconstruction(node.extract(), tier_node, input, errors)
+        crate::parser::typed_cst::report_admission(extraction, tier_node, input, errors)
     else {
         return;
     };
     let children = associated.children();
-    let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
-        super::helpers::dependent_tier_separator(children.child_1.slot()),
-        tier_node,
-        input,
-        errors,
-    ) else {
-        return;
-    };
+    let separator = super::helpers::dependent_tier_separator(children.child_1.slot());
     surface_displaced(
         &children.unexpected,
         "unsupported_dependent_tier",
         input,
         errors,
     );
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
+        associated.admit_ranges().map_err(Into::into),
+        tier_node,
+        input,
+        errors,
+    ) else {
+        return;
+    };
+    let children = associated.children();
 
     let Some(label) = tier_name(
-        associated.field_child_0().slot(),
+        &children.child_0.slot,
         &UNSUPPORTED_PREFIX,
-        tier_node,
+        associated.parent(),
         errors,
     ) else {
         return;
@@ -347,21 +362,10 @@ pub(super) fn apply_unsupported_tier<'tree>(
     // and the body had to be recovered by string-splitting the tier's source text;
     // the fix is sibling to the sometimes-leaf-choice (`LeafText`) fix. The prefix
     // `child_0`, a real named node, is likewise visitor-driven above. Source
-    // identity comes from the admitted parent, but the generated leaf span must
-    // still fit that input and its UTF-8 boundaries. A failed read is the
-    // traversal's own source-binding failure (E001), reported through the
-    // typed internal-failure boundary rather than read as an empty body, which
-    // is the file's fact and E756's to name: no tier claims a content the parser
-    // did not read.
-    let Some(body) = input.get(children.child_2.range.clone()) else {
-        crate::parser::typed_cst::report_cst_failure(
-            tier_node,
-            input,
-            SourceBindingError::InvalidRange,
-            errors,
-        );
-        return;
-    };
+    // identity and readable UTF-8 boundaries are retained by `ReadableLeafSpan`.
+    // The consuming transition above refuses the owner with E001 if any selected
+    // range is unreadable. This read is infallible, never an empty-body fallback.
+    let body = children.child_2.text();
 
     // An empty tier is KEPT, carrying `None`, rather than dropped with a
     // generic parse error. It used to be dropped because the model could not

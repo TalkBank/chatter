@@ -8,12 +8,14 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Situation_Header>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Types_Header>
 
+mod id_languages;
 mod languages;
 mod media;
 mod pid;
 mod situation;
 mod types;
 
+pub(crate) use id_languages::parse_id_languages;
 pub use languages::parse_languages_header;
 pub use media::parse_media_header;
 pub use pid::parse_pid_header;

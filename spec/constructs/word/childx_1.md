@@ -13,12 +13,8 @@ child@x
 ``` cst
 (standalone_word
   (word_body
-    (initial_word_segment)
-  )
-  (form_marker
-    (form_marker_token)
-  )
-)
+    (word_segment))
+  (form_marker))
 ```
 
 ## Metadata

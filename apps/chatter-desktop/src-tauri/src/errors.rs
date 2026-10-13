@@ -109,7 +109,7 @@ pub enum InstallCliError {
     },
 
     #[error(
-        "Bundled CLI not found at {path}. Build with `cargo build --release -p chatter` first."
+        "Bundled CLI not found at {path}. Build with `cargo build --release -p talkbank-chatter` first."
     )]
     NotBundled { path: PathBuf },
 

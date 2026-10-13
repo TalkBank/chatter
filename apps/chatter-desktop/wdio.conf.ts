@@ -11,32 +11,28 @@
  *   npx wdio run wdio.conf.ts
  */
 
-import { join } from "path";
+import type {} from "@wdio/types";
+import { admitDesktopSmokeBinary } from "./scripts/desktop-smoke-binary.mjs";
 
 const isCI = !!process.env.CI;
 
-// Path to the built Tauri app binary
-const appBinary = join(
-  __dirname,
-  "..",
-  "target",
-  "debug",
-  "chatter-desktop",
-);
+// The standalone driver's vendor extension is not in WebdriverIO's base types.
+const tauriCapabilities: WebdriverIO.Capabilities & {
+  "tauri:options": ReturnType<typeof admitDesktopSmokeBinary>;
+} = {
+  "tauri:options": admitDesktopSmokeBinary({
+    configUrl: import.meta.url,
+    binaryPath: process.env.CHATTER_DESKTOP_BINARY,
+    targetDir: process.env.CHATTER_DESKTOP_TARGET_DIR,
+  }),
+};
 
 export const config: WebdriverIO.Config = {
   runner: "local",
   specs: ["./tests/e2e/**/*.spec.ts"],
 
   maxInstances: 1,
-  capabilities: [
-    {
-      // Tauri uses the native WebDriver endpoint via tauri-driver
-      "tauri:options": {
-        application: appBinary,
-      },
-    } as never,
-  ],
+  capabilities: [tauriCapabilities],
 
   logLevel: isCI ? "warn" : "info",
   bail: 0,

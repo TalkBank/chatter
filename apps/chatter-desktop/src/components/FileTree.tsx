@@ -7,7 +7,7 @@
  */
 
 import { useMemo, useState, useCallback } from "react";
-import type { RunPhase } from "../hooks/useValidation";
+import type { RunPhase } from "../hooks/validationState";
 import { fileOutcome, shouldShowAllFilesValid, totalFilesOf } from "../hooks/validationState";
 import type { FileEntry, TreeNode } from "../types";
 

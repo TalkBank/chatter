@@ -147,6 +147,20 @@
       "type": "STRING",
       "value": "\t"
     },
+    "strict_date": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "(?:0[1-9]|[1-2][0-9]|3[0-1])-(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)-[1-2][0-9]{3}"
+      }
+    },
+    "strict_time": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "[0-9:\\-;,]+"
+      }
+    },
     "rest_of_line": {
       "type": "PATTERN",
       "value": "[^\\r\\n]+"
@@ -964,8 +978,16 @@
           "name": "header_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "date_contents"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "date_contents"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -1185,8 +1207,16 @@
           "name": "header_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "time_duration_contents"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "time_duration_contents"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -1206,8 +1236,16 @@
           "name": "header_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "time_duration_contents"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "time_duration_contents"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -1400,8 +1438,16 @@
           "name": "header_sep"
         },
         {
-          "type": "SYMBOL",
-          "name": "date_contents"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "date_contents"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -5550,13 +5596,6 @@
         }
       ]
     },
-    "strict_date": {
-      "type": "TOKEN",
-      "content": {
-        "type": "PATTERN",
-        "value": "(?:0[1-9]|[1-2][0-9]|3[0-1])-(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)-[1-2][0-9]{3}"
-      }
-    },
     "generic_date": {
       "type": "PATTERN",
       "value": "[^\\r\\n]+"
@@ -5585,13 +5624,6 @@
         }
       ]
     },
-    "strict_time": {
-      "type": "TOKEN",
-      "content": {
-        "type": "PATTERN",
-        "value": "[0-9:\\-;,]+"
-      }
-    },
     "generic_time": {
       "type": "PATTERN",
       "value": "[^\\r\\n]+"
@@ -5617,8 +5649,16 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "SYMBOL",
-          "name": "id_languages"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "id_languages"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -5933,17 +5973,45 @@
       ]
     },
     "id_languages": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "id_language"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "comma"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "space"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "tab"
+          }
+        ]
+      }
+    },
+    "id_language": {
       "type": "CHOICE",
       "members": [
         {
           "type": "SYMBOL",
-          "name": "languages_contents"
+          "name": "language_code"
         },
         {
-          "type": "PATTERN",
-          "value": "[^|\\r\\n]*"
+          "type": "SYMBOL",
+          "name": "generic_id_language"
         }
       ]
+    },
+    "generic_id_language": {
+      "type": "PATTERN",
+      "value": "[^ \\t,|\\r\\n]([^,|\\r\\n]*[^ \\t,|\\r\\n])?"
     },
     "id_corpus": {
       "type": "PATTERN",

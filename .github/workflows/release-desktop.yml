@@ -500,6 +500,29 @@ jobs:
           set -euo pipefail
           gh release upload "$RELEASE_TAG" latest.json --repo "$GITHUB_REPOSITORY"
 
+      # Older CLI binaries request chatter-installer.*, and existing download
+      # links use those names. Wrappers preserve the generated installer payload
+      # and translate the producer's environment mapping from the legacy prefix.
+      - name: Retain and verify legacy CLI installer URLs
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIST_PLAN: ${{ inputs.plan }}
+        run: |
+          set -euo pipefail
+          cli_installers="$RUNNER_TEMP/cli-installers"
+          uploaded_installers="$RUNNER_TEMP/uploaded-cli-installers"
+          mkdir -p "$cli_installers" "$uploaded_installers"
+          printf '%s' "$DIST_PLAN" > "$RUNNER_TEMP/cli-dist-plan.json"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'talkbank-chatter-installer.*' --dir "$cli_installers"
+          node scripts/release/cli-installer-compatibility.mjs create "$cli_installers" "$RUNNER_TEMP/cli-dist-plan.json"
+          gh release upload "$RELEASE_TAG" "$cli_installers"/chatter-installer.* \
+            --repo "$GITHUB_REPOSITORY"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern '*chatter-installer.*' --dir "$uploaded_installers"
+          node scripts/release/cli-installer-compatibility.mjs verify "$uploaded_installers" "$RUNNER_TEMP/cli-dist-plan.json"
+
       - name: Verify candidate downloads and updater references
         env:
           GH_TOKEN: ${{ github.token }}

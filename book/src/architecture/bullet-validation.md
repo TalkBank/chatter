@@ -1,7 +1,7 @@
 # Bullet Validation
 
 **Status:** Current
-**Last updated:** 2026-09-24 00:21 EDT
+**Last updated:** {{git-dates:page}}
 
 Media bullets are timestamps embedded in CHAT utterances that link transcript
 text to audio/video. They appear as `•start_end•` at the end of a main tier
@@ -12,6 +12,65 @@ because the "obvious" rules turn out to be wrong for multi-party conversation.
 This chapter documents what CLAN CHECK does, where its implementation falls
 short of its own intent, and how `chatter validate` interprets and improves on
 that intent.
+
+## Current policy by timing surface
+
+Bullets encode unsigned millisecond offsets between U+0015 delimiters; `•` is
+the visible notation used in this chapter. Parsing a bullet is not proof that
+its interval is valid, nor that it matches the recording.
+
+| Surface or relationship | Current validation contract |
+| --- | --- |
+| Individual main-tier bullet | Positive duration: `start < end`; otherwise E362 |
+| Individual `%wor` word bullet | Positive duration: `start < end`; zero or reversed duration is E362 |
+| Consecutive utterance-final main bullets, in document order | Starts must be nondecreasing, regardless of speaker; otherwise E362 |
+| Successive utterance bullets for one speaker | Starts must be nondecreasing (E701); self-overlap greater than 500 ms is E704 |
+| Cross-speaker utterance end overlap | Not itself an error; E729 is not implemented |
+| Adjacent words within `%wor` | Positive intervals may overlap or start out of order; no word-sequence rejection rule |
+| Word timing versus the main-tier envelope | No general requirement that each word interval lie inside the main bullet |
+| Missing word bullet | Legal partial timing, not a zero-duration substitute |
+
+Equal starts pass the start-order check; touching intervals and gaps are not
+errors. Exactly 500 ms of same-speaker utterance overlap passes E704. The
+word-level policy does not inherit that utterance-level tolerance: it has no
+adjacent-word overlap test at all. For example, `%wor` intervals `100_300`
+and `200_400` are both positive and allowed, as are `300_400` followed by
+`100_200`. These are structural permissions, not acoustic endorsements.
+
+**Important scope distinction:** the global E362 check in
+`ChatFile::run_validation_checks` still runs alongside the per-speaker E701
+check. Thus a cross-speaker backward start can pass E701 but fail complete
+validation with E362. Statements below about E701's per-speaker scope must
+not be read as permission for global backward starts. This is a tension
+between the conversational rationale and the current complete validator,
+not a new policy decision or a silent relaxation of E362.
+
+`%wor` has no trailing tier-level bullet. Its timing belongs to individual
+words; its main tier owns the utterance span. See
+[`%wor` Timing Semantics](wor-timing.md) for membership, lexical corroboration,
+complete timing admission, and source-bound replacement. Zero-duration word
+bullets are now invalid even in older data; this rule does not rewrite it.
+The special `0_0` spelling can already fail parsing as E360, before interval
+validation; it is not an accepted exception to positive duration.
+
+### Media linkage and evidence
+
+An utterance-final bullet, an internal main-tier bullet (including nested
+content), or an actual `%wor` word bullet supplies timing evidence. A `%wor`
+tier containing only untimed words does not. Timing presence does not depend
+on lexical alignment or matching word counts.
+
+- E752: timing exists but no `@Media` header declares the indexed media.
+- E552: `@Media` says `unlinked` but timing exists, including `%wor`-only timing.
+- E544: an expected recording is declared without a status qualifier, but
+  no timing exists. A declaration of missing media is not a linkage promise.
+
+Replacement admission may carry an E544 regeneration obligation while a
+designated timing tier is removed. It must be discharged before complete
+output admission; removing bad timing is not proof of successful regeneration.
+None of these checks opens audio to certify recording length or acoustic
+placement. Validation reports faults; it does not manufacture durations or
+normalize overlapping words.
 
 ## The three temporal checks
 
@@ -26,7 +85,7 @@ non-decreasing. If speaker CHI has utterance A starting at 10,000ms and
 utterance B (later in document order) starting at 8,000ms, that is an error,
 CHI's timeline has gone backward.
 
-**Scope:** Per-speaker. Cross-speaker non-monotonicity is allowed (see
+**Scope:** Per-speaker. E701 does not reject cross-speaker non-monotonicity (see
 [Why cross-speaker non-monotonicity is not an error](#why-cross-speaker-non-monotonicity-is-not-an-error)).
 
 **Severity:** Error.
@@ -156,7 +215,8 @@ must be non-decreasing.** This is what `chatter validate` checks for E701.
 
 `chatter validate` tracks each speaker's last start time in a `HashMap`. E701
 only fires when the *same speaker's* start time goes backward. Cross-speaker
-non-monotonicity is silently accepted.
+non-monotonicity is not reported by E701; the separate global E362 check above
+still applies during complete validation.
 
 This is an intentional semantic divergence from CLAN CHECK, which fires error 83
 globally. We believe CLAN's global check reflects the implementation
@@ -187,20 +247,13 @@ E730/E732 are likewise reserved; E731 does not add a zero-tolerance duplicate
 of the implemented E704 timing rule. The four specs retain real bullet-bearing
 default-mode controls, including E704's accepted exact-500-ms boundary.
 
-### Untranscribed utterances are skipped
+### Untranscribed utterances and CA mode remain checked
 
-Utterances containing only untranscribed markers (`www`, `xxx`, `yyy`) are
-skipped for E704 checks. These utterances often carry broad segment bullets
-(covering a long span of background speech) that would create false self-overlap
-reports. This matches CLAN CHECK's behavior, where untranscribed tiers do not
-contribute to timing comparisons.
-
-### CA mode disables all temporal checks
-
-When the file header includes `@Options: CA`, all temporal validation is
-skipped. Conversation Analysis mode intentionally relaxes timing constraints
-because CA transcription conventions use overlapping and non-sequential timing
-as part of the analytic notation.
+Every collected utterance bullet participates in E701/E704, including one
+whose content is only `www`, `xxx`, or `yyy`. A lexical-content predicate is
+not used to exempt its recorded interval. `@Options: CA` also does not bypass
+these temporal checks or the separate E362 checks. Older descriptions of
+either exemption were stale.
 
 ## Comparison: CLAN CHECK vs chatter validate
 
@@ -217,8 +270,8 @@ The following table summarizes the behavioral differences:
 │ 83 corrupts speaker state  │ Yes (bug)    │ No              │
 │ E701 + E704 independent    │ No           │ Yes             │
 │ Speaker state always fresh │ No           │ Yes             │
-│ Untranscribed skipped      │ Implicit     │ Explicit        │
-│ CA mode bypass             │ Yes          │ Yes             │
+│ Untranscribed skipped      │ Implicit     │ No              │
+│ CA mode bypass             │ Yes          │ No              │
 │ 500ms tolerance (E704)     │ Yes          │ Yes             │
 └────────────────────────────┴──────────────┴─────────────────┘
 ```
@@ -229,15 +282,16 @@ On multi-party files with overlapping speech:
 
 - **E701 count will be lower than CLAN's error 83 count.** CLAN fires error 83
   on cross-speaker non-monotonicity; we don't. The difference represents
-  legitimate conversational overlap that we intentionally do not flag.
+  E701's narrower speaker scope; it does not establish that complete
+  validation accepts the file, because global E362 can still report it.
 
 - **E704 count will be higher than CLAN's error 133 count.** CLAN's
   early-return shadowing prevents error 133 from firing when error 83 fires,
   and the stale speaker state causes further suppression. Our correctly
   maintained per-speaker tracking reports all genuine self-overlaps.
 
-On single-speaker files or files with minimal overlap, the counts should be
-very close or identical.
+Counts for these named diagnostics are not predictions of total validator
+counts: individual interval and global E362 checks are independent.
 
 ## Implementation details
 

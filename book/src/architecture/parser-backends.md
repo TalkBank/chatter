@@ -46,6 +46,13 @@ meaning and validity rules **idiomatically within their own architectures**.
 Neither parser is an oracle for the other. For supported valid input, the goal
 is semantic agreement in the shared model, not identical internal representation.
 
+The re2c backend is important for **1.0**. Every input that produces an error
+with tree-sitter must produce some error with re2c through the corresponding
+supported API and validation policy. A warning alone does not satisfy this
+one-way requirement. An internal tool failure is failed measurement, not proof
+that a CHAT fault was detected. Diagnose concrete tree-sitter defects against the
+specification; a difference does not authorize ignoring its error.
+
 For developers, these are mandatory constraints:
 
 - Use re2c lexer states, rich tokens, parser-owned recovery and typed,
@@ -74,7 +81,7 @@ For users switching `--parser`:
 | Supported valid CHAT | The intended meaning and shared-model semantics should agree. A disagreement needs investigation. |
 | Invalid input | Diagnostic detail, number, order and highlighted recovery region may differ; identical error reports are not promised. |
 | Recovered content | Partial models and retained fragments may differ. Recovery is not validity and is not a portable data-repair contract. |
-| Experimental limitations | re2c is incomplete and may reject supported CHAT or miss invalid input. A clean re2c result is not a substitute for default tree-sitter validation. |
+| Current limitations | Known missed errors are defects blocking the 1.0 detection contract, not experimental exemptions. Finite passing comparisons do not establish specification completeness. |
 
 Use the default tree-sitter backend for production validity decisions and the
 LSP. Consumers must not depend on cross-backend diagnostic identity or
@@ -82,10 +89,11 @@ interchangeable recovered output. Report concrete validity or semantic
 disagreements with a minimal input and parser version; a diagnostic difference
 alone does not establish a bug.
 
-Before 1.0, re2c improvements are welcome when justified and affordable, but
-remain lowest priority. Full backend equivalence is not a release prerequisite;
-re2c may remain explicitly experimental and incomplete. This does not waive
-truthful diagnostics or the prohibition on architecture-distorting workarounds.
+One-way error detection is a 1.0 acceptance condition; full diagnostic or
+recovered-model equivalence is not. Tree-sitter remains the default and the
+incremental LSP backend. The re2c requirement does not waive truthful diagnostics
+or authorize architecture-distorting workarounds. Retain valid controls and
+isolated invalid variants so an unrelated error cannot conceal a missed fault.
 
 ### API shape
 
@@ -122,6 +130,23 @@ Two notes on the trait's shape:
   `talkbank-parser/tests/chat_parser_trait.rs`.
 
 ## TreeSitterParser (default)
+
+### Structured metadata header boundaries
+
+`@Languages` retains its ordered code list; list structure and ISO 639-3
+membership are separate parsing and validation obligations. `@Types` carries
+design, activity and group as alphanumeric atoms. Optional whitespace around
+its commas is structure, not part of those values. Tree-sitter's generated field
+kinds own the Types reader's diagnostic identity; re2c's lexer tags capture the
+atoms without separator whitespace. `@Situation` remains free text, including
+Unicode, rather than inheriting the restricted Types field grammar.
+
+Header fragments and whole documents use the same lowering boundaries. Invalid
+Types atoms must be detected without treating an internal failure as a CHAT
+diagnostic. Parse diagnostics also remain distinct from model checks: validation
+of a salvaged model does not certify the original source bytes. Keep the parse
+product and its diagnostics when deciding whether the input was accepted; JSON
+payload replay does not recreate parse-health evidence.
 
 For isolated words, `parse_word_with_context` (or the inherent
 `parse_word_fragment_with_context`) applies the enclosing document's effective
@@ -289,10 +314,10 @@ backends to lose the same information.
 The [dated re2c measurements](https://github.com/TalkBank/chatter/blob/main/crates/talkbank-parser-re2c/docs/parity-report.md)
 include known silent invalid cases; do not treat zero-silence results as
 guarantees. A clean `--parser re2c` run is not a general validity
-guarantee. Backend disagreements
-remain in diagnostic specificity, extra or missing diagnostics, and source
-locations. The per-case authority is
-`tests/integration/error_parity/baseline.rs`; run its gate for derived counts.
+guarantee. Differences in diagnostic specificity, additional diagnostics,
+source locations and recovery remain permissible. Missed errors do not.
+Run the one-way comparison for the complete authored-example failure inventory;
+a historical diagnostic-set baseline cannot waive the requirement.
 
 Both backends feed the shared model validator, but source information discarded
 before lowering cannot be checked there. Rejected morphology preserves taint;
@@ -304,7 +329,7 @@ other recovery paths and remaining dummy diagnostic locations still need review.
 # Default: tree-sitter
 chatter validate corpus/
 
-# Opt into the experimental re2c backend
+# Select the independent re2c backend
 chatter validate --parser re2c corpus/
 
 # Roundtrip with re2c
@@ -316,22 +341,21 @@ are parser-specific, switching parsers does not invalidate the other's cache.
 
 ## Parity Status
 
-The reference-corpus equivalence and roundtrip gates compare actual parsed
-models and serialized output. The error-spec gate
-`backends_diverge_only_where_recorded` separately compares diagnostic code
-sets against a named, bidirectional baseline: a newly divergent case fails,
-and a resolved case must be removed from that baseline. E550 is not in the
-baseline because file and fragment participant recovery agree, and neither is
-E747: both lexers preserve single logical line breaks, and both parsers locate a
-blank line under LF, CRLF and lone-CR endings while retaining its surrounding
-utterances.
+The reference comparison checks error-free acceptance and shared-model semantics.
+The error-spec comparison `backends_report_every_tree_sitter_error` measures every
+declared example, including legal claims and deferred codes. It retains parsing
+and shared-validation findings separately, and rejects silence or warning-only
+re2c output whenever tree-sitter reports an error. Error codes and rejection
+stages may differ; code-set equality is informational only. Internal failures
+refuse measurement rather than passing as generic input errors.
 
-A passing baseline means that disagreements are accounted for, not that
-both backends meet every spec. The harness distinguishes backend agreement
-from each backend's conformance to the declared spec. Run its report with:
+Passing this finite file-level comparison does not prove every CHAT rule, every
+supported fragment API or every fault within a multi-fault input is covered.
+Fragment/coordinate contracts and isolated invalid controls remain separate.
+Run the current report with:
 
 ```bash
-cargo test -p talkbank-parser-re2c --test integration backends_diverge_only_where_recorded --locked -- --nocapture
+cargo test -p talkbank-parser-re2c --test integration error_parity::backends_report_every_tree_sitter_error --locked -- --exact --nocapture
 ```
 
 No wild-corpus percentage or performance figure is recorded here; measure

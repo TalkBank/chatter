@@ -24,9 +24,9 @@ Word with form type marker, `@letter` suffix indicating word form.
             (standalone_word
               (word_body
                 (word_segment))
-              (form_marker))))))
+              (form_marker)))))
+      (whitespaces))
     (utterance_end
-      (whitespaces)
       (period)
       (newline))))
 ```

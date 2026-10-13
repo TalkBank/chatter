@@ -46,7 +46,6 @@ use super::{
     UtteranceContent, WriteChat,
 };
 use crate::alignment::helpers::{WordItem, walk_words};
-use crate::model::content::word::Word;
 use crate::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -208,28 +207,22 @@ impl MainTier {
     /// when they do not have file-level `@Options: CA` context. This matches
     /// both explicit `CAOmission` words and standalone shortening-only forms.
     pub fn find_context_dependent_ca_omission_span(&self) -> Option<Span> {
-        fn word_requires_ca_file_context(word: &Word) -> bool {
-            let standalone_shortening = word.content().len() == 1
-                && matches!(word.content()[0], crate::model::WordContent::Shortening(_));
-
-            matches!(word.category, Some(crate::model::WordCategory::CAOmission))
-                || standalone_shortening
-        }
+        use crate::model::content::word::ca::requires_ca_omission_context;
 
         let mut span = None;
         walk_words(&self.content.content, None, &mut |leaf| match leaf {
-            WordItem::Word(word) if span.is_none() && word_requires_ca_file_context(word) => {
+            WordItem::Word(word) if span.is_none() && requires_ca_omission_context(word) => {
                 span = Some(word.span);
             }
             WordItem::ReplacedWord(replaced) if span.is_none() => {
-                if word_requires_ca_file_context(&replaced.word) {
+                if requires_ca_omission_context(&replaced.word) {
                     span = Some(replaced.word.span);
                 } else {
                     span = replaced
                         .replacement
                         .words
                         .iter()
-                        .find(|word| word_requires_ca_file_context(word))
+                        .find(|word| requires_ca_omission_context(word))
                         .map(|word| word.span);
                 }
             }

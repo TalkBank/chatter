@@ -21,13 +21,13 @@ Clitic boundary `~` within a word: `le~ha` (Arabic clitic attachment).
       (content_item
         (base_content_item
           (word_with_optional_annotations
-            word: (standalone_word
+            (standalone_word
               (word_body
                 (word_segment)
                 (tilde)
-                (word_segment)))))))
+                (word_segment))))))
+      (whitespaces))
     (utterance_end
-      (whitespaces)
       (period)
       (newline))))
 ```

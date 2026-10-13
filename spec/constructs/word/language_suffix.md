@@ -1,6 +1,8 @@
 # language_suffix
 
-Word with language suffix, `@s:code` or `@s:code1+code2`.
+Word with an opaque language suffix, `@s:code` or `@s:code1+code2`.
+The immediate suffix token has no code-list CST children. Candidate decoding
+belongs to its source-bound Rust adapter; registry validity is a later policy.
 
 ## Input
 
@@ -24,12 +26,9 @@ Word with language suffix, `@s:code` or `@s:code1+code2`.
             (standalone_word
               (word_body
                 (word_segment))
-              (word_lang_suffix
-                (word_lang_codes
-                  (language_code)
-                  (language_code))))))))
+              (word_lang_suffix)))))
+      (whitespaces))
     (utterance_end
-      (whitespaces)
       (period)
       (newline))))
 ```

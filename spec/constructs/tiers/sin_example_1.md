@@ -13,8 +13,32 @@ Sign tier with sign-group style content.
 
 ```cst
 (utterance
-  (main_tier ...)
-  (sin_dependent_tier ...))
+  (main_tier
+    (star)
+    (speaker)
+    (colon)
+    (tab)
+    (tier_body
+      (contents
+        (content_item
+          (base_content_item
+            (word_with_optional_annotations
+              (standalone_word
+                (word_body
+                  (word_segment))))))
+        (whitespaces))
+      (utterance_end
+        (period)
+        (newline))))
+  (sin_dependent_tier
+    (sin_tier_prefix)
+    (tier_sep
+      (colon)
+      (tab))
+    (sin_groups
+      (sin_group
+        (sin_word)))
+    (newline)))
 ```
 
 ## Metadata

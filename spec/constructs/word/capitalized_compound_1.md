@@ -13,15 +13,8 @@ Foo+Bar
 ``` cst
 (standalone_word
   (word_body
-    (initial_word_segment)
-    (word_content
-      (plus)
-    )
-    (word_content
-      (word_segment)
-    )
-  )
-)
+    (word_segment)
+    (word_segment)))
 ```
 
 ## Metadata

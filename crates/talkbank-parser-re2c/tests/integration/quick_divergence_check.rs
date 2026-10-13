@@ -21,8 +21,8 @@ use talkbank_parser::TreeSitterParser;
 // Ignored, like its two sibling report generators. This prints a divergence
 // sample for a human and asserts nothing, so running it in the default suite
 // bought a slower `just test` and no signal. Its own module doc already implies
-// a manual run. The question it was a proxy for is now GATED by
-// `error_parity::backends_diverge_only_where_recorded`.
+// a manual run. Missed errors are enforced by the authored-example one-way
+// comparison; model and diagnostic identity remain separate measurements.
 #[test]
 #[ignore = "report generator: run by hand with --ignored --nocapture"]
 fn check_sample_divergences() {

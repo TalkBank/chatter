@@ -297,6 +297,16 @@ fn reference_worker_failure_cannot_report_a_completed_validation() {
     );
     let mut phase = StreamPhase::Discovery;
     for event in events {
+        if let ValidationEvent::Finished(ending) = &event {
+            assert!(!ending.passed(), "worker loss cannot produce run success");
+            let summary = ending.stats().expect("lost files retain partial totals");
+            assert_eq!(summary.files_accounted_for(), 0);
+            assert_eq!(
+                summary.failed_files(),
+                0,
+                "loss is not an input-invalidity verdict"
+            );
+        }
         match event {
             ValidationEvent::Discovering => {
                 assert!(matches!(phase, StreamPhase::Discovery));
@@ -307,7 +317,26 @@ fn reference_worker_failure_cannot_report_a_completed_validation() {
                 assert_eq!(total_files, 1);
                 phase = StreamPhase::Running;
             }
-            ValidationEvent::Finished(RunEnding::Incomplete { stats, .. }) => {
+            ValidationEvent::Finished(RunEnding::Incomplete { stats, cause }) => {
+                let talkbank_transform::validation_runner::LossCause::WorkerFaults(faults) = &cause
+                else {
+                    panic!("the callback unwind must retain its observed worker fault");
+                };
+                let observed: Vec<_> = faults.iter().collect();
+                assert_eq!(observed.len(), 1);
+                assert!(matches!(observed[0],
+                    talkbank_transform::validation_runner::WorkerFault::Pool(
+                        talkbank_transform::worker_pool::PoolFault::Unwound { workers }
+                    ) if workers.get() == 1
+                ));
+                assert_eq!(
+                    observed[0].to_string(),
+                    "1 worker(s) failed with an internal error"
+                );
+                assert_eq!(
+                    cause.to_string(),
+                    "1 worker(s) failed with an internal error."
+                );
                 let lost_files = stats.missing_files();
                 let stats = stats.snapshot();
                 assert!(matches!(phase, StreamPhase::Running));
@@ -420,6 +449,17 @@ fn reference_cancellation_accounts_for_unprocessed_files() {
     let mut phase = StreamPhase::Discovery;
     let mut completed = 0;
     for event in events {
+        if let ValidationEvent::Finished(ending) = &event {
+            assert!(
+                !ending.passed(),
+                "a clean processed prefix is not a complete run"
+            );
+            let summary = ending.stats().expect("cancellation retains partial totals");
+            assert_eq!(summary.files_accounted_for(), completed);
+            assert_eq!(summary.failed_files(), 0);
+            assert_eq!(summary.internal_failures(), 0);
+            assert_eq!(summary.cache_errors(), 0);
+        }
         match event {
             ValidationEvent::Discovering => {
                 assert!(matches!(phase, StreamPhase::Discovery));

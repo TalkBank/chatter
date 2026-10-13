@@ -70,7 +70,12 @@ fn reference_word_projections_preserve_tuple_order_and_report_limits() {
     use talkbank_model::model::Word;
     use talkbank_parser_tests::repo_paths::workspace_root;
 
-    fn exercise<T: SemanticDiff + talkbank_model::SemanticEq>(left: &T, right: &T, fields: usize) {
+    fn exercise<T: SemanticDiff + talkbank_model::SemanticEq>(
+        left: &T,
+        right: &T,
+        fields: usize,
+        changed_fields: &[usize],
+    ) {
         assert!(
             left.semantic_eq(left),
             "unchanged projections compare equal"
@@ -83,6 +88,8 @@ fn reference_word_projections_preserve_tuple_order_and_report_limits() {
             full.is_empty(),
             "tuple comparison agrees with its report"
         );
+        assert_eq!(right.semantic_eq(left), full.is_empty());
+        assert_eq!(full.is_empty(), changed_fields.is_empty());
         assert!(!full.is_truncated());
         let mut previous = 0;
         for difference in full.differences() {
@@ -93,10 +100,12 @@ fn reference_word_projections_preserve_tuple_order_and_report_limits() {
             previous = field;
         }
         for field in 0..fields {
-            assert!(
+            assert_eq!(
                 full.differences()
                     .iter()
-                    .any(|difference| difference.path.starts_with(&format!("[{field}]")))
+                    .any(|difference| difference.path.starts_with(&format!("[{field}]"))),
+                changed_fields.contains(&field),
+                "only changed tuple fields may be reported"
             );
         }
         for limit in 0..=full.differences().len() + 1 {
@@ -232,12 +241,34 @@ fn reference_word_projections_preserve_tuple_order_and_report_limits() {
         &(left[0].clone(), left[1].clone()),
         &(right[0].clone(), right[1].clone()),
         2,
+        &[0, 1],
     );
     exercise(
         &(left[0].clone(), left[1].clone(), left[2].clone()),
         &(right[0].clone(), right[1].clone(), right[2].clone()),
         3,
+        &[0, 1, 2],
     );
+    // A mismatch in an earlier field must not be the only reason a tuple is
+    // unequal. Each later field is checked while the preceding fields agree.
+    for (changed, field) in [
+        ((right[0].clone(), left[1].clone()), 0),
+        ((left[0].clone(), right[1].clone()), 1),
+    ] {
+        exercise(&(left[0].clone(), left[1].clone()), &changed, 2, &[field]);
+    }
+    for (changed, field) in [
+        ((right[0].clone(), left[1].clone(), left[2].clone()), 0),
+        ((left[0].clone(), right[1].clone(), left[2].clone()), 1),
+        ((left[0].clone(), left[1].clone(), right[2].clone()), 2),
+    ] {
+        exercise(
+            &(left[0].clone(), left[1].clone(), left[2].clone()),
+            &changed,
+            3,
+            &[field],
+        );
+    }
 }
 
 #[test]
@@ -317,6 +348,19 @@ fn reference_participant_reports_preserve_order_keys_and_truncation() {
     let extended = parse("core/headers-speaker-info.cha");
     let equal = report(&basic.participants, &basic.participants, 0);
     assert!(equal.is_empty() && !equal.is_truncated());
+    assert!(basic.participants.semantic_eq(&basic.participants));
+
+    // Keep the speaker key and map order, changing only its observed metadata.
+    // This comparison projection is not admission of a modified CHAT document.
+    let (speaker, participant) = basic.participants.get_index(0).expect("first speaker");
+    let replacement = extended.participants.get(speaker).expect("same speaker");
+    assert!(!participant.semantic_eq(replacement));
+    let mut changed_value = basic.participants.clone();
+    changed_value.insert(speaker.clone(), replacement.clone());
+    assert!(
+        basic.participants.keys().eq(changed_value.keys()),
+        "metadata replacement must preserve keys and insertion order"
+    );
 
     // An authored speaker change must identify the first declared key, not
     // reorder maps or skip the key when the report budget is exhausted.
@@ -349,9 +393,13 @@ fn reference_participant_reports_preserve_order_keys_and_truncation() {
         (&overlap.participants, &basic.participants),
         (&basic.participants, &extended.participants),
         (&extended.participants, &basic.participants),
+        (&basic.participants, &changed_value),
+        (&changed_value, &basic.participants),
     ] {
         let full = report(left, right, usize::MAX);
         assert!(!full.is_empty() && !full.is_truncated());
+        assert_eq!(left.semantic_eq(right), full.is_empty());
+        assert_eq!(right.semantic_eq(left), full.is_empty());
         assert!(
             full.differences()
                 .iter()

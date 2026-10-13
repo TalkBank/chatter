@@ -190,9 +190,7 @@ fn parse_bullet_node_timestamps<'tree>(
     if node.has_error() {
         return Err(BulletRejection::ContainsRecoveryNode);
     }
-    let children = typed
-        .extract()
-        .map_err(|fault| BulletRejection::Producer(fault.into()))?;
+    let children = typed.extract();
     crate::parser::tree_parsing::parser_helpers::surface_displaced(
         &children.children().unexpected,
         "bullet",
@@ -262,7 +260,7 @@ mod tests {
             parsed.root_node(),
             source,
             &BulletRejection::Producer(
-                crate::generated_traversal::ReconstructionFault::UnexpectedDecision.into(),
+                crate::generated_traversal::AdmittedRefusal::ForeignLanguage.into(),
             ),
             &errors,
         );

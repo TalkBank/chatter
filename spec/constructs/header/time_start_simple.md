@@ -11,7 +11,14 @@
 ## Expected CST
 
 ```cst
-(time_start_header ...)
+(time_start_header
+  (time_start_prefix)
+  (header_sep
+    (colon)
+    (tab))
+  (time_duration_contents
+    (strict_time))
+  (newline))
 ```
 
 ## Metadata

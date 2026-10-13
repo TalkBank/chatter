@@ -59,7 +59,7 @@ fn media_reference_range_admission_preserves_payload_and_counts_work() {
                 continue;
             };
             seen += 1;
-            let selected = contents.extract().unwrap();
+            let selected = contents.extract();
             let raw_bytes = std::mem::size_of_val(selected.children());
             let admitted = selected.admit_ranges().unwrap();
             assert_eq!(admitted.checked_range_count(), expected_checks);

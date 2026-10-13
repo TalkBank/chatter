@@ -47,7 +47,7 @@ media_header: bare filename with a dot (attested: BA3 writes media stems verbati
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -149,7 +149,7 @@ media_header: bare filename with CJK (attested: HK Cantonese corpus)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -251,7 +251,7 @@ media_header: bare filename with an interior space (attested: STD14_MAIN_Cat Ret
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -353,7 +353,7 @@ media_header: bare filename with a close paren (attested: SD11__Srep_Mixed_Cloe_
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -455,7 +455,7 @@ media_header: space before the comma is not part of the filename
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -558,7 +558,7 @@ media_header: quoted URL keeps working
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)

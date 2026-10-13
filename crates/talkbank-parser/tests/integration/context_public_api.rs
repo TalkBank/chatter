@@ -301,3 +301,36 @@ fn main_tier_fragment_rejects_unconsumed_source() {
         assert!(!errors.is_empty());
     }
 }
+
+/// MOR word parsing needs a companion terminator internally, but that suffix
+/// is not source evidence for a caller's malformed word.
+#[test]
+fn mor_word_diagnostics_never_expose_the_companion_terminator() {
+    let p = parser();
+    for input in [
+        "|café",
+        "n|café\0ignored",
+        "n|café\u{b}",
+        "n|café\n@Comment:\textra\n",
+    ] {
+        for offset in [0, 25] {
+            let errors = ErrorCollector::new();
+            assert!(
+                p.parse_mor_word_fragment(input, offset, &errors)
+                    .is_rejected()
+            );
+            assert!(!errors.is_empty());
+            for error in errors.to_vec() {
+                assert!(error.location.span.start as usize >= offset, "{error:?}");
+                assert!(
+                    error.location.span.end as usize <= offset + input.len(),
+                    "{error:?}"
+                );
+                if let Some(context) = error.context {
+                    assert!(input.contains(context.source_text.as_str()), "{context:?}");
+                    assert!(context.span.end as usize <= context.source_text.len());
+                }
+            }
+        }
+    }
+}

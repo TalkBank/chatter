@@ -10,7 +10,7 @@ published) is the authoritative source. Until then, treat the rustdoc
 comments inside each crate's `src/lib.rs` as the source of truth.
 
 > **Examples on this page are mirrored as a real Cargo test at
-> `crates/talkbank-transform/tests/book_library_usage_examples.rs`.**
+> `crates/talkbank-transform/tests/integration/book_library_usage_examples.rs`.**
 > The book renders them as `rust,ignore` so mdbook doesn't try to link
 > against the workspace's many compiled crate variants; the parallel
 > test runs the same code under `cargo test` and is what catches API
@@ -41,6 +41,40 @@ talkbank-parser = { path = "../chatter/crates/talkbank-parser" }
 
 The published-crate workflow is tracked separately; once it lands these
 paths can become `version = "X.Y"` deps.
+
+### Optional library features
+
+`talkbank-model` has no default features. Its `async` feature adds Tokio-backed
+validation and `AsyncChannelErrorSink`; `channels` independently adds the
+crossbeam-backed `ChannelErrorSink`. Neither feature is required for ordinary
+parsing, model validation or checked diagnostic presentation.
+
+The optional Tokio dependency also exposes a `tokio` feature. Enabling it alone
+does **not** enable the `async` API; `async` enables `tokio`, not the reverse.
+Consequently the effective model combinations are none, `channels`, `tokio`,
+`tokio` + `channels`, `async`, and `async` + `channels`. Each can be combined
+with the transform runner enabled or disabled. An empty `default` marker does
+not enable optional model APIs. Tokio appearing among test dependencies is not
+evidence that the model's async API is enabled.
+
+`talkbank-transform` enables `validation-runner` by default. To use its core
+library without the batch runner and result cache, opt out explicitly:
+
+```toml
+talkbank-transform = { path = "../chatter/crates/talkbank-transform", default-features = false }
+```
+
+Parsing, synchronous validation, JSON/CHAT conversion, transforms and diagnostic
+rendering remain available. The batch runner, its cache and worker-pool exports
+do not. Cargo features are additive across a dependency graph: another dependency
+can enable a feature even if this declaration disables defaults.
+
+For an existing model in a Tokio application, `validate_async` consumes the
+`ChatFile` and returns `ValidChatFile` only after complete validation. A validation
+refusal and a failed blocking task are separate `AsyncValidationError` variants.
+`validate_with_rules_async` instead reports selected-rule findings to the supplied
+sink; its `Ok(())` means task completion, not document validity. The async rustdoc
+examples compile independently with the `async` feature.
 
 ## Explicit English number generation
 

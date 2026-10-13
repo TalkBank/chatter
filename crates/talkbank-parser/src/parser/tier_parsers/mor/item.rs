@@ -6,8 +6,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    AsRawNode, MorContentNode, MorPostCliticNode, MorWordNode, NoChild, NonMissingKindSlot,
-    SlotView, SourceBound, SourceField, SourceSlotView,
+    AsRawNode, MorContentNode, MorPostCliticNode, MorWordNode, NoChild, NonMissingKindSlot, Ranged,
+    ReadableSlot, SourceBound,
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::ParseOutcome;
@@ -44,22 +44,28 @@ pub fn parse_mor_content<'tree>(
     let children = bound_children.children();
     surface_displaced(&children.unexpected, "mor_content", source, errors);
 
-    let main_word = decode_main_word(bound_children.field_main().slot(), errors)?;
+    let admitted = bound_children.admit_ranges()?;
+    let children = admitted.children();
+    let main_word = decode_main_word(&children.main.slot, errors)?;
 
     let mut post_clitics = Vec::new();
-    for element in bound_children.field_post_clitics().slot().iter() {
-        match element.slot().view() {
-            SourceSlotView::Present(clitic) => {
-                if let ParseOutcome::Parsed(Some(clitic)) =
-                    parse_mor_post_clitic(clitic.read()?, errors)?
+    for element in &children.post_clitics.slot {
+        match &element.slot {
+            ReadableSlot::Present(clitic) => {
+                if let ParseOutcome::Parsed(Some(clitic)) = parse_mor_post_clitic(*clitic, errors)?
                 {
                     post_clitics.push(clitic);
                 }
             }
-            SourceSlotView::Error(raw) => {
-                errors.report(unexpected_node_error(raw.raw_node(), source, "mor_content"));
+            ReadableSlot::Error(raw) => {
+                errors.report(unexpected_node_error(
+                    raw.raw_node(),
+                    raw.source(),
+                    "mor_content",
+                ));
             }
-            SourceSlotView::Absent(never) => match never {},
+            ReadableSlot::Missing(never) => match never.0 {},
+            ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
         }
     }
 
@@ -78,21 +84,30 @@ pub fn parse_mor_content<'tree>(
 }
 
 /// Decode the admitted `main` field, retaining absent and recovered states.
-fn decode_main_word<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, MorWordNode<'tree>>>,
+fn decode_main_word<'tree, 'source>(
+    slot: &NonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, MorWordNode<'tree>>,
+        Ranged<'source>,
+    >,
     errors: &impl ErrorSink,
 ) -> Result<Option<MorWord>, crate::CstFailure> {
-    let source = slot.source();
-    Ok(match slot.view() {
-        SourceSlotView::Present(word) => match parse_mor_word(word.read()?, errors)? {
+    Ok(match slot {
+        ReadableSlot::Present(word) => match parse_mor_word(*word, errors)? {
             ParseOutcome::Parsed(word) => Some(word),
             ParseOutcome::Rejected => None,
         },
-        SourceSlotView::Error(raw) => {
-            errors.report(unexpected_node_error(raw.raw_node(), source, "mor_content"));
+        ReadableSlot::Error(raw) => {
+            errors.report(unexpected_node_error(
+                raw.raw_node(),
+                raw.source(),
+                "mor_content",
+            ));
             None
         }
-        SourceSlotView::Absent(NoChild) => None,
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => None,
     })
 }
 
@@ -116,28 +131,37 @@ fn parse_mor_post_clitic<'tree>(
     let bound_children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
     let children = bound_children.children();
     surface_displaced(&children.unexpected, "mor_post_clitic", source, errors);
+    let admitted = bound_children.admit_ranges()?;
+    let children = admitted.children();
 
-    match children.child_0.slot().view() {
-        SlotView::Present(_) | SlotView::Missing(_) | SlotView::Absent(NoChild) => {}
-        SlotView::Error(raw) => {
-            errors.report(unexpected_node_error(raw, source, "mor_post_clitic"));
-        }
-    }
-
-    match bound_children.field_child_1().slot().view() {
-        SourceSlotView::Present(word) => {
-            if let ParseOutcome::Parsed(word) = parse_mor_word(word.read()?, errors)? {
-                return Ok(ParseOutcome::parsed(Some(word)));
-            }
-        }
-        SourceSlotView::Error(raw) => {
+    match &children.child_0.slot {
+        ReadableSlot::Present(_) | ReadableSlot::Missing(_) | ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Error(raw) => {
             errors.report(unexpected_node_error(
                 raw.raw_node(),
-                source,
+                raw.source(),
                 "mor_post_clitic",
             ));
         }
-        SourceSlotView::Absent(NoChild) => {}
+        ReadableSlot::Unexpected(never) => match *never {},
+    }
+
+    match &children.child_1.slot {
+        ReadableSlot::Present(word) => {
+            if let ParseOutcome::Parsed(word) = parse_mor_word(*word, errors)? {
+                return Ok(ParseOutcome::parsed(Some(word)));
+            }
+        }
+        ReadableSlot::Error(raw) => {
+            errors.report(unexpected_node_error(
+                raw.raw_node(),
+                raw.source(),
+                "mor_post_clitic",
+            ));
+        }
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => {}
     }
 
     errors.report(unexpected_node_error(

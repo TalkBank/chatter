@@ -1,6 +1,6 @@
 # Development reference
 
-**Last modified:** 2026-09-10 00:45 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/agent-reference/development.md)
 
 Read the sections relevant to your task. [AGENTS.md](../../AGENTS.md)
 is the canonical policy entry point and resolves workflow conflicts here.
@@ -10,19 +10,16 @@ repository paths are relative to the repository root unless stated otherwise.
 
 ## THE LOOP
 
-The development process. Every rule is enforced by the thing named beside
-it; a rule with no enforcement is a wish.
+The development process combines explicit review with focused verification.
+Commit hooks do not substitute for either.
 
 1. **Inner loop: `just test`.** Red first (a type change or a failing test),
    then green. Nothing else runs per edit. **The red must be VISIBLE before
    the implementing edit**: the failing test's output, or the compiler
    refusing the old call sites. A red nobody watched is a red nobody ran, and
-   that is what the skipped steps looked like from outside. Enforced by
-   `.githooks/commit-msg`, which refuses a commit changing production Rust
-   with no test, spec, corpus or fixture staged beside it unless the message
-   names what was red in a `Red:` trailer
-   (`scripts/lint/production-rust-needs-evidence.sh`; `just
-   evidence-gate-test` proves both directions).
+   that is what the skipped steps looked like from outside. Review the
+   test, spec, corpus or fixture evidence explicitly before committing;
+   a `Red:` trailer can name the retained failure without introducing a gate.
 2. **Touched `grammar/`, `spec/` or a registry: `just regen`, then `just
    test`, once.** Every derived artifact, one command, dependency order.
    Enforced by each artifact's currency test, which fails the gate when it is
@@ -89,11 +86,11 @@ every step can be run by any contributor.
 8. **Program stack discipline:** `main()` spawns the program onto a 16 MiB
    thread; never move program logic onto the bare OS main thread. Gate:
    `crates/chatter/tests/stack_limit_tests.rs`.
-9. **`.githooks/commit-msg` runs two gates, neither with a bypass flag.** A
-   commit marked breaking must touch `CHANGELOG.md`, or a `type(scope)!:`
-   subject is refused; `just breaking-changelog [ref]` is the release-time
-   report. And production Rust must arrive with evidence of a red, or with a
-   `Red:` trailer naming one; see THE LOOP step 1.
+9. **Commit review is explicit, not an automatic gate.** Review breaking-change
+   notes and production-change evidence before committing. The tracked commit
+   hooks only chain to optional contributor-owned local hooks. The standalone
+   scripts remain available for deliberate review; retirement is not a bypass
+   flag and does not change publication authorization or release checks.
 10. **`clippy` is release-time, not inner-loop and not per push.**
     `just release-lint` runs it with `-D warnings` over both workspaces plus
     the feature-off build; `release-lint.yml` runs the same on every tag. A
@@ -109,10 +106,11 @@ every step can be run by any contributor.
   `roundtrip_reference_corpus`; the spec observation snapshot
   (`spec/observations/example-diagnostics.json`), which records for every
   spec example the codes each stage emitted and whether the parsed model
-  serializes back byte-exact; and `KNOWN_DIVERGENCES`, the backend-parity
-  baseline per spec case. A diff in the snapshot or the baseline is
-  adjudicated in the commit as intended or unintended, never regenerated
-  blindly.
+  serializes back byte-exact; and the one-way backend error comparison
+  `backends_report_every_tree_sitter_error`, including legal/deferred examples.
+  Snapshot changes are adjudicated in the commit, never regenerated blindly.
+  A diagnostic-set baseline cannot exempt silent acceptance from the 1.0
+  contract. Fragment coverage and isolated-fault controls remain separate.
 - Releases: cargo-dist on `vX.Y.Z` tags, via two commands and never a hand
   bump or raw `git tag`: `just release-bump X.Y.Z`, then after CI is green on
   the pushed squash commit, `just release-tag X.Y.Z` (fail-closed on drift, a

@@ -1,19 +1,17 @@
-//! Nonword content parsing, over the generated typed traversal.
+//! Nonword content parsing over source-bound generated traversal.
 //!
-//! Handles the unified nonword category: events (`&=action`) and the
-//! standalone zero/action (`0`). Other spoken events (`&*SPEAKER`) are a
-//! separate rule, parsed in `base/other_spoken.rs`.
+//! Handles events (`&=action`) and the standalone zero/action (`0`). Other
+//! spoken events (`&*SPEAKER`) belong to `base/other_spoken.rs`.
 //!
-//! # Related CHAT Manual Sections
-//!
+//! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Main_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Action_Code>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Scoped_Symbols>
 
 use crate::error::{ErrorSink, Span};
 use crate::generated_traversal::{
-    AsRawNode, EventNode, NonwordChoice, NonwordNode, NonwordWithOptionalAnnotationsNode,
-    extract_event, extract_nonword, extract_nonword_with_optional_annotations,
+    AsRawNode, EventNode, NonwordChoiceBoundView, NonwordNode, NonwordWithOptionalAnnotationsNode,
+    SourceBound, SourceSlotView,
 };
 use crate::model::{Action, Event, UtteranceContent};
 use talkbank_model::ParseOutcome;
@@ -21,147 +19,143 @@ use talkbank_model::ParseOutcome;
 use super::super::annotations::parse_scoped_annotations;
 use super::marker_chain::fold_marker_chain;
 use super::report_tree_shape;
+use crate::parser::tree_parsing::helpers::unexpected_node_error;
 use crate::parser::tree_parsing::parser_helpers::{
-    SlotState, expect_delimiter, expect_present, extract_utf8_text, surface_displaced,
+    check_not_missing, expect_delimiter, surface_displaced,
 };
+use crate::parser::typed_cst::read_source_field;
 
-/// Converts `nonword_with_optional_annotations` into `UtteranceContent`.
-///
-/// Grammar: `seq(field('nonword', nonword), field('annotations',
-/// optional(base_annotations)))`, with `nonword: choice(event, zero)` and
-/// `event: seq(event_marker, field('description', event_segment))`.
-/// `extract_nonword_with_optional_annotations` places the two in typed
-/// slots; the markers fold onto the nonword through `fold_marker_chain`,
-/// giving a bare `Event`/`Action` or the annotated spelling when a marker
-/// actually arrives. Until 2026-09-09 this walked the children by index and
-/// `node.kind()` string, with `child(0)`/`child(1)` reaching into the event.
-///
-/// The generated dispatcher retains the carrier type through this boundary.
-pub(crate) fn parse_nonword_content(
-    typed: NonwordWithOptionalAnnotationsNode<'_>,
-    source: &str,
+/// Fold the ordered annotations onto the nonword. Compiled kind admission
+/// excludes a Missing composite slot; Error/absence and lexical recovery
+/// inside the nonword remain independently handled. Every text reader and
+/// annotation caller retains the producing node's canonical source.
+pub(crate) fn parse_nonword_content<'tree>(
+    typed: SourceBound<'tree, '_, NonwordWithOptionalAnnotationsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
+    let source = typed.source();
     let node = typed.raw_node();
-    let full_span = Span::new(node.start_byte() as u32, node.end_byte() as u32);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_nonword_with_optional_annotations(typed),
-        typed.raw_node(),
+    let full_span = Span::from_usize(node.start_byte(), node.end_byte());
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
+        crate::parser::typed_cst::canonical_grammar()
+            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
+        node,
         source,
         errors,
     ) else {
         return ParseOutcome::Rejected;
     };
-
-    // Position `nonword`, required.
-    let core = match expect_present(
-        children.nonword.slot(),
-        "nonword_with_optional_annotations",
-        source,
-        errors,
-    ) {
-        SlotState::Present(nonword) => nonword_core(*nonword, source, errors),
-        SlotState::Absent | SlotState::Recovered => None,
-    };
-
-    // Position `annotations`, optional: at most one `base_annotations`, so
-    // this assigns rather than accumulates.
-    let markers = match children.annotations.slot() {
-        Some(slot) => {
-            match expect_present(slot, "nonword_with_optional_annotations", source, errors) {
-                SlotState::Present(annotations) => {
-                    match crate::parser::typed_cst::report_reconstruction(
-                        parse_scoped_annotations(*annotations, source, errors),
-                        annotations.raw_node(),
-                        source,
-                        errors,
-                    ) {
-                        Ok(markers) => markers,
-                        Err(_) => return ParseOutcome::Rejected,
-                    }
-                }
-                SlotState::Absent | SlotState::Recovered => Vec::new(),
-            }
+    let core = match associated.field_nonword().slot().view() {
+        SourceSlotView::Present(nonword) => {
+            read_source_field(nonword, errors).and_then(|nonword| nonword_core(nonword, errors))
         }
+        SourceSlotView::Error(bad) => {
+            errors.report(unexpected_node_error(
+                bad.raw_node(),
+                bad.source(),
+                "nonword_with_optional_annotations",
+            ));
+            None
+        }
+        SourceSlotView::Absent(_) => None,
+    };
+    let markers = match associated.field_annotations().slot().optional() {
+        Some(slot) => match slot.view() {
+            SourceSlotView::Present(annotations) => match read_source_field(annotations, errors) {
+                Some(annotations) => parse_scoped_annotations(annotations, errors),
+                None => Vec::new(),
+            },
+            SourceSlotView::Error(bad) => {
+                errors.report(unexpected_node_error(
+                    bad.raw_node(),
+                    bad.source(),
+                    "nonword_with_optional_annotations",
+                ));
+                Vec::new()
+            }
+            SourceSlotView::Absent(never) => match never {},
+        },
         None => Vec::new(),
     };
     surface_displaced(
-        &children.unexpected,
+        &associated.children().unexpected,
         "nonword_with_optional_annotations",
         source,
         errors,
     );
-
     ParseOutcome::from(core.map(|core| fold_marker_chain(core, markers, full_span)))
 }
 
-/// The bare content a `nonword` node names: an event, or the zero action.
-/// Bare, exactly like the event: this used to wrap every action in an
-/// `Annotated` carrying an empty list, because `UtteranceContent` had no bare
-/// `Action` variant; the wrapper is now unconstructible without an
-/// annotation, and the annotated spelling is reached only through
-/// `fold_marker_chain`, when a marker actually arrives.
-fn nonword_core(
-    nonword: NonwordNode<'_>,
-    source: &str,
+/// Bare events and actions stay bare until a marker actually arrives.
+fn nonword_core<'tree>(
+    nonword: SourceBound<'tree, '_, NonwordNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Option<UtteranceContent> {
-    let raw = nonword.raw_node();
-    let span = Span::new(raw.start_byte() as u32, raw.end_byte() as u32);
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_nonword(nonword),
-        nonword.raw_node(),
-        source,
+    let associated = nonword.extract();
+    surface_displaced(
+        &associated.children().unexpected,
+        "nonword",
+        nonword.source(),
         errors,
-    ) else {
-        return None;
-    };
-    surface_displaced(&children.unexpected, "nonword", source, errors);
-    match expect_present(children.content.slot(), "nonword", source, errors) {
-        SlotState::Present(NonwordChoice::Event(event)) => event_of(*event, span, source, errors),
-        SlotState::Present(NonwordChoice::Zero(_)) => {
-            Some(UtteranceContent::Action(Action::with_span(span)))
+    );
+    match associated.field_content().slot().view() {
+        SourceSlotView::Present(choice) => match read_source_field(choice, errors)?.view() {
+            NonwordChoiceBoundView::Event(event) => event_of(event, errors),
+            NonwordChoiceBoundView::Zero(zero) => {
+                let raw = zero.raw_node();
+                Some(UtteranceContent::Action(Action::with_span(
+                    Span::from_usize(raw.start_byte(), raw.end_byte()),
+                )))
+            }
+        },
+        SourceSlotView::Missing(bad) => {
+            check_not_missing(bad.raw_node(), bad.source(), errors, "nonword");
+            None
         }
-        SlotState::Absent | SlotState::Recovered => None,
+        SourceSlotView::Error(bad) => {
+            errors.report(unexpected_node_error(
+                bad.raw_node(),
+                bad.source(),
+                "nonword",
+            ));
+            None
+        }
+        SourceSlotView::Absent(_) => None,
     }
 }
 
-/// The event an `event` node names: `&=` then its description segment. A
-/// description whose bytes do not decode is reported and builds no event,
-/// where the old walk silently built nothing.
-fn event_of(
-    event: EventNode<'_>,
-    span: Span,
-    source: &str,
+/// The description comes only from the event's generated associated field.
+/// A source-read refusal is reported and builds no event.
+fn event_of<'tree>(
+    event: SourceBound<'tree, '_, EventNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Option<UtteranceContent> {
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_event(event),
-        event.raw_node(),
-        source,
-        errors,
-    ) else {
-        return None;
-    };
-    surface_displaced(&children.unexpected, "event", source, errors);
+    let associated = event.extract();
+    let children = associated.children();
+    surface_displaced(&children.unexpected, "event", event.source(), errors);
     expect_delimiter(children.child_0.slot(), |bad| {
         report_tree_shape(
             bad,
             format!("Expected '&=' opening an event, found '{}'", bad.kind()),
-            source,
+            event.source(),
             errors,
         );
     });
-    let SlotState::Present(segment) =
-        expect_present(children.description.slot(), "event", source, errors)
-    else {
-        return None;
+    let description = match associated.field_description().slot().view() {
+        SourceSlotView::Present(segment) => read_source_field(segment, errors)?,
+        SourceSlotView::Missing(bad) => {
+            check_not_missing(bad.raw_node(), bad.source(), errors, "event");
+            return None;
+        }
+        SourceSlotView::Error(bad) => {
+            errors.report(unexpected_node_error(bad.raw_node(), bad.source(), "event"));
+            return None;
+        }
+        SourceSlotView::Absent(_) => return None,
     };
-    let raw = segment.raw_node();
-    match extract_utf8_text(raw, source, errors, "event description") {
-        ParseOutcome::Parsed(description) => Some(UtteranceContent::Event(
-            Event::new(description).with_span(span),
-        )),
-        ParseOutcome::Rejected => None,
-    }
+    let raw = event.raw_node();
+    Some(UtteranceContent::Event(
+        Event::new(description.text())
+            .with_span(Span::from_usize(raw.start_byte(), raw.end_byte())),
+    ))
 }

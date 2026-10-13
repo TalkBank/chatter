@@ -85,6 +85,68 @@ fn internal_failure_wire_status_is_not_invalidity_or_success() {
     );
 }
 
+/// Context admission is a separate wire result, not a new finding or verdict.
+#[test]
+fn unavailable_source_context_preserves_original_evidence_and_wire_status() {
+    use chatter_desktop_lib::events::to_frontend_events;
+    use talkbank_model::{CompletedDiagnostics, ErrorCode, ErrorLabel, ParseError, Span};
+    use talkbank_transform::validation_runner::{
+        FailedAttempt, FileCompleteEvent, FileStatus, ValidationEvent,
+    };
+    for span in [Span::new(0, 2), Span::new(1, 4)] {
+        let raw = ParseError::build(ErrorCode::InternalError)
+            .at_span(span)
+            .message("producer coordinate fault")
+            .label(ErrorLabel::new(Span::new(0, 2), "original label"))
+            .finish();
+        let failure = CompletedDiagnostics::admit(vec![raw.clone()]).unwrap_err();
+        let [
+            Some(FrontendEvent::Errors { diagnostics, .. }),
+            Some(complete),
+        ] = to_frontend_events(ValidationEvent::FileComplete(FileCompleteEvent {
+            path: PathBuf::from("sample.cha"),
+            status: FileStatus::InternalFailure {
+                failure,
+                attempt: FailedAttempt::Validation {
+                    source: "é🙂".to_owned(),
+                },
+            },
+            cache: talkbank_transform::CacheUse::NotConsulted,
+        }))
+        else {
+            panic!("diagnostics then unchanged file status")
+        };
+        let diagnostic = &diagnostics[0];
+        assert_eq!(
+            diagnostic.error, raw,
+            "absolute original evidence is unchanged"
+        );
+        let json = serde_json::to_value(diagnostic).expect("wire diagnostic");
+        if span.start == 0 {
+            assert_eq!(json["sourceContext"]["kind"], "available");
+            assert_eq!(json["sourceContext"]["location"]["line"], 1);
+            assert_eq!(json["sourceContext"]["location"]["column"], 1);
+        } else {
+            assert_eq!(json["sourceContext"]["kind"], "unavailable");
+            assert!(json["sourceContext"].get("location").is_none());
+            // Miette wraps long messages and the HTML renderer adds markup.
+            // The separate wire variant above owns the machine-readable result.
+            for text in [&diagnostic.rendered_text, &diagnostic.rendered_html] {
+                assert!(
+                    text.contains("source")
+                        && text.contains("context")
+                        && text.contains("unavailable"),
+                    "context failure must remain visible: {text}"
+                );
+            }
+        }
+        assert_eq!(
+            serde_json::to_value(complete).expect("file status")["status"]["type"],
+            "internalFailure"
+        );
+    }
+}
+
 /// Test-only convenience wrapper: production always threads an explicit
 /// config and a cache pool selected for that config's active rule set (see
 /// `ValidationState::cache_for_config` in `commands.rs`), but most tests here
@@ -439,6 +501,10 @@ fn frontend_events_serialize_to_expected_json_shape() {
                     .and_then(|items| items.first())
                 {
                     assert!(first.get("error").is_some(), "diagnostic missing error");
+                    assert!(
+                        first.get("sourceContext").is_some(),
+                        "diagnostic missing source admission"
+                    );
                     assert!(
                         first.get("renderedHtml").is_some(),
                         "diagnostic missing renderedHtml"
@@ -1104,25 +1170,25 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
         .join("tests/error_corpus/validation_errors/E601_invalid_dependent_tier.cha");
     assert!(fixture.exists(), "fixture missing: {}", fixture.display());
 
-    // Use the REAL enhanced error the bridge produces, and build the request the
-    // way the frontend does (line/col/byte from the error, message = error.message).
+    // Use checked presentation coordinates, not possibly stale producer fields.
     let events = collect_events(&fixture);
     let error = events
         .iter()
         .find_map(|e| match e {
-            FrontendEvent::Errors { diagnostics, .. } => {
-                diagnostics.first().map(|d| d.error.clone())
-            }
+            FrontendEvent::Errors { diagnostics, .. } => diagnostics.first().cloned(),
             _ => None,
         })
         .expect("E601 fixture should yield one error diagnostic");
 
+    let json = serde_json::to_value(&error.source_context).expect("presentation wire");
+    assert_eq!(json["kind"], "available");
+    let location = &json["location"];
     let request = OpenInClanRequest {
         file: fixture.to_string_lossy().into_owned(),
-        line: error.location.line.map(|l| l as i32).unwrap_or(0),
-        col: error.location.column.map(|c| c as i32).unwrap_or(0),
-        byte_offset: error.location.span.start,
-        msg: error.message.clone(),
+        line: location["line"].as_i64().expect("admitted line") as i32,
+        col: location["column"].as_i64().expect("admitted column") as i32,
+        byte_offset: location["start"].as_u64().expect("admitted offset") as u32,
+        msg: error.error.message.clone(),
     };
 
     let resolved = resolve_open_in_clan(&request).expect("resolve should succeed for E601");
@@ -1133,7 +1199,7 @@ fn open_in_clan_resolves_clan_adjusted_line_and_bare_message() {
     );
     assert_eq!(resolved.column, 1, "CLAN column should be 1");
     assert_eq!(
-        resolved.message, error.message,
+        resolved.message, error.error.message,
         "highlight message must be the bare error.message, not '{{code}}: {{message}}'"
     );
 }

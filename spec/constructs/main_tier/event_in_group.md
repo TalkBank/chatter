@@ -23,19 +23,24 @@ Discovered by re2c parser parity testing (2026-03-30).
   (tier_body
     (contents
       (content_item
-        (base_content_item
-          (group_with_annotations
-            (left_angle_bracket)
-            (contents
-              (content_item
-                (base_content_item
-                  (event
-                    (event_marker)
-                    (event_segment)))))
-            (right_angle_bracket)
-            (base_annotations
-              (overlap_precedes)))))))
-  (utterance_end ...))
+        (group_with_annotations
+          (less_than)
+          (contents
+            (content_item
+              (base_content_item
+                (nonword_with_optional_annotations
+                  (nonword
+                    (event
+                      (event_marker)
+                      (event_segment)))))))
+          (greater_than)
+          (base_annotations
+            (whitespaces)
+            (indexed_overlap_precedes))))
+      (whitespaces))
+    (utterance_end
+      (period)
+      (newline))))
 ```
 
 ## Metadata

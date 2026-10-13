@@ -16,7 +16,9 @@
 // modules of one binary they cannot, so the import belongs here.
 use talkbank_model::model;
 
+mod enum_admission_tests;
 mod error_code_enum_tests;
+mod field_plan_tests;
 mod semantic_eq_tests;
 mod span_shift_tests;
 mod ui_tests;

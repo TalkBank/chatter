@@ -1,0 +1,18 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	SPK Speaker, LSN Adult, OBS Adult
+@Options:	CA
+@ID:	eng|sample|SPK|||||Speaker|||
+@ID:	eng|sample|LSN|||||Adult|||
+@ID:	eng|sample|OBS|||||Adult|||
+@Media:	overlap-siblings, audio
+@Comment:	Authored same-index sibling distribution and nearest preceding turn controls.
+*SPK:	⌈2 one ⌉2 ⌈2 two ⌉2 . 0_1000
+*LSN:	⌊2 yes ⌋2 ⌊2 right ⌋2 . 100_400
+*OBS:	⌊2 agreed ⌋2 .
+*LSN:	⌊2 indeed ⌋2 . 700_900
+@Comment:	A later top reuses the index; subsequent bottoms answer this turn.
+*SPK:	⌈2 three ⌉2 . 1000_2000
+*LSN:	⌊2 okay ⌋2 . 1000_2000
+@End

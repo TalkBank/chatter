@@ -1,6 +1,6 @@
 # talkbank-parser-re2c
 
-**Last modified:** 2026-09-28 20:59 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/crates/talkbank-parser-re2c/README.md)
 
 Alternate CHAT transcript parser using a
 [re2c](https://re2c.org/manual/manual_rust.html) DFA lexer and
@@ -8,8 +8,11 @@ Alternate CHAT transcript parser using a
 
 This crate implements the `ChatParser` trait from `talkbank-model`, but it is
 not the default parser surface for the TalkBank toolchain. Its primary role is
-to provide an independent, experimental implementation for comparison and
-specialist parsing, not an oracle against `talkbank-parser`.
+to provide an independent implementation for comparison and specialist parsing,
+not a specification oracle against `talkbank-parser`. Its 1.0 contract requires
+some error for every input that tree-sitter reports as erroneous; exact
+diagnostics and recovered models may differ. Known silent acceptance is a
+defect, not an experimental exemption.
 
 ## Compatibility contract
 

@@ -8,8 +8,8 @@
 use std::num::NonZeroUsize;
 
 use crate::generated_traversal::{
-    AsRawNode, GraHeadNode, GraIndexNode, GraRelationNameNode, GraRelationNode, KindSlot, NoChild,
-    SourceBound, SourceBoundKind, SourceField, SourceSlotView,
+    AsRawNode, GraRelationChildren, GraRelationNode, KindSlot, NoChild, RangeAdmittedChildren,
+    Ranged, ReadableSlot, SourceBound, SourceBoundKind,
 };
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
@@ -32,17 +32,16 @@ pub(super) fn parse_gra_relation<'tree>(
     let source = typed.source();
     let node = typed.raw_node();
     let relation_span = node.start_byte()..node.end_byte();
-    let children = typed.extract()?;
+    let children = typed.extract();
     surface_displaced(
         &children.children().unexpected,
         "gra_relation",
         source,
         errors,
     );
+    let children = children.admit_ranges()?;
 
-    let ParseOutcome::Parsed(index_text) =
-        RelationField::Index(children.field_index().slot()).read(typed, errors)?
-    else {
+    let ParseOutcome::Parsed(index_text) = RelationField::Index.read(&children, errors) else {
         return Ok(ParseOutcome::rejected());
     };
 
@@ -79,9 +78,7 @@ pub(super) fn parse_gra_relation<'tree>(
         }
     };
 
-    let ParseOutcome::Parsed(head_text) =
-        RelationField::Head(children.field_head().slot()).read(typed, errors)?
-    else {
+    let ParseOutcome::Parsed(head_text) = RelationField::Head.read(&children, errors) else {
         return Ok(ParseOutcome::rejected());
     };
 
@@ -105,9 +102,7 @@ pub(super) fn parse_gra_relation<'tree>(
         }
     };
 
-    let ParseOutcome::Parsed(relation_text) =
-        RelationField::Label(children.field_relation().slot()).read(typed, errors)?
-    else {
+    let ParseOutcome::Parsed(relation_text) = RelationField::Label.read(&children, errors) else {
         return Ok(ParseOutcome::rejected());
     };
 
@@ -129,55 +124,75 @@ pub(super) fn parse_gra_relation<'tree>(
     )))
 }
 
-/// Each role carries only its own generated slot type: a head cannot be read
-/// or diagnosed as an index. Recovery never supplies fabricated field text.
-///
-/// `'tree: 'slot` is stated because the slot type is a projection of the range
-/// phase, through which rustc does not infer the outlives bound a borrowed
-/// field needs.
-enum RelationField<'slot, 'tree: 'slot, 'source> {
-    Index(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraIndexNode<'tree>>>),
-    Head(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraHeadNode<'tree>>>),
-    Label(SourceField<'slot, 'tree, 'source, KindSlot<'tree, GraRelationNameNode<'tree>>>),
+/// A role projects only its matching field from the complete admitted relation.
+/// No unrelated field slot can be paired with this parent's diagnostic context.
+enum RelationField {
+    Index,
+    Head,
+    Label,
 }
 
-impl<'tree, 'source> RelationField<'_, 'tree, 'source> {
-    fn read(
+impl RelationField {
+    fn read<'tree, 'source>(
         self,
-        relation: SourceBound<'tree, 'source, GraRelationNode<'tree>>,
+        relation: &RangeAdmittedChildren<
+            'tree,
+            'source,
+            GraRelationChildren<'tree, Ranged<'source>>,
+        >,
         errors: &impl ErrorSink,
-    ) -> Result<ParseOutcome<&'source str>, crate::CstFailure> {
-        let source = relation.source();
+    ) -> ParseOutcome<&'source str> {
         let (field, name) = match self {
-            Self::Index(slot) => (read_present_text(slot)?, "index"),
-            Self::Head(slot) => (read_present_text(slot)?, "head"),
-            Self::Label(slot) => (read_present_text(slot)?, "relation name"),
+            Self::Index => (read_present_text(&relation.children().index.slot), "index"),
+            Self::Head => (read_present_text(&relation.children().head.slot), "head"),
+            Self::Label => (
+                read_present_text(&relation.children().relation.slot),
+                "relation name",
+            ),
         };
         let Some(field) = field else {
-            let node = relation.raw_node();
+            let parent = relation.parent();
+            let node = parent.raw_node();
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
                 Severity::Error,
                 SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                ErrorContext::new(source, node.byte_range(), ""),
+                ErrorContext::new(parent.source(), node.byte_range(), ""),
                 format!("Missing {name} in grammatical relation"),
             ));
-            return Ok(ParseOutcome::rejected());
+            return ParseOutcome::rejected();
         };
-        Ok(ParseOutcome::parsed(field))
+        ParseOutcome::parsed(field)
     }
 }
 
 fn read_present_text<'tree, 'source, T: SourceBoundKind<'tree>>(
-    slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, T>>,
-) -> Result<Option<&'source str>, crate::CstFailure> {
-    Ok(match slot.view() {
-        SourceSlotView::Present(field) => Some(field.read()?.text()),
-        SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
-            None
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, T>, Ranged<'source>>,
+) -> Option<&'source str> {
+    match slot {
+        ReadableSlot::Present(field) => Some(field.text()),
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => None,
+        ReadableSlot::Unexpected(never) => match *never {},
+    }
+}
+
+/// Test-only counted-work observation; field roles remain private to their owner.
+#[cfg(test)]
+pub(super) fn assert_repeated_field_reads<'tree, 'source>(
+    relation: &RangeAdmittedChildren<'tree, 'source, GraRelationChildren<'tree, Ranged<'source>>>,
+) {
+    let checks = relation.checked_range_count();
+    let errors = talkbank_model::ErrorCollector::new();
+    for _ in 0..100 {
+        for role in [
+            RelationField::Index,
+            RelationField::Head,
+            RelationField::Label,
+        ] {
+            let _ = role.read(relation, &errors);
         }
-        SourceSlotView::Unexpected(never) => match never {},
-    })
+        assert_eq!(relation.checked_range_count(), checks);
+    }
 }
 
 #[cfg(test)]

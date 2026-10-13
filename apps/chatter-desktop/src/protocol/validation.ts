@@ -56,8 +56,14 @@ export interface ValidationStats {
 }
 
 /** A parse diagnostic paired with pre-rendered miette HTML from Rust */
+export type DiagnosticSourceContext =
+  | { kind: "available"; location: SourceLocation & { line: number; column: number } }
+  | { kind: "unavailable"; reason: string };
+
 export interface RenderedDiagnostic {
+  /** Untouched evidence; labels and location keep absolute file offsets. */
   error: ParseError;
+  sourceContext: DiagnosticSourceContext;
   renderedHtml: string;
   /** Plain text rendering (no ANSI) for clipboard copy */
   renderedText: string;

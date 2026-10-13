@@ -3,7 +3,7 @@
 use super::{assert_display_refusals, assert_writer_refusals};
 use std::{fmt::Display, path::Path};
 use talkbank_model::{
-    WriteChat,
+    Span, WriteChat,
     alignment::helpers::{ContentItem, walk_content},
 };
 use talkbank_parser::TreeSitterParser;
@@ -15,6 +15,27 @@ fn check(value: &(impl WriteChat + Display), path: &Path) {
     assert_eq!(value.to_string(), chat, "{}", path.display());
     assert!(assert_writer_refusals(value, path) > 0);
     assert!(assert_display_refusals(value, path) > 0);
+}
+
+/// Source labels and JSON are external contracts, not node-ownership proofs.
+fn check_source_and_wire<T>(value: &T, span: Span, source: &str, path: &Path)
+where
+    T: WriteChat + Display + serde::Serialize + serde::de::DeserializeOwned,
+{
+    let spelling = value.to_string();
+    assert_eq!(
+        source.get(span.start as usize..span.end as usize),
+        Some(spelling.as_str()),
+        "nonword label must cover its own token, not its annotation: {}",
+        path.display()
+    );
+    let wire = serde_json::to_value(value).expect("nonword JSON");
+    assert!(
+        wire.get("span").is_none(),
+        "source labels are not wire payload"
+    );
+    let restored: T = serde_json::from_value(wire).expect("nonword import");
+    assert_eq!(restored.to_string(), spelling, "{}", path.display());
 }
 
 #[test]
@@ -60,6 +81,7 @@ fn reference_nonword_display_preserves_chat_and_every_writer_refusal() {
                     }
                     ContentItem::Event(value) => {
                         check(value, fixture.path());
+                        check_source_and_wire(value, value.span, fixture.source(), fixture.path());
                         7
                     }
                     ContentItem::Pause(value) => {
@@ -68,6 +90,7 @@ fn reference_nonword_display_preserves_chat_and_every_writer_refusal() {
                     }
                     ContentItem::Action(value) => {
                         check(value, fixture.path());
+                        check_source_and_wire(value, value.span, fixture.source(), fixture.path());
                         9
                     }
                     ContentItem::OverlapPoint(value) => {

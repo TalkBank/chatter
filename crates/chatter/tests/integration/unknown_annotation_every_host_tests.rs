@@ -23,8 +23,8 @@
 //! under `--parser re2c`, where v0.15.0 refused every one of them and the
 //! default backend still does.
 //!
-//! Three of those five are fixed here. The other two are a DIFFERENT defect at
-//! a different layer, and are pinned separately below.
+//! All five must now be refused. Recovery and diagnostic identity may differ
+//! between backends; invalid input must never be admitted as valid.
 //!
 //! The cause, and why it bit one backend only, is recorded once, on
 //! `talkbank_model::validation::main_tier::report_unknown_annotations`.
@@ -53,29 +53,10 @@ const HOSTS: &[(&str, &str)] = &[
     ("action", "0 [qq] ."),
 ];
 
-/// Hosts the re2c parser DISCARDS the annotation from, before validation ever
-/// sees it. Refused by the default backend; accepted by re2c.
-///
-/// A different defect from the one above, at a different layer, which is why
-/// they are a separate list rather than a longer one. The validation coupling
-/// is fixed; this is information lost at PARSE time:
-///
-/// ```text
-/// crates/talkbank-parser-re2c/src/ast.rs
-///   pub struct Group    { contents: ..., annotations: Vec<ParsedAnnotation> }
-///   pub struct Quotation{ contents: ... }                  // <- no field
-/// ```
-///
-/// Six lines apart. A quotation's annotations are not captured, so no
-/// validation can report them and `chatter normalize --parser re2c` would
-/// serialize the quotation without them. The pause is the same shape: the
-/// default backend refuses an annotated pause categorically, annotated with a
-/// KNOWN marker or not, so the construct is not representable there at all.
-///
-/// Pinned as the CURRENT behaviour, not endorsed. When the re2c parser learns
-/// to carry these, this test fails, and the fix is to move the host into
-/// `HOSTS` above and delete it here.
-const HOSTS_RE2C_DISCARDS: &[(&str, &str)] = &[
+/// Additional refusal cases formerly lost before validation. These do not
+/// imply that replacing the unknown marker makes every attachment legal:
+/// a pause, for example, cannot carry even a known scoped annotation.
+const STRUCTURAL_REFUSAL_HOSTS: &[(&str, &str)] = &[
     ("quotation", "“hello” [qq] ."),
     ("pause", "hello (.) [qq] ."),
 ];
@@ -102,7 +83,7 @@ fn an_unrecognised_annotation_is_refused_on_every_host_and_backend() -> Result<(
     let harness = CliHarness::new()?;
     let mut accepted = Vec::new();
 
-    for (host, body) in HOSTS {
+    for (host, body) in HOSTS.iter().chain(STRUCTURAL_REFUSAL_HOSTS) {
         for backend in BACKENDS {
             let output = validate_host(&harness, host, body, backend)?;
             if output.status.success() {
@@ -147,10 +128,11 @@ fn a_replaced_words_unknown_annotation_is_reported_once() -> Result<(), TestErro
         let output = harness.run_validate(&path, &["--parser", backend, "--force"])?;
         let rendered = combined_output(&output);
         // The primary grammar rejects the unknown marker structurally (E207
-        // spec, replacement variant). re2c retains its own E207 diagnostic.
+        // spec, replacement variant). re2c refuses its utterance at its own
+        // structural boundary. Neither backend may duplicate that finding.
         let diagnostic = match *backend {
             "tree-sitter" => "error[E316]",
-            "re2c" => "error[E207]",
+            "re2c" => "error[E321]",
             _ => unreachable!("the backend deck is closed"),
         };
         assert!(!output.status.success(), "{rendered}");
@@ -158,31 +140,6 @@ fn a_replaced_words_unknown_annotation_is_reported_once() -> Result<(), TestErro
         assert_eq!(
             count, 1,
             "{backend}: expected exactly one {diagnostic} for one unknown annotation, got {count}.\n{rendered}"
-        );
-    }
-    Ok(())
-}
-
-/// The two hosts re2c still discards, pinned so the gap is visible and so the
-/// eventual parser fix is forced to come here and say it is done.
-#[test]
-fn re2c_still_discards_an_annotation_on_a_quotation_or_pause() -> Result<(), TestError> {
-    let harness = CliHarness::new()?;
-    for (host, body) in HOSTS_RE2C_DISCARDS {
-        let authority = validate_host(&harness, &format!("gap_{host}"), body, "tree-sitter")?;
-        assert!(
-            !authority.status.success(),
-            "the default backend is supposed to refuse {host}; if it now accepts, \
-             this whole test is about the wrong thing"
-        );
-
-        let oracle = validate_host(&harness, &format!("gap_{host}"), body, "re2c")?;
-        assert!(
-            oracle.status.success(),
-            "re2c now REFUSES an annotation on a {host}. That is the fix this \
-             gap was waiting for: move {host:?} from HOSTS_RE2C_DISCARDS into \
-             HOSTS above and delete it here.\n{}",
-            combined_output(&oracle)
         );
     }
     Ok(())

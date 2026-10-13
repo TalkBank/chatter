@@ -81,14 +81,7 @@ impl<'tree> TerminalMainTier<'tree> {
             }
         };
         let end = self.ending.raw_node().end_byte();
-        let Ok(content) = crate::parser::typed_cst::report_reconstruction(
-            parse_main_tier_contents(contents, errors),
-            contents.raw_node(),
-            contents.source(),
-            errors,
-        ) else {
-            return ParseOutcome::Rejected;
-        };
+        let content = parse_main_tier_contents(contents, errors);
         let mut main = MainTier::new(
             speaker.text().to_owned(),
             content,

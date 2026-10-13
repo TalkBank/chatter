@@ -1,31 +1,14 @@
 //! Shared typed-CST seam for the production parser.
 //!
-//! One region-neutral primitive lives here so that every parser region (the
-//! header parsers in `chat_file_parser/header_parser/dispatch/` and
-//! `tree_parsing/header/`, and the utterance / dependent-tier / content parsers
-//! in `chat_file_parser/` and `tree_parsing/main_tier/`) reaches ONE shared seam
-//! instead of each module subtree reimplementing it:
-//!
-//! - [`decode_present_child`], the single helper that decodes a `Present`
-//!   content child's bytes to text and reports the caller's family-specific
-//!   diagnostic on a UTF-8 error. It replaces the duplicated decode logic that
-//!   each header family carried (`read_simple_content`, `decode_child_text`,
-//!   `read_types_field`, `decode_field_text`, and the inline `@Situation`
-//!   decode).
-//!
-//! (The former `TypedTraversal` ZST receiver for the OLD `GrammarTraversal`
-//! trait visitor was retired in the 2026-07 visitor migration once every region
-//! flipped onto the NEW self-contained backend's free `extract_*` functions; the
-//! parser no longer routes any structure through a trait receiver.)
+//! Canonical grammar binding, generated extraction and source-field admission
+//! share internal-failure reporting here. Admitted leaf text comes from its
+//! producing source capability, not an independently supplied node/source pair.
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, CanonicalLanguage, CompiledLanguage, Extract, GrammarBindingError, KindAdmitted,
-    Never, NoChild, NodeSlot, ReconstructionFault, SourceBindingError, SourceBound,
-    SourceBoundKind, SourceField,
+    AdmittedRefusal, AsRawNode, CanonicalLanguage, CompiledLanguage, GrammarBindingError, Never,
+    NoChild, NodeSlot, SourceBindingError, SourceBound, SourceBoundKind, SourceField,
 };
-use std::str::Utf8Error;
-use talkbank_model::ParseOutcome;
 
 /// A kind slot (a child taken by its kind, never `Unexpected`) whatever its
 /// `Missing` payload `M` is.
@@ -48,8 +31,7 @@ pub(crate) type AnySelectedKindSlot<'tree, T, M> = NodeSlot<'tree, T, M, Never, 
 
 /// Admit the statically linked CHAT producer once, retaining failures as tool
 /// faults. No consumer may substitute a kind-name or source-read assertion.
-pub(in crate::parser) fn canonical_grammar()
--> Result<&'static CanonicalLanguage, ReconstructionFault> {
+pub(in crate::parser) fn canonical_grammar() -> Result<&'static CanonicalLanguage, CstFailure> {
     static GRAMMAR: std::sync::OnceLock<Result<CanonicalLanguage, GrammarBindingError>> =
         std::sync::OnceLock::new();
     GRAMMAR
@@ -66,29 +48,22 @@ pub(in crate::parser) fn canonical_grammar()
             .admit_generated()
         })
         .as_ref()
-        .map_err(|error| ReconstructionFault::GrammarBinding(*error))
+        .map_err(|error| CstFailure::Grammar(*error))
 }
 
-/// Extract `node` under the admitted kind proof, with the canonical grammar as
-/// its evidence: the reading in which every slot the compiled grammar narrows
-/// is never MISSING, so its `Missing` state is uninhabited and a consumer's
-/// match has no arm for it.
-pub(in crate::parser) fn extract_admitted<'tree, W: Extract<'tree>>(
-    node: W,
-) -> Result<W::Children<KindAdmitted>, ReconstructionFault> {
-    node.extract_admitted(canonical_grammar()?)
-}
-
-/// Producer failures, distinct from source recovery evidence. Both alternatives
-/// stop reconstruction without manufacturing a carrier or a CHAT verdict.
+/// Admission failures, distinct from source recovery evidence. Broad extraction
+/// is total; these errors identify broken source or compiled-grammar evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum CstFailure {
     /// A node could not be associated with its producing source.
     #[error(transparent)]
     Binding(#[from] SourceBindingError),
-    /// The retained reconstruction plan violated a producer invariant.
+    /// The compiled grammar does not match the generated narrowing evidence.
     #[error(transparent)]
-    Reconstruction(#[from] ReconstructionFault),
+    Grammar(#[from] GrammarBindingError),
+    /// A node contradicts the admitted language or kind proof.
+    #[error(transparent)]
+    Admission(#[from] AdmittedRefusal),
 }
 
 /// Evidence that a producer failure has already been sent to the owning sink.
@@ -97,8 +72,8 @@ pub enum CstFailure {
 pub(in crate::parser) struct ReportedCstFailure;
 
 /// Admit extracted fields or report the producer fault exactly once.
-pub(in crate::parser) fn report_reconstruction<T>(
-    result: Result<T, ReconstructionFault>,
+pub(in crate::parser) fn report_admission<T>(
+    result: Result<T, CstFailure>,
     node: tree_sitter::Node<'_>,
     source: &str,
     errors: &impl ErrorSink,
@@ -150,111 +125,23 @@ pub(in crate::parser) fn read_source_field<'tree, 'source, T: SourceBoundKind<'t
     }
 }
 
-/// Failure at the transitional typed-node/source compatibility boundary.
-#[derive(Debug, thiserror::Error)]
-pub(in crate::parser) enum NodeTextError {
-    /// The source cannot supply the node's byte range.
-    #[error("node byte range is outside the supplied source")]
-    OutsideSource,
-    /// The range cuts across a UTF-8 code point in the supplied source.
-    #[error(transparent)]
-    InvalidUtf8(#[from] Utf8Error),
-}
-
-/// Admit a node range before decoding it. The result distinguishes an absent
-/// byte range from a range that cuts a UTF-8 code point; success borrows only
-/// the checked slice. This proves readability, not tree/source identity.
-pub(in crate::parser) fn admit_node_text<'source>(
-    node: tree_sitter::Node<'_>,
-    source: &'source str,
-) -> Result<&'source str, NodeTextError> {
-    let bytes = source
-        .as_bytes()
-        .get(node.byte_range())
-        .ok_or(NodeTextError::OutsideSource)?;
-    std::str::from_utf8(bytes).map_err(NodeTextError::from)
-}
-
-/// Decode a `Present` content child's bytes to owned text, reporting an
-/// internal failure when the node/source pairing cannot supply readable text.
-///
-/// This is the ONE shared form of the "decode a typed content child, emit the
-/// family diagnostic on a `utf8_text` `Err`" logic that the header families
-/// previously reimplemented (`read_simple_content`, `decode_child_text`,
-/// `read_types_field`, `decode_field_text`, and the inline `@Situation` decode).
-/// The family supplies context and message, but not the diagnostic category:
-/// an incompatible node/source pairing is not evidence of malformed CHAT.
-///
-/// - `context` is the [`ErrorContext`] node-kind / label string for the family
-///   (e.g. the header kind, the field label, or `"id_contents"` /
-///   `"situation_text"`).
-/// - `make_message` builds the family's message from the [`NodeTextError`]. It
-///   is invoked ONLY on the error path, so every call site reproduces its
-///   pre-extraction message byte-for-byte (the families deliberately phrase it
-///   differently: "text for `<kind>`", "text from `<label>`", a bare "text", and
-///   the `@Situation`-specific wording).
-///
-/// Retains the caller's typed node until the read boundary. A checked byte range
-/// precedes UTF-8 admission, so mismatched source ranges reject without indexing
-/// panics or fabricated text. This does not prove tree/source identity; callers
-/// with a producer-owned source slice should read that slice directly instead.
-pub(in crate::parser) fn decode_present_child<'tree, T: AsRawNode<'tree>>(
-    typed: &T,
-    source: &str,
-    errors: &impl ErrorSink,
-    context: &str,
-    make_message: impl FnOnce(NodeTextError) -> String,
-) -> ParseOutcome<String> {
-    match read_present_child(typed, source, context, make_message) {
-        Ok(text) => ParseOutcome::parsed(text),
-        Err(error) => {
-            errors.report(error);
-            ParseOutcome::rejected()
-        }
-    }
-}
-
-/// Decode while retaining the required failure diagnostic for a typed caller.
-/// The streaming adapter above consumes the same result, so both routes share
-/// range checks, UTF-8 admission and diagnostic construction.
-#[allow(clippy::result_large_err)] // Transfer the diagnostic directly to ErrorSink without a heap allocation.
-pub(in crate::parser) fn read_present_child<'tree, T: AsRawNode<'tree>>(
-    typed: &T,
-    source: &str,
-    context: &str,
-    make_message: impl FnOnce(NodeTextError) -> String,
-) -> Result<String, ParseError> {
-    let node = typed.raw_node();
-    match admit_node_text(node, source) {
-        Ok(text) => Ok(text.to_string()),
-        Err(err) => Err(ParseError::new(
-            ErrorCode::InternalError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(source, node.start_byte()..node.end_byte(), context),
-            make_message(err),
-        )),
-    }
-}
-
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
     use super::*;
     use crate::TreeSitterParser;
-    use crate::generated_traversal::{FromNodeKind, LanguageCodeNode};
     use talkbank_model::ErrorCollector;
 
     #[test]
-    fn reconstruction_fault_reports_once_without_a_source_invalidity_verdict() {
+    fn admission_failure_reports_once_without_a_source_invalidity_verdict() {
         let source = include_str!("../../../../corpus/reference/tiers/mor-gra.cha");
         let parser = TreeSitterParser::new().expect("grammar");
         let parsed = parser
             .parse_source_incremental(source, None)
             .expect("parse");
         let sink = ErrorCollector::new();
-        let result = report_reconstruction::<()>(
-            Err(ReconstructionFault::UnexpectedDecision),
+        let result = report_admission::<()>(
+            Err(AdmittedRefusal::ForeignLanguage.into()),
             parsed.root_node(),
             source,
             &sink,
@@ -278,62 +165,5 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         assert_eq!(diagnostics[0].code, ErrorCode::InternalError);
         assert!(talkbank_model::CompletedDiagnostics::admit(diagnostics).is_err());
-    }
-
-    #[test]
-    fn typed_text_boundary_distinguishes_range_and_utf8_refusals() {
-        let source = include_str!("../../../../corpus/reference/tiers/mor-gra.cha");
-        let parser = TreeSitterParser::new().expect("grammar");
-        let parsed = parser
-            .parse_source_incremental(source, None)
-            .expect("parse");
-        let mut pending = vec![parsed.root_node()];
-        let mut codes = 0;
-        while let Some(node) = pending.pop() {
-            let mut cursor = node.walk();
-            pending.extend(node.children(&mut cursor));
-            let Some(code) = LanguageCodeNode::from_node(node) else {
-                continue;
-            };
-            codes += 1;
-            let errors = ErrorCollector::new();
-            assert_eq!(
-                decode_present_child(&code, source, &errors, "language_code", |e| e.to_string())
-                    .into_option()
-                    .as_deref(),
-                Some("eng"),
-            );
-            assert!(errors.to_vec().is_empty());
-            assert!(
-                decode_present_child(&code, "", &errors, "language_code", |error| {
-                    assert!(matches!(error, NodeTextError::OutsideSource));
-                    error.to_string()
-                })
-                .is_none()
-            );
-
-            // Deliberately pair this real three-byte token with different
-            // source bytes: its end offset now bisects a UTF-8 code point.
-            // This is a source-pairing boundary test, not a CHAT fixture.
-            let mut foreign = source.to_owned();
-            foreign.replace_range(node.byte_range(), "λλ");
-            assert!(
-                decode_present_child(&code, &foreign, &errors, "language_code", |error| {
-                    assert!(matches!(error, NodeTextError::InvalidUtf8(_)));
-                    error.to_string()
-                })
-                .is_none()
-            );
-            let diagnostics = errors.into_vec();
-            assert_eq!(diagnostics.len(), 2);
-            assert!(
-                diagnostics
-                    .iter()
-                    .all(|error| error.code == ErrorCode::InternalError)
-            );
-            assert!(talkbank_model::CompletedDiagnostics::admit(diagnostics).is_err());
-        }
-        // One @Languages code and one in each of the two @ID headers.
-        assert_eq!(codes, 3);
     }
 }

@@ -516,32 +516,11 @@ conformance-gen:
 schema-gen:
     cargo test --quiet -p talkbank-transform --test integration generate_schema::generate::generate_chat_file_schema -- --exact --ignored
 
-# The typed CST traversal, from a CLEAN tree-sitter-grammar-utils checkout.
-# The generator stamps its own `git describe` into the output header and the
-# currency test refuses `-dirty`, so a dirty generator checkout is refused
-# here rather than discovered after the run. Edition and toolchain are read
-# from this workspace's own manifests, never restated.
+# Both traversal artifacts, from clean source at the reviewed tsgu-revision.
+# The owning script admits source, builds locked dependencies, uses Cargo's
+# executable report, and stages both outputs before replacing changed bytes.
 traversal-gen:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    tsgu="${TSGU_DIR:-$HOME/tsgu}"
-    if [ ! -d "$tsgu" ]; then
-        echo "error: tree-sitter-grammar-utils not found at $tsgu (set TSGU_DIR)" >&2
-        exit 1
-    fi
-    if [ -n "$(git -C "$tsgu" status --porcelain)" ]; then
-        echo "error: $tsgu has uncommitted changes; the generator would stamp -dirty" >&2
-        exit 1
-    fi
-    edition=$(sed -n 's/^edition = "\(.*\)"/\1/p' Cargo.toml)
-    toolchain=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
-    (cd "$tsgu" && cargo build --quiet --release --example generate_typed_traversal -p tree-sitter-node-types)
-    python3 scripts/generate_if_changed.py crates/talkbank-parser/src/generated_traversal.rs \
-        "$tsgu/target/release/examples/generate_typed_traversal" \
-        grammar/src/grammar.json grammar/src/node-types.json \
-        --edition "$edition" --toolchain "$toolchain"
-    python3 scripts/generate_if_changed.py grammar/bindings/rust/tsgu_language_metadata.c \
-        "$tsgu/target/release/examples/generate_typed_traversal" --metadata-bridge
+    python3 scripts/regenerate_traversal.py
 
 # The CHECK mapping inventory, `docs/audits/check-parity-audit.md`.
 #

@@ -54,7 +54,7 @@ impl<'source> CorroboratedWorTimings<'source> {
 /// One main-tier word plus timing from a canonically matching `%wor` slot.
 #[derive(Debug, PartialEq)]
 pub struct CorroboratedWorTimingSlot<'source> {
-    pub(super) main_word: &'source Word,
+    pub(super) main_slot: super::projection::ProjectedWorWord<'source>,
     pub(super) wor_word: &'source Word,
     pub(super) timing: WorSlotTiming,
 }
@@ -68,12 +68,17 @@ impl<'source> CorroboratedWorTimingSlot<'source> {
 
     /// Typed main-tier word that owns lexical identity.
     pub fn main_word(&self) -> &'source Word {
-        self.main_word
+        self.main_slot.word()
+    }
+
+    /// Producing root content from the canonical word-selection projection.
+    pub fn source_content(&self) -> super::WorSourceContent<'source> {
+        self.main_slot.source_content()
     }
 
     /// Cleaned lexical text from the typed main-tier word.
     pub fn main_text(&self) -> &str {
-        self.main_word.cleaned_text()
+        self.main_word().cleaned_text()
     }
 
     /// Timing observation from the corroborating `%wor` slot.
@@ -147,7 +152,8 @@ pub fn corroborate_wor_timing(
     } = count_matched;
     let mut mismatches = Vec::new();
 
-    for (raw_index, (main_word, wor_word)) in main_slots.iter().zip(&wor_slots).enumerate() {
+    for (raw_index, (main_slot, wor_word)) in main_slots.iter().zip(&wor_slots).enumerate() {
+        let main_word = main_slot.word();
         if super::projection::canonical_wor_display_text(main_word) != wor_word.cleaned_text() {
             mismatches.push(WorLexicalMismatch {
                 slot: WorSlotIndex(raw_index),
@@ -167,8 +173,8 @@ pub fn corroborate_wor_timing(
     let slots = main_slots
         .into_iter()
         .zip(wor_slots)
-        .map(|(main_word, wor_word)| CorroboratedWorTimingSlot {
-            main_word,
+        .map(|(main_slot, wor_word)| CorroboratedWorTimingSlot {
+            main_slot,
             wor_word,
             timing: match wor_word.inline_bullet.as_ref() {
                 Some(bullet) => WorSlotTiming::Timed(WorRecordedInterval::from_bullet(bullet)),

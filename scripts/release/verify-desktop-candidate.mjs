@@ -1,6 +1,7 @@
 // Boundary validation before a draft can reach cargo-dist's announcement.
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { installerPairs } from './cli-installer-compatibility.mjs';
 
 const installers = [
   'Chatter-macos-apple-silicon.dmg', 'Chatter-macos-intel.dmg',
@@ -23,6 +24,11 @@ export function verifyCandidate(release, manifest, tag, repo) {
   }
   for (const name of installers) {
     if (!names.has(name)) throw new Error(`missing installer or updater manifest: ${name}`);
+  }
+  for (const pair of installerPairs) {
+    for (const name of [pair.current, pair.legacy]) {
+      if (!names.has(name)) throw new Error(`missing CLI installer: ${name}`);
+    }
   }
   if (manifest.version !== tag.slice(1) || !manifest.platforms
       || Object.keys(manifest.platforms).sort().join() !== [...platforms].sort().join()) {

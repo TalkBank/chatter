@@ -37,15 +37,7 @@ impl<'input> UtteranceInput<'input> {
             let parsed = probe.parse(parser)?;
             match SourceFileNode::from_node(parsed.parsed_source().root_node()) {
                 Some(root) => {
-                    let children = extract_source_file(root).map_err(|fault| {
-                        crate::error::ParseErrors::from(vec![
-                            crate::parser::typed_cst::cst_failure_diagnostic(
-                                parsed.parsed_source().root_node(),
-                                parsed.parsed_source().source(),
-                                fault,
-                            ),
-                        ])
-                    })?;
+                    let children = extract_source_file(root);
                     matches!(
                         children.content.slot(),
                         NodeSlot::Present(SourceFileChoice::FullDocument(_))

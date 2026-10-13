@@ -116,11 +116,68 @@ invalidation receipts, not merely logged. No full parent interval is assigned
 to a partial child. Rebuilt children still need checked construction before
 output; structural partition admission is not whole-file validity.
 
+The authored `content/split-metadata.cha` reference combines utterance-language
+metadata, linkers, postcodes, measured word timing and tier retention policies.
+Language and coarse parent spans accompany every child; linkers and free-text
+tiers accompany the first, while the original terminator and postcodes accompany
+the last. Positional phonology and document-scoped coreference are invalidated
+with receipts pointing to their original tiers. Count-drifted timing is neither
+retained nor replaced by the parent's whole-turn bullet.
+
+Internally, partition admission owns the producing utterance and borrows its
+content as distinct nonempty first/last groups and optional interior groups.
+Rebuilding consumes that ordering through a cardinality-preserving producer;
+readers cannot create empty buckets, omit an endpoint or supply another source.
+The word-tier partition receives the same producer-owned affiliations, including
+leading word-tier separators, rather than an independently supplied group count.
+`WorMainTierProjection` constructs each selected word's `WorSourceContent`
+against its producing main tier. Count matching, lexical corroboration and
+complete timing retain that borrowed root and position. Both ordinary timing
+assignments and measured speaker ownership consume those positions; neither
+reconstructs the selected population with a second word walk. Word-tier
+partitioning streams the same positions through the admitted source groups,
+without an independent word/group vector or membership-agreement recheck.
+Timing is assessed from the tiers actually attached to the rebuilt children,
+not a second indexed rematch. Empty word tiers remain possible and are omitted;
+that does not erase their child's main-tier content.
+
+```mermaid
+flowchart LR
+    labels[Source-bound word labels] --> admission[Partition admission]
+    admission --> unchanged[Unchanged source]
+    admission --> groups[Nonempty source groups]
+    groups --> children[Cardinality-preserving rebuilt children]
+    children --> checked[Checked construction still required]
+```
+
+The final child inherits the source's terminator **including absence**. CA
+intonation contours can end an utterance without a separate terminator; a split
+must not invent a final period. Earlier children receive derived periods, while
+the final child's original contour, ending and postcodes stay together.
+The authored `tiers/wor-replacements.cha` control additionally preserves spoken
+original-word timing through single- and multiple-word replacement targets.
+
 `utterance_split::WordSpeakerSource` admits complete source timing before
 requesting acoustic inference and keeps its immutable source borrow through
 that request. `bind_timeline` then establishes `WordSpeakerSplitPlan`, without
 rematching timing or accepting another source. The convenience split-plan
 constructor performs those same transitions when evidence already exists.
+
+Complete timing retains `CompleteWorTimingSlots`: a mandatory first slot and an
+ordered tail, rather than a vector whose nonempty proof is lost at an accessor.
+Speaker admission measures that first slot before constructing
+`WordSpeakerOwnership`. Its first distribution and ordered tail travel unchanged
+through the plan, outcome and consumed parts. Neither stage can substitute an
+empty population; acoustic gaps and ties remain genuine refusals. Ownership
+serialization remains a JSON array in source-word order. These collection APIs
+provide infallible `first`, `following`, `len` and ordered iteration, not slice
+indexing or mutable-vector access.
+
+Complete timing and unique acoustic winners do not establish structural
+divisibility. Speaker changes inside an annotated or nested group refuse with
+the underlying partition error; a change before the whole group preserves its
+content and corroborated child word tiers. Replacements retain their spoken
+original's timing, including when the replacement target contains several words.
 
 The split plan adds measured word-level speaker ownership to that same partition
 owner. It requires complete, lexically corroborated `%wor`, uses
@@ -133,6 +190,15 @@ runs rebuild children. Execution retains ownership evidence and invalidation
 receipts; participant identities, headers and final output admission remain the
 caller's responsibility. The existing whole-turn rediarization API and its
 contestation reporting are unchanged.
+
+Each nonempty content group receives its speaker from the source-word slot that
+established that run, during partition admission. The rebuilding producer uses
+that attached affiliation when constructing the child. Execution does not
+reconstruct a run list, zip an independent speaker vector with children or
+repair a count mismatch. The legacy `ProducerChildCount` refusal and fallible
+`execute` signature remain API-compatible but are no longer produced. A single
+run retains its source borrow and measured speaker without copying its content.
+`into_parts` consumes the partition and all measured word distributions together.
 
 ### CHAT → JSON
 
@@ -335,6 +401,46 @@ companions require correspondence review. No tier is silently dropped and no
 orthographic placeholder is treated as a pronunciation. These review objects
 contain protected transcript content and must not be logged by default.
 
+## Catalog selection and source-owned splicing
+
+`FixDiagnosis::observe` retains one actual parse's source/CST, produced model,
+complete findings, validation policy and transcript name. Readonly
+`FixFinding` views are issued only by that owner. Their `catalog()` resolves
+against its source and distinguishes Offered, Unsupported, Ineligible,
+SourceUnavailable and Fault. Missing repair policy is not a source-capability
+failure. Diagnosis is not validity; recovery and warnings remain visible.
+
+An offered opaque `CatalogFix` is Mechanical, Semantic or Alternatives;
+`safety()` derives from that closed variant. Its consuming `into_kind()`
+exposes raw candidates without issuing application authority. The diagnosis's
+consuming `select(&FixCodeSelection)` aggregates only its own findings:
+mechanical proposals select by default, semantic proposals require an explicit
+code, and alternatives never batch-select. No append accepts another session.
+
+`SelectedRepairs::admit()` obtains the model from its diagnosis.
+`AdmittedRepairs::apply_verified()` obtains that same owner's source and
+returns `VerifiedRepairs`, retaining the diagnosis beside verified bytes.
+Neither transition accepts substitute arguments. Existing recovery exceptions
+and unknown/constructed-health refusal remain.
+
+`AdmittedEdits::map(source)` produces `MappedPlan`, which retains the exact
+immutable source, checked extents and computed edit sites. Assembly and the
+byte verifier share that one owner. `MappedPlan::apply_verified()` issues
+`ByteVerifiedSplice`. The repair path retains it inside `VerifiedRepairs`;
+the CLI derives baseline counts, policy and name from its actual diagnosis
+before issuing its private post-checked result after full diagnostic-multiset
+nonincrease and targeted-site clearance. The
+writer receives that result, not an arbitrary string beside a success flag.
+It does not recompute the mapping.
+
+Raw `apply_edits`, independent `verify_splice`, and plain-text
+`apply_edits_verified` remain available for numeric and external-byte contracts.
+Generic `admit_edits(model, edits)` likewise remains an intentional boundary.
+These raw routes cannot construct diagnosis-associated phases or CLI authority.
+Checked `u32` extents add no CHAT-size policy. These local phases do not prove
+semantic correctness, whole-document validity or filesystem
+race safety; report mode and explicit application retain their existing policy.
+
 ## Validation + Roundtrip Cache Lifecycle
 
 The following diagram shows the full validation and roundtrip pipeline, including the cache layer:
@@ -430,6 +536,18 @@ caller's choice, a `Links` value:
   deleted): links are neither walked nor kept. Following them would let
   `--prune` delete JSON outside `--output-dir` through a linked directory,
   and then remove that directory's emptied parents.
+
+Only native regular-file entries become `FoundFile` or `StoredTranscript`.
+Checked file-kind evidence travels from classification through discovery to
+stored-name admission; there is no unchecked “every non-directory is a file”
+fallback. Direct path and `DirEntry` constructors refuse directories and special
+entries. Directory arguments still expand recursively. A selected socket,
+device or pipe, including a followed link to one, is an explicit input I/O
+failure before content reads; a nonselected entry is outside the walk's filter.
+Regular-file links retain their own stored name and cache location. The walker
+reuses its native type observation rather than adding a stat per admitted file.
+This is admission-time evidence, not a guarantee against later filesystem
+replacement: subsequent read failures remain I/O failures, never CHAT invalidity.
 
 A directory the walk cannot list is always a failure, never skipped, even an
 operating system's own folder at a volume root (`.Spotlight-V100`,

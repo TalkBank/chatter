@@ -38,12 +38,11 @@ Words with category prefixes: filler (&-), nonword (&~), fragment (&+), omission
         (base_content_item
           (word_with_optional_annotations
             (standalone_word
-              (word_prefix
-                (zero))
+              (zero)
               (word_body
-                (word_segment)))))))
+                (word_segment))))))
+      (whitespaces))
     (utterance_end
-      (whitespaces)
       (period)
       (newline))))
 ```

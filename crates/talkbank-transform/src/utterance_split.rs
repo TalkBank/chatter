@@ -3,10 +3,7 @@
 //! This proves a structural split, not complete CHAT validity or output-write
 //! permission. Rebuilt children still require checked construction.
 
-use std::collections::HashSet;
-
-use talkbank_model::alignment::WorSlotMembershipPolicy;
-use talkbank_model::alignment::helpers::{PositionalDomain, TierDomain, WordItem, walk_words};
+use talkbank_model::alignment::helpers::PositionalDomain;
 use talkbank_model::model::{DependentTier, MainTier, Terminator, Utterance, UtteranceContent};
 
 use crate::extract;
@@ -129,13 +126,12 @@ impl<'source> SplitChildren<'source> {
 /// use talkbank_model::model::Utterance;
 /// use talkbank_transform::utterance_split::UtteranceSplitPlan;
 /// fn forge(source: &Utterance) -> UtteranceSplitPlan<'_> {
-///     UtteranceSplitPlan { source, content_groups: None }
+///     UtteranceSplitPlan { content_groups: None }
 /// }
 /// ```
 #[must_use]
 pub struct UtteranceSplitPlan<'source> {
-    source: &'source Utterance,
-    content_groups: Option<ContentItemGroups>,
+    content_groups: Option<ContentItemGroups<'source>>,
 }
 
 impl<'source> UtteranceSplitPlan<'source> {
@@ -166,24 +162,7 @@ impl<'source> UtteranceSplitPlan<'source> {
         source: &'source Utterance,
         assignments: &[usize],
     ) -> Result<Self, SplitRefusal> {
-        let mut word_to_content = Vec::new();
-        for (index, item) in source.main.content.content.iter().enumerate() {
-            walk_words(
-                std::slice::from_ref(item),
-                Some(TierDomain::Wor),
-                &mut |item| {
-                    let admitted = match item {
-                        WordItem::Word(word) => WOR_SLOT_POLICY.admits(word),
-                        WordItem::ReplacedWord(replaced) => WOR_SLOT_POLICY.admits(&replaced.word),
-                        WordItem::Separator(_) => false,
-                    };
-                    if admitted {
-                        word_to_content.push(index);
-                    }
-                },
-            );
-        }
-        Self::admit(source, assignments, word_to_content)
+        Self::admit(source, assignments, word_timing_content_map(source))
     }
 
     fn admit(
@@ -191,61 +170,8 @@ impl<'source> UtteranceSplitPlan<'source> {
         assignments: &[usize],
         word_to_content: Vec<usize>,
     ) -> Result<Self, SplitRefusal> {
-        if assignments.len() != word_to_content.len() {
-            return Err(SplitRefusal::SlotCount {
-                expected: word_to_content.len(),
-                actual: assignments.len(),
-            });
-        }
-        // Normalize only labels, never word order. Allocation is bounded by the
-        // source's slot count rather than the magnitude of a supplied label.
-        let mut seen = HashSet::new();
-        let mut previous = None;
-        let mut group_count = 0usize;
-        let mut normalized = Vec::with_capacity(assignments.len());
-        for &label in assignments {
-            if previous != Some(label) {
-                if !seen.insert(label) {
-                    return Err(SplitRefusal::DisjointGroup { group: label });
-                }
-                group_count += 1;
-                previous = Some(label);
-            }
-            normalized.push(group_count - 1);
-        }
-        let mut by_content = vec![None; source.main.content.content.len()];
-        for (&index, &group) in word_to_content.iter().zip(&normalized) {
-            match by_content[index] {
-                Some(previous) if previous != group => {
-                    return Err(SplitRefusal::IndivisibleContent {
-                        content_index: index,
-                    });
-                }
-                Some(_) | None => by_content[index] = Some(group),
-            }
-        }
-        let groups =
-            ContentItemGroups::assign(&source.main.content.content, &word_to_content, &normalized);
-        if let Some(groups) = &groups {
-            let mut previous = None;
-            for (index, (item, group)) in source
-                .main
-                .content
-                .content
-                .iter()
-                .zip(groups.in_content_order())
-                .enumerate()
-            {
-                if previous != Some(group) && matches!(item, UtteranceContent::Separator(_)) {
-                    return Err(SplitRefusal::LeadingSeparator {
-                        content_index: index,
-                    });
-                }
-                previous = Some(group);
-            }
-        }
+        let groups = ContentItemGroups::admit(source, &word_to_content, assignments)?;
         Ok(Self {
-            source,
             content_groups: groups,
         })
     }
@@ -253,36 +179,58 @@ impl<'source> UtteranceSplitPlan<'source> {
     /// Rebuild from the retained plan and source; no parser or independent rematch.
     /// An assignment that splits nothing copies nothing.
     pub fn execute(self) -> SplitOutcome<'source> {
-        let source = self.source;
         let Some(content_groups) = self.content_groups else {
             return SplitOutcome::Unchanged;
         };
-        let children = rebuild_split(source, &content_groups);
-        let retained_wor = children.iter().any(|child| child.wor_tier().is_some());
-        let invalidated = source
-            .dependent_tiers
-            .iter()
-            .enumerate()
-            .filter_map(|(index, tier)| {
-                let reason = match policy_for_tier(&tier.tier) {
-                    TierSplitPolicy::Drop => TierInvalidationReason::BoundaryDependent,
-                    TierSplitPolicy::Partition if !retained_wor => {
-                        TierInvalidationReason::UncorroboratedWordTiming
-                    }
-                    TierSplitPolicy::Partition | TierSplitPolicy::AttachFirst => return None,
-                };
-                Some(InvalidatedTier {
-                    index,
-                    tier: &tier.tier,
-                    reason,
-                })
-            })
-            .collect();
-        SplitOutcome::Split(SplitChildren {
-            children,
-            invalidated,
-        })
+        SplitOutcome::Split(execute_split(&content_groups, |_| {
+            content_groups.source().main.speaker.clone()
+        }))
     }
+}
+
+/// Finish every admitted group, keeping loss receipts bound to its source.
+fn execute_split<'source, Affiliation>(
+    content_groups: &ContentItemGroups<'source, Affiliation>,
+    speaker: impl FnMut(
+        &content_groups::ContentGroup<'source, Affiliation>,
+    ) -> talkbank_model::SpeakerCode,
+) -> SplitChildren<'source> {
+    let source = content_groups.source();
+    let children = rebuild_split(content_groups, speaker).into_vec();
+    let retained_wor = children.iter().any(|child| child.wor_tier().is_some());
+    let invalidated = source
+        .dependent_tiers
+        .iter()
+        .enumerate()
+        .filter_map(|(index, tier)| {
+            let reason = match policy_for_tier(&tier.tier) {
+                TierSplitPolicy::Drop => TierInvalidationReason::BoundaryDependent,
+                TierSplitPolicy::Partition if !retained_wor => {
+                    TierInvalidationReason::UncorroboratedWordTiming
+                }
+                TierSplitPolicy::Partition | TierSplitPolicy::AttachFirst => return None,
+            };
+            Some(InvalidatedTier {
+                index,
+                tier: &tier.tier,
+                reason,
+            })
+        })
+        .collect();
+    SplitChildren {
+        children,
+        invalidated,
+    }
+}
+
+/// The same policy-selected source-word domain for ordinary and speaker splits.
+fn word_timing_content_map(source: &Utterance) -> Vec<usize> {
+    source
+        .main
+        .wor_projection()
+        .source_content()
+        .map(|location| location.index())
+        .collect()
 }
 
 /// Build a mapping from extracted-word index to top-level content item index.
@@ -426,82 +374,30 @@ mod content_groups;
 #[cfg(test)]
 mod tests;
 mod wor_partition;
+mod word_ownership;
 mod word_speaker;
 
-use content_groups::ContentItemGroups;
+use content_groups::{ChildPosition, ContentItemGroups, RebuiltChildren};
 use wor_partition::{
     CompletePerChildMainTiming, SplitMainTimingEvidence, partition_wor_tier,
     split_main_timing_evidence,
 };
+pub use word_ownership::WordSpeakerOwnership;
 pub use word_speaker::{
     WordSpeakerPartition, WordSpeakerSource, WordSpeakerSplitOutcome, WordSpeakerSplitParts,
     WordSpeakerSplitPlan, WordSpeakerSplitRefusal,
 };
 
-/// The `%wor` slot-membership policy this module's decisions travel through.
-///
-/// Named once, and taken from chatter rather than restated. The doc on
-/// [`WorSlotMembershipPolicy::admits`] says the method is public precisely so
-/// that a per-content-item count in an utterance splitter can ask it instead
-/// of spelling the rule out beside its own walk; this module is one of the
-/// two trees that doc names, and this is the deletion it describes.
-const WOR_SLOT_POLICY: WorSlotMembershipPolicy = WorSlotMembershipPolicy::FilteredLexicalV1;
-
-/// Compute the child-group assignment for each main-tier word that occupies a
-/// `%wor` slot.
-///
-/// Which words those are is [`WOR_SLOT_POLICY`]'s answer, asked per word. A
-/// replaced word is admitted by its ORIGINAL, as the projection admits it.
-///
-/// The returned Vec has one entry per admitted word, in main-tier order;
-/// entries are child-group indices. The walk is per content item because that
-/// is what pairs a word with the group its item travels with, which is also
-/// why this cannot be `WorMainTierProjection` itself: that is constructible
-/// only from a whole `MainTier`, and it reports slots rather than the content
-/// items they came from.
-fn wor_eligible_word_groups(
-    content_items: &[UtteranceContent],
-    content_groups: &ContentItemGroups,
-) -> Vec<usize> {
-    let mut groups = Vec::new();
-    for (item, group) in content_items.iter().zip(content_groups.in_content_order()) {
-        walk_words(
-            std::slice::from_ref(item),
-            Some(TierDomain::Wor),
-            &mut |word| {
-                let admitted = match word {
-                    WordItem::Word(word) => WOR_SLOT_POLICY.admits(word),
-                    WordItem::ReplacedWord(replaced) => WOR_SLOT_POLICY.admits(&replaced.word),
-                    WordItem::Separator(_) => false,
-                };
-                if admitted {
-                    groups.push(group);
-                }
-            },
-        );
-    }
-    groups
-}
-
-fn rebuild_split(utt: &Utterance, content_groups: &ContentItemGroups) -> Vec<Utterance> {
-    let content_items = &utt.main.content.content;
-    let mut groups: Vec<Vec<UtteranceContent>> = vec![Vec::new(); content_groups.group_count()];
-    for (item, group_id) in content_items.iter().zip(content_groups.in_content_order()) {
-        groups[group_id].push(item.clone());
-    }
-
-    let speaker = &utt.main.speaker;
+fn rebuild_split<'source, Affiliation>(
+    content_groups: &ContentItemGroups<'source, Affiliation>,
+    mut speaker: impl FnMut(
+        &content_groups::ContentGroup<'source, Affiliation>,
+    ) -> talkbank_model::SpeakerCode,
+) -> RebuiltChildren {
+    let utt = content_groups.source();
     // The parent's main-tier bullet is not carried: it measures no child of a
     // split (see `SplitMainTimingEvidence::Unmeasured`).
 
-    // Capture the rest of the parent's main-tier metadata so each child
-    // can inherit the right slice of it. Per-field propagation policy
-    // (linkers → first only, terminator/postcodes → last only, language
-    // code/spans → all).
-    let parent_linkers = utt.main.content.linkers.clone();
-    let parent_terminator = utt.main.content.terminator.clone();
-    let parent_language_code = utt.main.content.language_code.clone();
-    let parent_postcodes = utt.main.content.postcodes.clone();
     let parent_main_span = utt.main.span;
     let parent_speaker_span = utt.main.speaker_span;
 
@@ -523,93 +419,61 @@ fn rebuild_split(utt: &Utterance, content_groups: &ContentItemGroups) -> Vec<Utt
             };
             Some(wor)
         })
-        .and_then(|wor| {
-            let main_groups = wor_eligible_word_groups(content_items, content_groups);
-            partition_wor_tier(&utt.main, wor, &main_groups, content_groups.group_count())
-        });
-
-    // Track (original_group_idx, utterance) so we can later look up the
-    // partitioned %wor for each kept child even after empty/all-separator
-    // groups are skipped.
-    let mut result: Vec<(usize, Utterance)> = Vec::new();
-
-    for (group_idx, group_content) in groups.into_iter().enumerate() {
-        if group_content.is_empty() {
-            continue;
-        }
-
+        .and_then(|wor| partition_wor_tier(wor, content_groups));
+    let mut result = content_groups.rebuild(|position, group| {
         let mut main = MainTier::new(
-            speaker.clone(),
-            group_content,
-            // A split child's terminator is synthesized; it points at the
-            // parent utterance it was derived from, like the child's spans.
+            speaker(group),
+            group.cloned_content(),
+            // Earlier children need a derived ending with a parent source
+            // pointer. Positional metadata below replaces the last ending.
             Terminator::Period {
                 span: parent_main_span,
             },
         );
         // Language code applies to every child (utterance-scope), set
-        // it at construction time. Linkers, terminator, postcodes, and
-        // bullet are positional and applied to the right child after
-        // the loop.
-        if let Some(ref lang) = parent_language_code {
+        // it at construction time. Linkers, terminator and postcodes use the
+        // admitted position below; word-derived bullets follow tier attachment.
+        if let Some(ref lang) = utt.main.content.language_code {
             main.content = main.content.with_language_code(lang.clone());
         }
         // Source spans: inherit the parent's so children retain a
         // useful (if coarse) source pointer instead of `Span::DUMMY`.
         main.span = parent_main_span;
         main.speaker_span = parent_speaker_span;
-        let new_utt = Utterance::new(main);
-        result.push((group_idx, new_utt));
-    }
-
-    let main_timing = split_main_timing_evidence(partitioned_wor.as_ref(), &result);
-
-    // Per-tier policy. Walk the parent's dependent tiers once, dispatching
-    // each to its policy. `partitioned_wor` (if Some) is the precomputed
-    // per-group payload; AttachFirst tiers go to result[0]; Drop tiers
-    // produce no output.
-    if let Some((_, first_child)) = result.first_mut() {
-        for tier in &utt.dependent_tiers {
-            if matches!(policy_for_tier(&tier.tier), TierSplitPolicy::AttachFirst) {
-                first_child.dependent_tiers.push(tier.clone());
+        let mut child = Utterance::new(main);
+        match position {
+            ChildPosition::First => {
+                child.main.content.linkers = utt.main.content.linkers.clone();
+                for tier in &utt.dependent_tiers {
+                    if matches!(policy_for_tier(&tier.tier), TierSplitPolicy::AttachFirst) {
+                        child.dependent_tiers.push(tier.clone());
+                    }
+                }
+            }
+            ChildPosition::Interior => {}
+            ChildPosition::Last => {
+                // Absence is authored too (CA unmarked endings). Do not keep
+                // the temporary period when the source had no terminator.
+                child.main.content.terminator = utt.main.content.terminator.clone();
+                child.main.content.postcodes = utt.main.content.postcodes.clone();
             }
         }
-    }
-
-    // Linkers go on the FIRST child only, they describe relation to the
-    // *prior* (different) utterance, which only the first piece is adjacent
-    // to. Use a non-empty check so we don't bother cloning the empty
-    // SmallVec for the common case.
-    if !parent_linkers.is_empty()
-        && let Some((_, first_child)) = result.first_mut()
-    {
-        first_child.main.content.linkers = parent_linkers;
-    }
-
-    // Terminator and postcodes go on the LAST child only. Terminator
-    // describes how the original utterance ended, that's the last child.
-    // Postcodes are utterance-level analysis tags; placing them on the
-    // last child matches the conventional after-terminator serialization.
-    if let Some((_, last)) = result.last_mut() {
-        if let Some(term) = parent_terminator {
-            last.main.content.terminator = Some(term);
-        }
-        if !parent_postcodes.is_empty() {
-            last.main.content.postcodes = parent_postcodes;
-        }
-    }
+        child
+    });
 
     // Attach partitioned %wor after child main-tier terminators are final, so
     // the dependent tier cannot retain the parent's terminator on an earlier
     // child or retain the default period on the last child.
-    // Each per-child tier moves into its child; kept children are in group
-    // order, so one forward pass over both pairs them.
+    // Both producers retain every admitted group in the same dense order.
+    // An empty word partition is omitted rather than emitted as an empty tier;
+    // missing content groups and independent index rematches are not possible.
     if let Some(per_group) = partitioned_wor {
-        let mut per_group = per_group.into_groups();
-        for (group_idx, child) in result.iter_mut() {
-            if let Some((_, child_wor)) = per_group.find(|(index, _)| index == group_idx)
-                && !child_wor.items.is_empty()
-            {
+        for (child, child_wor) in result
+            .as_mut_slice()
+            .iter_mut()
+            .zip(per_group.into_groups())
+        {
+            if !child_wor.items.is_empty() {
                 let child_wor = child_wor.with_terminator(child.main.content.terminator.clone());
                 child
                     .dependent_tiers
@@ -618,16 +482,16 @@ fn rebuild_split(utt: &Utterance, content_groups: &ContentItemGroups) -> Vec<Utt
         }
     }
 
-    match main_timing {
+    match split_main_timing_evidence(&result) {
         // One bullet per kept child, by construction (see
         // `split_main_timing_evidence`).
         SplitMainTimingEvidence::CompletePerChild(CompletePerChildMainTiming { bullets }) => {
-            for ((_, child), bullet) in result.iter_mut().zip(bullets) {
+            for (child, bullet) in result.as_mut_slice().iter_mut().zip(bullets) {
                 child.main.content.bullet = Some(bullet);
             }
         }
         SplitMainTimingEvidence::Unmeasured => {}
     }
 
-    result.into_iter().map(|(_, u)| u).collect()
+    result
 }

@@ -1,5 +1,5 @@
 [package]
-name = "chatter"
+name = "talkbank-chatter"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

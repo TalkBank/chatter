@@ -122,6 +122,41 @@ resolved through its deepest existing ancestor. `--force` clears by key, in
 every namespace a row can be written under, so two non-UTF-8 names that
 share a lossy display spelling cannot clear each other's rows.
 
+Directory admission refuses an existing file (including a link to a file),
+rather than treating it as a directory. `ResolvedDirectory::file` accepts only
+one literal native file-name component: trailing separators or `/.` are not
+file names merely because component iteration normalizes them. A missing
+directory remains a resolvable location, not a promise that it exists or can
+be created. Filesystem changes after admission are still fallible external facts.
+
+#### Clearing a retired input location
+
+Deleting or moving a transcript subtree does not itself remove its cached rows.
+The missing prefix can still name those rows through its existing ancestor:
+
+```bash
+chatter cache stats
+chatter cache clear --prefix /path/to/retired-corpus --dry-run
+# Only after confirming that this is the intended scope:
+chatter cache clear --prefix /path/to/retired-corpus
+chatter cache stats
+```
+
+The preview counts without deleting rows or recreating input directories.
+Clearing `corpus` leaves the adjacent `corpus-other` scope alone; a repeated
+clear reports zero after the selected rows are gone. A link to a transcript
+has its own stored-name/cache location: clearing the removed link leaves its
+target's rows and bytes intact. Directory aliases are resolved before scoping;
+the transcript's last component remains its own name. A prefix behind an
+existing regular file is refused, not interpreted as another scope. Use native
+path spellings; traversal through missing `..` remains platform-dependent.
+
+These are cache-administration semantics, not data recovery: clearing cannot
+restore deleted CHAT or certify a backup. Use `--force` for fresh validation of
+existing selected files, not a broad cache deletion. Local library and CLI
+contracts exercise canonical sources in isolated caches; supported-platform
+and independent operator drills remain separate acceptance.
+
 ### The key
 
 `path_hash` is a `CacheKey`, and `CacheKey::of(resolved_path, namespace)` in

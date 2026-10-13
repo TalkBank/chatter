@@ -12,16 +12,10 @@ Word with omission marker, phonology marker @wp
 
 ``` cst
 (standalone_word
-  (word_prefix
-    (zero)
-  )
+  (zero)
   (word_body
-    (initial_word_segment)
-  )
-  (form_marker
-    (form_marker_token)
-  )
-)
+    (word_segment))
+  (form_marker))
 ```
 
 ## Metadata

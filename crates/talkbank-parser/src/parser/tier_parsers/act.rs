@@ -22,14 +22,12 @@ use talkbank_model::model::ActTier;
 /// act_dependent_tier: seq('%', 'act', colon, tab, optional(text_with_bullets), newline)
 /// ```
 ///
-/// Delegates the whole five-state body policy to
+/// Delegates the range-admitted optional-body policy to
 /// `parse_optional_text_tier_content`, the owner shared with the seven
-/// text-like tiers. This file used to carry a private copy of that policy,
-/// differing in ONE state: a malformed body gets no `unexpected_node_error`
-/// here, because the removed hand-walk loop had none and simply fell through to
-/// the "Missing content" rejection. That difference is now
-/// `MalformedBody::ReportMissingOnly`, a value rather than a fork, so the four
-/// states nobody disputes cannot drift between the copies.
+/// text-like tiers. All nine retain the malformed-body diagnostic before the
+/// no-content report, rather than preserving the old hand-loop omission here.
+/// The concrete owner surfaces displaced recovery and admits selected ranges;
+/// the shared reader receives its whole carrier, not independent tier/body fields.
 ///
 /// The `Option` on the body slot is the grammar's `optional(...)` (E756
 /// widening, 2026-08-16): an absent body is the empty tier, not a parse
@@ -39,16 +37,32 @@ pub fn parse_act_tier<'tree>(
     typed: SourceBound<'tree, '_, ActDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<ActTier, crate::CstFailure> {
+    parse_act_tier_with_separator(typed, errors)
+        .map(crate::parser::tier_parsers::ParsedDependentTier::into_tier)
+}
+
+/// Retain the tier and its separator from one selected extraction.
+pub(crate) fn parse_act_tier_with_separator<'tree>(
+    typed: SourceBound<'tree, '_, ActDependentTierNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<crate::parser::tier_parsers::ParsedDependentTier<ActTier>, crate::CstFailure> {
     let node = typed.raw_node();
     let span = span_of(node);
     let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
-    let content = parse_optional_text_tier_content(
-        typed,
-        children.field_child_2().slot(),
+    let separator =
+        crate::parser::tier_parsers::dependent_tier_separator(children.children().child_1.slot());
+    crate::parser::tree_parsing::parser_helpers::surface_displaced(
         &children.children().unexpected,
+        node.kind(),
+        typed.source(),
         errors,
-    )?;
-    Ok(ActTier::new(content).with_span(span))
+    );
+    let children = children.admit_ranges()?;
+    let content = parse_optional_text_tier_content(&children, errors)?;
+    Ok(crate::parser::tier_parsers::ParsedDependentTier::new(
+        ActTier::new(content).with_span(span),
+        separator,
+    ))
 }
 
 #[cfg(test)]

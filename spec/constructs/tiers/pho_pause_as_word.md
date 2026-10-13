@@ -18,23 +18,48 @@ Discovered by re2c parser parity testing (2026-03-30).
 
 ```cst
 (utterance
-  (main_tier ...)
+  (main_tier
+    (star)
+    (speaker)
+    (colon)
+    (tab)
+    (tier_body
+      (contents
+        (content_item
+          (base_content_item
+            (word_with_optional_annotations
+              (standalone_word
+                (word_body
+                  (word_segment))))))
+        (whitespaces)
+        (content_item
+          (base_content_item
+            (word_with_optional_annotations
+              (standalone_word
+                (word_body
+                  (word_segment))))))
+        (whitespaces))
+      (utterance_end
+        (period)
+        (newline))))
   (pho_dependent_tier
     (pho_tier_prefix)
-    (tier_sep)
+    (tier_sep
+      (colon)
+      (tab))
     (pho_groups
       (pho_group
         (pho_words
           (pho_word)))
-      (whitespaces ...)
+      (whitespaces)
       (pho_group
         (pho_words
           (pho_word)))
-      (whitespaces ...)
+      (whitespaces)
       (pho_group
         (pho_words
           (pho_word)))
-      (whitespaces ...)
+      (whitespaces)
       (pho_group
         (pho_words
           (pho_word))))

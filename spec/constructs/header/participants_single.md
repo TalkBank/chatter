@@ -15,21 +15,13 @@
   (participants_prefix)
   (header_sep
     (colon)
-    (tab)
-  )
+    (tab))
   (participants_contents
     (participant
       (speaker)
-      (whitespaces
-        (whitespace
-          (space)
-        )
-      )
-      (participant_word)
-    )
-  )
-  (newline)
-)
+      (whitespaces)
+      (participant_word)))
+  (newline))
 ```
 
 ## Metadata

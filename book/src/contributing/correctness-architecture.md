@@ -178,8 +178,8 @@ table.
 a `[[example]]` in `spec/errors/`. A wrong parse shape is a construct spec with
 a model claim. An invariant over all inputs is a property test with a real case
 budget. A bug that only appears through the CLI, the LSP or the desktop app is
-a boundary test in that crate. A disagreement between the two parsers shrinks
-`KNOWN_DIVERGENCES`. See
+a boundary test in that crate. A missed re2c error needs an authored example and
+one-way detection evidence; different diagnostic codes alone are not a defect. See
 [Where evidence goes](#where-evidence-goes-when-you-fix-a-bug).
 
 **What you may delete.** 335 orphaned snapshot files, a duplicated roundtrip
@@ -866,7 +866,7 @@ ergonomics, not correctness, which is why it is last and optional.
 | a wrong parse SHAPE | a construct spec with a model claim | `spec/constructs/<area>/` |
 | an invariant that holds for all inputs | a property, at a real case budget, seeded | `property_tests/` |
 | only reachable through the CLI, LSP or desktop | a boundary test in that crate | `crates/chatter/tests/integration`, `talkbank-lsp`, `src-tauri/tests` |
-| one parser disagreeing with the other | a shrunk `KNOWN_DIVERGENCES` baseline | `talkbank-parser-re2c` |
+| re2c missing an error reported by tree-sitter | an authored example through the one-way comparison, with isolated-fault and valid controls | `talkbank-parser-re2c` |
 | a CLAN CHECK adjudication | a manifest row plus a fixture, and the CLAN identity it was verified against | `check_parity/manifest.json` |
 | an algorithm producing the wrong output | a unit test, labelled with its class | beside the algorithm |
 

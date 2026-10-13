@@ -145,35 +145,6 @@ where
     }
 }
 
-/// A typed position whose Present node carries nothing to parse: a separator
-/// comma, the whitespace around it, a delimiter. Present and Absent need
-/// nothing; a MISSING placeholder is reported as the recovery it is, through
-/// [`check_not_missing`] with `context`; an ERROR or a displaced node means
-/// the enclosing shape broke at that node, which `on_bad` reports in the
-/// words for that position. One owner for the three-arm match that the
-/// `@Participants` and `@Languages` list walkers had each written out per
-/// structural slot.
-pub(crate) fn expect_structure<'tree, T, M, U, A>(
-    slot: &crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
-    context: &str,
-    source: &str,
-    errors: &impl ErrorSink,
-    on_bad: impl FnOnce(Node),
-) where
-    M: RecoveryNode<'tree>,
-    U: RecoveryNode<'tree>,
-{
-    use crate::generated_traversal::NodeSlot;
-    match slot {
-        NodeSlot::Present(_) | NodeSlot::Absent(_) => {}
-        NodeSlot::Missing(missing) => {
-            check_not_missing(missing.node(), source, errors, context);
-        }
-        NodeSlot::Error(bad) => on_bad(*bad),
-        NodeSlot::Unexpected(bad) => on_bad(bad.node()),
-    }
-}
-
 /// A typed delimiter position (`<`, `>`, a quotation mark, a group bracket).
 /// Present needs nothing and so does Absent; a MISSING placeholder is left to
 /// the whole-tree recovery backstop, which already reports every MISSING
@@ -182,9 +153,8 @@ pub(crate) fn expect_structure<'tree, T, M, U, A>(
 /// reason, if by accident); an ERROR or a displaced node is the construct
 /// losing its shape at that node, which `on_bad` reports.
 ///
-/// The difference from [`expect_structure`] is the MISSING policy, and it
-/// is deliberate: the list walkers had always reported their MISSING commas
-/// locally, and the bracketed constructs never had.
+/// The MISSING policy is deliberate: list walkers and MOR pipe separators
+/// report their missing structural tokens locally; bracketed constructs do not.
 pub(crate) fn expect_delimiter<'tree, T, M, U: RecoveryNode<'tree>, A>(
     slot: &crate::generated_traversal::NodeSlot<'tree, T, M, U, A>,
     on_bad: impl FnOnce(Node),

@@ -22,17 +22,23 @@ than an utterance terminator. Based on `corpus/reference/ca/intonation.cha`.
       (content_item
         (base_content_item
           (word_with_optional_annotations
-            (standalone_word))))
+            (standalone_word
+              (word_body
+                (word_segment))))))
       (whitespaces)
       (content_item
         (base_content_item
           (word_with_optional_annotations
-            (standalone_word))))
+            (standalone_word
+              (word_body
+                (word_segment))))))
       (whitespaces)
       (content_item
         (base_content_item
           (word_with_optional_annotations
-            (standalone_word))))
+            (standalone_word
+              (word_body
+                (word_segment))))))
       (whitespaces)
       (separator
         (non_colon_separator

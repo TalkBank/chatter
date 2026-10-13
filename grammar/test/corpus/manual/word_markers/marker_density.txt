@@ -46,7 +46,7 @@ word_markers: lengthening interior x1 (attested U:m)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -148,7 +148,7 @@ word_markers: lengthening trailing x1 (attested a:)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -249,7 +249,7 @@ word_markers: lengthening interior x3 (attested m::)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -355,7 +355,7 @@ word_markers: lengthening trailing dense x4 (attested a::::)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -456,7 +456,7 @@ word_markers: lengthening interior dense x5
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -566,7 +566,7 @@ word_markers: syllable pause interior x1 (attested class)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -668,7 +668,7 @@ word_markers: syllable pause interior x2
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -772,7 +772,7 @@ word_markers: syllable pause interior x3
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -878,7 +878,7 @@ word_markers: syllable pause interior x4 (field-regression class)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -986,7 +986,7 @@ word_markers: syllable pause interior x6 (cliff margin)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -1098,7 +1098,7 @@ word_markers: syllable pause with form marker (attested a^a@p)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -1201,7 +1201,7 @@ word_markers: tilde clitic interior x1 (attested class)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -1303,7 +1303,7 @@ word_markers: compound interior x2 (attested I+C+E)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)
@@ -1405,7 +1405,7 @@ word_markers: mixed markers dense (pause + lengthening)
           (tab))
         (id_contents
           (id_languages
-            (languages_contents
+            (id_language
               (language_code)))
           (pipe)
           (id_corpus)

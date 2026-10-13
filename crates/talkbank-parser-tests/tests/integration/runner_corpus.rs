@@ -146,15 +146,33 @@ fn canonical_file_sibling_survives_unreadable_input() {
     let mut finished = false;
     for event in events {
         assert!(!finished, "completion event must be terminal");
+        if let ValidationEvent::Finished(ending) = &event {
+            assert!(!ending.passed(), "unreadable files prevent run success");
+            let summary = ending
+                .stats()
+                .expect("read refusals still complete the run");
+            assert_eq!(summary.files_accounted_for(), 3);
+            assert_eq!(summary.failed_files(), 2);
+            assert_eq!(summary.internal_failures(), 0);
+            assert_eq!(summary.cache_errors(), 0);
+        }
         match event {
             ValidationEvent::Discovering => {}
             ValidationEvent::Started { total_files } => assert_eq!(total_files, 3),
             ValidationEvent::FileComplete(event) => {
+                assert_eq!(
+                    event.status.failed(),
+                    event.path == bad || event.path == missing
+                );
                 assert!(
                     pending.remove(&event.path),
                     "duplicate or unexpected completion"
                 );
                 if event.path == bad || event.path == missing {
+                    assert!(
+                        event.status.shown().is_none(),
+                        "read failure has no CHAT source"
+                    );
                     assert!(
                         matches!(event.status, FileStatus::ReadError { ref message } if !message.is_empty())
                     );
@@ -409,6 +427,20 @@ fn reference_completion_survives_cache_write_failures() {
     );
     let mut phase = Phase::Completion;
     for event in events {
+        if let ValidationEvent::Finished(ending) = &event {
+            assert!(
+                ending.passed(),
+                "cache write refusal cannot erase file success"
+            );
+            let summary = ending.stats().expect("the reference run completes");
+            assert_eq!(summary.files_accounted_for(), 1);
+            assert_eq!(summary.failed_files(), 0);
+            assert_eq!(
+                summary.cache_errors(),
+                2,
+                "both attempted cache writes refuse"
+            );
+        }
         match event {
             ValidationEvent::Discovering => assert!(matches!(phase, Phase::Completion)),
             ValidationEvent::Started { total_files } => {
@@ -681,6 +713,18 @@ fn check_run(corpora: &[ChatCorpus], workflow: Workflow<'_>) {
     };
     let mut phase = StreamPhase::Discovery;
     for event in events {
+        if let ValidationEvent::Finished(ending) = &event {
+            assert_eq!(ending.passed(), total > 0 && expected_invalid == 0);
+            match ending.stats() {
+                Some(summary) => {
+                    assert_eq!(summary.files_accounted_for(), total);
+                    assert_eq!(summary.failed_files(), expected_invalid);
+                    assert_eq!(summary.internal_failures(), 0);
+                    assert_eq!(summary.cache_errors(), 0);
+                }
+                None => assert_eq!(total, 0, "only the empty workflow has no totals"),
+            }
+        }
         match event {
             ValidationEvent::Discovering => {
                 assert!(matches!(phase, StreamPhase::Discovery));
@@ -699,6 +743,7 @@ fn check_run(corpora: &[ChatCorpus], workflow: Workflow<'_>) {
                         event.path.display()
                     );
                 };
+                assert_eq!(event.status.failed(), expected.error_count > 0);
                 match event.status.shown() {
                     Some(shown) => {
                         assert_eq!(expected.source.as_str(), shown.source);
@@ -707,12 +752,22 @@ fn check_run(corpora: &[ChatCorpus], workflow: Workflow<'_>) {
                     None => assert!(expected.errors.is_empty(), "{}", event.path.display()),
                 }
                 match event.status {
-                    FileStatus::Valid { roundtrip, .. } => {
+                    FileStatus::Valid {
+                        roundtrip,
+                        warnings,
+                        ..
+                    } => {
                         assert_eq!(expected.error_count, 0);
                         assert_eq!(roundtrip, expected.roundtrip);
+                        if let Some(warnings) = warnings {
+                            assert_eq!(warnings.source(), expected.source);
+                            assert_eq!(warnings.errors(), expected.errors);
+                        }
                     }
                     FileStatus::Invalid { diagnostics } => {
                         assert_eq!(diagnostics.error_count().get(), expected.error_count);
+                        assert_eq!(diagnostics.shown().source(), expected.source);
+                        assert_eq!(diagnostics.shown().errors(), expected.errors);
                     }
                     other => panic!("unexpected file status: {} {other:?}", event.path.display()),
                 }

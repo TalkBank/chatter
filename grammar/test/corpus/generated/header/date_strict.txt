@@ -5,4 +5,4 @@ date_strict - @Date header using strict DD-MMM-YYYY format.
 
 --------------------------------------------------------------------------------
 
-(source_file (date_header (date_prefix) (header_sep (colon) (tab)) (date_contents (generic_date)) (newline)))
+(source_file (date_header (date_prefix) (header_sep (colon) (tab)) (date_contents (strict_date)) (newline)))

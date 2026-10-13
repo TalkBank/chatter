@@ -11,7 +11,19 @@
 ## Expected CST
 
 ```cst
-(types_header ...)
+(types_header
+  (types_prefix)
+  (header_sep
+    (colon)
+    (tab))
+  (types_design)
+  (comma)
+  (whitespaces)
+  (types_activity)
+  (comma)
+  (whitespaces)
+  (types_group)
+  (newline))
 ```
 
 ## Metadata

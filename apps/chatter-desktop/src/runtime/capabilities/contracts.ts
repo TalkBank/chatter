@@ -6,7 +6,7 @@ import type {
   ValidationEventPayload,
   ValidationSettings,
 } from "../../protocol/desktopProtocol";
-import type { FileStatus, ParseError, ValidationEvent } from "../../protocol/validation";
+import type { DiagnosticSourceContext, FileStatus, ParseError, ValidationEvent } from "../../protocol/validation";
 
 /** A `ParseError` paired with its pre-rendered miette text, for text export.
  *
@@ -15,6 +15,7 @@ import type { FileStatus, ParseError, ValidationEvent } from "../../protocol/val
  * hand-rebuilding a poorer "path:line: code msg" line from raw fields.
  */
 export interface ValidationExportError extends ParseError {
+  sourceContext: DiagnosticSourceContext;
   renderedText: string;
 }
 
@@ -31,6 +32,7 @@ export type { ParserKindSetting, ValidationSettings } from "../../protocol/deskt
 export interface OpenInClanRequest {
   file: string;
   error: ParseError;
+  sourceContext: Extract<DiagnosticSourceContext, { kind: "available" }>;
 }
 
 export type ValidationDragDropEvent =

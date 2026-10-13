@@ -13,10 +13,13 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E101](E101.md) | Invalid line format | Invalidity | file | ⏳ |
 | [E202](E202.md) | Missing form type after @ | Invalidity | word, utterance | ✅ |
 | [E203](E203.md) | Invalid form type marker | Invalidity | word | ✅ |
+| [E203](E203.md) | POS and word-internal features do not license two form suffixes | Invalidity | word | ✅ |
 | [E207](E207.md) | Unknown or incomplete annotation marker | Invalidity | word, utterance | ✅ |
 | [E208](E208.md) | Empty replacement | Invalidity | word | ? |
 | [E209](E209.md) | Word has no spoken content | Invalidity | word | ✅ |
 | [E209](E209.md) | CA omission versus adjacent shortenings | Invalidity | word | ✅ |
+| [E209](E209.md) | Markers do not combine adjacent shortenings into one CA omission | Invalidity | word | ✅ |
+| [E209](E209.md) | Spoken material in shortened words with other features | Invalidity | word | ✅ |
 | [E210](E210.md) | Deprecated, replaced by E387 | Invalidity | word | ? |
 | [E212](E212.md) | Invalid word format | Invalidity | word | ✅ |
 | [E213](E213.md) | Deprecated, replaced by E391 | Invalidity | word | ? |
@@ -27,6 +30,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E220](E220.md) | Numeric overflow does not license digit words | Invalidity | word | ✅ |
 | [E220](E220.md) | Unsupported Spanish number generation preserves digit words | Invalidity | word | ✅ |
 | [E230](E230.md) | Unbalanced CA delimiter | Invalidity | word, utterance | ✅ |
+| [E230](E230.md) | Paired CA stretches across word boundaries | Invalidity | utterance | ✅ |
 | [E231](E231.md) | Unbalanced shortening parenthesis | Invalidity | word | ✅ |
 | [E232](E232.md) | Compound marker at word start | Invalidity | word | ✅ |
 | [E233](E233.md) | Empty compound part | Invalidity | word | ✅ |
@@ -41,15 +45,20 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E244](E244.md) | Consecutive stress markers in word | Invalidity | word | ✅ |
 | [E244](E244.md) | Clean stress tokens retain local evidence during unrelated recovery | Invalidity | word | ✅ |
 | [E244](E244.md) | Stress-run repair boundaries | Invalidity | word | ✅ |
+| [E244](E244.md) | Stress evidence across shortening recovery boundaries | Invalidity | word | ✅ |
 | [E245](E245.md) | Stress marker without following spoken material | Invalidity | word | ✅ |
+| [E245](E245.md) | Marker-only word rejection retains surrounding turns | Invalidity | utterance | ✅ |
+| [E245](E245.md) | Secondary stress needs spoken material | Invalidity | word | ✅ |
 | [E246](E246.md) | Lengthening marker not after spoken material | Invalidity | word | ✅ |
 | [E246](E246.md) | Lengthening across word categories | Invalidity | word | ✅ |
+| [E246](E246.md) | Repeated lengthening still needs preceding spoken material | Invalidity | word | ✅ |
 | [E247](E247.md) | Multiple primary stress markers in one word | Invalidity | word | ✅ |
 | [E248](E248.md) | Bare @s shortcut in tertiary language context | Invalidity | word | ✅ |
 | [E249](E249.md) | Bare @s shortcut with no secondary language | Invalidity | word, file | ✅ |
 | [E250](E250.md) | Secondary stress without primary stress | Invalidity | word | ✅ |
 | [E251](E251.md) | Empty word content text | Invalidity |  | ✅ |
 | [E252](E252.md) | Syntax error - caret at word start | Invalidity | word | ✅ |
+| [E252](E252.md) | Leading and trailing pauses remain invalid among structural markers | Invalidity | utterance | ✅ |
 | [E253](E253.md) | Empty word content | Invalidity | word | ✅ |
 | [E255](E255.md) | Whole-utterance language switch should use precode | Invalidity | utterance | ✅ |
 | [E256](E256.md) | Illegal curly single quote | Invalidity | word | ✅ |
@@ -63,6 +72,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E303](E303.md) | Header colon not followed by a TAB | Invalidity | header, file | ✅ |
 | [E304](E304.md) | Missing speaker code | Invalidity | utterance | ⏳ |
 | [E305](E305.md) | Missing terminator | Invalidity | utterance | ✅ |
+| [E305](E305.md) | Omitted terminator before postcodes and timing | Invalidity | utterance | ✅ |
 | [E305](E305.md) | Missing terminator does not discard timing evidence | Invalidity | utterance | ✅ |
 | [E305](E305.md) | Morphology requires its own terminator | Invalidity | tier | ✅ |
 | [E305](E305.md) | Missing terminator before final postcodes | Invalidity | utterance | ✅ |
@@ -82,7 +92,11 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E314](E314.md) | Incomplete annotation | Invalidity | utterance | ✅ |
 | [E315](E315.md) | Invalid control character | Invalidity | utterance, tier, file | ✅ |
 | [E316](E316.md) | Unparsable content | Invalidity | utterance, tier, header, file | ✅ |
+| [E316](E316.md) | Malformed body and ending recovery | Invalidity | utterance | ✅ |
 | [E316](E316.md) | Malformed inline picture reference | Invalidity | tier | ✅ |
+| [E316](E316.md) | Main-tier recovery preserves source-owned neighboring turns | Invalidity | utterance | ✅ |
+| [E316](E316.md) | Structured metadata header boundaries | Invalidity | header | ✅ |
+| [E316](E316.md) | Malformed precode and hostless annotation positions | Invalidity | utterance | ✅ |
 | [E316](E316.md) | Missing main-tier speaker colon | Invalidity | utterance | ✅ |
 | [E319](E319.md) | UnparsableLine | Invalidity | utterance | ✅ |
 | [E320](E320.md) | UnparsableHeader | Invalidity | utterance | ✅ |
@@ -93,6 +107,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E325](E325.md) | UnexpectedUtteranceChild | Invalidity | utterance | ⏳ |
 | [E326](E326.md) | UnexpectedLineType | Invalidity | utterance | ✅ |
 | [E330](E330.md) | Internal CST traversal failure | Invalidity | utterance, tier | ✅ |
+| [E330](E330.md) | Dependent-tier composition and traversal recovery | Invalidity | tier | ✅ |
 | [E331](E331.md) | UnexpectedNodeInContext | Invalidity | utterance | ✅ |
 | [E340](E340.md) | UnknownBaseContent | Invalidity |  | ✅ |
 | [E341](E341.md) | UnbalancedQuotationCrossUtterance | Invalidity | utterance, file | 🔧 |
@@ -109,10 +124,13 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E354](E354.md) | MissingTrailingOffTerminator | Invalidity | utterance, file | 🔧 |
 | [E355](E355.md) | InterleavedScopedAnnotations | Invalidity | utterance | 🔧 |
 | [E356](E356.md) | UnmatchedUnderlineBegin | Invalidity | utterance | ✅ |
+| [E356](E356.md) | Underline balance beside attached CA pitch | Invalidity | utterance | ✅ |
 | [E357](E357.md) | UnmatchedUnderlineEnd | Invalidity | utterance | ✅ |
+| [E357](E357.md) | Underline opener beside attached CA pitch | Invalidity | utterance | ✅ |
 | [E358](E358.md) | Unmatched long-feature begin | Invalidity | utterance | ✅ |
 | [E359](E359.md) | Unmatched long-feature end | Invalidity | utterance | ✅ |
 | [E360](E360.md) | Invalid media bullet | Invalidity | utterance, tier | ✅ |
+| [E360](E360.md) | Rejected terminal bullets retain their source owner | Invalidity | utterance | ✅ |
 | [E361](E361.md) | Invalid bullet timestamp | Invalidity | utterance | ⏳ |
 | [E362](E362.md) | Bullet times backwards | Invalidity | utterance | ✅ |
 | [E363](E363.md) | Postcode without content | Invalidity | utterance | ✅ |
@@ -126,14 +144,19 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E372](E372.md) | Nested quotation | Invalidity | utterance | ✅ |
 | [E373](E373.md) | InvalidOverlapIndex | Invalidity | utterance | ✅ |
 | [E375](E375.md) | Scoped annotation parse error | Invalidity | word, utterance | ✅ |
+| [E375](E375.md) | Unmatched delimiters across body positions | Invalidity | utterance | ✅ |
 | [E375](E375.md) | Retired repetition counts without a terminator | Invalidity | utterance | ✅ |
 | [E376](E376.md) | Replacement parse error | Invalidity | utterance | ✅ |
+| [E376](E376.md) | Empty replacements across body positions | Invalidity | utterance | ✅ |
 | [E377](E377.md) | A retracing marker with no material of its own | Invalidity | utterance | ✅ |
 | [E378](E378.md) | A retracing marker over material with no words | Invalidity | utterance | ✅ |
 | [E382](E382.md) | %mor tier parse failure | Invalidity | tier | ⏳ |
 | [E387](E387.md) | Replacement on a phonological fragment | Invalidity | utterance | ✅ |
+| [E387](E387.md) | Replacement on a fragment with word-internal features | Invalidity | utterance | ✅ |
 | [E388](E388.md) | Replacement on a nonword | Invalidity | utterance | ✅ |
+| [E388](E388.md) | Nonword features do not license replacement | Invalidity | word | ✅ |
 | [E389](E389.md) | Replacement on a filler | Invalidity | utterance | ✅ |
+| [E389](E389.md) | Filler features do not license replacement | Invalidity | word | ✅ |
 | [E390](E390.md) | Replacement containing an omission | Invalidity | utterance | ✅ |
 | [E391](E391.md) | Replacement containing untranscribed material | Invalidity | utterance | ✅ |
 | [E401](E401.md) | Duplicate dependent tier | Invalidity | tier | ✅ |
@@ -203,15 +226,19 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E605](E605.md) | Unsupported Dependent Tier | Invalidity | utterance | ✅ |
 | [E701](E701.md) | Per-speaker start-time not monotonically increasing | Invalidity | utterance | ✅ |
 | [E702](E702.md) | Unparsable content in a %mor item | Invalidity | tier | ✅ |
+| [E702](E702.md) | Internal recovery within repeated-clitic morphology | Invalidity | tier | ✅ |
 | [E704](E704.md) | Speaker self-overlap, overlapping overlap markers | Invalidity | tier, file | ✅ |
 | [E704](E704.md) | Untranscribed speech constrains same-speaker timing | Invalidity | utterance | ✅ |
 | [E705](E705.md) | %mor has fewer items than the main tier has words | Invalidity | tier | ✅ |
+| [E705](E705.md) | MOR item count is distinct from expanded chunks | Invalidity | tier | ✅ |
 | [E706](E706.md) | %mor has more items than the main tier has words | Invalidity | tier | ✅ |
+| [E706](E706.md) | A clitic becoming an item preserves its word chunk | Invalidity | tier | ✅ |
 | [E707](E707.md) | Mor terminator presence mismatch | Invalidity | tier | ⏳ |
 | [E708](E708.md) | Malformed grammar relation on %gra tier | Invalidity | tier | ✅ |
 | [E709](E709.md) | Invalid grammar index | Invalidity | tier | ✅ |
 | [E710](E710.md) | Unexpected node in %gra | Invalidity | tier | ✅ |
 | [E711](E711.md) | Mor empty content | Invalidity | tier | ✅ |
+| [E711](E711.md) | Repeated post-clitic feature boundaries | Invalidity | tier | ✅ |
 | [E711](E711.md) | Empty features on main and post-clitic morphology words | Invalidity | tier | ✅ |
 | [E712](E712.md) | %gra word index out of range | Invalidity | tier | ✅ |
 | [E713](E713.md) | Gra head index invalid | Invalidity | tier | ✅ |
@@ -221,6 +248,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E718](E718.md) | %sin has fewer tokens than the main tier has words | Invalidity | tier | ✅ |
 | [E719](E719.md) | %sin has more tokens than the main tier has words | Invalidity | tier | ✅ |
 | [E720](E720.md) | Mor-Gra count mismatch | Invalidity | tier | ✅ |
+| [E720](E720.md) | Repeated-clitic chunk and relation boundaries | Invalidity | tier | ✅ |
 | [E721](E721.md) | %gra indices not sequential | Invalidity | tier | ✅ |
 | [E722](E722.md) | %gra has no ROOT | Invalidity | tier | ✅ |
 | [E723](E723.md) | %gra has more than one ROOT | Invalidity | tier | ✅ |
@@ -256,9 +284,11 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E752](E752.md) | Timing bullets without an @Media header | Invalidity | file | ✅ |
 | [E753](E753.md) | Word consisting only of repetition segments | Invalidity | utterance | ✅ |
 | [E755](E755.md) | Utterance language not declared in @Languages | Invalidity | utterance | ✅ |
+| [E755](E755.md) | Language declaration in combined preludes | Invalidity | utterance | ✅ |
 | [E756](E756.md) | Empty dependent tier | Invalidity | utterance, tier | ✅ |
 | [E757](E757.md) | Bracketed code glued to the following content | Style | utterance | ✅ |
 | [E758](E758.md) | Trailing space in a line's tier separator (non-CA file) | Invalidity | utterance, header | ✅ |
+| [E758](E758.md) | Separator provenance before a combined prelude | Invalidity | utterance | ✅ |
 | [E759](E759.md) | Annotation at utterance start has nothing to attach to | Invalidity | utterance | ✅ |
 | [E760](E760.md) | %mor item has an empty part-of-speech field | Invalidity | tier | ✅ |
 | [E761](E761.md) | %gra relation head is not a Universal Dependencies relation | Invalidity | tier | ✅ |
@@ -267,6 +297,7 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E764](E764.md) | prefixed form glued to the preceding word | Style | utterance | ✅ |
 | [E765](E765.md) | separator glued to the following content | Invalidity | utterance | ✅ |
 | [E766](E766.md) | linker not utterance-initial | Invalidity | utterance | ✅ |
+| [E766](E766.md) | Linker placement with language precodes | Invalidity | utterance | ✅ |
 | [E767](E767.md) | whitespace before the comma in @Media | Invalidity | header | ✅ |
 | [E768](E768.md) | @Media filename cannot be written and read back unchanged | Invalidity |  | ✅ |
 | [E769](E769.md) | Semicolon on a main tier | Invalidity | utterance | ✅ |
@@ -274,5 +305,6 @@ Status: ✅ = active in the validator, 🔧 = active only when its rule option i
 | [E999](E999.md) | Unknown error (internal fallback) | Invalidity | tier | ⏳ |
 | [W108](W108.md) | Speaker not declared in @Participants (warning form) | Invalidity | utterance | ✅ |
 | [W109](W109.md) | Media filename not in canonical Unicode form | Style | header | ✅ |
+| [W109](W109.md) | Unicode filename normalization preserves unrelated recovery | Style | header | ✅ |
 | [W110](W110.md) | Media filename differs from the file name only in letter case | Style | header | ✅ |
 

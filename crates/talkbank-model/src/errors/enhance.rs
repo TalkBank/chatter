@@ -8,8 +8,10 @@
 
 use crate::chat_formatting::{PlainDisplayResult, process_for_plain_display_mapped};
 use crate::line_map::SourceIndex;
-use crate::{ErrorCode, ParseError};
-use tracing::warn;
+use crate::{
+    DiagnosticContext, DiagnosticLabel, DiagnosticPresentation, DiagnosticSourceError, DisplaySpan,
+    ErrorCode, ParseError, SourceDiagnostic, Span,
+};
 
 /// Check if an error code requires raw source display (no CHAT formatting)
 ///
@@ -32,466 +34,276 @@ fn requires_raw_display(code: &ErrorCode) -> bool {
 /// the same immutable source, retain a [`SourceIndex`] and use
 /// [`enhance_errors_with_index`]. Construction is O(source bytes), followed
 /// by O(log lines) lookups for each diagnostic and label.
-pub fn enhance_errors_with_source(errors: &mut [ParseError], full_source: &str) {
+pub fn enhance_errors_with_source<'a>(
+    errors: &'a [ParseError],
+    full_source: &'a str,
+) -> impl Iterator<Item = SourceDiagnostic> + 'a {
     let index = SourceIndex::new(full_source);
-    enhance_errors_with_index(errors, &index);
+    errors
+        .iter()
+        .map(move |error| SourceDiagnostic::with_index(error.clone(), &index))
 }
 
 /// Enhance diagnostics using an index bound to its original immutable source.
 ///
-/// The source and line boundaries cannot be supplied independently, so an index
-/// from another file cannot produce incorrect coordinates or invalid UTF-8 slices.
-pub fn enhance_errors_with_index(errors: &mut [ParseError], index: &SourceIndex<'_>) {
+/// Source and line boundaries share an owner. Every diagnostic range is checked
+/// separately; range admission does not prove that the diagnostic originated in
+/// this source. The caller must retain the producing snapshot.
+pub fn enhance_errors_with_index<'a>(
+    errors: &'a [ParseError],
+    index: &'a SourceIndex<'_>,
+) -> impl Iterator<Item = SourceDiagnostic> + 'a {
+    errors
+        .iter()
+        .map(move |error| SourceDiagnostic::with_index(error.clone(), index))
+}
+
+/// Admit all absolute ranges before computing the display window.
+pub(super) fn project(
+    error: &ParseError,
+    index: &SourceIndex<'_>,
+) -> Result<DiagnosticPresentation, DiagnosticSourceError> {
     let full_source = index.source();
     let line_map = index.lines();
-    let has_content = !full_source.is_empty();
-    let source_len = full_source.len() as u32;
-
-    for error in errors {
-        if !has_content {
-            continue;
-        }
-
-        let span_start = error.location.span.start as usize;
-        let span_end = error.location.span.end as usize;
-
-        if span_start > full_source.len() {
-            warn!(
-                span_start,
-                source_len = full_source.len(),
-                code = %error.code,
-                "Error span start exceeds source length; clamping to end"
-            );
-            // The source-bound EOF is a valid UTF-8 boundary. Its preceding
-            // byte need not be: a final scalar may occupy several bytes.
-            error.location.span = crate::Span::new(source_len, source_len);
-        } else if span_end > full_source.len() {
-            warn!(
-                span_end,
-                source_len = full_source.len(),
-                code = %error.code,
-                "Error span end exceeds source length; clamping to end"
-            );
-            error.location.span.end = full_source.len() as u32;
-        }
-
-        let span_start = error.location.span.start as usize;
-        let span_end = error.location.span.end as usize;
-
-        let needs_span = span_start == 0 && span_end == 0 && has_content;
-        let span_start = if needs_span { 0 } else { span_start };
-        let span_end = if needs_span {
-            1.min(full_source.len())
-        } else {
-            span_end
-        };
-
-        // LineMap.line_col_of works on byte offsets, always succeeds, no
-        // mid-character fallback needed (unlike line_index::try_line_col).
-        // A zero-width EOF span belongs to this source index. Preserve its
-        // final-line position rather than moving it onto the previous byte.
-        let clamped = |off: usize| off.min(full_source.len());
-
-        // Calculate line/column using binary search - O(log m)
-        let (line_0, col_0) = line_map.line_col_of(clamped(span_start) as u32);
-        let line_number = line_0 + 1; // 0-indexed → 1-indexed
-        let column_number = col_0 + 1;
-
-        // Authoritative line/column for this source buffer.
-        // This avoids stale/synthetic positions and guarantees TUI/CLI consistency.
-        error.location.line = Some(line_number);
-        error.location.column = Some(column_number);
-
-        // Determine the range of lines to extract as context.
-        // When labels reference spans on different lines, expand to cover them all.
-        let mut min_byte = span_start;
-        let mut max_byte = span_end;
-        for label in &error.labels {
-            let ls = label.span.start as usize;
-            let le = label.span.end as usize;
-            if ls < full_source.len() {
-                min_byte = min_byte.min(ls);
-                max_byte = max_byte.max(le.min(full_source.len()));
-            }
-        }
-
-        // Find the line range covering min_byte..max_byte
-        let first_line = line_map.line_of(clamped(min_byte) as u32);
-        let last_line = line_map.line_of(clamped(max_byte.saturating_sub(1).max(min_byte)) as u32);
-
-        let context_start = line_map.line_start(first_line) as usize;
-        let mut context_end = line_map.line_end(last_line, source_len) as usize;
-
-        // Strip trailing newline if present
-        if context_end > context_start
-            && full_source.as_bytes().get(context_end - 1) == Some(&b'\n')
-        {
-            context_end -= 1;
-        }
-
-        // Extract multi-line context text
-        let context_text = &full_source[context_start..context_end];
-
-        // Calculate primary span relative to the extracted context
-        let relative_start = span_start.saturating_sub(context_start);
-        let relative_end = span_end
-            .saturating_sub(context_start)
-            .min(context_text.len());
-
-        // Adjust label spans to be relative to the extracted context
-        for label in &mut error.labels {
-            let ls = label.span.start as usize;
-            let le = label.span.end as usize;
-            label.span = crate::Span::from_usize(
-                ls.saturating_sub(context_start).min(context_text.len()),
-                le.saturating_sub(context_start).min(context_text.len()),
-            );
-        }
-
-        // Check if this error requires raw display (errors about control characters)
-        let mapped = if requires_raw_display(&error.code) {
-            PlainDisplayResult::unformatted(context_text)
-        } else {
-            process_for_plain_display_mapped(context_text)
-        };
-        let (display_start, display_end) = mapped.map_span(relative_start, relative_end);
-        for label in &mut error.labels {
-            let (ls, le) = mapped.map_span(label.span.start as usize, label.span.end as usize);
-            label.span = crate::Span::from_usize(ls, le);
-        }
-        let ctx = error
-            .context
-            .get_or_insert_with(|| crate::ErrorContext::new("", 0..0, ""));
-        ctx.source_text = mapped.into_text();
-        ctx.span = crate::Span::from_usize(display_start, display_end);
-
-        // The mutable context reference returned by get_or_insert_with is
-        // the presence proof; retain it through the complete display update.
-        ctx.line_offset = Some(first_line + 1);
+    let source_len =
+        u32::try_from(full_source.len()).map_err(|_| DiagnosticSourceError::SourceTooLarge {
+            source_len: full_source.len(),
+        })?;
+    let primary = error.location.span;
+    if full_source.get(primary.to_range()).is_none() {
+        return Err(DiagnosticSourceError::PrimaryRange {
+            span: primary,
+            source_len: full_source.len(),
+        });
     }
+    for (index, label) in error.labels.iter().enumerate() {
+        if full_source.get(label.span.to_range()).is_none() {
+            return Err(DiagnosticSourceError::LabelRange {
+                index,
+                span: label.span,
+                source_len: full_source.len(),
+            });
+        }
+    }
+    if full_source.is_empty() {
+        return Err(DiagnosticSourceError::EmptySource);
+    }
+
+    let (line, column) = line_map.line_col_of(primary.start);
+    let mut min_byte = primary.start;
+    let mut max_byte = primary.end;
+    // Zero-width positions belong to their own line (including final empty EOF).
+    let mut last_line = line_map.line_of(if primary.is_empty() {
+        primary.start
+    } else {
+        primary.end - 1
+    });
+    for label in &error.labels {
+        min_byte = min_byte.min(label.span.start);
+        max_byte = max_byte.max(label.span.end);
+        last_line = last_line.max(line_map.line_of(if label.span.is_empty() {
+            label.span.start
+        } else {
+            label.span.end - 1
+        }));
+    }
+    let first_line = line_map.line_of(min_byte);
+    let context_start = line_map.line_start(first_line) as usize;
+    let mut context_end = line_map.line_end(last_line, source_len) as usize;
+    // Only strip an unreferenced newline. Never shorten an admitted span.
+    if context_end > max_byte as usize
+        && full_source.as_bytes().get(context_end - 1) == Some(&b'\n')
+    {
+        context_end -= 1;
+    }
+    let context_text = &full_source[context_start..context_end];
+    let mapped = if requires_raw_display(&error.code) {
+        PlainDisplayResult::unformatted(context_text)
+    } else {
+        process_for_plain_display_mapped(context_text)
+    };
+    let project_span = |span: Span| {
+        let (start, end) = mapped.map_span(
+            span.start as usize - context_start,
+            span.end as usize - context_start,
+        );
+        DisplaySpan::in_text(
+            start,
+            if span.is_empty() { start } else { end },
+            mapped.text(),
+        )
+    };
+    let display_span = project_span(primary)?;
+    let labels = error
+        .labels
+        .iter()
+        .map(|label| {
+            Ok(DiagnosticLabel {
+                span: project_span(label.span)?,
+                message: label.message.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, DiagnosticSourceError>>()?;
+    let context = DiagnosticContext {
+        source_text: mapped.into_text(),
+        span: display_span,
+        first_line: first_line + 1,
+    };
+    Ok(DiagnosticPresentation::new(
+        primary,
+        line + 1,
+        column + 1,
+        context,
+        labels,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ErrorCode, ErrorContext, Severity, SourceLocation, Span};
+    use crate::{ErrorContext, ErrorLabel, Severity, SourceLocation};
+
+    fn render(source: &str, start: usize, end: usize, code: ErrorCode) -> SourceDiagnostic {
+        let raw = ParseError::new(
+            code,
+            Severity::Error,
+            SourceLocation::from_offsets(start, end),
+            ErrorContext::new("partial", 0..0, "original"),
+            "Test error",
+        );
+        SourceDiagnostic::with_index(raw, &SourceIndex::new(source))
+    }
 
     #[test]
     fn test_enhance_errors_with_empty_context() {
         let source = "line 1\nline 2 with error\nline 3\n";
-
-        // Error at "error" on line 2 (byte offset 14-19)
-        let mut errors = vec![ParseError::new(
-            ErrorCode::UnknownError,
-            Severity::Error,
-            SourceLocation::from_offsets(14, 19),
-            ErrorContext::new("", Span::from_usize(0, 0), ""),
-            "Test error".to_string(),
-        )];
-
-        // Before enhancement
-        if let Some(ref ctx) = errors[0].context {
-            assert!(ctx.source_text.is_empty());
-            assert!(ctx.line_offset.is_none());
-        }
-        assert!(errors[0].location.line.is_none());
-
-        // Enhance
-        enhance_errors_with_source(&mut errors, source);
-
-        // After enhancement
-        assert!(
-            errors[0].context.is_some(),
-            "context should be set after enhancement"
-        );
-        if let Some(ref ctx) = errors[0].context {
-            assert_eq!(ctx.source_text, "line 2 with error");
-            assert_eq!(ctx.line_offset, Some(2));
-        }
-        assert_eq!(errors[0].location.line, Some(2));
-        // Column should be calculated from byte offset in full source
-        // "line 1\n" = 7 bytes, then "line 2 " = 7 bytes, then "with error" starts at byte 14 (offset from line start = 7)
-        assert!(errors[0].location.column.is_some());
-
-        // Span should be relative to the extracted line
-        if let Some(ref ctx) = errors[0].context {
-            let extracted_line = "line 2 with error";
-            if let Some(error_word_start) = extracted_line.find("with") {
-                // "with" starts the span
-                assert_eq!(ctx.span.start as usize, error_word_start);
-            }
-        }
+        let raw = ParseError::build(ErrorCode::UnknownError)
+            .at(14, 19)
+            .message("Test error")
+            .finish();
+        let rendered = SourceDiagnostic::with_index(raw.clone(), &SourceIndex::new(source));
+        assert_eq!(rendered.original(), &raw);
+        let p = rendered.presentation().expect("source admission");
+        assert_eq!((p.line(), p.column()), (2, 8));
+        assert_eq!(p.context().source_text(), "line 2 with error");
+        assert_eq!(p.context().first_line(), 2);
+        assert_eq!(p.context().span().to_range(), 7..12);
     }
 
     #[test]
     fn test_enhance_errors_replaces_partial_context_with_full_line() {
-        let source = "line 1\nline 2 with error\nline 3\n";
-
-        // Find actual byte offset of "error"
-        let error_start = source.find("error");
-        assert!(error_start.is_some(), "Expected to find 'error' in source");
-        let error_start = error_start.unwrap_or(0);
-        let error_end = error_start + "error".len();
-
-        let mut errors = vec![ParseError::new(
+        let rendered = render(
+            "line 1\nline 2 with error\nline 3\n",
+            14,
+            19,
             ErrorCode::UnknownError,
-            Severity::Error,
-            SourceLocation::from_offsets(error_start, error_end),
-            ErrorContext::new("error", Span::from_usize(0, 5), "error") // partial context
-                .with_line_offset(2),
-            "Test error".to_string(),
-        )];
-
-        // Has partial context
-        if let Some(ref ctx) = errors[0].context {
-            assert_eq!(ctx.source_text, "error");
-        }
-
-        enhance_errors_with_source(&mut errors, source);
-
-        // Should replace with full line
-        assert!(
-            errors[0].context.is_some(),
-            "context should be set after enhancement"
         );
-        if let Some(ref ctx) = errors[0].context {
-            assert_eq!(ctx.source_text, "line 2 with error");
-            // Span should now be relative to full line
-            let full_line = "line 2 with error";
-            if let Some(error_start_in_line) = full_line.find("error") {
-                assert_eq!(ctx.span.start as usize, error_start_in_line);
-            }
-            assert_eq!(ctx.line_offset, Some(2));
-        }
+        let context = rendered.context().expect("source admission");
+        assert_eq!(context.source_text(), "line 2 with error");
+        assert_eq!(
+            rendered
+                .original()
+                .context
+                .as_ref()
+                .expect("producer context")
+                .source_text,
+            "partial"
+        );
+        assert_eq!(
+            rendered
+                .original()
+                .context
+                .as_ref()
+                .expect("producer context")
+                .found,
+            "original"
+        );
     }
 
     #[test]
     fn test_enhance_errors_handles_first_line() {
-        let source = "first line error\nsecond line\n";
-
-        let mut errors = vec![ParseError::new(
-            ErrorCode::UnknownError,
-            Severity::Error,
-            SourceLocation::from_offsets(11, 16), // "error"
-            ErrorContext::new("", Span::from_usize(0, 0), ""),
-            "Test error".to_string(),
-        )];
-
-        enhance_errors_with_source(&mut errors, source);
-
-        assert!(
-            errors[0].context.is_some(),
-            "context should be set after enhancement"
-        );
-        if let Some(ref ctx) = errors[0].context {
-            assert_eq!(ctx.source_text, "first line error");
-            assert_eq!(ctx.line_offset, Some(1));
-        }
-        assert_eq!(errors[0].location.line, Some(1));
+        let rendered = render("error first\nsecond\n", 0, 5, ErrorCode::UnknownError);
+        let p = rendered.presentation().expect("source admission");
+        assert_eq!((p.line(), p.column()), (1, 1));
+        assert_eq!(p.context().source_text(), "error first");
+        assert_eq!(p.context().first_line(), 1);
     }
 
     #[test]
     fn test_enhance_errors_handles_last_line() {
-        let source = "first line\nlast line error";
-
-        let mut errors = vec![ParseError::new(
-            ErrorCode::UnknownError,
-            Severity::Error,
-            SourceLocation::from_offsets(21, 26), // "error" on last line
-            ErrorContext::new("", Span::from_usize(0, 0), ""),
-            "Test error".to_string(),
-        )];
-
-        enhance_errors_with_source(&mut errors, source);
-
-        assert!(
-            errors[0].context.is_some(),
-            "context should be set after enhancement"
-        );
-        if let Some(ref ctx) = errors[0].context {
-            assert_eq!(ctx.source_text, "last line error");
-            assert_eq!(ctx.line_offset, Some(2));
-        }
-        assert_eq!(errors[0].location.line, Some(2));
+        let source = "first\nlast error";
+        let start = source.find("error").expect("error");
+        let rendered = render(source, start, source.len(), ErrorCode::UnknownError);
+        let p = rendered.presentation().expect("source admission");
+        assert_eq!((p.line(), p.column()), (2, 6));
+        assert_eq!(p.context().source_text(), "last error");
+        assert_eq!(p.context().first_line(), 2);
     }
 
     #[test]
     fn test_enhance_preserves_raw_formatting_for_marker_errors() {
-        // Source with underline markers
         let source = "hello \u{0002}\u{0001}bad\u{0002}\u{0002} world\n";
-
-        // Error about unmatched underline marker - should show raw control chars
-        let mut errors = vec![ParseError::new(
-            ErrorCode::UnmatchedUnderlineBegin,
-            Severity::Error,
-            SourceLocation::from_offsets(6, 8), // Points to \u{0002}\u{0001}
-            ErrorContext::new("", Span::from_usize(0, 0), ""),
-            "Unmatched underline marker".to_string(),
-        )];
-
-        enhance_errors_with_source(&mut errors, source);
-
-        // Should preserve raw control characters
-        assert!(
-            errors[0].context.is_some(),
-            "context should be set after enhancement"
-        );
-        if let Some(ref ctx) = errors[0].context {
-            assert_eq!(
-                ctx.source_text,
-                "hello \u{0002}\u{0001}bad\u{0002}\u{0002} world"
-            );
-            // Span should point to actual marker position
-            assert_eq!(ctx.span.start, 6);
-        }
+        let rendered = render(source, 6, 8, ErrorCode::UnmatchedUnderlineBegin);
+        let context = rendered.context().expect("source admission");
+        assert_eq!(context.source_text(), source.trim_end_matches('\n'));
+        assert_eq!(context.span().to_range(), 6..8);
     }
 
     #[test]
     fn test_enhance_applies_formatting_for_normal_errors() {
-        // Source with underline markers
         let source = "hello \u{0002}\u{0001}bad\u{0002}\u{0002} world\n";
-
-        // Normal error (not about markers) - should apply formatting
-        // "world" starts at position 14 in original (after space at 13)
-        let mut errors = vec![ParseError::new(
-            ErrorCode::UnknownError,
-            Severity::Error,
-            SourceLocation::from_offsets(14, 19), // Points to "world"
-            ErrorContext::new("", Span::from_usize(0, 0), ""),
-            "Generic error".to_string(),
-        )];
-
-        enhance_errors_with_source(&mut errors, source);
-
-        // Should have markers stripped: "hello bad world"
-        assert!(
-            errors[0].context.is_some(),
-            "context should be set after enhancement"
-        );
-        if let Some(ref ctx) = errors[0].context {
-            assert_eq!(ctx.source_text, "hello bad world");
-            // "world" position after removing 4 marker chars: 14 - 4 = 10
-            assert_eq!(ctx.span.start, 10);
-        }
+        let rendered = render(source, 14, 19, ErrorCode::UnknownError);
+        let context = rendered.context().expect("source admission");
+        assert_eq!(context.source_text(), "hello bad world");
+        assert_eq!(context.span().to_range(), 10..15);
     }
 
     #[test]
     fn test_enhance_multi_line_context_with_label() {
-        // Simulate main tier on line 2 and %wor tier on line 3
         let source = "line 1\n*CHI:\thello world .\n%wor:\thello world\nline 4\n";
-
-        // Primary error points at the main tier (line 2)
-        let main_start = source.find("*CHI:").unwrap();
-        let main_end = source[main_start..].find('\n').unwrap() + main_start;
-
-        // Label points at the %wor tier (line 3)
-        let wor_start = source.find("%wor:").unwrap();
-        let wor_end = source[wor_start..].find('\n').unwrap() + wor_start;
-
-        let mut errors = vec![
-            ParseError::new(
-                ErrorCode::PhoCountMismatchTooFew,
-                Severity::Error,
-                SourceLocation::from_offsets(main_start, main_end),
-                ErrorContext::new("", Span::from_usize(0, 0), ""),
-                "Alignment mismatch".to_string(),
-            )
-            .with_label(crate::ErrorLabel::new(
-                Span::from_usize(wor_start, wor_end),
-                "%wor tier",
-            )),
-        ];
-
-        enhance_errors_with_source(&mut errors, source);
-
-        let ctx = errors[0].context.as_ref().expect("context should be set");
-
-        // Context should span both lines (main tier + %wor tier)
+        let main = source.find("*CHI:").expect("main tier");
+        let wor = source.find("%wor:").expect("wor tier");
+        let end = source[wor..].find('\n').expect("wor end") + wor;
+        let raw = ParseError::build(ErrorCode::PhoCountMismatchTooFew)
+            .at(main, wor - 1)
+            .message("Alignment mismatch")
+            .label(ErrorLabel::new(Span::from_usize(wor, end), "%wor tier"))
+            .finish();
+        let rendered = SourceDiagnostic::with_index(raw.clone(), &SourceIndex::new(source));
+        let p = rendered.presentation().expect("source admission");
+        let text = p.context().source_text();
+        assert!(text.contains("*CHI:") && text.contains("%wor:"));
+        assert_eq!(p.context().first_line(), 2);
+        let label_text = &text[p.labels()[0].span().to_range()];
+        assert!(label_text.starts_with("%wor:") && label_text.ends_with("hello world"));
         assert!(
-            ctx.source_text.contains("*CHI:"),
-            "context should contain main tier, got: {}",
-            ctx.source_text
+            !label_text.contains('\t'),
+            "labels use formatted display bytes, not raw tabbed offsets"
         );
-        assert!(
-            ctx.source_text.contains("%wor:"),
-            "context should contain wor tier, got: {}",
-            ctx.source_text
-        );
-
-        // Line offset should be line 2 (first line in context)
-        assert_eq!(ctx.line_offset, Some(2));
-
-        // Primary span should point into main tier (relative to context)
-        assert!(
-            (ctx.span.start as usize) < ctx.source_text.len(),
-            "primary span should be within context"
-        );
-
-        // Label span should point into %wor tier (relative to context)
-        assert_eq!(errors[0].labels.len(), 1);
-        let label = &errors[0].labels[0];
-        assert!(
-            (label.span.start as usize) < ctx.source_text.len(),
-            "label span should be within context"
-        );
-        assert!(
-            (label.span.start as usize) > (ctx.span.start as usize),
-            "label span should be after primary span (wor is after main)"
-        );
+        assert!(p.labels()[0].span().start() > p.context().span().start());
+        assert_eq!(rendered.original(), &raw, "absolute labels remain intact");
     }
 
     #[test]
     fn test_enhance_label_before_primary() {
-        // Label on line 1, primary on line 3
         let source = "alpha\nbeta\ngamma error\ndelta\n";
-        let gamma_start = source.find("gamma").unwrap();
-        let gamma_end = gamma_start + "gamma error".len();
-        let alpha_start = 0;
-        let alpha_end = "alpha".len();
-
-        let mut errors = vec![
-            ParseError::new(
-                ErrorCode::UnknownError,
-                Severity::Error,
-                SourceLocation::from_offsets(gamma_start, gamma_end),
-                ErrorContext::new("", Span::from_usize(0, 0), ""),
-                "Error with backward label",
-            )
-            .with_label(crate::ErrorLabel::new(
-                Span::from_usize(alpha_start, alpha_end),
-                "related",
-            )),
-        ];
-
-        enhance_errors_with_source(&mut errors, source);
-
-        let ctx = errors[0].context.as_ref().unwrap();
-        // Should span from line 1 to line 3
-        assert!(ctx.source_text.contains("alpha"), "should contain alpha");
-        assert!(ctx.source_text.contains("gamma"), "should contain gamma");
-        assert_eq!(ctx.line_offset, Some(1));
-
-        // Label span should be valid
-        let label = &errors[0].labels[0];
-        assert_eq!(label.span.start, 0, "label should start at beginning");
+        let gamma = source.find("gamma").expect("gamma");
+        let raw = ParseError::build(ErrorCode::UnknownError)
+            .at(gamma, gamma + 11)
+            .message("Error with backward label")
+            .label(ErrorLabel::new(Span::new(0, 5), "related"))
+            .finish();
+        let rendered = SourceDiagnostic::with_index(raw, &SourceIndex::new(source));
+        let p = rendered.presentation().expect("source admission");
+        assert_eq!(p.context().source_text(), "alpha\nbeta\ngamma error");
+        assert_eq!(p.context().first_line(), 1);
+        assert_eq!(p.labels()[0].span().to_range(), 0..5);
     }
-}
-
-#[cfg(test)]
-mod source_binding_tests {
-    use super::*;
 
     #[test]
     fn source_and_line_index_must_not_be_mixed() {
-        let mut errors = [ParseError::new(
-            ErrorCode::UnmatchedUnderlineBegin,
-            crate::Severity::Error,
-            crate::SourceLocation::from_offsets(4, 5),
-            crate::ErrorContext::new("", 0..0, "b"),
-            "diagnostic on the final character",
-        )];
-        enhance_errors_with_index(&mut errors, &SourceIndex::new("aaéb"));
-        assert_eq!(errors[0].location.line, Some(1));
-        assert_eq!(errors[0].location.column, Some(5));
+        let rendered = render("aaéb", 4, 5, ErrorCode::UnmatchedUnderlineBegin);
+        let p = rendered.presentation().expect("source admission");
+        assert_eq!((p.line(), p.column()), (1, 5));
     }
 }

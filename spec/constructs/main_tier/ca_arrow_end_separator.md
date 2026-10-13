@@ -22,7 +22,17 @@ main tier in CA mode. This pattern is covered by `corpus/reference/ca/intonation
       (content_item
         (base_content_item
           (word_with_optional_annotations
-            (standalone_word))))
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
       (separator
         (non_colon_separator
           (level_pitch))))

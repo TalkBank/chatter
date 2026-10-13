@@ -237,14 +237,7 @@ fn push_piece(
         Piece::Shortening(node) => {
             let source = node.source();
             // shortening = '(' word_segment ')'
-            let Ok(bound_inner) = crate::parser::typed_cst::report_reconstruction(
-                node.extract(),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return;
-            };
+            let bound_inner = node.extract();
             let inner = bound_inner.children();
             surface_displaced(&inner.unexpected, "shortening", source, errors);
             expect_delimiter(inner.child_0.slot(), |bad| {
@@ -329,16 +322,12 @@ fn push_piece(
             }
         }
         Piece::CaElement(node) => {
-            if let ParseOutcome::Parsed(element) =
-                parse_ca_element_node(node.node(), node.source(), errors)
-            {
+            if let ParseOutcome::Parsed(element) = parse_ca_element_node(node, errors) {
                 items.push(WordContent::CAElement(element));
             }
         }
         Piece::CaDelimiter(node) => {
-            if let ParseOutcome::Parsed(delimiter) =
-                parse_ca_delimiter_node(node.node(), node.source(), errors)
-            {
+            if let ParseOutcome::Parsed(delimiter) = parse_ca_delimiter_node(node, errors) {
                 items.push(WordContent::CADelimiter(delimiter));
             }
         }

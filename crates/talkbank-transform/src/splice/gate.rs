@@ -44,17 +44,64 @@
 //! as one necessary tripwire in a chain, never as proof of correctness on
 //! its own.
 //!
-//! # The obvious way to get a gated result
+//! # Carrying a verified result
 //!
-//! [`apply_edits_verified`] splices and verifies in one call, returning the
-//! checked string. That is the intended default for anything that reaches
-//! disk: prefer it over calling [`crate::splice::apply_edits`]
-//! and then this module's `verify_splice` separately, which a future
-//! caller could forget to do. Reach for the two functions separately only
-//! when a caller genuinely needs the raw, unverified splice (this
-//! module's own tests, chiefly).
+//! [`MappedPlan::apply_verified`] consumes the source-bound mapping and
+//! returns [`ByteVerifiedSplice`]. The CLI retains that receipt through its
+//! diagnostic post-check before application. [`apply_edits_verified`] is an
+//! intentional plain-text convenience that discards the receipt; independent
+//! [`verify_splice`] compares an externally assembled candidate.
 
-use super::engine::{MappedEdit, SpliceEdit, SpliceError, mapped_edit_sites, splice_with_sites};
+use super::{MappedPlan, SpliceEdit, SpliceError, mapped_edit_sites};
+
+/// Candidate bytes verified against their producer-owned source and mapping.
+///
+/// This is byte fidelity, not health, catalog policy, semantic correctness or
+/// CLI post-check authority. Read-only text access does not issue another receipt.
+///
+/// ```compile_fail
+/// use talkbank_transform::splice::ByteVerifiedSplice;
+/// let forged = ByteVerifiedSplice { text: String::new() };
+/// ```
+#[derive(Debug)]
+pub struct ByteVerifiedSplice<'source> {
+    plan: MappedPlan<'source>,
+    text: String,
+}
+
+impl<'source> ByteVerifiedSplice<'source> {
+    /// The verified candidate text.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+    /// The retained original source and its computed sites.
+    pub fn plan(&self) -> &MappedPlan<'source> {
+        &self.plan
+    }
+    /// Discard the receipt and return plain text for intentional low-level use.
+    pub fn into_text(self) -> String {
+        self.text
+    }
+}
+
+impl std::ops::Deref for ByteVerifiedSplice<'_> {
+    type Target = str;
+    fn deref(&self) -> &str {
+        self.text()
+    }
+}
+
+impl<'source> MappedPlan<'source> {
+    /// Consume the producer's mapping, assemble once and verify those bytes.
+    pub fn apply_verified(self) -> Result<ByteVerifiedSplice<'source>, GateError> {
+        let assembled = self.assemble();
+        verify_splice_mapped(&assembled.plan, &assembled.text)?;
+        Ok(ByteVerifiedSplice {
+            plan: assembled.plan,
+            text: assembled.text,
+        })
+    }
+}
 
 /// Why a spliced result was refused before it reached disk.
 #[derive(Debug, thiserror::Error)]
@@ -92,38 +139,23 @@ pub enum GateError {
 ///
 /// See the module docs for what this check does NOT prove.
 ///
-/// A thin wrapper over `verify_splice_mapped` that computes the mapping
-/// itself; [`apply_edits_verified`] already has the mapping in hand (from
-/// `splice_with_sites`) and calls that entry point directly instead, so
-/// a splice-then-verify never folds [`mapped_edit_sites`] twice over the
-/// same inputs.
+/// This independent comparison computes one source-bound mapping. The owned
+/// [`MappedPlan::apply_verified`] path already retains that mapping for both
+/// assembly and verification, and does not run the fold again.
 pub fn verify_splice(
     original: &str,
     spliced: &str,
     applied: &[SpliceEdit],
 ) -> Result<(), GateError> {
-    let mapped = mapped_edit_sites(original, applied)?;
-    verify_splice_mapped(original, spliced, &mapped)
+    let plan = mapped_edit_sites(original, applied)?;
+    verify_splice_mapped(&plan, spliced)
 }
 
-/// The gap-walk itself, over an ALREADY-COMPUTED edit mapping.
-///
-/// Exists so [`apply_edits_verified`] can share the one [`MappedEdit`]
-/// fold `splice_with_sites` already did to build `spliced`, rather than
-/// [`verify_splice`] recomputing [`mapped_edit_sites`] on the identical
-/// `(original, applied)` a second time: that second fold could never
-/// disagree with the first (both are the same deterministic function on
-/// the same inputs), so it verified nothing about the mapping itself; the
-/// real value of this gap-walk is checking the ASSEMBLY loop's output
-/// bytes, which sharing the mapping preserves completely. Not exported
-/// beyond this crate: `mapped` must be the actual mapping the caller used
-/// to build `spliced`, which only `splice_with_sites` and
-/// [`mapped_edit_sites`] can honestly produce.
-pub(crate) fn verify_splice_mapped(
-    original: &str,
-    spliced: &str,
-    mapped: &[MappedEdit],
-) -> Result<(), GateError> {
+/// Check candidate assembly against the producer-owned source and mapping.
+/// No independently replaceable original/source-sites pair is accepted.
+fn verify_splice_mapped(plan: &MappedPlan<'_>, spliced: &str) -> Result<(), GateError> {
+    let original = plan.source();
+    let mapped = plan.sites();
     let original_bytes = original.as_bytes();
     let spliced_bytes = spliced.as_bytes();
 
@@ -173,21 +205,16 @@ pub(crate) fn verify_splice_mapped(
     Ok(())
 }
 
-/// Splice `edits` into `source` and verify the result before returning it.
+/// Splice raw candidates and return byte-verified plain text.
 ///
-/// The single ergonomic way to get gated splice output: see the module
-/// docs' "obvious way to get a gated result" section. Built on
-/// `splice_with_sites` rather than [`crate::splice::apply_edits`]
-/// plus [`verify_splice`]: the two functions together would fold
-/// [`mapped_edit_sites`] twice over the identical `(source, edits)`, once
-/// inside `apply_edits` and again inside `verify_splice`, which cannot
-/// catch anything a single fold does not (see `verify_splice_mapped`'s
-/// docs). This computes the mapping once and hands it to both the
-/// assembly step and the gap-walk.
+/// This intentional low-level text operation discards the mapping receipt. Use
+/// [`MappedPlan::apply_verified`] to carry it into a subsequent typed transition.
+///
+/// Computes one mapping and passes its owner through assembly and verification.
 pub fn apply_edits_verified(source: &str, edits: &[SpliceEdit]) -> Result<String, GateError> {
-    let (spliced, mapped) = splice_with_sites(source, edits)?;
-    verify_splice_mapped(source, &spliced, &mapped)?;
-    Ok(spliced)
+    Ok(mapped_edit_sites(source, edits)?
+        .apply_verified()?
+        .into_text())
 }
 
 /// Compare `expected` byte-for-byte against `spliced` starting at

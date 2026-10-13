@@ -45,14 +45,7 @@ pub(crate) fn parse_optional_gem_label<'tree>(
         return ParseOutcome::parsed(None);
     };
     let input = node.source();
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        node.extract(),
-        node.raw_node(),
-        input,
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = node.extract();
     let mut label = String::new();
     let mut saw_text = false;
     let mut push = |piece: Piece<'_>| match piece {
@@ -160,36 +153,31 @@ impl<'tree, 'source> From<SourceBound<'tree, 'source, FreeTextChild1Choice<'tree
 ///
 /// The trailing space must remain adjacent to the same separator's actual
 /// tab. Recovery can otherwise put a content space in this optional slot.
-pub(crate) fn header_separator(
-    header_node: Node,
-) -> Result<TierSeparator, crate::generated_traversal::ReconstructionFault> {
+pub(crate) fn header_separator(header_node: Node) -> TierSeparator {
     let qualified = if let Some(header) = BirthOfHeaderNode::from_node(header_node) {
-        Some(extract_birth_of_header(header)?.child_3.slot().clone())
+        Some(extract_birth_of_header(header).child_3.slot().clone())
     } else if let Some(header) = BirthplaceOfHeaderNode::from_node(header_node) {
-        Some(extract_birthplace_of_header(header)?.child_3.slot().clone())
+        Some(extract_birthplace_of_header(header).child_3.slot().clone())
     } else {
         L1OfHeaderNode::from_node(header_node)
-            .map(|header| {
-                extract_l1_of_header(header).map(|children| children.child_3.slot().clone())
-            })
-            .transpose()?
+            .map(|header| extract_l1_of_header(header).child_3.slot().clone())
     };
     let sep = match qualified {
         Some(NodeSlot::Present(sep)) => sep,
-        Some(_) => return Ok(TierSeparator::CLEAN),
+        Some(_) => return TierSeparator::CLEAN,
         None => {
             let Some(sep) = header_node
                 .named_child(1)
                 .and_then(HeaderSepNode::from_node)
             else {
-                return Ok(TierSeparator::CLEAN);
+                return TierSeparator::CLEAN;
             };
             sep
         }
     };
-    let sep_children = extract_header_sep(sep)?;
+    let sep_children = extract_header_sep(sep);
     let trailing = sep_children.child_2.slot();
-    Ok(match trailing.as_ref().map(NodeSlot::view) {
+    match trailing.as_ref().map(NodeSlot::view) {
         Some(SlotView::Present(sep))
             if matches!(sep_children.child_1.slot(), NodeSlot::Present(tab)
                 if tab.raw_node().end_byte() == sep.raw_node().start_byte()) =>
@@ -203,7 +191,7 @@ pub(crate) fn header_separator(
         Some(SlotView::Present(_) | SlotView::Missing(_) | SlotView::Error(_)) | None => {
             TierSeparator::CLEAN
         }
-    })
+    }
 }
 
 #[cfg(test)]

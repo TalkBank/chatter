@@ -45,10 +45,10 @@ commit, review your diff for:
 - Operational detail tied to private infrastructure (deploy logs,
   scratch directories, run state)
 
-Maintainers additionally run an automated identifier screen as a
-commit-time hook. A standalone, in-repo version of that screen is not
-yet packaged for external contributors; until it is, the manual
-review above is the contract.
+The manual review above is the commit contract for all contributors.
+Maintainers also perform an explicit publication review. Commit hooks do not
+automatically run privacy, publication-date, evidence or changelog checks;
+optional contributor-owned local hooks are preserved.
 
 ## Coding conventions
 

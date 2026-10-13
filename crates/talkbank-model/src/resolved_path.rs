@@ -40,6 +40,14 @@ impl ResolvedDirectory {
         loop {
             match std::fs::canonicalize(&existing) {
                 Ok(mut resolved) => {
+                    // Admission is about a directory location, not just an
+                    // existing path. Never append missing children to a file.
+                    if !std::fs::metadata(&resolved)?.is_dir() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::NotADirectory,
+                            "the resolved ancestor is not a directory",
+                        ));
+                    }
                     resolved.extend(missing.iter().rev());
                     return Ok(Self(resolved));
                 }
@@ -65,7 +73,9 @@ impl ResolvedDirectory {
     pub fn file(&self, name: &OsStr) -> io::Result<ResolvedPath> {
         let mut components = Path::new(name).components();
         match (components.next(), components.next()) {
-            (Some(Component::Normal(_)), None) => Ok(ResolvedPath(self.0.join(name))),
+            (Some(Component::Normal(component)), None) if component == name => {
+                Ok(ResolvedPath(self.0.join(name)))
+            }
             (Some(_), _) | (None, _) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "a file name must be one plain path component",
@@ -143,81 +153,5 @@ impl From<ResolvedDirectory> for ResolvedPrefix {
 impl From<ResolvedPath> for ResolvedPrefix {
     fn from(file: ResolvedPath) -> Self {
         Self(file.0)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Every spelling of one file resolves to one path: absolute, through
-    /// `..`, and through a linked directory. Its own name is kept, so a link
-    /// to a file is a different location.
-    #[test]
-    fn spellings_of_one_file_resolve_to_one_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("corpus/sub")).unwrap();
-        std::fs::write(root.join("corpus/a.cha"), "").unwrap();
-        let direct = ResolvedPath::of_file(&root.join("corpus/a.cha")).unwrap();
-        assert_eq!(
-            ResolvedPath::of_file(&root.join("corpus/sub/../a.cha")).unwrap(),
-            direct
-        );
-        assert!(direct.as_path().is_absolute());
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink(root.join("corpus"), root.join("linked")).unwrap();
-            assert_eq!(
-                ResolvedPath::of_file(&root.join("linked/a.cha")).unwrap(),
-                direct
-            );
-            std::os::unix::fs::symlink(root.join("corpus/a.cha"), root.join("corpus/b.cha"))
-                .unwrap();
-            let link = ResolvedPath::of_file(&root.join("corpus/b.cha")).unwrap();
-            assert_ne!(link, direct, "a link keeps its own name");
-            assert_eq!(link.as_path().file_name(), Some(OsStr::new("b.cha")));
-        }
-    }
-
-    /// A prefix names an existing directory (resolved whole) or anything
-    /// else (resolved as a file), and a missing directory is resolved
-    /// through its deepest existing ancestor.
-    #[test]
-    fn prefixes_resolve_directories_files_and_missing_paths() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("corpus")).unwrap();
-        let resolved_root = ResolvedDirectory::resolve(root).unwrap();
-        assert_eq!(
-            ResolvedPrefix::of(&root.join("corpus")).unwrap().as_path(),
-            resolved_root.as_path().join("corpus")
-        );
-        assert_eq!(
-            ResolvedPrefix::of(&root.join("gone/deeper"))
-                .unwrap()
-                .as_path(),
-            resolved_root.as_path().join("gone/deeper")
-        );
-        assert!(resolved_root.file(OsStr::new("a/b")).is_err());
-        assert!(resolved_root.file(OsStr::new("..")).is_err());
-    }
-
-    /// Native path semantics are external facts, not guaranteed by a proof
-    /// type: POSIX retains a missing `..`; ordinary Windows paths normalize it.
-    #[test]
-    fn missing_parent_components_follow_native_path_semantics() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("gone").join("..").join("x");
-        #[cfg(unix)]
-        assert!(ResolvedPrefix::of(&path).is_err());
-        #[cfg(windows)]
-        assert_eq!(
-            ResolvedPrefix::of(&path).unwrap().as_path(),
-            ResolvedDirectory::resolve(dir.path())
-                .unwrap()
-                .as_path()
-                .join("x")
-        );
     }
 }

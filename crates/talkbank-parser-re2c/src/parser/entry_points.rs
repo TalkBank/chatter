@@ -7,7 +7,6 @@
 //! `parse_chat_file_to_model` also converts the AST into a fully owned model.
 
 use crate::ast::*;
-use crate::token::Token;
 use talkbank_model::{ErrorSink, ParseError, Severity, SourceLocation, Span};
 
 use super::{dependent_tiers, file, headers, lex_to_tokens, main_tier};
@@ -75,6 +74,7 @@ pub fn parse_participants_header<'a>(
     input: &'a str,
     errors: &impl ErrorSink,
 ) -> ParticipantsHeaderParsed<'a> {
+    talkbank_model::validation::report_control_characters(input, errors);
     let lexed = super::LexedSource::new(input, crate::lexer::COND_PARTICIPANTS_CONTENT);
     headers::parse_participants_tokens(lexed.located(0..lexed.tokens().len()), errors)
 }
@@ -104,34 +104,35 @@ pub fn parse_mor_word(input: &str) -> Option<MorWordParsed<'_>> {
 
 /// Parse a single GraRelation from %gra content.
 pub fn parse_gra_relation(input: &str) -> Option<GraRelationParsed<'_>> {
+    use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_GRA_CONTENT);
-    if let Some(Token::GraRelation {
-        index,
-        head,
-        relation,
-    }) = tokens.first().cloned()
-    {
-        Some(GraRelationParsed {
-            index,
-            head,
-            relation,
-        })
-    } else {
-        None
+    let tier = dependent_tiers::gra_tier_parser()
+        .parse(tokens.as_slice())
+        .into_result()
+        .ok()?;
+    let mut relations = tier.relations.into_iter();
+    match (relations.next(), relations.next()) {
+        (Some(relation), None) => Some(relation),
+        _ => None,
     }
 }
 
 /// Parse a %pho tier body (content after `%pho:\t`).
 pub fn parse_pho_tier(input: &str) -> PhoTier<'_> {
+    parse_pho_tier_checked(input).unwrap_or_else(|| PhoTier {
+        items: Vec::new(),
+        terminator: None,
+    })
+}
+
+/// Preserve native rejection for sink-bearing phonology fragment adapters.
+pub(crate) fn parse_pho_tier_checked(input: &str) -> Option<PhoTier<'_>> {
     use chumsky::Parser as _;
     let tokens = lex_to_tokens(input, crate::lexer::COND_PHO_CONTENT);
     dependent_tiers::pho_tier_parser()
         .parse(tokens.as_slice())
         .into_result()
-        .unwrap_or_else(|_| PhoTier {
-            items: Vec::new(),
-            terminator: None,
-        })
+        .ok()
 }
 
 /// Parse a text tier body (content after `%com:\t`, `%act:\t`, etc.).
@@ -144,16 +145,60 @@ pub fn parse_text_tier_with_errors<'a>(
     input: &'a str,
     errors: &impl ErrorSink,
 ) -> TextTierParsed<'a> {
+    parse_text_tier_in_condition(input, crate::lexer::COND_TIER_CONTENT, errors)
+}
+
+/// Comment fragments share the file comment grammar, including pictures.
+pub(crate) fn parse_com_tier_with_errors<'a>(
+    input: &'a str,
+    errors: &impl ErrorSink,
+) -> TextTierParsed<'a> {
+    parse_text_tier_in_condition(input, crate::lexer::COND_COM_CONTENT, errors)
+}
+
+fn parse_text_tier_in_condition<'a>(
+    input: &'a str,
+    condition: usize,
+    errors: &impl ErrorSink,
+) -> TextTierParsed<'a> {
     use chumsky::Parser as _;
-    let lexed = super::LexedSource::new(input, crate::lexer::COND_TIER_CONTENT);
+    talkbank_model::validation::report_control_characters(input, errors);
+    let lexed = super::LexedSource::new(input, condition);
     let tokens =
         dependent_tiers::AdmittedTextTierTokens::admit(&lexed, 0..lexed.tokens().len(), errors);
-    dependent_tiers::text_tier_parser()
+    match dependent_tiers::text_tier_parser()
         .parse(tokens.tokens())
         .into_result()
-        .unwrap_or_else(|_| TextTierParsed {
-            segments: Vec::new(),
-        })
+    {
+        Ok(tier) => tier,
+        Err(_) => {
+            errors.report(ParseError::new(
+                talkbank_model::ErrorCode::UnparsableContent,
+                Severity::Error,
+                SourceLocation::from_offsets(0, input.len()),
+                talkbank_model::ErrorContext::new(input, 0..input.len(), "text-tier body"),
+                "Native text-tier grammar cannot consume the complete caller input",
+            ));
+            TextTierParsed {
+                segments: Vec::new(),
+            }
+        }
+    }
+}
+
+/// Admit one original dependent-tier line through the existing native dispatch,
+/// without constructing a synthetic main tier or document around it.
+pub(crate) fn parse_dependent_fragment<'a>(
+    input: &'a str,
+    errors: &impl ErrorSink,
+) -> Option<DependentTierEntryParsed<'a>> {
+    let lexed = lex_file_source(input, errors);
+    let mut pos = 0;
+    let mut tiers = file::parse_dependent_tiers(&lexed, &mut pos, errors).into_iter();
+    match (tiers.next(), tiers.next()) {
+        (Some(tier), None) if pos == lexed.tokens().len() => Some(tier),
+        _ => None,
+    }
 }
 
 /// Parse a complete CHAT file (AST, borrows from the input).

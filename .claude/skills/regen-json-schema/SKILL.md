@@ -6,6 +6,8 @@ allowed-tools: Bash, Read, Grep
 
 # JSON Schema Regeneration
 
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/.claude/skills/regen-json-schema/SKILL.md)
+
 The canonical schema (`schema/chat-file.schema.json`) is generated
 from the talkbank-model types and EMBEDDED into the binary at compile
 time (`include_str!`). It never regenerates itself, and `chatter
@@ -22,7 +24,7 @@ Sequence, in the SAME change:
 1. `cargo test -p talkbank-transform --test generate_schema`
    (rewrites the schema file; run it twice: first writes, second
    verifies green).
-2. `cargo build -p chatter` (the rebuild is not optional; the schema
+2. `cargo build -p talkbank-chatter` (the rebuild is not optional; the schema
    is compile-time embedded).
 3. Commit the regenerated `schema/chat-file.schema.json` alongside
    the model change.

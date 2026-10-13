@@ -29,7 +29,7 @@ first_wave=(
     send2clan
     talkbank-llm
     talkbank-lsp
-    chatter
+    talkbank-chatter
 )
 
 echo "==> Checking first-wave crates.io publication metadata"

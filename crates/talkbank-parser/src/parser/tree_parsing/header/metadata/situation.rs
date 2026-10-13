@@ -30,7 +30,7 @@ pub fn parse_situation_header<'tree>(
     // text is directly at child_2. Source-bound projection retains its owner;
     // every non-present recovery state keeps the missing-text diagnostic at
     // the header span. Readable-range admission remains a distinct obligation.
-    let children = typed.extract()?;
+    let children = typed.extract();
     let SourceSlotView::Present(free_text) = children.field_child_2().slot().view() else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,

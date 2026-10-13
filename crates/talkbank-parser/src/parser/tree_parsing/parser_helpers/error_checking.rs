@@ -20,14 +20,7 @@ use crate::parser::tree_parsing::helpers::ReadableRecovery;
 /// Other missing tokens remain the generic recovery backstop's responsibility.
 fn missing_header_tab_error(node: Node, source: &str) -> Option<ParseError> {
     let separator = HeaderSepNode::from_node(node.parent()?)?;
-    let children = match extract_header_sep(separator) {
-        Ok(children) => children,
-        Err(fault) => {
-            return Some(crate::parser::typed_cst::cst_failure_diagnostic(
-                node, source, fault,
-            ));
-        }
-    };
+    let children = extract_header_sep(separator);
     let NodeSlot::Missing(tab) = children.child_1.slot() else {
         return None;
     };

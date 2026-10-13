@@ -4,7 +4,7 @@
 //! on the span-splicing engine (`talkbank_transform::splice`) rather than a
 //! bespoke three-code rewriter. It covers the whole fix catalog, applies
 //! fixes at exact byte spans validated against the source text, and, because
-//! [`admit_edits`] gates every edit
+//! [`SelectedRepairs::admit`](talkbank_transform::splice::SelectedRepairs::admit) gates every edit
 //! on the health of its enclosing utterance, repairs a clean utterance even
 //! in a file whose other regions did not parse.
 //!
@@ -14,11 +14,11 @@
 //! utterances; only 5 of those were even detectable by re-validating
 //! afterwards, because the rest were structurally valid and semantically
 //! wrong. That incident is why every catalog entry carries a
-//! [`BatchSafety`] tier and why this command enforces it rather than
+//! [`BatchSafety`](talkbank_transform::splice::BatchSafety) tier and why this command enforces it rather than
 //! trusting the caller: bare `--apply` writes only
-//! [`BatchSafety::Mechanical`] fixes, a [`BatchSafety::Semantic`] fix is
+//! [`Mechanical`](talkbank_transform::splice::BatchSafety::Mechanical) fixes, a [`Semantic`](talkbank_transform::splice::BatchSafety::Semantic) fix is
 //! written only when its code is named with `--code`, and a
-//! [`BatchSafety::Ambiguous`] fix is never written by this command at all,
+//! [`Ambiguous`](talkbank_transform::splice::BatchSafety::Ambiguous) fix is never written by this command at all,
 //! regardless of `--code`.
 //!
 //! # Parsing choice
@@ -32,15 +32,18 @@
 //! The retained source-bound CST is reused by fix planning; no catalog entry
 //! reparses the unchanged input. Changed output is still parsed for verification.
 
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use talkbank_model::{ErrorCode, ErrorCollector, ParseError, Span};
+use talkbank_model::ErrorCode;
 use talkbank_parser::TreeSitterParser;
 use talkbank_transform::splice::{
-    BatchSafety, EditProvenance, FixKind, SkipReason, SpliceEdit, SpliceError, admit_edits,
-    apply_edits_verified, catalog_fix, mapped_edit_sites,
+    EditProvenance, FixCodeSelection as CodeSelection, FixDiagnosis, SkipReason,
 };
+
+mod postcheck;
+#[cfg(test)]
+use postcheck::{FixVerificationError, check_fix_result, code_counts};
+use postcheck::{PostCheckedFix, verify_fix_result};
 
 use super::debug::die;
 use crate::cli::FixMode;
@@ -61,7 +64,7 @@ use talkbank_model::model::TranscriptName;
 /// nothing considers every diagnostic ([`CodeSelection::All`]); naming one
 /// or more codes narrows to exactly those ([`CodeSelection::Only`]), the
 /// same way `validate --suppress` narrows its own working set. Naming a
-/// [`BatchSafety::Semantic`] code is how a caller opts into writing it;
+/// [`Semantic`](talkbank_transform::splice::BatchSafety::Semantic) code is how a caller opts into writing it;
 /// leaving it unnamed leaves the semantic tier reported but unwritten.
 ///
 /// A file with nothing to report prints nothing; a run over a large corpus
@@ -122,7 +125,7 @@ pub fn run_fix(
         };
 
         let write_outcome = match mode {
-            FixMode::Apply => match std::fs::write(path, &spliced) {
+            FixMode::Apply => match std::fs::write(path, spliced.text()) {
                 Ok(()) => WriteOutcome::Written,
                 Err(err) => {
                     eprintln!("ERROR: cannot write {}: {err}", path.display());
@@ -133,7 +136,7 @@ pub fn run_fix(
         };
 
         summaries.push(FileFixSummary {
-            selected_count: outcome.selected_count,
+            selected_count: spliced.edit_count(),
             write_outcome,
         });
     }
@@ -198,46 +201,6 @@ impl FixOutcome {
     }
 }
 
-/// Which diagnostics `chatter fix` narrows its work to.
-///
-/// Replaces the earlier untyped behavior of an empty `HashSet<ErrorCode>`
-/// standing in for "no narrowing": that sentinel meant an argument list
-/// that resolved to nothing (every value a typo) was indistinguishable
-/// from no `--code` at all, so a wholly unrecognized `--code` silently
-/// widened the run to every code in the catalog. `requested_codes` builds
-/// `Only` from a non-empty list of real codes, so a `--code` list cannot
-/// collapse to `All`.
-enum CodeSelection {
-    /// No `--code` was given: every diagnostic is a candidate for
-    /// selection, subject to `BatchSafety` as always.
-    All,
-    /// `--code` named these codes, and only these codes, are considered.
-    Only(HashSet<ErrorCode>),
-}
-
-impl CodeSelection {
-    /// Whether a diagnostic with `code` passes `--code` narrowing at all:
-    /// with [`Self::All`] every code passes (nothing was named to narrow
-    /// away); with [`Self::Only`] only a named code does.
-    fn admits(&self, code: ErrorCode) -> bool {
-        match self {
-            CodeSelection::All => true,
-            CodeSelection::Only(codes) => codes.contains(&code),
-        }
-    }
-
-    /// Whether `code` was EXPLICITLY named with `--code`.
-    ///
-    /// Distinct from [`Self::admits`]: `All` admits every code (nothing
-    /// narrowed it away) but names none of them. That distinction is
-    /// exactly what keeps a `BatchSafety::Semantic` fix from writing
-    /// under a bare `--apply`, which only opts in a diagnostic whose code
-    /// was actually typed on the command line.
-    fn names(&self, code: ErrorCode) -> bool {
-        matches!(self, CodeSelection::Only(codes) if codes.contains(&code))
-    }
-}
-
 /// The [`CodeSelection`] `--code` names: every diagnostic when it named
 /// nothing, otherwise exactly the named codes. Each value was already parsed
 /// by clap into a real [`ErrorCode`], so a typo stopped the run as a usage
@@ -292,86 +255,54 @@ struct FileFixSummary {
 
 /// Everything learned about one file: what would (or did) change, and why
 /// everything else did not.
-struct FileFixOutcome {
+struct FileFixOutcome<'source> {
     /// Human-readable lines, one per diagnostic that had something to say:
     /// applied, or skipped with a reason. Diagnostics excluded entirely by
     /// `--code` narrowing produce no line, matching how `--suppress` narrows
     /// `validate` silently.
     report_lines: Vec<String>,
-    /// Count of diagnostics selected to apply (written or, in report
-    /// mode, that would have been written).
-    selected_count: usize,
     /// Count of diagnostics considered and not selected, for any reason.
     skipped_count: usize,
-    /// The spliced text, present exactly when at least one edit was
-    /// selected and the splice engine accepted the whole edit set.
-    spliced: Option<String>,
-}
-
-/// Validate at the requested coverage: the one place `fix` turns it into a
-/// validator call, for the first check and the post-fix re-check alike.
-fn validate_at(
-    chat_file: &mut talkbank_model::ChatFile,
-    alignment: talkbank_model::validation::AlignmentValidation,
-    sink: &ErrorCollector,
-    name: TranscriptName<'_>,
-) {
-    chat_file.validate_at(
-        talkbank_model::validation::ValidationPolicy::new(
-            talkbank_model::RuleSelection::new(),
-            alignment,
-        ),
-        sink,
-        name,
-    );
+    /// An actual byte-verified and post-checked result, never an arbitrary string.
+    spliced: Option<PostCheckedFix<'source>>,
 }
 
 /// Parse, validate, resolve every diagnostic against the fix catalog, and
 /// splice the selected edits for one file. Never writes; the caller decides
 /// whether to persist [`FileFixOutcome::spliced`].
-fn fix_one_file(
+fn fix_one_file<'source>(
     parser: &TreeSitterParser,
-    source: &str,
+    source: &'source str,
     requested_codes: &CodeSelection,
     alignment: talkbank_model::validation::AlignmentValidation,
     mode: FixMode,
-    name: TranscriptName<'_>,
-) -> FileFixOutcome {
-    let sink = ErrorCollector::new();
-    let (mut chat_file, parsed) = parser.parse_chat_file_with_source(source, &sink);
-
-    validate_at(&mut chat_file, alignment, &sink, name);
-    let diagnostics = sink.into_vec();
-
-    let mut report_lines = Vec::new();
-    let mut skipped_count = 0usize;
-    let mut candidate_edits = Vec::new();
-
-    for diagnostic in &diagnostics {
-        if !requested_codes.admits(diagnostic.code) {
-            continue;
-        }
-        classify_diagnostic(
-            diagnostic,
-            parsed.as_ref(),
-            requested_codes,
-            &mut candidate_edits,
-            &mut report_lines,
-            &mut skipped_count,
-        );
-    }
-
-    if candidate_edits.is_empty() {
+    name: TranscriptName<'source>,
+) -> FileFixOutcome<'source> {
+    let diagnosis = FixDiagnosis::observe(
+        parser,
+        source,
+        talkbank_model::validation::ValidationPolicy::new(
+            talkbank_model::RuleSelection::new(),
+            alignment,
+        ),
+        name,
+    );
+    let selected = diagnosis.select(requested_codes);
+    let mut report_lines: Vec<String> = selected
+        .skipped()
+        .iter()
+        .map(|skip| format!("skip {}: {}", skip.code, skip.reason))
+        .collect();
+    let mut skipped_count = selected.skipped().len();
+    if selected.is_empty() {
         return FileFixOutcome {
             report_lines,
-            selected_count: 0,
             skipped_count,
             spliced: None,
         };
     }
-
-    let admission = admit_edits(&chat_file, candidate_edits);
-    for skipped in &admission.skipped {
+    let admission = selected.admit();
+    for skipped in admission.skipped() {
         report_lines.push(format!(
             "skip {}: {}",
             provenance_label(&skipped.provenance),
@@ -380,17 +311,16 @@ fn fix_one_file(
         skipped_count += 1;
     }
 
-    if admission.admitted.is_empty() {
+    if admission.admitted().is_empty() {
         return FileFixOutcome {
             report_lines,
-            selected_count: 0,
             skipped_count,
             spliced: None,
         };
     }
 
     let admitted_labels: Vec<String> = admission
-        .admitted
+        .admitted()
         .iter()
         .map(|edit| provenance_label(edit.provenance()))
         .collect();
@@ -400,44 +330,32 @@ fn fix_one_file(
         FixMode::Report => "would apply",
     };
 
-    let codes_before = code_counts(&diagnostics);
-
-    // `admission.admitted` is only ever borrowed from here: once by
-    // `apply_edits_verified` to splice and byte-gate the result, and again
-    // by `verify_fix_result`'s post-parse re-check. Neither call needs to
-    // own the edits, so there is nothing to clone.
-    match apply_edits_verified(source, &admission.admitted) {
+    // Admission and mapping obtain their source/model from the consumed owner.
+    match admission.apply_verified() {
         Ok(spliced) => {
-            if let Err(err) = verify_fix_result(
-                parser,
-                source,
-                &spliced,
-                &admission.admitted,
-                &codes_before,
-                alignment,
-                name,
-            ) {
-                for label in &admitted_labels {
-                    report_lines.push(format!(
-                        "skip {label}: the post-fix safety check refused the result: {err}"
-                    ));
+            let checked = match verify_fix_result(parser, spliced) {
+                Ok(checked) => checked,
+                Err(err) => {
+                    for label in &admitted_labels {
+                        report_lines.push(format!(
+                            "skip {label}: the post-fix safety check refused the result: {err}"
+                        ));
+                    }
+                    return FileFixOutcome {
+                        report_lines,
+                        skipped_count: skipped_count + selected_count,
+                        spliced: None,
+                    };
                 }
-                return FileFixOutcome {
-                    report_lines,
-                    selected_count: 0,
-                    skipped_count: skipped_count + selected_count,
-                    spliced: None,
-                };
-            }
+            };
 
             for label in &admitted_labels {
                 report_lines.push(format!("{action_verb} {label}"));
             }
             FileFixOutcome {
                 report_lines,
-                selected_count,
                 skipped_count,
-                spliced: Some(spliced),
+                spliced: Some(checked),
             }
         }
         Err(err) => {
@@ -448,240 +366,10 @@ fn fix_one_file(
             }
             FileFixOutcome {
                 report_lines,
-                selected_count: 0,
                 skipped_count: skipped_count + selected_count,
                 spliced: None,
             }
         }
-    }
-}
-
-/// Why the post-splice re-parse safety check refused to let a spliced
-/// result reach disk, once the byte-identity write gate
-/// (`apply_edits_verified`, called before this function ever runs) has
-/// already passed.
-///
-/// This command's OWN additional tier, layered on top of that gate: having
-/// passed byte identity, the spliced text is re-parsed and re-validated,
-/// and the result must show every targeted diagnostic gone from its fix
-/// site and no diagnostic code firing MORE often than it did before
-/// (counting a code absent before as firing zero times). Neither tier
-/// proves the fix was semantically correct; see the
-/// `talkbank_transform::splice::gate` module docs on why `BatchSafety`
-/// carries that weight instead.
-#[derive(Debug, thiserror::Error)]
-enum FixVerificationError {
-    /// Re-mapping `admitted` onto the spliced text failed. Unreachable in
-    /// practice here (the exact same edits against the exact same source
-    /// already succeeded moments earlier, inside `apply_edits_verified`),
-    /// but the possibility is typed rather than assumed away.
-    #[error("could not map the applied edits onto the spliced text: {0}")]
-    EditMapping(#[from] SpliceError),
-    /// A diagnostic this fix targeted still fires at (an overlap with) the
-    /// new-text span its edit produced.
-    #[error("{code} still fires at its fix site after re-parsing the result")]
-    TargetedCodeStillFires {
-        /// The code that should have cleared but did not.
-        code: ErrorCode,
-    },
-    /// Re-parsing the spliced text produced MORE instances of a code than
-    /// the original file had; `before` is zero for a code the original
-    /// never had at all. One variant covers both a brand-new
-    /// code and a multiplied existing one: a "new" code is not a
-    /// different KIND of regression, only the `before == 0` case of the
-    /// same one, and splitting them into two variants was itself the
-    /// review finding that produced this type. A fix that shifts tier
-    /// alignment can multiply an existing code exactly like this;
-    /// comparing only the SET of codes before and after (as this check
-    /// once did) cannot see it, because the set already contained the
-    /// code.
-    #[error(
-        "re-parsing the result found {code} {after} time(s), up from {before} time(s) in the original file"
-    )]
-    CodeCountIncreased {
-        /// The code whose count increased. Zero when the code is
-        /// entirely new to the file.
-        code: ErrorCode,
-        /// How many times it fired in the original file.
-        before: usize,
-        /// How many times it fires after re-parsing the spliced result.
-        after: usize,
-    },
-}
-
-/// The post-splice safety net, run AFTER `apply_edits_verified` has already
-/// byte-gated `spliced`: re-parse and re-validate `spliced` and require
-/// that every targeted diagnostic cleared at its fix site, that no
-/// diagnostic code appears which `codes_before` did not already contain,
-/// and that no code that DID already appear now appears MORE often.
-///
-/// `codes_before` is deliberately the FULL multiset of codes the original
-/// parse produced, not just the codes this run selected to fix: an
-/// untouched pre-existing diagnostic elsewhere in the file is expected to
-/// survive unchanged, and only a diagnostic code whose count went up
-/// (including from zero) counts as something re-parsing introduced.
-fn verify_fix_result(
-    parser: &TreeSitterParser,
-    source: &str,
-    spliced: &str,
-    admitted: &[SpliceEdit],
-    codes_before: &HashMap<ErrorCode, usize>,
-    alignment: talkbank_model::validation::AlignmentValidation,
-    name: TranscriptName<'_>,
-) -> Result<(), FixVerificationError> {
-    let sink = ErrorCollector::new();
-    let mut reparsed = parser.parse_chat_file_streaming(spliced, &sink);
-    validate_at(&mut reparsed, alignment, &sink, name);
-    let diagnostics_after = sink.into_vec();
-
-    let codes_after = code_counts(&diagnostics_after);
-    for (code, after_count) in &codes_after {
-        let before_count = codes_before.get(code).copied().unwrap_or(0);
-        if *after_count > before_count {
-            return Err(FixVerificationError::CodeCountIncreased {
-                code: *code,
-                before: before_count,
-                after: *after_count,
-            });
-        }
-    }
-
-    for (code, fix_site) in mapped_fix_sites(source, admitted)? {
-        // The content repair cannot rename the on-disk transcript. A remaining
-        // W109 is expected only if its @Media token no longer offers a repair.
-        if code == ErrorCode::MediaFilenameNonCanonicalUnicode
-            && reparsed
-                .headers()
-                .find_map(|header| match header {
-                    talkbank_model::model::Header::Media(media) => Some(media),
-                    _ => None,
-                })
-                .is_some_and(|media| !media.filename.needs_unicode_normalization())
-        {
-            continue;
-        }
-        let still_fires = diagnostics_after
-            .iter()
-            .any(|d| d.code == code && d.location.span.overlaps(fix_site));
-        if still_fires {
-            return Err(FixVerificationError::TargetedCodeStillFires { code });
-        }
-    }
-
-    Ok(())
-}
-
-/// Count how many times each error code appears in `diagnostics`.
-///
-/// A `HashMap` rather than a `HashSet`: the post-splice safety net
-/// (`verify_fix_result`) needs to notice a fix that MULTIPLIES an
-/// already-present code, not only one that introduces a brand-new one. A
-/// set can answer "did this code ever appear" but not "how many times",
-/// so it cannot see the difference between one occurrence and twenty.
-fn code_counts(diagnostics: &[ParseError]) -> HashMap<ErrorCode, usize> {
-    let mut counts = HashMap::new();
-    for diagnostic in diagnostics {
-        *counts.entry(diagnostic.code).or_insert(0) += 1;
-    }
-    counts
-}
-
-/// For every diagnostic-provenance edit in `admitted`, the byte span its
-/// replacement text occupies in the SPLICED text, paired with the code it
-/// targeted.
-///
-/// Delegates the validate/sort/overlap/cumulative-delta mapping entirely to
-/// [`mapped_edit_sites`]: the same computation `apply_edits` builds its
-/// output from and the write gate (`verify_splice`) walks to check it, so
-/// this fold exists in exactly one place rather than a second private copy
-/// here. A non-diagnostic edit (`EditProvenance::Transform`) still occupies
-/// room in the mapping (it shifts every later edit's spliced offset) but
-/// produces no entry: there is no code to check it against. A deletion
-/// (empty replacement) maps to a zero-width span, which
-/// [`talkbank_model::Span::overlaps`] defines to overlap nothing, so a
-/// diagnostic can never "still fire" at content that was removed outright:
-/// the right outcome, since there is no byte left there to re-flag.
-fn mapped_fix_sites(
-    source: &str,
-    admitted: &[SpliceEdit],
-) -> Result<Vec<(ErrorCode, Span)>, SpliceError> {
-    let mapped = mapped_edit_sites(source, admitted)?;
-    Ok(mapped
-        .iter()
-        .filter_map(|edit| match edit.provenance() {
-            EditProvenance::Diagnostic(code) => Some((*code, edit.spliced())),
-            EditProvenance::Transform(_) => None,
-        })
-        .collect())
-}
-
-/// Resolve one diagnostic against the fix catalog and the batch-safety
-/// gate, either queuing its edits in `candidate_edits` or recording a
-/// report line explaining why it was not queued.
-///
-/// Exhaustive over [`FixKind`] and [`BatchSafety`]: there is no catch-all
-/// arm that could silently drop a new combination as it is added to the
-/// catalog.
-fn classify_diagnostic(
-    diagnostic: &ParseError,
-    parsed: Option<&talkbank_parser::generated_traversal::ParsedSource<'_>>,
-    requested_codes: &CodeSelection,
-    candidate_edits: &mut Vec<SpliceEdit>,
-    report_lines: &mut Vec<String>,
-    skipped_count: &mut usize,
-) {
-    // The four skip sites below differ only in their reason text; this
-    // closure is the one place that turns a reason into the "skip <code>:
-    // <reason>" report line and the count increment, so a fifth site
-    // added later cannot drift from the other four's format.
-    let skip = |report_lines: &mut Vec<String>, skipped_count: &mut usize, reason: &str| {
-        report_lines.push(format!("skip {}: {reason}", diagnostic.code));
-        *skipped_count += 1;
-    };
-
-    let Some(parsed) = parsed else {
-        skip(
-            report_lines,
-            skipped_count,
-            "source-bound parse unavailable",
-        );
-        return;
-    };
-    let Some(fix) = catalog_fix(diagnostic, parsed) else {
-        skip(report_lines, skipped_count, "no catalog entry");
-        return;
-    };
-
-    match fix.kind {
-        FixKind::Alternatives(alternatives) => {
-            let labels: Vec<&str> = alternatives.iter().map(|a| a.label.as_str()).collect();
-            skip(
-                report_lines,
-                skipped_count,
-                &format!("ambiguous, several valid fixes ({})", labels.join("; ")),
-            );
-        }
-        FixKind::Deterministic(edits) => match fix.safety {
-            BatchSafety::Ambiguous => {
-                skip(
-                    report_lines,
-                    skipped_count,
-                    "ambiguous, never batch-applied",
-                );
-            }
-            BatchSafety::Mechanical => candidate_edits.extend(edits),
-            BatchSafety::Semantic => {
-                if requested_codes.names(diagnostic.code) {
-                    candidate_edits.extend(edits);
-                } else {
-                    skip(
-                        report_lines,
-                        skipped_count,
-                        "semantic fix, name it with --code to apply",
-                    );
-                }
-            }
-        },
     }
 }
 
@@ -716,21 +404,61 @@ fn describe_skip_reason(reason: &SkipReason) -> &'static str {
 mod tests {
     use super::*;
 
-    use talkbank_transform::splice::{EditTarget, Replacement, TransformName};
+    use talkbank_transform::splice::{
+        EditTarget, Replacement, SpliceEdit, TransformName, mapped_edit_sites,
+    };
 
     fn parser() -> TreeSitterParser {
         TreeSitterParser::new().expect("parser initializes")
     }
 
-    /// Parse and validate `source`, returning its diagnostics; the same
-    /// pipeline `fix_one_file` runs, extracted so a unit test can build a
-    /// `codes_before` multiset from a REAL parse rather than a fabricated
-    /// one.
-    fn diagnostics_for(parser: &TreeSitterParser, source: &str) -> Vec<ParseError> {
-        let sink = ErrorCollector::new();
-        let mut chat_file = parser.parse_chat_file_streaming(source, &sink);
-        chat_file.validate_with_alignment(&sink, TranscriptName::Anonymous);
-        sink.into_vec()
+    fn diagnosis_for<'source>(
+        parser: &TreeSitterParser,
+        source: &'source str,
+    ) -> FixDiagnosis<'source> {
+        FixDiagnosis::observe(
+            parser,
+            source,
+            talkbank_model::validation::ValidationPolicy::new(
+                talkbank_model::RuleSelection::new(),
+                talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
+            ),
+            TranscriptName::Anonymous,
+        )
+    }
+
+    /// Byte fidelity and unchanged counts cannot license an edit that leaves
+    /// its diagnosed defect at the same site. Use the authored recovery input.
+    #[test]
+    fn verify_fix_result_rejects_a_byte_faithful_nonrepair_at_its_site() {
+        let parser = parser();
+        let source = include_str!(
+            "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E241_illegal_untranscribed_marker_3.cha"
+        );
+        let diagnosis = diagnosis_for(&parser, source);
+        let diagnostics = diagnosis.diagnostics();
+        let span = diagnostics
+            .iter()
+            .find(|d| d.code == ErrorCode::IllegalUntranscribed)
+            .expect("authored E241")
+            .location
+            .span;
+        let edit = SpliceEdit::new(
+            EditTarget::Replace(span),
+            Replacement::new(&source[span.to_range()]),
+            EditProvenance::Diagnostic(ErrorCode::IllegalUntranscribed),
+        );
+        let verified = mapped_edit_sites(source, &[edit])
+            .expect("mapping")
+            .apply_verified()
+            .expect("byte-faithful nonrepair");
+        assert_eq!(verified.text(), source);
+        assert!(matches!(
+            check_fix_result(&parser, &verified, &diagnosis),
+            Err(FixVerificationError::TargetedCodeStillFires {
+                code: ErrorCode::IllegalUntranscribed
+            })
+        ));
     }
 
     /// Regression for the review finding that `verify_fix_result` compared
@@ -740,7 +468,7 @@ mod tests {
     /// (`"xx"` is untranscribed material); `spliced` stands in for a fix
     /// result that produced a SECOND "xx" (same code, no new code at all).
     /// The admitted edit is a non-diagnostic `Transform`, which
-    /// `mapped_fix_sites` never turns into a fix site, so this isolates the
+    /// the retained mapping never turns into a diagnostic fix site, so this isolates the
     /// multiset comparison from the separate `TargetedCodeStillFires`
     /// check.
     #[test]
@@ -748,7 +476,9 @@ mod tests {
         let parser = parser();
         let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                        @ID:\teng|test|CHI|||||Child|||\n*CHI:\txx .\n@End\n";
-        let codes_before = code_counts(&diagnostics_for(&parser, source));
+        let diagnosis = diagnosis_for(&parser, source);
+        let diagnostics_before = diagnosis.diagnostics();
+        let codes_before = code_counts(diagnostics_before);
         assert_eq!(
             codes_before.get(&ErrorCode::IllegalUntranscribed).copied(),
             Some(1),
@@ -757,27 +487,28 @@ mod tests {
 
         let spliced = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                         @ID:\teng|test|CHI|||||Child|||\n*CHI:\txx and xx .\n@End\n";
-        // An identity replace of the `*CHI:` speaker code itself: a valid,
-        // in-bounds span against `source` whose exact location does not
-        // matter, since a `Transform`-provenance edit never becomes a fix
-        // site (`mapped_fix_sites` only keeps `Diagnostic` provenance), so
-        // this test isolates the multiset comparison from the separate
-        // `TargetedCodeStillFires` check.
+        // The actual diagnostic owns the original word range. Produce the
+        // adversarial candidate faithfully rather than pairing unrelated edits
+        // with a prewritten string; it must pass byte verification first.
+        let word_span = diagnostics_before
+            .iter()
+            .find(|d| d.code == ErrorCode::IllegalUntranscribed)
+            .expect("actual E241")
+            .location
+            .span;
+        assert_eq!(&source[word_span.to_range()], "xx");
         let admitted = vec![SpliceEdit::new(
-            EditTarget::Replace(Span::new(0, 5)),
-            Replacement::new("*CHI:"),
+            EditTarget::Replace(word_span),
+            Replacement::new("xx and xx"),
             EditProvenance::Transform(TransformName::new("test")),
         )];
 
-        let result = verify_fix_result(
-            &parser,
-            source,
-            spliced,
-            &admitted,
-            &codes_before,
-            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
-            TranscriptName::Anonymous,
-        );
+        let verified = mapped_edit_sites(source, &admitted)
+            .expect("source mapping")
+            .apply_verified()
+            .expect("faithful candidate");
+        assert_eq!(verified.text(), spliced);
+        let result = check_fix_result(&parser, &verified, &diagnosis);
         match result {
             Err(FixVerificationError::CodeCountIncreased {
                 code,
@@ -805,7 +536,9 @@ mod tests {
         let parser = parser();
         let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                        @ID:\teng|test|CHI|||||Child|||\n*CHI:\txx .\n@End\n";
-        let codes_before = code_counts(&diagnostics_for(&parser, source));
+        let diagnosis = diagnosis_for(&parser, source);
+        let diagnostics_before = diagnosis.diagnostics();
+        let codes_before = code_counts(diagnostics_before);
         assert_eq!(
             codes_before.get(&ErrorCode::IllegalUntranscribed).copied(),
             Some(1),
@@ -814,17 +547,25 @@ mod tests {
 
         let spliced = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                         @ID:\teng|test|CHI|||||Child|||\n*CHI:\t, xx .\n@End\n";
-        let admitted: Vec<SpliceEdit> = Vec::new();
+        let word_span = diagnostics_before
+            .iter()
+            .find(|d| d.code == ErrorCode::IllegalUntranscribed)
+            .expect("actual E241")
+            .location
+            .span;
+        assert_eq!(&source[word_span.to_range()], "xx");
+        let admitted = vec![SpliceEdit::new(
+            EditTarget::InsertAt(word_span.start),
+            Replacement::new(", "),
+            EditProvenance::Transform(TransformName::new("test")),
+        )];
+        let verified = mapped_edit_sites(source, &admitted)
+            .expect("source mapping")
+            .apply_verified()
+            .expect("faithful candidate");
+        assert_eq!(verified.text(), spliced);
 
-        let result = verify_fix_result(
-            &parser,
-            source,
-            spliced,
-            &admitted,
-            &codes_before,
-            talkbank_model::validation::AlignmentValidation::IncludeTierAlignment,
-            TranscriptName::Anonymous,
-        );
+        let result = check_fix_result(&parser, &verified, &diagnosis);
         match result {
             Err(FixVerificationError::CodeCountIncreased {
                 code,

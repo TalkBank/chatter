@@ -248,6 +248,7 @@ pub fn blank_literals(source: &str) -> String {
                 let mut j = i + 1;
                 while j < bytes.len() && bytes[j] != b'"' {
                     if bytes[j] == b'\\' {
+                        out[j] = b' ';
                         j += 1;
                     }
                     if let Some(slot) = out.get_mut(j) {
@@ -346,8 +347,52 @@ fn calls_helper(body: &BlankedShape, helper: &str) -> bool {
             .next_back()
             .is_some_and(|c| c.is_alphanumeric() || c == '_');
         let declaration = before.split_whitespace().next_back() == Some("fn");
-        !inside_identifier && !declaration && after.trim_start().starts_with('(')
+        if inside_identifier || declaration {
+            return false;
+        }
+        let after = after.trim_start();
+        after.starts_with('(')
+            || (after.starts_with("::")
+                && body
+                    .0
+                    .parse()
+                    .is_ok_and(|tokens| generic_helper_call(tokens, helper)))
     })
+}
+
+/// Token groups retain their delimiters: parsing a substring after a helper
+/// would leave unmatched closing braces from the enclosing test or loop.
+fn generic_helper_call(tokens: proc_macro2::TokenStream, helper: &str) -> bool {
+    use syn::parse::Parser;
+
+    let mut tokens = tokens.into_iter();
+    while let Some(token) = tokens.next() {
+        match token {
+            proc_macro2::TokenTree::Group(group) => {
+                if generic_helper_call(group.stream(), helper) {
+                    return true;
+                }
+            }
+            proc_macro2::TokenTree::Ident(name) if name == helper => {
+                // Admit syntax, not a name followed by arbitrary angle
+                // brackets. syn owns nested types, consts and fn arrows.
+                let call = |input: syn::parse::ParseStream<'_>| {
+                    let _: syn::Token![::] = input.parse()?;
+                    let _: syn::AngleBracketedGenericArguments = input.parse()?;
+                    let arguments;
+                    syn::parenthesized!(arguments in input);
+                    let _: proc_macro2::TokenStream = arguments.parse()?;
+                    let _: proc_macro2::TokenStream = input.parse()?;
+                    Ok(())
+                };
+                if call.parse2(tokens.clone().collect()).is_ok() {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Every function name in `blanked` whose own body can fail.
@@ -694,31 +739,4 @@ impl Gate for DuplicateTestGate {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{RelPath, Scanned, SourceFile, blank_literals};
-
-    #[test]
-    fn helper_declaration_is_not_a_call() {
-        let original = r#"
-            fn report() { panic!("helper failed"); }
-            #[test]
-            fn compile_only() {
-                struct Handler;
-                impl Handler { fn report(&self) {} }
-            }
-            #[test]
-            fn invokes_helper() { report (); }
-        "#;
-        let scan = Scanned {
-            files: vec![SourceFile {
-                path: RelPath::new("example.rs"),
-                original: original.to_owned(),
-                blanked: blank_literals(original),
-            }],
-            unreadable: vec![],
-        };
-        let found = scan.resolve().vacuous();
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].name, "compile_only");
-    }
-}
+mod tests;

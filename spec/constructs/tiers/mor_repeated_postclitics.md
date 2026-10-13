@@ -1,0 +1,63 @@
+# mor_repeated_postclitics
+
+One MOR item with a POS subcategory, ordered flat/keyed features and two
+post-clitics. Every post-clitic is an independent morphological word; the
+second has its own ordered feature sequence. This is the first item in the
+authored MOR/GRA combination reference, not a claim of exhaustive combinations.
+
+## Input
+
+```mor_dependent_tier
+%mor:	pron:pers|we-Nom-Person=1~aux|have-Tense=Past~aux|have-Mood=Ind-Polarity=Pos .
+```
+
+## Expected CST
+
+```cst
+(mor_dependent_tier
+  (mor_tier_prefix)
+  (tier_sep
+    (colon)
+    (tab))
+  (mor_contents
+    (mor_content
+      (mor_word
+        (mor_pos)
+        (pipe)
+        (mor_lemma)
+        (mor_feature
+          (hyphen)
+          (mor_feature_value))
+        (mor_feature
+          (hyphen)
+          (mor_feature_value)))
+      (mor_post_clitic
+        (tilde)
+        (mor_word
+          (mor_pos)
+          (pipe)
+          (mor_lemma)
+          (mor_feature
+            (hyphen)
+            (mor_feature_value))))
+      (mor_post_clitic
+        (tilde)
+        (mor_word
+          (mor_pos)
+          (pipe)
+          (mor_lemma)
+          (mor_feature
+            (hyphen)
+            (mor_feature_value))
+          (mor_feature
+            (hyphen)
+            (mor_feature_value)))))
+    (whitespaces)
+    (period))
+  (newline))
+```
+
+## Metadata
+
+- **Level**: tier
+- **Category**: tiers

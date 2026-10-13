@@ -47,6 +47,7 @@ mod content_structure_public_view;
 mod coverage_source;
 mod cross_utterance_from_source;
 mod declared_speakers;
+mod dependent_content_range_corpus;
 mod dependent_tier_recovery_codes_from_source;
 mod dev_equivalence;
 mod direct_parser_roundtrip_corpus;

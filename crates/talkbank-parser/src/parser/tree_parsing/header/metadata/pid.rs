@@ -29,7 +29,7 @@ pub fn parse_pid_header<'tree>(
 ) -> Result<Header, CstFailure> {
     let node = typed.raw_node();
     let source = typed.source();
-    let associated = typed.extract()?;
+    let associated = typed.extract();
     let children = associated.children();
     // The value: the `free_text` position's text, decoded, and NOT empty. A
     // line with nothing after the tab leaves the position present with

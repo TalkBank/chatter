@@ -11,7 +11,14 @@
 ## Expected CST
 
 ```cst
-(comment_header ...)
+(comment_header
+  (comment_prefix)
+  (header_sep
+    (colon)
+    (tab))
+  (text_with_bullets_and_pics
+    (text_segment))
+  (newline))
 ```
 
 ## Metadata

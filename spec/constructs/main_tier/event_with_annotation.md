@@ -30,8 +30,8 @@ Discovered by re2c parser parity testing (2026-03-30).
           (word_with_optional_annotations
             (standalone_word
               (word_body
-                (initial_word_segment))))))
-      (whitespaces ...)
+                (word_segment))))))
+      (whitespaces)
       (content_item
         (base_content_item
           (nonword_with_optional_annotations
@@ -39,17 +39,41 @@ Discovered by re2c parser parity testing (2026-03-30).
               (event
                 (event_marker)
                 (event_segment)))
-            (whitespaces ...)
             (base_annotations
+              (whitespaces)
               (retrace_complete)))))
-      (whitespaces ...)
+      (whitespaces)
       (content_item
         (base_content_item
           (word_with_optional_annotations
             (standalone_word
               (word_body
-                (initial_word_segment)))))))
-    (utterance_end ...)))
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces)
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces))
+    (utterance_end
+      (period)
+      (newline))))
 ```
 
 ## Metadata

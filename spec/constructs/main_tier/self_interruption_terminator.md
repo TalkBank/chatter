@@ -12,7 +12,19 @@ Main tier ending with self-interruption terminator `+//.'`.
 
 ```cst
 (main_tier
+  (star)
+  (speaker)
+  (colon)
+  (tab)
   (tier_body
+    (contents
+      (content_item
+        (base_content_item
+          (word_with_optional_annotations
+            (standalone_word
+              (word_body
+                (word_segment))))))
+      (whitespaces))
     (utterance_end
       (self_interruption)
       (newline))))

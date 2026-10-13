@@ -45,9 +45,56 @@ impl<'source> LexedSource<'source> {
         &self.tokens
     }
 
+    /// Diagnose a nonempty region selected from this lexer run. Never derive
+    /// locations or previews by concatenating delimiter-stripped payloads.
+    pub(crate) fn report_error(
+        &self,
+        range: Range<usize>,
+        code: talkbank_model::ErrorCode,
+        message: &str,
+        errors: &impl talkbank_model::ErrorSink,
+    ) {
+        let start = self.spans[range.start].start;
+        let end = self.spans[range.end - 1].end;
+        errors.report(talkbank_model::ParseError::new(
+            code,
+            talkbank_model::Severity::Error,
+            talkbank_model::SourceLocation::from_offsets(start, end),
+            talkbank_model::ErrorContext::new(self.source, start..end, "native_region"),
+            message,
+        ));
+    }
+
     /// A token selected by the file cursor and its original lexer location.
     pub(crate) fn token_at(&self, index: usize) -> (&Token<'source>, LexerSpan) {
         (&self.tokens[index], self.spans[index].clone())
+    }
+
+    /// The cursor selected one dependent prefix, its body and its optional
+    /// ending from this lexer run. Rich payload slices are not range proxies.
+    pub(crate) fn dependent_content_span(
+        &self,
+        line: Range<usize>,
+        ending: usize,
+    ) -> Result<
+        Option<talkbank_model::model::dependent_tier::DependentTierContentSpan>,
+        talkbank_model::model::dependent_tier::InvalidDependentTierContentSpan,
+    > {
+        use talkbank_model::Span;
+        use talkbank_model::model::dependent_tier::DependentTierContentSpan;
+        let line_end = self.spans[line.end - 1].end;
+        let body_end = match self.spans.get(ending) {
+            Some(newline) => newline.start,
+            None if line_end == self.source.len() => line_end,
+            // Token exhaustion can mean an embedded NUL stopped the lexer.
+            // Neither that stop nor an unconsumed buffer tail proves EOF.
+            None => return Ok(None),
+        };
+        DependentTierContentSpan::try_new(
+            Span::from_usize(self.spans[line.start].start, line_end),
+            Span::from_usize(self.spans[line.start].end, body_end),
+        )
+        .map(Some)
     }
 
     /// The file cursor has consumed a nonempty logical header, including its

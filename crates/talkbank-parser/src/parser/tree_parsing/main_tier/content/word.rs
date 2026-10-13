@@ -22,7 +22,7 @@ use super::super::word::convert_word_node;
 use super::marker_chain::fold_marker_chain;
 use super::report_tree_shape;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::{SlotState, expect_present, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use crate::parser::typed_cst::read_source_field;
 
 /// Parse a `word_with_optional_annotations` node into `UtteranceContent`,
@@ -46,9 +46,9 @@ pub(crate) fn parse_word_content<'tree>(
 ) -> ParseOutcome<UtteranceContent> {
     let source = typed.source();
     let node = typed.node().raw_node();
-    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar)),
+            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -125,23 +125,22 @@ pub(crate) fn parse_word_content<'tree>(
     // marker. ONE value rather than an `annotations` list beside a
     // `retrace_kind`, because those two were a partition of one ordered
     // sequence and could not say which side of the marker an annotation sat on.
-    let markers = match children.annotations.slot() {
-        Some(slot) => {
-            match expect_present(slot, "word_with_optional_annotations", source, errors) {
-                SlotState::Present(annotations) => {
-                    match crate::parser::typed_cst::report_reconstruction(
-                        parse_scoped_annotations(*annotations, source, errors),
-                        annotations.raw_node(),
-                        source,
-                        errors,
-                    ) {
-                        Ok(markers) => markers,
-                        Err(_) => return ParseOutcome::Rejected,
-                    }
-                }
-                SlotState::Absent | SlotState::Recovered => Vec::new(),
+    let markers = match associated.field_annotations().slot().optional() {
+        Some(slot) => match slot.view() {
+            SourceSlotView::Present(annotations) => match read_source_field(annotations, errors) {
+                Some(annotations) => parse_scoped_annotations(annotations, errors),
+                None => Vec::new(),
+            },
+            SourceSlotView::Error(bad) => {
+                errors.report(unexpected_node_error(
+                    bad.raw_node(),
+                    bad.source(),
+                    "word_with_optional_annotations",
+                ));
+                Vec::new()
             }
-        }
+            SourceSlotView::Absent(never) => match never {},
+        },
         None => Vec::new(),
     };
     surface_displaced(

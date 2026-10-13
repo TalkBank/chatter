@@ -20,10 +20,10 @@ fn an_untimed_wor_tier_has_no_timing_evidence() {
     assert!(matches!(tier.timing_evidence(), WorTimingEvidence::Absent));
 }
 
-/// A reversed word interval is E362; a zero-duration one is a legal instant,
+/// Reversed and zero-duration word intervals are E362,
 /// and untimed, overlapping and out-of-order words are not this rule's business.
 #[test]
-fn only_a_reversed_word_interval_is_an_error() {
+fn nonpositive_word_intervals_are_errors() {
     let tier = WorTier::from_words(vec![
         Word::simple("backward").with_inline_bullet(Bullet::new(20, 10)),
         Word::simple("instant").with_inline_bullet(Bullet::new(20, 20)),
@@ -34,6 +34,10 @@ fn only_a_reversed_word_interval_is_an_error() {
     let errors = crate::ErrorCollector::new();
     tier.validate_word_intervals(&errors);
     let diagnostics = errors.into_vec();
-    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-    assert_eq!(diagnostics[0].code, crate::ErrorCode::TimestampBackwards);
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| { diagnostic.code == crate::ErrorCode::TimestampBackwards })
+    );
 }

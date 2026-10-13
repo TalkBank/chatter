@@ -173,17 +173,7 @@ fn report_gra(
 /// transcript whose two tiers agree.
 #[must_use]
 pub struct LoweredGra {
-    tier: GraTier,
-    recovered: Recovered,
-}
-
-/// Whether lowering had to drop something the author wrote.
-#[derive(Clone, Copy)]
-enum Recovered {
-    /// Every relation on the line is in the tier.
-    Nothing,
-    /// At least one relation was rejected and is not in the tier.
-    ADroppedRelation,
+    receipt: GraLoweringReceipt,
 }
 
 impl LoweredGra {
@@ -192,11 +182,10 @@ impl LoweredGra {
     /// The one route for a caller that HAS an utterance, which is every caller
     /// that lowers a whole file.
     pub fn into_tier(self, health: &mut ParseHealth) -> GraTier {
-        match self.recovered {
-            Recovered::Nothing => {}
-            Recovered::ADroppedRelation => health.taint(ParseHealthTier::Gra),
+        if self.receipt.is_truncated() {
+            health.taint(ParseHealthTier::Gra);
         }
-        self.tier
+        self.receipt.into_tier()
     }
 
     /// The tier alone, for a caller with no utterance to record it on.
@@ -206,7 +195,7 @@ impl LoweredGra {
     /// so that dropping the fact is a decision visible at the call site rather
     /// than a field nobody looked at.
     pub fn tier_without_health(self) -> GraTier {
-        self.tier
+        self.receipt.into_tier()
     }
 }
 
@@ -216,27 +205,17 @@ pub fn gra_tier_to_model(
     source: SourceText<'_>,
     errors: &(impl ErrorSink + ?Sized),
 ) -> LoweredGra {
-    let mut relations = Vec::with_capacity(tier.relations.len());
-    for parsed in &tier.relations {
-        if let ParseOutcome::Parsed(relation) = gra_relation_to_model(parsed, source, errors) {
-            relations.push(relation);
-        }
-    }
-    // Compared against what the LINE held, not against a count carried
-    // alongside: the two cannot disagree.
-    let (recovered, completeness) = match relations.len() == tier.relations.len() {
-        true => (Recovered::Nothing, GraCompleteness::Whole),
-        false => (Recovered::ADroppedRelation, GraCompleteness::Truncated),
-    };
+    let receipt = tier
+        .relations
+        .iter()
+        .map(|parsed| gra_relation_to_model(parsed, source, errors))
+        .collect::<GraLowering>()
+        .finish();
     LoweredGra {
-        // The fact is recorded TWICE, on purpose, because two different
-        // questions read it. `GraCompleteness` travels on the tier and answers
-        // "did this tier lose a relation", which is what the structural rules
-        // need. The taint below travels on the utterance and answers "is
-        // cross-tier alignment involving `%gra` trustworthy", which is coarser
-        // and is set for reasons that have nothing to do with this tier.
-        tier: GraTier::lowered_from(relations, completeness),
-        recovered,
+        // One finalized receipt feeds both distinct consumers: the tier's own
+        // completeness and the utterance's coarser cross-tier parse health.
+        // No caller can pair unrelated tier and recovered flags here.
+        receipt,
     }
 }
 
@@ -514,17 +493,29 @@ mod gra_lowering_tests {
     use super::*;
     use talkbank_model::errors::ErrorCollector;
 
-    /// Lower a `%gra` body through the real lexer and parser, as the whole-file
-    /// path does.
-    fn lower(body: &str) -> (GraTier, Vec<ErrorCode>) {
+    /// Actual tier, diagnostics and health from the whole-file consumption path.
+    struct LoweredCase {
+        tier: GraTier,
+        codes: Vec<ErrorCode>,
+        health: ParseHealth,
+    }
+
+    /// Lower an existing body through the real lexer/parser and consume its receipt.
+    fn lower(body: &str) -> LoweredCase {
         let parsed = match crate::parser::parse_gra_tier(body) {
             Some(parsed) => parsed,
             None => panic!("the fixture bodies in this module all parse: {body}"),
         };
         let errors = ErrorCollector::new();
-        let tier = gra_tier_to_model(&parsed, SourceText::new(body), &errors).tier_without_health();
+        let mut health = ParseHealth::untainted();
+        let tier =
+            gra_tier_to_model(&parsed, SourceText::new(body), &errors).into_tier(&mut health);
         let codes = errors.to_vec().iter().map(|error| error.code).collect();
-        (tier, codes)
+        LoweredCase {
+            tier,
+            codes,
+            health,
+        }
     }
 
     /// SURVIVES: behaviour a signature cannot state. That an unrepresentable
@@ -538,7 +529,13 @@ mod gra_lowering_tests {
     /// dependency tree invented out of invalid input.
     #[test]
     fn a_head_the_model_cannot_hold_is_reported_and_dropped() {
-        let (tier, codes) = lower("1|0|ROOT 2|99999999999999999999|PUNCT\n");
+        let LoweredCase {
+            tier,
+            codes,
+            health,
+        } = lower("1|0|ROOT 2|99999999999999999999|PUNCT\n");
+        assert_eq!(tier.completeness(), GraCompleteness::Truncated);
+        assert!(health.is_tier_tainted(ParseHealthTier::Gra));
         assert_eq!(codes, vec![ErrorCode::UnexpectedGrammarNode]);
         assert_eq!(
             tier.relations().len(),
@@ -555,25 +552,43 @@ mod gra_lowering_tests {
     /// different code, and the canonical parser reports E709 for it.
     #[test]
     fn a_zero_index_is_reported_as_its_own_rule() {
-        let (tier, codes) = lower("0|0|ROOT\n");
+        let LoweredCase {
+            tier,
+            codes,
+            health,
+        } = lower("0|0|ROOT\n");
+        assert_eq!(tier.completeness(), GraCompleteness::Truncated);
+        assert!(health.is_tier_tainted(ParseHealthTier::Gra));
         assert_eq!(codes, vec![ErrorCode::InvalidGrammarIndex]);
         assert!(tier.relations().is_empty());
     }
 
     /// SURVIVES: behaviour. An index too large to hold is E708, not E710:
     /// the two fields fail for the same reason and are reported differently
-    /// because the canonical parser reports them differently, and an oracle
-    /// that rejects the same input under another code is not one.
+    /// according to the field's role. This backend's diagnostic policy is not
+    /// a cross-backend code-identity requirement.
     #[test]
     fn an_index_the_model_cannot_hold_is_a_different_code_from_a_head() {
-        let (_, codes) = lower("99999999999999999999|0|ROOT\n");
+        let LoweredCase {
+            tier,
+            codes,
+            health,
+        } = lower("99999999999999999999|0|ROOT\n");
+        assert_eq!(tier.completeness(), GraCompleteness::Truncated);
+        assert!(health.is_tier_tainted(ParseHealthTier::Gra));
         assert_eq!(codes, vec![ErrorCode::MalformedGrammarRelation]);
     }
 
     /// SURVIVES: behaviour. The ordinary tier still lowers untouched.
     #[test]
     fn a_well_formed_tier_reports_nothing() {
-        let (tier, codes) = lower("1|2|SUBJ 2|0|ROOT 3|2|OBJ\n");
+        let LoweredCase {
+            tier,
+            codes,
+            health,
+        } = lower("1|2|SUBJ 2|0|ROOT 3|2|OBJ\n");
+        assert_eq!(tier.completeness(), GraCompleteness::Whole);
+        assert!(!health.is_tier_tainted(ParseHealthTier::Gra));
         assert!(codes.is_empty());
         assert_eq!(tier.relations().len(), 3);
     }

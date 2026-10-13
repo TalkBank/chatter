@@ -1,0 +1,111 @@
+---
+source: crates/talkbank-parser-tests/tests/integration/comment_media_corpus.rs
+assertion_line: 77
+expression: "(&headers, &comment.content, &action.content)"
+---
+[
+  [
+    {
+      "segments": [
+        {
+          "type": "text",
+          "text": "Authored control for pictures, timing, text and wrapped comments."
+        }
+      ]
+    },
+    {
+      "segments": [
+        {
+          "type": "picture",
+          "filename": "images/frame-01.png"
+        },
+        {
+          "type": "text",
+          "text": "header caption"
+        },
+        {
+          "type": "bullet",
+          "start_ms": 100,
+          "end_ms": 200
+        },
+        {
+          "type": "continuation"
+        },
+        {
+          "type": "text",
+          "text": "header continuation"
+        },
+        {
+          "type": "picture",
+          "filename": "images/frame-02.png"
+        }
+      ]
+    }
+  ],
+  {
+    "segments": [
+      {
+        "type": "picture",
+        "filename": "images/frame-01.png"
+      },
+      {
+        "type": "picture",
+        "filename": "images/frame-02.png"
+      },
+      {
+        "type": "text",
+        "text": "two views"
+      },
+      {
+        "type": "bullet",
+        "start_ms": 100,
+        "end_ms": 200
+      },
+      {
+        "type": "continuation"
+      },
+      {
+        "type": "text",
+        "text": "then"
+      },
+      {
+        "type": "bullet",
+        "start_ms": 200,
+        "end_ms": 300
+      },
+      {
+        "type": "text",
+        "text": "another view"
+      },
+      {
+        "type": "picture",
+        "filename": "images/frame-03.png"
+      }
+    ]
+  },
+  {
+    "segments": [
+      {
+        "type": "text",
+        "text": "points"
+      },
+      {
+        "type": "bullet",
+        "start_ms": 100,
+        "end_ms": 200
+      },
+      {
+        "type": "continuation"
+      },
+      {
+        "type": "text",
+        "text": "then waves"
+      },
+      {
+        "type": "bullet",
+        "start_ms": 200,
+        "end_ms": 300
+      }
+    ]
+  }
+]

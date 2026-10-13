@@ -43,7 +43,8 @@ pub struct LineMap {
 /// use talkbank_model::{SourceIndex, enhance_errors_with_index};
 /// let index = SourceIndex::new("first\nsecond");
 /// assert_eq!(index.line_col_of(6), (1, 0));
-/// enhance_errors_with_index(&mut [], &index);
+/// let projected: Vec<_> = enhance_errors_with_index(&[], &index).collect();
+/// assert!(projected.is_empty());
 /// ```
 ///
 /// ```compile_fail,E0502
@@ -51,7 +52,7 @@ pub struct LineMap {
 /// # let mut text = String::from("first\nsecond");
 /// # let index = SourceIndex::new(&text);
 /// text.clear();
-/// # enhance_errors_with_index(&mut [], &index);
+/// # let projected: Vec<_> = enhance_errors_with_index(&[], &index).collect();
 /// ```
 #[derive(Debug)]
 pub struct SourceIndex<'source> {

@@ -10,10 +10,9 @@
 
 //! `DependentTierEntry::content_span` must agree with the source it describes.
 //!
-//! The span is DERIVED from the label length and the separator rather than
-//! recorded by the parser, so it is only as good as that arithmetic. A derived
-//! value that quietly disagrees with the bytes is worse than no accessor at
-//! all, which is what these tests exist to prevent.
+//! The parser records the body from its selected source boundaries. These
+//! runtime-byte contracts survive that representation change: geometry is
+//! separate from syntax validity, wire trust and semantic model equality.
 
 use talkbank_model::model::Line;
 use talkbank_parser::{ParseProduct, TreeSitterParser};

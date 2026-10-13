@@ -1,7 +1,7 @@
 # Alignment
 
 **Status:** Current
-**Last modified:** 2026-10-02 06:50 EDT
+**Last modified:** {{git-dates:page}}
 
 Alignment in the toolchain operates at two structural layers, plus a
 separate overlap-marker pass. Tier alignment is structural (counting and
@@ -277,6 +277,19 @@ convention, region has `end_at_word = None`,
 For whole-file analysis, in `overlap_groups.rs`. 1:N matching: one
 top region from speaker A can match multiple bottom regions from
 speakers B, C, etc. Used by E347 and `chatter debug overlap-audit`.
+
+When a turn contains multiple top regions with the same index, bottoms from
+the same responding speaker distribute among vacant sibling tops before
+reusing a filled sibling. Other speakers may still join a group (1:N), and
+a later top with that index takes precedence for subsequent responses.
+`corpus/reference/ca/overlap-siblings.cha` covers this combination with mixed
+timed/untimed respondents and an interleaved comment. Its checked-admission
+contract asserts the grouping independently before snapshotting region order
+and timing; timing is not inferred for an untimed respondent.
+Analysis consumes each bottom anchor into either a matched group or the
+orphan collection. No parallel match bitmap or cloned classification input
+can drift from that partition. Public analysis types and matching policy are
+unchanged.
 
 ### Overlap validation
 

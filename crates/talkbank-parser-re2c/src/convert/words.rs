@@ -152,11 +152,7 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>
     // again below for the assignment, discarding the first result, so every
     // form-marked word paid for two splits and two case folds, and every
     // `@z:label` word built a `FormType::UserDefined` purely to drop it.
-    let declared = w
-        .form_marker
-        .map(|marker| FormType::from_payload(FormMarkerPayload::after_at(marker)));
-
-    let is_u_form = matches!(declared, Some(Ok(FormType::U)));
+    let is_u_form = matches!(w.form_marker, Some(FormType::U));
     let content_items = if is_u_form {
         fold_phonetic(content_items)
     } else {
@@ -177,19 +173,10 @@ pub fn word_from_parsed(w: &ast::WordWithAnnotations<'_>, source: SourceText<'_>
         });
     }
 
-    // Form marker, tag-extracted content, direct to model.
-    //
-    // The lexer hands over the payload WITHOUT the `@`, while the tree-sitter
-    // parser hands over its token WITH one. That is why the payload is a named
-    // type: both sides used to pass a bare `&str` into one function that
-    // accepted either shape, and each then re-derived the `@z:label` rule
-    // itself, one testing for `"@z:"` and the other for `"z:"`.
-    // Deliberately silent on the error path. An undeclared marker (`@zzz`, or
-    // `@z` with no label) is left WITHOUT a form_type so the shared model
-    // validation raises E203, matching CLAN CHECK 147 and the tree-sitter
-    // parser. Setting one would mask it from that check.
-    if let Some(Ok(declared)) = declared {
-        word = word.with_form_type(declared);
+    // Admission already established the registry value. Invalid payloads must
+    // not disappear while cleaned word text loses the original @ spelling.
+    if let Some(declared) = &w.form_marker {
+        word = word.with_form_type(declared.clone());
     }
 
     // Language suffix, typed enum, no string hacking. Each split piece is

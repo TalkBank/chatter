@@ -102,7 +102,7 @@ pub mod wor;
 pub use act::*;
 pub use bullet_content::*;
 pub use cod::*;
-pub use entry::DependentTierEntry;
+pub use entry::{DependentTierContentSpan, DependentTierEntry, InvalidDependentTierContentSpan};
 pub use gra::*;
 pub use mor::*;
 pub use pho::*;

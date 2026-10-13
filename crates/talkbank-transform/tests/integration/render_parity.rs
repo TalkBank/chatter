@@ -75,8 +75,7 @@ fn plain_and_colored_renders_agree_on_line() {
         !raw.is_empty(),
         "fixture {E601_FIXTURE} should produce at least one validation error"
     );
-    let mut errors = raw;
-    enhance_errors_with_source(&mut errors, &content);
+    let errors: Vec<_> = enhance_errors_with_source(&raw, &content).collect();
 
     // The name passed is the fallback source name; enhanced errors supply their
     // own "input"-named windowed source, so this matches the real call sites.
@@ -84,13 +83,15 @@ fn plain_and_colored_renders_agree_on_line() {
 
     for error in &errors {
         let line = error
-            .location
+            .location()
+            .expect("source admission")
             .line
             .expect("enhance_errors_with_source populates location.line");
         let marker = format!(":{line}:");
 
-        let plain = render_error_with_miette_with_source(error, &name, &content);
-        let colored = render_error_with_miette_with_source_colored(error, &name, &content);
+        let plain = render_error_with_miette_with_source(error.original(), &name, &content);
+        let colored =
+            render_error_with_miette_with_source_colored(error.original(), &name, &content);
 
         assert!(
             plain.contains(&marker),
@@ -125,7 +126,8 @@ fn render_diagnostics_text_and_ansi_agree_on_line() {
     for d in &diagnostics {
         let line = d
             .error
-            .location
+            .location()
+            .expect("source admission")
             .line
             .expect("render_diagnostics enhances internally -> location.line is set");
         let marker = format!(":{line}:");
@@ -151,4 +153,39 @@ fn render_diagnostics_text_and_ansi_agree_on_line() {
         plain.iter().all(|d| d.ansi.is_none()),
         "RenderMode::Plain must not produce an ANSI form"
     );
+}
+
+/// A boundary producer fault is not malformed CHAT. Every rendering entrypoint
+/// must retain the finding without fabricating a caret, EOF location or verdict.
+#[test]
+fn invalid_source_context_never_falls_back_to_a_guessed_location() {
+    use talkbank_model::{ErrorCode, ErrorContext, ErrorLabel, SourceLocation, Span};
+    let source = "é🙂";
+    let shared = miette::NamedSource::new("fallback.cha", std::sync::Arc::new(source.to_owned()));
+    let raw = ParseError::build(ErrorCode::UnparsableContent)
+        .location(SourceLocation::new(Span::new(1, 4)).with_position(99, 88))
+        .message("original finding")
+        .context(ErrorContext::new("stale snippet", Span::new(0, 5), "stale"))
+        .label(ErrorLabel::new(Span::new(0, 100), "original label"))
+        .finish();
+    for mode in [RenderMode::Plain, RenderMode::Ansi] {
+        let reports = render_diagnostics(std::slice::from_ref(&raw), "fallback.cha", source, mode);
+        let report = &reports[0];
+        assert_eq!(report.error.original(), &raw);
+        assert!(report.error.location().is_err());
+        assert_eq!(
+            report.text,
+            render_error_with_miette_with_source(&raw, "fallback.cha", source)
+        );
+        assert_eq!(
+            report.text,
+            talkbank_transform::render_error_with_miette_with_named_source(&raw, &shared)
+        );
+        for text in std::iter::once(&report.text).chain(report.ansi.iter()) {
+            assert!(text.contains("E316") && text.contains("original finding"));
+            assert!(text.contains("source context unavailable"));
+            assert!(!text.contains("input:") && !text.contains("fallback.cha:"));
+            assert!(!text.contains("line 99"));
+        }
+    }
 }

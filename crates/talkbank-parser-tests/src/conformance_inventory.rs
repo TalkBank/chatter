@@ -102,6 +102,10 @@ pub enum InventoryGenError {
     #[error("extract fn `extract_{0}` has no first parameter")]
     ExtractMissingParam(String),
 
+    /// Broad extraction must return a carrier, never a fallible plan result.
+    #[error("broad extractor `extract_{0}` must return its carrier directly")]
+    FallibleBroadExtractor(String),
+
     /// An `extract_*` free function's first parameter was neither a
     /// `tree_sitter::Node` nor a `XxxNode` typed wrapper.
     #[error("extract fn `extract_{name}` has an unrecognized first parameter type `{ty}`")]
@@ -389,16 +393,6 @@ pub enum ExtractArg {
     TypedWrapper(String),
 }
 
-/// Whether the producer returns a carrier directly or admits reconstruction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExtractReturn {
-    /// Returns the carrier itself (supertype self-classification).
-    Direct,
-    /// Returns `Result<_, ReconstructionFault>`; the arm fails the test on
-    /// `Err`.
-    Fallible,
-}
-
 /// One dispatchable `extract_<snake>` free function.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExtractFn {
@@ -406,7 +400,6 @@ pub struct ExtractFn {
     snake: String,
     /// The argument-passing shape.
     arg: ExtractArg,
-    result: ExtractReturn,
 }
 
 impl ExtractFn {
@@ -414,12 +407,6 @@ impl ExtractFn {
     #[must_use]
     pub fn arg(&self) -> &ExtractArg {
         &self.arg
-    }
-
-    /// Whether the arm unwraps a reconstruction result.
-    #[must_use]
-    pub fn result(&self) -> ExtractReturn {
-        self.result
     }
 }
 
@@ -493,10 +480,10 @@ impl Inventory {
                     // (reached only by recursion, never by `node.kind()`) get
                     // none.
                     if named_kinds.contains(snake) {
+                        admit_total_extractor(snake, &item_fn.sig.output)?;
                         dispatch.push(ExtractFn {
                             snake: snake.to_owned(),
                             arg,
-                            result: extract_return(&item_fn.sig.output),
                         });
                     }
                 }
@@ -665,13 +652,6 @@ fn push_dispatch_arm(out: &mut String, extract: &ExtractFn) {
             out.push_str(">(node))");
         }
     }
-    match extract.result {
-        ExtractReturn::Direct => {}
-        // A producer fault must fail conformance, never silently drop a node.
-        ExtractReturn::Fallible => {
-            out.push_str(".expect(\"generated reconstruction must preserve its selected plan\")");
-        }
-    }
     out.push_str(".inspect(\"");
     out.push_str(&extract.snake);
     out.push_str("\", out),\n");
@@ -691,16 +671,16 @@ pub fn generate_inventory(
     Inventory::parse(typed_src, node_types_json)?.render()
 }
 
-/// Whether an extractor returns its carrier or a reconstruction `Result`.
-fn extract_return(output: &syn::ReturnType) -> ExtractReturn {
+/// Admit the current broad-extraction contract before constructing a dispatch arm.
+fn admit_total_extractor(name: &str, output: &syn::ReturnType) -> Result<(), InventoryGenError> {
     match output {
         syn::ReturnType::Type(_, ty)
             if matches!(ty.as_ref(), Type::Path(path)
                 if path.path.segments.last().is_some_and(|s| s.ident == "Result")) =>
         {
-            ExtractReturn::Fallible
+            Err(InventoryGenError::FallibleBroadExtractor(name.to_owned()))
         }
-        syn::ReturnType::Type(..) | syn::ReturnType::Default => ExtractReturn::Direct,
+        syn::ReturnType::Type(..) | syn::ReturnType::Default => Ok(()),
     }
 }
 

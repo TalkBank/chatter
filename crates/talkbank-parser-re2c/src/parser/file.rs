@@ -13,6 +13,8 @@
 //! output (e.g., falling back to a generic text tier for unparseable
 //! dependent tiers).
 
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use chumsky::Parser as _;
 
 use crate::ast::*;
@@ -21,7 +23,7 @@ use talkbank_model::{ErrorSink, ParseError, Span};
 
 mod dependent;
 use super::main_tier;
-use dependent::parse_dependent_tiers;
+pub(super) use dependent::parse_dependent_tiers;
 
 /// Report E750 for whitespace hugging an angle-group delimiter: a
 /// `LessThan` token immediately followed by whitespace, or whitespace
@@ -67,8 +69,10 @@ fn report_annotation_spacing(lexed: &super::LexedSource<'_>, errors: &impl Error
         // A replacement is a separate token after a word, including a word
         // assembled from sub-tokens. Recovery retains the AST, but the missing
         // separator violates word_with_optional_annotations (CHECK 161).
-        if matches!(right, Token::ReplacementBegin(_))
+        if (matches!(right, Token::ReplacementBegin(_))
+            || super::classify::token_to_parsed_annotation(right.clone()).is_some())
             && (matches!(left, Token::Word { .. })
+                || matches!(left, Token::GreaterThan(_) | Token::RightDoubleQuote(_))
                 || super::classify::is_word_token(TokenDiscriminants::from(left)))
         {
             errors.report(ParseError::new(
@@ -76,7 +80,7 @@ fn report_annotation_spacing(lexed: &super::LexedSource<'_>, errors: &impl Error
                 talkbank_model::Severity::Error,
                 talkbank_model::SourceLocation::from_offsets(span.start, span.end),
                 None,
-                "Replacement annotation must be separated from its word by whitespace",
+                "Annotation must be separated from its preceding content by whitespace",
             ));
         }
         let closes_a_code = matches!(left, Token::RightBracket(_))
@@ -137,6 +141,10 @@ fn scan_main_tier_line(main_tier_tokens: &[Token<'_>]) -> LineScan {
     };
     for (idx, tok) in main_tier_tokens.iter().enumerate() {
         let d = TokenDiscriminants::from(tok);
+        #[allow(
+            clippy::wildcard_enum_match_arm,
+            reason = "every other lexical token ends the initial linker run"
+        )]
         match d {
             TokenDiscriminants::Star
             | TokenDiscriminants::Speaker
@@ -270,9 +278,25 @@ pub(crate) fn parse_file_with_errors<'a>(
     report_annotation_spacing(lexed, errors);
     let mut pos = 0;
     let mut lines = Vec::new();
+    // This is only an observed document boundary, not a synthesized @Begin
+    // requirement: header and utterance fragments use the same dispatcher.
+    let mut ended = false;
 
     while pos < tokens.len() {
+        if ended && !matches!(tokens[pos], Token::Newline(_) | Token::BOM(_)) {
+            let end = skip_to_newline(tokens, pos);
+            lexed.report_error(
+                pos..end,
+                talkbank_model::ErrorCode::UnexpectedSyntax,
+                "Content follows the explicit @End boundary",
+                errors,
+            );
+        }
         let d = TokenDiscriminants::from(&tokens[pos]);
+        #[allow(
+            clippy::wildcard_enum_match_arm,
+            reason = "file dispatch reports unhandled lexical tokens; content traversal remains exhaustive"
+        )]
         match d {
             // No-content headers
             TokenDiscriminants::HeaderUtf8
@@ -282,6 +306,9 @@ pub(crate) fn parse_file_with_errors<'a>(
             | TokenDiscriminants::HeaderNewEpisode => {
                 let header_start = pos;
                 let tok = tokens[pos].clone();
+                if matches!(tok, Token::HeaderEnd(_)) {
+                    ended = true;
+                }
                 pos += 1;
                 if pos < tokens.len()
                     && TokenDiscriminants::from(&tokens[pos]) == TokenDiscriminants::Newline
@@ -326,6 +353,37 @@ pub(crate) fn parse_file_with_errors<'a>(
                     && TokenDiscriminants::from(&tokens[pos]) != TokenDiscriminants::Newline
                 {
                     pos += 1;
+                }
+                let content = &tokens[content_start..pos];
+                let malformed = if matches!(&prefix, Token::HeaderPrefix(p) if p.text().starts_with("@Languages:"))
+                {
+                    super::headers::languages_header_parser()
+                        .parse(content)
+                        .into_result()
+                        .is_err()
+                } else if matches!(&prefix, Token::HeaderPrefix(p) if p.text().starts_with("@Media:"))
+                {
+                    super::headers::media_header_parser()
+                        .parse(content)
+                        .into_result()
+                        .is_err()
+                } else if matches!(&prefix, Token::HeaderPrefix(p) if p.text().starts_with("@G:")) {
+                    content
+                        .iter()
+                        .all(|token| matches!(token, Token::Whitespace(_) | Token::Continuation(_)))
+                } else {
+                    content.iter().any(|token| token.error_context().is_some())
+                };
+                if malformed
+                    || (content.is_empty()
+                        && matches!(&prefix, Token::HeaderPrefix(p) if p.text().starts_with("@Page:")))
+                {
+                    lexed.report_error(
+                        header_start..pos,
+                        talkbank_model::ErrorCode::UnparsableContent,
+                        "Malformed or unsupported header content",
+                        errors,
+                    );
                 }
                 let header = if matches!(&prefix, Token::HeaderPrefix(p) if p.text().contains("@Participants"))
                 {
@@ -447,7 +505,14 @@ pub(crate) fn parse_file_with_errors<'a>(
                         // CHECK 52, "Item '%s' must be preceded by text.").
                         // Report E759 here, mirroring the tree-sitter error
                         // analysis; the AST is kept (recovery policy).
-                        report_annotation_at_utterance_start(&main_tier.tier_body.contents, errors);
+                        if has_orphan_annotation(&main_tier.tier_body.contents) {
+                            lexed.report_error(
+                                start..pos,
+                                talkbank_model::ErrorCode::AnnotationAtUtteranceStart,
+                                "Scoped annotation has no preceding host",
+                                errors,
+                            );
+                        }
                         // Recovery is not validity: a `<...>` group with no
                         // following annotation only parses via a synthesized
                         // retrace (Retrace::synthesized_missing_annotation). CLAN
@@ -472,12 +537,11 @@ pub(crate) fn parse_file_with_errors<'a>(
                     }
                     Err(_) => {
                         // Report E321: unparsable utterance.
-                        report_error(
-                            errors,
+                        lexed.report_error(
+                            start..pos,
                             talkbank_model::errors::codes::ErrorCode::UnparsableUtterance,
-                            talkbank_model::Severity::Error,
-                            main_tier_tokens,
                             "utterance could not be parsed",
+                            errors,
                         );
                         // Skip any dependent tiers that follow; they're orphaned
                         // without a valid main tier.
@@ -574,31 +638,10 @@ pub(crate) fn parse_file_with_errors<'a>(
 /// events, groups, precodes) never match. The `["]` quotation-marker
 /// case of CHECK 52 has no token variant in this front end and is
 /// covered by the tree-sitter side only.
-fn report_annotation_at_utterance_start(items: &[ContentItem<'_>], errors: &impl ErrorSink) {
-    // Asked of the annotation's own type rather than by listing seven token
-    // variants here; `is_postfix` is the property, and `chat_text` reproduces
-    // the marker as written even though the lexer tag-extracts most payloads.
-    let offending = match items.first() {
-        Some(ContentItem::OrphanAnnotation(annotation)) if annotation.is_postfix() => {
-            Some(annotation.chat_text())
-        }
-        _ => None,
-    };
-    if let Some(code_text) = offending {
-        errors.report(
-            ParseError::new(
-                talkbank_model::errors::codes::ErrorCode::AnnotationAtUtteranceStart,
-                talkbank_model::Severity::Error,
-                talkbank_model::SourceLocation::new(Span::DUMMY),
-                None,
-                format!("Annotation '{code_text}' at utterance start has no content to attach to"),
-            )
-            .with_suggestion(
-                "Retraces, overlap markers, replacements, and quotation codes scope over the \
-                 material BEFORE them; put the annotated content first, or remove the code",
-            ),
-        );
-    }
+fn has_orphan_annotation(items: &[ContentItem<'_>]) -> bool {
+    items.iter().any(|item| {
+        matches!(item, ContentItem::OrphanAnnotation(_)) || has_orphan_annotation(item.children())
+    })
 }
 
 fn has_synthesized_missing_annotation(items: &[ContentItem<'_>]) -> bool {

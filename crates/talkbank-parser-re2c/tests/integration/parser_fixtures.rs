@@ -651,17 +651,17 @@ fn convert_mor_to_model() {
     assert_eq!(tier.items.len(), 3);
 
     // Convert to talkbank-model MorTier
-    let model_tier: talkbank_model::dependent_tier::mor::MorTier = (&tier).into();
-    assert_eq!(model_tier.items.len(), 3);
+    let model_tier = talkbank_model::MorTier::try_from(&tier).expect("admitted morphology");
+    assert_eq!(model_tier.items().len(), 3);
 
     // Verify first item: pro|I
-    let first = &model_tier.items[0];
+    let first = &model_tier.items()[0];
     assert_eq!(first.main.pos.as_str(), "pro");
     assert_eq!(first.main.lemma.as_str(), "I");
     assert!(first.main.features.is_empty());
 
     // Verify third item: n|cookie-PL
-    let third = &model_tier.items[2];
+    let third = &model_tier.items()[2];
     assert_eq!(third.main.pos.as_str(), "n");
     assert_eq!(third.main.lemma.as_str(), "cookie");
     assert_eq!(third.main.features.len(), 1);
@@ -672,10 +672,10 @@ fn convert_mor_to_model() {
 fn convert_mor_with_clitic_to_model() {
     let input = "pron|it~aux|be-Fin-Ind-Pres-S3 .\n";
     let tier = parser::parse_mor_tier(input);
-    let model_tier: talkbank_model::dependent_tier::mor::MorTier = (&tier).into();
+    let model_tier = talkbank_model::MorTier::try_from(&tier).expect("admitted clitic morphology");
 
-    assert_eq!(model_tier.items.len(), 1);
-    let item = &model_tier.items[0];
+    assert_eq!(model_tier.items().len(), 1);
+    let item = &model_tier.items()[0];
     assert_eq!(item.main.pos.as_str(), "pron");
     assert_eq!(item.main.lemma.as_str(), "it");
     assert_eq!(item.post_clitics.len(), 1);
@@ -1003,11 +1003,18 @@ fn parse_all_err_fixtures() {
 fn convert_gra_to_model() {
     let input = "1|2|SUBJ 2|0|ROOT 3|2|OBJ\n";
     let tier = parser::parse_gra_tier(input).expect("a well formed %gra body parses");
-    let model_tier: talkbank_model::model::GraTier = (&tier).into();
-    assert_eq!(model_tier.relations.len(), 3);
-    assert_eq!(model_tier.relations[0].index, 1);
-    assert_eq!(model_tier.relations[0].head, 2);
-    assert_eq!(model_tier.relations[1].head, 0); // ROOT
+    let errors = talkbank_model::ErrorCollector::new();
+    let model_tier = talkbank_parser_re2c::convert::gra_tier_to_model(
+        &tier,
+        talkbank_parser_re2c::source_text::SourceText::new(input),
+        &errors,
+    )
+    .tier_without_health();
+    assert!(errors.into_vec().is_empty());
+    assert_eq!(model_tier.relations().len(), 3);
+    assert_eq!(model_tier.relations()[0].index, 1);
+    assert_eq!(model_tier.relations()[0].head, 2);
+    assert_eq!(model_tier.relations()[1].head, 0); // ROOT
 }
 
 #[test]
@@ -1047,7 +1054,7 @@ fn trait_parse_mor_tier() {
     let result = p.parse_mor_tier("pro|I v|want n|cookie-PL .\n", 0, &errors);
     assert!(result.is_parsed());
     let tier = result.into_option().unwrap();
-    assert_eq!(tier.items.len(), 3);
+    assert_eq!(tier.items().len(), 3);
 }
 
 #[test]
@@ -1060,7 +1067,7 @@ fn trait_parse_gra_tier() {
     let result = p.parse_gra_tier("1|2|SUBJ 2|0|ROOT 3|2|OBJ\n", 0, &errors);
     assert!(result.is_parsed());
     let tier = result.into_option().unwrap();
-    assert_eq!(tier.relations.len(), 3);
+    assert_eq!(tier.relations().len(), 3);
 }
 
 #[test]
@@ -1071,7 +1078,7 @@ fn trait_parse_id_header() {
     let p = talkbank_parser_re2c::Re2cParser::new();
     let errors = ErrorCollector::new();
     let result = p.parse_id_header(
-        "eng|corpus|CHI|3;00.|female|typical||Child|||\n",
+        "@ID:\teng|corpus|CHI|3;00.|female|typical||Child|||\n",
         0,
         &errors,
     );
@@ -1083,15 +1090,45 @@ fn trait_parse_id_header() {
 #[test]
 #[cfg(feature = "trait_tests")]
 fn trait_parse_mor_word() {
-    use talkbank_model::ChatParser;
     use talkbank_model::errors::ErrorCollector;
+    use talkbank_model::{ChatParser, SemanticEq, Severity};
     let p = talkbank_parser_re2c::Re2cParser::new();
     let errors = ErrorCollector::new();
-    let result = p.parse_mor_word("verb|want-Fin-Ind-Pres\n", 0, &errors);
+    // A word body is contiguous; a newline is a tier boundary, not part of it.
+    let input = "verb|want-Fin-Ind-Pres";
+    let result = p.parse_mor_word(input, 0, &errors);
     assert!(result.is_parsed());
     let word = result.into_option().unwrap();
     assert_eq!(word.pos.as_str(), "verb");
     assert_eq!(word.lemma.as_str(), "want");
+    assert!(errors.into_vec().is_empty());
+    let canonical = talkbank_parser::TreeSitterParser::new().unwrap();
+    let canonical_errors = ErrorCollector::new();
+    let canonical_word = canonical
+        .parse_mor_word(input, 0, &canonical_errors)
+        .into_option()
+        .unwrap();
+    assert!(canonical_errors.into_vec().is_empty());
+    assert!(word.semantic_eq(&canonical_word));
+    {
+        let input = format!("{input}\n");
+        let native_errors = ErrorCollector::new();
+        let canonical_errors = ErrorCollector::new();
+        p.parse_mor_word(&input, 0, &native_errors);
+        canonical.parse_mor_word(&input, 0, &canonical_errors);
+        assert!(
+            native_errors
+                .into_vec()
+                .iter()
+                .any(|error| error.severity == Severity::Error)
+        );
+        assert!(
+            canonical_errors
+                .into_vec()
+                .iter()
+                .any(|error| error.severity == Severity::Error)
+        );
+    }
 }
 
 #[test]

@@ -12,13 +12,9 @@ Word with omission marker
 
 ``` cst
 (standalone_word
-  (word_prefix
-    (zero)
-  )
+  (zero)
   (word_body
-    (initial_word_segment)
-  )
-)
+    (word_segment)))
 ```
 
 ## Metadata

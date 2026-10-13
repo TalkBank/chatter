@@ -1,4 +1,4 @@
-//! Authored missing-encoding example through both public file parsers.
+//! Authored header contracts through both public file and fragment parsers.
 #![allow(clippy::unwrap_used)]
 use talkbank_model::{ChatParser, ErrorCode, ErrorCollector, Span, model::TranscriptName};
 
@@ -105,5 +105,302 @@ fn header_lexer_extents_survive_file_lowering_and_rebasing() {
             .collect();
         assert_eq!(actual, expected);
         assert!(errors.is_empty());
+    }
+}
+
+/// New authored optional-field controls must mean the same thing through both APIs.
+#[test]
+fn structured_id_specs_preserve_legal_semantics_across_backends() {
+    use talkbank_model::model::{ChatFile, SemanticEq};
+    fn parse_clean(parser: &impl ChatParser, input: &str, origin: usize) -> ChatFile {
+        let errors = ErrorCollector::new();
+        let file = parser
+            .parse_chat_file(input, origin, &errors)
+            .into_option()
+            .unwrap();
+        assert!(
+            errors.is_empty(),
+            "{}: {:?}",
+            parser.parser_name(),
+            errors.into_vec()
+        );
+        file
+    }
+    let tree = talkbank_parser::TreeSitterParser::new().unwrap();
+    let re2c = crate::Re2cParser::new();
+    for input in [
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E514_2.cha"),
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E514_3.cha"),
+    ] {
+        for origin in [0, 25] {
+            let left = parse_clean(&tree, input, origin);
+            let right = parse_clean(&re2c, input, origin);
+            assert!(left.semantic_eq(&right), "supported ID semantics agree");
+            for file in [left, right] {
+                let errors = ErrorCollector::new();
+                file.validate_into(&errors, TranscriptName::Anonymous)
+                    .unwrap();
+                assert!(errors.is_empty());
+            }
+        }
+    }
+}
+
+/// Detection needs an error, not warning-only output or an internal tool failure.
+#[test]
+fn structured_id_specs_require_error_level_invalidity_from_each_backend() {
+    fn check(parser: &impl ChatParser, input: &str, origin: usize) {
+        let errors = ErrorCollector::new();
+        if let Some(file) = parser.parse_chat_file(input, origin, &errors).into_option() {
+            assert!(
+                file.validate_into(&errors, TranscriptName::Anonymous)
+                    .is_err(),
+                "{}: invalid ID cannot gain validity",
+                parser.parser_name()
+            );
+        }
+        let completed = talkbank_model::CompletedDiagnostics::admit(errors.into_vec()).unwrap();
+        assert!(
+            completed
+                .diagnostics()
+                .iter()
+                .any(|error| error.severity == talkbank_model::Severity::Error),
+            "{}: warnings or silence do not satisfy detection",
+            parser.parser_name()
+        );
+    }
+    let tree = talkbank_parser::TreeSitterParser::new().unwrap();
+    let re2c = crate::Re2cParser::new();
+    for input in [
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E511_3.cha"),
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E515_3.cha"),
+    ] {
+        for origin in [0, 25] {
+            check(&tree, input, origin);
+            check(&re2c, input, origin);
+        }
+    }
+}
+
+#[test]
+fn metadata_headers_legal_specs_agree_through_files_and_fragments() {
+    use talkbank_model::model::{Header, Line, SemanticEq};
+    let tree = talkbank_parser::TreeSitterParser::new().unwrap();
+    let re2c = crate::Re2cParser::new();
+    for source in [
+        include_str!(
+            "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_1.cha"
+        ),
+        include_str!(
+            "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_2.cha"
+        ),
+    ] {
+        for newline in ["\n", "\r\n"] {
+            let source = source.replace('\n', newline);
+            for origin in [0, 25] {
+                let left_errors = ErrorCollector::new();
+                let left = ChatParser::parse_chat_file(&tree, &source, origin, &left_errors)
+                    .into_option()
+                    .unwrap();
+                let right_errors = ErrorCollector::new();
+                let right = re2c
+                    .parse_chat_file(&source, origin, &right_errors)
+                    .into_option()
+                    .unwrap();
+                assert!(
+                    left.semantic_eq(&right),
+                    "supported metadata semantics agree ({newline:?}, origin {origin}):\nleft: {:?}\nright: {:?}",
+                    left.headers().collect::<Vec<_>>(),
+                    right.headers().collect::<Vec<_>>()
+                );
+                let left = left
+                    .validate_into(&left_errors, TranscriptName::Anonymous)
+                    .unwrap();
+                right
+                    .validate_into(&right_errors, TranscriptName::Anonymous)
+                    .unwrap();
+                assert!(left_errors.is_empty(), "{:?}", left_errors.to_vec());
+                assert!(right_errors.is_empty(), "{:?}", right_errors.to_vec());
+                let mut compared = 0;
+                for line in &left.document().lines {
+                    let Line::Header { header, span, .. } = line else {
+                        continue;
+                    };
+                    if !matches!(
+                        header.as_ref(),
+                        Header::Languages { .. } | Header::Types(_) | Header::Situation { .. }
+                    ) {
+                        continue;
+                    }
+                    let input = &source[span.start as usize - origin..span.end as usize - origin];
+                    let left_errors = ErrorCollector::new();
+                    let left_fragment =
+                        ChatParser::parse_header(&tree, input, origin, &left_errors)
+                            .into_option()
+                            .unwrap();
+                    let right_errors = ErrorCollector::new();
+                    let right_fragment = re2c
+                        .parse_header(input, origin, &right_errors)
+                        .into_option()
+                        .unwrap();
+                    assert!(left_fragment.semantic_eq(&right_fragment));
+                    assert!(header.as_ref().semantic_eq(&left_fragment));
+                    assert!(left_errors.is_empty());
+                    assert!(right_errors.is_empty());
+                    compared += 1;
+                }
+                assert_eq!(compared, 3);
+            }
+        }
+    }
+}
+
+#[test]
+fn metadata_headers_invalid_specs_require_error_level_file_detection() {
+    fn check(parser: &impl ChatParser, input: &str, origin: usize) {
+        let errors = ErrorCollector::new();
+        if let Some(file) = parser.parse_chat_file(input, origin, &errors).into_option() {
+            // Preserve parse diagnostics alongside model validation. A
+            // salvaged model does not certify the original source bytes.
+            file.validate(&errors, TranscriptName::Anonymous);
+        }
+        let completed = talkbank_model::CompletedDiagnostics::admit(errors.into_vec()).unwrap();
+        assert!(
+            completed
+                .diagnostics()
+                .iter()
+                .any(|error| error.severity == talkbank_model::Severity::Error),
+            "{}: warnings or silence cannot satisfy detection",
+            parser.parser_name()
+        );
+    }
+    let tree = talkbank_parser::TreeSitterParser::new().unwrap();
+    let re2c = crate::Re2cParser::new();
+    for input in [
+        include_str!(
+            "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_3.cha"
+        ),
+        include_str!(
+            "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_4.cha"
+        ),
+        include_str!(
+            "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_5.cha"
+        ),
+        include_str!(
+            "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_6.cha"
+        ),
+        include_str!(
+            "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_13.cha"
+        ),
+        include_str!(
+            "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_14.cha"
+        ),
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E507_2.cha"),
+        include_str!("../../talkbank-parser-tests/tests/error_corpus/validation_errors/E519_1.cha"),
+    ] {
+        for newline in ["\n", "\r\n"] {
+            let input = input.replace('\n', newline);
+            for origin in [0, 25] {
+                check(&tree, &input, origin);
+                check(&re2c, &input, origin);
+            }
+        }
+    }
+}
+
+#[test]
+fn metadata_headers_types_mutations_detect_faults_through_isolated_headers() {
+    use talkbank_parser::generated_traversal::{AsRawNode, SourceSlotView, TypesHeaderNode};
+    fn check(parser: &impl ChatParser, input: &str, origin: usize) {
+        let errors = ErrorCollector::new();
+        let _outcome = parser.parse_header(input, origin, &errors);
+        let completed = talkbank_model::CompletedDiagnostics::admit(errors.into_vec()).unwrap();
+        assert!(
+            completed
+                .diagnostics()
+                .iter()
+                .any(|error| error.severity == talkbank_model::Severity::Error)
+        );
+        for error in completed.diagnostics() {
+            assert!(error.location.span.start as usize >= origin);
+            assert!(error.location.span.end as usize <= origin + input.len());
+        }
+    }
+    let tree = talkbank_parser::TreeSitterParser::new().unwrap();
+    let re2c = crate::Re2cParser::new();
+    let control = include_str!(
+        "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_1.cha"
+    );
+    for newline in ["\n", "\r\n"] {
+        let source = control.replace('\n', newline);
+        let parsed = tree.parse_source_incremental(&source, None).unwrap();
+        let mut mutations = 0;
+        for node in parsed.root().unwrap().descendants() {
+            let node = node.unwrap();
+            let Some(types) = node.typed::<TypesHeaderNode>() else {
+                continue;
+            };
+            let children = types.extract();
+            let SourceSlotView::Present(design) = children.field_child_2().slot().view() else {
+                panic!("design")
+            };
+            let SourceSlotView::Present(activity) = children.field_child_6().slot().view() else {
+                panic!("activity")
+            };
+            let SourceSlotView::Present(group) = children.field_child_10().slot().view() else {
+                panic!("group")
+            };
+            let design = design.read().unwrap();
+            let activity = activity.read().unwrap();
+            let group = group.read().unwrap();
+            let start = types.raw_node().start_byte();
+            let end = types.raw_node().end_byte();
+            for (range, replacement, authored) in [
+                (
+                    design.raw_node().end_byte()..group.raw_node().end_byte(),
+                    "",
+                    include_str!(
+                        "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_3.cha"
+                    ),
+                ),
+                (
+                    activity.raw_node().byte_range(),
+                    "toy play",
+                    include_str!(
+                        "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_4.cha"
+                    ),
+                ),
+                (
+                    group.raw_node().byte_range(),
+                    "T-D",
+                    include_str!(
+                        "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_5.cha"
+                    ),
+                ),
+                (
+                    group.raw_node().byte_range(),
+                    "TDé",
+                    include_str!(
+                        "../../talkbank-parser-tests/tests/error_corpus/validation_errors/E316_metadata_headers_6.cha"
+                    ),
+                ),
+            ] {
+                let mut whole = source.clone();
+                whole.replace_range(range.clone(), replacement);
+                assert_eq!(
+                    whole,
+                    authored.replace('\n', newline),
+                    "only the admitted field range changes"
+                );
+                let mut fragment = source[start..end].to_owned();
+                fragment.replace_range(range.start - start..range.end - start, replacement);
+                for origin in [0, 25] {
+                    check(&tree, &fragment, origin);
+                    check(&re2c, &fragment, origin);
+                }
+                mutations += 1;
+            }
+        }
+        assert_eq!(mutations, 4);
     }
 }

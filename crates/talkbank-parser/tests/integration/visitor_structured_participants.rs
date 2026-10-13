@@ -73,7 +73,7 @@ fn participant_reference_range_admission_preserves_fields_and_counts_work() {
                 foreign.bind(entry.raw_node()).is_err(),
                 "equal text is not the same parse owner"
             );
-            let selected = entry.extract().unwrap();
+            let selected = entry.extract();
             assert!(selected.children().unexpected.is_empty());
             let raw_inline = std::mem::size_of_val(selected.children());
             let raw_groups = selected.children().child_1.slot();

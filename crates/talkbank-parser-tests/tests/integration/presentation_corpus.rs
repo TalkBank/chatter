@@ -455,7 +455,7 @@ fn missing_end_spec_keeps_its_legitimate_eof_location_when_rendered() {
         let sink = ErrorCollector::new();
         let file = parser.parse_chat_file_streaming(source, &sink);
         file.validate(&sink, TranscriptName::Anonymous);
-        let mut diagnostics = sink.into_vec();
+        let diagnostics = sink.into_vec();
         let [error] = diagnostics.as_slice() else {
             panic!("one missing-end diagnosis")
         };
@@ -465,19 +465,26 @@ fn missing_end_spec_keeps_its_legitimate_eof_location_when_rendered() {
         assert_eq!(span.start, span.end);
         let index = SourceIndex::new(source);
         let (line, column) = index.line_col_of(span.start);
-        enhance_errors_with_index(&mut diagnostics, &index);
-        let rendered = &diagnostics[0];
+        let rendered: Vec<_> = enhance_errors_with_index(&diagnostics, &index).collect();
+        let rendered = &rendered[0];
         assert_eq!(
-            rendered.location.span, span,
+            rendered.location().expect("admitted EOF").span,
+            span,
             "EOF is not an out-of-bounds offset"
         );
-        assert_eq!(rendered.location.line, Some(line + 1));
-        assert_eq!(rendered.location.column, Some(column + 1));
-        let context = rendered.context.as_ref().expect("display context");
+        assert_eq!(
+            rendered.location().expect("admitted EOF").line,
+            Some(line + 1)
+        );
+        assert_eq!(
+            rendered.location().expect("admitted EOF").column,
+            Some(column + 1)
+        );
+        let context = rendered.context().expect("display context");
         assert!(
             context
-                .source_text
-                .get(context.span.start as usize..context.span.end as usize)
+                .source_text()
+                .get(context.span().to_range())
                 .is_some()
         );
     }
@@ -497,16 +504,27 @@ fn deleting_spec_buffer_preserves_empty_source_diagnostics_when_rendered() {
     let sink = ErrorCollector::new();
     let (file, _) = parser.parse_chat_file_revision(Arc::from(""), Some(&previous), &sink);
     file.validate(&sink, TranscriptName::Anonymous);
-    let mut diagnostics = sink.into_vec();
+    let diagnostics = sink.into_vec();
     assert!(
         !diagnostics.is_empty(),
         "deleting all text must not certify valid CHAT"
     );
     let original = serde_json::to_value(&diagnostics).expect("diagnostic JSON");
-    enhance_errors_with_index(&mut diagnostics, &SourceIndex::new(""));
+    let rendered: Vec<_> = enhance_errors_with_index(&diagnostics, &SourceIndex::new("")).collect();
     assert_eq!(
-        serde_json::to_value(&diagnostics).expect("diagnostic JSON"),
+        serde_json::to_value(
+            rendered
+                .iter()
+                .map(|diagnostic| diagnostic.original())
+                .collect::<Vec<_>>()
+        )
+        .expect("diagnostic JSON"),
         original,
         "without source bytes, display enrichment must not invent coordinates or context"
+    );
+    assert!(
+        rendered
+            .iter()
+            .all(|diagnostic| diagnostic.presentation().is_err())
     );
 }

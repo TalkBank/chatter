@@ -21,16 +21,16 @@ Syllable pause marker `^` between syllables within a word: `ja^ja^ja@o`.
       (content_item
         (base_content_item
           (word_with_optional_annotations
-            word: (standalone_word
+            (standalone_word
               (word_body
                 (word_segment)
                 (syllable_pause)
                 (word_segment)
                 (syllable_pause)
                 (word_segment))
-              (form_marker))))))
+              (form_marker)))))
+      (whitespaces))
     (utterance_end
-      (whitespaces)
       (period)
       (newline))))
 ```

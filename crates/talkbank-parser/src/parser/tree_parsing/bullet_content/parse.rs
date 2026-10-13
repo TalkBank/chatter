@@ -34,7 +34,7 @@ pub fn parse_bullet_content(
     };
     match typed {
         BulletTextNode::Text(node) => {
-            let children = node.extract()?;
+            let children = node.extract();
             sink.choice(children.field_child_0().slot(), push_text_first)?;
             for item in children.field_child_1().slot().iter() {
                 sink.choice(item.slot(), push_text_repeat)?;
@@ -42,7 +42,7 @@ pub fn parse_bullet_content(
             sink.displaced(children.field_unexpected(), "text_with_bullets");
         }
         BulletTextNode::Pictures(node) => {
-            let children = node.extract()?;
+            let children = node.extract();
             sink.choice(children.field_child_0().slot(), push_pictures_first)?;
             for item in children.field_child_1().slot().iter() {
                 sink.choice(item.slot(), push_pictures_repeat)?;
@@ -79,7 +79,7 @@ impl<E: ErrorSink> SegmentSink<'_, E> {
 
     fn picture<'tree>(&mut self, typed: SourceBound<'tree, '_, InlinePicNode<'tree>>) {
         if let ParseOutcome::Parsed(filename) = parse_inline_pic(typed, self.errors) {
-            self.segments.push(BulletContentSegment::picture(filename));
+            self.segments.push(filename.into_segment());
         }
     }
 

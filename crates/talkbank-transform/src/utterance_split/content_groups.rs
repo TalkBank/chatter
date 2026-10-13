@@ -50,49 +50,134 @@ pub(super) fn as_retrace(item: &UtteranceContent) -> Option<&Retrace> {
     }
 }
 
-/// Which child each top-level content item travels with, for EVERY item.
-///
-/// This replaced a `Vec<Option<usize>>` that stayed partial after its
-/// fills, so both of its readers ended in `unwrap_or(0)`: an item whose
-/// group was unknown was quietly handed to the FIRST child, which is a
-/// measured-looking answer nobody measured. Here the fill IS the
-/// constructor, its seed is the first word's own group rather than a
-/// zero, and each stored entry is a plain `usize`, so no unknown survives
-/// construction for a reader to default.
-pub(super) struct ContentItemGroups {
-    /// One group index per content item, in content order.
-    by_content: Vec<usize>,
-    /// One past the highest group index `by_content` can name. Every entry
-    /// indexes a collection sized from this, by construction.
-    group_count: usize,
+/// One nonempty, contiguous slice of the producing main-tier content.
+/// Only partition admission constructs this; readers cannot pair it with a
+/// second source, invent an empty bucket or supply a different affiliation.
+pub(super) struct ContentGroup<'source, Affiliation = ()> {
+    index: usize,
+    content_index: usize,
+    first: &'source UtteranceContent,
+    remaining: &'source [UtteranceContent],
+    affiliation: Affiliation,
 }
 
-impl ContentItemGroups {
-    /// Assign every content item to a child, or report that this
-    /// assignment splits nothing.
-    ///
-    /// `None` is the one answer covering all three ways there is nothing
-    /// to split: no assignments, no extracted words, or every word
-    /// assigned to the same child. A `Some` therefore proves the
-    /// assignment names at least two distinct children, and the caller
-    /// hands back the parent untouched on `None` rather than rebuilding
-    /// it from its own parts.
-    pub(super) fn assign(
-        content_items: &[UtteranceContent],
+impl<'source, Affiliation> ContentGroup<'source, Affiliation> {
+    fn items(&self) -> impl Iterator<Item = &'source UtteranceContent> {
+        std::iter::once(self.first).chain(self.remaining)
+    }
+
+    pub(super) fn cloned_content(&self) -> Vec<UtteranceContent> {
+        self.items().cloned().collect()
+    }
+
+    pub(super) fn affiliation(&self) -> &Affiliation {
+        &self.affiliation
+    }
+}
+
+/// Metadata position in a split that has distinct first and last children.
+pub(super) enum ChildPosition {
+    First,
+    Interior,
+    Last,
+}
+
+/// Source-associated admission of two or more nonempty content groups.
+/// Both endpoint fields are mandatory; optional interior groups cannot erase
+/// either endpoint. Count, content and affiliations have this single owner.
+pub(super) struct ContentItemGroups<'source, Affiliation = ()> {
+    source: &'source talkbank_model::model::Utterance,
+    first: ContentGroup<'source, Affiliation>,
+    interior: Vec<ContentGroup<'source, Affiliation>>,
+    last: ContentGroup<'source, Affiliation>,
+}
+
+/// Rebuilt children with the admitted partition's cardinality.
+/// Construction and length-changing access stay private to this producer.
+pub(super) struct RebuiltChildren(Vec<talkbank_model::model::Utterance>);
+
+impl RebuiltChildren {
+    pub(super) fn as_slice(&self) -> &[talkbank_model::model::Utterance] {
+        &self.0
+    }
+
+    pub(super) fn as_mut_slice(&mut self) -> &mut [talkbank_model::model::Utterance] {
+        &mut self.0
+    }
+
+    pub(super) fn into_vec(self) -> Vec<talkbank_model::model::Utterance> {
+        self.0
+    }
+}
+
+impl<'source> ContentItemGroups<'source> {
+    /// Admit the proposed word labels against their producing content domain.
+    /// `None` means no structural split, not an empty rebuilt child list.
+    pub(super) fn admit(
+        source: &'source talkbank_model::model::Utterance,
         word_to_content: &[usize],
         assignments: &[usize],
-    ) -> Option<Self> {
-        let (&first_group, rest) = assignments.split_first()?;
-        if word_to_content.is_empty() || rest.iter().all(|&group| group == first_group) {
-            return None;
-        }
+    ) -> Result<Option<Self>, super::SplitRefusal> {
+        Self::admit_with_affiliation(source, word_to_content, assignments, |_| ())
+    }
+}
 
-        // Direct assignment, first writer wins: a content item holding
-        // several extracted words takes the group of its first word.
-        let mut partial: Vec<Option<usize>> = vec![None; content_items.len()];
-        for (word_idx, &content_idx) in word_to_content.iter().enumerate() {
-            if word_idx < assignments.len() && partial[content_idx].is_none() {
-                partial[content_idx] = Some(assignments[word_idx]);
+/// A normalized run retains the source-word slot that established it.
+#[derive(Clone, Copy)]
+struct AssignedRun {
+    index: usize,
+    first_word_slot: usize,
+}
+
+impl<'source, Affiliation> ContentItemGroups<'source, Affiliation> {
+    /// Attach evidence at the producing word slot, before content is rebuilt.
+    pub(super) fn admit_with_affiliation(
+        source: &'source talkbank_model::model::Utterance,
+        word_to_content: &[usize],
+        assignments: &[usize],
+        mut affiliation: impl FnMut(usize) -> Affiliation,
+    ) -> Result<Option<Self>, super::SplitRefusal> {
+        use super::SplitRefusal;
+        use std::collections::HashSet;
+
+        if assignments.len() != word_to_content.len() {
+            return Err(SplitRefusal::SlotCount {
+                expected: word_to_content.len(),
+                actual: assignments.len(),
+            });
+        }
+        // Labels become dense source-ordered runs; their magnitude never sizes
+        // a collection. Reappearing labels would reorder content and refuse.
+        let mut seen = HashSet::new();
+        let mut previous = None;
+        let mut run_count = 0usize;
+        let mut first_word_slot = 0usize;
+        let mut normalized = Vec::with_capacity(assignments.len());
+        for (slot, &label) in assignments.iter().enumerate() {
+            if previous != Some(label) {
+                if !seen.insert(label) {
+                    return Err(SplitRefusal::DisjointGroup { group: label });
+                }
+                run_count += 1;
+                previous = Some(label);
+                first_word_slot = slot;
+            }
+            normalized.push(AssignedRun {
+                index: run_count - 1,
+                first_word_slot,
+            });
+        }
+        let Some((&first_group, _)) = normalized.split_first() else {
+            return Ok(None);
+        };
+        let content_items = &source.main.content.content;
+        let mut partial: Vec<Option<AssignedRun>> = vec![None; content_items.len()];
+        for (&content_index, &group) in word_to_content.iter().zip(&normalized) {
+            match partial[content_index] {
+                Some(previous) if previous.index != group.index => {
+                    return Err(SplitRefusal::IndivisibleContent { content_index });
+                }
+                Some(_) | None => partial[content_index] = Some(group),
             }
         }
 
@@ -132,31 +217,105 @@ impl ContentItemGroups {
         // pass that used to repair leading `None`s is what the seed
         // replaces.
         let mut last_group = first_group;
-        let by_content = partial
-            .into_iter()
-            .map(|slot| {
-                if let Some(group) = slot {
-                    last_group = group;
+        let by_content = partial.into_iter().map(|slot| {
+            if let Some(group) = slot {
+                last_group = group;
+            }
+            last_group
+        });
+        let mut items = content_items.iter().zip(by_content).enumerate();
+        let Some((mut start, (mut head, mut group))) = items.next() else {
+            return Ok(None);
+        };
+        let mut first = None;
+        let mut interior = Vec::new();
+        for (index, (item, next_group)) in items {
+            if group.index != next_group.index {
+                let completed = ContentGroup {
+                    index: group.index,
+                    content_index: start,
+                    first: head,
+                    remaining: &content_items[start + 1..index],
+                    affiliation: affiliation(group.first_word_slot),
+                };
+                match first {
+                    None => first = Some(completed),
+                    Some(_) => interior.push(completed),
                 }
-                last_group
-            })
-            .collect();
-
-        Some(Self {
-            by_content,
-            // Every stored entry came from `assignments`, so the highest
-            // assignment bounds them all.
-            group_count: rest.iter().copied().fold(first_group, usize::max) + 1,
-        })
+                start = index;
+                head = item;
+                group = next_group;
+            }
+        }
+        let Some(first) = first else {
+            return Ok(None);
+        };
+        let admitted = Self {
+            source,
+            first,
+            interior,
+            last: ContentGroup {
+                index: group.index,
+                content_index: start,
+                first: head,
+                remaining: &content_items[start + 1..],
+                affiliation: affiliation(group.first_word_slot),
+            },
+        };
+        for group in admitted.groups() {
+            if matches!(group.first, UtteranceContent::Separator(_)) {
+                return Err(SplitRefusal::LeadingSeparator {
+                    content_index: group.content_index,
+                });
+            }
+        }
+        Ok(Some(admitted))
     }
 
-    /// Each content item's group, in content order: one entry per item.
-    pub(super) fn in_content_order(&self) -> impl Iterator<Item = usize> + '_ {
-        self.by_content.iter().copied()
+    fn groups(&self) -> impl Iterator<Item = &ContentGroup<'source, Affiliation>> {
+        std::iter::once(&self.first)
+            .chain(&self.interior)
+            .chain(std::iter::once(&self.last))
     }
 
-    /// One past the highest group any item names.
+    pub(super) fn source(&self) -> &'source talkbank_model::model::Utterance {
+        self.source
+    }
+
+    /// Content and affiliation travel together, in their producing order.
+    pub(super) fn items_with_groups(
+        &self,
+    ) -> impl Iterator<Item = (&'source UtteranceContent, usize)> + '_ {
+        self.groups()
+            .flat_map(|group| group.items().map(move |item| (item, group.index)))
+    }
+
+    /// The admitted first child's source affiliation, including leading markers.
+    pub(super) const fn first_group(&self) -> usize {
+        self.first.index
+    }
+
+    /// Every admitted run owns content, so this also sizes dense tier partitions.
     pub(super) fn group_count(&self) -> usize {
-        self.group_count
+        self.interior.len() + 2
+    }
+
+    /// The only route to rebuilt children: one child for each source group.
+    pub(super) fn rebuild(
+        &self,
+        mut make_child: impl FnMut(
+            ChildPosition,
+            &ContentGroup<'source, Affiliation>,
+        ) -> talkbank_model::model::Utterance,
+    ) -> RebuiltChildren {
+        let mut children = Vec::with_capacity(self.group_count());
+        children.push(make_child(ChildPosition::First, &self.first));
+        children.extend(
+            self.interior
+                .iter()
+                .map(|group| make_child(ChildPosition::Interior, group)),
+        );
+        children.push(make_child(ChildPosition::Last, &self.last));
+        RebuiltChildren(children)
     }
 }

@@ -13,9 +13,7 @@ yyy
 ``` cst
 (standalone_word
   (word_body
-    (initial_word_segment)
-  )
-)
+    (word_segment)))
 ```
 
 ## Metadata

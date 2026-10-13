@@ -147,80 +147,20 @@ use talkbank_model::model::content::word::MarkerSpelling;
 use talkbank_model::{ErrorCode, ParseError, Span};
 
 use super::engine::{EditProvenance, EditTarget, Replacement, SpliceEdit};
+mod proposal;
+mod refusal;
+pub use proposal::{BatchSafety, CatalogFix, FixKind, NamedAlternative};
+use refusal::CatalogRefusal;
+pub use refusal::{CatalogFault, CatalogIneligibility, CatalogResolution};
+type CatalogResult = Result<CatalogFix, CatalogRefusal>;
 
-/// How safe a fix is to apply without a human looking at each site.
-///
-/// The LSP catalog can afford to be liberal because a human accepts each
-/// action individually. A batch CLI applying the same catalog converts twenty
-/// reviewed decisions into twenty unreviewed ones, so every entry carries a
-/// tier and bare `--apply` writes only the mechanical ones.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BatchSafety {
-    /// One right answer, no semantic judgment.
-    Mechanical,
-    /// Deterministic, but changes meaning enough to require naming the code.
-    Semantic,
-    /// Several valid answers; never batch-applied.
-    Ambiguous,
-}
-
-/// One named choice for an ambiguous fix.
-#[derive(Clone, Debug)]
-pub struct NamedAlternative {
-    /// Human-facing label, e.g. "Add '.' (declarative)".
-    pub label: String,
-    /// The edits this alternative would apply.
-    pub edits: Vec<SpliceEdit>,
-}
-
-/// What a catalog entry produces for a given diagnostic.
-#[derive(Clone, Debug)]
-pub enum FixKind {
-    /// Exactly one set of edits.
-    Deterministic(Vec<SpliceEdit>),
-    /// Several mutually exclusive candidate edit sets.
-    Alternatives(Vec<NamedAlternative>),
-}
-
-/// A catalog entry resolved against one concrete diagnostic.
-#[derive(Clone, Debug)]
-pub struct CatalogFix {
-    /// Batch-safety tier for this code.
-    pub safety: BatchSafety,
-    /// The edits, or the alternatives.
-    pub kind: FixKind,
-}
-
-/// Resolve the catalog fix for one diagnostic, if the code has an entry.
-///
-/// `parsed` retains the exact text and CST from the caller's original parse.
-/// No catalog entry reparses that text. The caller must supply a diagnostic
-/// from that same input; this capability binds the CST to its text, not an
-/// independently supplied diagnostic to its producer. The source is used both
-/// to compute edits that need surrounding context (inserting into an
-/// existing header line, deleting a whole line rather than a bare span) and
-/// to verify a span actually contains what a fix assumes before trusting
-/// it, per the module-level doc.
-///
-/// Every arm is explicit. A code with no entry, whether never considered or
-/// deliberately excluded (see the module docs), falls through to `None`;
-/// nothing here invents a default fix for a code it does not recognize.
-///
-/// An independent string cannot substitute for the parse capability:
-///
-/// ```compile_fail,E0308
-/// # use talkbank_model::ParseError;
-/// # use talkbank_transform::splice::catalog_fix;
-/// # fn disconnected(error: &ParseError, source: &str) {
-/// let _ = catalog_fix(error, source);
-/// # }
-/// ```
-pub fn catalog_fix(
+/// Private resolver: only an owner-issued finding supplies this associated pair.
+pub(super) fn catalog_fix(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResolution {
     let source = parsed.source();
-    match error.code {
+    let result = match error.code {
         ErrorCode::IllegalUntranscribed => e241_illegal_untranscribed(error, parsed),
         ErrorCode::ConsecutiveStressMarkers => e244_consecutive_stress_markers(error, parsed),
         ErrorCode::ConsecutiveCommas => e258_consecutive_commas(error, parsed),
@@ -233,42 +173,12 @@ pub fn catalog_fix(
         ErrorCode::GraWithoutMor => e604_gra_without_mor(error, parsed),
         ErrorCode::SpaceInsideAngleGroup => e750_space_inside_angle_group(error, parsed),
         ErrorCode::MediaFilenameNonCanonicalUnicode => w109_media_name(error, parsed),
-
-        // Missing participant/language facts require user-supplied values.
-        // A diagnostic code or message cannot establish a role or language.
-        ErrorCode::UndeclaredSpeaker
-        | ErrorCode::MissingRequiredHeader
-        | ErrorCode::EmptyLanguagesHeader => None,
-
-        // E301: seed source aliased this to E305's terminator fix, but the
-        // real diagnostic is "Empty speaker code", unrelated to terminators
-        // (see module docs). No safe fix to guess.
-        ErrorCode::MissingMainTier => None,
-        // E242: seed source's "+..." insertion does not address the real
-        // "Unbalanced quotation" diagnostic (see module docs). Which side
-        // is wrong (missing open vs. missing close) is not determinable
-        // from the diagnostic alone.
-        ErrorCode::UnbalancedQuotation => None,
-        // E362: seed source's within-bullet digit swap does not fix the
-        // real cross-utterance monotonicity check (see module docs).
-        ErrorCode::TimestampBackwards => None,
-        // E322: "delete the whole line" is disproportionate to a missing
-        // colon token, and the code is currently unreachable via the
-        // parser (see module docs).
-        ErrorCode::EmptyColon => None,
-        // E506: every observed diagnostic carries Span::DUMMY, which the
-        // splice engine correctly refuses; there is no location to build
-        // an edit against until chatter attaches a real span (see module
-        // docs).
-        ErrorCode::EmptyParticipantsHeader => None,
-        // E312 / E313 / E323: sound fix intent, but all three are
-        // currently unreachable via the parser, so there is no way to
-        // verify an entry against a real diagnostic (see module docs).
-        ErrorCode::UnclosedBracket => None,
-        ErrorCode::UnclosedParenthesis => None,
-        ErrorCode::MissingColonAfterSpeaker => None,
-
-        _ => None,
+        _ => return CatalogResolution::Unsupported,
+    };
+    match result {
+        Ok(fix) => CatalogResolution::Offered(fix),
+        Err(CatalogRefusal::Ineligible(reason)) => CatalogResolution::Ineligible(reason),
+        Err(CatalogRefusal::Fault(fault)) => CatalogResolution::Fault(fault),
     }
 }
 
@@ -276,19 +186,20 @@ pub fn catalog_fix(
 fn enclosing_node<'tree, 'source, T>(
     parsed: &'tree talkbank_parser::generated_traversal::ParsedSource<'source>,
     span: Span,
-) -> Option<talkbank_parser::generated_traversal::SourceBound<'tree, 'source, T>>
+) -> Result<talkbank_parser::generated_traversal::SourceBound<'tree, 'source, T>, CatalogRefusal>
 where
     T: talkbank_parser::generated_traversal::SourceBoundKind<'tree>
         + talkbank_parser::generated_traversal::FromNodeKind<'tree>,
 {
     let mut node = parsed
         .root_node()
-        .descendant_for_byte_range(span.start as usize, span.end as usize)?;
+        .descendant_for_byte_range(span.start as usize, span.end as usize)
+        .ok_or(CatalogIneligibility::MissingCarrier)?;
     loop {
-        if let Some(typed) = parsed.bind(node).ok()?.typed::<T>() {
-            return Some(typed);
+        if let Some(typed) = parsed.bind(node)?.typed::<T>() {
+            return Ok(typed);
         }
-        node = node.parent()?;
+        node = node.parent().ok_or(CatalogIneligibility::MissingCarrier)?;
     }
 }
 
@@ -297,33 +208,33 @@ where
 fn w109_media_name(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, MediaHeaderNode, SourceSlotView};
     use unicode_normalization::UnicodeNormalization;
     let header = enclosing_node::<MediaHeaderNode>(parsed, error.location.span)?;
     if header.raw_node().has_error() {
-        return None;
+        return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
-    let fields = header.extract().ok()?;
+    let fields = header.extract();
     let SourceSlotView::Present(contents) = fields.field_child_2().slot().view() else {
-        return None;
+        return Err(CatalogIneligibility::MissingCarrier.into());
     };
-    let contents = contents.read().ok()?;
-    let fields = contents.extract().ok()?;
+    let contents = contents.read()?;
+    let fields = contents.extract();
     let SourceSlotView::Present(filename) = fields.field_child_0().slot().view() else {
-        return None;
+        return Err(CatalogIneligibility::MissingCarrier.into());
     };
-    let filename = filename.read().ok()?;
+    let filename = filename.read()?;
     let text = filename.text();
     if talkbank_model::model::MediaFilename::parse(text)
-        .ok()?
+        .map_err(|_| CatalogIneligibility::MediaToken)?
         .is_remote_url()
     {
-        return None;
+        return Err(CatalogIneligibility::MediaToken.into());
     }
     let canonical: String = text.nfc().collect();
     if canonical == text {
-        return None;
+        return Err(CatalogIneligibility::MediaToken.into());
     }
     let range = filename.raw_node().byte_range();
     let edit = SpliceEdit::new_header_token(
@@ -331,16 +242,7 @@ fn w109_media_name(
         Replacement::new(canonical),
         error.code,
     );
-    Some(single_edit_fix(BatchSafety::Mechanical, edit))
-}
-
-/// A single-edit [`CatalogFix`], the common shape for every deterministic
-/// entry in this catalog.
-fn single_edit_fix(safety: BatchSafety, edit: SpliceEdit) -> CatalogFix {
-    CatalogFix {
-        safety,
-        kind: FixKind::Deterministic(vec![edit]),
-    }
+    Ok(CatalogFix::mechanical(vec![edit]))
 }
 
 /// E241 replaces a complete source-bound word only when the model-owned
@@ -349,21 +251,26 @@ fn single_edit_fix(safety: BatchSafety, edit: SpliceEdit) -> CatalogFix {
 fn e241_illegal_untranscribed(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, StandaloneWordNode};
     let span = error.location.span;
     let word = enclosing_node::<StandaloneWordNode>(parsed, span)?;
-    if word.raw_node().byte_range() != span.to_range() || word.raw_node().has_error() {
-        return None;
+    if word.raw_node().byte_range() != span.to_range() {
+        return Err(CatalogIneligibility::TokenMismatch.into());
+    }
+    if word.raw_node().has_error() {
+        return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
     // The token itself must be a marker, not merely its cleaned spelling.
-    let intended = MarkerSpelling::of(word.text()).misspelled()?;
+    let intended = MarkerSpelling::of(word.text())
+        .misspelled()
+        .ok_or(CatalogIneligibility::NoRepairableToken)?;
     let edit = SpliceEdit::new(
         EditTarget::Replace(span),
         Replacement::new(intended.canonical()),
         EditProvenance::Diagnostic(error.code),
     );
-    Some(single_edit_fix(BatchSafety::Mechanical, edit))
+    Ok(CatalogFix::mechanical(vec![edit]))
 }
 
 /// E244 `ConsecutiveStressMarkers`: collapse runs of consecutive primary
@@ -373,7 +280,7 @@ fn e241_illegal_untranscribed(
 fn e244_consecutive_stress_markers(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{
         AsRawNode, SourceBound, StandaloneWordNode, StressMarkerNode,
     };
@@ -381,12 +288,12 @@ fn e244_consecutive_stress_markers(
     struct PrimaryStress<'tree, 'source>(SourceBound<'tree, 'source, StressMarkerNode<'tree>>);
     let word = enclosing_node::<StandaloneWordNode>(parsed, error.location.span)?;
     if word.raw_node().has_error() {
-        return None;
+        return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
     let mut previous: Option<PrimaryStress<'_, '_>> = None;
     let mut edits = Vec::new();
     for node in word.source_slice().descendants() {
-        let Some(mark) = node.ok()?.typed::<StressMarkerNode>() else {
+        let Some(mark) = node?.typed::<StressMarkerNode>() else {
             continue;
         };
         if mark.text() != "ˈ" {
@@ -408,10 +315,11 @@ fn e244_consecutive_stress_markers(
         }
         previous = Some(current);
     }
-    (!edits.is_empty()).then_some(CatalogFix {
-        safety: BatchSafety::Mechanical,
-        kind: FixKind::Deterministic(edits),
-    })
+    if edits.is_empty() {
+        Err(CatalogIneligibility::NoRepairableToken.into())
+    } else {
+        Ok(CatalogFix::mechanical(edits))
+    }
 }
 
 /// E258 `ConsecutiveCommas`: the diagnostic span covers exactly one of the
@@ -419,12 +327,12 @@ fn e244_consecutive_stress_markers(
 fn e258_consecutive_commas(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, TierBodyNode};
     let comma = diagnostic_comma(parsed, error.location.span)?;
     let body = enclosing_node::<TierBodyNode>(parsed, error.location.span)?;
     if body.raw_node().has_error() {
-        return None;
+        return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
     let edit = SpliceEdit::new(
         EditTarget::Replace(Span::from_usize(
@@ -434,23 +342,28 @@ fn e258_consecutive_commas(
         Replacement::new(""),
         EditProvenance::Diagnostic(error.code),
     );
-    Some(single_edit_fix(BatchSafety::Mechanical, edit))
+    Ok(CatalogFix::mechanical(vec![edit]))
 }
 
 /// Admit only a complete grammar comma at the diagnostic's exact source range.
 fn diagnostic_comma<'tree, 'source>(
     parsed: &'tree talkbank_parser::generated_traversal::ParsedSource<'source>,
     span: Span,
-) -> Option<
+) -> Result<
     talkbank_parser::generated_traversal::SourceBound<
         'tree,
         'source,
         talkbank_parser::generated_traversal::CommaNode<'tree>,
     >,
+    CatalogRefusal,
 > {
     use talkbank_parser::generated_traversal::{AsRawNode, CommaNode};
     let comma = enclosing_node::<CommaNode>(parsed, span)?;
-    (comma.raw_node().byte_range() == span.to_range()).then_some(comma)
+    if comma.raw_node().byte_range() == span.to_range() {
+        Ok(comma)
+    } else {
+        Err(CatalogIneligibility::TokenMismatch.into())
+    }
 }
 
 /// E259 `CommaAfterNonSpokenContent`: delete the comma that has no
@@ -460,20 +373,20 @@ fn diagnostic_comma<'tree, 'source>(
 fn e259_comma_after_non_spoken_content(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, TierBodyNode, WhitespacesNode};
     let span = error.location.span;
     let comma = diagnostic_comma(parsed, span)?;
     let body = enclosing_node::<TierBodyNode>(parsed, span)?;
     if body.raw_node().has_error() {
-        return None;
+        return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
     let mut delete_span = span;
     if comma.raw_node().start_byte() == body.raw_node().start_byte() {
         // Only a body-initial comma owns the following separator: deleting it
         // alone would introduce leading whitespace. Interior commas retain it.
         for node in body.source_slice().descendants() {
-            if let Some(space) = node.ok()?.typed::<WhitespacesNode>()
+            if let Some(space) = node?.typed::<WhitespacesNode>()
                 && space.raw_node().start_byte() == comma.raw_node().end_byte()
             {
                 delete_span =
@@ -487,7 +400,7 @@ fn e259_comma_after_non_spoken_content(
         Replacement::new(""),
         EditProvenance::Diagnostic(error.code),
     );
-    Some(single_edit_fix(BatchSafety::Semantic, edit))
+    Ok(CatalogFix::semantic(vec![edit]))
 }
 
 /// E305 `MissingTerminator`: fires both for a main-tier utterance and a
@@ -501,17 +414,21 @@ fn e259_comma_after_non_spoken_content(
 fn e305_missing_terminator(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{
         AsRawNode, MainTierNode, MorDependentTierNode, NewlineNode, UtteranceEndNode,
     };
-    let anchor = if let Some(main) = enclosing_node::<MainTierNode>(parsed, error.location.span) {
-        terminal_descendant::<UtteranceEndNode>(main.source_slice())?.source_slice()
-    } else {
-        let mor = enclosing_node::<MorDependentTierNode>(parsed, error.location.span)?;
-        terminal_descendant::<NewlineNode>(mor.source_slice())?.source_slice()
+    let anchor = match enclosing_node::<MainTierNode>(parsed, error.location.span) {
+        Ok(main) => terminal_descendant::<UtteranceEndNode>(main.source_slice())?.source_slice(),
+        Err(CatalogRefusal::Ineligible(CatalogIneligibility::MissingCarrier)) => {
+            let mor = enclosing_node::<MorDependentTierNode>(parsed, error.location.span)?;
+            terminal_descendant::<NewlineNode>(mor.source_slice())?.source_slice()
+        }
+        Err(reason) => return Err(reason),
     };
-    let insert_at = u32::try_from(anchor.raw_node().start_byte()).ok()?;
+    let bytes = anchor.raw_node().start_byte();
+    let insert_at = u32::try_from(bytes)
+        .map_err(|_| CatalogRefusal::Fault(CatalogFault::CoordinateExtent { bytes }))?;
     let alternatives = [
         (".", "Add '.' (declarative/default)"),
         ("?", "Add '?' (question)"),
@@ -527,36 +444,33 @@ fn e305_missing_terminator(
         )],
     })
     .collect();
-    Some(CatalogFix {
-        safety: BatchSafety::Ambiguous,
-        kind: FixKind::Alternatives(alternatives),
-    })
+    Ok(CatalogFix::alternatives(alternatives))
 }
 
 /// Admit a unique typed descendant ending at its clean carrier's boundary.
 fn terminal_descendant<'tree, 'source, T>(
     tier: talkbank_parser::generated_traversal::SourceSlice<'tree, 'source>,
-) -> Option<talkbank_parser::generated_traversal::SourceBound<'tree, 'source, T>>
+) -> Result<talkbank_parser::generated_traversal::SourceBound<'tree, 'source, T>, CatalogRefusal>
 where
     T: talkbank_parser::generated_traversal::SourceBoundKind<'tree>
         + talkbank_parser::generated_traversal::FromNodeKind<'tree>,
 {
     use talkbank_parser::generated_traversal::AsRawNode;
     if tier.raw_node().has_error() {
-        return None;
+        return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
     let mut terminal = None;
     for node in tier.descendants() {
-        if let Some(anchor) = node.ok()?.typed::<T>()
+        if let Some(anchor) = node?.typed::<T>()
             && anchor.raw_node().end_byte() == tier.raw_node().end_byte()
         {
             if terminal.is_some() {
-                return None;
+                return Err(CatalogIneligibility::NonUniqueCarrier.into());
             }
             terminal = Some(anchor);
         }
     }
-    terminal
+    terminal.ok_or(CatalogIneligibility::MissingCarrier.into())
 }
 
 /// E306: delete a complete, clean main-tier-only utterance. Dependent tiers
@@ -564,13 +478,15 @@ where
 fn e306_empty_utterance(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, MainTierNode, UtteranceNode};
     let main = enclosing_node::<MainTierNode>(parsed, error.location.span)?;
     let owner = enclosing_node::<UtteranceNode>(parsed, error.location.span)?;
-    if owner.raw_node().has_error() || owner.raw_node().byte_range() != main.raw_node().byte_range()
-    {
-        return None;
+    if owner.raw_node().has_error() {
+        return Err(CatalogIneligibility::RecoveredCarrier.into());
+    }
+    if owner.raw_node().byte_range() != main.raw_node().byte_range() {
+        return Err(CatalogIneligibility::DependentTiers.into());
     }
     let range = main.raw_node().byte_range();
     let edit = SpliceEdit::new(
@@ -578,7 +494,7 @@ fn e306_empty_utterance(
         Replacement::new(""),
         EditProvenance::Diagnostic(error.code),
     );
-    Some(single_edit_fix(BatchSafety::Semantic, edit))
+    Ok(CatalogFix::semantic(vec![edit]))
 }
 
 /// Evidence that the selected complete header repeats earlier identical text,
@@ -595,17 +511,17 @@ impl<'tree, 'source> IdenticalHeaderDuplicate<'tree, 'source> {
     fn admit(
         parsed: &'tree talkbank_parser::generated_traversal::ParsedSource<'source>,
         span: Span,
-    ) -> Option<Self> {
+    ) -> Result<Self, CatalogRefusal> {
         use talkbank_parser::generated_traversal::{AsRawNode, HeaderChoice};
         let root = parsed.root_node();
         if root.has_error() {
-            return None;
+            return Err(CatalogIneligibility::RecoveredCarrier.into());
         }
         let target = enclosing_node::<HeaderChoice>(parsed, span)?;
         let kind = std::mem::discriminant(&target.view());
         let mut earlier = false;
-        for node in parsed.bind(root).ok()?.descendants() {
-            let Some(header) = node.ok()?.typed::<HeaderChoice>() else {
+        for node in parsed.bind(root)?.descendants() {
+            let Some(header) = node?.typed::<HeaderChoice>() else {
                 continue;
             };
             if std::mem::discriminant(&header.view()) != kind {
@@ -614,24 +530,23 @@ impl<'tree, 'source> IdenticalHeaderDuplicate<'tree, 'source> {
             // Exact source equality is deliberately conservative: a whitespace
             // difference is not proof of interchangeable declarations.
             if header.text() != target.text() {
-                return None;
+                return Err(CatalogIneligibility::HeaderConflict.into());
             }
             earlier |= header.raw_node().end_byte() <= target.raw_node().start_byte();
         }
-        earlier.then_some(Self(target))
+        earlier
+            .then_some(Self(target))
+            .ok_or(CatalogIneligibility::HeaderConflict.into())
     }
 
     fn into_fix(self, code: ErrorCode) -> CatalogFix {
         use talkbank_parser::generated_traversal::AsRawNode;
         let range = self.0.raw_node().byte_range();
-        single_edit_fix(
-            BatchSafety::Mechanical,
-            SpliceEdit::new(
-                EditTarget::Replace(Span::from_usize(range.start, range.end)),
-                Replacement::new(""),
-                EditProvenance::Diagnostic(code),
-            ),
-        )
+        CatalogFix::mechanical(vec![SpliceEdit::new(
+            EditTarget::Replace(Span::from_usize(range.start, range.end)),
+            Replacement::new(""),
+            EditProvenance::Diagnostic(code),
+        )])
     }
 }
 
@@ -641,8 +556,8 @@ impl<'tree, 'source> IdenticalHeaderDuplicate<'tree, 'source> {
 fn e501_duplicate_header(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
-    Some(IdenticalHeaderDuplicate::admit(parsed, error.location.span)?.into_fix(error.code))
+) -> CatalogResult {
+    Ok(IdenticalHeaderDuplicate::admit(parsed, error.location.span)?.into_fix(error.code))
 }
 
 /// E502 `MissingEndHeader`: append `@End` at end of file, prefixing a
@@ -651,18 +566,22 @@ fn e501_duplicate_header(
 ///
 /// Header-scoped, so `chatter fix` cannot apply it today; see the note on
 /// `e501_duplicate_header` above.
-fn e502_missing_end_header(error: &ParseError, source: &str) -> Option<CatalogFix> {
+fn e502_missing_end_header(error: &ParseError, source: &str) -> CatalogResult {
     let text = if source.ends_with('\n') {
         "@End\n"
     } else {
         "\n@End\n"
     };
     let edit = SpliceEdit::new(
-        EditTarget::InsertAt(source.len() as u32),
+        EditTarget::InsertAt(u32::try_from(source.len()).map_err(|_| {
+            CatalogRefusal::Fault(CatalogFault::CoordinateExtent {
+                bytes: source.len(),
+            })
+        })?),
         Replacement::new(text),
         EditProvenance::Diagnostic(error.code),
     );
-    Some(single_edit_fix(BatchSafety::Mechanical, edit))
+    Ok(CatalogFix::mechanical(vec![edit]))
 }
 
 /// E503 `MissingUTF8Header`: prepend `@UTF8` as the first line. Mechanical:
@@ -670,13 +589,13 @@ fn e502_missing_end_header(error: &ParseError, source: &str) -> Option<CatalogFi
 ///
 /// Header-scoped, so `chatter fix` cannot apply it today; see the note on
 /// `e501_duplicate_header` above.
-fn e503_missing_utf8_header(error: &ParseError) -> Option<CatalogFix> {
+fn e503_missing_utf8_header(error: &ParseError) -> CatalogResult {
     let edit = SpliceEdit::new(
         EditTarget::InsertAt(0),
         Replacement::new("@UTF8\n"),
         EditProvenance::Diagnostic(error.code),
     );
-    Some(single_edit_fix(BatchSafety::Mechanical, edit))
+    Ok(CatalogFix::mechanical(vec![edit]))
 }
 
 /// E604 `GraWithoutMor`: the diagnostic anchors to the main tier the
@@ -687,26 +606,29 @@ fn e503_missing_utf8_header(error: &ParseError) -> Option<CatalogFix> {
 fn e604_gra_without_mor(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{AsRawNode, GraDependentTierNode, UtteranceNode};
     let utterance = enclosing_node::<UtteranceNode>(parsed, error.location.span)?;
     let mut selected = None;
     for child in utterance.descendants() {
-        if let Some(gra) = child.ok()?.typed::<GraDependentTierNode>() {
-            if gra.raw_node().has_error() || selected.is_some() {
-                return None;
+        if let Some(gra) = child?.typed::<GraDependentTierNode>() {
+            if gra.raw_node().has_error() {
+                return Err(CatalogIneligibility::RecoveredCarrier.into());
+            }
+            if selected.is_some() {
+                return Err(CatalogIneligibility::NonUniqueCarrier.into());
             }
             selected = Some(gra);
         }
     }
-    let gra = selected?;
+    let gra = selected.ok_or(CatalogIneligibility::MissingCarrier)?;
     let range = gra.raw_node().byte_range();
     let edit = SpliceEdit::new(
         EditTarget::Replace(Span::from_usize(range.start, range.end)),
         Replacement::new(""),
         EditProvenance::Diagnostic(error.code),
     );
-    Some(single_edit_fix(BatchSafety::Semantic, edit))
+    Ok(CatalogFix::semantic(vec![edit]))
 }
 
 /// E750 `SpaceInsideAngleGroup`: remove the whitespace run immediately after
@@ -716,7 +638,7 @@ fn e604_gra_without_mor(
 fn e750_space_inside_angle_group(
     error: &ParseError,
     parsed: &talkbank_parser::generated_traversal::ParsedSource<'_>,
-) -> Option<CatalogFix> {
+) -> CatalogResult {
     use talkbank_parser::generated_traversal::{
         AsRawNode, GroupWithAnnotationsNode, SourceSlotView, WhitespacesNode,
     };
@@ -726,63 +648,77 @@ fn e750_space_inside_angle_group(
         || whitespace.text().is_empty()
         || !whitespace.text().bytes().all(|byte| byte == b' ')
     {
-        return None;
+        return Err(CatalogIneligibility::GroupEdge.into());
     }
     let group = enclosing_node::<GroupWithAnnotationsNode>(parsed, span)?;
     if group.raw_node().has_error() {
-        return None;
+        return Err(CatalogIneligibility::RecoveredCarrier.into());
     }
-    let fields = group.extract().ok()?;
+    let fields = group.extract();
     let content = fields.field_content_2();
     let SourceSlotView::Present(content) = content.slot().view() else {
-        return None;
+        return Err(CatalogIneligibility::MissingCarrier.into());
     };
-    let content = content.read().ok()?;
+    let content = content.read()?;
     if whitespace.raw_node().start_byte() != content.raw_node().start_byte()
         && whitespace.raw_node().end_byte() != content.raw_node().end_byte()
     {
-        return None;
+        return Err(CatalogIneligibility::GroupEdge.into());
     }
     let edit = SpliceEdit::new_recovery_repair(
         EditTarget::Replace(span),
         Replacement::new(""),
         error.code,
     );
-    Some(single_edit_fix(BatchSafety::Mechanical, edit))
+    Ok(CatalogFix::mechanical(vec![edit]))
 }
 
 #[cfg(test)]
 mod tests {
-    use talkbank_model::ErrorCollector;
+    use talkbank_model::{
+        model::TranscriptName,
+        validation::{AlignmentValidation, ValidationPolicy},
+    };
     use talkbank_parser::TreeSitterParser;
 
-    use super::{BatchSafety, FixKind, catalog_fix};
+    use super::{BatchSafety, FixKind};
+    use crate::splice::FixDiagnosis;
     use crate::splice::apply_edits;
 
     #[test]
     fn e750_mechanically_removes_only_the_space_inside_group_delimiters() {
         let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t< dog > [/] dog .\n@End\n";
         let parser = TreeSitterParser::new().expect("tree-sitter parser initializes");
-        let errors = ErrorCollector::new();
-        let (_file, parsed) = parser.parse_chat_file_with_source(source, &errors);
-        let parsed = parsed.expect("source-bound parse");
-        let diagnostics = errors.into_vec();
-        let fixes = diagnostics
-            .iter()
+        let diagnosis = FixDiagnosis::observe(
+            &parser,
+            source,
+            ValidationPolicy::new(
+                talkbank_model::RuleSelection::new(),
+                AlignmentValidation::Structure,
+            ),
+            TranscriptName::Anonymous,
+        );
+        let fixes = diagnosis
+            .findings()
             .filter(|error| error.code.as_str() == "E750")
-            .map(|error| catalog_fix(error, &parsed).expect("E750 has a catalog fix"))
+            .map(|error| {
+                error
+                    .catalog()
+                    .into_offer()
+                    .expect("E750 has a catalog fix")
+            })
             .collect::<Vec<_>>();
 
         assert_eq!(fixes.len(), 2);
         assert!(
             fixes
                 .iter()
-                .all(|fix| fix.safety == BatchSafety::Mechanical)
+                .all(|fix| fix.safety() == BatchSafety::Mechanical)
         );
         let edits = fixes
             .into_iter()
-            .flat_map(|fix| match fix.kind {
-                FixKind::Deterministic(edits) => edits,
+            .flat_map(|fix| match fix.into_kind() {
+                FixKind::Mechanical(edits) | FixKind::Semantic(edits) => edits,
                 FixKind::Alternatives(_) => panic!("E750 has only one correct repair"),
             })
             .collect::<Vec<_>>();

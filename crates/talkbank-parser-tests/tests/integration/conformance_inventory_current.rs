@@ -30,7 +30,7 @@
 //! the two committed inputs, never on a formatter installed on the machine.
 
 use talkbank_parser_tests::conformance_inventory::{
-    ExtractArg, ExtractReturn, Inventory, InventoryGenError, generate_inventory, inventory_path,
+    ExtractArg, Inventory, InventoryGenError, generate_inventory, inventory_path,
     node_types_json_path, typed_traversal_path,
 };
 
@@ -142,9 +142,9 @@ fn a_shape_with_an_unknown_generic_is_refused() {
 }
 
 #[test]
-fn fallible_extraction_cannot_silently_skip_conformance() {
+fn broad_extraction_must_be_total_before_dispatch_is_generated() {
     let source = r#"
-        pub fn extract_example(node: ExampleNode<'_>) -> Result<ExampleChildren<'_>, ReconstructionFault> {}
+        pub fn extract_example(node: ExampleNode<'_>) -> ExampleChildren<'_> {}
         pub fn extract_choice(node: tree_sitter::Node<'_>) -> Choice<'_> {}
     "#;
     let inventory = Inventory::parse(
@@ -157,13 +157,18 @@ fn fallible_extraction_cannot_silently_skip_conformance() {
         example.arg(),
         &ExtractArg::TypedWrapper("ExampleNode".to_owned())
     );
-    assert_eq!(example.result(), ExtractReturn::Fallible);
     let choice = inventory.dispatch_arm("choice").expect("choice arm");
     assert_eq!(choice.arg(), &ExtractArg::BareNode);
-    assert_eq!(choice.result(), ExtractReturn::Direct);
     let rendered = inventory.render().expect("observed layouts");
-    assert!(rendered.contains("extract_example(classify::<ExampleNode>(node)).expect("));
+    assert!(rendered.contains("extract_example(classify::<ExampleNode>(node)).inspect("));
     assert!(rendered.contains("extract_choice(node).inspect("));
+    let fallible = r#"
+        pub fn extract_example(node: ExampleNode<'_>) -> Result<ExampleChildren<'_>, AdmissionError> {}
+    "#;
+    assert!(matches!(
+        Inventory::parse(fallible, r#"[{"type":"example","named":true}]"#),
+        Err(InventoryGenError::FallibleBroadExtractor(name)) if name == "example"
+    ));
 }
 
 #[test]

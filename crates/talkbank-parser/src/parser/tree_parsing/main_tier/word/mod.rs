@@ -12,27 +12,24 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Words>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>
 
-use super::content::report_tree_shape;
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, NodeSlot, RecoveryNode, SourceBound, SourceSlotView, StandaloneWordChild0Choice,
+    AsRawNode, ReadableSlot, SourceBound, SourceSlotView, StandaloneWordChild0Choice,
     StandaloneWordChild2Choice, StandaloneWordNode, WordBodyChoiceSourceView, WordBodyNode,
 };
 use crate::model::Word;
-use crate::parser::tree_parsing::parser_helpers::{
-    after_marker, extract_utf8_text, surface_displaced,
-};
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use smallvec::SmallVec;
 use talkbank_model::ParseOutcome;
 use talkbank_model::content::word::{
-    FormMarkerPayload, FormType, WordCategory, WordContent, WordContents, WordLanguageMarker,
-    WordPhonetic, WordText,
+    FormType, WordCategory, WordContent, WordContents, WordPhonetic, WordText,
 };
 use talkbank_model::model::WriteChat;
-use talkbank_model::model::{EmptyText, LanguageCode, NonEmptyString};
-use tree_sitter::Node;
+use talkbank_model::model::{EmptyText, NonEmptyString};
 
+mod language;
 mod pieces;
+mod tokens;
 use pieces::push_slot;
 
 /// Convert a tree-sitter `standalone_word` node into the typed `Word` model.
@@ -47,7 +44,7 @@ use pieces::push_slot;
 /// Content, replacement, %wor and fragment callers retain the producer-bound
 /// word and its admitted source text. Missing placeholders still reject;
 /// source ownership and a typed kind are not syntax validity. Body and piece
-/// projections retain ownership; suffix and CA adapters remain transitional.
+/// projections, prefix/suffix and inline CA conversions retain ownership too.
 pub fn convert_word_node<'tree>(
     typed: SourceBound<'tree, '_, StandaloneWordNode<'tree>>,
     errors: &impl ErrorSink,
@@ -72,87 +69,91 @@ pub fn convert_word_node<'tree>(
     let span = talkbank_model::Span::from_usize(node.start_byte(), node.end_byte());
 
     let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar));
+        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into));
     let Ok(bound_children) =
-        crate::parser::typed_cst::report_reconstruction(extraction, node, source, errors)
+        crate::parser::typed_cst::report_admission(extraction, node, source, errors)
     else {
         return ParseOutcome::Rejected;
     };
+    // The five root fields all participate in lowering. Admit their selected
+    // ranges once, retaining the kind proof, rather than lowering a word with
+    // a discarded optional field after its source read failed. Keep only displaced
+    // recovery across failure; do not clone the complete selected carrier.
+    let displaced = bound_children.children().unexpected.clone();
+    let bound_children = match bound_children.admit_ranges() {
+        Ok(admitted) => admitted,
+        Err(failure) => {
+            crate::parser::typed_cst::report_cst_failure(node, source, failure, errors);
+            surface_displaced(&displaced, "standalone_word", source, errors);
+            return ParseOutcome::Rejected;
+        }
+    };
+    drop(displaced);
     let children = bound_children.children();
 
     // Position 0: a category prefix (`&-`, `&~`, `&+`) or the omission
     // `zero`, which the grammar inlines here rather than through
     // `word_prefix` to resolve a shift-reduce conflict with `nonword`.
-    let category = children
-        .child_0
-        .slot()
-        .as_ref()
-        .and_then(|slot| taken(slot, "word prefix", "standalone_word", source, errors))
-        .and_then(|choice| match choice {
+    let category = children.child_0.slot.as_ref().and_then(|slot| match slot {
+        ReadableSlot::Present(choice) => match choice {
             StandaloneWordChild0Choice::WordPrefix(prefix) => {
-                word_category(prefix.raw_node(), source, errors)
+                tokens::word_category(*prefix, errors)
             }
             StandaloneWordChild0Choice::Zero(_) => Some(WordCategory::Omission),
-        });
+        },
+        ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) => None,
+    });
 
     // Position 1: the body, required.
     let mut content_items: SmallVec<[WordContent; 2]> = SmallVec::new();
-    match bound_children.field_child_1().slot().view() {
-        SourceSlotView::Present(body) => {
-            if let Some(body) = crate::parser::typed_cst::read_source_field(body, errors) {
-                build_word_contents(body, errors, &mut content_items);
-            }
-        }
-        SourceSlotView::Unexpected(never) => match never {},
-        SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {}
+    match &children.child_1.slot {
+        ReadableSlot::Present(body) => build_word_contents(*body, errors, &mut content_items),
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Error(_) | ReadableSlot::Absent(_) => {}
     }
 
     // Position 2: one `@` suffix run, or the node the grammar builds for a
     // word carrying more than one.
-    let form_type = children
-        .child_2
-        .slot()
-        .as_ref()
-        .and_then(|slot| taken(slot, "form marker", "standalone_word", source, errors))
-        .and_then(|choice| match choice {
-            StandaloneWordChild2Choice::FormMarker(marker) => {
-                form_marker(marker.raw_node(), source, errors)
-            }
+    let form_type = children.child_2.slot.as_ref().and_then(|slot| match slot {
+        ReadableSlot::Present(choice) => match choice {
+            StandaloneWordChild2Choice::FormMarker(marker) => tokens::form_marker(*marker, errors),
             StandaloneWordChild2Choice::RepeatedFormMarker(marker) => {
-                repeated_form_marker(marker.raw_node(), source, errors)
+                tokens::repeated_form_marker(*marker, errors)
             }
-        });
+        },
+        ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) => None,
+    });
 
-    // Position 3: `@s`, `@s:eng`, `@s:eng+zho`, `@s:eng&zho`.
-    let lang = children
-        .child_3
-        .slot()
-        .as_ref()
-        .and_then(|slot| taken(slot, "language suffix", "standalone_word", source, errors))
-        .and_then(|suffix| build_lang_marker(suffix.raw_node(), source, errors));
+    // Position 3 is an opaque token. Keep its admitted source ownership
+    // through spelling admission and atomic candidate conversion.
+    let lang = children.child_3.slot.as_ref().and_then(|slot| match slot {
+        ReadableSlot::Present(suffix) => {
+            language::parse_language_suffix(*suffix, errors).into_option()
+        }
+        ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) => None,
+    });
 
     // Position 4: `$tag`.
-    let part_of_speech = children
-        .child_4
-        .slot()
-        .as_ref()
-        .and_then(|slot| {
-            taken(
-                slot,
-                "part-of-speech tag",
-                "standalone_word",
-                source,
-                errors,
-            )
-        })
-        .and_then(|tag| {
-            after_marker(tag.raw_node(), "$", "Part-of-speech tag", source, errors)
-                .map(smol_str::SmolStr::from)
-        });
+    let part_of_speech = children.child_4.slot.as_ref().and_then(|slot| match slot {
+        ReadableSlot::Present(tag) => tokens::part_of_speech(*tag, errors),
+        ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) => None,
+    });
 
     // Whatever filled no position, after the positions, so that the
     // diagnostics keep the order the old child walk emitted them in.
-    surface_displaced(&children.unexpected, "standalone_word", source, errors);
+    for displaced in &children.unexpected {
+        surface_displaced(
+            std::slice::from_ref(&displaced.raw_node()),
+            "standalone_word",
+            displaced.source(),
+            errors,
+        );
+    }
 
     // If no content items were collected, use raw_text as a single Text item
     if content_items.is_empty()
@@ -250,27 +251,6 @@ pub fn convert_word_node<'tree>(
 /// Falls back to the original pieces if serialization yields nothing (a
 /// content-free word already rejected upstream) so no information is ever
 /// dropped.
-/// An E203 anchored on one `@` suffix token.
-///
-/// The two arms that report it differ only in their message and suggestion;
-/// the code, severity, location and context were spelled out twice, with
-/// `child.start_byte()`/`end_byte()` appearing four times between them.
-fn at_suffix_error(
-    child: Node,
-    source: &str,
-    message: String,
-    suggestion: &'static str,
-) -> ParseError {
-    ParseError::new(
-        ErrorCode::InvalidFormType,
-        Severity::Error,
-        SourceLocation::from_offsets(child.start_byte(), child.end_byte()),
-        ErrorContext::new(source, child.start_byte()..child.end_byte(), ""),
-        message,
-    )
-    .with_suggestion(suggestion)
-}
-
 fn fold_phonetic(content_items: SmallVec<[WordContent; 2]>) -> SmallVec<[WordContent; 2]> {
     let mut phonetic = String::new();
     for item in &content_items {
@@ -286,155 +266,6 @@ fn fold_phonetic(content_items: SmallVec<[WordContent; 2]>) -> SmallVec<[WordCon
     }
 }
 
-/// The node a typed word position holds, or `None` when it holds none.
-///
-/// A MISSING placeholder and an ERROR node are both the whole-tree pass's
-/// to report: it names a stray token inside a word with its classified code
-/// (E375 for a bracket glued to the word, E316 otherwise), and a local
-/// "lost its shape" report here would outrank that by span overlap and
-/// replace the specific code with E330, which is what the first draft of
-/// this migration did to `E375.md#2`. A displaced node is the one state the
-/// backstop cannot see, so that is reported here. An optional position that
-/// is empty holds nothing.
-///
-/// `what` names the position and `within` the node it belongs to, so the
-/// diagnostic reads "Expected shortening content in shortening" rather than
-/// naming the word for a position three levels down.
-pub(super) fn taken<'a, 'tree, T, M, U, A>(
-    slot: &'a NodeSlot<'tree, T, M, U, A>,
-    what: &str,
-    within: &str,
-    source: &str,
-    errors: &impl ErrorSink,
-) -> Option<&'a T>
-where
-    U: RecoveryNode<'tree>,
-{
-    match slot {
-        NodeSlot::Present(value) => Some(value),
-        NodeSlot::Missing(_) | NodeSlot::Error(_) | NodeSlot::Absent(_) => None,
-        NodeSlot::Unexpected(bad) => {
-            report_tree_shape(
-                bad.node(),
-                format!("Expected {what} in {within}, found '{}'", bad.node().kind()),
-                source,
-                errors,
-            );
-            None
-        }
-    }
-}
-
-/// The category a `word_prefix` token names. The token is one of three
-/// spellings by grammar; any other text is a shape fault, reported rather
-/// than read as "no category".
-fn word_category(node: Node, source: &str, errors: &impl ErrorSink) -> Option<WordCategory> {
-    let talkbank_model::ParseOutcome::Parsed(text) =
-        extract_utf8_text(node, source, errors, "word_prefix")
-    else {
-        return None;
-    };
-    match text {
-        "&-" => Some(WordCategory::Filler),
-        "&~" => Some(WordCategory::Nonword),
-        "&+" => Some(WordCategory::PhonologicalFragment),
-        other => {
-            report_tree_shape(
-                node,
-                format!("Unknown word prefix {other:?}"),
-                source,
-                errors,
-            );
-            None
-        }
-    }
-}
-
-/// The form type a `form_marker` token declares.
-///
-/// The grammar captures the whole marker as ONE token, `@` and any `:label`
-/// included, and deliberately tokenizes shapes it does not sanction (`@zz`,
-/// `@x:foo`) so they can be named here rather than degrading into generic
-/// unparsable content. Which codes exist, and which of them take a `:label`,
-/// is the registry's business, not this function's: `@z` requires a label and
-/// `@x` refuses one, and both facts arrive through `from_payload`. A token
-/// without its `@` does not fit its own grammar and declares no form
-/// (reported by [`after_marker`]); until 2026-09-09 it was read as a bare
-/// payload, so a bare declared code would have parsed as a marker.
-fn form_marker(node: Node, source: &str, errors: &impl ErrorSink) -> Option<FormType> {
-    // The `@` is stripped HERE rather than by the payload type, because the
-    // guarantee that it is present is the GRAMMAR's, and this is the only
-    // code that reads a grammar token.
-    let payload = after_marker(node, "@", "Form marker", source, errors)?;
-    Some(
-        match FormType::from_payload(FormMarkerPayload::after_at(payload)) {
-            Ok(declared) => declared,
-            Err(undeclared) => {
-                // CLAN CHECK 147, "undeclared special form marker".
-                errors.report(at_suffix_error(
-                    node,
-                    source,
-                    format!("Undeclared form marker '@{}'", undeclared.payload()),
-                    undeclared.suggestion(),
-                ));
-                // Record what was WRITTEN, not a marker that happens to be
-                // declared. This used to store `UserDefined(payload)`, which
-                // claimed `word@zz` was `@z` with label `zz` and would serialize
-                // back as `word@z:zz`. Storing it also keeps the model's own E203
-                // check quiet, so the specific diagnostic above is not duplicated
-                // by the generic one.
-                FormType::Undeclared(undeclared.into_payload())
-            }
-        },
-    )
-}
-
-/// A word carrying MORE THAN ONE `@` suffix run. The rule and the ruling
-/// behind it live in `spec/errors/E203.md`; two things are decided HERE and
-/// belong here.
-///
-/// THE MESSAGE NAMES THE RUN, not a marker. `@c` in `@c@s:spa` is perfectly
-/// real, so `Undeclared form marker '@c@s:spa'` would send a transcriber
-/// hunting for a marker that does not exist instead of deleting one of the
-/// two that do. The node KIND carries this, which is the structural answer
-/// `check_inline_at_markers` says the model could not previously see.
-///
-/// THE TEXT IS STORED VERBATIM, so the word serializes back byte for byte
-/// and `normalize` refuses the file rather than rewriting it. A token with
-/// no leading `@` is REFUSED rather than absorbed, unlike [`form_marker`]:
-/// the payload is stored and `write_chat` puts the `@` back, so absorbing a
-/// sigil-less text would emit an `@` that was never in the source. The
-/// grammar cannot produce this node without one, so the branch is
-/// unreachable and says so rather than inventing a value.
-fn repeated_form_marker(node: Node, source: &str, errors: &impl ErrorSink) -> Option<FormType> {
-    let talkbank_model::ParseOutcome::Parsed(text) =
-        extract_utf8_text(node, source, errors, "repeated_form_marker")
-    else {
-        return None;
-    };
-    let Some(payload) = text.strip_prefix('@') else {
-        errors.report(ParseError::new(
-            ErrorCode::TreeParsingError,
-            Severity::Error,
-            SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(
-                source,
-                node.start_byte()..node.end_byte(),
-                "repeated_form_marker",
-            ),
-            format!("repeated form marker token has no leading '@': {text:?}"),
-        ));
-        return None;
-    };
-    errors.report(at_suffix_error(
-        node,
-        source,
-        format!("A word may carry only one '@' suffix, found '{text}'"),
-        "Keep one marker on the word and remove the rest",
-    ));
-    Some(FormType::Undeclared(payload.to_owned()))
-}
-
 /// Build `WordContent` items from a typed `word_body` node.
 ///
 /// Grammar: `choice(seq(choice(word_segment, shortening, stress_marker),
@@ -448,9 +279,9 @@ fn build_word_contents<'tree>(
     items: &mut SmallVec<[WordContent; 2]>,
 ) {
     let source = body.source();
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
+    let Ok(children) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| body.extract_admitted(grammar)),
+            .and_then(|grammar| body.extract_admitted(grammar).map_err(Into::into)),
         body.raw_node(),
         source,
         errors,
@@ -486,67 +317,5 @@ fn build_word_contents<'tree>(
                 push_slot(positioned.slot(), errors, items);
             }
         }
-    }
-}
-
-/// Build a `WordLanguageMarker` from a `word_lang_suffix` token text.
-///
-/// The token is a single `token.immediate` matching `@s(?::[a-z]{2,3}(?:[+&][a-z]{2,3})*)?`.
-/// Examples: `@s`, `@s:eng`, `@s:eng+zho+fra`, `@s:eng&zho&fra`. A token
-/// without its `@s` does not fit its own grammar and is no marker (reported
-/// by [`after_marker`]); until 2026-09-09 it was read as the bare `@s`
-/// shortcut.
-fn build_lang_marker(
-    node: Node,
-    source: &str,
-    errors: &impl ErrorSink,
-) -> Option<WordLanguageMarker> {
-    let after_at_s = after_marker(node, "@s", "Language suffix", source, errors)?;
-
-    // No colon: the bare `@s` shortcut.
-    let Some(codes_str) = after_at_s.strip_prefix(':') else {
-        return Some(WordLanguageMarker::Shortcut);
-    };
-
-    // Check for & separator (ambiguous) vs + separator (multiple). Every
-    // split segment is guaranteed non-empty by the `word_lang_suffix` token
-    // regex (`[a-z]{2,3}` per `+`/`&`-separated segment, see the doc
-    // comment above); `LanguageCode::new` rejects an empty segment fallibly,
-    // and the (token-regex-impossible) `Err` arms below stay panic-free and
-    // non-silent per the no-panic / no-silent-drop policy: list forms skip
-    // the offending segment via `filter_map`, the single-code form reports a
-    // diagnostic and recovers with the documented `LanguageCode::empty()`
-    // ("und") parser-recovery sentinel.
-    if codes_str.contains('&') {
-        let codes: Vec<LanguageCode> = codes_str
-            .split('&')
-            .filter_map(|c| LanguageCode::new(c).ok())
-            .collect();
-        Some(WordLanguageMarker::Ambiguous(codes))
-    } else if codes_str.contains('+') {
-        let codes: Vec<LanguageCode> = codes_str
-            .split('+')
-            .filter_map(|c| LanguageCode::new(c).ok())
-            .collect();
-        Some(WordLanguageMarker::Multiple(codes))
-    } else {
-        // Single code
-        Some(match LanguageCode::new(codes_str) {
-            Ok(code) => WordLanguageMarker::Explicit(code),
-            Err(error) => {
-                errors.report(ParseError::new(
-                    ErrorCode::TreeParsingError,
-                    Severity::Error,
-                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-                    ErrorContext::new(
-                        source,
-                        node.start_byte()..node.end_byte(),
-                        "word_lang_suffix",
-                    ),
-                    format!("Invalid @s language code: {error}"),
-                ));
-                WordLanguageMarker::Explicit(LanguageCode::empty())
-            }
-        })
     }
 }

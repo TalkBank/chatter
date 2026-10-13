@@ -1,0 +1,8 @@
+================================================================================
+annotation_payload_positions - Authored control: alternative transcription can be the first scoped annotation, with a following comment retaining its own payload and position. Both apply to the preceding word, not to a replacement or a new content item. The CHAT manual documents alternative transcription and scoped comments separately from word replacement.
+================================================================================
+*CHI:	bird [=? lark] [% guess] .
+
+--------------------------------------------------------------------------------
+
+(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment))) annotations: (base_annotations (whitespaces) (alt_annotation (space) text: (annotation_content) (right_bracket)) (whitespaces) (percent_annotation (space) text: (annotation_content) (right_bracket)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

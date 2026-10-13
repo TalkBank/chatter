@@ -1,8 +1,8 @@
 /**
  * Smoke tests for Chatter Desktop.
  *
- * These tests launch the real app via tauri-driver and verify basic user
- * interactions through the WebDriver protocol. They are slow (~5-10s each)
+ * These tests launch the real app via tauri-driver and check launch UI
+ * through the WebDriver protocol. They are slow (~5-10s each)
  * and require a built app binary, so they run separately from unit tests.
  *
  * Run:
@@ -51,15 +51,7 @@ describe("Chatter Desktop", () => {
     expect(text).toContain("Ready");
   });
 
-  // --- Validation flow (requires reference corpus) ---
-
-  // TODO: These tests need invoke() to trigger validation programmatically
-  // since file dialogs can't be driven via WebDriver. Options:
-  //
-  // 1. Add a Tauri command `validate_for_test(path)` behind a #[cfg(test)] gate
-  // 2. Use tauri-driver's invoke capability if available
-  // 3. Test via drag-and-drop simulation (platform-dependent)
-  //
-  // For now, the Rust integration tests in src-tauri/tests/ cover the full
-  // validation pipeline end-to-end. These E2E tests focus on UI rendering.
+  // Launch checks are not native validation-flow evidence. Future interaction
+  // tests must use the production typed contract, bounded terminal events and
+  // isolated state; see the book's Desktop App Testing chapter.
 });

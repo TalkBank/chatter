@@ -15,10 +15,40 @@ use talkbank_transform::{RenderMode, render_diagnostics};
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FrontendDiagnostic {
+    /// Untouched producer evidence: all spans and labels remain absolute.
     pub error: ParseError,
+    /// Admitted file coordinates, or the reason source context is unavailable.
+    pub source_context: FrontendSourceContext,
     pub rendered_html: String,
     /// Plain text rendering (no ANSI codes) for clipboard copy.
     pub rendered_text: String,
+}
+
+/// Presentation admission is independent of the file's validation status.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum FrontendSourceContext {
+    Available { location: FrontendSourceLocation },
+    Unavailable { reason: String },
+}
+
+/// Wire coordinates exist only after checked presentation admission.
+#[derive(Debug, Clone, Serialize)]
+pub struct FrontendSourceLocation {
+    #[serde(flatten)]
+    span: talkbank_model::Span,
+    line: usize,
+    column: usize,
+}
+
+impl From<&talkbank_model::DiagnosticPresentation> for FrontendSourceLocation {
+    fn from(presentation: &talkbank_model::DiagnosticPresentation) -> Self {
+        Self {
+            span: presentation.location().span,
+            line: presentation.line(),
+            column: presentation.column(),
+        }
+    }
 }
 
 /// Serializable event sent to the frontend via `app_handle.emit()`.
@@ -187,9 +217,15 @@ fn frontend_errors(
                 None => ansi_to_html(&d.text),
             };
             FrontendDiagnostic {
-                // The ENHANCED error (line/column populated), for the
-                // frontend and Open-in-CLAN.
-                error: d.error,
+                error: d.error.original().clone(),
+                source_context: match d.error.presentation() {
+                    Ok(presentation) => FrontendSourceContext::Available {
+                        location: presentation.into(),
+                    },
+                    Err(reason) => FrontendSourceContext::Unavailable {
+                        reason: reason.to_string(),
+                    },
+                },
                 rendered_html,
                 rendered_text: d.text,
             }

@@ -30,14 +30,7 @@ pub(crate) fn parse_long_feature(
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_long_feature(typed),
-        typed.raw_node(),
-        source,
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = extract_long_feature(typed);
     surface_displaced(&children.unexpected, "long_feature", source, errors);
     let SlotState::Present(choice) =
         expect_present(children.content.slot(), "long_feature", source, errors)
@@ -46,14 +39,7 @@ pub(crate) fn parse_long_feature(
     };
     let built = match choice {
         LongFeatureChoice::LongFeatureBegin(node) => {
-            let Ok(inner) = crate::parser::typed_cst::report_reconstruction(
-                extract_long_feature_begin(*node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::Rejected;
-            };
+            let inner = extract_long_feature_begin(*node);
             surface_displaced(&inner.unexpected, "long_feature_begin", source, errors);
             // Every delimiter is checked (and reported) before the verdict;
             // a marker whose shape is not intact is not built.
@@ -88,14 +74,7 @@ pub(crate) fn parse_long_feature(
             })
         }
         LongFeatureChoice::LongFeatureEnd(node) => {
-            let Ok(inner) = crate::parser::typed_cst::report_reconstruction(
-                extract_long_feature_end(*node),
-                node.raw_node(),
-                source,
-                errors,
-            ) else {
-                return ParseOutcome::Rejected;
-            };
+            let inner = extract_long_feature_end(*node);
             surface_displaced(&inner.unexpected, "long_feature_end", source, errors);
             // Every delimiter is checked (and reported) before the verdict;
             // a marker whose shape is not intact is not built.

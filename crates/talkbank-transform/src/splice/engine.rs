@@ -185,6 +185,18 @@ impl SpliceEdit {
 /// Why a set of edits could not be applied.
 #[derive(Debug, thiserror::Error)]
 pub enum SpliceError {
+    /// Source length cannot be represented by this API's byte coordinates.
+    #[error("source length {bytes} does not fit in u32 byte coordinates")]
+    SourceTooLarge {
+        /// Actual source length, without narrowing.
+        bytes: usize,
+    },
+    /// Replacement length cannot be represented by this API's coordinates.
+    #[error("replacement length {bytes} does not fit in u32 byte coordinates")]
+    ReplacementTooLarge {
+        /// Actual replacement length, without narrowing.
+        bytes: usize,
+    },
     /// `Span::DUMMY` is `{0, 0}`, which is indistinguishable from a real
     /// zero-length position at the head of the file, so a `Replace` carrying
     /// it would silently splice there.
@@ -242,222 +254,13 @@ pub enum SpliceError {
     },
 }
 
-/// Validate one edit's target against `source`, without regard to any other
-/// edit. Overlap between edits is a separate, ordering-dependent check in
-/// [`apply_edits`].
-fn validate_target(source: &str, len: u32, edit: &SpliceEdit) -> Result<(), SpliceError> {
-    match edit.target {
-        EditTarget::Replace(span) => {
-            if span.is_dummy() {
-                return Err(SpliceError::DummySpan {
-                    provenance: edit.provenance.clone(),
-                });
-            }
-            if span.end > len || span.start > span.end {
-                return Err(SpliceError::OutOfBounds { span, len });
-            }
-            if span.start == span.end {
-                return Err(SpliceError::EmptyReplaceRange { span });
-            }
-            for offset in [span.start, span.end] {
-                if !source.is_char_boundary(offset as usize) {
-                    return Err(SpliceError::NotCharBoundary { offset });
-                }
-            }
-        }
-        EditTarget::InsertAt(offset) => {
-            if offset > len {
-                return Err(SpliceError::OutOfBounds {
-                    span: Span::at(offset),
-                    len,
-                });
-            }
-            if !source.is_char_boundary(offset as usize) {
-                return Err(SpliceError::NotCharBoundary { offset });
-            }
-        }
-    }
-    Ok(())
-}
+/// Read-only mapping API; its returned owner retains the admitted source.
+pub use super::mapping::{MappedEdit, MappedPlan, mapped_edit_sites};
 
-/// One edit's byte range in both the ORIGINAL source and the text that
-/// results from applying every edit up to and including it (the "spliced"
-/// text).
-///
-/// This is the position [`gate::verify_splice`](super::gate::verify_splice)'s
-/// gap-walk and `chatter fix`'s post-splice re-check both need: where does
-/// this edit's replacement land once every earlier edit (in ascending
-/// start-offset order) has grown or shrunk the text ahead of it. Computed
-/// once by [`mapped_edit_sites`] so no caller reimplements the
-/// cumulative-delta fold that produces it, and, within this crate,
-/// `splice_with_sites` folds it exactly once per splice: `apply_edits`
-/// and [`gate::apply_edits_verified`](super::gate::apply_edits_verified)
-/// both build on it rather than each calling [`mapped_edit_sites`]
-/// separately on the same `(source, edits)`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MappedEdit {
-    original: Span,
-    spliced: Span,
-    provenance: EditProvenance,
-    replacement: Replacement,
-}
-
-impl MappedEdit {
-    /// This edit's byte range in the original source: the span it
-    /// replaced, or a zero-width point at the insertion offset.
-    pub fn original(&self) -> Span {
-        self.original
-    }
-
-    /// This edit's byte range in the spliced text: where its replacement
-    /// now sits, after accounting for how every earlier edit grew or
-    /// shrank the text ahead of it.
-    pub fn spliced(&self) -> Span {
-        self.spliced
-    }
-
-    /// What produced this edit.
-    pub fn provenance(&self) -> &EditProvenance {
-        &self.provenance
-    }
-
-    /// The text this edit writes, i.e. the same value as the originating
-    /// [`SpliceEdit::replacement`], carried alongside the mapped spans so a
-    /// caller does not have to zip two parallel sequences back together.
-    pub fn replacement(&self) -> &Replacement {
-        &self.replacement
-    }
-}
-
-/// Convert a cumulative signed offset back to `u32`, typed rather than
-/// truncating: see [`SpliceError::OffsetOverflow`].
-fn checked_u32_offset(offset: i64) -> Result<u32, SpliceError> {
-    u32::try_from(offset).map_err(|_| SpliceError::OffsetOverflow { offset })
-}
-
-/// Validate, sort, and map `edits` onto both the original source and the
-/// text that results from applying them, WITHOUT building that text.
-///
-/// This is the shared core [`apply_edits`] and
-/// [`gate::verify_splice`](super::gate::verify_splice) both build on:
-/// `apply_edits` copies bytes according to the spans this computes, and
-/// `verify_splice` compares bytes according to them, so the
-/// validate/sort/overlap/cumulative-delta logic exists exactly once.
-/// `chatter fix`'s post-splice re-check (`mapped_fix_sites`) uses it too,
-/// to find where each fixed diagnostic's code now lives in the spliced
-/// text.
-pub fn mapped_edit_sites(
-    source: &str,
-    edits: &[SpliceEdit],
-) -> Result<Vec<MappedEdit>, SpliceError> {
-    let len = source.len() as u32;
-
-    for edit in edits {
-        validate_target(source, len, edit)?;
-    }
-
-    // Unstable sort is safe here, and stability was never what made the
-    // overlap check work: ANY correct sort groups equal keys contiguously,
-    // which is all the "compare against the previous edit" check relies on.
-    // The relative order WITHIN a group of tied start offsets is never
-    // observed, because a tie is rejected as an overlap either way.
-    let mut sorted: Vec<&SpliceEdit> = edits.iter().collect();
-    sorted.sort_unstable_by_key(|edit| edit.target.start_offset());
-
-    let mut mapped = Vec::with_capacity(sorted.len());
-    let mut cursor: u32 = 0;
-    let mut delta: i64 = 0;
-    let mut previous: Option<&SpliceEdit> = None;
-
-    for edit in sorted {
-        let start = edit.target.start_offset();
-        let end = edit.target.end_offset();
-
-        // Two edits tied on start offset overlap regardless of kind (see
-        // the doc comment on `SpliceError::Overlap`); otherwise the usual
-        // "does this edit begin before the previous one finished" check.
-        // Only a previous edit can be overlapped: the cursor advances only
-        // past one, so with none the first edit begins at or after 0.
-        if let Some(previous_edit) = previous
-            && (previous_edit.target.start_offset() == start || start < cursor)
-        {
-            return Err(SpliceError::Overlap {
-                earlier: previous_edit.provenance.clone(),
-                later: edit.provenance.clone(),
-            });
-        }
-
-        let replacement_len = edit.replacement.as_str().len() as i64;
-        let spliced_start = checked_u32_offset(i64::from(start) + delta)?;
-        let spliced_end = checked_u32_offset(i64::from(spliced_start) + replacement_len)?;
-
-        mapped.push(MappedEdit {
-            original: Span::new(start, end),
-            spliced: Span::new(spliced_start, spliced_end),
-            provenance: edit.provenance.clone(),
-            replacement: edit.replacement.clone(),
-        });
-
-        delta += replacement_len - i64::from(end - start);
-        cursor = end;
-        previous = Some(edit);
-    }
-
-    Ok(mapped)
-}
-
-/// Splice `edits` into `source`, returning both the resulting text and the
-/// [`MappedEdit`] mapping used to build it.
-///
-/// The shared internal core of [`apply_edits`] and
-/// [`gate::apply_edits_verified`](super::gate::apply_edits_verified):
-/// both need the mapping (one to build the text from it, the other to
-/// additionally verify the text against it), and recomputing a
-/// deterministic fold on identical inputs cannot disagree with itself, so
-/// `apply_edits_verified` calls this once and hands the mapping it already
-/// has to `gate`'s sites-based verify entry point rather than asking
-/// [`gate::verify_splice`] to redo [`mapped_edit_sites`] a second time on
-/// the same `(source, edits)`.
-///
-/// Not part of the public API: a tuple return is acceptable at this
-/// private seam between two modules of the same crate (the caller
-/// destructures it immediately), never at a public one.
-pub(super) fn splice_with_sites(
-    source: &str,
-    edits: &[SpliceEdit],
-) -> Result<(String, Vec<MappedEdit>), SpliceError> {
-    let mapped = mapped_edit_sites(source, edits)?;
-
-    let mut out = String::with_capacity(source.len());
-    let mut cursor: u32 = 0;
-    for edit in &mapped {
-        out.push_str(&source[cursor as usize..edit.original.start as usize]);
-        out.push_str(edit.replacement.as_str());
-        cursor = edit.original.end;
-    }
-    out.push_str(&source[cursor as usize..]);
-
-    Ok((out, mapped))
-}
-
-/// Apply every edit to `source`, returning the spliced text.
-///
-/// Built entirely on [`mapped_edit_sites`] (via `splice_with_sites`):
-/// every target indexes the ORIGINAL source, which is the only text it was
-/// ever valid against, so copying the mapped gaps and replacements
-/// forward, in ascending original order, means no edit can invalidate
-/// another's offsets. The alternative (mutating in place from the end
-/// backwards) works only because of that reverse ordering, costs O(n) per
-/// edit, and gives overlap detection nowhere natural to live.
-///
-/// This returns the raw spliced string with no write-gate: nothing stops a
-/// caller from writing it to disk unverified. Prefer
-/// [`gate::apply_edits_verified`](super::gate::apply_edits_verified) for
-/// anything that reaches disk; call this directly only when the raw,
-/// unverified form is genuinely what is needed.
+/// Apply raw candidates after geometry admission, without issuing byte-verification
+/// or catalog/health/post-check authority. Use the verified operation when needed.
 pub fn apply_edits(source: &str, edits: &[SpliceEdit]) -> Result<String, SpliceError> {
-    let (spliced, _mapped) = splice_with_sites(source, edits)?;
-    Ok(spliced)
+    Ok(mapped_edit_sites(source, edits)?.assemble().into_text())
 }
 
 #[cfg(test)]

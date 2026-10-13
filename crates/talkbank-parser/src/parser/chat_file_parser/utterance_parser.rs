@@ -55,9 +55,9 @@ pub fn parse_utterance_node<'tree, P: TierRouting>(
     // supertype already expanded to the concrete tier kinds, one `<Rule>Choice`
     // variant per tier). Every slot variant is handled explicitly so a recovery
     // node can never be silently dropped.
-    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar)),
+            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
         typed.raw_node(),
         input,
         errors,
@@ -407,12 +407,7 @@ fn classify_x_tier_label<'tree>(
     node: SourceBound<'tree, '_, XDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<Option<ParseHealthTier>, crate::parser::typed_cst::ReportedCstFailure> {
-    let children = crate::parser::typed_cst::report_reconstruction(
-        node.extract(),
-        node.raw_node(),
-        node.source(),
-        errors,
-    )?;
+    let children = node.extract();
     let SourceSlotView::Present(prefix) = children.field_child_0().slot().view() else {
         return Ok(None);
     };

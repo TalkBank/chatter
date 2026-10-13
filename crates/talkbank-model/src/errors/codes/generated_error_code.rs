@@ -294,7 +294,7 @@ pub enum ErrorCode {
     #[code("E361")]
     #[status(planned)]
     InvalidTimestamp,
-    /// Timestamp end is before start (backwards range).
+    /// Timestamp end is at or before start, or a media bullet starts before its predecessor.
     #[code("E362")]
     TimestampBackwards,
     /// Invalid postcode format.

@@ -23,40 +23,18 @@ Main tier with multiple words
           (word_with_optional_annotations
             (standalone_word
               (word_body
-                (initial_word_segment)
-              )
-            )
-          )
-        )
-      )
-      (whitespaces
-        (whitespace
-          (space)
-        )
-      )
+                (word_segment))))))
+      (whitespaces)
       (content_item
         (base_content_item
           (word_with_optional_annotations
             (standalone_word
               (word_body
-                (initial_word_segment)
-              )
-            )
-          )
-        )
-      )
-    )
+                (word_segment))))))
+      (whitespaces))
     (utterance_end
-      (whitespaces
-        (whitespace
-          (space)
-        )
-      )
       (period)
-      (newline)
-    )
-  )
-)
+      (newline))))
 ```
 
 ## Metadata

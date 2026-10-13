@@ -12,7 +12,6 @@
 
 //! Integration tests for the streaming validation runner, config and stats.
 
-use std::io::Write as _;
 use talkbank_model::validation::AlignmentValidation;
 use talkbank_transform::{
     ParserKind, RoundtripCheck, RunEnding, ValidationConfig, ValidationEvent,
@@ -56,24 +55,18 @@ fn config_parser_kind_default_is_treesitter() {
 // ===== Streaming validation (3 tests) =====
 
 /// Helper: write a .cha file into a directory.
-fn write_cha_file(dir: &std::path::Path, name: &str, content: &str) {
+fn write_cha_file(dir: &std::path::Path, name: &str, content: &str) -> std::io::Result<()> {
     let path = dir.join(name);
-    let mut f = std::fs::File::create(&path).ok();
-    if let Some(ref mut f) = f {
-        f.write_all(content.as_bytes()).ok();
-    }
+    std::fs::write(path, content)
 }
 
 #[test]
-fn validate_directory_with_valid_files() {
-    let dir = tempfile::tempdir().ok();
-    let dir = match dir {
-        Some(ref d) => d.path(),
-        None => return,
-    };
+fn validate_directory_with_valid_files() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let dir = directory.path();
 
-    write_cha_file(dir, "valid1.cha", VALID_CHAT);
-    write_cha_file(dir, "valid2.cha", VALID_CHAT);
+    write_cha_file(dir, "valid1.cha", VALID_CHAT)?;
+    write_cha_file(dir, "valid2.cha", VALID_CHAT)?;
 
     let config = ValidationConfig {
         alignment: AlignmentValidation::Structure,
@@ -108,17 +101,15 @@ fn validate_directory_with_valid_files() {
     }
     assert!(saw_started, "Should see Started event");
     assert!(saw_finished, "Should see Complete event");
+    Ok(())
 }
 
 #[test]
-fn validate_directory_with_invalid_file() {
-    let dir = tempfile::tempdir().ok();
-    let dir = match dir {
-        Some(ref d) => d.path(),
-        None => return,
-    };
+fn validate_directory_with_invalid_file() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let dir = directory.path();
 
-    write_cha_file(dir, "bad.cha", INVALID_CHAT);
+    write_cha_file(dir, "bad.cha", INVALID_CHAT)?;
 
     let config = ValidationConfig {
         alignment: AlignmentValidation::Structure,
@@ -161,15 +152,13 @@ fn validate_directory_with_invalid_file() {
         saw_errors,
         "the invalid file's result should carry its diagnostics"
     );
+    Ok(())
 }
 
 #[test]
-fn validate_directory_empty() {
-    let dir = tempfile::tempdir().ok();
-    let dir = match dir {
-        Some(ref d) => d.path(),
-        None => return,
-    };
+fn validate_directory_empty() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let dir = directory.path();
 
     let config = ValidationConfig {
         alignment: AlignmentValidation::Structure,
@@ -203,4 +192,5 @@ fn validate_directory_empty() {
     }
     assert!(saw_started, "Empty dir should still emit Started{{0}}");
     assert!(saw_finished, "Empty dir should end NothingFound");
+    Ok(())
 }

@@ -321,9 +321,9 @@ fn complete_timing_sequence_exposes_binding_hull_and_gap_geometry() -> Result<()
     assert_eq!(complete.hull().start().get(), 10);
     assert_eq!(complete.hull().end().get(), 50);
     assert_eq!(complete.hull().duration().get(), 40);
-    assert_eq!(complete.slots()[0].main_text(), "one");
-    assert_eq!(complete.slots()[2].timing().end().get(), 50);
-    assert_eq!(complete.slots()[2].duration().get(), 10);
+    assert_eq!(complete.slots().first().main_text(), "one");
+    assert_eq!(complete.slots().following()[1].timing().end().get(), 50);
+    assert_eq!(complete.slots().following()[1].duration().get(), 10);
     assert_eq!(
         adjacencies(complete.adjacencies()),
         [Adjacency::Gap(0, 1, 5), Adjacency::Touching(1, 2)]
@@ -346,8 +346,8 @@ fn empty_count_matched_sequence_is_distinct_from_complete_timing() -> Result<(),
 }
 
 /// A missing bullet and a zero-duration bullet each reject the sequence,
-/// naming the slot. `30_30` is valid CHAT (CLAN CHECK accepts it, so no E362);
-/// the timing consumer is what refuses it, at its own boundary.
+/// naming the slot. `30_30` also fails CHAT validation with E362; the consumer
+/// independently refuses the parsed invalid interval at its own boundary.
 #[test]
 fn incomplete_and_nonpositive_timings_are_rejected_with_slot_identity() -> Result<(), TestError> {
     let wor = format!("one {} two three {} .", bullet(10, 20), bullet(30, 30));
@@ -356,7 +356,7 @@ fn incomplete_and_nonpositive_timings_are_rejected_with_slot_identity() -> Resul
         media: Media::Declared,
         ..SingleSpeaker::english(&lines)
     }
-    .utterance(&[])?;
+    .utterance(&["E362"])?;
     let bound = corroborated(&utterance)?;
     let WorTimingSequence::Rejected(rejected) = assess_wor_timing_sequence(bound) else {
         return Err(TestError::Failure(

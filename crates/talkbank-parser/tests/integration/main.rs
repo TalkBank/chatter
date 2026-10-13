@@ -24,7 +24,6 @@
 // Shared harness, declared ONCE for the whole binary. Modules below
 // reach it as `crate::common::...`.
 mod common;
-mod replacement_admission;
 
 mod chat_parser_trait;
 mod context_public_api;
@@ -57,10 +56,14 @@ mod typed_full_document_recovery_routing;
 mod utterance_contents_characterization;
 mod utterance_dispatch_characterization;
 mod utterance_end_dispatch_characterization;
+mod visitor_bullet_tier_range_admission;
+mod visitor_free_text_tier_range_admission;
 mod visitor_gem_header_internals;
 mod visitor_gem_lazy_label;
 mod visitor_hidden_rule_inlining;
 mod visitor_line_choice;
+mod visitor_mor_range_admission;
+mod visitor_mor_tier_range_admission;
 mod visitor_repeat_rule_contents;
 mod visitor_repeat_slotting;
 mod visitor_simple_header_internals;
@@ -71,5 +74,6 @@ mod visitor_structured_media;
 mod visitor_structured_participants;
 mod visitor_structured_situation_types;
 mod visitor_supertype_classify;
+mod visitor_word_range_admission;
 mod wor_alignment_regression;
 mod wor_tier_characterization;

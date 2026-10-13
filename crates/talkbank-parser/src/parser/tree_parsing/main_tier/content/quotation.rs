@@ -16,7 +16,7 @@ use talkbank_model::ParseOutcome;
 
 use super::group::{contents_of, parse_group_contents};
 use super::report_tree_shape;
-use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, present, surface_displaced};
+use crate::parser::tree_parsing::parser_helpers::{expect_delimiter, surface_displaced};
 
 /// Parse a bare `quotation` node.
 ///
@@ -37,9 +37,9 @@ fn parse_quotation_content<'tree>(
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
     let source = typed.source();
-    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar)),
+            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -137,9 +137,9 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
 ) -> ParseOutcome<UtteranceContent> {
     let node = typed.raw_node();
     let source = typed.source();
-    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar)),
+            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,
@@ -173,26 +173,20 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
     // `annotations` is ONE optional slot, so there is no accumulator that a
     // second `base_annotations` child could silently overwrite. The hand-written
     // loop assigned into a `Vec` and carried no note saying why that was safe.
-    let markers = match children.annotations.slot() {
-        Some(slot) => match present(slot) {
-            Some(annotations) => {
-                match crate::parser::typed_cst::report_reconstruction(
-                    super::super::annotations::parse_scoped_annotations(
-                        *annotations,
-                        source,
-                        errors,
-                    ),
-                    annotations.raw_node(),
-                    source,
-                    errors,
-                ) {
-                    Ok(markers) => markers,
-                    Err(_) => return ParseOutcome::Rejected,
+    let markers = match associated.field_annotations().slot().optional() {
+        Some(slot) => match slot.view() {
+            SourceSlotView::Present(annotations) => {
+                match crate::parser::typed_cst::read_source_field(annotations, errors) {
+                    Some(annotations) => {
+                        super::super::annotations::parse_scoped_annotations(annotations, errors)
+                    }
+                    None => Vec::new(),
                 }
             }
             // Present-but-unusable (ERROR): the quotation still stands, and
             // recovery remains explicit despite composite nonmissing admission.
-            None => Vec::new(),
+            SourceSlotView::Error(_) => Vec::new(),
+            SourceSlotView::Absent(never) => match never {},
         },
         // Genuinely absent: a bare quotation, which folds to itself.
         None => Vec::new(),

@@ -5,7 +5,8 @@
     "outDir": ".test-dist",
     "rootDir": ".",
     "target": "ES2021",
-    "lib": ["ES2021"],
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "types": ["node"],
     "module": "CommonJS",
     // The app source uses extensionless (bundler-style) imports; this test build
     // compiles it to CommonJS for `node --test`. TypeScript 7 removed the old
@@ -23,6 +24,9 @@
   "include": [
     "src/protocol/**/*.ts",
     "src/runtime/capabilities/**/*.ts",
-    "src/hooks/validationState.ts"
+    "src/hooks/validationState.ts",
+    "src/components/FileTree.tsx",
+    "src/components/ErrorPanel.tsx",
+    "tests/unit/renderedResults.test.ts"
   ]
 }

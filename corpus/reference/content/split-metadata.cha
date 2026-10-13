@@ -1,0 +1,20 @@
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Child, MOT Mother
+@ID:	eng, spa|sample|CHI|||||Child|||
+@ID:	eng, spa|sample|MOT|||||Mother|||
+@Media:	split-metadata, audio
+@Comment:	Authored split control: utterance language, linker, postcodes,
+	word timing and dependent tiers with different partition policies.
+*MOT:	ready .
+*CHI:	+^ [- spa] hola , mundo ? [+ ask] [+ context demo] 100_600
+%mor:	intj|hola cm|cm noun|mundo ?
+%gra:	1|0|ROOT 2|1|PUNCT 3|1|OBJ 4|1|PUNCT
+%pho:	ola mundo
+%xcoref:	topic reference
+%wor:	[- spa] , hola 100_300 , mundo 300_600 ?
+%com:	first-child comment
+%xtra:	first-child custom annotation
+%act:	pointing
+@End

@@ -1,7 +1,7 @@
 # Installation
 
 **Status:** Current
-**Last modified:** 2026-08-30 14:11 EDT
+**Last modified:** {{git-dates:page}}
 
 `chatter` targets **Windows, macOS, and Linux**. There are two ways to
 install it: the **prebuilt binaries** (recommended for most people,
@@ -74,33 +74,55 @@ hand.
 
   This self-update runs **in-process**: `chatter update` embeds `axoupdater`
   as a library and downloads the newest release from GitHub Releases
-  directly, without a separate bundled `chatter-update` program. (The
-  self-update facility is experimental and works the same way regardless of
-  how you installed the CLI.)
+  directly, without a separate bundled `chatter-update` program. It requires
+  a supported official installer receipt for this executable. Source and
+  package-manager installs should be updated through their original method;
+  a missing or unrelated receipt is refused before update execution.
 - **Desktop app:** the app checks for updates on launch and offers to
   install a new version when one is available.
 
 ## From source
 
-Building from source needs only a stable **Rust** toolchain (install via
-[rustup](https://rustup.rs/), which supports Windows, macOS, and Linux).
+Building from source needs the workspace-selected stable **Rust** toolchain
+(install via [rustup](https://rustup.rs/)), native build tools (C compiler and
+linker), and SQLite development headers where required by the platform.
+See [contributor setup](../../contributing/setup.md) for the platform prerequisites.
+This is not a declared minimum Rust-version promise.
 Node.js and the Tree-sitter CLI are needed only when working on the grammar
 or generated artifacts. Use the Node version in `grammar/.nvmrc`, then run
-`npm ci` in `grammar/`; its lockfile pins the CLI to 0.27.0 so regeneration
+`npm ci` in `grammar/`; its lockfile pins the CLI so regeneration
 uses the same toolchain as CI.
 
-Clone and install the CLI:
+Clone and install the CLI and, if needed, the standalone LSP:
 
 ```bash
 git clone https://github.com/TalkBank/chatter.git
 cd chatter
 cargo install --path crates/chatter --locked
+cargo install --path crates/talkbank-lsp --locked
 ```
 
 This installs the `chatter` binary to `~/.cargo/bin/` (macOS/Linux) or
 `%USERPROFILE%\.cargo\bin\` (Windows). To update a source install, pull
-and re-run the `cargo install` command above (`chatter update` is only
-for installer-based installs).
+and reinstall the selected package with `--force --locked`, retaining the
+reviewed checkout revision. `chatter update` targets published installer
+releases, not the source revision you selected.
+
+For a local verification install that must not replace your normal commands,
+use an explicit install root:
+
+```bash
+cargo install --path crates/chatter --root /path/to/test-install --debug --locked
+cargo install --path crates/talkbank-lsp --root /path/to/test-install --debug --locked
+```
+
+Its programs are `/path/to/test-install/bin/chatter` and
+`/path/to/test-install/bin/talkbank-lsp` (`.exe` on Windows). `--debug` selects
+a development artifact, not a release candidate. `--offline` may be added when
+all locked dependencies are already cached; it is not a clean-machine drill.
+A local `--path` install does not verify crates.io resolution or a published
+candidate. Build/install evidence, actual executable behavior and independent
+operator/platform acceptance are separate requirements.
 
 ### Building the libraries
 

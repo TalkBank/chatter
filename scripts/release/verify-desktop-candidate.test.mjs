@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyCandidate } from './verify-desktop-candidate.mjs';
+import { installerPairs } from './cli-installer-compatibility.mjs';
 
 function candidate() {
   const tag = 'v1.2.3', repo = 'example/project';
   const names = ['Chatter-macos-apple-silicon.dmg', 'Chatter-macos-intel.dmg',
     'Chatter-windows-setup.exe', 'Chatter-linux-x86_64.AppImage', 'Chatter-linux-x86_64.deb', 'latest.json'];
+  for (const pair of installerPairs) names.push(pair.current, pair.legacy);
   const platforms = {};
   for (const key of ['darwin-aarch64', 'darwin-x86_64', 'windows-x86_64', 'linux-x86_64']) {
     const name = `${key}.bundle`;

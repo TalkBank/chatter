@@ -261,8 +261,20 @@ fn rich_word_with<'tokens, 'a: 'tokens>(
             (raw_text, prefix, body, form_marker, lang_suffix, pos_tag),
     }
     .then(annotations)
-    .map(
-        |((raw_text, prefix, body_str, form_marker, lang_suffix_opt, pos_tag), annotations)| {
+    .try_map(
+        |((raw_text, prefix, body_str, form_marker, lang_suffix_opt, pos_tag), annotations), _| {
+            // A word has one @ suffix, not independent form and language slots.
+            if form_marker.is_some() && lang_suffix_opt.is_some() {
+                return Err(Default::default());
+            }
+            let form_marker = form_marker
+                .map(|payload| {
+                    talkbank_model::model::FormType::from_payload(
+                        talkbank_model::model::FormMarkerPayload::after_at(payload),
+                    )
+                })
+                .transpose()
+                .map_err(|_| Default::default())?;
             let category = match prefix {
                 Some("&-") => Some(WordCategory::Filler),
                 Some("&~") => Some(WordCategory::Nonword),
@@ -285,7 +297,7 @@ fn rich_word_with<'tokens, 'a: 'tokens>(
                 annotations,
                 raw_text: raw_text.into(),
             };
-            word_to_content_item(word)
+            Ok(word_to_content_item(word))
         },
     )
 }
@@ -315,7 +327,7 @@ fn subtoken_word_with<'tokens, 'a: 'tokens>(
         .at_least(1)
         .collect::<Vec<Token<'a>>>()
         .then(annotations)
-        .map(|(toks, annotations)| {
+        .try_map(|(toks, annotations), _| {
             let mut category = None;
             let mut body = Vec::new();
             let mut form_marker = None;
@@ -338,8 +350,21 @@ fn subtoken_word_with<'tokens, 'a: 'tokens>(
                     Token::PrefixFiller(_) => category = Some(WordCategory::Filler),
                     Token::PrefixNonword(_) => category = Some(WordCategory::Nonword),
                     Token::PrefixFragment(_) => category = Some(WordCategory::Fragment),
-                    Token::FormMarker(s) => form_marker = Some(s),
+                    Token::FormMarker(s) => {
+                        if form_marker.is_some() || lang.is_some() {
+                            return Err(Default::default());
+                        }
+                        form_marker = Some(
+                            talkbank_model::model::FormType::from_payload(
+                                talkbank_model::model::FormMarkerPayload::after_at(s),
+                            )
+                            .map_err(|_| Default::default())?,
+                        );
+                    }
                     Token::WordLangSuffix(opt) => {
+                        if form_marker.is_some() || lang.is_some() {
+                            return Err(Default::default());
+                        }
                         lang = Some(match opt {
                             None => ParsedLangSuffix::Shortcut,
                             Some(codes) => ParsedLangSuffix::Explicit(codes),
@@ -445,7 +470,7 @@ fn subtoken_word_with<'tokens, 'a: 'tokens>(
                         body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::BreathyVoice))
                     }
                     Token::CaYawn(_) => body.push(WordBodyItem::CaDelimiter(CaDelimiterKind::Yawn)),
-                    Token::Ampersand(_) => body.push(WordBodyItem::Text("&")),
+                    Token::Ampersand(_) => return Err(Default::default()),
                     other => body.push(WordBodyItem::Text(other.text())),
                 }
             }
@@ -456,10 +481,14 @@ fn subtoken_word_with<'tokens, 'a: 'tokens>(
                 && body.is_empty()
                 && let Some(zt) = zero_tok
             {
-                return ContentItem::Action {
+                return Ok(ContentItem::Action {
                     zero: zt.text(),
                     annotations,
-                };
+                });
+            }
+
+            if body.is_empty() {
+                return Err(Default::default());
             }
 
             let word = WordWithAnnotations {
@@ -471,7 +500,7 @@ fn subtoken_word_with<'tokens, 'a: 'tokens>(
                 annotations,
                 raw_text,
             };
-            word_to_content_item(word)
+            Ok(word_to_content_item(word))
         })
 }
 
@@ -518,37 +547,42 @@ pub fn contents_parser<'tokens, 'a: 'tokens>()
             .ignore_then(contents.clone())
             .then_ignore(select! { Token::GreaterThan(_) => () })
             .then(trailing_annotations())
-            .map(|(contents, annotations)| {
-                if annotations.is_empty() {
-                    // grammar.js: `group_with_annotations` REQUIRES at
-                    // least one annotation. Tree-sitter recovers from a
-                    // missing annotation by inserting a synthetic MISSING
-                    // `retrace_complete`, producing
-                    // `Retrace { kind: Full, is_group: true }` in the model.
-                    // Mirror that recovery here so SemanticEq holds on
-                    // malformed input, and flag it so the file-level parser
-                    // emits the matching MISSING diagnostic (E342); the chumsky
-                    // combinator itself has no ErrorSink access. See this
-                    // crate's MISSING-Token Recovery Policy.
-                    ContentItem::Retrace(Retrace {
-                        content: contents,
-                        kind: RetraceKindParsed::Complete,
-                        is_group: true,
-                        synthesized_missing_annotation: true,
-                        annotations,
-                    })
-                } else {
-                    // Every other shape is the ordinary marker fold. This arm
-                    // used to be a third hand-rolled algorithm that took only
-                    // the FIRST retrace marker and put the rest in the
-                    // retrace's annotation list, where lowering dropped them,
-                    // so `<a b> [//] [/]` lost the `[/]` on this backend after
-                    // the word path had already been fixed.
-                    Chain::Group(contents, Vec::new())
-                        .fold(annotations)
-                        .into_content_item()
-                }
-            });
+            .try_map(
+                |(contents, annotations): (Vec<ContentItem<'a>>, Vec<ParsedAnnotation<'a>>), _| {
+                    if contents.is_empty() {
+                        return Err(Default::default());
+                    }
+                    if annotations.is_empty() {
+                        // grammar.js: `group_with_annotations` REQUIRES at
+                        // least one annotation. Tree-sitter recovers from a
+                        // missing annotation by inserting a synthetic MISSING
+                        // `retrace_complete`, producing
+                        // `Retrace { kind: Full, is_group: true }` in the model.
+                        // Mirror that recovery here so SemanticEq holds on
+                        // malformed input, and flag it so the file-level parser
+                        // emits the matching MISSING diagnostic (E342); the chumsky
+                        // combinator itself has no ErrorSink access. See this
+                        // crate's MISSING-Token Recovery Policy.
+                        Ok(ContentItem::Retrace(Retrace {
+                            content: contents,
+                            kind: RetraceKindParsed::Complete,
+                            is_group: true,
+                            synthesized_missing_annotation: true,
+                            annotations,
+                        }))
+                    } else {
+                        // Every other shape is the ordinary marker fold. This arm
+                        // used to be a third hand-rolled algorithm that took only
+                        // the FIRST retrace marker and put the rest in the
+                        // retrace's annotation list, where lowering dropped them,
+                        // so `<a b> [//] [/]` lost the `[/]` on this backend after
+                        // the word path had already been fixed.
+                        Ok(Chain::Group(contents, Vec::new())
+                            .fold(annotations)
+                            .into_content_item())
+                    }
+                },
+            );
 
         // grammar.js: quotation_with_optional_annotations. The same ordered
         // chain owns scoped annotations and retraces for every seed kind.

@@ -106,10 +106,13 @@ pub fn mor_tier_parser<'tokens, 'a: 'tokens>()
             .allow_trailing()
             .collect::<Vec<_>>(),
     )
-    .then(ws().ignore_then(terminator).or_not())
+    .then(ws().ignore_then(terminator))
     .then_ignore(ws())
     .then_ignore(opt_newline())
-    .map(|(items, terminator)| MorTier { items, terminator })
+    .map(|(items, terminator)| MorTier {
+        items,
+        terminator: Some(terminator),
+    })
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -222,22 +225,33 @@ impl<'source> AdmittedTextTierTokens<'source> {
     ) -> Self {
         let mut admitted = Vec::new();
         for (token, span) in lexed.located(range) {
-            if let Token::MediaBullet {
+            if let Some(context) = token.error_context() {
+                errors.report(talkbank_model::ParseError::new(
+                    talkbank_model::ErrorCode::UnparsableContent,
+                    talkbank_model::Severity::Error,
+                    talkbank_model::SourceLocation::from_offsets(span.start, span.end),
+                    talkbank_model::ErrorContext::new(lexed.source(), span, "dependent_content"),
+                    context,
+                ));
+            } else if let Token::MediaBullet {
                 start_time,
                 end_time,
                 ..
             } = token
-                && matches!(
-                    (start_time.parse::<u64>(), end_time.parse::<u64>()),
-                    (Ok(0), Ok(0))
-                )
+                && let Some(message) = match (start_time.parse::<u64>(), end_time.parse::<u64>()) {
+                    (Ok(0), Ok(0)) => Some("Invalid bullet: both start and end timestamps are 0"),
+                    (Err(_), _) | (_, Err(_)) => {
+                        Some("Invalid bullet: timestamp cannot be represented as milliseconds")
+                    }
+                    _ => None,
+                }
             {
                 errors.report(talkbank_model::ParseError::new(
                     talkbank_model::ErrorCode::InvalidMediaBullet,
                     talkbank_model::Severity::Error,
                     talkbank_model::SourceLocation::from_offsets(span.start, span.end),
                     talkbank_model::ErrorContext::new(lexed.source(), span.start..span.end, ""),
-                    "Invalid bullet: both start and end timestamps are 0",
+                    message,
                 ));
             } else {
                 admitted.push(token.clone());

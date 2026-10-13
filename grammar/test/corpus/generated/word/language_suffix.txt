@@ -1,5 +1,5 @@
 ================================================================================
-language_suffix - Word with language suffix, @s:code or @s:code1+code2.
+language_suffix - Word with an opaque language suffix, @s:code or @s:code1+code2. The immediate suffix token has no code-list CST children. Candidate decoding belongs to its source-bound Rust adapter; registry validity is a later policy.
 ================================================================================
 *CHI:	hao3@s:eng+zho .
 

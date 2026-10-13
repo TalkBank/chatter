@@ -93,7 +93,7 @@ pub struct GraTier {
     #[schemars(skip)]
     #[semantic_eq(skip)]
     #[span_shift(skip)]
-    pub(crate) completeness: GraCompleteness,
+    pub(super) completeness: GraCompleteness,
 }
 
 /// Whether a `%gra` tier holds every relation its line declared.
@@ -112,8 +112,9 @@ pub struct GraTier {
 /// rule that switches itself off wherever the plumbing is incomplete is the
 /// gate-that-skips-itself failure, and it would be invisible, whereas a
 /// cascade is at least visible in the output. The cost of this direction is
-/// stated rather than hidden: a future lowering that drops a relation without
-/// saying so reopens the cascade, and no type here can stop it.
+/// stated rather than hidden: a producer that omits an observed outcome can
+/// still reopen the cascade. [`super::GraLowering`] guards aggregation of the
+/// recorded outcomes; it does not certify source origin or input completeness.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GraCompleteness {
     /// No parser said. The default, and it is JUDGED; see above.
@@ -130,28 +131,14 @@ impl GraTier {
     ///
     /// Says nothing about completeness: a caller holding a bare `Vec` has not
     /// established whether anything was dropped on the way. A parser that
-    /// knows says so with [`Self::lowered_from`].
+    /// knows records its outcomes with [`super::GraLowering`] and consumes the
+    /// completed receipt instead.
     pub fn new(tier_type: GraTierType, relations: Vec<GrammaticalRelation>) -> Self {
         Self {
             tier_type,
             relations: relations.into(),
             span: Span::DUMMY,
             completeness: GraCompleteness::Unknown,
-        }
-    }
-
-    /// Constructs a tier from a lowering that knows what it dropped.
-    ///
-    /// The one route to a [`GraCompleteness`] other than `Unknown`, so a claim
-    /// of completeness can only come from the code that counted.
-    #[must_use]
-    pub fn lowered_from(
-        relations: Vec<GrammaticalRelation>,
-        completeness: GraCompleteness,
-    ) -> Self {
-        Self {
-            completeness,
-            ..Self::new_gra(relations)
         }
     }
 
@@ -634,8 +621,9 @@ impl crate::validation::Validate for GraRelations {
 
 #[cfg(test)]
 mod tests {
+    use super::super::GraLowering;
     use super::*;
-    use crate::{ErrorCode, ErrorCollector, Severity};
+    use crate::{ErrorCode, ErrorCollector, ParseOutcome, Severity};
 
     /// Both halves, exactly as `Utterance::validate_gra_structure` runs them
     /// on a tier nothing disputes.
@@ -677,14 +665,16 @@ mod tests {
     /// Dropping a relation cannot create a second ROOT, so E723 still fires.
     #[test]
     fn a_truncated_tier_still_reports_two_roots() {
-        let tier = GraTier::lowered_from(
-            vec![
-                GrammaticalRelation::new(1, 0, "ROOT"),
-                GrammaticalRelation::new(2, 0, "ROOT"),
-                GrammaticalRelation::new(3, 2, "PUNCT"),
-            ],
-            GraCompleteness::Truncated,
-        );
+        let tier = [
+            ParseOutcome::Parsed(GrammaticalRelation::new(1, 0, "ROOT")),
+            ParseOutcome::Parsed(GrammaticalRelation::new(2, 0, "ROOT")),
+            ParseOutcome::Parsed(GrammaticalRelation::new(3, 2, "PUNCT")),
+            ParseOutcome::Rejected,
+        ]
+        .into_iter()
+        .collect::<GraLowering>()
+        .finish()
+        .into_tier();
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         assert!(
@@ -699,14 +689,16 @@ mod tests {
     /// Dropping a relation cannot close a cycle, so E724 still fires.
     #[test]
     fn a_truncated_tier_still_reports_a_cycle() {
-        let tier = GraTier::lowered_from(
-            vec![
-                GrammaticalRelation::new(1, 2, "NSUBJ"),
-                GrammaticalRelation::new(2, 1, "OBJ"),
-                GrammaticalRelation::new(3, 2, "PUNCT"),
-            ],
-            GraCompleteness::Truncated,
-        );
+        let tier = [
+            ParseOutcome::Parsed(GrammaticalRelation::new(1, 2, "NSUBJ")),
+            ParseOutcome::Parsed(GrammaticalRelation::new(2, 1, "OBJ")),
+            ParseOutcome::Parsed(GrammaticalRelation::new(3, 2, "PUNCT")),
+            ParseOutcome::Rejected,
+        ]
+        .into_iter()
+        .collect::<GraLowering>()
+        .finish()
+        .into_tier();
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         assert!(
@@ -725,10 +717,14 @@ mod tests {
         // What `%gra: 1|0|ROOT 2|<unrepresentable>|PUNCT` leaves behind, and
         // what `%gra: 0|0|ROOT 1|0|PUNCT` leaves behind: one relation each,
         // shaped so that the whole-tier rules would fire if they ran.
-        let rootless = GraTier::lowered_from(
-            vec![GrammaticalRelation::new(2, 1, "PUNCT")],
-            GraCompleteness::Truncated,
-        );
+        let rootless = [
+            ParseOutcome::Rejected,
+            ParseOutcome::Parsed(GrammaticalRelation::new(2, 1, "PUNCT")),
+        ]
+        .into_iter()
+        .collect::<GraLowering>()
+        .finish()
+        .into_tier();
         let errors = ErrorCollector::new();
         validate_all(&rootless, &errors);
         let reported = errors.into_vec();
@@ -750,10 +746,13 @@ mod tests {
     /// stop firing for any reason at all.
     #[test]
     fn the_same_tier_reports_both_when_nothing_was_dropped() {
-        let tier = GraTier::lowered_from(
-            vec![GrammaticalRelation::new(2, 1, "PUNCT")],
-            GraCompleteness::Whole,
-        );
+        let tier = [ParseOutcome::Parsed(GrammaticalRelation::new(
+            2, 1, "PUNCT",
+        ))]
+        .into_iter()
+        .collect::<GraLowering>()
+        .finish()
+        .into_tier();
         let errors = ErrorCollector::new();
         validate_all(&tier, &errors);
         let reported = errors.into_vec();

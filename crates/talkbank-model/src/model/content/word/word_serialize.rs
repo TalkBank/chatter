@@ -7,7 +7,7 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::model::WriteChat;
+use crate::model::{WordContent, WriteChat};
 
 use super::category::WordCategory;
 use super::form::FormType;
@@ -167,16 +167,19 @@ impl WriteChat for Word {
 
         let wrap_ca_omission = matches!(self.category, Some(WordCategory::CAOmission));
 
-        if wrap_ca_omission {
-            w.write_char('(')?;
-        }
-
         for item in self.content() {
+            // CA normalization replaces the single lexical shortening with
+            // Text while preserving neighboring markers. Only that lexical
+            // text belongs inside parentheses; moving an overlap/prosodic
+            // boundary inside would change its source spelling and grammar.
+            let wrap_text = wrap_ca_omission && matches!(item, WordContent::Text(_));
+            if wrap_text {
+                w.write_char('(')?;
+            }
             item.write_chat(w)?;
-        }
-
-        if wrap_ca_omission {
-            w.write_char(')')?;
+            if wrap_text {
+                w.write_char(')')?;
+            }
         }
 
         if let Some(ref ft) = self.form_type {

@@ -11,7 +11,14 @@
 ## Expected CST
 
 ```cst
-(date_header ...)
+(date_header
+  (date_prefix)
+  (header_sep
+    (colon)
+    (tab))
+  (date_contents
+    (strict_date))
+  (newline))
 ```
 
 ## Metadata

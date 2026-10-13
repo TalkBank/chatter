@@ -36,9 +36,9 @@ pub(crate) fn parse_replacement<'tree>(
     let source = typed.source();
     let node = typed.node().raw_node();
     let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar));
+        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into));
     let Ok(associated) =
-        crate::parser::typed_cst::report_reconstruction(extraction, node, source, errors)
+        crate::parser::typed_cst::report_admission(extraction, node, source, errors)
     else {
         return ParseOutcome::Rejected;
     };

@@ -80,27 +80,59 @@ class ProspectiveDates(unittest.TestCase):
         git(["checkout", "--detach", "-q"], self.root)
         self.assertEqual(self.check("--prospective").returncode, 0)
 
-    def test_real_commit_hook_rechecks_dates_after_an_earlier_gate(self) -> None:
+    def test_commit_hook_does_not_run_a_date_gate(self) -> None:
         hook = self.root / ".git" / "hooks" / "pre-commit"
         shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook)
         hook.chmod(0o755)
         self.page.write_text(self.page.read_text() + "\nChanged after the earlier check.\n")
         git(["add", "."], self.root)
-        with self.assertRaises(subprocess.CalledProcessError) as caught:
-            git(["commit", "-qm", "stale date"], self.root)
-        self.assertIn("prospective commit", caught.exception.stderr)
+        git(["commit", "-qm", "explicit review checkpoint"], self.root)
+
+    def test_commit_msg_hook_has_no_builtin_gates(self) -> None:
+        hook = self.root / ".git" / "hooks" / "commit-msg"
+        shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/commit-msg", hook)
+        hook.chmod(0o755)
+        (self.root / "sample.rs").write_text("fn main() {}\n")
+        git(["add", "sample.rs"], self.root)
+        # No lint scripts or changelog are present: none may be invoked or
+        # required by a built-in hook. This exercises actual Git invocation.
+        git(["commit", "-qm", "feat!: explicit review checkpoint"], self.root)
+
+    def test_commit_hooks_preserve_optional_local_protocol(self) -> None:
+        hooks = self.root / ".git" / "hooks"
+        for name in ("pre-commit", "commit-msg"):
+            hook = hooks / name
+            shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks" / name, hook)
+            hook.chmod(0o755)
+            local = hooks / f"{name}.local"
+            local.write_text(
+                f'#!/bin/sh\nprintf "%s\\n" "$#" > .git/{name}-argc\n'
+                f'printf "%s\\n" "$@" > .git/{name}-args\n'
+                'exit 0\n'
+            )
+            local.chmod(0o755)
+        self.page.write_text(self.page.read_text() + "\nExplicitly reviewed edit.\n")
+        git(["add", "."], self.root)
+        git(["commit", "-qm", "local protocol"], self.root)
+        self.assertEqual((self.root / ".git/pre-commit-argc").read_text(), "0\n")
+        self.assertEqual((self.root / ".git/commit-msg-argc").read_text(), "1\n")
+        self.assertEqual((self.root / ".git/commit-msg-args").read_text(), ".git/COMMIT_EDITMSG\n")
+        # A contributor-owned hook's refusal must still reach Git unchanged.
+        local = hooks / "pre-commit.local"
+        local.write_text("#!/bin/sh\nexit 23\n")
+        self.page.write_text(self.page.read_text() + "\nAnother edit.\n")
+        git(["add", "."], self.root)
+        with self.assertRaises(subprocess.CalledProcessError):
+            git(["commit", "-qm", "local refusal"], self.root)
 
     def test_unstaged_repair_cannot_mask_stale_staged_content(self) -> None:
-        hook = self.root / ".git" / "hooks" / "pre-commit"
-        shutil.copyfile(Path(__file__).resolve().parents[1] / ".githooks/pre-commit", hook)
-        hook.chmod(0o755)
         self.page.write_text(self.page.read_text() + "\nStaged change.\n")
         git(["add", "."], self.root)
         today = datetime.datetime.now().astimezone().date().isoformat()
         self.page.write_text(self.page.read_text().replace("2020-01-01", today))
-        with self.assertRaises(subprocess.CalledProcessError) as caught:
-            git(["commit", "-qm", "old staged header"], self.root)
-        self.assertIn("prospective commit", caught.exception.stderr)
+        result = self.check("--prospective", "--snapshot", "index")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("prospective commit", result.stderr)
         git(["add", "."], self.root)
         git(["commit", "-qm", "admitted staged header"], self.root)
         self.assertEqual(self.check().returncode, 0)

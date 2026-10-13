@@ -63,6 +63,13 @@ wraps the fragment in a complete CHAT file, because tree-sitter parses
 documents rather than fragments. A label with no matching `.tera` template is
 an error; add the template.
 
+For fragment specs, the current corpus emitter parses the wrapped input and
+derives its full-document CST from that parse. The generated corpus fixture
+pins this observed tree, but the emitter does not compare it with the authored
+fragment's `Expected CST` block. That block still needs review against a real
+parse; passing generated tests or artifact currency does not prove it agrees.
+Full-document specs supply their authored full CST instead.
+
 ### Error specs, `spec/errors/`
 
 Invalid CHAT, and the codes it must produce. Everything declared lives in

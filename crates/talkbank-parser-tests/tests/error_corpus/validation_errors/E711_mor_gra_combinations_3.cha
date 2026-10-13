@@ -1,0 +1,22 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child
+@ID:	eng|corpus|CHI|||||Child|||
+@Comment:	Authored MOR/GRA combinations: repeated post-clitics, POS subcategories,
+	ordered flat/keyed/multivalue features, Unicode lemmas and a compound lemma.
+	The middle turn has four main words and MOR items but seven GRA word chunks,
+	including two post-clitics and the terminator. Neighboring turns are sentinels.
+*CHI:	start .
+%mor:	verb|start .
+%gra:	1|0|ROOT 2|1|PUNCT
+%com:	before café
+*CHI:	we'd've found café icecream .
+%mor:	pron:pers|we-Nom-Person=1~aux|have-Tense=Past~aux|have-Mood=-Polarity=Pos verb|find-Past noun|café-Case=Acc noun|ice_cream-PronType=Int,Rel .
+%gra:	1|4|NSUBJ 2|4|AUX 3|2|AUX 4|0|ROOT 5|4|OBJ 6|4|OBJ 7|4|PUNCT
+%com:	middle naïve
+*CHI:	finish .
+%mor:	verb|finish .
+%gra:	1|0|ROOT 2|1|PUNCT
+%com:	after résumé
+@End

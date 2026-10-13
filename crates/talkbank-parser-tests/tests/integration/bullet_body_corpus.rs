@@ -7,6 +7,115 @@ use talkbank_parser_tests::chat_corpus::ChatCorpus;
 use talkbank_parser_tests::repo_paths::workspace_root;
 use talkbank_parser_tests::test_error::strict_parse;
 
+/// The authored media examples must exercise real delimited bullets, not bare
+/// timestamp-shaped words that merely satisfy a parse-only construct test.
+#[test]
+fn authored_bullet_constructs_preserve_timing_and_continuation() {
+    use talkbank_model::model::{DependentTier, Utterance, UtteranceContent};
+
+    let parser = TreeSitterParser::new().expect("parser");
+    for (fixture, delimiters, main_tier) in [
+        (
+            include_str!(
+                "../../../../grammar/test/corpus/generated/main_tier/inline_bullet_continuation.txt"
+            ),
+            4,
+            true,
+        ),
+        (
+            include_str!("../../../../grammar/test/corpus/generated/tiers/x_tier_with_bullets.txt"),
+            2,
+            false,
+        ),
+    ] {
+        let header = format!("\n{}\n", "=".repeat(80));
+        let divider = format!("\n{}\n", "-".repeat(80));
+        let (_, body) = fixture
+            .split_once(&header)
+            .expect("generated fixture header");
+        let (source, _) = body.split_once(&divider).expect("generated fixture input");
+        assert_eq!(source.matches('\u{15}').count(), delimiters);
+        // Grammar corpus inputs are fragments. The public file API needs the
+        // same document scaffolding as the generated construct parser tests;
+        // this is syntax/model evidence, not participant-header validation.
+        let document = talkbank_parser_tests::from_source::SingleSpeaker::english(
+            source.trim_end_matches('\n'),
+        )
+        .source();
+        let file =
+            strict_parse(parser.parse_chat_file(&document)).expect("authored fixture parses");
+        let utterances: Vec<_> = file.utterances().collect();
+        let [utterance] = utterances.as_slice() else {
+            panic!("fixture must describe one utterance");
+        };
+        if main_tier {
+            let internal: Vec<_> = utterance
+                .main
+                .content
+                .content
+                .iter()
+                .filter_map(|item| match item {
+                    UtteranceContent::InternalBullet(bullet) => Some(bullet),
+                    _ => None,
+                })
+                .collect();
+            let [internal] = internal.as_slice() else {
+                panic!("fixture must retain exactly one internal bullet");
+            };
+            let terminal = utterance
+                .main
+                .content
+                .bullet
+                .as_ref()
+                .expect("terminal bullet");
+            for (bullet, times, spelling) in [
+                (*internal, (0, 2633), "\u{15}0_2633\u{15}"),
+                (terminal, (2633, 4026), "\u{15}2633_4026\u{15}"),
+            ] {
+                assert_eq!((bullet.timing.start_ms, bullet.timing.end_ms), times);
+                assert_eq!(
+                    document.get(bullet.span.start as usize..bullet.span.end as usize),
+                    Some(spelling),
+                );
+            }
+            assert!(source.contains("\n\t(1.0)"));
+            assert!(
+                utterance
+                    .main
+                    .content
+                    .content
+                    .iter()
+                    .any(|item| matches!(item, UtteranceContent::Pause(_)))
+            );
+        } else {
+            let [entry] = utterance.dependent_tiers.as_slice() else {
+                panic!("fixture must retain its user-defined tier");
+            };
+            let DependentTier::UserDefined(tier) = &entry.tier else {
+                panic!("fixture must remain a user-defined tier");
+            };
+            assert_eq!(tier.label.as_str(), "xs1");
+            assert_eq!(
+                tier.content.as_deref(),
+                Some("swallow \u{15}3093_4877\u{15}")
+            );
+        }
+        let output = utterance.to_chat_string();
+        let timings: &[&str] = if main_tier {
+            &["\u{15}0_2633\u{15}", "\u{15}2633_4026\u{15}"]
+        } else {
+            &["\u{15}3093_4877\u{15}"]
+        };
+        for timing in timings {
+            assert_eq!(output.matches(timing).count(), 1);
+        }
+        let restored: Utterance =
+            serde_json::from_str(&serde_json::to_string(utterance).expect("fixture model JSON"))
+                .expect("fixture model import");
+        assert_eq!(restored.to_chat_string(), output);
+    }
+}
+
 /// Body-only consumers preserve typed media and wrapping, independently of
 /// which ordinary dependent tier owns the content.
 #[test]

@@ -359,11 +359,7 @@ fn parse_participant_entry<'tree>(
 ) -> ParseOutcome<ParticipantEntry> {
     let node = typed.raw_node();
     let source = typed.source();
-    let Ok(children) =
-        crate::parser::typed_cst::report_reconstruction(typed.extract(), node, source, errors)
-    else {
-        return ParseOutcome::Rejected;
-    };
+    let children = typed.extract();
     // Keep only displaced recovery evidence across a failed consuming
     // admission. Do not clone the complete selected carrier.
     let displaced = children.children().unexpected.clone();

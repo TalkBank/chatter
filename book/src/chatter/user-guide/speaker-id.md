@@ -249,11 +249,12 @@ Comma, tag-question and vocative separators contribute no tokens. The reference
 separator control checks exact support counts and verifies that a stricter
 confidence threshold refuses the same evidence without changing it.
 
-The current matcher also skips an entire `ReplacedWord` (`word [: replacement]`)
-node, including its original word. Unlike punctuation, that node does contain
-lexical content. This is an unresolved matching-policy limitation, not a claim
-that replaced speech contains no words; inspect the support counts when using
-replacement-annotated transcripts.
+For a `ReplacedWord` (`word [: replacement]`), the matcher counts the original
+spoken word, not the replacement targets. Thus `goed [: went]` contributes
+`goed`, while `child [: children]` contributes `child`. The same cleaning and
+eligibility rules apply to these originals as to other words. This policy is
+shared by reference and input speakers; it does not alter either transcript or
+claim that an ASR system necessarily preserves the spoken form.
 
 The ASCII restriction is a limitation of the matcher, not a CHAT validity rule:
 accented and non-Latin words are excluded. For example, the Mandarin reference

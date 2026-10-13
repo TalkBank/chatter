@@ -86,6 +86,7 @@ pub use config::{LinkerChecks, RuleSelection};
 pub use context::{ErrorContext, SourceExcerptError};
 pub use diagnostic_kind::{DiagnosticKind, ValidationProfile, kind_of, severity};
 pub use enhance::{enhance_errors_with_index, enhance_errors_with_source};
+mod source_diagnostic;
 #[cfg(feature = "channels")]
 pub use error_sink::ChannelErrorSink;
 pub use error_sink::{ErrorSink, NullErrorSink};
@@ -94,6 +95,10 @@ pub use offset_adjusting_sink::OffsetAdjustingErrorSink;
 pub use parse_error::ParseError;
 pub use parse_errors::{ParseErrors, ParseResult};
 pub use rebased_sink::RebasedErrorSink;
+pub use source_diagnostic::{
+    DiagnosticContext, DiagnosticLabel, DiagnosticPresentation, DiagnosticSourceError, DisplaySpan,
+    SourceDiagnostic,
+};
 pub use source_location::{ErrorLabel, ErrorVec, Severity, SourceLocation, SourceLocationError};
 pub use span_shift::SpanShift;
 pub use tee_sink::TeeErrorSink;

@@ -48,14 +48,7 @@ pub fn handle_pre_begin_header<'tree>(
             return;
         }
     };
-    let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
-        header_separator(choice.raw_node()),
-        choice.raw_node(),
-        input,
-        errors,
-    ) else {
-        return;
-    };
+    let separator = header_separator(choice.raw_node());
     append(Line::header_with_separator(header, span, separator));
 }
 
@@ -74,7 +67,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
             header?
         }
         FullDocumentChild1ChoiceBoundView::WindowHeader(window) => {
-            let associated = window.extract()?;
+            let associated = window.extract();
             surface_displaced(
                 &associated.children().unexpected,
                 "window_header",
@@ -96,7 +89,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
             )?
         }
         FullDocumentChild1ChoiceBoundView::ColorWordsHeader(color_words) => {
-            let associated = color_words.extract()?;
+            let associated = color_words.extract();
             surface_displaced(
                 &associated.children().unexpected,
                 "color_words_header",
@@ -118,7 +111,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
             )?
         }
         FullDocumentChild1ChoiceBoundView::FontHeader(font) => {
-            let associated = font.extract()?;
+            let associated = font.extract();
             surface_displaced(
                 &associated.children().unexpected,
                 "font_header",

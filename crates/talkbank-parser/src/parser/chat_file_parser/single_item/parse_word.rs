@@ -65,8 +65,7 @@ impl<'tree, 'source> WordFragment<'tree, 'source> {
                 format!("Expected source_file root, got '{}'", raw_root.kind()),
             )
         })?;
-        let children = extract_source_file(root)
-            .map_err(|fault| failure(ErrorCode::InternalError, fault.to_string()))?;
+        let children = extract_source_file(root);
         let NodeSlot::Present(SourceFileChoice::StandaloneWord(node)) = children.content.slot()
         else {
             // Raw shape is used only to describe the refused input. Admission

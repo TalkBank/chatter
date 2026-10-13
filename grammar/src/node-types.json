@@ -1955,15 +1955,46 @@
     }
   },
   {
-    "type": "id_languages",
+    "type": "id_language",
     "named": true,
     "fields": {},
     "children": {
       "multiple": false,
-      "required": false,
+      "required": true,
       "types": [
         {
-          "type": "languages_contents",
+          "type": "generic_id_language",
+          "named": true
+        },
+        {
+          "type": "language_code",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "id_languages",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "comma",
+          "named": true
+        },
+        {
+          "type": "id_language",
+          "named": true
+        },
+        {
+          "type": "space",
+          "named": true
+        },
+        {
+          "type": "tab",
           "named": true
         }
       ]
@@ -5245,6 +5276,10 @@
   },
   {
     "type": "g_prefix",
+    "named": true
+  },
+  {
+    "type": "generic_id_language",
     "named": true
   },
   {

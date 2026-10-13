@@ -203,29 +203,26 @@ log, archived, holds the full record).
 - **Revisit**: Only when CLAN CHECK adds a repeated-`@Date` rule. Chatter
   then follows it for parity, under a new code.
 
-### Decision 10: `%wor` word intervals, reversed rejected, zero-duration legal
+### Decision 10: `%wor` word intervals must have positive duration
 
 - **Behaviour**: A `%wor` word bullet that ends before it starts
-  (`300_100`) is `E362` (`check_word_interval`). A zero-duration word bullet
-  (`100_100`) is legal, and word bullets may overlap or start out of order.
+  (`300_100`) or has zero duration (`100_100`) is `E362`
+  (`check_word_interval`). Untimed words remain legal partial timing.
+  Word bullets may overlap or start out of order.
 - **Relation to CHECK**: CLAN CHECK `21-Sep-2026` checks no `%wor` bullets:
   it accepts both cases above, and reports its error 82 ("BEG mark of bullet
   must be smaller than END mark") only for main-tier bullets. Measured with
   the `E362` spec examples renamed to match `@Media`. Chatter goes beyond
-  CHECK for the reversed case only.
-- **Why**: the maintainer, 2026-10-06: "do what actually makes sense. CHECK is not
-  God and neither are we." A reversed interval contradicts itself and has no
-  reading as timing; no corpus file was found with one, so rejecting it costs
-  nothing. A zero-duration interval places a word at an instant; at least
-  185,540 such bullets in 1,102 corpus files pass today, and rejecting them
-  would invalidate those files for no reader's benefit. A consumer that needs
-  a positive interval for each word refuses it at its own boundary
-  (`assess_wor_timing_sequence` yields `Rejected` with the slot named).
-- **Planned**: zero-duration word bullets in existing files are aligner
-  artifacts (words that were not located, recorded as instants). Once the
-  affected files are regenerated, a zero-duration word bullet becomes `E362`
-  as well, as a zero-duration main-tier bullet already is: a bullet that
-  covers no time locates nothing.
+  CHECK for both reversed and zero-duration word intervals.
+- **Ruling**: the maintainer explicitly required zero-duration `%wor` bullets
+  to become invalid on 2026-10-09, superseding the October 6 temporary
+  compatibility allowance. A bullet that covers no time locates nothing.
+  An aligner that cannot time a word must omit its bullet, not fabricate an
+  instant. Existing zero-duration data now receives E362; this change neither
+  rewrites corpus files nor claims they have been regenerated.
+- **Consumer boundary**: `assess_wor_timing_sequence` still requires a positive
+  interval for every word and names rejected slots. Validation of partial CHAT
+  and admission of a complete reusable timing sequence remain distinct.
 
 ---
 

@@ -1,0 +1,21 @@
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	SPK Speaker
+@Options:	CA
+@ID:	eng|sample|SPK|||||Speaker|||
+@Comment:	Independently authored repeated word-internal boundaries with form, language, POS and replacement context.
+*SPK:	ra~mi~na ra~mi~na~lo ra~mi~na~lo~su ra~mi~na~lo~su~te ra~mi~na~lo~su~te~vi .
+*SPK:	sun+flower+seed rain+water+storage+tank blue+green+garden+stone+path red+blue+green+flow(er)+seed+box .
+*SPK:	vo^ca^bu^la vo^ca^bu [: vocabulary] vo^ca [: vocal] .
+*SPK:	chir^rup@o chir^rup^ing@o chir^rup^ing^ly@o .
+*SPK:	ri::ver ri:::ver ri:ver:bank: ri:ver: ri:ver:bank .
+*SPK:	chir:rup@o chirrup:@o chir:rup:ing@o chir:rup:@o chi::rp@o chirp::@o .
+*SPK:	ˈriver ˈriver: reˈmark [: remark] ˈriˌver .
+*SPK:	⌈ˈriver boundary⌉ .
+*SPK:	⌈(re)mark boundary⌉ .
+*SPK:	⌈(re)ma::rk boundary⌉ .
+*SPK:	chirrup@o$n café@s:spa$n murmur@s$n sol+luna@s:spa$n con~ella@s:spa$pro cari(ño)@s:spa$n anchor .
+*SPK:	bo^nito@s:spa sol+luna@s:spa anchor .
+*SPK:	tʃɛ:@u ˌtʃ:ɛ~ɪ+mə^n(ə)↑@u$n .
+@End

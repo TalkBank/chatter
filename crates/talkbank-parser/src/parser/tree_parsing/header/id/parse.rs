@@ -16,7 +16,7 @@
 //! )
 //!
 //! id_contents: $ => seq(
-//!     id_languages,                          // typed child_0  (required)
+//!     optional(id_languages),                // typed child_0  (Option; validation requires nonempty)
 //!     '|',                                   // typed child_1  (pipe)
 //!     optional($.whitespaces),               // typed child_2  (NEW: not skipped)
 //!     optional($.id_corpus),                 // typed child_3  (Option)
@@ -54,42 +54,52 @@
 //! ```
 //!
 //! Extraction retains the source-bound header, contents and field projections.
-//! Required and optional field presence retain their recovery policies; a
-//! failed source read is an internal producer failure, not an empty CHAT field.
+//! Contents consume selected range admission before any field decoding.
+//! Required and optional field presence retain their recovery policies; an
+//! admission failure is an internal producer failure, not an empty CHAT field.
 //! Structural pipes and whitespace carry no model payload.
 
 use crate::generated_traversal::{
-    AsRawNode, IdContentsNode, IdHeaderNode, SourceBound, SourceBoundKind, SourceField,
-    SourceRecovery, SourceSlotView,
+    AsRawNode, IdContentsNode, IdHeaderNode, IdRoleNode, IdSpeakerNode, Never, NoChild,
+    ReadableSlot, SourceBound, SourceBoundKind, SourceSlotView,
 };
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::parser::tree_parsing::parser_helpers::surface_displaced;
-use crate::parser::typed_cst::{AnyKindSlot, AnySelectedKindSlot};
 use talkbank_model::ParseOutcome;
-use talkbank_model::model::{Header, Sex};
+use talkbank_model::model::{Header, LanguageCodes, Sex};
 
-/// Read a REQUIRED `@ID` field (languages / speaker / role) from its typed slot.
-///
-/// Non-present recovery states retain the field's empty-field diagnostic and
-/// rejection. A present field must additionally admit its source range; failure
-/// propagates as `CstFailure` rather than being classified as invalid CHAT.
-fn required_field<'value, 'tree: 'value, 'source, T, M>(
-    slot: SourceField<'value, 'tree, 'source, AnyKindSlot<'tree, T, M>>,
+/// The field's generated kind owns its diagnostic; callers supply no policy selector.
+trait RequiredIDField<'tree>: SourceBoundKind<'tree> {
+    const ERROR: ErrorCode;
+    const MESSAGE: &'static str;
+}
+
+impl<'tree> RequiredIDField<'tree> for IdSpeakerNode<'tree> {
+    const ERROR: ErrorCode = ErrorCode::EmptyIDSpeaker;
+    const MESSAGE: &'static str = "Missing id_speaker field in @ID header";
+}
+
+impl<'tree> RequiredIDField<'tree> for IdRoleNode<'tree> {
+    const ERROR: ErrorCode = ErrorCode::EmptyIDRole;
+    const MESSAGE: &'static str =
+        "Empty role field in @ID header: the role (8th field) must not be blank";
+}
+
+/// Decode only a range-admitted required field; recovery still rejects its payload.
+fn required_field<'tree, 'source, T, M>(
+    slot: &ReadableSlot<'tree, 'source, SourceBound<'tree, 'source, T>, M, Never, NoChild>,
     contents: SourceBound<'tree, '_, IdContentsNode<'tree>>,
     errors: &impl ErrorSink,
-    error_code: ErrorCode,
-    error_message: &str,
-) -> Result<ParseOutcome<String>, crate::CstFailure>
+) -> ParseOutcome<String>
 where
-    T: SourceBoundKind<'tree>,
-    M: SourceRecovery<'value, 'tree, 'source>,
+    T: RequiredIDField<'tree>,
 {
     let id_contents = contents.raw_node();
     let source = contents.source();
-    let SourceSlotView::Present(field) = slot.view() else {
+    let ReadableSlot::Present(value) = slot else {
         errors.report(ParseError::new(
-            error_code,
+            T::ERROR,
             Severity::Error,
             SourceLocation::from_offsets(id_contents.start_byte(), id_contents.end_byte()),
             ErrorContext::new(
@@ -97,37 +107,24 @@ where
                 id_contents.start_byte()..id_contents.end_byte(),
                 "id_contents",
             ),
-            error_message,
+            T::MESSAGE,
         ));
-        return Ok(ParseOutcome::rejected());
+        return ParseOutcome::rejected();
     };
-    Ok(ParseOutcome::parsed(field.read()?.text().to_owned()))
+    ParseOutcome::parsed(value.text().to_owned())
 }
 
-/// Read an OPTIONAL `@ID` text field (corpus / age / group / ses / education /
-/// custom) from its typed `Option<NodeSlot>` slot.
-///
-/// Non-present fields remain unset, preserving the existing recovery policy
-/// and whole-tree recovery reporting. Only a present field is read. Its range
-/// failure is an internal error, so no independent `ParseOutcome::Rejected`
-/// state is needed alongside the optional payload.
-///
-/// Both field readers are generic over the slot's `Missing` payload: some
-/// `@ID` fields are kinds the compiled grammar narrows and some are not, and
-/// either reader reads only `Present`.
-fn optional_field<'value, 'tree: 'value, 'source, T, M>(
-    slot: SourceField<'value, 'tree, 'source, Option<AnySelectedKindSlot<'tree, T, M>>>,
-) -> Result<Option<String>, crate::CstFailure>
+/// Decode an admitted optional field; recovery omission keeps the whole-tree backstop.
+fn optional_field<'tree, 'source, T, M>(
+    slot: &Option<ReadableSlot<'tree, 'source, SourceBound<'tree, 'source, T>, M, Never, Never>>,
+) -> Option<String>
 where
     T: SourceBoundKind<'tree>,
-    M: SourceRecovery<'value, 'tree, 'source>,
 {
-    if let Some(slot) = slot.optional()
-        && let SourceSlotView::Present(field) = slot.view()
-    {
-        Ok(Some(field.read()?.text().to_owned()))
+    if let Some(ReadableSlot::Present(field)) = slot {
+        Some(field.text().to_owned())
     } else {
-        Ok(None)
+        None
     }
 }
 
@@ -141,7 +138,7 @@ pub fn parse_id_header<'tree>(
 
     // Retain the missing-payload diagnostic for every non-present slot state;
     // source-range admission is a distinct producer obligation.
-    let header_children = typed.extract()?;
+    let header_children = typed.extract();
     let SourceSlotView::Present(contents) = header_children.field_child_2().slot().view() else {
         errors.report(ParseError::new(
             ErrorCode::TreeParsingError,
@@ -167,55 +164,75 @@ pub fn parse_id_header<'tree>(
     // fields is its OWN position; the field indices below are wider than the OLD
     // module's (see the field-mapping table in the module doc comment) but the
     // FIELDS THEMSELVES are unchanged.
-    let contents = id_contents.extract()?;
+    let contents = id_contents.extract();
 
-    let language = required_field(
-        contents.field_child_0().slot(),
-        id_contents,
-        errors,
-        ErrorCode::EmptyIDLanguage,
-        "Missing id_languages field in @ID header",
-    )?;
+    // Retain only displaced evidence across consuming admission, not a cloned
+    // payload. Unreadable selected ranges cannot enter field decoding.
+    let displaced = contents.children().unexpected.clone();
+    let admitted = match contents.admit_ranges() {
+        Ok(admitted) => admitted,
+        Err(failure) => {
+            surface_displaced(
+                &header_children.children().unexpected,
+                "id_header",
+                source,
+                errors,
+            );
+            surface_displaced(&displaced, "id_contents", source, errors);
+            return Err(failure.into());
+        }
+    };
+    drop(displaced);
+    let contents = admitted.children();
+
+    let language = match &contents.child_0.slot {
+        // Absence is an empty model list, whose validator retains E510.
+        None => ParseOutcome::parsed(LanguageCodes::new(Vec::new())),
+        Some(slot) => match slot {
+            ReadableSlot::Present(field) => {
+                super::super::metadata::parse_id_languages(*field, errors)?
+            }
+            ReadableSlot::Missing(_) | ReadableSlot::Error(_) => {
+                errors.report(ParseError::new(
+                    ErrorCode::EmptyIDLanguage,
+                    Severity::Error,
+                    SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
+                    ErrorContext::new(source, node.byte_range(), "id_languages"),
+                    "Malformed id_languages field in @ID header",
+                ));
+                ParseOutcome::Rejected
+            }
+            ReadableSlot::Absent(never) | ReadableSlot::Unexpected(never) => match *never {},
+        },
+    };
 
     // Corpus is semantically required but parsed leniently as an optional slot so
     // the model is still built when the corpus is blank; an absent/empty corpus
     // leaves the constructor's empty `CorpusName`, which the Validate trait flags
     // as E514. (Reproduces the pre-migration `parse_optional_text_field` choice.)
-    let corpus = optional_field(contents.field_child_3().slot())?;
+    let corpus = optional_field(&contents.child_3.slot);
 
-    let speaker = required_field(
-        contents.field_child_6().slot(),
-        id_contents,
-        errors,
-        ErrorCode::EmptyIDSpeaker,
-        "Missing id_speaker field in @ID header",
-    )?;
+    let speaker = required_field(&contents.child_6.slot, id_contents, errors);
 
-    let age = optional_field(contents.field_child_9().slot())?;
+    let age = optional_field(&contents.child_9.slot);
 
     // Sex is classified to `Sex` HERE (unlike `ses` below, whose raw text defers
     // to the model constructor): the optional `id_sex` node's text -- known
     // (`male`/`female`) or generic alike -- is mapped through `Sex::from_text`
     // (`Unsupported` for unknown values, flagged as E542 by the validator).
-    let sex = optional_field(contents.field_child_13().slot())?.map(|text| Sex::from_text(&text));
+    let sex = optional_field(&contents.child_13.slot).map(|text| Sex::from_text(&text));
 
-    let group = optional_field(contents.field_child_17().slot())?;
+    let group = optional_field(&contents.child_17.slot);
 
     // Ses stays TEXT-based: the raw text is carried through and classified by
     // `SesValue::from_text` at model-construction time below (E546 for unknown).
-    let ses = optional_field(contents.field_child_21().slot())?;
+    let ses = optional_field(&contents.child_21.slot);
 
-    let role = required_field(
-        contents.field_child_24().slot(),
-        id_contents,
-        errors,
-        ErrorCode::EmptyIDRole,
-        "Empty role field in @ID header: the role (8th field) must not be blank",
-    )?;
+    let role = required_field(&contents.child_24.slot, id_contents, errors);
 
-    let education = optional_field(contents.field_child_27().slot())?;
+    let education = optional_field(&contents.child_27.slot);
 
-    let custom_field = optional_field(contents.field_child_31().slot())?;
+    let custom_field = optional_field(&contents.child_31.slot);
 
     surface_displaced(
         &header_children.children().unexpected,
@@ -223,12 +240,14 @@ pub fn parse_id_header<'tree>(
         source,
         errors,
     );
-    surface_displaced(
-        &contents.children().unexpected,
-        "id_contents",
-        source,
-        errors,
-    );
+    for displaced in &contents.unexpected {
+        surface_displaced(
+            std::slice::from_ref(&displaced.raw_node()),
+            "id_contents",
+            displaced.source(),
+            errors,
+        );
+    }
 
     let (language, speaker, role) = match (language, speaker, role) {
         (
@@ -243,17 +262,7 @@ pub fn parse_id_header<'tree>(
     // wrappers and trimming field regexes ensure field content arrives without
     // leading/trailing whitespace.
 
-    // Parse comma-separated language codes (e.g., "eng, spa" → [eng, spa]).
-    // `LanguageCode::new` rejects empty pieces fallibly, so `filter_map(.. .ok())`
-    // both constructs the code and drops empty segments (e.g. a malformed
-    // "eng,,spa"), exactly like the previous explicit `filter(!is_empty)`.
-    let language_codes: Vec<talkbank_model::model::LanguageCode> = language
-        .split(',')
-        .filter_map(|s| talkbank_model::model::LanguageCode::new(s.trim()).ok())
-        .collect();
-    let languages = talkbank_model::model::LanguageCodes::new(language_codes);
-
-    let mut id_header = talkbank_model::model::IDHeader::from_languages(languages, speaker, role);
+    let mut id_header = talkbank_model::model::IDHeader::from_languages(language, speaker, role);
     // Absent/empty corpus leaves the constructor's empty `CorpusName`, which the
     // Validate trait reports as E514 (corpus is required).
     if let Some(c) = corpus {

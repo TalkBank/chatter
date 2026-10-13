@@ -37,10 +37,20 @@ pub mod engine;
 /// docs for what it does not prove.
 pub mod gate;
 
-pub use admit::{Admission, SkipReason, Skipped, admit_edits};
-pub use catalog::{BatchSafety, CatalogFix, FixKind, NamedAlternative, catalog_fix};
-pub use engine::{
-    EditProvenance, EditTarget, MappedEdit, Replacement, SpliceEdit, SpliceError, TransformName,
-    apply_edits, mapped_edit_sites,
+mod diagnosis;
+mod mapping;
+
+pub use admit::{Admission, AdmittedEdits, SkipReason, Skipped, admit_edits};
+pub use catalog::{
+    BatchSafety, CatalogFault, CatalogFix, CatalogIneligibility, CatalogResolution, FixKind,
+    NamedAlternative,
 };
-pub use gate::{GateError, apply_edits_verified, verify_splice};
+pub use diagnosis::{
+    AdmittedRepairs, FixCodeSelection, FixDiagnosis, FixFinding, SelectedRepairs, SelectionSkip,
+    SelectionSkipped, VerifiedRepairs,
+};
+pub use engine::{
+    EditProvenance, EditTarget, Replacement, SpliceEdit, SpliceError, TransformName, apply_edits,
+};
+pub use gate::{ByteVerifiedSplice, GateError, apply_edits_verified, verify_splice};
+pub use mapping::{MappedEdit, MappedPlan, mapped_edit_sites};

@@ -31,13 +31,44 @@ mod pause_contracts;
 #[path = "header_boundary_corpus.rs"]
 mod header_boundary_contracts;
 
+#[path = "header_admission_corpus.rs"]
+mod header_admission_contracts;
+
+#[path = "structured_id_corpus.rs"]
+mod structured_id_contracts;
+
+#[path = "metadata_header_corpus.rs"]
+mod metadata_header_contracts;
+
+#[path = "main_tier_recovery_corpus.rs"]
+mod main_tier_recovery_contracts;
+
+#[path = "dependent_composition_corpus.rs"]
+mod dependent_composition_contracts;
+
+#[path = "mor_gra_combination_corpus.rs"]
+mod mor_gra_combination_contracts;
+
+#[path = "contextual_fragment_corpus.rs"]
+mod contextual_fragment_contracts;
+
 #[test]
 fn reference_terminator_tokens_roundtrip_without_claiming_source_provenance() {
     use talkbank_model::alignment::helpers::{ContentItem, walk_content};
-    use talkbank_model::model::Terminator;
+    use talkbank_model::model::{MorTier, Terminator};
 
     let parser = TreeSitterParser::new().expect("parser");
     let corpus = ChatCorpus::reference().expect("reference corpus");
+    let mor_file = talkbank_parser_tests::test_error::strict_parse(parser.parse_chat_file(
+        include_str!("../../../../corpus/reference/tiers/mor-gra.cha"),
+    ))
+    .expect("morphology reference parses");
+    let mor_item = mor_file
+        .utterances()
+        .filter_map(|utterance| utterance.mor_tier())
+        .flat_map(|tier| tier.items())
+        .next()
+        .expect("reference morphology item");
     let mut terminators = std::collections::BTreeSet::new();
     let mut separators = std::collections::BTreeSet::new();
     for fixture in corpus.fixtures() {
@@ -64,7 +95,32 @@ fn reference_terminator_tokens_roundtrip_without_claiming_source_provenance() {
                 // lexical recognition alone above still carries no provenance.
                 assert_eq!(actual.with_span(expected.span()), *expected);
                 assert!(Terminator::is_chat_terminator(&spelling));
-                terminators.insert(spelling);
+                if terminators.insert(spelling.clone()) {
+                    // These fragments combine real parsed model values. Their
+                    // coordinates belong to the derived input, not the original
+                    // fixtures; lexical recognition cannot transfer provenance.
+                    for items in [Vec::new(), vec![mor_item.clone()]] {
+                        let expected_tier = MorTier::new_mor(items, expected.clone());
+                        let input = expected_tier.to_content();
+                        let errors = ErrorCollector::new();
+                        let ParseOutcome::Parsed(actual_tier) =
+                            ChatParser::parse_mor_tier(&parser, &input, 0, &errors)
+                        else {
+                            panic!("reference-derived morphology rejected: {input:?}");
+                        };
+                        assert!(errors.is_empty(), "{input:?}: {:?}", errors.to_vec());
+                        assert!(actual_tier.semantic_eq(&expected_tier), "{input:?}");
+                        assert_eq!(actual_tier.to_content(), input);
+                        assert_eq!(
+                            actual_tier.terminator.span(),
+                            talkbank_model::Span::from_usize(
+                                input.len() - spelling.len(),
+                                input.len(),
+                            ),
+                            "terminator belongs to the derived fragment: {input:?}",
+                        );
+                    }
+                }
             }
             walk_content(&utterance.main.content.content, None, &mut |item| {
                 if let ContentItem::Separator(separator) = item {
@@ -87,64 +143,9 @@ fn reference_terminator_tokens_roundtrip_without_claiming_source_provenance() {
 
 /// Check the coordinate wire contract without inventing an expected model or
 /// diagnostic code. The fixture runner separately enforces the spec's claim.
-fn assert_fragment_rebases<T: SpanShift + PartialEq + std::fmt::Debug>(
-    path: &std::path::Path,
-    input: &str,
-    parse: impl Fn(usize, &ErrorCollector) -> ParseOutcome<T>,
-) -> bool {
-    let local_errors = ErrorCollector::new();
-    let local = parse(0, &local_errors);
-    let shifted_errors = ErrorCollector::new();
-    let shifted = parse(17, &shifted_errors);
-    match (local, shifted) {
-        (ParseOutcome::Parsed(mut expected), ParseOutcome::Parsed(actual)) => {
-            expected.shift_spans_after(0, 17);
-            assert_eq!(actual, expected, "model: {} {input:?}", path.display());
-        }
-        (ParseOutcome::Rejected, ParseOutcome::Rejected) => {
-            assert!(
-                !local_errors.is_empty(),
-                "rejection needs evidence: {}",
-                path.display()
-            );
-        }
-        _ => panic!("offset changed admission: {} {input:?}", path.display()),
-    }
-    let mut expected_errors = local_errors.to_vec();
-    for error in &mut expected_errors {
-        let span = error.location.span;
-        assert!(
-            input.get(span.start as usize..span.end as usize).is_some(),
-            "diagnostic must address caller bytes: {} {input:?} {error:?}",
-            path.display()
-        );
-        for label in &mut error.labels {
-            let span = label.span;
-            assert!(
-                input.get(span.start as usize..span.end as usize).is_some(),
-                "label must address caller bytes: {} {input:?} {label:?}",
-                path.display()
-            );
-        }
-        // Retained diagnostic context remains snippet-relative.
-        error.shift_spans_after(0, 17);
-    }
-    assert_eq!(
-        shifted_errors.to_vec(),
-        expected_errors,
-        "diagnostics: {} {input:?}",
-        path.display()
-    );
-    let mut restored_errors = shifted_errors.to_vec();
-    restored_errors.shift_spans_after(17, -17);
-    assert_eq!(
-        restored_errors,
-        local_errors.to_vec(),
-        "inverse diagnostic rebase: {}",
-        path.display(),
-    );
-    !expected_errors.is_empty()
-}
+#[path = "fragment_rebasing.rs"]
+mod fragment_rebasing;
+use fragment_rebasing::assert_fragment_rebases;
 
 #[test]
 fn spec_main_tier_fragments_preserve_recovery_under_rebasing() {
@@ -767,20 +768,32 @@ fn file_fragments_preserve_models_and_snippet_relative_diagnostics() {
 
 #[test]
 fn reference_dependent_tier_fragments_preserve_source_models() {
-    use talkbank_model::model::DependentTier;
+    use talkbank_model::model::{DependentTier, GraCompleteness, GraLowering, GraTier};
     use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
     use talkbank_model::{RuleSelection, TranscriptName};
+    use talkbank_parser::generated_traversal::{
+        ActDependentTierNode, AddDependentTierNode, AsRawNode, CodDependentTierNode,
+        ComDependentTierNode, ExpDependentTierNode, GpxDependentTierNode, GraDependentTierNode,
+        GraRelationNode, IntDependentTierNode, SinDependentTierNode, SitDependentTierNode,
+        SpaDependentTierNode,
+    };
     let parser = TreeSitterParser::new().expect("parser");
     let corpus = ChatCorpus::reference().expect("admitted reference corpus");
     let mut compared = 0;
     let context = FragmentSemanticContext::new();
     let mut contextual_variants = std::collections::BTreeSet::new();
+    let mut source_bound_variants = std::collections::BTreeSet::new();
     let mut morphology_whitespace_controls = [0; 2];
     for fixture in corpus.fixtures() {
         let file = talkbank_parser_tests::test_error::strict_parse(
             parser.parse_chat_file(fixture.source()),
         )
         .expect("reference parses cleanly");
+        // Parse only files needing low-level tier APIs, once each. The ordered
+        // native traversal consumes real source-bound nodes alongside the AST;
+        // no independently reconstructed node/source pair reaches those APIs.
+        let native_source = std::cell::OnceCell::new();
+        let mut native_tiers = None;
         if file
             .utterances()
             .any(|utterance| utterance.mor_tier().is_some_and(|tier| tier.is_empty()))
@@ -852,6 +865,53 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                 // Only tier variants with a public content-only entry point
                 // participate here; the generic API above covers every variant.
                 macro_rules! compare_content {
+                    ($variant:ident, $method:ident, $contextual:ident, $kind:ident) => {
+                        compare_content!($variant, $method, $contextual);
+                        if let DependentTier::$variant(_) = &entry.tier {
+                            let tiers = native_tiers.get_or_insert_with(|| {
+                                native_source
+                                    .get_or_init(|| {
+                                        parser
+                                            .parse_source_incremental(fixture.source(), None)
+                                            .expect("reference native CST")
+                                    })
+                                    .root()
+                                    .expect("source-bound reference root")
+                                    .descendants()
+                            });
+                            let typed = tiers
+                                .find_map(|node| {
+                                    let node = node.expect("source-bound reference descendant");
+                                    let tier = node.typed::<$kind>()?;
+                                    (tier.raw_node().start_byte() == span.start as usize
+                                        && tier.raw_node().end_byte() == span.end as usize)
+                                        .then_some(tier)
+                                })
+                                .expect("each reference tier has its ordered native CST owner");
+                            let errors = ErrorCollector::new();
+                            let actual = talkbank_parser::api::tiers::$method(typed, &errors)
+                                .expect("source-bound public tier API admits its native owner");
+                            let actual = DependentTier::$variant(actual);
+                            assert!(
+                                errors.is_empty(),
+                                "source-bound diagnostics: {} {input:?}: {:?}",
+                                fixture.path().display(),
+                                errors.to_vec()
+                            );
+                            assert!(
+                                actual.semantic_eq(&entry.tier),
+                                "source-bound semantics: {} {input:?}",
+                                fixture.path().display()
+                            );
+                            assert_eq!(
+                                actual.span(),
+                                span,
+                                "source-bound coordinates: {}",
+                                fixture.path().display()
+                            );
+                            source_bound_variants.insert(stringify!($variant));
+                        }
+                    };
                     ($variant:ident, $method:ident, $contextual:ident) => {
                         if let DependentTier::$variant(expected) = &entry.tier {
                             let errors = ErrorCollector::new();
@@ -941,18 +1001,93 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
                         assert!(!errors.is_empty(), "refusal needs evidence: {variant:?}");
                     }
                 }
-                compare_content!(Gra, parse_gra_tier, parse_gra_tier_with_context);
+                compare_content!(
+                    Gra,
+                    parse_gra_tier,
+                    parse_gra_tier_with_context,
+                    GraDependentTierNode
+                );
+                if let DependentTier::Gra(expected) = &entry.tier {
+                    // Public construction from actual parsed reference relations
+                    // derives retention; no independent completeness claim enters.
+                    let receipt = expected
+                        .relations()
+                        .iter()
+                        .cloned()
+                        .map(ParseOutcome::Parsed)
+                        .collect::<GraLowering>()
+                        .finish();
+                    assert!(!receipt.is_truncated());
+                    let actual = receipt.into_tier().with_span(expected.span);
+                    assert!(actual.semantic_eq(expected));
+                    assert_eq!(actual.completeness(), GraCompleteness::Whole);
+                    let json = serde_json::to_string(&actual).expect("public gra JSON");
+                    let restored: GraTier =
+                        serde_json::from_str(&json).expect("public gra readback");
+                    assert!(restored.semantic_eq(&actual));
+                    assert_eq!(restored.completeness(), GraCompleteness::Unknown);
+                }
                 compare_content!(Pho, parse_pho_tier, parse_pho_tier_with_context);
-                compare_content!(Sin, parse_sin_tier, parse_sin_tier_with_context);
-                compare_content!(Act, parse_act_tier, parse_act_tier_with_context);
-                compare_content!(Cod, parse_cod_tier, parse_cod_tier_with_context);
-                compare_content!(Com, parse_com_tier, parse_com_tier_with_context);
-                compare_content!(Exp, parse_exp_tier, parse_exp_tier_with_context);
-                compare_content!(Add, parse_add_tier, parse_add_tier_with_context);
-                compare_content!(Gpx, parse_gpx_tier, parse_gpx_tier_with_context);
-                compare_content!(Int, parse_int_tier, parse_int_tier_with_context);
-                compare_content!(Spa, parse_spa_tier, parse_spa_tier_with_context);
-                compare_content!(Sit, parse_sit_tier, parse_sit_tier_with_context);
+                compare_content!(
+                    Sin,
+                    parse_sin_tier,
+                    parse_sin_tier_with_context,
+                    SinDependentTierNode
+                );
+                compare_content!(
+                    Act,
+                    parse_act_tier,
+                    parse_act_tier_with_context,
+                    ActDependentTierNode
+                );
+                compare_content!(
+                    Cod,
+                    parse_cod_tier,
+                    parse_cod_tier_with_context,
+                    CodDependentTierNode
+                );
+                compare_content!(
+                    Com,
+                    parse_com_tier,
+                    parse_com_tier_with_context,
+                    ComDependentTierNode
+                );
+                compare_content!(
+                    Exp,
+                    parse_exp_tier,
+                    parse_exp_tier_with_context,
+                    ExpDependentTierNode
+                );
+                compare_content!(
+                    Add,
+                    parse_add_tier,
+                    parse_add_tier_with_context,
+                    AddDependentTierNode
+                );
+                compare_content!(
+                    Gpx,
+                    parse_gpx_tier,
+                    parse_gpx_tier_with_context,
+                    GpxDependentTierNode
+                );
+                compare_content!(
+                    Int,
+                    parse_int_tier,
+                    parse_int_tier_with_context,
+                    IntDependentTierNode
+                );
+                compare_content!(
+                    Spa,
+                    parse_spa_tier,
+                    parse_spa_tier_with_context,
+                    SpaDependentTierNode
+                );
+                compare_content!(
+                    Sit,
+                    parse_sit_tier,
+                    parse_sit_tier_with_context,
+                    SitDependentTierNode
+                );
                 compare_content!(Wor, parse_wor_tier, parse_wor_tier_with_context);
             }
         }
@@ -972,6 +1107,89 @@ fn reference_dependent_tier_fragments_preserve_source_models() {
         14,
         "each public tier context adapter needs a reference witness: {contextual_variants:?}"
     );
+    assert_eq!(
+        source_bound_variants.len(),
+        11,
+        "each selected bullet/gra/sin CST API needs a reference witness: {source_bound_variants:?}"
+    );
+
+    // E709's authored line declares two relations: the zero index is rejected,
+    // and the following PUNCT survives. Exercise native and string public APIs
+    // with their actual source-bound nodes, not an invented rejection event.
+    let source = include_str!("../error_corpus/validation_errors/E709_1.cha");
+    let parsed = parser
+        .parse_source_incremental(source, None)
+        .expect("authored E709 native CST");
+    let mut native = None;
+    let native_errors = ErrorCollector::new();
+    let mut lowering = GraLowering::with_capacity(2);
+    let mut observed = [0; 2];
+    for node in parsed.root().expect("E709 root").descendants() {
+        let node = node.expect("E709 source-bound descendant");
+        if let Some(tier) = node.typed::<GraDependentTierNode>() {
+            assert!(native.is_none(), "E709 supplies exactly one gra tier");
+            native = Some(
+                talkbank_parser::api::tiers::parse_gra_tier(tier, &native_errors)
+                    .expect("native gra admission is distinct from lexical index rejection"),
+            );
+        }
+        if let Some(relation) = node.typed::<GraRelationNode>() {
+            let errors = ErrorCollector::new();
+            let outcome = ChatParser::parse_gra_relation(
+                &parser,
+                relation.text(),
+                relation.raw_node().start_byte(),
+                &errors,
+            );
+            match &outcome {
+                ParseOutcome::Parsed(_) => {
+                    assert!(errors.is_empty(), "{:?}", errors.to_vec());
+                    observed[0] += 1;
+                }
+                ParseOutcome::Rejected => {
+                    assert!(errors.to_vec().iter().any(|error| {
+                        error.code == talkbank_model::ErrorCode::InvalidGrammarIndex
+                    }));
+                    observed[1] += 1;
+                }
+            }
+            lowering.record(outcome);
+        }
+    }
+    assert_eq!(
+        observed,
+        [1, 1],
+        "both actual E709 relation outcomes required"
+    );
+    let native = native.expect("E709 retains a native gra tier");
+    assert_eq!(native.completeness(), GraCompleteness::Truncated);
+    assert!(
+        native_errors
+            .to_vec()
+            .iter()
+            .any(|error| { error.code == talkbank_model::ErrorCode::InvalidGrammarIndex })
+    );
+    let receipt = lowering.finish();
+    assert!(
+        receipt.is_truncated(),
+        "a later success cannot undo rejection"
+    );
+    let rebuilt = receipt.into_tier().with_span(native.span);
+    assert!(rebuilt.semantic_eq(&native));
+    assert_eq!(rebuilt.completeness(), GraCompleteness::Truncated);
+    let streaming_errors = ErrorCollector::new();
+    let file = parser.parse_chat_file_streaming(source, &streaming_errors);
+    let streamed = file
+        .utterances()
+        .find_map(|utterance| utterance.gra_tier())
+        .expect("E709 preserves the partial tier for downstream reporting");
+    assert!(native.semantic_eq(streamed));
+    assert_eq!(streamed.completeness(), GraCompleteness::Truncated);
+    assert_eq!(streaming_errors.to_vec(), native_errors.to_vec());
+    let json = serde_json::to_string(&rebuilt).expect("partial gra JSON");
+    let restored: GraTier = serde_json::from_str(&json).expect("partial gra readback");
+    assert!(restored.semantic_eq(&rebuilt));
+    assert_eq!(restored.completeness(), GraCompleteness::Unknown);
 }
 
 #[test]
@@ -1428,10 +1646,7 @@ fn reference_single_item_fragments_refuse_extra_input() {
             if matches!(kind, Kind::Phone)
                 && let Some(group) = PhoGroupNode::from_node(node)
                 && matches!(
-                    extract_pho_group(group)
-                        .expect("producer reconstruction")
-                        .content
-                        .slot(),
+                    extract_pho_group(group).content.slot(),
                     NodeSlot::Present(PhoGroupChoice::PhoBeginGroup(_))
                 )
             {

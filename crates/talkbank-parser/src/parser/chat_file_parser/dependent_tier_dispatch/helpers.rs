@@ -3,28 +3,39 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::error::{
-    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
-};
+use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, KindProof, NarrowedKindSlot, NodeSlot, Raw, SelectedNonMissingKindSlot, SlotView,
-    TierSepNode, extract_tier_sep,
+    AsRawNode, RangeAdmittedChildren, Ranged, ReadableSlot, SelectedNonMissingKindSlot,
+    SourceBound, SourceSlice, TextWithBulletsNode,
 };
+use crate::model::NonEmptyString;
 use crate::model::TextTier;
-use crate::model::{NonEmptyString, TierSeparator};
 use crate::parser::tree_parsing::parser_helpers::analyze_dependent_tier_error;
-use crate::parser::tree_parsing::parser_helpers::{extract_utf8_text, surface_displaced};
 use talkbank_model::ParseOutcome;
-use tree_sitter::Node;
 
-/// Read the raw text of a simple text-like dependent tier's body slot as a
-/// `NonEmptyString`, driven by the generated typed visitor.
+/// The optional body shape of the range-admitted simple text-like tier carriers.
+pub(super) type OptionalTierBodySlot<'tree, 'source> = Option<
+    SelectedNonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, TextWithBulletsNode<'tree>>,
+        Ranged<'source>,
+    >,
+>;
+
+/// Project this carrier's body, never independently supplied text.
+/// Implementations are emitted beside their concrete appliers in `raw`.
+pub(super) trait OptionalTierBody<'tree, 'source> {
+    fn body(&self) -> &OptionalTierBodySlot<'tree, 'source>;
+}
+
+/// Read the retained text of a range-admitted dependent-tier body slot.
 ///
 /// The raw text-like tiers share the grammar shape
-/// `seq(<x>_tier_prefix, tier_sep, optional(text_with_bullets), newline)`, so
-/// each caller extracts its own concrete tier via the generated
-/// `extract_<kind>_dependent_tier` and hands the body slot (`child_2`, a
-/// `text_with_bullets` node) AND the carrier's `unexpected` sink here.
+/// `seq(<x>_tier_prefix, tier_sep, optional(text_with_bullets), newline)`.
+/// Each concrete applier retains its source-bound tier, extracts under the
+/// compiled kind proof, surfaces the displaced sink and consumes range admission.
+/// The optional readers receive the whole admitted carrier: its parent and body
+/// cannot be supplied independently.
 ///
 /// Since the E756 widening made those bodies optional, NOTHING calls this
 /// directly: every caller goes through [`read_optional_tier_body_text`] or
@@ -40,8 +51,9 @@ use tree_sitter::Node;
 ///
 /// - `Present`: the body node's raw text is decoded. A non-empty text yields
 ///   `Parsed`; an empty text reports "Tier has empty content" at the tier-node
-///   span; a UTF-8 error reports at the body-node span, exactly as before.
-/// - `Missing` has no arm, because it cannot occur. The body is a named
+///   span. Source failure has already refused admission with E001 before this
+///   reader can run; it cannot become empty content.
+/// - `Missing` has no inhabited arm. The body is a named
 ///   nonterminal, which the compiled grammar proves tree-sitter never inserts as
 ///   a MISSING placeholder, and every caller extracts its tier under that proof
 ///   ([`SelectedNonMissingKindSlot`]), so the state is uninhabited. Until the
@@ -57,40 +69,38 @@ use tree_sitter::Node;
 /// Selection rules out `Unexpected` and `Absent`; producer faults remain
 /// distinct from these source-recovery states.
 ///
-/// The carrier's `unexpected` sink is surfaced FIRST via [`surface_displaced`]
-/// (R2; a no-op on valid input, load-bearing for migration Task D), at the
-/// context named by `tier_node.kind()`, the dependent-tier rule name shared by
-/// every caller's own `extract_<kind>_dependent_tier`.
-fn read_tier_body_text<'tree, T>(
-    tier_node: Node<'tree>,
-    body: &SelectedNonMissingKindSlot<'tree, T>,
-    unexpected: &[Node<'tree>],
-    source: &str,
+/// The applier surfaces displaced recovery FIRST, before consuming admission,
+/// retaining the body-versus-outside-body diagnostic order.
+fn read_tier_body_text<'tree, 'source>(
+    tier: SourceSlice<'tree, 'source>,
+    body: &SelectedNonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, TextWithBulletsNode<'tree>>,
+        Ranged<'source>,
+    >,
     errors: &impl ErrorSink,
-) -> ParseOutcome<NonEmptyString>
-where
-    T: AsRawNode<'tree> + Copy,
-{
-    surface_displaced(unexpected, tier_node.kind(), source, errors);
-
-    match body.view() {
-        SlotView::Present(text) => decode_body_text(tier_node, text.raw_node(), source, errors),
-        SlotView::Error(node) => {
-            errors.report(analyze_dependent_tier_error(node, source));
-            report_missing_content_node(tier_node, source, errors);
+) -> ParseOutcome<NonEmptyString> {
+    match body {
+        ReadableSlot::Present(text) => decode_body_text(tier, *text, errors),
+        ReadableSlot::Error(node) => {
+            errors.report(analyze_dependent_tier_error(node.raw_node(), node.source()));
+            report_missing_content_node(tier, errors);
             ParseOutcome::rejected()
         }
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
     }
 }
 
 /// E330 at the tier: the typed walk arrived at the body slot and found no
 /// content node there.
-fn report_missing_content_node(tier_node: Node, source: &str, errors: &impl ErrorSink) {
+fn report_missing_content_node(tier: SourceSlice<'_, '_>, errors: &impl ErrorSink) {
+    let tier_node = tier.raw_node();
     errors.report(ParseError::new(
         ErrorCode::TreeParsingError,
         Severity::Error,
         SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-        ErrorContext::new(source, tier_node.start_byte()..tier_node.end_byte(), "tier"),
+        ErrorContext::new(tier.source(), tier_node.byte_range(), "tier"),
         "Tier is missing content node",
     ));
 }
@@ -112,25 +122,20 @@ fn report_missing_content_node(tier_node: Node, source: &str, errors: &impl Erro
 /// `TextTier::empty` is called here and in the re2c converter's own lowering;
 /// both are parsers saying what the file contains, which is what that
 /// constructor's doc asks for.
-pub(crate) fn read_optional_tier_body_text<'tree, T>(
-    tier_node: Node<'tree>,
-    body: &Option<SelectedNonMissingKindSlot<'tree, T>>,
-    unexpected: &[Node<'tree>],
-    source: &str,
+pub(super) fn read_optional_tier_body_text<'tree, 'source, C>(
+    tier: &RangeAdmittedChildren<'tree, 'source, C>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<TextTier>
 where
-    T: AsRawNode<'tree> + Copy,
+    C: OptionalTierBody<'tree, 'source>,
 {
     // Defined over the raw reader rather than repeating its `match`, so the
-    // absent-body policy (surface the carrier's sink, report nothing, return a
+    // absent-body policy (report nothing, return a
     // payload that says it is empty) is stated in exactly one place. Two copies
     // thirty lines apart would agree only by inspection.
-    read_optional_tier_body_raw_text(tier_node, body, unexpected, source, errors).map(|content| {
-        match content {
-            Some(text) => TextTier::new(text),
-            None => TextTier::empty(),
-        }
+    read_optional_tier_body_raw_text(tier, errors).map(|content| match content {
+        Some(text) => TextTier::new(text),
+        None => TextTier::empty(),
     })
 }
 
@@ -151,48 +156,34 @@ where
 /// was one to read. Collapsing the two would make an empty tier
 /// indistinguishable from an unreadable one, and they get different diagnostics
 /// (E756 versus a parse error).
-pub(crate) fn read_optional_tier_body_raw_text<'tree, T>(
-    tier_node: Node<'tree>,
-    body: &Option<SelectedNonMissingKindSlot<'tree, T>>,
-    unexpected: &[Node<'tree>],
-    source: &str,
+pub(super) fn read_optional_tier_body_raw_text<'tree, 'source, C>(
+    tier: &RangeAdmittedChildren<'tree, 'source, C>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Option<NonEmptyString>>
 where
-    T: AsRawNode<'tree> + Copy,
+    C: OptionalTierBody<'tree, 'source>,
 {
-    match body {
-        Some(slot) => read_tier_body_text(tier_node, slot, unexpected, source, errors).map(Some),
-        None => {
-            surface_displaced(unexpected, tier_node.kind(), source, errors);
-            ParseOutcome::Parsed(None)
-        }
+    match tier.children().body() {
+        Some(slot) => read_tier_body_text(tier.parent(), slot, errors).map(Some),
+        None => ParseOutcome::Parsed(None),
     }
 }
 
-/// Decode one body node's raw UTF-8 text into a `NonEmptyString`, reproducing
-/// the removed helper's content-node handling: a UTF-8 error reports at the
-/// BODY-node span; an empty (or whitespace-only-that-`NonEmptyString`-rejects)
-/// text reports "Tier has empty content" at the TIER-node span.
-fn decode_body_text(
-    tier_node: Node,
-    body_node: Node,
-    source: &str,
+/// Decode a retained body slice; empty content reports at the tier-node span.
+fn decode_body_text<'tree, 'source>(
+    tier: SourceSlice<'tree, 'source>,
+    body: SourceBound<'tree, 'source, TextWithBulletsNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<NonEmptyString> {
-    let ParseOutcome::Parsed(text) = extract_utf8_text(body_node, source, errors, "tier_content")
-    else {
-        return ParseOutcome::rejected();
-    };
-
-    match NonEmptyString::new(text) {
+    match NonEmptyString::new(body.text()) {
         Ok(content) => ParseOutcome::parsed(content),
         Err(_) => {
+            let tier_node = tier.raw_node();
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
                 Severity::Error,
                 SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
-                ErrorContext::new(source, tier_node.start_byte()..tier_node.end_byte(), "tier"),
+                ErrorContext::new(tier.source(), tier_node.byte_range(), "tier"),
                 "Tier has empty content",
             ));
             ParseOutcome::rejected()
@@ -200,48 +191,5 @@ fn decode_body_text(
     }
 }
 
-/// Decode a dependent tier's `tier_sep` slot (E758 provenance) into a
-/// [`TierSeparator`].
-///
-/// Every dependent-tier grammar shape is `seq(<x>_tier_prefix, tier_sep,
-/// <body>, newline)`, so `tier_sep` is always positional child 1 of the
-/// generated `<Kind>DependentTierChildren` carrier; callers pass that
-/// carrier's `child_1.slot`. Mirrors the main-tier `sep_from_slot` helper
-/// (`main_tier/structure/convert/mod.rs`) one level deeper: first unwrap the
-/// `tier_sep` node itself, then read its own optional `sep_trailing_space`
-/// child (`extract_tier_sep(..).child_2.slot`). Only a `Present` trailing-space
-/// node carries a real span; every other outer/inner recovery state
-/// (Missing/Error/Absent, or an absent `tier_sep` itself) means no
-/// illegal trailing space was captured, and maps to a clean separator (the
-/// E758 check itself is a later validation pass over this provenance, not
-/// parse-time). A recovered child can occur between the tab and that space;
-/// both positions must come from this carrier and remain adjacent. Otherwise
-/// the space belongs to content, not the line separator.
-///
-/// `tier_sep` is a slot the compiled grammar narrows (it is never MISSING), so
-/// the slot is a [`NarrowedKindSlot`] under whichever kind proof the caller
-/// extracted its tier with; only `Present` is read, so either serves.
-pub(crate) fn dependent_tier_separator<K: KindProof>(
-    slot: &NarrowedKindSlot<'_, TierSepNode<'_>, Raw, K>,
-) -> Result<TierSeparator, crate::generated_traversal::ReconstructionFault> {
-    let NodeSlot::Present(tier_sep) = slot else {
-        return Ok(TierSeparator::CLEAN);
-    };
-    let tier_sep_children = extract_tier_sep(*tier_sep)?;
-    let trailing = tier_sep_children.child_2.slot();
-    Ok(match trailing.as_ref().map(NodeSlot::view) {
-        Some(SlotView::Present(sep_node))
-            if matches!(tier_sep_children.child_1.slot(), NodeSlot::Present(tab)
-                if tab.raw_node().end_byte() == sep_node.raw_node().start_byte()) =>
-        {
-            let node = sep_node.raw_node();
-            TierSeparator::with_trailing_space(Span::new(
-                node.start_byte() as u32,
-                node.end_byte() as u32,
-            ))
-        }
-        Some(SlotView::Present(_) | SlotView::Missing(_) | SlotView::Error(_)) | None => {
-            TierSeparator::CLEAN
-        }
-    })
-}
+// Accepted dispatch callers share the tier parser's unchanged separator policy.
+pub(crate) use crate::parser::tier_parsers::dependent_tier_separator;

@@ -32,7 +32,7 @@ pub fn parse_media_header<'tree>(
 
     // Only a present body enters lowering; missing/error/absent body states
     // retain the existing header-level diagnostic and Unknown recovery.
-    let header_children = typed.extract()?;
+    let header_children = typed.extract();
     let contents = match header_children.field_child_2().slot().view() {
         SourceSlotView::Present(contents) => Some(contents),
         SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
@@ -63,7 +63,7 @@ pub fn parse_media_header<'tree>(
     );
 
     // Child slots retain the same source as their admitted body.
-    let admitted = contents.read()?.extract()?.admit_ranges()?;
+    let admitted = contents.read()?.extract().admit_ranges()?;
     let contents_children = admitted.children();
 
     // Payload recovery reports once and retains Header::Unknown. Finite

@@ -256,10 +256,9 @@ pub fn convert_main_tier_node<'tree>(
     // from the generated typed visitor. Every field is `Positioned<..>`: read
     // `.slot`.
     let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar));
-    let associated =
-        crate::parser::typed_cst::report_reconstruction(extraction, node, source, errors)
-            .map_err(ReportedMainTierError::from)?;
+        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into));
+    let associated = crate::parser::typed_cst::report_admission(extraction, node, source, errors)
+        .map_err(ReportedMainTierError::from)?;
     let main = associated.children();
 
     // Speaker prefix (`* speaker : tab`).
@@ -274,7 +273,7 @@ pub fn convert_main_tier_node<'tree>(
     let separator = sep_from_slot(main);
 
     // Robustness for a recovery ERROR produced by malformed content right after
-    // the tab (a bare `&` -> E207, a retrace/bracket code at tier start -> E747,
+    // the tab (a bare `&`, a retrace/bracket code at tier start,
     // an italic control byte, ...). Before the `sep_trailing_space` slot existed
     // the grammar was `seq(star, speaker, colon, tab, tier_body)`, so that ERROR
     // landed in the `tier_body` slot and was classified by `analyze_word_error`.
@@ -284,11 +283,12 @@ pub fn convert_main_tier_node<'tree>(
     // while a retrace/bracket followed by a space (`[/] world`) leaves the real
     // `sep_trailing_space` in its slot and the ERROR as a SEPARATE sibling node.
     // Checking only one slot missed the second shape and downgraded the specific
-    // diagnostic to a generic whole-tree-backstop E316 (the "never silently drop
-    // a recovery node" rule). So classify EVERY direct ERROR child of the main
+    // region-specific classification (the "never silently drop a recovery node"
+    // rule). So classify EVERY direct ERROR child of the main
     // tier here, skipping the one the `tier_body` (child_5) Error arm below
     // classifies itself, to avoid a duplicate. The whole-tree backstop still
-    // emits E316 for coverage; the richer specific code coexists with it.
+    // retains unhandled recovery; specific diagnostics require evidence from
+    // their owning construct, not a guess from unparsed marker text.
     let mut recovery = MainTierRecovery::collect(node, &main.unexpected);
     // The `tier_body` slot's own ERROR is classified by its arm below with the
     // richer Body region, so take it out of this walk's reach FIRST rather than
@@ -454,8 +454,8 @@ pub(super) struct TierBodyData {
 }
 
 impl TierBodyData {
-    /// Empty tier-body payload, used by the unreachable no-`tier_body` recovery
-    /// arms (the model carries no linkers/content/terminator in that case).
+    /// Empty tier-body payload when location found no usable body. General
+    /// reachability is not proved; this recovery retains no invented content.
     fn empty() -> Self {
         Self {
             linkers: Vec::new(),

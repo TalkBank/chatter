@@ -61,7 +61,7 @@ pub(super) fn parse_tier_body<'tree>(
     // linker list, matching the pre-migration absent-linkers behavior with no new
     // diagnostic.
     let linkers = match body.linkers.slot().as_ref().map(NodeSlot::view) {
-        Some(SlotView::Present(linkers_node)) => parse_linkers(*linkers_node, source, errors)?,
+        Some(SlotView::Present(linkers_node)) => parse_linkers(*linkers_node, source, errors),
         Some(SlotView::Error(_)) | None => Vec::new(),
     };
 
@@ -75,7 +75,7 @@ pub(super) fn parse_tier_body<'tree>(
     // The admitted producer excludes Missing for the contents nonterminal,
     // not ERROR, absence or failures reading its source-associated range.
     let content = match associated.field_content_2().slot().view() {
-        SourceSlotView::Present(contents) => parse_main_tier_contents(contents.read()?, errors)?,
+        SourceSlotView::Present(contents) => parse_main_tier_contents(contents.read()?, errors),
         // Invalid input can leave ERROR at this position. Surface the node (the whole-tree
         // backstop also covers ERROR nodes) and yield empty content rather than
         // fabricating model values.
@@ -139,10 +139,11 @@ pub(super) fn parse_tier_body<'tree>(
     //
     // It must be classified by the MAIN-TIER word classifier, not by the
     // generic backstop. The two answer the same question at different
-    // resolutions: [`analyze_word_error`] knows main-tier word syntax and names
-    // the construct (an unclosed replacement, a bare `&`, a misplaced form
-    // marker), while the backstop knows only that something did not parse and
-    // so answers E316, the generic "unparsable content" catch-all.
+    // resolutions: the region classifier can retain a narrower finding when
+    // native delimiter evidence proves it; otherwise E316 honestly reports
+    // unparsed content. It does not infer a replacement or marker identity
+    // merely from recovery text. Structured construct decoders own their
+    // specific diagnostics independently.
     //
     // Routing the sink to the backstop silently degraded six error codes to
     // E316 with every gate green, because each of those codes still had a

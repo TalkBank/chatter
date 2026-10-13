@@ -362,7 +362,7 @@ impl<'a> Iterator for Lexer<'a> {
         <INITIAL> "@Time Start:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
         <INITIAL> "@Transcriber:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
         <INITIAL> "@Warning:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
-        <INITIAL> "@Page:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
+        <INITIAL> "@Page:\t" " "* => PAGE_CONTENT { emit_prefix!(HeaderPrefix); }
         <INITIAL> "@Videos:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
         <INITIAL> "@Thumbnail:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
         <INITIAL> "@T:\t" " "* => HEADER_CONTENT { emit_prefix!(HeaderPrefix); }
@@ -431,9 +431,10 @@ impl<'a> Iterator for Lexer<'a> {
             emit!(IncompleteTierPrefix);
         }
 
-        // Whitespace at line start (before @, *, %)
-        <INITIAL> [ \t]+ {
-            emit!(Whitespace);
+        // A line prefix must start at column zero. Continuations have already
+        // matched the global newline+tab rule and retain their previous mode.
+        <INITIAL> [ \t]+ [^\x00\r\n]* {
+            emit!(ErrorLine);
         }
 
         // Anything else at line start is an error.
@@ -502,7 +503,10 @@ impl<'a> Iterator for Lexer<'a> {
         // Model: talkbank_model::TypesHeader (design, activity, group)
         // ═══════════════════════════════════════════════════════
 
-        <TYPES_CONTENT> @t1 [^\x00,\r\n]+ @t4 "," [ ]* @t2 [^\x00,\r\n]+ @t5 "," [ ]* @t3 [^\x00\r\n]+ {
+        // The grammar's fields are nonempty alphanumeric atoms. Optional
+        // comma whitespace belongs to structure, outside the payload tags.
+        types_field = [a-zA-Z0-9]+;
+        <TYPES_CONTENT> @t1 types_field @t4 [ ]* "," [ ]* @t2 types_field @t5 [ ]* "," [ ]* @t3 types_field {
             // t1..t4 = design, t2..t5 = activity, t3..end = group
             let end = self.cursor;
             return Some((Token::TypesFields {
@@ -523,6 +527,11 @@ impl<'a> Iterator for Lexer<'a> {
         //             Some headers have structured content (ID, date, etc.)
         //             We capture as opaque text; parser structures it.
         // ═══════════════════════════════════════════════════════
+
+        // Page has a numeric carrier, not arbitrary free text. Preserve valid
+        // numeric references while keeping malformed payloads visible.
+        <PAGE_CONTENT> [0-9]+ { emit!(HeaderContent); }
+        <PAGE_CONTENT> [^\x00\r\n] { emit!(ErrorInHeaderContent); }
 
         <HEADER_CONTENT> [^\x00\r\n]+ {
             emit!(HeaderContent);
@@ -766,7 +775,7 @@ impl<'a> Iterator for Lexer<'a> {
             return Some((Token::Postcode(postcode), start..end));
         }
 
-        <MAIN_CONTENT> "[- " @t1 [^\x00\]\r\n]+ @t2 "]" { emit_t1t2!(Langcode); }
+        <MAIN_CONTENT> "[- " @t1 lang_code @t2 "]" { emit_t1t2!(Langcode); }
 
         // Leave replacement words and the closing bracket in the token stream.
         // The existing word grammar admits their structure exactly once.
@@ -1016,8 +1025,8 @@ impl<'a> Iterator for Lexer<'a> {
         // ── Media bullet (RICH TOKEN with tagged timestamps) ──
         // grammar.js: bullet = seq(bullet_start, start_time, '_', end_time, bullet_end)
         // Tags mark start_time and end_time boundaries for zero-copy extraction.
-        // Legacy skip dash (-) before closing NAK is silently accepted (deprecated).
-        <MAIN_CONTENT, MOR_CONTENT, GRA_CONTENT, TIER_CONTENT, COM_CONTENT, USER_TIER_CONTENT> "\u0015" @t1 [0-9]+ @t2 "_" @t3 [0-9]+ @t4 "-"? "\u0015" {
+        // Legacy skip suffixes are not timing bullets in the supported syntax.
+        <MAIN_CONTENT, MOR_CONTENT, GRA_CONTENT, TIER_CONTENT, COM_CONTENT, USER_TIER_CONTENT> "\u0015" @t1 [0-9]+ @t2 "_" @t3 [0-9]+ @t4 "\u0015" {
             let end = self.cursor;
             return Some((Token::MediaBullet {
                 raw_text: &yyinput[start..end],
@@ -1194,7 +1203,7 @@ impl<'a> Iterator for Lexer<'a> {
         // So (..) is a pho_word, NOT a pause, pauses are main tier only.
         // First char excludes only structural separators (space, +, ‹, ›, NAK).
         // Dot and parens are INCLUDED (unlike main tier).
-        <PHO_CONTENT> [^\x00 \t\r\n+\u2039\u203A\u0015] [^\x00 \t\r\n+\u2039\u203A\u0015]* {
+        <PHO_CONTENT> [^\x00 \t\r\n:+\u2039\u203A\u0015] [^\x00 \t\r\n:+\u2039\u203A\u0015]* {
             emit!(PhoWord);
         }
 

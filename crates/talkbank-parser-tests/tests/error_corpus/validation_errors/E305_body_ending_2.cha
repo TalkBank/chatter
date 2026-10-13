@@ -1,0 +1,22 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	SPK Speaker
+@ID:	eng|sample|SPK|||||Speaker|||
+@Media:	body-ending-controls, audio
+@Comment:	Préface café
+*SPK:	café opening .
+%com:	opening note
+*SPK:	alder cedar . [+ bch] [+ first] 100_200
+%com:	begin note
+*SPK:	anchor maple drift ? [+ second] 200_300
+%com:	middle note
+*SPK:	willow pine . [+ third] 300_400
+%com:	tail note
+*SPK:	<moss <larch elm> [!]> [!] ! [+ fourth] 400_500
+%com:	nested note
+*SPK:	hazel  [+ fifth] [+ final] 500_600
+%com:	ending note
+*SPK:	finch closing .
+%com:	closing note
+@End

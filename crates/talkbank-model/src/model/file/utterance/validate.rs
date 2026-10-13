@@ -174,9 +174,8 @@ impl Validate for Utterance {
         self.validate_gra_structure(errors);
 
         // Tier-local content and interval invariants, independent of alignment:
-        // E711 `%mor` content; E362 for a `%wor` bullet that ends before it
-        // starts (zero-duration word bullets are legal; leniency policy,
-        // Decision 10).
+        // E711 `%mor` content; E362 for a `%wor` bullet that ends at or before
+        // it starts. An absent bullet remains legitimate partial timing.
         for entry in &self.dependent_tiers {
             match &entry.tier {
                 DependentTier::Mor(marker) => marker.validate_content(errors),

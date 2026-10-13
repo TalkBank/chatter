@@ -12,16 +12,10 @@ Word with nonword marker, lengthening
 
 ``` cst
 (standalone_word
-  (word_prefix
-    (nonword_marker)
-  )
+  (word_prefix)
   (word_body
-    (initial_word_segment)
-    (word_content
-      (colon)
-    )
-  )
-)
+    (word_segment)
+    (lengthening)))
 ```
 
 ## Metadata

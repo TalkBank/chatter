@@ -6,7 +6,7 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{AsRawNode, InlinePicNode, SourceBound};
-use talkbank_model::ParseOutcome;
+use talkbank_model::{ParseOutcome, model::BulletContentSegment};
 
 /// A nonempty filename admitted from delimited inline-picture text.
 ///
@@ -14,7 +14,8 @@ use talkbank_model::ParseOutcome;
 ///   `\u{15}%pic:"FILENAME"\u{15}`
 ///
 /// Construction checks the delimiters and filename before ownership conversion.
-struct InlinePictureFilename<'text>(&'text str);
+#[derive(Debug, PartialEq)]
+pub(super) struct InlinePictureFilename<'text>(&'text str);
 
 impl<'text> InlinePictureFilename<'text> {
     fn admit(text: &'text str) -> Option<Self> {
@@ -27,8 +28,10 @@ impl<'text> InlinePictureFilename<'text> {
         }
     }
 
-    fn into_owned(self) -> String {
-        self.0.to_owned()
+    /// Consume the filename proof at the model boundary, without an untyped
+    /// intermediate string or a second allocation before the segment owns it.
+    pub(super) fn into_segment(self) -> BulletContentSegment {
+        BulletContentSegment::picture(self.0)
     }
 }
 
@@ -40,16 +43,16 @@ impl<'text> InlinePictureFilename<'text> {
 /// ```
 ///
 /// Returns the admitted filename or rejection, streaming errors via `ErrorSink`.
-pub(super) fn parse_inline_pic<'tree>(
-    typed: SourceBound<'tree, '_, InlinePicNode<'tree>>,
+pub(super) fn parse_inline_pic<'tree, 'source>(
+    typed: SourceBound<'tree, 'source, InlinePicNode<'tree>>,
     errors: &impl ErrorSink,
-) -> ParseOutcome<String> {
+) -> ParseOutcome<InlinePictureFilename<'source>> {
     let node = typed.raw_node();
     let source = typed.source();
     let text = typed.text();
 
     match InlinePictureFilename::admit(text) {
-        Some(filename) => ParseOutcome::parsed(filename.into_owned()),
+        Some(filename) => ParseOutcome::parsed(filename),
         None => {
             errors.report(ParseError::new(
                 ErrorCode::TreeParsingError,
@@ -101,7 +104,7 @@ mod tests {
                     &errors
                 )
                 .into_option(),
-                Some(admitted.into_owned())
+                Some(admitted)
             );
             assert!(errors.into_vec().is_empty());
             // Retained-token delimiter mutations exercise the admission boundary,

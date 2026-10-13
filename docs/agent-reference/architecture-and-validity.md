@@ -1,6 +1,6 @@
 # Architecture and validity reference
 
-**Last modified:** 2026-09-24 00:21 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/docs/agent-reference/architecture-and-validity.md)
 
 Read the sections relevant to your task. [AGENTS.md](../../AGENTS.md)
 is the canonical policy entry point and resolves workflow conflicts here.
@@ -80,9 +80,11 @@ Two Cargo workspaces: the root, and `spec/` (`spec/tools`,
 adjudication** asks, per CLAN CHECK code, whether the rejected construct
 fails to make sense, and records a divergence or closes the gap; it is about
 CHAT validity and every entry in `tests/check_parity/manifest.json` carries a
-terminal verdict. **Backend parity** asks whether the two parsers answer
-identically; it is about our implementations, says nothing about CHAT, and
-is open, tracked per spec case in `KNOWN_DIVERGENCES`.
+terminal verdict. **Backend comparison** measures our implementations under the
+[compatibility contract](../../book/src/architecture/parser-backends.md#backend-compatibility-mandate):
+supported valid input needs semantic agreement, and every tree-sitter error
+requires some re2c error for 1.0. Diagnostic/recovery identity is not required;
+code-set measurements do not define CHAT policy or waive missed errors.
 
 **The reference corpus** (`corpus/reference/`) is a regression signal, not a
 validity authority: when a change rejects a reference file, adjudicate the

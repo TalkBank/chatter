@@ -33,21 +33,38 @@ use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, Sou
 use crate::generated_traversal::{
     AltDependentTierNode, AsRawNode, CohDependentTierNode, DefDependentTierNode,
     EngDependentTierNode, ErrDependentTierNode, FacDependentTierNode, FloDependentTierNode,
-    GlsDependentTierNode, ModsylDependentTierNode, OrtDependentTierNode, ParDependentTierNode,
-    PhoalnDependentTierNode, PhosylDependentTierNode, TimDependentTierNode,
-    XphointDependentTierNode,
+    GlsDependentTierNode, KindAdmitted, ModsylDependentTierNode, OrtDependentTierNode,
+    ParDependentTierNode, PhoalnDependentTierNode, PhosylDependentTierNode, Ranged, SourceBound,
+    TimDependentTierNode, XphointDependentTierNode,
 };
 use crate::model::Utterance;
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
 use crate::parser::node_span::span_of;
-use crate::parser::typed_cst::extract_admitted;
+use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::dependent_tier::{
     PhoalnTier, SylTier, SylTierType, XphointTier, parse_phoaln_content, parse_syl_content,
     parse_xphoint_content,
 };
 
-use super::helpers::{read_optional_tier_body_raw_text, read_optional_tier_body_text};
+use super::helpers::{
+    OptionalTierBody, OptionalTierBodySlot, read_optional_tier_body_raw_text,
+    read_optional_tier_body_text,
+};
+
+/// Keep the body projection beside its concrete applier, not in another tier list.
+/// Only the generated kind/range-admitted carrier implements this reader shape.
+macro_rules! optional_body_carrier {
+    ($children:ident) => {
+        impl<'tree, 'source> OptionalTierBody<'tree, 'source>
+            for crate::generated_traversal::$children<'tree, KindAdmitted, Ranged<'source>>
+        {
+            fn body(&self) -> &OptionalTierBodySlot<'tree, 'source> {
+                &self.child_2.slot
+            }
+        }
+    };
+}
 
 /// A tier is pushed even when its body is ABSENT. That is the E756 widening: an
 /// empty tier line is a real (if invalid) construct, so the parser records what
@@ -68,31 +85,32 @@ use super::helpers::{read_optional_tier_body_raw_text, read_optional_tier_body_t
 macro_rules! plain_text_tier_appliers {
     ($(
         $(#[$meta:meta])*
-        $name:ident : $node:ident => $variant:ident;
+        $name:ident : $node:ident / $children:ident => $variant:ident;
     )*) => {
         $(
+            optional_body_carrier!($children);
             $(#[$meta])*
             /// Read this tier's optional text body and attach it to `utterance`.
-            pub(super) fn $name(
+            pub(super) fn $name<'tree>(
                 utterance: &mut Utterance,
-                node: $node<'_>,
-                input: &str,
+                node: SourceBound<'tree, '_, $node<'tree>>,
                 errors: &impl ErrorSink,
             ) {
                 let raw = node.raw_node();
+                let input = node.source();
                 let span = span_of(raw);
-                let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-                    extract_admitted(node), raw, input, errors,
+                let extraction = crate::parser::typed_cst::canonical_grammar()
+                    .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+                let Ok(selected) = crate::parser::typed_cst::report_admission(
+                    extraction, raw, input, errors,
                 ) else { return; };
-                let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
-                    super::helpers::dependent_tier_separator(children.child_1.slot()),
-                    raw, input, errors,
+                let separator = super::helpers::dependent_tier_separator(selected.children().child_1.slot());
+                surface_displaced(&selected.children().unexpected, raw.kind(), input, errors);
+                let Ok(children) = crate::parser::typed_cst::report_admission(
+                    selected.admit_ranges().map_err(Into::into), raw, input, errors,
                 ) else { return; };
                 if let ParseOutcome::Parsed(tier) = read_optional_tier_body_text(
-                    raw,
-                    children.child_2.slot(),
-                    &children.unexpected,
-                    input,
+                    &children,
                     errors,
                 ) {
                     utterance
@@ -108,16 +126,16 @@ macro_rules! plain_text_tier_appliers {
 }
 
 plain_text_tier_appliers! {
-    apply_ort: OrtDependentTierNode => Ort;
-    apply_eng: EngDependentTierNode => Eng;
-    apply_gls: GlsDependentTierNode => Gls;
-    apply_alt: AltDependentTierNode => Alt;
-    apply_coh: CohDependentTierNode => Coh;
-    apply_def: DefDependentTierNode => Def;
-    apply_err: ErrDependentTierNode => Err;
-    apply_fac: FacDependentTierNode => Fac;
-    apply_flo: FloDependentTierNode => Flo;
-    apply_par: ParDependentTierNode => Par;
+    apply_ort: OrtDependentTierNode / OrtDependentTierChildren => Ort;
+    apply_eng: EngDependentTierNode / EngDependentTierChildren => Eng;
+    apply_gls: GlsDependentTierNode / GlsDependentTierChildren => Gls;
+    apply_alt: AltDependentTierNode / AltDependentTierChildren => Alt;
+    apply_coh: CohDependentTierNode / CohDependentTierChildren => Coh;
+    apply_def: DefDependentTierNode / DefDependentTierChildren => Def;
+    apply_err: ErrDependentTierNode / ErrDependentTierChildren => Err;
+    apply_fac: FacDependentTierNode / FacDependentTierChildren => Fac;
+    apply_flo: FloDependentTierNode / FloDependentTierChildren => Flo;
+    apply_par: ParDependentTierNode / ParDependentTierChildren => Par;
 }
 
 /// Generates `%modsyl` and `%phosyl`, which differ only in the [`SylTierType`]
@@ -125,33 +143,34 @@ plain_text_tier_appliers! {
 /// RAW text rather than as a `TextTier` because they lower it themselves.
 macro_rules! syl_tier_appliers {
     ($(
-        $name:ident : $node:ident => $variant:ident as $syl_type:ident;
+        $name:ident : $node:ident / $children:ident => $variant:ident as $syl_type:ident;
     )*) => {
         $(
+            optional_body_carrier!($children);
             /// Read this tier's optional body, parse it into syllable words, and
             /// attach it to `utterance`. An absent body yields no words, which is
             /// what `SylTier::is_empty` reports and E756 judges; the tier stays in
             /// the model either way.
-            pub(super) fn $name(
+            pub(super) fn $name<'tree>(
                 utterance: &mut Utterance,
-                node: $node<'_>,
-                input: &str,
+                node: SourceBound<'tree, '_, $node<'tree>>,
                 errors: &impl ErrorSink,
             ) {
                 let raw = node.raw_node();
+                let input = node.source();
                 let span = span_of(raw);
-                let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-                    extract_admitted(node), raw, input, errors,
+                let extraction = crate::parser::typed_cst::canonical_grammar()
+                    .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+                let Ok(selected) = crate::parser::typed_cst::report_admission(
+                    extraction, raw, input, errors,
                 ) else { return; };
-                let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
-                    super::helpers::dependent_tier_separator(children.child_1.slot()),
-                    raw, input, errors,
+                let separator = super::helpers::dependent_tier_separator(selected.children().child_1.slot());
+                surface_displaced(&selected.children().unexpected, raw.kind(), input, errors);
+                let Ok(children) = crate::parser::typed_cst::report_admission(
+                    selected.admit_ranges().map_err(Into::into), raw, input, errors,
                 ) else { return; };
                 if let ParseOutcome::Parsed(content) = read_optional_tier_body_raw_text(
-                    raw,
-                    children.child_2.slot(),
-                    &children.unexpected,
-                    input,
+                    &children,
                     errors,
                 ) {
                     let words = match &content {
@@ -173,8 +192,8 @@ macro_rules! syl_tier_appliers {
 }
 
 syl_tier_appliers! {
-    apply_modsyl: ModsylDependentTierNode => Modsyl as Modsyl;
-    apply_phosyl: PhosylDependentTierNode => Phosyl as Phosyl;
+    apply_modsyl: ModsylDependentTierNode / ModsylDependentTierChildren => Modsyl as Modsyl;
+    apply_phosyl: PhosylDependentTierNode / PhosylDependentTierChildren => Phosyl as Phosyl;
 }
 
 /// Generates `%phoaln` and `%xphoint`, the two whose content parser can FAIL.
@@ -184,33 +203,34 @@ syl_tier_appliers! {
 /// malformed-content error, so the absent case never reaches the content parser.
 macro_rules! fallible_content_tier_appliers {
     ($(
-        $name:ident : $node:ident => $variant:ident
+        $name:ident : $node:ident / $children:ident => $variant:ident
             using $parse:ident into $tier:ident labelled $label:literal;
     )*) => {
         $(
+            optional_body_carrier!($children);
             /// Read this tier's optional body, run its content parser, and attach
             /// the result to `utterance`; report a malformed-content error if the
             /// parser refuses a body that was present.
-            pub(super) fn $name(
+            pub(super) fn $name<'tree>(
                 utterance: &mut Utterance,
-                node: $node<'_>,
-                input: &str,
+                node: SourceBound<'tree, '_, $node<'tree>>,
                 errors: &impl ErrorSink,
             ) {
                 let raw = node.raw_node();
+                let input = node.source();
                 let span = span_of(raw);
-                let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-                    extract_admitted(node), raw, input, errors,
+                let extraction = crate::parser::typed_cst::canonical_grammar()
+                    .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+                let Ok(selected) = crate::parser::typed_cst::report_admission(
+                    extraction, raw, input, errors,
                 ) else { return; };
-                let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
-                    super::helpers::dependent_tier_separator(children.child_1.slot()),
-                    raw, input, errors,
+                let separator = super::helpers::dependent_tier_separator(selected.children().child_1.slot());
+                surface_displaced(&selected.children().unexpected, raw.kind(), input, errors);
+                let Ok(children) = crate::parser::typed_cst::report_admission(
+                    selected.admit_ranges().map_err(Into::into), raw, input, errors,
                 ) else { return; };
                 if let ParseOutcome::Parsed(content) = read_optional_tier_body_raw_text(
-                    raw,
-                    children.child_2.slot(),
-                    &children.unexpected,
-                    input,
+                    &children,
                     errors,
                 ) {
                     let parsed = match &content {
@@ -247,11 +267,13 @@ macro_rules! fallible_content_tier_appliers {
 }
 
 fallible_content_tier_appliers! {
-    apply_phoaln: PhoalnDependentTierNode => Phoaln
+    apply_phoaln: PhoalnDependentTierNode / PhoalnDependentTierChildren => Phoaln
         using parse_phoaln_content into PhoalnTier labelled "%phoaln";
-    apply_xphoint: XphointDependentTierNode => Xphoint
+    apply_xphoint: XphointDependentTierNode / XphointDependentTierChildren => Xphoint
         using parse_xphoint_content into XphointTier labelled "%xphoint";
 }
+
+optional_body_carrier!(TimDependentTierChildren);
 
 /// Read `%tim`'s optional body and attach it to `utterance`.
 ///
@@ -259,34 +281,31 @@ fallible_content_tier_appliers! {
 /// segments, so it is written out rather than generated. An absent body is
 /// `TimTier::Empty`, not a fabricated time and not a dropped tier: E756 judges
 /// it and the line roundtrips.
-pub(super) fn apply_tim(
+pub(super) fn apply_tim<'tree>(
     utterance: &mut Utterance,
-    node: TimDependentTierNode<'_>,
-    input: &str,
+    node: SourceBound<'tree, '_, TimDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) {
     let raw = node.raw_node();
+    let input = node.source();
     let span = span_of(raw);
-    let Ok(children) =
-        crate::parser::typed_cst::report_reconstruction(extract_admitted(node), raw, input, errors)
+    let extraction = crate::parser::typed_cst::canonical_grammar()
+        .and_then(|grammar| node.extract_admitted(grammar).map_err(Into::into));
+    let Ok(selected) = crate::parser::typed_cst::report_admission(extraction, raw, input, errors)
     else {
         return;
     };
-    let Ok(separator) = crate::parser::typed_cst::report_reconstruction(
-        super::helpers::dependent_tier_separator(children.child_1.slot()),
+    let separator = super::helpers::dependent_tier_separator(selected.children().child_1.slot());
+    surface_displaced(&selected.children().unexpected, raw.kind(), input, errors);
+    let Ok(children) = crate::parser::typed_cst::report_admission(
+        selected.admit_ranges().map_err(Into::into),
         raw,
         input,
         errors,
     ) else {
         return;
     };
-    if let ParseOutcome::Parsed(content) = read_optional_tier_body_raw_text(
-        raw,
-        children.child_2.slot(),
-        &children.unexpected,
-        input,
-        errors,
-    ) {
+    if let ParseOutcome::Parsed(content) = read_optional_tier_body_raw_text(&children, errors) {
         let tier = match content {
             Some(text) => crate::model::dependent_tier::TimTier::from_text(text),
             None => crate::model::dependent_tier::TimTier::empty(),

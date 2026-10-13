@@ -10,7 +10,7 @@ import { useTheme } from "./hooks/useTheme";
 import { useValidation } from "./hooks/useValidation";
 import { fileStatusLabel, finishedRunSummary, isRunPending, isRunRecoverable } from "./hooks/validationState";
 import { DEFAULT_VALIDATION_SETTINGS, type ValidationSettings } from "./protocol/desktopProtocol";
-import type { ParseError } from "./protocol/validation";
+import type { RenderedDiagnostic } from "./protocol/validation";
 import {
   useAboutCapability,
   useClanCapability,
@@ -190,9 +190,10 @@ export default function App() {
   }, [lastTarget, reset, startValidation, validationSettings]);
 
   const handleOpenInClan = useCallback(
-    async (file: string, error: ParseError) => {
+    async (file: string, diagnostic: RenderedDiagnostic) => {
+      if (diagnostic.sourceContext.kind !== "available") return;
       try {
-        await clan.openInClan({ file, error });
+        await clan.openInClan({ file, error: diagnostic.error, sourceContext: diagnostic.sourceContext });
       } catch (err) {
         console.error("open_in_clan failed:", err);
         alert(`Open in CLAN failed: ${err}`);
@@ -228,6 +229,7 @@ export default function App() {
         path: file.path,
         errors: file.diagnostics.map((diagnostic) => ({
           ...diagnostic.error,
+          sourceContext: diagnostic.sourceContext,
           renderedText: diagnostic.renderedText,
         })),
         status: file.status,

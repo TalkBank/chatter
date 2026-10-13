@@ -1627,19 +1627,45 @@ fn empty_replacement_at_eof_is_rejected_with_or_without_newline() -> Result<(), 
 // ============================================================================
 
 /// `chatter validate --list-checks` prints every check and exits 0 without
-/// requiring a path argument. Output must mention both statuses so users know
-/// the column exists.
+/// requiring a path argument. Every generated code has its actual enforcement
+/// state printed; the registry owns per-code policy, not this test.
 #[test]
-fn list_checks_shows_active_and_planned() -> Result<(), TestError> {
-    crate::common::chatter_cmd()
+fn list_checks_reports_all_enforcement_states() -> Result<(), TestError> {
+    use talkbank_model::{CheckStatus, ErrorCode};
+
+    let output = crate::common::chatter_cmd()
         .args(["validate", "--list-checks", "--tui-mode", "disable"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Active"))
-        .stdout(predicate::str::contains("Planned"))
-        // Spot-check a known Active and a known Planned code.
-        .stdout(predicate::str::contains("E305"))
-        .stdout(predicate::str::contains("E321"));
+        .output()?;
+    assert!(output.status.success());
+    let stdout = std::str::from_utf8(&output.stdout)
+        .map_err(|error| TestError::Failure(format!("check listing is not UTF-8: {error}")))?;
+    let mut counts = [0usize; 3];
+    for code in ErrorCode::iter() {
+        let (index, label) = match code.check_status() {
+            CheckStatus::Active => (0, "Active"),
+            CheckStatus::OptIn => (1, "Opt-in: needs its rule option"),
+            CheckStatus::Planned => (2, "Planned"),
+        };
+        counts[index] += 1;
+        let code_match = format!("  {}  ", code.as_str());
+        let label_suffix = format!("({label})");
+        assert_eq!(
+            stdout
+                .lines()
+                .filter(|line| line.contains(&code_match) && line.ends_with(&label_suffix))
+                .count(),
+            1,
+            "listing for {code:?}"
+        );
+    }
+    assert!(counts.into_iter().all(|count| count > 0));
+    assert!(stdout.contains(&format!(
+        "Total: {} checks ({} Active, {} Opt-in, {} Planned)",
+        ErrorCode::all().len(),
+        counts[0],
+        counts[1],
+        counts[2]
+    )));
     Ok(())
 }
 

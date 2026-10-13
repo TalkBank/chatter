@@ -39,9 +39,8 @@ mod node_span;
 mod node_identity;
 pub(crate) use node_identity::CstNodeId;
 
-/// Region-neutral typed-CST seam shared by every parser region: the single
-/// content-child decode helper (`decode_present_child`). Structure now comes
-/// from the NEW backend's free `extract_*` functions, not a trait receiver.
+/// Shared canonical grammar/source admission and internal-failure diagnostics.
+/// Structure comes from generated extractors; leaf text retains its producer.
 pub(crate) mod typed_cst;
 
 /// Re-export the main parser type, initialization error, and the strict

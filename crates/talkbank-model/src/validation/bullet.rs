@@ -33,15 +33,12 @@ pub(crate) fn check_bullet(bullet: &Bullet, errors: &impl ErrorSink) {
     }
 }
 
-/// Validate one `%wor` word bullet: its end must not precede its start.
+/// Validate one `%wor` word bullet: it must describe a positive interval.
 ///
-/// Narrower than [`check_bullet`] on purpose. A reversed interval contradicts
-/// itself and is `E362`, although CLAN CHECK does not check word bullets at
-/// all. A zero-duration word interval is legitimate: it places a word at an
-/// instant, and existing corpus files carry many such bullets, so it is not an
-/// error (a consumer that needs positive durations refuses it itself).
+/// Both reversed and zero-duration intervals are `E362`. An absent bullet is
+/// different: untimed words remain legitimate partial alignment.
 pub(crate) fn check_word_interval(bullet: &Bullet, errors: &impl ErrorSink) {
-    if bullet.timing.start_ms > bullet.timing.end_ms {
+    if bullet.timing.start_ms >= bullet.timing.end_ms {
         let bullet_text = bullet.to_chat_string();
         errors.report(
             ParseError::new(
@@ -50,11 +47,13 @@ pub(crate) fn check_word_interval(bullet: &Bullet, errors: &impl ErrorSink) {
                 SourceLocation::new(bullet.span),
                 ErrorContext::from_reconstructed(&bullet_text, bullet.span),
                 format!(
-                    "Word timing ends ({}ms) before it starts ({}ms)",
-                    bullet.timing.end_ms, bullet.timing.start_ms
+                    "Word timing start ({}ms) must be less than end ({}ms)",
+                    bullet.timing.start_ms, bullet.timing.end_ms
                 ),
             )
-            .with_suggestion("Swap or correct the word bullet's start and end times"),
+            .with_suggestion(
+                "Correct the word timing, or omit its bullet if timing is unavailable",
+            ),
         );
     }
 }

@@ -148,6 +148,9 @@ impl<'input> WrappedFragment<'input> {
     }
 
     fn document_span(&self, span: Span) -> Span {
+        if self.input.input().is_empty() {
+            return self.input.whole_span();
+        }
         if span.is_dummy() {
             return span;
         }
@@ -166,6 +169,18 @@ impl<'input> WrappedFragment<'input> {
             span.start.saturating_sub(prefix).min(end),
             span.end.saturating_sub(prefix).min(end),
         )
+    }
+
+    /// Project a model container that may include a wrapper-owned tier label.
+    /// Empty model containers retain the legacy unlocated representation; a
+    /// known empty diagnostic is separately placed by `document_span`.
+    pub(crate) fn rebase_tier(
+        &self,
+        tier: talkbank_model::DependentTier,
+    ) -> talkbank_model::DependentTier {
+        let span = self.input_span(tier.span());
+        let source_span = self.input.rebase(span);
+        self.rebase(tier).with_span(source_span)
     }
 
     /// Translate parser diagnostics before display enhancement rewrites labels.

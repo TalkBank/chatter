@@ -54,7 +54,20 @@ can be trusted until this has run.
 `crates/talkbank-parser/src/generated_traversal.rs` is the single generated
 visitor the whole production parser dispatches through, produced from the
 grammar's JSON by `tree-sitter-grammar-utils`. A grammar change that alters
-node types or their positions makes it stale.
+node types or their positions makes it stale. A TSGU update also requires
+regeneration and consumer integration, even when both grammar JSON hashes are
+unchanged. Grammar-hash checks alone do not prove generator currency. Do not
+declare an update complete while retaining an older traversal to avoid its
+API migration; the generated source identity must name the reviewed generator.
+
+The generator source is not yet publicly available. Ordinary builds consume
+the committed traversal and metadata bridge without a generator checkout, but
+the public Chatter checkout alone cannot reproduce these two generated files.
+Grammar contributors currently need a maintainer-provided generator checkout.
+`tsgu-revision` pins the full reviewed generator commit. The committed traversal's
+header records its producer identity; its package version alone is insufficient.
+Public source availability and a verified independent regeneration remain
+prerequisites for a self-contained public grammar-development workflow.
 
 From the Chatter checkout, use its owning recipe:
 
@@ -64,23 +77,39 @@ just conformance-gen
 ```
 
 `TSGU_DIR` selects the generator checkout; the recipe defaults to the `tsgu`
-directory in the user's home directory. It refuses a dirty generator checkout,
-builds its `generate_typed_traversal` example, and reads edition and toolchain
-from Chatter's own manifests rather than a copied command. The output header
-records the generator's version and source identity.
+directory in the user's home directory. The recipe requires Python 3.11 or later.
+It refuses a non-root, dirty or wrong-revision generator checkout, builds its
+`generate_typed_traversal` example with `cargo build --locked`, and reads edition
+and toolchain from Chatter's own manifests rather than a copied command. Cargo
+and the native Rust compiler/linker must be available, with the dependencies in
+the generator's committed lockfile obtainable from the registry or a local cache.
+The output header records the generator's version and source identity.
+The recipe uses the executable reported by Cargo, so `CARGO_TARGET_DIR` and
+Cargo target-directory configuration do not cause it to run an old binary from
+an assumed location. Relative Cargo overrides resolve in the generator checkout.
 The same recipe emits `grammar/bindings/rust/tsgu_language_metadata.c` through
 the generator's `--metadata-bridge` mode. This companion is generated, not
 hand-maintained: the grammar build compiles it against its own `parser.h` and
 namespaces its export. It supplies actual ABI-15 symbol/alias metadata for
 source-bound nonmissing admission; it does not parse CHAT or C source text.
-The generator runs `rustfmt` on its output, so no separate `cargo fmt` step is
-needed. Never hand-edit the file; if the output is wrong, fix the generator as
-a general change and regenerate.
+The generator runs `rustfmt` on its output, so Chatter's selected toolchain needs
+that component and no separate `cargo fmt` step is needed. Both child commands
+must succeed before either committed output is replaced; identical bytes retain
+their modification times. This is failure-safe generation staging, not a
+cross-file filesystem transaction or a hermetic build. Never hand-edit the files;
+if the output is wrong, fix the generator as a general change and regenerate.
+
+For a bootstrap drill, select an empty build directory explicitly, for example
+`CARGO_TARGET_DIR=/path/to/new-generator-build TSGU_DIR=/path/to/tree-sitter-grammar-utils just traversal-gen`.
+Compare both output hashes and inspect `git diff`. Cached registry dependencies
+are allowed for this local drill; reproducing bytes without an existing build
+directory does not establish clean-machine or independent public-source access.
 
 Generated lint findings belong in the generator, not hand-edited output. Run
 its generated-code Clippy probe and reconstruction regressions before consuming
-a changed generator. Fallible extraction uses `Result`'s must-use contract;
-source projections have explicit must-use annotations. Admission remains sealed
+a changed generator. Kind-admitted extraction uses `Result`'s must-use contract;
+broad extraction is total and source projections have explicit must-use
+annotations. Admission remains sealed
 against caller-supplied projections, with a narrowly documented private-bound
 allowance rather than a public escape hatch.
 The audited compiled-metadata FFI boundary and grammar-specific admission
@@ -93,7 +122,9 @@ accessors may be constant functions, but that does not establish new admission.
 
 For a generator API change, first implement and verify the change in TSGU,
 then commit that reviewed generator change locally so regeneration has clean
-source identity. Regenerate Chatter, migrate the handwritten consumers of the
+source identity. Update Chatter's `tsgu-revision` to that full commit explicitly;
+the recipe never fetches, resets or silently selects a newer generator. Regenerate
+Chatter, migrate the handwritten consumers of the
 changed API, and exercise the affected spec/reference workflows. A local
 generator commit is not publication. Grammar changes additionally require
 `tree-sitter generate` before traversal regeneration; a generator-only change
@@ -111,8 +142,7 @@ completeness or semantic validity; do not remove recovery states merely because
 the finite corpus has not reached them.
 
 The generated source-bound extraction path:
-`bound.extract()` returns `Result<SourceChildren, ReconstructionFault>`; the
-admitted immutable carrier's generated
+`bound.extract()` returns `SourceChildren` directly; the immutable carrier's generated
 `field_<minted_name>()` accessors retain source identity in `SourceField`.
 Structural projections (`slot`, `iter`, `optional`, and `view`) preserve that
 association through positional slots, sequence groups, choices, extras, and
@@ -122,25 +152,39 @@ membership search. Choice views preserve the already reconstructed variant.
 `SourceSlice::extract_header()` retains association through supertype dispatch,
 including Missing, Error, and Unexpected outcomes.
 
-Selection records leaf, choice, optional, sequence, repeat and recovery decisions
-in one source-bound match plan. Extraction consumes those decisions; it must not
-independently rematch a mutable child cursor. Only successful construction commits
-the selected span and recovery sink. Flat repeat links avoid recursively owned
-suffixes. Runtime plan/range checks remain explicit: a producer fault is not an
-input recovery state and must not be replaced with fabricated children.
+Lookahead and construction share the generator's typed decision functions.
+Lookahead memoizes answers; construction advances one cursor and consumes typed
+choice selections. There is no separately interpreted plan arena or
+`ReconstructionFault`: broad extraction is total by construction, with recovery
+retained in the carrier, not converted into an extraction failure.
 
-Concrete free extractors also return `Result`; ERROR-root recovery returns
-`Result<Option<_>, ReconstructionFault>`, where `Ok(None)` means the node is not
-an eligible recovery root. Supertype self-classification remains infallible.
-Chatter reports reconstruction faults as E001 internal failure, preserving partial
-evidence but refusing a validity verdict. The conformance inventory explicitly
-fails on a producer fault rather than silently omitting that node.
+Concrete free extractors return their carriers directly; broad ERROR-root
+recovery returns `Option<_>`, where `None` means the node is not an eligible
+recovery root. Kind-admitted extraction remains fallible with `AdmittedRefusal`
+(`ForeignLanguage` or `ContradictedKindProof`); admitted ERROR-root recovery
+returns `Result<Option<_>, AdmittedRefusal>`. Compiled-grammar and source-range
+admission also retain their real errors. Chatter combines those three admission
+boundaries in `CstFailure`, reports E001 internal failure once at the owning
+boundary, and never turns them into a CHAT-invalidity verdict. The conformance
+inventory admits only total broad extractors before generating dispatch arms.
 
-The transitional typed-node-plus-source text reader also reports E001 when a
-node range is outside the supplied source or bisects UTF-8. Those failures
-describe a broken API pairing, not malformed CHAT. Its successful range check
-still proves only readability, not source identity: use the source-bound API
-for new callers. Do not treat equal-width foreign text as an admitted pairing.
+Source-range admission reports E001 when a node range is outside its source or
+bisects UTF-8. Those failures describe a broken API association, not malformed
+CHAT. A successful range check alone proves readability, not source identity;
+new callers must retain the source-bound API. The canonical word and inline CA
+decoders now consume the producing bound token, with no independently supplied
+node/source pair or transitional raw text decoder. Do not treat equal-width
+foreign text as an admitted pairing.
+Nonwords and ordered scoped annotations retain the same source capability
+through word, event/action, group and quotation callers. First and repeated
+annotation choices lower exhaustively into bound alternatives; token policy
+reads their admitted spelling, and retrace labels use the marker's own range.
+The former raw-choice `From` conversions are replaced by source-bound view
+conversions: admit the selected choice, then use `.view().into()`.
+Code-switch language selection uses generated associated fields, not raw child
+lookup. Only actual optional absence produces the shortcut; recovered explicit
+language content cannot be silently replaced by it. Kind/source admission does
+not replace lexical policy or the whole-tree recovery backstop.
 Likewise, a present CA token with empty text or a symbol outside its shared
 generated registry is a producer/source-association failure. Actual MISSING
 tokens retain their existing recovery handling.
@@ -154,7 +198,7 @@ Participant lowering accepts a `SourceBound<ParticipantsHeaderNode>` and carries
 association through its contents, repeated groups, speaker, name, and role.
 Its text reads accept no separately supplied source string.
 
-Calling the free `extract_participant(bound.node())` returns a fallible ordinary
+Calling the free `extract_participant(bound.node())` returns a total ordinary
 carrier. Other header families retain their transitional lowering APIs behind
 the associated dispatcher; their checked decoding remains necessary until they
 also migrate. Do not infer that every parser region is source-bound.

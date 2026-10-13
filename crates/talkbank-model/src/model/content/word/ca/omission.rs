@@ -28,7 +28,54 @@
 //! One rule, one owner, so the two backends cannot disagree about it again.
 
 use crate::alignment::helpers::{WordItemMut, walk_words_mut};
-use crate::model::{Word, WordCategory, WordContent, WordText};
+use crate::model::{Word, WordCategory, WordContent, WordShortening, WordText};
+
+/// One qualifying shortening in its original word. Only `inspect` constructs
+/// this association; a second shortening or other lexical content refuses it.
+struct CaOmission<'word> {
+    index: usize,
+    shortening: &'word WordShortening,
+}
+
+impl<'word> CaOmission<'word> {
+    fn inspect(word: &'word Word) -> Option<Self> {
+        if matches!(word.category.as_ref(), Some(category) if *category != WordCategory::CAOmission)
+        {
+            return None;
+        }
+        let mut found = None;
+        for (index, item) in word.content().iter().enumerate() {
+            match item {
+                WordContent::Shortening(shortening) => {
+                    if found.is_some() {
+                        return None;
+                    }
+                    found = Some(Self { index, shortening });
+                }
+                WordContent::Text(_)
+                | WordContent::Phonetic(_)
+                | WordContent::CompoundMarker(_) => return None,
+                WordContent::OverlapPoint(_)
+                | WordContent::CAElement(_)
+                | WordContent::CADelimiter(_)
+                | WordContent::StressMarker(_)
+                | WordContent::Lengthening(_)
+                | WordContent::SyllablePause(_)
+                | WordContent::UnderlineBegin(_)
+                | WordContent::UnderlineEnd(_)
+                | WordContent::CliticBoundary(_) => {}
+            }
+        }
+        found
+    }
+}
+
+/// Whether fragment interpretation needs the CA option for this word.
+/// This uses the normalization owner's shape admission, including non-lexical
+/// markers, rather than a second one-item approximation in the main tier.
+pub fn requires_ca_omission_context(word: &Word) -> bool {
+    matches!(word.category, Some(WordCategory::CAOmission)) || CaOmission::inspect(word).is_some()
+}
 
 /// Rewrite a standalone CA-omission shortening into text, in place.
 ///
@@ -40,50 +87,12 @@ use crate::model::{Word, WordCategory, WordContent, WordText};
 /// Callers apply this only in CA mode; the function itself expresses which
 /// SHAPES qualify, not the policy about when to ask.
 pub fn normalize_ca_omission_word(word: &mut Word) {
-    if matches!(word.category.as_ref(), Some(category) if *category != WordCategory::CAOmission) {
-        return;
-    }
-
-    let mut found = None;
-    for (idx, item) in word.content().iter().enumerate() {
-        match item {
-            WordContent::Shortening(shortening) => {
-                // A second shortening means this is not a standalone omission.
-                if found.is_some() {
-                    return;
-                }
-                found = Some((idx, shortening.clone()));
-            }
-            // Lexical material beside the parentheses makes it an ordinary
-            // shortening (`(be)cause`). Phonetic content is lexical the same
-            // way plain text is.
-            WordContent::Text(_) | WordContent::Phonetic(_) | WordContent::CompoundMarker(_) => {
-                return;
-            }
-            // Non-lexical markers ride along: an overlap point, a stress mark
-            // or an underline marker does not stop `(ja)` being a standalone
-            // omission. This arm is exhaustive on purpose, so a new
-            // `WordContent` variant has to be classified here rather than
-            // silently joining the permissive side.
-            WordContent::OverlapPoint(_)
-            | WordContent::CAElement(_)
-            | WordContent::CADelimiter(_)
-            | WordContent::StressMarker(_)
-            | WordContent::Lengthening(_)
-            | WordContent::SyllablePause(_)
-            | WordContent::UnderlineBegin(_)
-            | WordContent::UnderlineEnd(_)
-            | WordContent::CliticBoundary(_) => {}
-        }
-    }
-
-    let Some((index, shortening)) = found else {
+    let Some(candidate) = CaOmission::inspect(word) else {
         return;
     };
-    // The loop carries the shortening out with it, so there is no second
-    // lookup and no `let ... else` branch that the loop already made
-    // impossible to reach.
-    word.replace_content_at(index, WordContent::Text(WordText::from(shortening)));
+    let index = candidate.index;
+    let content = WordContent::Text(WordText::from(candidate.shortening.clone()));
+    word.replace_content_at(index, content);
     word.category = Some(WordCategory::CAOmission);
 }
 

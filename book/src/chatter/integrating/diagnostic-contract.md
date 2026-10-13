@@ -16,6 +16,39 @@ top-level `chatter` CLI.
   first, then a record's own tag such as `status`) but is not part of the
   contract: read records as objects.
 
+## Source admission and presentation (Rust API)
+
+`ParseError` is original evidence: its location and secondary labels stay in
+absolute source bytes, with its code, severity, message and producer context
+unchanged. `enhance_errors_with_source` and `enhance_errors_with_index` now take
+an immutable slice and return an iterator of `SourceDiagnostic`, not a mutation
+of that slice. Collect the iterator when a stored batch is needed.
+
+`SourceDiagnostic::presentation()` returns a checked `DiagnosticPresentation`
+or a `DiagnosticSourceError`. Admission checks the primary and every label
+range, including UTF-8 boundaries and zero-width EOF. Reversed, oversized and
+split-scalar ranges are not clamped. Empty buffers expose unavailable context.
+Failure retains `original()` and the existing validation verdict; it does not
+invent an EOF location, an E001 finding, or valid CHAT.
+
+Presentation owns `DiagnosticContext`, `DisplaySpan` and `DiagnosticLabel` in a
+separate display coordinate space. It cannot be fed back into an absolute-source
+enhancement API. `render_error_with_miette` takes this checked value and can be
+called repeatedly; the source-taking render helpers admit original diagnostics
+before rendering. No full-source fallback revives a rejected context.
+
+The desktop bridge retains the original error alongside `sourceContext`, a
+discriminated union: `available` carries checked file coordinates, `unavailable`
+carries a reason and no location. Its CLAN action, like the TUI's, requires an
+available presentation. Export retains both original evidence and this outcome.
+
+Range admission proves bounds, not origin. A diagnostic and a different
+same-length source may have compatible ranges. Consumers must use the retained
+producing snapshot, not reread an edited file. The legacy `Span::DUMMY` value
+also equals a real `0..0` insertion point; presentation preserves it as zero
+width rather than inventing a first-byte highlight. No new source-origin claim
+is made from that overloaded value.
+
 ## `chatter validate ... --format json`
 
 Both `chatter validate FILE --format json` and

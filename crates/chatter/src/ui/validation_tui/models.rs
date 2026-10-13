@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use talkbank_model::{LineMap, ParseError};
+use talkbank_model::SourceDiagnostic;
 
 /// A file the TUI lists: one with diagnostics, one that failed without
 /// any (it could not be read, its roundtrip failed), or both (a tool
@@ -19,8 +19,8 @@ pub struct FileErrors {
     /// Path to the validated CHAT file.
     pub path: PathBuf,
     /// Validation and parse errors associated with this file.
-    pub errors: Vec<ParseError>,
-    /// Full source text for calculating line/column if needed (shared reference)
+    pub errors: Vec<SourceDiagnostic>,
+    /// Producing source snapshot, also used for CLAN line adjustment.
     pub source: Arc<str>,
     /// How the file failed beyond its diagnostics, if it did.
     pub failure: Option<FileFailure>,
@@ -44,21 +44,6 @@ impl std::fmt::Display for FileFailure {
             Self::Unreadable(why) => write!(f, "Could not read this file: {why}"),
             Self::RoundtripFailed(why) => write!(f, "Roundtrip failed: {why}"),
             Self::ToolFailed(why) => write!(f, "Internal failure (validity undetermined): {why}"),
-        }
-    }
-}
-
-impl FileErrors {
-    /// Ensure all errors have line/column information calculated.
-    pub fn ensure_line_columns(&mut self) {
-        // Build LineMap once for O(log n) lookups instead of O(n) per error
-        let line_map = LineMap::new(&self.source);
-        for error in &mut self.errors {
-            if error.location.line.is_none() || error.location.column.is_none() {
-                let (line_0, col_0) = line_map.line_col_of(error.location.span.start);
-                error.location.line = Some(line_0 + 1);
-                error.location.column = Some(col_0 + 1);
-            }
         }
     }
 }

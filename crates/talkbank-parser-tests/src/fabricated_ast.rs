@@ -291,6 +291,12 @@ const CEILING: &[(&str, usize)] = &[
 /// Reviewed source-boundary evidence, not hand-built CHAT semantic examples.
 /// Exact sentinel counts are checked in both directions, including disappearance.
 const BOUNDARY_SPANS: &[(&str, usize)] = &[
+    // Observe empty-fragment unknown locations and reject missing locations
+    // on diagnostics produced from parsed source; neither constructs an AST.
+    (
+        "crates/talkbank-parser-tests/tests/integration/contextual_fragment_corpus.rs",
+        2,
+    ),
     // Unknown-location admission, overflow and rebasing contracts.
     (
         "crates/talkbank-parser-tests/tests/integration/public_error_types.rs",

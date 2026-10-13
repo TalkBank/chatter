@@ -124,6 +124,8 @@ function diagnostic(code, message, start = 1) {
       message,
     },
     renderedHtml: `<span>${message}</span>`,
+    renderedText: message,
+    sourceContext: { kind: "available", location: { start, end: start + 1, line: 1, column: 1 } },
   };
 }
 

@@ -11,12 +11,14 @@
 //! `catalog.rs` for two cases exactly like that in the LSP source this
 //! catalog was ported from).
 
-use talkbank_model::ErrorCollector;
-use talkbank_model::errors::ParseError;
-use talkbank_parser::{TreeSitterParser, generated_traversal::ParsedSource};
+use talkbank_model::validation::{AlignmentValidation, ValidationPolicy};
+use talkbank_parser::TreeSitterParser;
 
 use talkbank_model::model::TranscriptName;
-use talkbank_transform::splice::{BatchSafety, EditTarget, FixKind, apply_edits, catalog_fix};
+use talkbank_transform::splice::{
+    BatchSafety, CatalogIneligibility, CatalogResolution, EditTarget, FixDiagnosis, FixKind,
+    apply_edits,
+};
 
 /// Parse `source`, run the same alignment-aware validation pass
 /// `chatter validate` runs (parsing alone only catches PARSER-layer codes;
@@ -34,33 +36,32 @@ use talkbank_transform::splice::{BatchSafety, EditTarget, FixKind, apply_edits, 
 /// motivated adding the `validate_with_alignment` pass (the same two-step
 /// pipeline `crates/talkbank-parser-tests/tests/integration/
 /// validation_error_corpus.rs` documents as its own test strategy).
-fn single_error_with_code<'a>(
-    source: &'a str,
-    code: &str,
-) -> Result<(ParseError, ParsedSource<'a>), String> {
+fn single_error_with_code<'a>(source: &'a str, code: &str) -> Result<FixDiagnosis<'a>, String> {
     let parser = TreeSitterParser::new().map_err(|error| format!("parser init failed: {error}"))?;
-    let parse_errors = ErrorCollector::new();
-    let (mut file, parsed) = parser.parse_chat_file_with_source(source, &parse_errors);
-    let parsed = parsed.ok_or("source-bound parse unavailable")?;
-
-    let validation_errors = ErrorCollector::new();
-    file.validate_with_alignment(&validation_errors, TranscriptName::Anonymous);
-
-    let mut diagnostics = parse_errors.into_vec();
-    diagnostics.extend(validation_errors.into_vec());
-
-    diagnostics
-        .iter()
-        .find(|error| error.code.as_str() == code)
-        .cloned()
-        .map(|error| (error, parsed))
-        .ok_or_else(|| {
-            let seen: Vec<&str> = diagnostics
-                .iter()
-                .map(|error| error.code.as_str())
-                .collect();
-            format!("expected {code} but parse+validate produced {seen:?}")
-        })
+    let diagnosis = FixDiagnosis::observe(
+        &parser,
+        source,
+        ValidationPolicy::new(
+            talkbank_model::RuleSelection::new(),
+            AlignmentValidation::IncludeTierAlignment,
+        ),
+        TranscriptName::Anonymous,
+    );
+    if diagnosis
+        .findings()
+        .any(|error| error.code.as_str() == code)
+    {
+        Ok(diagnosis)
+    } else {
+        let seen: Vec<_> = diagnosis
+            .diagnostics()
+            .iter()
+            .map(|error| error.code.as_str())
+            .collect();
+        Err(format!(
+            "expected {code} but parse+validate produced {seen:?}"
+        ))
+    }
 }
 
 /// E241 is the mechanical case the whole first consumer rests on.
@@ -68,11 +69,18 @@ fn single_error_with_code<'a>(
 fn e241_yields_a_mechanical_xxx_replacement() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
                   @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\tI said xx today .\n@End";
-    let (error, parsed) = single_error_with_code(source, "E241")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E241")?;
-    assert_eq!(fix.safety, BatchSafety::Mechanical);
-    match fix.kind {
-        FixKind::Deterministic(edits) => {
+    let diagnosis = single_error_with_code(source, "E241")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E241")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E241")?;
+    assert_eq!(fix.safety(), BatchSafety::Mechanical);
+    match fix.into_kind() {
+        FixKind::Mechanical(edits) | FixKind::Semantic(edits) => {
             assert_eq!(edits.len(), 1);
             match edits[0].target() {
                 EditTarget::Replace(span) => assert_eq!(&source[span.to_range()], "xx"),
@@ -95,10 +103,17 @@ fn e241_yields_a_mechanical_xxx_replacement() -> Result<(), String> {
 #[test]
 fn missing_terminator_is_ambiguous_and_offers_every_alternative() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n*CHI:\thi\n@End\n";
-    let (error, parsed) = single_error_with_code(source, "E305")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E305")?;
-    assert_eq!(fix.safety, BatchSafety::Ambiguous);
-    match fix.kind {
+    let diagnosis = single_error_with_code(source, "E305")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E305")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E305")?;
+    assert_eq!(fix.safety(), BatchSafety::Ambiguous);
+    match fix.into_kind() {
         FixKind::Alternatives(alts) => {
             assert_eq!(alts.len(), 3);
             let mut texts: Vec<String> = Vec::new();
@@ -109,7 +124,9 @@ fn missing_terminator_is_ambiguous_and_offers_every_alternative() -> Result<(), 
             assert!(texts.iter().any(|t| t.contains("hi ?")), "got {texts:?}");
             assert!(texts.iter().any(|t| t.contains("hi !")), "got {texts:?}");
         }
-        FixKind::Deterministic(_) => return Err("E305 must not be deterministic".to_string()),
+        FixKind::Mechanical(_) | FixKind::Semantic(_) => {
+            return Err("E305 must not be deterministic".to_string());
+        }
     }
     Ok(())
 }
@@ -120,11 +137,18 @@ fn missing_terminator_is_ambiguous_and_offers_every_alternative() -> Result<(), 
 fn comma_deletion_is_semantic_not_mechanical() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
                   @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\twww, the rest .\n@End";
-    let (error, parsed) = single_error_with_code(source, "E259")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E259")?;
-    assert_eq!(fix.safety, BatchSafety::Semantic);
-    match fix.kind {
-        FixKind::Deterministic(edits) => {
+    let diagnosis = single_error_with_code(source, "E259")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E259")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E259")?;
+    assert_eq!(fix.safety(), BatchSafety::Semantic);
+    match fix.into_kind() {
+        FixKind::Mechanical(edits) | FixKind::Semantic(edits) => {
             let out = apply_edits(source, &edits).map_err(|error| error.to_string())?;
             assert!(out.contains("www the rest ."), "got {out:?}");
         }
@@ -145,10 +169,17 @@ fn comma_deletion_is_semantic_not_mechanical() -> Result<(), String> {
 fn e259_tier_initial_comma_deletion_does_not_leave_a_leading_space() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                   @ID:\teng|test|CHI|||||Child|||\n*CHI:\t, xx .\n@End\n";
-    let (error, parsed) = single_error_with_code(source, "E259")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E259")?;
-    match fix.kind {
-        FixKind::Deterministic(edits) => {
+    let diagnosis = single_error_with_code(source, "E259")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E259")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E259")?;
+    match fix.into_kind() {
+        FixKind::Mechanical(edits) | FixKind::Semantic(edits) => {
             let out = apply_edits(source, &edits).map_err(|error| error.to_string())?;
             assert!(
                 out.contains("*CHI:\txx .\n"),
@@ -176,11 +207,18 @@ fn e259_tier_initial_comma_deletion_does_not_leave_a_leading_space() -> Result<(
 fn e244_collapses_consecutive_stress_marks_without_deleting_the_word() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
                   @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t\u{2C8}\u{2C8}hello .\n@End";
-    let (error, parsed) = single_error_with_code(source, "E244")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E244")?;
-    assert_eq!(fix.safety, BatchSafety::Mechanical);
-    match fix.kind {
-        FixKind::Deterministic(edits) => {
+    let diagnosis = single_error_with_code(source, "E244")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E244")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E244")?;
+    assert_eq!(fix.safety(), BatchSafety::Mechanical);
+    match fix.into_kind() {
+        FixKind::Mechanical(edits) | FixKind::Semantic(edits) => {
             let out = apply_edits(source, &edits).map_err(|error| error.to_string())?;
             assert!(
                 out.contains("\u{2C8}hello ."),
@@ -203,11 +241,18 @@ fn e244_collapses_consecutive_stress_marks_without_deleting_the_word() -> Result
 fn e258_collapses_the_comma_pair_not_a_noop_replace() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
                   @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello ,, world .\n@End";
-    let (error, parsed) = single_error_with_code(source, "E258")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E258")?;
-    assert_eq!(fix.safety, BatchSafety::Mechanical);
-    match fix.kind {
-        FixKind::Deterministic(edits) => {
+    let diagnosis = single_error_with_code(source, "E258")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E258")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E258")?;
+    assert_eq!(fix.safety(), BatchSafety::Mechanical);
+    match fix.into_kind() {
+        FixKind::Mechanical(edits) | FixKind::Semantic(edits) => {
             let out = apply_edits(source, &edits).map_err(|error| error.to_string())?;
             assert!(out.contains("hello , world ."), "got {out:?}");
             assert!(!out.contains(",,"), "comma pair survived: {out:?}");
@@ -223,16 +268,25 @@ fn e258_collapses_the_comma_pair_not_a_noop_replace() -> Result<(), String> {
 fn e306_refuses_a_recovered_empty_main_tier() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                   @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\t.\n@End";
-    let (error, parsed) = single_error_with_code(source, "E306")?;
-    let node = parsed
+    let diagnosis = single_error_with_code(source, "E306")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E306")
+        .ok_or("actual finding absent")?;
+    let node = diagnosis
+        .parsed_source()
+        .ok_or("source unavailable")?
         .root_node()
         .descendant_for_byte_range(
-            error.location.span.start as usize,
-            error.location.span.end as usize,
+            finding.location.span.start as usize,
+            finding.location.span.end as usize,
         )
         .ok_or("missing diagnostic node")?;
     assert!(node.has_error(), "the refusal witness must retain recovery");
-    assert!(catalog_fix(&error, &parsed).is_none());
+    assert!(matches!(
+        finding.catalog(),
+        CatalogResolution::Ineligible(CatalogIneligibility::RecoveredCarrier)
+    ));
     Ok(())
 }
 
@@ -240,8 +294,12 @@ fn e306_refuses_a_recovered_empty_main_tier() -> Result<(), String> {
 #[test]
 fn e308_does_not_invent_a_participant_role() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*MOT:\thello world .\n@End";
-    let (error, parsed) = single_error_with_code(source, "E308")?;
-    assert!(catalog_fix(&error, &parsed).is_none());
+    let diagnosis = single_error_with_code(source, "E308")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E308")
+        .ok_or("actual finding absent")?;
+    assert!(matches!(finding.catalog(), CatalogResolution::Unsupported));
     Ok(())
 }
 
@@ -252,8 +310,12 @@ fn duplicate_begin_grammar_rejection_has_no_catalog_repair() -> Result<(), Strin
     let source = include_str!(
         "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E501_1.cha"
     );
-    let (error, parsed) = single_error_with_code(source, "E316")?;
-    assert!(catalog_fix(&error, &parsed).is_none());
+    let diagnosis = single_error_with_code(source, "E316")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E316")
+        .ok_or("actual finding absent")?;
+    assert!(matches!(finding.catalog(), CatalogResolution::Unsupported));
     Ok(())
 }
 
@@ -263,11 +325,18 @@ fn duplicate_begin_grammar_rejection_has_no_catalog_repair() -> Result<(), Strin
 fn e502_appends_end_header_at_eof() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                   @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .";
-    let (error, parsed) = single_error_with_code(source, "E502")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E502")?;
-    assert_eq!(fix.safety, BatchSafety::Mechanical);
-    match fix.kind {
-        FixKind::Deterministic(edits) => {
+    let diagnosis = single_error_with_code(source, "E502")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E502")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E502")?;
+    assert_eq!(fix.safety(), BatchSafety::Mechanical);
+    match fix.into_kind() {
+        FixKind::Mechanical(edits) | FixKind::Semantic(edits) => {
             let out = apply_edits(source, &edits).map_err(|error| error.to_string())?;
             assert!(out.ends_with("hello world .\n@End\n"), "got {out:?}");
         }
@@ -282,11 +351,18 @@ fn e502_appends_end_header_at_eof() -> Result<(), String> {
 fn e503_prepends_utf8_header() -> Result<(), String> {
     let source = "@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n\
                   @ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n@End";
-    let (error, parsed) = single_error_with_code(source, "E503")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E503")?;
-    assert_eq!(fix.safety, BatchSafety::Mechanical);
-    match fix.kind {
-        FixKind::Deterministic(edits) => {
+    let diagnosis = single_error_with_code(source, "E503")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E503")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E503")?;
+    assert_eq!(fix.safety(), BatchSafety::Mechanical);
+    match fix.into_kind() {
+        FixKind::Mechanical(edits) | FixKind::Semantic(edits) => {
             let out = apply_edits(source, &edits).map_err(|error| error.to_string())?;
             assert!(out.starts_with("@UTF8\n@Begin\n"), "got {out:?}");
         }
@@ -299,8 +375,12 @@ fn e503_prepends_utf8_header() -> Result<(), String> {
 #[test]
 fn e504_does_not_invent_participants() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@End";
-    let (error, parsed) = single_error_with_code(source, "E504")?;
-    assert!(catalog_fix(&error, &parsed).is_none());
+    let diagnosis = single_error_with_code(source, "E504")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E504")
+        .ok_or("actual finding absent")?;
+    assert!(matches!(finding.catalog(), CatalogResolution::Unsupported));
     Ok(())
 }
 
@@ -311,8 +391,12 @@ fn empty_languages_grammar_rejection_has_no_catalog_repair() -> Result<(), Strin
     let source = include_str!(
         "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E507_1.cha"
     );
-    let (error, parsed) = single_error_with_code(source, "E316")?;
-    assert!(catalog_fix(&error, &parsed).is_none());
+    let diagnosis = single_error_with_code(source, "E316")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E316")
+        .ok_or("actual finding absent")?;
+    assert!(matches!(finding.catalog(), CatalogResolution::Unsupported));
     Ok(())
 }
 
@@ -324,11 +408,18 @@ fn e604_deletes_the_orphaned_gra_tier_not_the_main_tier() -> Result<(), String> 
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
                   @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\thello world .\n\
                   %gra:\t1|2|NSUBJ 2|0|ROOT\n@End";
-    let (error, parsed) = single_error_with_code(source, "E604")?;
-    let fix = catalog_fix(&error, &parsed).ok_or("no catalog entry for E604")?;
-    assert_eq!(fix.safety, BatchSafety::Semantic);
-    match fix.kind {
-        FixKind::Deterministic(edits) => {
+    let diagnosis = single_error_with_code(source, "E604")?;
+    let finding = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E604")
+        .ok_or("actual finding absent")?;
+    let fix = finding
+        .catalog()
+        .into_offer()
+        .ok_or("no catalog entry for E604")?;
+    assert_eq!(fix.safety(), BatchSafety::Semantic);
+    match fix.into_kind() {
+        FixKind::Mechanical(edits) | FixKind::Semantic(edits) => {
             let out = apply_edits(source, &edits).map_err(|error| error.to_string())?;
             assert!(
                 out.contains("*CHI:\thello world .\n"),
@@ -351,8 +442,12 @@ fn empty_speaker_grammar_rejection_has_no_catalog_repair() -> Result<(), String>
     let source = include_str!(
         "../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E301_1.cha"
     );
-    let (error, parsed) = single_error_with_code(source, "E316")?;
-    assert!(catalog_fix(&error, &parsed).is_none());
+    let diagnosis = single_error_with_code(source, "E316")?;
+    let error = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E316")
+        .expect("actual finding");
+    assert!(matches!(error.catalog(), CatalogResolution::Unsupported));
     Ok(())
 }
 
@@ -369,9 +464,13 @@ fn empty_speaker_grammar_rejection_has_no_catalog_repair() -> Result<(), String>
 fn e242_has_no_catalog_entry_because_the_seed_fix_is_unrelated() -> Result<(), String> {
     let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n\
                   @ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t\u{201C}hello .\n@End";
-    let (error, parsed) = single_error_with_code(source, "E242")?;
+    let diagnosis = single_error_with_code(source, "E242")?;
+    let error = diagnosis
+        .findings()
+        .find(|error| error.code.as_str() == "E242")
+        .expect("actual finding");
     assert!(
-        catalog_fix(&error, &parsed).is_none(),
+        matches!(error.catalog(), CatalogResolution::Unsupported),
         "E242 has no verified single-answer fix"
     );
     Ok(())

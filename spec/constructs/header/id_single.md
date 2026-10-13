@@ -11,7 +11,29 @@ Minimal `@ID` header with identity fields populated.
 ## Expected CST
 
 ```cst
-(id_header ...)
+(id_header
+  (id_prefix)
+  (header_sep
+    (colon)
+    (tab))
+  (id_contents
+    (id_languages
+      (id_language
+        (language_code)))
+    (pipe)
+    (id_corpus)
+    (pipe)
+    (id_speaker)
+    (pipe)
+    (pipe)
+    (pipe)
+    (pipe)
+    (pipe)
+    (id_role)
+    (pipe)
+    (pipe)
+    (pipe))
+  (newline))
 ```
 
 ## Metadata

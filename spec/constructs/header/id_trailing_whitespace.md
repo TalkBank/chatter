@@ -17,8 +17,32 @@ Discovered by re2c parser parity testing (2026-03-30).
 ```cst
 (id_header
   (id_prefix)
-  (header_sep)
-  (id_fields)
+  (header_sep
+    (colon)
+    (tab))
+  (id_contents
+    (id_languages
+      (id_language
+        (language_code)))
+    (pipe)
+    (id_corpus)
+    (pipe)
+    (id_speaker)
+    (pipe)
+    (id_age)
+    (pipe)
+    (id_sex
+      (male_value))
+    (pipe)
+    (id_group)
+    (pipe)
+    (pipe)
+    (id_role)
+    (pipe)
+    (pipe)
+    (id_custom_field)
+    (whitespaces)
+    (pipe))
   (newline))
 ```
 

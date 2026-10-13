@@ -7,6 +7,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Morphological_Tier>
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Word_Tier>
 
+mod content_range;
 mod helpers;
 mod parse;
 mod parsed;

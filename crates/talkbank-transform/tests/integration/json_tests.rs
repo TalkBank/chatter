@@ -113,13 +113,21 @@ fn render_error_includes_code() {
     match parse_and_validate(content, options) {
         Err(PipelineError::Parse(parse_errors)) => {
             assert!(!parse_errors.errors.is_empty(), "Should have parse errors");
-            let rendered = render_error_with_miette(&parse_errors.errors[0]);
+            let checked = talkbank_model::SourceDiagnostic::with_index(
+                parse_errors.errors[0].clone(),
+                &talkbank_model::SourceIndex::new(content),
+            );
+            let rendered = render_error_with_miette(&checked);
             // The rendered output should contain some error information
             assert!(!rendered.is_empty(), "Rendered error should not be empty");
         }
         Err(PipelineError::Validation(errors)) => {
             assert!(!errors.is_empty(), "Should have validation errors");
-            let rendered = render_error_with_miette(&errors[0]);
+            let checked = talkbank_model::SourceDiagnostic::with_index(
+                errors[0].clone(),
+                &talkbank_model::SourceIndex::new(content),
+            );
+            let rendered = render_error_with_miette(&checked);
             assert!(!rendered.is_empty(), "Rendered error should not be empty");
         }
         Ok(_) => {

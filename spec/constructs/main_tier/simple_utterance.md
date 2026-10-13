@@ -23,24 +23,11 @@ Simple main tier with single word
           (word_with_optional_annotations
             (standalone_word
               (word_body
-                (initial_word_segment)
-              )
-            )
-          )
-        )
-      )
-    )
+                (word_segment))))))
+      (whitespaces))
     (utterance_end
-      (whitespaces
-        (whitespace
-          (space)
-        )
-      )
       (period)
-      (newline)
-    )
-  )
-)
+      (newline))))
 ```
 
 ## Metadata

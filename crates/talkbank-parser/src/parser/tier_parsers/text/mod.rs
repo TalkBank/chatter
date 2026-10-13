@@ -44,3 +44,11 @@ pub use gpx::parse_gpx_tier;
 pub use int::parse_int_tier;
 pub use sit::parse_sit_tier;
 pub use spa::parse_spa_tier;
+
+pub(crate) use add::parse_add_tier_with_separator;
+pub(crate) use com::parse_com_tier_with_separator;
+pub(crate) use exp::parse_exp_tier_with_separator;
+pub(crate) use gpx::parse_gpx_tier_with_separator;
+pub(crate) use int::parse_int_tier_with_separator;
+pub(crate) use sit::parse_sit_tier_with_separator;
+pub(crate) use spa::parse_spa_tier_with_separator;

@@ -14,7 +14,7 @@ use talkbank_model::ParseOutcome;
 use talkbank_model::dependent_tier::DependentTier;
 use talkbank_model::model::Line;
 use talkbank_model::{
-    ErrorCode, ErrorCollector, ErrorSink, ParseError, Severity, Span, SpanShift, TeeErrorSink,
+    ErrorCode, ErrorCollector, ErrorSink, ParseError, Severity, Span, TeeErrorSink,
 };
 
 use crate::parser::TreeSitterParser;
@@ -60,7 +60,7 @@ const MAIN_TIER_LINE: &str = "*CHI:\thello .\n";
 ///
 /// # Type Parameters
 ///
-/// * `T` - The tier type to extract (must implement `SpanShift`)
+/// * `T` - The tier type to extract after the owned dependent tier is projected
 /// * `F` - Extractor function that pulls the tier from a `DependentTier`
 ///
 /// # Arguments
@@ -80,30 +80,22 @@ pub(crate) fn wrapper_parse_tier<T, F>(
     extractor: F,
 ) -> ParseOutcome<T>
 where
-    T: SpanShift,
     F: FnOnce(DependentTier) -> Option<T>,
 {
-    // A tier fragment's `input` is the tier CONTENT that follows the header;
-    // the wrapper supplies the tier line's terminator itself (the `\n` before
-    // the suffix below). If the caller's `input` already ends in a line
-    // terminator, emitting a second one would produce a blank line, which the
-    // parser then correctly rejects as E747 (blank lines not allowed), causing
-    // a spurious fragment rejection that does NOT reflect the tier content.
-    // Normalizing exactly one trailing terminator keeps this API in agreement
-    // with the re2c oracle (which parses the raw fragment and treats a trailing
-    // newline as a benign line end) while still surfacing a GENUINE extra blank
-    // line: an `input` ending in "\n\n" strips to "\n" and still doubles.
+    // Caller line endings are source evidence too. Supply a wrapper newline
+    // only if the original input did not supply one; never shorten the owner's
+    // admitted range merely to avoid an artificial blank line.
     let ParseOutcome::Parsed(source) = talkbank_model::FragmentSource::admit(input, offset, errors)
     else {
         return ParseOutcome::rejected();
     };
-    let body = strip_one_trailing_newline(source.input());
+    let suffix = tier_suffix(source.input());
 
     // Build the minimal CHAT wrapper
     let fragment = WrappedFragment::new(
         &[MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE, tier_header],
-        body,
-        &format!("\n{MINIMAL_CHAT_SUFFIX}"),
+        source.input(),
+        &suffix,
         offset,
     );
     let fragment = match fragment {
@@ -132,20 +124,18 @@ pub(crate) fn wrapper_parse_generic_tier(
     offset: usize,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<DependentTier> {
-    // As in `wrapper_parse_tier`: drop at most one caller-supplied trailing
-    // line terminator so the wrapper's own terminator does not double into a
-    // blank line (spurious E747). See that function for the full rationale.
+    // Preserve the complete original line, including its caller-owned ending.
     let ParseOutcome::Parsed(source) = talkbank_model::FragmentSource::admit(input, offset, errors)
     else {
         return ParseOutcome::rejected();
     };
-    let body = strip_one_trailing_newline(source.input());
+    let suffix = tier_suffix(source.input());
 
     // Build wrapper (input already has tier header)
     let fragment = WrappedFragment::new(
         &[MINIMAL_CHAT_PREFIX, MAIN_TIER_LINE],
-        body,
-        &format!("\n{MINIMAL_CHAT_SUFFIX}"),
+        source.input(),
+        &suffix,
         offset,
     );
     let fragment = match fragment {
@@ -162,21 +152,13 @@ pub(crate) fn wrapper_parse_generic_tier(
     }
 }
 
-/// Strip at most one trailing line terminator (`\r\n` or `\n`) from a tier
-/// fragment body.
-///
-/// The minimal-wrapper tier-fragment APIs supply the tier line's own
-/// terminator when they build the synthetic document. A caller-supplied
-/// trailing terminator in `input` would therefore double, producing a blank
-/// line that the parser rejects as E747. Removing exactly one terminator makes
-/// the wrapper robust to callers that hand it a whole line (terminator
-/// included), which is how a real fragment reparse often extracts one, while a
-/// deliberate extra blank line (`"...\n\n"`) still survives as `"...\n"` and is
-/// still reported.
-fn strip_one_trailing_newline(input: &str) -> &str {
-    match input.strip_suffix('\n') {
-        Some(without_lf) => without_lf.strip_suffix('\r').unwrap_or(without_lf),
-        None => input,
+/// Do not synthesize a line terminator that the caller already supplied.
+/// LF/CRLF bytes stay in the owned input; an actual extra blank line survives.
+fn tier_suffix(input: &str) -> std::borrow::Cow<'static, str> {
+    if input.ends_with('\n') {
+        std::borrow::Cow::Borrowed(MINIMAL_CHAT_SUFFIX)
+    } else {
+        std::borrow::Cow::Owned(format!("\n{MINIMAL_CHAT_SUFFIX}"))
     }
 }
 
@@ -235,12 +217,9 @@ impl<'fragment, 'input> CompleteTierFragment<'fragment, 'input> {
         ParseOutcome::Rejected
     }
 
-    fn project<T: SpanShift>(
-        self,
-        extractor: impl FnOnce(DependentTier) -> Option<T>,
-    ) -> ParseOutcome<T> {
-        match extractor(self.tier) {
-            Some(tier) => ParseOutcome::Parsed(self.fragment.rebase(tier)),
+    fn project<T>(self, extractor: impl FnOnce(DependentTier) -> Option<T>) -> ParseOutcome<T> {
+        match extractor(self.fragment.rebase_tier(self.tier)) {
+            Some(tier) => ParseOutcome::Parsed(tier),
             None => ParseOutcome::Rejected,
         }
     }

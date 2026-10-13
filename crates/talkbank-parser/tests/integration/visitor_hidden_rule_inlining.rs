@@ -80,7 +80,8 @@ fn full_document(tree: &tree_sitter::Tree) -> tree_sitter::Node<'_> {
 
 /// On a real reference @ID line, `extract_id_contents` must classify the REAL flat
 /// children as `Present` (the hidden `_id_*` groups are inlined). Asserts
-/// `child_0` (`id_languages`) and `child_1` (first `pipe`) are `NodeSlot::Present`.
+/// The optional `child_0` (`id_languages`) is populated, and `child_1` (first
+/// `pipe`) is `NodeSlot::Present`.
 #[test]
 fn extract_id_contents_classifies_real_flat_children_present() {
     // An existing reference fixture whose @ID line carries a full field list
@@ -93,8 +94,7 @@ fn extract_id_contents_classifies_real_flat_children_present() {
     let tree = parse_chat(&source);
     let full_doc = full_document(&tree);
 
-    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc))
-        .expect("producer reconstruction");
+    let doc_children = extract_full_document(classify::<FullDocumentNode>(full_doc));
 
     // Find the first @ID line and extract its id_contents node.
     let mut id_contents_seen = 0usize;
@@ -109,7 +109,7 @@ fn extract_id_contents_classifies_real_flat_children_present() {
         // header lines select the @ID headers directly by the nested choice's
         // OWN variant (no separate `classify_header` round-trip needed: the
         // nested choice already names the concrete header kind).
-        let line_children = extract_line(*line_node).expect("producer reconstruction");
+        let line_children = extract_line(*line_node);
         let id_header_node = match line_children.content.slot() {
             NodeSlot::Present(LineChoice::ActivitiesHeader(
                 LineActivitiesHeaderChoice::IdHeader(node),
@@ -118,8 +118,7 @@ fn extract_id_contents_classifies_real_flat_children_present() {
         };
 
         // `extract_id_header(node).child_2` is the `id_contents` node slot.
-        let id_header_children =
-            extract_id_header(id_header_node).expect("producer reconstruction");
+        let id_header_children = extract_id_header(id_header_node);
         let id_contents_node = id_header_children
             .child_2
             .slot()
@@ -127,17 +126,17 @@ fn extract_id_contents_classifies_real_flat_children_present() {
             .expect("an @ID header must have an id_contents node");
 
         // The Task-0e target call: walk the inlined flat field positions.
-        let id_contents = extract_id_contents(classify::<IdContentsNode>(id_contents_node))
-            .expect("producer reconstruction");
+        let id_contents = extract_id_contents(classify::<IdContentsNode>(id_contents_node));
         id_contents_seen += 1;
 
-        // child_0 (id_languages) and child_1 (first pipe) are REQUIRED slots.
+        // This reference populates optional child_0 (id_languages); child_1
+        // (first pipe) remains a required slot.
         // Pre-fix they classified the real children against the phantom kinds
         // "_id_identity_fields" / "_id_demographic_fields" and were
         // `Unexpected`; post-fix they expect "id_languages" / "pipe" and are
         // `Present`.
         assert!(
-            matches!(id_contents.child_0.slot(), NodeSlot::Present(_)),
+            matches!(id_contents.child_0.slot(), Some(NodeSlot::Present(_))),
             "id_contents child_0 (id_languages) must be Present after hidden-rule \
              inlining (was Unexpected against the phantom `_id_identity_fields` kind), \
              got {:?}",

@@ -1,0 +1,22 @@
+@UTF8
+@Begin
+@Languages:	eng, spa
+@Participants:	CHI Child, MOT Mother
+@ID:	eng|corpus|CHI|3;00.||||Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Authored controls for first and repeated scoped annotation positions, payloads and order; not derived from a recording.
+@Comment:	Alternatives are not replacements; overlaps have paired speakers and retraces have following spoken repairs.
+*CHI:	bird [=? lark] [% guess] .
+*CHI:	<casa azul> [% color] [@s:spa] .
+*CHI:	<casa verde> [% color] [@s] .
+*CHI:	noise [% aside] [e] .
+*CHI:	xxx [% heard] [= blue bird] .
+*CHI:	yes [% reply] [>] .
+*MOT:	no [<] .
+*CHI:	there [= pointing] [% near window] .
+*CHI:	old [% retry] [///] a new plan .
+*CHI:	start [% retry] [/-] another idea .
+*CHI:	mine [% reply] [!!] .
+*CHI:	ready [% reply] [!] .
+*CHI:	maybe [% guess] [?] .
+@End

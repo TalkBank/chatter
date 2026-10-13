@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
@@ -13,6 +14,91 @@ mod diagnostics;
 
 const DEADLINE: Duration = Duration::from_secs(10);
 
+/// A native program path admitted before process construction. The operating
+/// system still decides whether the observed file can actually be executed.
+struct TestProgram(PathBuf);
+
+impl TestProgram {
+    fn at(path: PathBuf) -> std::io::Result<Self> {
+        if !path.is_absolute() || !std::fs::metadata(&path)?.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "the test program must be an absolute regular-file path",
+            ));
+        }
+        Ok(Self(path))
+    }
+
+    fn selected() -> std::io::Result<Self> {
+        let path = match std::env::var_os("TALKBANK_LSP_TEST_BINARY") {
+            Some(path) => {
+                let path = PathBuf::from(path);
+                eprintln!("LSP test program: {}", path.display());
+                path
+            }
+            None => PathBuf::from(env!("CARGO_BIN_EXE_talkbank-lsp")),
+        };
+        Self::at(path)
+    }
+
+    fn command(self) -> Command {
+        Command::new(self.0)
+    }
+}
+
+#[test]
+fn native_program_selection_refuses_relative_directory_and_missing_paths() {
+    assert!(matches!(
+        TestProgram::at(PathBuf::from("talkbank-lsp")),
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidInput
+    ));
+    let directory = std::env::temp_dir();
+    assert!(matches!(
+        TestProgram::at(directory),
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidInput
+    ));
+    let executable = PathBuf::from(env!("CARGO_BIN_EXE_talkbank-lsp"));
+    let missing = executable.with_file_name(format!("missing-lsp-program-{}", std::process::id()));
+    assert!(
+        !missing.exists(),
+        "missing-path control must actually be absent"
+    );
+    assert!(matches!(
+        TestProgram::at(missing),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    ));
+    assert!(TestProgram::at(executable).is_ok());
+}
+
+#[test]
+fn native_program_selection_missing_override_never_falls_back() {
+    let executable = std::env::current_exe().expect("test executable");
+    let missing = executable.with_file_name(format!("missing-lsp-program-{}", std::process::id()));
+    assert!(
+        !missing.exists(),
+        "missing-path control must actually be absent"
+    );
+    let output = Command::new(executable)
+        .args([
+            "stdio_lifecycle::shutdown_then_exit_does_not_require_stdin_eof",
+            "--exact",
+            "--nocapture",
+        ])
+        .env("TALKBANK_LSP_TEST_BINARY", missing)
+        .output()
+        .expect("actual test subprocess");
+    assert!(
+        !output.status.success(),
+        "missing override must not fall back"
+    );
+    let output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.contains("admitted LSP test program"), "{output}");
+}
+
 struct Editor {
     process: Child,
     input: Option<ChildStdin>,
@@ -22,7 +108,9 @@ struct Editor {
 
 impl Editor {
     fn start() -> Self {
-        let mut process = Command::new(env!("CARGO_BIN_EXE_talkbank-lsp"))
+        let mut process = TestProgram::selected()
+            .expect("admitted LSP test program")
+            .command()
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

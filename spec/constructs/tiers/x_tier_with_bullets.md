@@ -11,20 +11,37 @@ Discovered by re2c parser parity testing (2026-03-30).
 
 ```utterance
 *SLP:	0 .
-%xs1:	swallow 3093_4877
+%xs1:	swallow 3093_4877
 ```
 
 ## Expected CST
 
 ```cst
 (utterance
-  (main_tier ...)
+  (main_tier
+    (star)
+    (speaker)
+    (colon)
+    (tab)
+    (tier_body
+      (contents
+        (content_item
+          (base_content_item
+            (nonword_with_optional_annotations
+              (nonword
+                (zero)))))
+        (whitespaces))
+      (utterance_end
+        (period)
+        (newline))))
   (x_dependent_tier
     (x_tier_prefix)
-    (tier_sep)
+    (tier_sep
+      (colon)
+      (tab))
     (text_with_bullets
       (text_segment)
-      (inline_bullet
+      (bullet
         (bullet_start)
         (bullet_timestamp)
         (bullet_timestamp)

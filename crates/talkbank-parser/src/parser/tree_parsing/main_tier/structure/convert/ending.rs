@@ -8,11 +8,9 @@
 //! replaces the previous flat positional `node.kind()` loop (the removed
 //! `parse_utterance_end` in `utterance_end.rs`), so the 13 terminator subtypes
 //! are now a compiler-exhaustive typed match (the shared `terminator_from_new_choice`)
-//! instead of a `node.kind()` string dispatch. Each slot is matched EXHAUSTIVELY
-//! over [`NodeSlot`], so a recovery node is handled explicitly rather than
-//! silently dropped, and the ONE reachable recovery diagnostic (E360
-//! `InvalidMediaBullet` on a malformed trailing bullet) is reproduced
-//! byte-identically.
+//! instead of a `node.kind()` string dispatch. Slot recovery and displaced
+//! nodes retain their region-specific reporter; structured bullet rejection
+//! remains distinct from malformed syntax and source-admission failure.
 //!
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Terminators>
@@ -155,8 +153,9 @@ pub(super) fn parse_utterance_end<'tree>(
     // becomes a `Bullet` carrying the node span; on `None` timestamps (a
     // grammar-rejected or malformed bullet, e.g. the deprecated `·N_N-·` skip
     // marker) the E360 diagnostic is emitted byte-identically to the removed
-    // flat loop, so the file still fails validation. Every other slot state
-    // (at either nesting level) yields no bullet, no diagnostic.
+    // flat loop, so the file still fails validation. Non-Present semantic slots
+    // contribute no bullet; the carrier's reporter and whole-tree backstop
+    // independently retain syntax-recovery diagnostics.
     // Keep the established region-specific recovery reporter. Semantic reads
     // below use the associated projection, never this raw diagnostic carrier.
     if let Some(SlotView::Present(group)) = end.child_2.slot().as_ref().map(NodeSlot::view) {

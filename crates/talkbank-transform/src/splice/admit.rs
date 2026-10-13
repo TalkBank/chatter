@@ -46,12 +46,53 @@ pub struct Skipped {
 }
 
 /// The partition of offered edits into applied and skipped.
-#[derive(Debug, Default)]
+///
+/// ```compile_fail
+/// use talkbank_transform::splice::Admission;
+/// let forged = Admission { admitted: Vec::new(), skipped: Vec::new() };
+/// ```
+#[derive(Debug)]
 pub struct Admission {
     /// Edits cleared for splicing.
-    pub admitted: Vec<SpliceEdit>,
+    admitted: Vec<SpliceEdit>,
     /// Edits refused, each with a reason to report.
-    pub skipped: Vec<Skipped>,
+    skipped: Vec<Skipped>,
+}
+
+impl Admission {
+    /// Read-only candidates admitted by the actual health decision.
+    pub fn admitted(&self) -> &[SpliceEdit] {
+        &self.admitted
+    }
+    /// Refused candidates and their recorded reasons.
+    pub fn skipped(&self) -> &[Skipped] {
+        &self.skipped
+    }
+    /// Consume the partition into an immutable accepted-edits receipt.
+    pub fn into_admitted(self) -> AdmittedEdits {
+        AdmittedEdits(self.admitted)
+    }
+}
+
+/// Edits issued by health admission, not a publicly constructible success vector.
+/// This records the model's decision, not model/source identity or byte validity.
+///
+/// ```compile_fail
+/// use talkbank_transform::splice::AdmittedEdits;
+/// let forged = AdmittedEdits(Vec::new());
+/// ```
+#[derive(Debug)]
+pub struct AdmittedEdits(Vec<SpliceEdit>);
+
+impl AdmittedEdits {
+    /// Read-only admitted candidates.
+    pub fn edits(&self) -> &[SpliceEdit] {
+        &self.0
+    }
+    /// Consume into the sole checked mapping against its retained source.
+    pub fn map(self, source: &str) -> Result<super::MappedPlan<'_>, super::SpliceError> {
+        super::mapped_edit_sites(source, &self.0)
+    }
 }
 
 /// The edit's insertion point, or both endpoints of its nonempty replacement,
@@ -113,7 +154,10 @@ impl<'a> UtteranceScopedEdit<'a> {
 /// below also rejects checked construction, which cannot certify source spans;
 /// `Clean` is the only one that admits.
 pub fn admit_edits(file: &ChatFile, edits: Vec<SpliceEdit>) -> Admission {
-    let mut admission = Admission::default();
+    let mut admission = Admission {
+        admitted: Vec::new(),
+        skipped: Vec::new(),
+    };
 
     for edit in edits {
         if matches!(edit.recovery_safety(), RecoverySafety::VerifiedHeaderToken) {
@@ -187,8 +231,12 @@ mod tests {
 
         let admission = admit_edits(&file, vec![make_edit(EditTarget::InsertAt(offset))]);
 
-        assert_eq!(admission.admitted.len(), 1);
-        assert!(admission.skipped.is_empty(), "got {:?}", admission.skipped);
+        assert_eq!(admission.admitted().len(), 1);
+        assert!(
+            admission.skipped().is_empty(),
+            "got {:?}",
+            admission.skipped()
+        );
     }
 
     /// `ParseHealthState::Unknown` is `#[default]`, so it is indistinguishable
@@ -206,12 +254,12 @@ mod tests {
         let admission = admit_edits(&file, vec![make_edit(EditTarget::InsertAt(5))]);
 
         assert!(
-            admission.admitted.is_empty(),
+            admission.admitted().is_empty(),
             "got {:?}",
-            admission.admitted
+            admission.admitted()
         );
-        assert_eq!(admission.skipped.len(), 1);
-        assert_eq!(admission.skipped[0].reason, SkipReason::UnknownHealth);
+        assert_eq!(admission.skipped().len(), 1);
+        assert_eq!(admission.skipped()[0].reason, SkipReason::UnknownHealth);
     }
 
     #[test]
@@ -231,36 +279,47 @@ mod tests {
         let admission = admit_edits(&file, vec![make_edit(EditTarget::InsertAt(offset))]);
 
         assert!(
-            admission.admitted.is_empty(),
+            admission.admitted().is_empty(),
             "got {:?}",
-            admission.admitted
+            admission.admitted()
         );
-        assert_eq!(admission.skipped.len(), 1);
-        assert_eq!(admission.skipped[0].reason, SkipReason::TaintedUtterance);
+        assert_eq!(admission.skipped().len(), 1);
+        assert_eq!(admission.skipped()[0].reason, SkipReason::TaintedUtterance);
     }
 
     #[test]
     fn an_e750_edit_is_admitted_to_repair_the_recovery_that_tainted_its_utterance() {
         let source = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|corpus|CHI|||||Target_Child|||\n*CHI:\t< dog> [/] dog .\n@End\n";
         let parser = TreeSitterParser::new().expect("grammar loads");
-        let errors = ErrorCollector::new();
-        let (file, parsed) = parser.parse_chat_file_with_source(source, &errors);
-        let parsed = parsed.expect("source-bound parse");
-        let diagnostic = errors
-            .into_vec()
-            .into_iter()
+        let diagnosis = crate::splice::FixDiagnosis::observe(
+            &parser,
+            source,
+            talkbank_model::validation::ValidationPolicy::new(
+                talkbank_model::RuleSelection::new(),
+                talkbank_model::validation::AlignmentValidation::Structure,
+            ),
+            talkbank_model::model::TranscriptName::Anonymous,
+        );
+        let diagnostic = diagnosis
+            .findings()
             .find(|error| error.code.as_str() == "E750")
             .expect("fixture emits E750");
-        let fix = crate::splice::catalog_fix(&diagnostic, &parsed).expect("E750 has a fix");
-        let edits = match fix.kind {
-            crate::splice::FixKind::Deterministic(edits) => edits,
+        let fix = diagnostic.catalog().into_offer().expect("E750 has a fix");
+        let edits = match fix.into_kind() {
+            crate::splice::FixKind::Mechanical(edits) | crate::splice::FixKind::Semantic(edits) => {
+                edits
+            }
             crate::splice::FixKind::Alternatives(_) => panic!("E750 is deterministic"),
         };
 
-        let admission = admit_edits(&file, edits);
+        let admission = admit_edits(diagnosis.document(), edits);
 
-        assert_eq!(admission.admitted.len(), 1);
-        assert!(admission.skipped.is_empty(), "got {:?}", admission.skipped);
+        assert_eq!(admission.admitted().len(), 1);
+        assert!(
+            admission.skipped().is_empty(),
+            "got {:?}",
+            admission.skipped()
+        );
     }
 
     #[test]
@@ -273,11 +332,14 @@ mod tests {
         let admission = admit_edits(&file, vec![make_edit(EditTarget::InsertAt(0))]);
 
         assert!(
-            admission.admitted.is_empty(),
+            admission.admitted().is_empty(),
             "got {:?}",
-            admission.admitted
+            admission.admitted()
         );
-        assert_eq!(admission.skipped.len(), 1);
-        assert_eq!(admission.skipped[0].reason, SkipReason::OutsideAnyUtterance);
+        assert_eq!(admission.skipped().len(), 1);
+        assert_eq!(
+            admission.skipped()[0].reason,
+            SkipReason::OutsideAnyUtterance
+        );
     }
 }

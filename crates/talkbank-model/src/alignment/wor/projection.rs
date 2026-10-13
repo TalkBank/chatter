@@ -8,7 +8,7 @@ use crate::alignment::helpers::{
     TierDomain, WordItem, counts_for_tier, is_tag_marker_separator, walk_words,
 };
 use crate::model::dependent_tier::WorItem;
-use crate::model::{MainTier, Separator, WorTier, Word, WriteChat};
+use crate::model::{MainTier, Separator, UtteranceContent, WorTier, Word, WriteChat};
 use schemars::JsonSchema;
 
 /// Main-tier membership rule used by a `%wor` timing binding.
@@ -30,13 +30,12 @@ impl WorSlotMembershipPolicy {
     ///
     /// The ONE owner of `%wor` membership, and public on purpose.
     /// `WorMainTierProjection::from_main` admits its slots through it, and
-    /// a consumer that needs the answer for a single word (a per-content-item
-    /// count in an utterance splitter, a per-token check in a diarizer) asks
+    /// a consumer that needs the answer for a single word asks
     /// here instead of restating `counts_for_tier(word, TierDomain::Wor)`
-    /// beside its own walk. Two downstream trees carried exactly that
-    /// restatement on 2026-09-09, named so they could not drift silently;
-    /// this method is what lets them delete it. A replaced word is admitted by
-    /// its ORIGINAL, as the projection admits it.
+    /// beside its own walk. Whole-main-tier consumers use the projection,
+    /// which also retains the selected words' producing root content; split
+    /// consumers no longer reconstruct membership beside an independent walk.
+    /// A replaced word is admitted by its ORIGINAL, as the projection admits it.
     pub fn admits(self, word: &Word) -> bool {
         match self {
             WorSlotMembershipPolicy::FilteredLexicalV1 => counts_for_tier(word, TierDomain::Wor),
@@ -58,9 +57,97 @@ pub struct WorMainTierProjection<'main> {
     items: Vec<WorMainTierProjectionItem<'main>>,
 }
 
+/// The producing top-level content of one canonical `%wor` word slot.
+///
+/// Only projection constructs this association. The index belongs to the
+/// borrowed main tier, not a caller-supplied second model. Nested words share
+/// their indivisible root's position; replacements retain their original word.
+/// No timing or whole-document validity is claimed by this capability.
+/// Equality means the same producing main-tier object and root position,
+/// not equal CHAT content in a different model. Comparison and debug output
+/// do not traverse the producing main tier.
+///
+/// A caller cannot invent a position or substitute its producing main tier:
+///
+/// ```compile_fail,E0451
+/// use talkbank_model::alignment::WorSourceContent;
+/// use talkbank_model::model::MainTier;
+/// fn forge(main: &MainTier) -> WorSourceContent<'_> {
+///     WorSourceContent { main, index: 0 }
+/// }
+/// ```
+///
+/// Its borrow also excludes changing the source before the location is used:
+///
+/// ```compile_fail,E0506
+/// use talkbank_model::model::MainTier;
+/// fn replace(main: &mut MainTier) {
+///     let projection = main.wor_projection();
+///     if let Some(location) = projection.source_content().next() {
+///         main.content.content = Vec::new().into();
+///         let _ = location.content();
+///     }
+/// }
+/// ```
+#[derive(Clone, Copy)]
+pub struct WorSourceContent<'main> {
+    main: &'main MainTier,
+    index: usize,
+}
+
+impl PartialEq for WorSourceContent<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.main, other.main) && self.index == other.index
+    }
+}
+
+impl Eq for WorSourceContent<'_> {}
+
+impl std::fmt::Debug for WorSourceContent<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorSourceContent")
+            .field("index", &self.index)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'main> WorSourceContent<'main> {
+    /// The exact main tier from whose projection this location was issued.
+    pub fn source(self) -> &'main MainTier {
+        self.main
+    }
+
+    /// Position within the producing main tier's top-level content.
+    pub fn index(self) -> usize {
+        self.index
+    }
+
+    /// The borrowed root content item, including its surrounding annotations.
+    pub fn content(self) -> &'main UtteranceContent {
+        &self.main.content.content[self.index]
+    }
+}
+
+/// A selected lexical word retains the root association issued by its producer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct ProjectedWorWord<'main> {
+    word: &'main Word,
+    source_content: WorSourceContent<'main>,
+}
+
+impl<'main> ProjectedWorWord<'main> {
+    pub(super) fn word(self) -> &'main Word {
+        self.word
+    }
+
+    pub(super) fn source_content(self) -> WorSourceContent<'main> {
+        self.source_content
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum WorMainTierProjectionItem<'main> {
-    Slot(&'main Word),
+    Slot(ProjectedWorWord<'main>),
     Separator(&'main Separator),
 }
 
@@ -68,27 +155,36 @@ impl<'main> WorMainTierProjection<'main> {
     pub(crate) fn from_main(main: &'main MainTier) -> Self {
         let policy = WorSlotMembershipPolicy::FilteredLexicalV1;
         let mut items = Vec::new();
-        walk_words(
-            &main.content.content,
-            Some(TierDomain::Wor),
-            &mut |item| match item {
-                WordItem::Word(word) => {
-                    if policy.admits(word) {
-                        items.push(WorMainTierProjectionItem::Slot(word));
+        for (index, root) in main.content.content.iter().enumerate() {
+            let source_content = WorSourceContent { main, index };
+            walk_words(
+                std::slice::from_ref(root),
+                Some(TierDomain::Wor),
+                &mut |item| match item {
+                    WordItem::Word(word) => {
+                        if policy.admits(word) {
+                            items.push(WorMainTierProjectionItem::Slot(ProjectedWorWord {
+                                word,
+                                source_content,
+                            }));
+                        }
                     }
-                }
-                WordItem::ReplacedWord(replaced) => {
-                    if policy.admits(&replaced.word) {
-                        items.push(WorMainTierProjectionItem::Slot(&replaced.word));
+                    WordItem::ReplacedWord(replaced) => {
+                        if policy.admits(&replaced.word) {
+                            items.push(WorMainTierProjectionItem::Slot(ProjectedWorWord {
+                                word: &replaced.word,
+                                source_content,
+                            }));
+                        }
                     }
-                }
-                WordItem::Separator(separator) => {
-                    if is_tag_marker_separator(separator) {
-                        items.push(WorMainTierProjectionItem::Separator(separator));
+                    WordItem::Separator(separator) => {
+                        if is_tag_marker_separator(separator) {
+                            items.push(WorMainTierProjectionItem::Separator(separator));
+                        }
                     }
-                }
-            },
-        );
+                },
+            );
+        }
         Self {
             main,
             policy,
@@ -108,7 +204,19 @@ impl<'main> WorMainTierProjection<'main> {
     /// sanitizer on 2026-09-08).
     pub(crate) fn slots(&self) -> impl Iterator<Item = &'main Word> + '_ {
         self.items.iter().filter_map(|item| match item {
-            WorMainTierProjectionItem::Slot(word) => Some(*word),
+            WorMainTierProjectionItem::Slot(word) => Some(word.word()),
+            WorMainTierProjectionItem::Separator(_) => None,
+        })
+    }
+
+    /// Producing root content for every selected word, in canonical slot order.
+    ///
+    /// This exposes content locations, not uncorroborated timing or an
+    /// independently pairable lexical word sequence. No second traversal is
+    /// needed to assign the selected words to structural groups.
+    pub fn source_content(&self) -> impl Iterator<Item = WorSourceContent<'main>> + '_ {
+        self.items.iter().filter_map(|item| match item {
+            WorMainTierProjectionItem::Slot(word) => Some(word.source_content()),
             WorMainTierProjectionItem::Separator(_) => None,
         })
     }
@@ -128,7 +236,7 @@ impl<'main> WorMainTierProjection<'main> {
             .iter()
             .map(|item| match item {
                 WorMainTierProjectionItem::Slot(word) => {
-                    WorItem::Word(Box::new(wor_display_word_from_main(word)))
+                    WorItem::Word(Box::new(wor_display_word_from_main(word.word())))
                 }
                 WorMainTierProjectionItem::Separator(separator) => WorItem::Separator {
                     text: separator.to_chat_string(),

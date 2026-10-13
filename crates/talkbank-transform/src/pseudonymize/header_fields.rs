@@ -95,15 +95,14 @@ pub(super) fn plan<'input>(
             let header = parsed
                 .bind_typed(node)
                 .map_err(|_| HeaderFieldRefusal)?
-                .extract()
-                .map_err(|_| HeaderFieldRefusal)?;
+                .extract();
             let contents = match header.field_child_2().slot().view() {
                 SourceSlotView::Present(field) => field.read().map_err(|_| HeaderFieldRefusal)?,
                 SourceSlotView::Missing(_)
                 | SourceSlotView::Error(_)
                 | SourceSlotView::Absent(_) => return Err(HeaderFieldRefusal),
             };
-            let contents = contents.extract().map_err(|_| HeaderFieldRefusal)?;
+            let contents = contents.extract();
             match contents.field_child_0().slot().view() {
                 SourceSlotView::Present(field) => participant(
                     input,
@@ -140,15 +139,14 @@ pub(super) fn plan<'input>(
         let header = parsed
             .bind_typed(node)
             .map_err(|_| HeaderFieldRefusal)?
-            .extract()
-            .map_err(|_| HeaderFieldRefusal)?;
+            .extract();
         let contents = match header.field_child_2().slot().view() {
             SourceSlotView::Present(field) => field.read().map_err(|_| HeaderFieldRefusal)?,
             SourceSlotView::Missing(_) | SourceSlotView::Error(_) | SourceSlotView::Absent(_) => {
                 return Err(HeaderFieldRefusal);
             }
         };
-        let fields = contents.extract().map_err(|_| HeaderFieldRefusal)?;
+        let fields = contents.extract();
         // Each optional generated field has a distinct node type. Erase only
         // after its producer has admitted the canonical source range.
         macro_rules! inspect {
@@ -192,7 +190,7 @@ fn participant<'input>(
     node: SourceBound<'input, '_, ParticipantNode<'input>>,
     findings: &mut Vec<HeaderFieldReview<'input>>,
 ) -> Result<(), HeaderFieldRefusal> {
-    let fields = node.extract().map_err(|_| HeaderFieldRefusal)?;
+    let fields = node.extract();
     let mut words = Vec::new();
     for repeated in fields.field_child_1().slot().iter() {
         let group = match repeated.slot().view() {

@@ -35,6 +35,11 @@ criteria. This readiness record does not maintain a second CHECK status.
 - Review typestate transitions at parsing, validation, repair and writing.
   Output-producing APIs must consume the evidence their operation requires;
   a curated label, parsed AST or recovered node is not proof of validity.
+- Require one-way backend error detection: every tree-sitter error must also
+  yield some error through the corresponding supported re2c API and validation
+  policy. Warnings and internal tool failures cannot satisfy detection. Keep
+  valid controls and isolated faults; identical diagnostics or recovered models
+  are not required. See the [backend contract](../architecture/parser-backends.md#backend-compatibility-mandate).
 - Keep generated artifacts current and reader-facing documentation consistent
   with actual commands, validation behavior and release mechanics.
 - Pass the established release gate and platform jobs on the exact release
@@ -55,6 +60,11 @@ a typed or gated boundary rather than a convention.
   Indexed callers use `enhance_errors_with_index`. One-off lookups scan the
   source prefix; repeated batches use one explicit index (O(source bytes)
   construction, O(log lines) lookup).
+- **Checked diagnostic presentation.** `SourceDiagnostic` retains immutable
+  original evidence and separately admits its primary/label ranges for display.
+  Unavailable context carries a reason, not guessed coordinates; display-local
+  spans cannot re-enter raw-source enhancement. Readable ranges do not establish
+  diagnostic/source origin, even if two sources have equal lengths.
 - **Prosodic validation.** `Word` passes through a private `ProsodicWord`
   measurement before its prosodic checks. It borrows the word immutably and
   owns the stress counts and the first and last spoken positions; only its

@@ -9,7 +9,7 @@
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::widgets::ListState;
-use talkbank_model::{ClanHiddenLineError, ParseError, resolve_clan_location};
+use talkbank_model::{ClanHiddenLineError, SourceDiagnostic, resolve_clan_location};
 use thiserror::Error;
 
 use super::models::FileErrors;
@@ -166,7 +166,7 @@ impl TuiState {
     }
 
     /// Return the currently selected error inside the selected file.
-    pub fn current_error(&self) -> Option<&ParseError> {
+    pub fn current_error(&self) -> Option<&SourceDiagnostic> {
         self.current_file()?.errors.get(self.selected_error_idx)
     }
 
@@ -297,7 +297,10 @@ impl TuiState {
         let error = self.current_error().ok_or(OpenInClanError::NoError)?;
         let file = self.current_file().ok_or(OpenInClanError::NoFile)?;
 
-        let clan_loc = resolve_clan_location(&error.location, &file.source)?;
+        let location = error
+            .location()
+            .map_err(|reason| OpenInClanError::SourceContext(reason.clone()))?;
+        let clan_loc = resolve_clan_location(&location, &file.source)?;
 
         // Shared with the desktop GUI: same resolved coordinates, same canonical
         // timeout, same bare `error.message` highlight, so the two surfaces issue
@@ -306,7 +309,7 @@ impl TuiState {
             file.path.to_str().ok_or(OpenInClanError::InvalidPath)?,
             clan_loc.line as i32,
             clan_loc.column as i32,
-            &error.message,
+            &error.original().message,
         )?;
 
         Ok(())
@@ -316,6 +319,8 @@ impl TuiState {
 /// Errors raised when forwarding the selected error location to CLAN.
 #[derive(Debug, Error)]
 pub enum OpenInClanError {
+    #[error("Source context unavailable: {0}")]
+    SourceContext(talkbank_model::DiagnosticSourceError),
     #[error("No error selected")]
     NoError,
     #[error("No file selected")]

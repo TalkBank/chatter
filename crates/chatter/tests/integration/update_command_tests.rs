@@ -40,6 +40,108 @@ fn isolated_home(tag: &str) -> tempfile::TempDir {
     dir
 }
 
+/// The real updater reads these external receipt bytes in an isolated process.
+/// A deliberately foreign install root keeps refusal tests entirely offline.
+fn write_receipt(home: &std::path::Path, package: &str, owner: &str) {
+    let receipt = serde_json::json!({
+        "install_prefix": home.join("other-installation"),
+        "binaries": ["chatter"],
+        "source": {
+            "release_type": "github", "owner": owner,
+            "name": "chatter", "app_name": package,
+        },
+        "version": "0.29.0",
+        "provider": { "source": "cargo-dist", "version": "0.33.0" },
+        "modify_path": false,
+    });
+    std::fs::write(
+        home.join(format!("{package}-receipt.json")),
+        serde_json::to_vec(&receipt).expect("serialize receipt"),
+    )
+    .expect("write receipt");
+}
+
+fn update_with_receipts(home: &std::path::Path) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_chatter"))
+        .arg("update")
+        .env_remove("AXOUPDATER_CONFIG_WORKING_DIR")
+        .env("AXOUPDATER_CONFIG_PATH", home)
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .output()
+        .expect("run updater with isolated receipts")
+}
+
+/// Both wire identities load, but neither may update a different installation.
+#[test]
+fn current_and_legacy_receipts_are_loaded_then_bound_to_the_executable() {
+    for package in [env!("CARGO_PKG_NAME"), "chatter"] {
+        let home = isolated_home("receipt-identity");
+        write_receipt(home.path(), package, "TalkBank");
+        let output = update_with_receipts(home.path());
+        assert!(!output.status.success());
+        let message = crate::common::combined_output(&output);
+        assert!(
+            message.contains("another executable installation"),
+            "{package}: {message}"
+        );
+    }
+}
+
+/// Corrupt current evidence must not be hidden by an older receipt.
+#[test]
+fn malformed_current_receipt_is_not_replaced_by_legacy_evidence() {
+    let home = isolated_home("malformed-current");
+    write_receipt(home.path(), "chatter", "TalkBank");
+    std::fs::write(
+        home.path()
+            .join(concat!(env!("CARGO_PKG_NAME"), "-receipt.json")),
+        b"not a receipt",
+    )
+    .expect("write malformed current receipt");
+    let output = update_with_receipts(home.path());
+    assert!(!output.status.success());
+    let message = crate::common::combined_output(&output);
+    assert!(
+        message.contains("Unable to read installation information"),
+        "{message}"
+    );
+    assert!(
+        !message.contains("another executable installation"),
+        "{message}"
+    );
+}
+
+/// A name collision is not authority to fetch from a different release owner.
+#[test]
+fn similarly_named_receipt_cannot_redirect_the_release_source() {
+    let home = isolated_home("foreign-source");
+    write_receipt(home.path(), env!("CARGO_PKG_NAME"), "unrelated-owner");
+    let output = update_with_receipts(home.path());
+    assert!(!output.status.success());
+    let message = crate::common::combined_output(&output);
+    assert!(
+        message.contains("official TalkBank/chatter release source"),
+        "{message}"
+    );
+}
+
+/// Current evidence takes precedence even if a legacy receipt is also present.
+#[test]
+fn current_receipt_precedes_legacy_receipt() {
+    let home = isolated_home("current-first");
+    write_receipt(home.path(), env!("CARGO_PKG_NAME"), "TalkBank");
+    std::fs::write(home.path().join("chatter-receipt.json"), b"not a receipt")
+        .expect("write malformed legacy receipt");
+    let output = update_with_receipts(home.path());
+    assert!(!output.status.success());
+    let message = crate::common::combined_output(&output);
+    assert!(
+        message.contains("another executable installation"),
+        "{message}"
+    );
+}
+
 /// `chatter --help` must list `update` so a non-technical user can discover it.
 #[test]
 fn top_level_help_lists_update_command() {
@@ -48,6 +150,10 @@ fn top_level_help_lists_update_command() {
         .output()
         .expect("failed to run chatter --help");
     let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
+    assert!(
+        text.contains("usage: chatter "),
+        "the package rename must not change the executable's help identity:\n{text}"
+    );
     assert!(
         text.lines().any(|l| l.trim_start().starts_with("update")),
         "`chatter --help` does not list an `update` subcommand:\n{text}"

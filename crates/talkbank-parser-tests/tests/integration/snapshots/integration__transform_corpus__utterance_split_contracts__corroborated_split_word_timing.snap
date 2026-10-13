@@ -1,0 +1,9 @@
+---
+source: crates/talkbank-parser-tests/tests/integration/utterance_split_corpus.rs
+expression: text
+---
+*CHI:	hello . 100_300
+%wor:	hello 100_300 .
+
+*CHI:	world . 300_600
+%wor:	world 300_600 .

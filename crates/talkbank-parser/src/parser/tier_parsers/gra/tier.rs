@@ -9,13 +9,17 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 use crate::generated_traversal::{
-    AsRawNode, GraContentsNode, GraDependentTierNode, GraRelationNode, KindSlot, NoChild,
-    NonMissingKindSlot, SourceBound, SourceField, SourceSlotView, WhitespacesNode,
+    AdmittedGraContentsChildren, AdmittedGraDependentTierChildren, AsRawNode, GraContentsNode,
+    GraDependentTierNode, GraRelationNode, KindSlot, NoChild, NonMissingKindSlot,
+    RangeAdmittedChildren, Ranged, ReadableSlot, SourceBound, SourceChildren, SourceSlice,
+    WhitespacesNode,
 };
 use crate::parser::node_span::span_of;
-use talkbank_model::ParseOutcome;
-use talkbank_model::model::{GraCompleteness, GraTier, GrammaticalRelation};
-use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
+use crate::parser::tier_parsers::{ParsedDependentTier, dependent_tier_separator};
+use talkbank_model::model::{GraLowering, GraLoweringReceipt, GraTier};
+use talkbank_model::{
+    ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, TierSeparator,
+};
 
 use super::relation::parse_gra_relation;
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
@@ -38,23 +42,110 @@ pub fn parse_gra_tier<'tree>(
     typed: SourceBound<'tree, '_, GraDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> Result<GraTier, crate::CstFailure> {
-    let source = typed.source();
-    let node = typed.raw_node();
-    let span = span_of(node);
-    let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+    parse_gra_tier_with_separator(typed, errors).map(ParsedDependentTier::into_tier)
+}
+
+/// Root extraction and separator provenance share one immutable source owner.
+#[must_use]
+struct GraTierReading<'tree, 'source> {
+    children: SourceChildren<'tree, 'source, AdmittedGraDependentTierChildren<'tree>>,
+    separator: TierSeparator,
+}
+
+/// Only this consumed phase can decode or preserve the selected root's model.
+#[must_use]
+struct RangedGraTier<'tree, 'source> {
+    children: RangeAdmittedChildren<
+        'tree,
+        'source,
+        AdmittedGraDependentTierChildren<'tree, Ranged<'source>>,
+    >,
+    separator: TierSeparator,
+}
+
+impl<'tree, 'source> GraTierReading<'tree, 'source> {
+    fn extract(
+        typed: SourceBound<'tree, 'source, GraDependentTierNode<'tree>>,
+    ) -> Result<Self, crate::CstFailure> {
+        let children = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
+        let separator = dependent_tier_separator(children.children().child_1.slot());
+        Ok(Self {
+            children,
+            separator,
+        })
+    }
+
+    fn admit_ranges(self) -> Result<RangedGraTier<'tree, 'source>, crate::CstFailure> {
+        Ok(RangedGraTier {
+            children: self.children.admit_ranges()?,
+            separator: self.separator,
+        })
+    }
+}
+
+impl RangedGraTier<'_, '_> {
+    fn parse(
+        self,
+        errors: &impl ErrorSink,
+    ) -> Result<ParsedDependentTier<GraTier>, crate::CstFailure> {
+        Ok(ParsedDependentTier::new(
+            parse_gra_root_contents(&self.children, errors)?,
+            self.separator,
+        ))
+    }
+
+    fn into_recovered(self) -> ParsedDependentTier<GraTier> {
+        // Document-level structural recovery keeps an Unknown placeholder at
+        // the real slot. It is not native lost-contents lowering evidence.
+        ParsedDependentTier::new(
+            GraTier::new_gra(Vec::new()).with_span(span_of(self.children.parent().raw_node())),
+            self.separator,
+        )
+    }
+}
+
+pub(crate) fn parse_gra_tier_with_separator<'tree>(
+    typed: SourceBound<'tree, '_, GraDependentTierNode<'tree>>,
+    errors: &impl ErrorSink,
+) -> Result<ParsedDependentTier<GraTier>, crate::CstFailure> {
+    let reading = GraTierReading::extract(typed)?;
     surface_displaced(
-        &children.children().unexpected,
+        &reading.children.children().unexpected,
         "gra_dependent_tier",
-        source,
+        reading.children.source(),
         errors,
     );
+    reading.admit_ranges()?.parse(errors)
+}
 
-    Ok(match children.field_child_2().slot().view() {
-        SourceSlotView::Present(contents) => {
-            let (relations, completeness) = parse_gra_relations(contents.read()?, errors)?;
-            GraTier::lowered_from(relations, completeness).with_span(span)
-        }
-        SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
+pub(crate) fn recover_gra_tier_with_separator<'tree>(
+    typed: SourceBound<'tree, '_, GraDependentTierNode<'tree>>,
+) -> Result<ParsedDependentTier<GraTier>, crate::CstFailure> {
+    // The document caller owns its has_error report. Do not introduce native
+    // displacement diagnostics or turn this into a Truncated lowering claim.
+    Ok(GraTierReading::extract(typed)?
+        .admit_ranges()?
+        .into_recovered())
+}
+
+fn parse_gra_root_contents<'tree, 'source>(
+    children: &RangeAdmittedChildren<
+        'tree,
+        'source,
+        AdmittedGraDependentTierChildren<'tree, Ranged<'source>>,
+    >,
+    errors: &impl ErrorSink,
+) -> Result<GraTier, crate::CstFailure> {
+    let parent = children.parent();
+    let source = parent.source();
+    let node = parent.raw_node();
+    let span = span_of(node);
+
+    Ok(match &children.children().child_2.slot {
+        ReadableSlot::Present(contents) => parse_gra_relations(*contents, errors)?
+            .into_tier()
+            .with_span(span),
+        ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => {
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
                 Severity::Error,
@@ -66,8 +157,12 @@ pub fn parse_gra_tier<'tree>(
             // contents node is not, so whatever the author wrote was lost. An
             // empty tier reported as whole would be judged as a complete graph
             // with no relations.
-            GraTier::lowered_from(Vec::new(), GraCompleteness::Truncated).with_span(span)
+            GraLoweringReceipt::lost_contents()
+                .into_tier()
+                .with_span(span)
         }
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) => match *never {},
     })
 }
 
@@ -84,56 +179,55 @@ pub fn parse_gra_tier<'tree>(
 /// `gra_relation` itself); that position is purely structural (no content to
 /// decode) and retains the recovery handling in [`push_gra_separator`].
 ///
-/// Returns the relations WITH whether every declared one is among them. A
-/// rejected relation is dropped, so the tier can come back shorter than the
-/// line, and `talkbank-model`'s E721 and E722 describe the tier as a whole. The
-/// count of `gra_relation` slots that were `Present` is the denominator: it is
-/// what the LINE declared, and it cannot disagree with the numerator because
-/// both are counted here.
+/// Returns one completed owner of the retained relations and their lowering
+/// evidence. Only Present relation slots record parsed/rejected outcomes;
+/// recovery siblings keep their existing diagnostic policy. A rejection cannot
+/// be undone by a later accepted relation. No separate declaration counter or
+/// independently supplied completeness value survives finalization.
 fn parse_gra_relations<'tree>(
     typed: SourceBound<'tree, '_, GraContentsNode<'tree>>,
     errors: &impl ErrorSink,
-) -> Result<(Vec<GrammaticalRelation>, GraCompleteness), crate::CstFailure> {
-    let source = typed.source();
-    let contents = typed.extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?;
-    let mut relations: Vec<GrammaticalRelation> =
-        Vec::with_capacity(contents.field_child_1().slot().iter().len() + 1);
-    let mut declared = 0usize;
+) -> Result<GraLoweringReceipt, crate::CstFailure> {
+    let contents = typed
+        .extract_admitted(crate::parser::typed_cst::canonical_grammar()?)?
+        .admit_ranges()?;
+    lower_gra_relations(&contents, errors)
+}
 
-    declared += push_gra_relation(contents.field_child_0().slot(), errors, &mut relations)?;
-    for element in contents.field_child_1().slot().iter() {
-        match element.slot().view() {
-            SourceSlotView::Present(pair) => {
-                push_gra_separator(pair.field_child_0().slot(), errors);
-                declared += push_gra_relation(pair.field_child_1().slot(), errors, &mut relations)?;
-                for node in pair.field_unexpected().iter() {
-                    surface_displaced(&[node.raw_node()], "gra_contents", node.source(), errors);
-                }
+/// The whole contents carrier owns its first relation, inline repeats and extras.
+fn lower_gra_relations<'tree, 'source>(
+    contents: &RangeAdmittedChildren<
+        'tree,
+        'source,
+        AdmittedGraContentsChildren<'tree, Ranged<'source>>,
+    >,
+    errors: &impl ErrorSink,
+) -> Result<GraLoweringReceipt, crate::CstFailure> {
+    let mut lowering = GraLowering::with_capacity(contents.children().child_1.slot.len() + 1);
+
+    push_gra_relation(&contents.children().child_0.slot, errors, &mut lowering)?;
+    for element in &contents.children().child_1.slot {
+        match &element.slot {
+            ReadableSlot::Present(pair) => {
+                push_gra_separator(&pair.child_0.slot, errors);
+                push_gra_relation(&pair.child_1.slot, errors, &mut lowering)?;
+                surface_source_displaced(&pair.unexpected, "gra_contents", errors);
             }
             // An inline sequence is never MISSING or displaced; `SeqSlot` says so.
-            SourceSlotView::Error(raw) => {
+            ReadableSlot::Error(raw) => {
                 errors.report(unexpected_node_error(
                     raw.raw_node(),
-                    source,
+                    raw.source(),
                     "gra_contents",
                 ));
             }
-            SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => match never {},
-            SourceSlotView::Absent(never) => match never {},
+            ReadableSlot::Missing(never) | ReadableSlot::Unexpected(never) => match *never {},
+            ReadableSlot::Absent(never) => match *never {},
         }
     }
 
-    surface_displaced(
-        &contents.children().unexpected,
-        "gra_contents",
-        source,
-        errors,
-    );
-    let completeness = match relations.len() == declared {
-        true => GraCompleteness::Whole,
-        false => GraCompleteness::Truncated,
-    };
-    Ok((relations, completeness))
+    surface_source_displaced(&contents.children().unexpected, "gra_contents", errors);
+    Ok(lowering.finish())
 }
 
 /// Decode the separating `whitespaces` token inside one `gra_contents` repeat
@@ -147,63 +241,258 @@ fn parse_gra_relations<'tree>(
 /// positions (`check_not_missing` / `unexpected_node_error`), for consistency.
 /// Source ownership does not narrow these recovery states. Keep their handling
 /// until the producer's slot types establish a stronger invariant.
-fn push_gra_separator<'tree>(
-    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, WhitespacesNode<'tree>>>,
+fn push_gra_separator<'tree, 'source>(
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, WhitespacesNode<'tree>>, Ranged<'source>>,
     errors: &impl ErrorSink,
 ) {
-    let source = slot.source();
-    match slot.view() {
-        SourceSlotView::Present(_) | SourceSlotView::Absent(NoChild) => {}
-        SourceSlotView::Missing(raw) => {
-            check_not_missing(raw.raw_node(), source, errors, "gra_contents");
+    match slot {
+        ReadableSlot::Present(_) | ReadableSlot::Absent(NoChild) => {}
+        ReadableSlot::Missing(raw) => {
+            check_not_missing(raw.raw_node(), raw.source(), errors, "gra_contents");
         }
-        SourceSlotView::Error(raw) => {
+        ReadableSlot::Error(raw) => {
             errors.report(unexpected_node_error(
                 raw.raw_node(),
-                source,
+                raw.source(),
                 "gra_contents",
             ));
         }
-        SourceSlotView::Unexpected(never) => match never {},
+        ReadableSlot::Unexpected(never) => match *never {},
     }
 }
 
-/// Decode one relation slot, pushing it onto `relations` when it parses.
+/// Decode one relation slot, recording its actual result in the lowering owner.
 ///
 /// Compiled-grammar admission excludes missing composite relations. Present
 /// relations are retained only after successful field admission; no default is
 /// fabricated for a rejected relation. Error is diagnosed and Absent emits
 /// nothing. Lexical fields retain their independent recovery checks.
 ///
-/// Returns how many relations the LINE declared at this slot: one when the slot
-/// held a `gra_relation` node, whether or not it survived lowering, and zero
-/// otherwise. The caller compares that total against `relations.len()`, so
-/// "was anything dropped" is derived from the same walk that does the dropping
-/// rather than recounted afterwards.
-fn push_gra_relation<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, GraRelationNode<'tree>>>,
+/// Only a Present relation is a declaration. Its parsed/rejected result is
+/// recorded atomically; Error/Absent does not invent a declaration or relation.
+fn push_gra_relation<'tree, 'source>(
+    slot: &NonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, GraRelationNode<'tree>>,
+        Ranged<'source>,
+    >,
     errors: &impl ErrorSink,
-    relations: &mut Vec<GrammaticalRelation>,
-) -> Result<usize, crate::CstFailure> {
-    let source = slot.source();
-    match slot.view() {
-        SourceSlotView::Present(relation_node) => {
-            if let ParseOutcome::Parsed(relation) =
-                parse_gra_relation(relation_node.read()?, errors)?
-            {
-                relations.push(relation);
-            }
-            return Ok(1);
+    lowering: &mut GraLowering,
+) -> Result<(), crate::CstFailure> {
+    match slot {
+        ReadableSlot::Present(relation_node) => {
+            lowering.record(parse_gra_relation(*relation_node, errors)?);
         }
-        SourceSlotView::Error(raw) => {
+        ReadableSlot::Error(raw) => {
             errors.report(unexpected_node_error(
                 raw.raw_node(),
-                source,
+                raw.source(),
                 "gra_contents",
             ));
         }
-        SourceSlotView::Unexpected(never) => match never {},
-        SourceSlotView::Absent(NoChild) => {}
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => {}
     }
-    Ok(0)
+    Ok(())
+}
+
+fn surface_source_displaced(
+    unexpected: &[SourceSlice<'_, '_>],
+    context: &str,
+    errors: &impl ErrorSink,
+) {
+    for node in unexpected {
+        surface_displaced(&[node.raw_node()], context, node.source(), errors);
+    }
+}
+
+#[cfg(test)]
+mod range_tests {
+    use super::*;
+    use crate::TreeSitterParser;
+    use crate::generated_traversal::{SourceBindingError, SourceSlotView};
+    use talkbank_model::ErrorCollector;
+    use talkbank_model::model::{DependentTier, GraCompleteness};
+
+    /// Generated/native boundary, recovery policy and counted selected work.
+    /// These are actual authored CST observations, not universal reachability
+    /// claims or fixture models invented to enter a recovery branch.
+    #[test]
+    fn gra_selected_carriers_retain_source_ranges_and_recovery() {
+        let parser = TreeSitterParser::new().expect("grammar");
+        let cases = [
+            (
+                "reference",
+                include_str!("../../../../../../corpus/reference/tiers/mor-gra.cha"),
+            ),
+            (
+                "E709",
+                include_str!(
+                    "../../../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E709_1.cha"
+                ),
+            ),
+            (
+                "E708",
+                include_str!(
+                    "../../../../../talkbank-parser-tests/tests/error_corpus/validation_errors/E708_1.cha"
+                ),
+            ),
+        ];
+        for (name, source) in cases {
+            let parsed = parser
+                .parse_source_incremental(source, None)
+                .expect("authored native source");
+            let foreign = parser
+                .parse_source_incremental(source, None)
+                .expect("independent owner of equal bytes");
+            let mut carriers = [0; 3];
+            let mut body_states = [0; 3];
+            let mut root_checks = Vec::new();
+            let mut contents_checks = Vec::new();
+            let mut relation_checks = Vec::new();
+            let mut repeated_pairs = 0;
+            for node in parsed.root().expect("source root").descendants() {
+                let node = node.expect("source-bound descendant");
+                if let Some(tier) = node.typed::<GraDependentTierNode>() {
+                    carriers[0] += 1;
+                    assert!(matches!(
+                        foreign.bind(tier.raw_node()),
+                        Err(SourceBindingError::ForeignTree)
+                    ));
+                    let reading = GraTierReading::extract(tier).expect("kind-admitted root");
+                    let before = match reading.children.field_child_2().slot().view() {
+                        SourceSlotView::Present(_) => 0,
+                        SourceSlotView::Error(_) => 1,
+                        SourceSlotView::Absent(NoChild) => 2,
+                    };
+                    let separator = reading.separator;
+                    let ranged = reading.admit_ranges().expect("whole selected root");
+                    assert_eq!(ranged.children.parent().raw_node(), tier.raw_node());
+                    assert_eq!(ranged.children.parent().text(), tier.text());
+                    assert_eq!(ranged.children.parent().source(), source);
+                    let after = match &ranged.children.children().child_2.slot {
+                        ReadableSlot::Present(_) => 0,
+                        ReadableSlot::Error(_) => 1,
+                        ReadableSlot::Absent(NoChild) => 2,
+                        ReadableSlot::Missing(never) => match never.0 {},
+                        ReadableSlot::Unexpected(never) => match *never {},
+                    };
+                    assert_eq!(after, before, "range admission retains {name}'s body state");
+                    body_states[after] += 1;
+                    let checks = ranged.children.checked_range_count();
+                    for _ in 0..100 {
+                        assert_eq!(ranged.children.parent().text(), tier.text());
+                        assert_eq!(ranged.children.checked_range_count(), checks);
+                    }
+                    root_checks.push(checks);
+                    let errors = ErrorCollector::new();
+                    let entry = ranged
+                        .parse(&errors)
+                        .expect("native lowering is distinct from CHAT validity")
+                        .into_entry(DependentTier::Gra);
+                    assert_eq!(entry.span(), span_of(tier.raw_node()));
+                    assert_eq!(entry.separator, separator);
+                    if before != 0 {
+                        let DependentTier::Gra(tier) = entry.tier else {
+                            panic!("gra construction preserves its variant");
+                        };
+                        assert!(tier.relations().is_empty());
+                        assert_eq!(tier.completeness(), GraCompleteness::Truncated);
+                        assert!(
+                            errors
+                                .to_vec()
+                                .iter()
+                                .any(|error| { error.code == ErrorCode::MalformedGrammarRelation })
+                        );
+                    }
+                    if tier.raw_node().has_error() {
+                        let recovered = recover_gra_tier_with_separator(tier)
+                            .expect("document structural-recovery root")
+                            .into_entry(DependentTier::Gra);
+                        assert_eq!(recovered.span(), span_of(tier.raw_node()));
+                        assert_eq!(recovered.separator, separator);
+                        let DependentTier::Gra(tier) = recovered.tier else {
+                            panic!("recovered gra preserves its variant");
+                        };
+                        assert!(tier.relations().is_empty());
+                        assert_eq!(tier.completeness(), GraCompleteness::Unknown);
+                    }
+                }
+                if let Some(contents) = node.typed::<GraContentsNode>() {
+                    carriers[1] += 1;
+                    assert!(matches!(
+                        foreign.bind(contents.raw_node()),
+                        Err(SourceBindingError::ForeignTree)
+                    ));
+                    let ranged = contents
+                        .extract_admitted(
+                            crate::parser::typed_cst::canonical_grammar().expect("binding"),
+                        )
+                        .expect("kind-admitted contents")
+                        .admit_ranges()
+                        .expect("contents and inline repeat ranges");
+                    assert_eq!(ranged.parent().raw_node(), contents.raw_node());
+                    assert_eq!(ranged.parent().text(), contents.text());
+                    assert_eq!(ranged.parent().source(), source);
+                    contents_checks.push(ranged.checked_range_count());
+                    for element in &ranged.children().child_1.slot {
+                        match &element.slot {
+                            ReadableSlot::Present(pair) => {
+                                repeated_pairs += 1;
+                                if let ReadableSlot::Present(separator) = &pair.child_0.slot {
+                                    assert_eq!(separator.source(), source);
+                                    assert!(matches!(
+                                        foreign.bind(separator.raw_node()),
+                                        Err(SourceBindingError::ForeignTree)
+                                    ));
+                                }
+                                if let ReadableSlot::Present(relation) = &pair.child_1.slot {
+                                    assert_eq!(relation.source(), source);
+                                    assert!(matches!(
+                                        foreign.bind(relation.raw_node()),
+                                        Err(SourceBindingError::ForeignTree)
+                                    ));
+                                }
+                            }
+                            ReadableSlot::Error(error) => assert_eq!(error.source(), source),
+                            ReadableSlot::Missing(never) | ReadableSlot::Unexpected(never) => {
+                                match *never {}
+                            }
+                            ReadableSlot::Absent(never) => match *never {},
+                        }
+                    }
+                }
+                if let Some(relation) = node.typed::<GraRelationNode>() {
+                    carriers[2] += 1;
+                    assert!(matches!(
+                        foreign.bind(relation.raw_node()),
+                        Err(SourceBindingError::ForeignTree)
+                    ));
+                    let ranged = relation
+                        .extract()
+                        .admit_ranges()
+                        .expect("selected lexical fields");
+                    assert_eq!(ranged.parent().raw_node(), relation.raw_node());
+                    assert_eq!(ranged.parent().text(), relation.text());
+                    assert_eq!(ranged.parent().source(), source);
+                    let checks = ranged.checked_range_count();
+                    super::super::relation::assert_repeated_field_reads(&ranged);
+                    relation_checks.push(checks);
+                }
+            }
+            if name != "E708" {
+                assert!(
+                    carriers.into_iter().all(|count| count > 0),
+                    "{name}: {carriers:?}"
+                );
+                assert!(repeated_pairs > 0, "authored repeated relations required");
+            }
+            eprintln!(
+                "gra selected {name}: carriers={carriers:?} body[present,error,absent]={body_states:?} pairs={repeated_pairs}; checks root={root_checks:?} contents={contents_checks:?} relation={relation_checks:?}; inline reading={} ranged={}",
+                std::mem::size_of::<GraTierReading<'_, '_>>(),
+                std::mem::size_of::<RangedGraTier<'_, '_>>(),
+            );
+        }
+    }
 }

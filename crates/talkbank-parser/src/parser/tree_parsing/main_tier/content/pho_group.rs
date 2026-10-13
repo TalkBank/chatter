@@ -26,9 +26,9 @@ pub(crate) fn parse_pho_group_content<'tree>(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<UtteranceContent> {
     let source = typed.source();
-    let Ok(associated) = crate::parser::typed_cst::report_reconstruction(
+    let Ok(associated) = crate::parser::typed_cst::report_admission(
         crate::parser::typed_cst::canonical_grammar()
-            .and_then(|grammar| typed.extract_admitted(grammar)),
+            .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into)),
         typed.raw_node(),
         source,
         errors,

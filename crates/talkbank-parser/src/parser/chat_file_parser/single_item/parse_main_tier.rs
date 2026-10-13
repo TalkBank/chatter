@@ -56,13 +56,7 @@ impl<'tree, 'source> MainTierFragment<'tree, 'source> {
         let source = parsed.source();
         let root = SourceFileNode::from_node(parsed.root_node())
             .ok_or_else(|| failure(ErrorCode::TreeParsingError, "Expected source_file root"))?;
-        let children = extract_source_file(root).map_err(|fault| {
-            ParseErrors::from(vec![crate::parser::typed_cst::cst_failure_diagnostic(
-                root.raw_node(),
-                source,
-                fault,
-            )])
-        })?;
+        let children = extract_source_file(root);
         let NodeSlot::Present(SourceFileChoice::MainTier(node)) = children.content.slot() else {
             return Err(failure(
                 ErrorCode::MissingMainTier,

@@ -66,14 +66,7 @@ fn parse_non_colon_separator_node(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Separator> {
     let node = typed.raw_node();
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_non_colon_separator(typed),
-        node,
-        source,
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = extract_non_colon_separator(typed);
     match children.content.slot().typed_or_placeholder() {
         SlotValue::Present(choice) | SlotValue::Placeholder(choice) => {
             ParseOutcome::parsed(separator_for(&choice))
@@ -163,14 +156,7 @@ fn parse_separator_contents(
     errors: &impl ErrorSink,
 ) -> ParseOutcome<Separator> {
     let node = typed.raw_node();
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extract_separator(typed),
-        node,
-        source,
-        errors,
-    ) else {
-        return ParseOutcome::Rejected;
-    };
+    let children = extract_separator(typed);
     surface_displaced(&children.unexpected, "separator", source, errors);
 
     match children.content.slot().typed_or_placeholder() {

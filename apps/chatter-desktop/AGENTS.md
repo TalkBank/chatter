@@ -194,7 +194,7 @@ npm run test:e2e
 ## App Identity
 
 The official name is **Chatter**, not "chatter-desktop". The Cargo package name
-is `chatter-desktop` to avoid conflicts with the CLI package (`chatter`
+is `chatter-desktop` to avoid conflicts with the CLI package (`talkbank-chatter`
 produces the `chatter` binary), but the user-visible name everywhere must be
 "Chatter":
 
@@ -211,7 +211,7 @@ the `code` command).
 
 **Approach (VS Code-style):**
 
-1. Build `chatter` alongside the desktop app (`cargo build --release -p chatter`)
+1. Build `chatter` alongside the desktop app (`cargo build --release -p talkbank-chatter`)
 2. Include it as a Tauri `resources` entry, bundled inside the `.app`
 3. Add a menu item "Install CLI command" that symlinks the bundled binary
    to `/usr/local/bin/chatter` (macOS/Linux) or adds to PATH (Windows)

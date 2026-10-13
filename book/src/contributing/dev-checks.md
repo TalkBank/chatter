@@ -50,19 +50,22 @@ every supported operating system; use authorized incremental push/CI
 checkpoints before freezing a release candidate instead of treating release
 publication as the first cross-platform test.
 
-## The git hooks, and what each refuses
+## The git hooks
 
 Run `just install-hooks` once per clone. It points `core.hooksPath` at the
 tracked `.githooks/` directory, because `.git/hooks` does not survive a clone
 and an untracked hook is a gate that exists on exactly one machine.
 
-| Hook | Refuses |
+| Hook | Behavior |
 |---|---|
-| `pre-commit` | invalid publication metadata or stale staged handwritten dates, then chains to the optional local hook |
-| `commit-msg` | a `type(scope)!:` subject that does not touch `CHANGELOG.md`; and production Rust staged with no test, spec, corpus or fixture beside it |
+| `pre-commit` | only chains to an optional contributor-owned local hook |
+| `commit-msg` | only chains to an optional contributor-owned local hook, forwarding the message path |
 | `pre-push` | a push with no `just gate` stamp, or a stamp taken on different bytes |
 
-These hooks have no bypass flag, and `pre-push` runs no checks of its own: it reads
+There are no built-in date, evidence or changelog commit gates. Privacy,
+publication metadata, production-change evidence and breaking notes receive
+explicit review. Contributor-owned local hooks remain opt-in. The publication
+hook is unchanged: `pre-push` runs no checks of its own and reads
 the stamp `just gate` writes, because git has already opened its connection to
 the remote by the time a pre-push hook runs, so a multi-minute hook is closed
 by the SSH idle timeout and fails a push that had passed.
@@ -71,12 +74,13 @@ by the SSH idle timeout and fails a push that had passed.
 headers follow the document's own history automatically; see
 [documentation architecture](documentation-architecture.md). Remaining
 handwritten dates are checked against actual history and, for pending changes
-since the configured upstream, today's date. The commit hook reads the Git
-index, so an unstaged correction cannot conceal a stale staged header.
+since the configured upstream, today's date. An explicit staged review can
+select `--prospective --snapshot index`, so an unstaged correction cannot
+conceal a stale staged header. This is not run automatically on commit.
 Detached CI checks actual committed history. Neither Git publication metadata
 nor a handwritten date certifies a content review.
 
-**The red-evidence gate has one way past it, and it is not a flag.** If a change
+**Evidence belongs in the review and history.** If a change
 genuinely admits neither a test nor a type, say so in a `Red:` trailer on its
 own line in the message body, naming what was red:
 
@@ -86,8 +90,8 @@ Red: nothing. A pure deletion; it removes the only caller of X.
 ```
 
 That trailer is recorded in the history and names a claim a reader can check,
-which a bypass variable is not. In this repo a **spec file counts as the
-failing test**: a construct or parser bug is fixed by writing the spec first,
+without a bypass variable or automatic commit gate. In this repo a **spec file
+counts as the failing test**: a construct or parser bug is fixed by writing the spec first,
 and `just regen` turns it into fixtures.
 
 `just evidence-gate-test` and `just breaking-changelog-test` prove both gates

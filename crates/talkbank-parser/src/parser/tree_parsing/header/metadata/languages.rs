@@ -74,7 +74,7 @@ impl LanguageListFault<'_> {
 /// Admit one typed language-code node to the model. Text cannot be supplied
 /// independently of the node used for its diagnostic; recovery slots never
 /// enter this transition.
-fn parse_language_code<'tree>(
+pub(super) fn parse_language_code<'tree>(
     typed: SourceBound<'tree, '_, LanguageCodeNode<'tree>>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<LanguageCode> {

@@ -1,0 +1,26 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, MOT Mother
+@ID:	eng|corpus|CHI|||||Target_Child|||
+@ID:	eng|corpus|MOT|||||Mother|||
+@Comment:	Unicode café recovery control
+*CHI:	before .
+%mor:	co|before .
+%gra:	1|0|ROOT 2|1|PUNCT
+%com:	before comment
+%eng:	before translation
+%xnote:	before café
+*MOT:	middle .
+%mor:	co|middle .
+%gra:	1|0|ROOT 2|1|PUNCT
+%com:	middle comment
+%eng:	middle translation
+%xnote:	middle café
+*CHI:	after .
+%mor:	co|after .
+%gra:	1|0|ROOT 2|1|PUNCT
+%com:	after comment
+%eng:	after translation
+%xnote:	after café
+@End

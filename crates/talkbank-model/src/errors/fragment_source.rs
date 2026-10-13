@@ -81,6 +81,23 @@ impl<'a> FragmentSource<'a> {
         self.input
     }
 
+    /// The complete admitted document range, including a known empty range.
+    /// Unlike generic model-span shifting, this comes from source admission
+    /// rather than interpreting the legacy unknown-span sentinel.
+    pub fn whole_span(self) -> Span {
+        Span::new(self.origin, self.origin + self.input.len() as u32)
+    }
+
+    /// Source admission, not a generic span, knows an empty caller's point.
+    /// Primary locations and related labels consume this same source fact.
+    fn diagnostic_span(self, span: Span) -> Span {
+        if self.input.is_empty() {
+            self.whole_span()
+        } else {
+            self.rebase(span)
+        }
+    }
+
     /// Move input-relative model spans into the admitted document range.
     pub fn rebase<T: SpanShift>(self, value: T) -> T {
         self.rebase_from(value, 0)
@@ -116,9 +133,9 @@ struct FragmentSink<'a, 's, S> {
 
 impl<S: ErrorSink> ErrorSink for FragmentSink<'_, '_, S> {
     fn report(&self, mut error: ParseError) {
-        error.location.span = self.source.rebase(error.location.span);
+        error.location.span = self.source.diagnostic_span(error.location.span);
         for label in &mut error.labels {
-            label.span = self.source.rebase(label.span);
+            label.span = self.source.diagnostic_span(label.span);
         }
         self.inner.report(error);
     }

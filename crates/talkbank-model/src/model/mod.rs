@@ -267,6 +267,8 @@ pub use dependent_tier::{
     ExpTier,
     GpxTier,
     GraCompleteness,
+    GraLowering,
+    GraLoweringReceipt,
     GraTier,
     GraTierType,
     // GRA

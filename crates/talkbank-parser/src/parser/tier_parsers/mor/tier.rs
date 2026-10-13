@@ -9,13 +9,14 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    Absence, AdmittedMorContentsChild0ChoiceSourceView, AsRawNode, KindMissing, KindSlot,
-    MorContentNode, MorContentsChild0MorContentChild2Child1Choice, MorContentsNode,
-    MorDependentTierNode, Never, NoChild, NodeSlot, NonMissingKindSlot, SourceBound,
-    SourceBoundKind, SourceField, SourceSlotView, WhitespacesNode,
+    Absence, AdmittedMorContentsChild0Choice, AsRawNode, KindSlot, MorContentNode,
+    MorContentsChild0MorContentChild2Child1Choice, MorContentsNode, MorDependentTierNode, Never,
+    NoChild, NonMissingKindSlot, Ranged, ReadableSlot, SourceBound, SourceSlice, WhitespacesNode,
 };
 use crate::parser::node_span::span_of;
-use crate::parser::tree_parsing::main_tier::structure::terminator::terminator_from_new_choice;
+use crate::parser::tree_parsing::main_tier::structure::terminator::{
+    RangedTerminatorChoice, terminator_from_new_choice,
+};
 use talkbank_model::ParseOutcome;
 use talkbank_model::model::content::Terminator;
 use talkbank_model::model::{Mor, MorTier, MorTierType};
@@ -56,9 +57,9 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_dis
 /// flat `while mor_contents.child(idx)` scan that dispatched each child by
 /// `node.kind()`.
 ///
-/// Only `mor_dependent_tier`'s `child_2` (the body) is ever inspected, exactly
-/// as the removed hand-walk never looked at the prefix / tier-sep / newline
-/// positions either; `child_0`/`child_1`/`child_3` stay unexamined.
+/// All selected ranges are admitted together before lowering. Only the body's
+/// slot is classified here; prefix, separator and newline retain their existing
+/// recovery policy rather than gaining lexical checks from range admission.
 pub fn parse_mor_tier_inner<'tree>(
     typed: SourceBound<'tree, '_, MorDependentTierNode<'tree>>,
     errors: &impl ErrorSink,
@@ -67,13 +68,10 @@ pub fn parse_mor_tier_inner<'tree>(
     let node = typed.raw_node();
     let span = span_of(node);
     let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar));
-    let Ok(children) = crate::parser::typed_cst::report_reconstruction(
-        extraction,
-        typed.raw_node(),
-        source,
-        errors,
-    ) else {
+        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into));
+    let Ok(children) =
+        crate::parser::typed_cst::report_admission(extraction, typed.raw_node(), source, errors)
+    else {
         return ParseOutcome::Rejected;
     };
     surface_displaced(
@@ -83,23 +81,24 @@ pub fn parse_mor_tier_inner<'tree>(
         errors,
     );
 
-    match children.field_child_2().slot().view() {
-        SourceSlotView::Present(contents) => {
-            match crate::parser::typed_cst::read_source_field(contents, errors) {
-                Some(contents) => parse_mor_contents_body(contents, span, errors),
-                None => ParseOutcome::Rejected,
-            }
-        }
-        SourceSlotView::Error(bad) => {
+    let ranges = children.admit_ranges().map_err(Into::into);
+    let Ok(children) = crate::parser::typed_cst::report_admission(ranges, node, source, errors)
+    else {
+        return ParseOutcome::Rejected;
+    };
+    match &children.children().child_2.slot {
+        ReadableSlot::Present(contents) => parse_mor_contents_body(*contents, span, errors),
+        ReadableSlot::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
-                source,
+                bad.source(),
                 "mor_dependent_tier",
             ));
             ParseOutcome::Rejected
         }
-        SourceSlotView::Unexpected(never) => match never {},
-        SourceSlotView::Absent(NoChild) => {
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => {
             // The loud signal for a grammar that no longer matches the
             // generator, kept in its own words: the generic reporter would
             // say "Unexpected 'mor_dependent_tier' in mor_dependent_tier".
@@ -134,109 +133,102 @@ fn parse_mor_contents_body<'tree>(
     let source = typed.source();
     let mor_contents_node = typed.raw_node();
     let extraction = crate::parser::typed_cst::canonical_grammar()
-        .and_then(|grammar| typed.extract_admitted(grammar));
-    let Ok(contents) = crate::parser::typed_cst::report_reconstruction(
-        extraction,
-        typed.raw_node(),
-        source,
-        errors,
-    ) else {
+        .and_then(|grammar| typed.extract_admitted(grammar).map_err(Into::into))
+        .and_then(|children| children.admit_ranges().map_err(Into::into));
+    let Ok(contents) =
+        crate::parser::typed_cst::report_admission(extraction, typed.raw_node(), source, errors)
+    else {
         return ParseOutcome::Rejected;
     };
-    let choice = match contents.field_child_0().slot().view() {
-        SourceSlotView::Present(choice) => choice,
-        SourceSlotView::Missing(missing) => {
-            check_not_missing(missing.raw_node(), source, errors, "mor_contents");
+    let contents = contents.children();
+    let choice = match &contents.child_0.slot {
+        ReadableSlot::Present(choice) => choice,
+        ReadableSlot::Missing(missing) => {
+            check_not_missing(missing.raw_node(), missing.source(), errors, "mor_contents");
             return ParseOutcome::Rejected;
         }
-        SourceSlotView::Error(bad) => {
+        ReadableSlot::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
-                source,
+                bad.source(),
                 "mor_contents",
             ));
             return ParseOutcome::Rejected;
         }
-        SourceSlotView::Unexpected(never) => match never {},
-        SourceSlotView::Absent(NoChild) => {
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => {
             report_missing_terminator(mor_contents_node, source, errors);
             return ParseOutcome::Rejected;
         }
     };
-    match choice.view() {
-        AdmittedMorContentsChild0ChoiceSourceView::MorContent(items_children) => {
-            let mut items =
-                MorItems::with_capacity(items_children.field_child_1().slot().iter().len() + 1);
+    match choice {
+        AdmittedMorContentsChild0Choice::MorContent(items_children) => {
+            let mut items = MorItems::with_capacity(items_children.child_1.slot.len() + 1);
 
-            push_mor_content_item(items_children.field_child_0().slot(), errors, &mut items);
+            push_mor_content_item(&items_children.child_0.slot, errors, &mut items);
             // Sequence payloads retain their source through repetition. The
             // existing SeqSlot type makes Missing/Unexpected uninhabited;
             // Error and Absent remain explicit, as do each item's own states.
-            for element in items_children.field_child_1().slot().iter() {
-                match element.slot().view() {
-                    SourceSlotView::Present(pair) => {
-                        require_structure(pair.field_child_0().slot(), errors, &mut items);
-                        push_mor_content_item(pair.field_child_1().slot(), errors, &mut items);
-                        surface_source_displaced(pair.field_unexpected(), errors);
+            for element in &items_children.child_1.slot {
+                match &element.slot {
+                    ReadableSlot::Present(pair) => {
+                        require_structure(&pair.child_0.slot, errors, &mut items);
+                        push_mor_content_item(&pair.child_1.slot, errors, &mut items);
+                        surface_source_displaced(&pair.unexpected, errors);
                     }
-                    SourceSlotView::Error(bad) => {
+                    ReadableSlot::Error(bad) => {
                         errors.report(unexpected_node_error(
                             bad.raw_node(),
-                            source,
+                            bad.source(),
                             "mor_contents",
                         ));
                         items.reject();
                     }
-                    SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => {
-                        match never {}
+                    ReadableSlot::Missing(never) | ReadableSlot::Unexpected(never) => {
+                        match *never {}
                     }
-                    SourceSlotView::Absent(never) => match never {},
+                    ReadableSlot::Absent(never) => match *never {},
                 }
             }
-            surface_source_displaced(items_children.field_unexpected(), errors);
+            surface_source_displaced(&items_children.unexpected, errors);
 
-            let terminator = match items_children.field_child_2().slot().optional() {
-                Some(slot) => match slot.view() {
-                    SourceSlotView::Present(group) => {
-                        require_structure(group.field_child_0().slot(), errors, &mut items);
+            let terminator = match &items_children.child_2.slot {
+                Some(slot) => match slot {
+                    ReadableSlot::Present(group) => {
+                        require_structure(&group.child_0.slot, errors, &mut items);
                         let decoded =
-                            decode_mor_terminator(group.field_child_1().slot(), errors, &mut items);
-                        surface_source_displaced(group.field_unexpected(), errors);
+                            decode_mor_terminator(&group.child_1.slot, errors, &mut items);
+                        surface_source_displaced(&group.unexpected, errors);
                         decoded
                     }
-                    SourceSlotView::Error(bad) => {
+                    ReadableSlot::Error(bad) => {
                         errors.report(unexpected_node_error(
                             bad.raw_node(),
-                            source,
+                            bad.source(),
                             "mor_contents",
                         ));
                         items.reject();
                         None
                     }
-                    SourceSlotView::Missing(never) | SourceSlotView::Unexpected(never) => {
-                        match never {}
+                    ReadableSlot::Missing(never) | ReadableSlot::Unexpected(never) => {
+                        match *never {}
                     }
-                    SourceSlotView::Absent(never) => match never {},
+                    ReadableSlot::Absent(never) => match *never {},
                 },
                 None => None,
             };
 
-            if let Some(slot) = contents.field_child_1().slot().optional() {
+            if let Some(slot) = &contents.child_1.slot {
                 require_structure(slot, errors, &mut items);
             }
 
             finish_mor_tier(items, terminator, span, mor_contents_node, source, errors)
         }
-        AdmittedMorContentsChild0ChoiceSourceView::BreakForCoding(term_choice) => {
+        AdmittedMorContentsChild0Choice::BreakForCoding(term_choice) => {
             let mut items = MorItems::with_capacity(0);
-            let Some(term_choice) =
-                crate::parser::typed_cst::read_source_field(term_choice, errors)
-            else {
-                return ParseOutcome::Rejected;
-            };
-            let terminator = Some(terminator_from_new_choice(&term_choice.node()));
+            let terminator = Some(terminator_from_new_choice(term_choice));
 
-            if let Some(slot) = contents.field_child_1().slot().optional() {
+            if let Some(slot) = &contents.child_1.slot {
                 require_structure(slot, errors, &mut items);
             }
 
@@ -321,31 +313,29 @@ fn report_missing_terminator(mor_contents_node: Node, source: &str, errors: &imp
 /// - `Missing` / `Unexpected`: uninhabited for this admitted composite slot.
 /// - `Error`: report recovery and reject the whole tier.
 /// - `Absent`: no child at this position; nothing reported, nothing pushed.
-fn push_mor_content_item<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, MorContentNode<'tree>>>,
+fn push_mor_content_item<'tree, 'source>(
+    slot: &NonMissingKindSlot<
+        'tree,
+        SourceBound<'tree, 'source, MorContentNode<'tree>>,
+        Ranged<'source>,
+    >,
     errors: &impl ErrorSink,
     items: &mut MorItems,
 ) {
-    let item_node = match slot.view() {
-        SourceSlotView::Present(item) => {
-            match crate::parser::typed_cst::read_source_field(item, errors) {
-                Some(item) => item,
-                None => {
-                    items.reject();
-                    return;
-                }
-            }
-        }
-        SourceSlotView::Error(bad) => {
+    let item_node = match slot {
+        ReadableSlot::Present(item) => *item,
+        ReadableSlot::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
-                slot.source(),
+                bad.source(),
                 "mor_contents",
             ));
             items.reject();
             return;
         }
-        SourceSlotView::Absent(NoChild) => return,
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => return,
     };
     match parse_mor_content(item_node, errors) {
         Ok(ParseOutcome::Parsed(mor)) => items.push(mor),
@@ -366,19 +356,31 @@ fn push_mor_content_item<'tree>(
 /// terminator, or after the whole body): purely structural, so Present and
 /// Absent need nothing, and a reported recovery marks the whole tier failed,
 /// as it does for an item or a terminator.
-fn require_structure<'tree, A: Absence>(
-    slot: SourceField<
-        '_,
-        'tree,
-        '_,
-        NodeSlot<'tree, WhitespacesNode<'tree>, KindMissing<WhitespacesNode<'tree>>, Never, A>,
+fn require_structure<'tree, 'source, A: Absence>(
+    slot: &ReadableSlot<
+        SourceBound<'tree, 'source, WhitespacesNode<'tree>>,
+        SourceBound<'tree, 'source, WhitespacesNode<'tree>>,
+        Never,
+        A,
     >,
     errors: &impl ErrorSink,
     items: &mut MorItems,
 ) {
-    match admit_present_kind(slot, errors) {
-        MorSlotAdmission::Present(_) | MorSlotAdmission::Absent(_) => {}
-        MorSlotAdmission::Rejected => items.reject(),
+    match slot {
+        ReadableSlot::Present(_) | ReadableSlot::Absent(_) => {}
+        ReadableSlot::Missing(missing) => {
+            check_not_missing(missing.raw_node(), missing.source(), errors, "mor_contents");
+            items.reject();
+        }
+        ReadableSlot::Error(bad) => {
+            errors.report(unexpected_node_error(
+                bad.raw_node(),
+                bad.source(),
+                "mor_contents",
+            ));
+            items.reject();
+        }
+        ReadableSlot::Unexpected(never) => match *never {},
     }
 }
 
@@ -386,71 +388,42 @@ fn require_structure<'tree, A: Absence>(
 /// terminator)` group of the items alternative. `Present` maps through the
 /// SHARED exhaustive [`terminator_from_new_choice`] (the same 13-arm mapping
 /// `convert/ending.rs` and `tier_parsers/wor.rs` use); the recovery arms
-/// mirror [`push_mor_separator`]'s policy since the removed loop applied the
+/// retain the structural whitespace policy since the removed loop applied the
 /// SAME uniform `check_not_missing`-first gate to the terminator child as to
 /// every other child in `mor_contents`.
-fn decode_mor_terminator<'tree>(
-    slot: SourceField<
-        '_,
+fn decode_mor_terminator<'tree, 'source>(
+    slot: &KindSlot<
         'tree,
-        '_,
-        KindSlot<'tree, MorContentsChild0MorContentChild2Child1Choice<'tree>>,
+        MorContentsChild0MorContentChild2Child1Choice<'tree, Ranged<'source>>,
+        Ranged<'source>,
     >,
     errors: &impl ErrorSink,
     items: &mut MorItems,
 ) -> Option<Terminator> {
-    match admit_present_kind(slot, errors) {
-        MorSlotAdmission::Present(choice) => Some(terminator_from_new_choice(&choice.node())),
-        MorSlotAdmission::Rejected => {
+    match slot {
+        ReadableSlot::Present(choice) => Some(terminator_from_new_choice(choice)),
+        ReadableSlot::Missing(missing) => {
+            let missing = missing.source_slice();
+            check_not_missing(missing.raw_node(), missing.source(), errors, "mor_contents");
             items.reject();
             None
         }
-        MorSlotAdmission::Absent(_) => None,
-    }
-}
-
-/// Present content is readable; absence is not a reported recovery failure.
-enum MorSlotAdmission<T, A = NoChild> {
-    Present(T),
-    Absent(A),
-    Rejected,
-}
-
-/// Preserve this tier's check-not-missing policy before admitting source text.
-fn admit_present_kind<'tree, 'source, T: SourceBoundKind<'tree>, A: Absence>(
-    slot: SourceField<'_, 'tree, 'source, NodeSlot<'tree, T, KindMissing<T>, Never, A>>,
-    errors: &impl ErrorSink,
-) -> MorSlotAdmission<SourceBound<'tree, 'source, T>, A> {
-    let source = slot.source();
-    match slot.view() {
-        SourceSlotView::Present(field) => {
-            match crate::parser::typed_cst::read_source_field(field, errors) {
-                Some(node) => MorSlotAdmission::Present(node),
-                None => MorSlotAdmission::Rejected,
-            }
-        }
-        SourceSlotView::Missing(missing) => {
-            check_not_missing(missing.raw_node(), source, errors, "mor_contents");
-            MorSlotAdmission::Rejected
-        }
-        SourceSlotView::Error(bad) => {
+        ReadableSlot::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
-                source,
+                bad.source(),
                 "mor_contents",
             ));
-            MorSlotAdmission::Rejected
+            items.reject();
+            None
         }
-        SourceSlotView::Unexpected(never) => match never {},
-        SourceSlotView::Absent(absent) => MorSlotAdmission::Absent(absent),
+        ReadableSlot::Unexpected(never) => match *never {},
+        ReadableSlot::Absent(NoChild) => None,
     }
 }
 
-fn surface_source_displaced<'tree>(
-    unexpected: SourceField<'_, 'tree, '_, Vec<Node<'tree>>>,
-    errors: &impl ErrorSink,
-) {
-    for node in unexpected.iter() {
+fn surface_source_displaced<'tree>(unexpected: &[SourceSlice<'tree, '_>], errors: &impl ErrorSink) {
+    for node in unexpected {
         surface_displaced(&[node.raw_node()], "mor_contents", node.source(), errors);
     }
 }

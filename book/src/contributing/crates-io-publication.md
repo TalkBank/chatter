@@ -23,7 +23,7 @@ The publication order is:
 9. `send2clan`
 10. `talkbank-llm`
 11. `talkbank-lsp`
-12. `chatter`
+12. `talkbank-chatter`
 
 `talkbank-build` is build-only support for the model and parser source
 fingerprints and must be published before those consumers.
@@ -44,12 +44,62 @@ Internal test, vocabulary, desktop and task-runner packages remain held back;
 the script prints the complete current set. CLI/LSP binary releases and desktop
 installers remain required alongside registry installation.
 
+The registry already contains an unrelated
+[`chatter` 0.1.0 package](https://docs.rs/crate/chatter/0.1.0/source/Cargo.toml.orig),
+which translates dialogue scripts into Rust. `cargo install chatter` is therefore
+not an installation instruction for the TalkBank CLI. Our workspace package is
+`talkbank-chatter`; its executable remains `chatter`. This package-name choice
+does not reserve the registry name or authorize bootstrap publication.
+
 Before declaring registry installation supported, verify the actual published
-candidate with `cargo install chatter --locked` and
-`cargo install talkbank-lsp --locked`, including CLI validation and LSP protocol
-smoke tests. These are acceptance targets, not a claim that current registry
-versions are available. MSRV, supported platforms and post-1.0 compatibility
-policy still require explicit decisions and candidate-bound verification.
+candidate with `cargo install talkbank-chatter --version <candidate> --locked`,
+including CLI validation and LSP protocol smoke tests. The LSP target
+remains `cargo install talkbank-lsp --version <candidate> --locked`. These are
+acceptance targets, not a claim that current registry versions are available.
+MSRV, supported platforms and post-1.0 compatibility policy still require
+explicit decisions and candidate-bound verification.
+
+Local source-install verification can reuse the existing process contracts
+against a selected installed executable, without changing their default
+Cargo-produced program or CI selection:
+
+```bash
+TALKBANK_CHATTER_TEST_BINARY=/path/to/test-install/bin/chatter \
+  cargo test -p talkbank-chatter --test integration cache_identity_recovery:: -- --nocapture
+TALKBANK_LSP_TEST_BINARY=/path/to/test-install/bin/talkbank-lsp \
+  cargo test -p talkbank-lsp --test position_conversion_tests stdio_lifecycle:: -- --nocapture
+```
+
+Explicit paths must be absolute regular files; invalid or missing selections
+fail rather than falling back to a workspace binary. The operating system still
+checks executability at spawn. Record the checkout, build profile/toolchain,
+installed-program hashes and actual successful runtime names. These local
+contracts cover scoped cache recovery and LSP lifecycle/diagnostic/edit behavior,
+not registry installation, released upgrades or every CLI/LSP feature. They do
+not replace the published-candidate installation requirement above.
+
+Binary distribution follows the new package identity: cargo-dist produces
+`talkbank-chatter-installer.sh` and `.ps1` and records `talkbank-chatter` receipts.
+The publication prerequisite retains `chatter-installer.sh` and `.ps1` wrappers
+for existing download links and older self-updaters. They preserve the generated
+installer payload and translate legacy `CHATTER_*` settings using cargo-dist's
+environment mapping; explicit `TALKBANK_CHATTER_*` settings take precedence.
+Uploaded wrappers are checked against the payload and mapping before announcement.
+New binaries load current receipts first, fall back to legacy `chatter` receipts
+only when the current receipt is absent, and target the new release identity. Receipts for
+another executable or release source are refused. Actual released upgrade
+acceptance remains required; local compatibility checks do not certify a release.
+
+The local boundary checks are:
+
+```bash
+cargo test -p talkbank-chatter --test integration update_command_tests
+node --test scripts/release/cli-installer-compatibility.test.mjs scripts/release/verify-desktop-candidate.test.mjs
+```
+
+They cover receipt refusal, legacy shell settings and wrapper/payload integrity;
+native Windows execution
+and actual released upgrades remain separate acceptance obligations.
 
 ## What the repo automates
 

@@ -3,13 +3,14 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
-use crate::generated_traversal::{AsRawNode, NamedKind, SelectedNonMissingKindSlot};
+use crate::generated_traversal::{
+    AsRawNode, KindAdmitted, NamedKind, RangeAdmittedChildren, Ranged, ReadableSlot,
+    SelectedNonMissingKindSlot, SourceBound, SourceBoundKind, SourceSlice,
+};
 use crate::parser::tree_parsing::bullet_content::{BulletTextNode, parse_bullet_content};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
-use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 use talkbank_model::model::BulletContent;
 use talkbank_model::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
-use tree_sitter::Node;
 
 /// Byte span of an entire tier node.
 ///
@@ -34,9 +35,21 @@ pub(super) use crate::parser::node_span::span_of;
 /// non-tier type out of it.
 pub(crate) trait TextTierBody: NamedKind {}
 
+/// Only the whole generated kind/range-admitted tier projects a readable body.
+pub(crate) trait AdmittedTextTierBody<'tree, 'source> {
+    type Tier: TextTierBody;
+    type Body: SourceBoundKind<'tree>;
+
+    fn body(
+        &self,
+    ) -> &Option<
+        SelectedNonMissingKindSlot<'tree, SourceBound<'tree, 'source, Self::Body>, Ranged<'source>>,
+    >;
+}
+
 /// The nine tiers this module parses.
 mod policies {
-    use super::TextTierBody;
+    use super::{AdmittedTextTierBody, KindAdmitted, Ranged, TextTierBody};
     use crate::generated_traversal::{
         ActDependentTierNode, AddDependentTierNode, CodDependentTierNode, ComDependentTierNode,
         ExpDependentTierNode, GpxDependentTierNode, IntDependentTierNode, SitDependentTierNode,
@@ -44,19 +57,35 @@ mod policies {
     };
 
     macro_rules! text_tiers {
-        ($($node:ident),* $(,)?) => { $( impl TextTierBody for $node<'_> {} )* };
+        ($($node:ident / $children:ident => $body:ident),* $(,)?) => { $(
+            impl TextTierBody for $node<'_> {}
+            impl<'tree, 'source> AdmittedTextTierBody<'tree, 'source>
+                for crate::generated_traversal::$children<'tree, KindAdmitted, Ranged<'source>>
+            {
+                type Tier = $node<'tree>;
+                type Body = crate::generated_traversal::$body<'tree>;
+
+                fn body(&self) -> &Option<crate::generated_traversal::SelectedNonMissingKindSlot<
+                    'tree,
+                    crate::generated_traversal::SourceBound<'tree, 'source, Self::Body>,
+                    Ranged<'source>,
+                >> {
+                    &self.child_2.slot
+                }
+            }
+        )* };
     }
 
     text_tiers! {
-        ActDependentTierNode,
-        AddDependentTierNode,
-        CodDependentTierNode,
-        ComDependentTierNode,
-        ExpDependentTierNode,
-        GpxDependentTierNode,
-        IntDependentTierNode,
-        SitDependentTierNode,
-        SpaDependentTierNode,
+        ActDependentTierNode / ActDependentTierChildren => TextWithBulletsNode,
+        AddDependentTierNode / AddDependentTierChildren => TextWithBulletsNode,
+        CodDependentTierNode / CodDependentTierChildren => TextWithBulletsNode,
+        ComDependentTierNode / ComDependentTierChildren => TextWithBulletsAndPicsNode,
+        ExpDependentTierNode / ExpDependentTierChildren => TextWithBulletsNode,
+        GpxDependentTierNode / GpxDependentTierChildren => TextWithBulletsNode,
+        IntDependentTierNode / IntDependentTierChildren => TextWithBulletsNode,
+        SitDependentTierNode / SitDependentTierChildren => TextWithBulletsNode,
+        SpaDependentTierNode / SpaDependentTierChildren => TextWithBulletsNode,
     }
 }
 
@@ -90,35 +119,30 @@ fn tier_label(kind: &str) -> &str {
 /// Until the proof reached this slot, a placeholder body was parsed as though
 /// it were present content.
 ///
-/// Surface displaced children before lowering, preserving the recovery backstop.
+/// The concrete owner surfaces displaced children before consuming admission.
 fn parse_text_tier_content<'tree, 'source, Tier, Body>(
-    tier_node: Node<'tree>,
-    body: crate::generated_traversal::SourceField<
-        '_,
-        'tree,
-        'source,
-        SelectedNonMissingKindSlot<'tree, Body>,
-    >,
-    unexpected: &[Node<'tree>],
+    tier: SourceSlice<'tree, 'source>,
+    body: &SelectedNonMissingKindSlot<'tree, SourceBound<'tree, 'source, Body>, Ranged<'source>>,
     errors: &impl ErrorSink,
 ) -> Result<BulletContent, crate::CstFailure>
 where
     Tier: TextTierBody,
-    Body: crate::generated_traversal::SourceBoundKind<'tree>,
-    crate::generated_traversal::SourceBound<'tree, 'source, Body>:
-        Into<BulletTextNode<'tree, 'source>>,
+    Body: SourceBoundKind<'tree>,
+    SourceBound<'tree, 'source, Body>: Into<BulletTextNode<'tree, 'source>>,
 {
-    let source = body.source();
-    surface_displaced(unexpected, Tier::KIND, source, errors);
-
-    use crate::generated_traversal::SourceSlotView;
-    match body.view() {
-        SourceSlotView::Present(text) => parse_bullet_content(text.read()?.into(), errors),
-        SourceSlotView::Error(node) => {
-            errors.report(unexpected_node_error(node.raw_node(), source, Tier::KIND));
-            report_missing_text_content::<Tier>(tier_node, source, errors);
+    match body {
+        ReadableSlot::Present(text) => parse_bullet_content((*text).into(), errors),
+        ReadableSlot::Error(node) => {
+            errors.report(unexpected_node_error(
+                node.raw_node(),
+                node.source(),
+                Tier::KIND,
+            ));
+            report_missing_text_content::<Tier>(tier, errors);
             Ok(BulletContent::empty())
         }
+        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
     }
 }
 
@@ -141,34 +165,18 @@ where
 ///
 /// `Some(slot)` delegates to [`parse_text_tier_content`] unchanged, so a body
 /// that is present but malformed keeps its existing diagnostics.
-pub(crate) fn parse_optional_text_tier_content<'tree, 'source, Tier, Body>(
-    tier: crate::generated_traversal::SourceBound<'tree, 'source, Tier>,
-    body: crate::generated_traversal::SourceField<
-        '_,
-        'tree,
-        'source,
-        Option<SelectedNonMissingKindSlot<'tree, Body>>,
-    >,
-    unexpected: &[Node<'tree>],
+pub(crate) fn parse_optional_text_tier_content<'tree, 'source, C>(
+    tier: &RangeAdmittedChildren<'tree, 'source, C>,
     errors: &impl ErrorSink,
 ) -> Result<BulletContent, crate::CstFailure>
 where
-    Tier: TextTierBody + crate::generated_traversal::SourceBoundKind<'tree>,
-    Body: crate::generated_traversal::SourceBoundKind<'tree>,
-    crate::generated_traversal::SourceBound<'tree, 'source, Body>:
-        Into<BulletTextNode<'tree, 'source>>,
+    C: AdmittedTextTierBody<'tree, 'source>,
+    SourceBound<'tree, 'source, C::Body>: Into<BulletTextNode<'tree, 'source>>,
 {
-    // The tier node comes from the tier VALUE, so the span reported and the
-    // policy applied are the same tier by construction. They were a `Node` and
-    // three loose arguments that a caller paired by hand.
-    let tier_node = tier.raw_node();
-    let source = tier.source();
-    match body.optional() {
-        Some(slot) => parse_text_tier_content::<Tier, Body>(tier_node, slot, unexpected, errors),
-        None => {
-            surface_displaced(unexpected, Tier::KIND, source, errors);
-            Ok(BulletContent::empty())
-        }
+    // Parent and body are projected from this one consuming admission result.
+    match tier.children().body() {
+        Some(slot) => parse_text_tier_content::<C::Tier, C::Body>(tier.parent(), slot, errors),
+        None => Ok(BulletContent::empty()),
     }
 }
 
@@ -180,16 +188,16 @@ where
 /// context, and caller-supplied message (for example "Missing content in %com
 /// tier").
 fn report_missing_text_content<Tier: TextTierBody>(
-    tier_node: Node,
-    source: &str,
+    tier: SourceSlice<'_, '_>,
     errors: &impl ErrorSink,
 ) {
+    let tier_node = tier.raw_node();
     errors.report(ParseError::new(
         ErrorCode::TreeParsingError,
         Severity::Error,
         SourceLocation::from_offsets(tier_node.start_byte(), tier_node.end_byte()),
         ErrorContext::new(
-            source,
+            tier.source(),
             tier_node.start_byte()..tier_node.end_byte(),
             Tier::KIND,
         ),

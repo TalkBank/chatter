@@ -209,6 +209,19 @@ runtime seam as real JavaScript.
 - Compile config: `apps/chatter-desktop/tsconfig.unit.json`
 - Test files: `apps/chatter-desktop/tests/unit/*.test.cjs`
 
+`tests/unit/renderedResults.test.ts` is compiled in the same deck and uses the
+installed `react-dom/server` renderer. Typed production events travel through
+`applyValidationEvent` into the actual `FileTree` and `ErrorPanel`: no-card
+failure messages, pending versus valid results, warning retention, and the
+runner-owned all-valid verdict are checked in their rendered markup. FileTree
+imports its phase type directly from the canonical state owner; no native
+transport is loaded by this deck. DOM types are compile-time only.
+
+These checks add no browser, DOM emulator or runtime dependency. Static markup
+does not prove clicks, effects, clipboard, native IPC, styling, installation
+or updates. Cancellation/incomplete events test refusal of an all-valid claim,
+not a live cancellation interaction.
+
 ### TypeScript ↔ Rust contract
 
 The Rust integration tests verify that serialized JSON matches what the
@@ -258,6 +271,29 @@ renders the expected UI elements:
 - Empty file tree ("No files loaded")
 - Empty error panel ("Select a file to view errors")
 - Status bar showing "Ready"
+
+### Binary discovery
+
+The ESM config derives the workspace root from its own `import.meta.url`, not
+the shell's current directory. It admits `target/debug/chatter-desktop` on
+Linux and `target/debug/chatter-desktop.exe` on Windows, matching the Cargo
+binary declaration rather than the packaged macOS `Chatter.app` name.
+
+For a custom Cargo target directory, set `CHATTER_DESKTOP_TARGET_DIR` to its
+absolute path; discovery adds `debug` and the native binary name. For release,
+cross-target, or other build layouts, set `CHATTER_DESKTOP_BINARY` to the exact
+absolute executable path instead. Set only one override. Relative paths, empty
+values, missing/non-file binaries, and unsupported platforms refuse before
+WebDriver connection. Linux also checks execute permission. Cargo configuration
+and `CARGO_TARGET_DIR` are not inferred: an explicit override must match the
+actual build output. Windows file existence is not executable-format evidence.
+
+`tests/unit/desktopSmokeBinary.test.mjs` exercises this admission through the
+existing Node deck, with owned temporary files, including the old `apps/target`
+decoy and refusal cases. A simulated platform checks suffix policy on the host
+filesystem, not another OS. No binary or driver is launched by these controls.
+Retain a successful supported-platform native run separately before treating
+this launch-only deck as usable release evidence.
 
 ### Limitations
 
@@ -326,11 +362,9 @@ ship in production artifacts; require an explicit test-build configuration and
 an automated release-exclusion check. Do not add a second validator, test-only
 production command, or global IPC escape hatch. Keep settings/cache isolated.
 
-The existing native smoke deck only checks launch UI. Its configuration also
-resolves the binary under `apps/target`, rather than the workspace `target`, and
-does not select the Windows `.exe` suffix. Correct binary discovery and retain
-an actual successful run before treating this deck as a usable release check.
-The smoke test's suggested `validate_for_test` shortcut is not an approved design.
+The native smoke deck only checks launch UI. Binary discovery has finite Node
+controls, not a successful native WebDriver receipt. Correct path admission
+alone does not certify that the executable launches or its workflows work.
 
 CSS rendering differs slightly between WebKit (Linux) and Chromium (Windows).
 Visual regressions are possible, consider screenshot comparison tests if this

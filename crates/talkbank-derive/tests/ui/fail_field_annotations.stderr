@@ -1,0 +1,35 @@
+error: expected `skip`
+ --> tests/ui/fail_field_annotations.rs:5:19
+  |
+5 |     #[semantic_eq(skp)]
+  |                   ^^^
+
+error: expected `skip`
+  --> tests/ui/fail_field_annotations.rs:10:31
+   |
+10 | struct ShiftTypo(#[span_shift(skp)] u32);
+   |                               ^^^
+
+error: duplicate #[semantic_eq(skip)] attribute
+  --> tests/ui/fail_field_annotations.rs:15:5
+   |
+15 |     #[semantic_eq(skip)]
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+error: duplicate #[span_shift(skip)] attribute
+  --> tests/ui/fail_field_annotations.rs:20:43
+   |
+20 | struct ShiftDuplicate(#[span_shift(skip)] #[span_shift(skip)] u32);
+   |                                           ^^^^^^^^^^^^^^^^^^^
+
+error: #[semantic_eq(skip)] is only supported on fields
+  --> tests/ui/fail_field_annotations.rs:23:1
+   |
+23 | #[semantic_eq(skip)]
+   | ^^^^^^^^^^^^^^^^^^^^
+
+error: #[span_shift(skip)] is only supported on fields
+  --> tests/ui/fail_field_annotations.rs:28:5
+   |
+28 |     #[span_shift(skip)]
+   |     ^^^^^^^^^^^^^^^^^^^

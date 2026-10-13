@@ -33,7 +33,7 @@ fn parse_test_file(filename: &str) -> Result<(BulletContent, Vec<ParseError>), S
     for descendant in root.descendants() {
         let node = descendant.map_err(|err| err.to_string())?;
         if let Some(tier) = node.typed::<ActDependentTierNode>() {
-            let children = tier.extract().map_err(|err| err.to_string())?;
+            let children = tier.extract();
             if let Some(body) = children.field_child_2().slot().optional()
                 && let SourceSlotView::Present(text) = body.view()
             {

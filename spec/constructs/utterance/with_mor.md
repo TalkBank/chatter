@@ -25,56 +25,25 @@ Utterance with main tier and %mor dependent tier
             (word_with_optional_annotations
               (standalone_word
                 (word_body
-                  (initial_word_segment)
-                )
-              )
-            )
-          )
-        )
-      )
+                  (word_segment))))))
+        (whitespaces))
       (utterance_end
-        (whitespaces
-          (whitespace
-            (space)
-          )
-        )
         (period)
-        (newline)
-      )
-    )
-  )
+        (newline))))
   (mor_dependent_tier
     (mor_tier_prefix)
     (tier_sep
       (colon)
-      (tab)
-    )
+      (tab))
     (mor_contents
       (mor_content
-        (mor_compound_word
-          (mor_word
-            (mpos
-              (mor_category
-                (mor_word_segment)
-              )
-            )
-            (pipe)
-            (stem
-              (mor_word_segment)
-            )
-          )
-        )
-      )
-      (whitespaces
-        (whitespace
-          (space)
-        )
-      )
-      (period)
-    )
-    (newline)
-  )
-)
+        (mor_word
+          (mor_pos)
+          (pipe)
+          (mor_lemma)))
+      (whitespaces)
+      (period))
+    (newline)))
 ```
 
 ## Metadata

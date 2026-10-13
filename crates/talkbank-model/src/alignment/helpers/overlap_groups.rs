@@ -178,9 +178,11 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
     // Step 3: Match each bottom to its nearest preceding top from a different
     // speaker with the same index. Build groups.
     let mut top_to_bottoms: Vec<Vec<OverlapAnchor>> = vec![Vec::new(); tops.len()];
-    let mut bottom_matched: Vec<bool> = vec![false; bottoms.len()];
+    let mut orphaned_bottoms: Vec<OverlapAnchor> = Vec::new();
 
-    for (bi, bottom) in bottoms.iter().enumerate() {
+    // Classification consumes each anchor: it belongs either to its matched
+    // top or to the orphan collection, never to a separate match bitmap.
+    for bottom in bottoms {
         // Search backward through tops for a match.
         let mut best_top: Option<usize> = None;
         for (ti, top) in tops.iter().enumerate().rev() {
@@ -231,8 +233,9 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
         }
 
         if let Some(ti) = best_top {
-            top_to_bottoms[ti].push(bottom.clone());
-            bottom_matched[bi] = true;
+            top_to_bottoms[ti].push(bottom);
+        } else {
+            orphaned_bottoms.push(bottom);
         }
     }
 
@@ -251,13 +254,6 @@ pub fn analyze_file_overlaps(lines: &[Line]) -> FileOverlapAnalysis {
             });
         }
     }
-
-    let orphaned_bottoms: Vec<OverlapAnchor> = bottoms
-        .into_iter()
-        .zip(bottom_matched)
-        .filter(|(_, matched)| !*matched)
-        .map(|(b, _)| b)
-        .collect();
 
     FileOverlapAnalysis {
         groups,

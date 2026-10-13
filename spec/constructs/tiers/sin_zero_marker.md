@@ -17,13 +17,33 @@ lists `$.zero` as an alternative.
 
 ```cst
 (utterance
-  (main_tier ...)
+  (main_tier
+    (star)
+    (speaker)
+    (colon)
+    (tab)
+    (tier_body
+      (contents
+        (content_item
+          (base_content_item
+            (word_with_optional_annotations
+              (standalone_word
+                (word_body
+                  (word_segment))))))
+        (whitespaces))
+      (utterance_end
+        (period)
+        (newline))))
   (sin_dependent_tier
     (sin_tier_prefix)
-    (tier_sep ...)
-    (sin_group
-      (sin_word
-        (zero)))))
+    (tier_sep
+      (colon)
+      (tab))
+    (sin_groups
+      (sin_group
+        (sin_word
+          (zero))))
+    (newline)))
 ```
 
 ## Metadata

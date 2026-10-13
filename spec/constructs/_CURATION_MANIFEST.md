@@ -1,6 +1,6 @@
 # Construct Curation Manifest
 
-**Last modified:** 2026-05-29 18:43 EDT
+**Last modified:** [Git history](https://github.com/TalkBank/chatter/commits/main/spec/constructs/_CURATION_MANIFEST.md)
 
 This checklist tracks curated construct coverage. Mark items as curated only when
 there is a minimal, representative spec in `spec/constructs/`.
@@ -32,14 +32,20 @@ there is a minimal, representative spec in `spec/constructs/`.
 - [x] `%wor` baseline
 - [x] uncommon tier labels represented by grammar
 - [x] alignment-sensitive edge cases
+- [x] selected repeated MOR post-clitics with ordered flat/keyed features and POS subcategories (`tiers/mor_repeated_postclitics.md`)
 
 ## Word/Token Layer
 
 - [x] plain words
 - [x] representative punctuation/marker variants
 - [x] overlap-enclosed token
-- [ ] clitic and compound variants not yet represented
-- [ ] annotation combinations not yet represented
+- [ ] exhaustive clitic/compound interaction completeness (selected combinations already represented)
+- [ ] exhaustive annotation-combination completeness (selected combinations already represented)
+
+These are finite curation witnesses, not execution-coverage or validity proofs.
+MOR items, expanded word chunks and GRA relations are different count spaces;
+the selected combination reference and E705/E706/E711/E720 boundary specs keep
+those requirements separate. Recovery outcomes require actual producer review.
 
 ## Process Gate
 
