@@ -147,22 +147,22 @@ pub(super) fn plan<'input>(
             }
         };
         let fields = contents.extract();
-        // Each optional generated field has a distinct node type. Erase only
-        // after its producer has admitted the canonical source range.
+        // The generated repeats distinguish structural whitespace from each
+        // concrete field. Erase only after canonical source-range admission.
         macro_rules! inspect {
-            ($accessor:ident, $kind:expr) => {
-                if let Some(slot) = fields.$accessor().slot().optional() {
-                    let bound = match slot.view() {
-                        SourceSlotView::Present(field) => {
-                            field.read().map_err(|_| HeaderFieldRefusal)?
-                        }
+            ($accessor:ident, $choice:ident, $field:ident, $kind:expr) => {
+                for element in fields.$accessor().slot().iter() {
+                    use talkbank_parser::generated_traversal::$choice;
+                    let field = match element.slot().view() {
+                        SourceSlotView::Present(choice) => match choice.view() {
+                            $choice::Whitespaces(_) => continue,
+                            $choice::$field(field) => field,
+                        },
                         SourceSlotView::Missing(_)
                         | SourceSlotView::Error(_)
                         | SourceSlotView::Absent(_) => return Err(HeaderFieldRefusal),
                     };
-                    let source = parsed
-                        .bind(bound.raw_node())
-                        .map_err(|_| HeaderFieldRefusal)?;
+                    let source = field.read().map_err(|_| HeaderFieldRefusal)?.source_slice();
                     for matched in super::free_text::matches(source, input.names())
                         .map_err(|_| HeaderFieldRefusal)?
                     {
@@ -177,9 +177,24 @@ pub(super) fn plan<'input>(
                 }
             };
         }
-        inspect!(field_child_17, HeaderNameField::Group);
-        inspect!(field_child_27, HeaderNameField::Education);
-        inspect!(field_child_31, HeaderNameField::Custom);
+        inspect!(
+            field_child_10,
+            IdContentsChild10ChoiceSourceView,
+            IdGroup,
+            HeaderNameField::Group
+        );
+        inspect!(
+            field_child_16,
+            IdContentsChild16ChoiceSourceView,
+            IdEducation,
+            HeaderNameField::Education
+        );
+        inspect!(
+            field_child_18,
+            IdContentsChild18ChoiceSourceView,
+            IdCustomField,
+            HeaderNameField::Custom
+        );
     }
     Ok(findings)
 }

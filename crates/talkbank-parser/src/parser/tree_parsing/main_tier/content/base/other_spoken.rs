@@ -33,7 +33,10 @@ fn required<'a, 'tree, T: NamedKind + AsRawNode<'tree> + Copy, M: RecoveryNode<'
                 Severity::Error,
                 SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
                 ErrorContext::new(source, node.byte_range(), node.kind()),
-                format!("Missing required '{}' in other_spoken_event", T::KIND),
+                format!(
+                    "Missing required '{}' in other_spoken_event",
+                    T::KIND.name()
+                ),
             ));
             ParseOutcome::rejected()
         }

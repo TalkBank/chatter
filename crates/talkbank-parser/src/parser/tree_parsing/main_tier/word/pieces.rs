@@ -12,11 +12,8 @@ use crate::generated_traversal::{
     WordBodyOverlapPointChild1Choice, WordBodyOverlapPointChild1ChoiceBoundView,
     WordBodyOverlapPointChild2Choice, WordBodyOverlapPointChild2ChoiceBoundView,
     WordBodyOverlapPointChild3Choice, WordBodyOverlapPointChild3ChoiceBoundView,
-    WordBodyOverlapPointChild3LengtheningChoice,
-    WordBodyOverlapPointChild3LengtheningChoiceBoundView, WordBodyWordSegmentChild0Choice,
-    WordBodyWordSegmentChild0ChoiceBoundView, WordBodyWordSegmentChild1Choice,
-    WordBodyWordSegmentChild1ChoiceBoundView, WordBodyWordSegmentChild1LengtheningChoice,
-    WordBodyWordSegmentChild1LengtheningChoiceBoundView, WordSegmentNode,
+    WordBodyWordSegmentChild0Choice, WordBodyWordSegmentChild0ChoiceBoundView,
+    WordBodyWordSegmentChild1Choice, WordBodyWordSegmentChild1ChoiceBoundView, WordSegmentNode,
 };
 use crate::parser::tree_parsing::main_tier::content::{
     parse_overlap_point_token, report_tree_shape,
@@ -72,28 +69,6 @@ impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyWordSegmentChild0C
     }
 }
 
-impl<'tree, 'source>
-    From<SourceBound<'tree, 'source, WordBodyWordSegmentChild1LengtheningChoice<'tree>>>
-    for Piece<'tree, 'source>
-{
-    fn from(
-        choice: SourceBound<'tree, 'source, WordBodyWordSegmentChild1LengtheningChoice<'tree>>,
-    ) -> Self {
-        use WordBodyWordSegmentChild1LengtheningChoiceBoundView as C;
-        match choice.view() {
-            C::Lengthening(node) => Piece::Lengthening(node),
-            C::OverlapPoint(node) => Piece::Overlap(node),
-            C::CaElement(node) => Piece::CaElement(node),
-            C::CaDelimiter(node) => Piece::CaDelimiter(node),
-            C::UnderlineBegin(node) => Piece::UnderlineBegin(node),
-            C::UnderlineEnd(node) => Piece::UnderlineEnd(node),
-            C::SyllablePause(node) => Piece::SyllablePause(node),
-            C::Tilde(node) => Piece::Tilde(node),
-            C::Variant8(node) => Piece::Plus(node),
-        }
-    }
-}
-
 impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyWordSegmentChild1Choice<'tree>>>
     for Piece<'tree, 'source>
 {
@@ -103,7 +78,15 @@ impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyWordSegmentChild1C
             C::WordSegment(node) => Piece::Segment(node),
             C::Shortening(node) => Piece::Shortening(node),
             C::StressMarker(node) => Piece::Stress(node),
-            C::Lengthening(marker) => marker.into(),
+            C::Lengthening(node) => Piece::Lengthening(node),
+            C::OverlapPoint(node) => Piece::Overlap(node),
+            C::CaElement(node) => Piece::CaElement(node),
+            C::CaDelimiter(node) => Piece::CaDelimiter(node),
+            C::UnderlineBegin(node) => Piece::UnderlineBegin(node),
+            C::UnderlineEnd(node) => Piece::UnderlineEnd(node),
+            C::SyllablePause(node) => Piece::SyllablePause(node),
+            C::Tilde(node) => Piece::Tilde(node),
+            C::Variant11(node) => Piece::Plus(node),
         }
     }
 }
@@ -151,28 +134,6 @@ impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyOverlapPointChild2
     }
 }
 
-impl<'tree, 'source>
-    From<SourceBound<'tree, 'source, WordBodyOverlapPointChild3LengtheningChoice<'tree>>>
-    for Piece<'tree, 'source>
-{
-    fn from(
-        choice: SourceBound<'tree, 'source, WordBodyOverlapPointChild3LengtheningChoice<'tree>>,
-    ) -> Self {
-        use WordBodyOverlapPointChild3LengtheningChoiceBoundView as C;
-        match choice.view() {
-            C::Lengthening(node) => Piece::Lengthening(node),
-            C::OverlapPoint(node) => Piece::Overlap(node),
-            C::CaElement(node) => Piece::CaElement(node),
-            C::CaDelimiter(node) => Piece::CaDelimiter(node),
-            C::UnderlineBegin(node) => Piece::UnderlineBegin(node),
-            C::UnderlineEnd(node) => Piece::UnderlineEnd(node),
-            C::SyllablePause(node) => Piece::SyllablePause(node),
-            C::Tilde(node) => Piece::Tilde(node),
-            C::Variant8(node) => Piece::Plus(node),
-        }
-    }
-}
-
 impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyOverlapPointChild3Choice<'tree>>>
     for Piece<'tree, 'source>
 {
@@ -182,7 +143,15 @@ impl<'tree, 'source> From<SourceBound<'tree, 'source, WordBodyOverlapPointChild3
             C::WordSegment(node) => Piece::Segment(node),
             C::Shortening(node) => Piece::Shortening(node),
             C::StressMarker(node) => Piece::Stress(node),
-            C::Lengthening(marker) => marker.into(),
+            C::Lengthening(node) => Piece::Lengthening(node),
+            C::OverlapPoint(node) => Piece::Overlap(node),
+            C::CaElement(node) => Piece::CaElement(node),
+            C::CaDelimiter(node) => Piece::CaDelimiter(node),
+            C::UnderlineBegin(node) => Piece::UnderlineBegin(node),
+            C::UnderlineEnd(node) => Piece::UnderlineEnd(node),
+            C::SyllablePause(node) => Piece::SyllablePause(node),
+            C::Tilde(node) => Piece::Tilde(node),
+            C::Variant11(node) => Piece::Plus(node),
         }
     }
 }

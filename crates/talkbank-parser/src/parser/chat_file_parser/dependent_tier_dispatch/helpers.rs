@@ -5,8 +5,8 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, RangeAdmittedChildren, Ranged, ReadableSlot, SelectedNonMissingKindSlot,
-    SourceBound, SourceSlice, TextWithBulletsNode,
+    AsRawNode, RangeAdmittedChildren, Ranged, ReadableSlot, SelectedKindSlot, SourceBound,
+    SourceSlice, TextWithBulletsNode,
 };
 use crate::model::NonEmptyString;
 use crate::model::TextTier;
@@ -15,7 +15,7 @@ use talkbank_model::ParseOutcome;
 
 /// The optional body shape of the range-admitted simple text-like tier carriers.
 pub(super) type OptionalTierBodySlot<'tree, 'source> = Option<
-    SelectedNonMissingKindSlot<
+    SelectedKindSlot<
         'tree,
         SourceBound<'tree, 'source, TextWithBulletsNode<'tree>>,
         Ranged<'source>,
@@ -53,12 +53,8 @@ pub(super) trait OptionalTierBody<'tree, 'source> {
 ///   `Parsed`; an empty text reports "Tier has empty content" at the tier-node
 ///   span. Source failure has already refused admission with E001 before this
 ///   reader can run; it cannot become empty content.
-/// - `Missing` has no inhabited arm. The body is a named
-///   nonterminal, which the compiled grammar proves tree-sitter never inserts as
-///   a MISSING placeholder, and every caller extracts its tier under that proof
-///   ([`SelectedNonMissingKindSlot`]), so the state is uninhabited. Until the
-///   kind proof reached this slot the type admitted it, and this function read
-///   a placeholder's (empty) text as the removed hand-walk had.
+/// - `Missing` is diagnosed and rejected; source admission cannot turn a
+///   recovered nonterminal into readable tier content.
 /// - `Error`: the recovery node is reported first, in the dependent-tier
 ///   analyzer's words (E316 for text nothing could parse), then "Tier is
 ///   missing content node" at the tier-node span: E330.md's pair. Until
@@ -73,7 +69,7 @@ pub(super) trait OptionalTierBody<'tree, 'source> {
 /// retaining the body-versus-outside-body diagnostic order.
 fn read_tier_body_text<'tree, 'source>(
     tier: SourceSlice<'tree, 'source>,
-    body: &SelectedNonMissingKindSlot<
+    body: &SelectedKindSlot<
         'tree,
         SourceBound<'tree, 'source, TextWithBulletsNode<'tree>>,
         Ranged<'source>,
@@ -87,7 +83,16 @@ fn read_tier_body_text<'tree, 'source>(
             report_missing_content_node(tier, errors);
             ParseOutcome::rejected()
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "dependent_tier",
+            );
+            report_missing_content_node(tier, errors);
+            ParseOutcome::rejected()
+        }
         ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
     }
 }

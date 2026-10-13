@@ -109,7 +109,14 @@ pub fn convert_word_node<'tree>(
     let mut content_items: SmallVec<[WordContent; 2]> = SmallVec::new();
     match &children.child_1.slot {
         ReadableSlot::Present(body) => build_word_contents(*body, errors, &mut content_items),
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "standalone_word",
+            );
+        }
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Error(_) | ReadableSlot::Absent(_) => {}
     }

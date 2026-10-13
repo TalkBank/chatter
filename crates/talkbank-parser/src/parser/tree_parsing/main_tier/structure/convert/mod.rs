@@ -18,8 +18,8 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AdmittedMainTierChildren, AsRawNode, MainTierNode, NoChild, NodeSlot, SlotView,
-    SourceBindingError, SourceBound, SourceChildren, SourceSlotView, TierBodyNode,
+    AsRawNode, MainTierChildren, MainTierNode, NoChild, NodeSlot, SlotView, SourceBindingError,
+    SourceBound, SourceChildren, SourceSlotView, TierBodyNode,
 };
 use crate::model::{
     Bullet, LanguageCode, Linker, MainTier, Postcode, Terminator, TierSeparator, UtteranceContent,
@@ -143,9 +143,7 @@ impl<'tree, 'source> TierBodyLocation<'tree, 'source> {
     /// the ONLY way to use the sink at all, and it is not the banned hand-walk,
     /// which is driving the parse by scanning `node.kind()` instead of the
     /// generated traversal.
-    fn locate(
-        associated: &SourceChildren<'tree, 'source, AdmittedMainTierChildren<'tree>>,
-    ) -> Self {
+    fn locate(associated: &SourceChildren<'tree, 'source, MainTierChildren<'tree>>) -> Self {
         let main = associated.children();
         // The question is not "which slot state is it?" but "is the content
         // actually here?", which is the only one whose answer is a fact about
@@ -326,6 +324,14 @@ pub fn convert_main_tier_node<'tree>(
     // the very `tier_body` the arm had thrown away.
     match main.child_5.slot().view() {
         SlotView::Present(_) => {}
+        SlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing,
+                source,
+                errors,
+                "main_tier",
+            );
+        }
         SlotView::Error(error_node) => errors.report(classify_main_tier_recovery(
             error_node,
             source,
@@ -473,7 +479,7 @@ impl TierBodyData {
 ///
 /// `None` means the tab is missing or recovered, in which case nothing can be
 /// proven adjacent to it and no adjacency-dependent claim is asserted.
-fn tab_end(main: &AdmittedMainTierChildren<'_>) -> Option<usize> {
+fn tab_end(main: &MainTierChildren<'_>) -> Option<usize> {
     match main.child_3.slot().view() {
         SlotView::Present(tab_node) => Some(tab_node.raw_node().end_byte()),
         SlotView::Missing(_) | SlotView::Error(_) | SlotView::Absent(NoChild) => None,
@@ -487,7 +493,7 @@ fn tab_end(main: &AdmittedMainTierChildren<'_>) -> Option<usize> {
 /// (Missing/Error/Absent) mean no illegal trailing space was
 /// captured, and map to a clean separator with no diagnostic (the E758 check
 /// itself is a later validation pass over this provenance, not parse-time).
-fn sep_from_slot(main: &AdmittedMainTierChildren<'_>) -> TierSeparator {
+fn sep_from_slot(main: &MainTierChildren<'_>) -> TierSeparator {
     match main.child_4.slot().as_ref().map(NodeSlot::view) {
         // E758 says "extra whitespace BETWEEN THE TAB AND the tier content", so
         // the span only carries that meaning while it is genuinely adjacent to
@@ -501,7 +507,7 @@ fn sep_from_slot(main: &AdmittedMainTierChildren<'_>) -> TierSeparator {
         // rather than assumed from position. This takes the CARRIER rather than
         // the two values: a `tab_end: usize` parameter type-checks against any
         // node's end byte in the crate, so the pairing would have been held
-        // together by the caller's care. Holding `AdmittedMainTierChildren` is itself
+        // together by the caller's care. Holding `MainTierChildren` is itself
         // the proof that both slots came from the same `main_tier`.
         //
         // The tab is read INSIDE this arm, so a well-formed utterance (no

@@ -235,13 +235,13 @@ never into empty-content or recovery branches. Compound spelling, empty-content
 omission, Missing/Error/Absent handling and string fragment APIs are unchanged.
 
 Both families consume compiled canonical-grammar admission at their tier,
-group-list, group-choice and grouped-content boundaries. Generated
-`NonMissingKindSlot` carriers rule out Missing for composite bodies, groups,
-grouped content, `pho_words` and `sin_word`; this is a producer proof, not an
-inference from an error-free tier or a lack of failing fixtures. Outer choice
-Missing, Error, Absent, displaced nodes and lexical whitespace Missing remain
-explicit. Whole-group fallback and empty-token omission are unchanged, as are
-the public APIs. Grammar/source admission failures propagate as internal
+group-list, group-choice and grouped-content boundaries. Generated `KindSlot`
+carriers retain typed Missing placeholders for composite bodies, groups,
+grouped content, `pho_words` and `sin_word`. Missing is diagnosed without
+lowering placeholder text; inner recovery still preserves the whole-group
+fallback. Error, Absent, displaced nodes and lexical whitespace Missing remain
+explicit. Empty-token omission and the public parser entry points are unchanged.
+Grammar/source admission failures propagate as internal
 failures rather than taking any CHAT recovery branch.
 
 `%wor` marker construction retains its already-admitted source-bound comma,
@@ -250,20 +250,20 @@ silently drop a separator. Its transitional language-token reader and raw
 dependent-tier body reader use checked range admission and report internal
 failure before lexical or empty-content policy is applied.
 The tier, body and word-item extractors also consume compiled canonical-grammar
-admission: body, language-code and standalone-word composite slots cannot
-themselves be Missing. Mixed word/bullet/marker choices, lexical whitespace and
+admission: body, language-code and standalone-word composite slots retain
+Missing, which is diagnosed rather than lowered as content.
+Mixed word/bullet/marker choices, lexical whitespace and
 terminators still retain their recovery states; Error, Absent and displaced
 children remain explicit. The admitted terminator choice uses the same exhaustive
 mapping as other tiers. No clean-tier assumption substitutes for those types,
-and no timing, empty-tier or public API policy changes follow from this proof.
+and source admission does not prove timing completeness or CHAT validity.
 The free-text dependent tiers (the nine bullet-payload tiers, the fifteen
 simple text-like tiers and `%x` user-defined tiers) also extract under compiled
-canonical-grammar admission. Each body is a named nonterminal, so its slot is a
-`SelectedNonMissingKindSlot` and no inhabited Missing arm: before
-the proof reached them they read a placeholder body's empty text as content, a
-path the grammar can never take. Their `tier_sep` slot is narrowed too, and the
-separator reader accepts it under either kind proof because it reads only a
-present separator. Error, an absent optional body and displaced children keep
+canonical-grammar admission. Each optional-present body uses
+`SelectedKindSlot`: selection excludes absence, not Missing. Recovered
+bodies are diagnosed without reading their empty text as present content.
+The separator reader consumes only a present `tier_sep`, keeping its recovery
+payload producer-owned. Error, an absent optional body and displaced children keep
 their diagnostics. Header and field readers whose callers hold both narrowed
 and plain kind slots stay generic over the slot's Missing payload
 (`AnyKindSlot`); a placeholder there only refuses, so one body serves every
@@ -866,22 +866,35 @@ parser header. A cached, fallible `CanonicalLanguage` capability verifies the
 generated narrowing requirements once; extraction checks actual language
 identity and retains the proof in the existing selection memo. There is no
 second parser, rematching pass or consumer assertion based on a kind name.
-Admitted nonterminal slots have an uninhabited Missing payload, including the
-participant/language contents, participant entries, tier bodies, body contents,
-linkers, utterance endings, document anchors, selected lines/dependent tiers and
-final-code/postcode slots. Lexical slots such
-as speaker and language codes retain Missing, and all applicable Error, Absent,
-displaced recovery and source-read failures remain. Raw extraction stays broad.
+Kind identity includes both the name and tree-sitter's named/anonymous flag.
+Consumers use the full identity for classification; `KIND.name()` is only a
+diagnostic label. The current generated carriers retain Missing for both
+nonterminal and lexical positions. Compiled-language admission is not a
+blanket nonterminal non-missing proof: only a generated narrowed slot carrying
+that exact proof may omit its Missing arm. Carriers declare a kind-proof axis
+only when they actually reach such a slot; an `Admitted*` mirror name does
+not exist when there is no distinct narrowed reading.
+Error, Absent, displaced recovery and source-read failures remain independent.
+Raw extraction stays broad.
 A failed metadata admission is an internal tool failure, not invalid CHAT.
 Main-tier body location still searches the source-associated recovery sink when
 the body is not in its expected slot. A nonmissing proof does not prove that a
 required position exists or that displaced children are impossible. Nested
 terminator recovery and lexical prefix diagnostics remain unchanged.
-Mixed line choices retain their broad Missing state when any alternative lacks
-the nonterminal proof. Document recovery ownership failures use E001 and cannot
+Selected kind choices retain Missing even though selection excludes absence.
+Document recovery ownership failures use E001 and cannot
 certify source invalidity. The low-level pre-begin/dependent-tier adapters accept
 the generated admitted choice types; their concrete header/tier policies remain
 unchanged. The generated broad/raw APIs remain available for other producers.
+
+Generator upgrades can flatten nested choices and normalize whitespace/field
+sequences into typed repeats without changing the grammar. Word pieces lower
+every flattened alternative exhaustively. ID decoding selects the concrete
+field alternative and ignores only structural whitespace; pseudonymization
+travels the same source-bound projections and refuses recovery before offering
+edits. Regenerate the conformance inventory alongside the traversal, then check
+reference parsing, backend equivalence, diagnostics and roundtrips. Do not
+hand-edit generated outputs or update observations merely to obtain a pass.
 
 Wrapper and supertype child positions use `KindSlot`: extraction matches the
 concrete kind before constructing `KindMissing<T>`. The kind-preserving

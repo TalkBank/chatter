@@ -4,8 +4,8 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::generated_traversal::{
-    AsRawNode, KindAdmitted, NamedKind, RangeAdmittedChildren, Ranged, ReadableSlot,
-    SelectedNonMissingKindSlot, SourceBound, SourceBoundKind, SourceSlice,
+    AsRawNode, NamedKind, RangeAdmittedChildren, Ranged, ReadableSlot, SelectedKindSlot,
+    SourceBound, SourceBoundKind, SourceSlice,
 };
 use crate::parser::tree_parsing::bullet_content::{BulletTextNode, parse_bullet_content};
 use crate::parser::tree_parsing::helpers::unexpected_node_error;
@@ -31,7 +31,7 @@ pub(super) use crate::parser::node_span::span_of;
 /// `E315 E316 E330 E756` exactly as the other seven always did.
 ///
 /// It stays a trait rather than becoming nothing, because the bound is what
-/// makes `Self::KIND` available to the shared parser and what keeps a
+/// makes `Self::KIND.name()` available to the shared parser and what keeps a
 /// non-tier type out of it.
 pub(crate) trait TextTierBody: NamedKind {}
 
@@ -42,14 +42,12 @@ pub(crate) trait AdmittedTextTierBody<'tree, 'source> {
 
     fn body(
         &self,
-    ) -> &Option<
-        SelectedNonMissingKindSlot<'tree, SourceBound<'tree, 'source, Self::Body>, Ranged<'source>>,
-    >;
+    ) -> &Option<SelectedKindSlot<'tree, SourceBound<'tree, 'source, Self::Body>, Ranged<'source>>>;
 }
 
 /// The nine tiers this module parses.
 mod policies {
-    use super::{AdmittedTextTierBody, KindAdmitted, Ranged, TextTierBody};
+    use super::{AdmittedTextTierBody, Ranged, TextTierBody};
     use crate::generated_traversal::{
         ActDependentTierNode, AddDependentTierNode, CodDependentTierNode, ComDependentTierNode,
         ExpDependentTierNode, GpxDependentTierNode, IntDependentTierNode, SitDependentTierNode,
@@ -60,12 +58,12 @@ mod policies {
         ($($node:ident / $children:ident => $body:ident),* $(,)?) => { $(
             impl TextTierBody for $node<'_> {}
             impl<'tree, 'source> AdmittedTextTierBody<'tree, 'source>
-                for crate::generated_traversal::$children<'tree, KindAdmitted, Ranged<'source>>
+                for crate::generated_traversal::$children<'tree, Ranged<'source>>
             {
                 type Tier = $node<'tree>;
                 type Body = crate::generated_traversal::$body<'tree>;
 
-                fn body(&self) -> &Option<crate::generated_traversal::SelectedNonMissingKindSlot<
+                fn body(&self) -> &Option<crate::generated_traversal::SelectedKindSlot<
                     'tree,
                     crate::generated_traversal::SourceBound<'tree, 'source, Self::Body>,
                     Ranged<'source>,
@@ -113,16 +111,13 @@ fn tier_label(kind: &str) -> &str {
 /// the no-content diagnostic. The enclosing optional-body transition handles
 /// author-written empty tiers separately.
 ///
-/// The body slot has no `Missing` state: the body is a named nonterminal the
-/// compiled grammar proves is never MISSING, and every caller extracts its
-/// tier under that proof, so the slot is a [`SelectedNonMissingKindSlot`].
-/// Until the proof reached this slot, a placeholder body was parsed as though
-/// it were present content.
+/// Selection excludes absence, not MISSING. A placeholder body is diagnosed
+/// and cannot be lowered as present bullet text.
 ///
 /// The concrete owner surfaces displaced children before consuming admission.
 fn parse_text_tier_content<'tree, 'source, Tier, Body>(
     tier: SourceSlice<'tree, 'source>,
-    body: &SelectedNonMissingKindSlot<'tree, SourceBound<'tree, 'source, Body>, Ranged<'source>>,
+    body: &SelectedKindSlot<'tree, SourceBound<'tree, 'source, Body>, Ranged<'source>>,
     errors: &impl ErrorSink,
 ) -> Result<BulletContent, crate::CstFailure>
 where
@@ -136,12 +131,21 @@ where
             errors.report(unexpected_node_error(
                 node.raw_node(),
                 node.source(),
-                Tier::KIND,
+                Tier::KIND.name(),
             ));
             report_missing_text_content::<Tier>(tier, errors);
             Ok(BulletContent::empty())
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                Tier::KIND.name(),
+            );
+            report_missing_text_content::<Tier>(tier, errors);
+            Ok(BulletContent::empty())
+        }
         ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
     }
 }
@@ -199,9 +203,9 @@ fn report_missing_text_content<Tier: TextTierBody>(
         ErrorContext::new(
             tier.source(),
             tier_node.start_byte()..tier_node.end_byte(),
-            Tier::KIND,
+            Tier::KIND.name(),
         ),
-        format!("Missing content in %{} tier", tier_label(Tier::KIND)),
+        format!("Missing content in %{} tier", tier_label(Tier::KIND.name())),
     ));
 }
 
@@ -226,7 +230,7 @@ mod tests {
     #[test]
     fn tier_labels_follow_the_rule_naming_convention() {
         fn label_of<T: TextTierBody>() -> &'static str {
-            tier_label(T::KIND)
+            tier_label(T::KIND.name())
         }
         assert_eq!(label_of::<ActDependentTierNode<'_>>(), "act");
         assert_eq!(label_of::<AddDependentTierNode<'_>>(), "add");

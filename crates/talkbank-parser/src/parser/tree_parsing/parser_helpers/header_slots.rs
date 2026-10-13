@@ -105,7 +105,7 @@ impl<'tree, 'src> HeaderSite<'tree, 'src> {
     ) -> Self {
         Self {
             actual: typed.raw_node(),
-            kind: T::KIND,
+            kind: T::KIND.name(),
             input: typed.source(),
             text: typed.text(),
         }
@@ -188,7 +188,7 @@ impl ContentReadError<'_> {
 /// What a header says when its content slot does not deliver: the reason
 /// recorded on the `Header::Unknown` recovery, and the fix to suggest with
 /// it. The node kinds the diagnostic names come from the typed nodes
-/// themselves (`NamedKind::KIND`), never from a string the caller spells.
+/// themselves (`NamedKind::KIND.name()`), never from a string the caller spells.
 #[derive(Debug)]
 pub(crate) struct ContentSlot<'a> {
     /// The `parse_reason` of the `Header::Unknown` built when the slot fails.
@@ -243,7 +243,7 @@ where
         SourceSlotView::Missing(_) | SourceSlotView::Absent(NoChild) | SourceSlotView::Error(_) => {
             Err(ContentReadError::Recovery(words.refuse(
                 site,
-                T::KIND,
+                T::KIND.name(),
                 errors,
             )))
         }
@@ -271,7 +271,7 @@ where
             .map(|bound| Some(bound.text()))
             .map_err(|error| ContentReadError::Producer(error.into())),
         SourceSlotView::Missing(_) | SourceSlotView::Error(_) => Err(ContentReadError::Recovery(
-            words.refuse(site, T::KIND, errors),
+            words.refuse(site, T::KIND.name(), errors),
         )),
         SourceSlotView::Absent(never) | SourceSlotView::Unexpected(never) => match never {},
     }
@@ -298,7 +298,7 @@ pub(crate) fn read_admitted_content<
         ReadableSlot::Present(content) => Ok(content.text()),
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Missing(_) | ReadableSlot::Absent(NoChild) | ReadableSlot::Error(_) => {
-            Err(words.refuse(site, T::KIND, errors))
+            Err(words.refuse(site, T::KIND.name(), errors))
         }
     }
 }

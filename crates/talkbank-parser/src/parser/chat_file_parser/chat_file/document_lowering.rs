@@ -55,10 +55,9 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AdmittedFullDocumentChildren as FullDocumentChildren, AsRawNode, BeginHeaderNode,
-    EndHeaderNode, FromNodeKind, FullDocumentChild1Choice, LineChoiceSourceView, LineNode,
-    MainTierNode, NoChild, NonMissingKindSlot as KindSlot, SlotView, SourceBound, SourceChildren,
-    SourceField, SourceSlotView, Utf8HeaderNode,
+    AsRawNode, BeginHeaderNode, EndHeaderNode, FromNodeKind, FullDocumentChild1Choice,
+    FullDocumentChildren, KindSlot, LineChoiceSourceView, LineNode, MainTierNode, NoChild,
+    SlotView, SourceBound, SourceChildren, SourceField, SourceSlotView, Utf8HeaderNode,
 };
 use crate::model::{Header, Line, Utterance};
 use crate::node_types::{BLANK_LINE, UNSUPPORTED_LINE};
@@ -266,9 +265,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
     /// is still surfaced because the backstop walks the whole tree.
     fn lower_utf8_anchor<'tree>(
         &mut self,
-        slot: &Option<
-            crate::generated_traversal::SelectedNonMissingKindSlot<'tree, Utf8HeaderNode<'tree>>,
-        >,
+        slot: &Option<crate::generated_traversal::SelectedKindSlot<'tree, Utf8HeaderNode<'tree>>>,
     ) {
         let Some(slot) = slot else {
             // Preserve the complete document without inventing an encoding
@@ -277,6 +274,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
         };
         match slot.view() {
             SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::Utf8),
+            SlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing,
+                    self.parsed.source(),
+                    self.errors,
+                    "full_document",
+                );
+            }
             SlotView::Error(error_node) => self.handle_top_level_error(error_node),
         }
     }
@@ -286,6 +291,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
     fn lower_begin_anchor<'tree>(&mut self, slot: &KindSlot<'tree, BeginHeaderNode<'tree>>) {
         match slot.view() {
             SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::Begin),
+            SlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing,
+                    self.parsed.source(),
+                    self.errors,
+                    "full_document",
+                );
+            }
             SlotView::Absent(NoChild) => {
                 // Backstop + validation (missing @Begin) cover this.
             }
@@ -298,6 +311,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
     fn lower_end_anchor<'tree>(&mut self, slot: &KindSlot<'tree, EndHeaderNode<'tree>>) {
         match slot.view() {
             SlotView::Present(node) => self.push_anchor_header(node.raw_node(), Header::End),
+            SlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing,
+                    self.parsed.source(),
+                    self.errors,
+                    "full_document",
+                );
+            }
             SlotView::Absent(NoChild) => {
                 // Backstop + validation (missing @End) cover this.
             }
@@ -316,10 +337,7 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
             '_,
             'tree,
             '_,
-            crate::generated_traversal::SelectedNonMissingKindSlot<
-                'tree,
-                FullDocumentChild1Choice<'tree>,
-            >,
+            crate::generated_traversal::SelectedKindSlot<'tree, FullDocumentChild1Choice<'tree>>,
         >,
     ) {
         match slot.view() {
@@ -333,6 +351,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
                 };
                 handle_pre_begin_header(choice, self.errors, |line| self.lines.push(line));
             }
+            SourceSlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing.raw_node(),
+                    missing.source(),
+                    self.errors,
+                    "full_document",
+                );
+            }
             SourceSlotView::Error(error_node) => self.handle_top_level_error(error_node.raw_node()),
             SourceSlotView::Unexpected(never) => match never {},
         }
@@ -342,14 +368,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
     ///
     /// `Present` dispatches the `line` node to `dispatch_line`, which now drives
     /// the typed `extract_line` visitor (Task 2a). `Error` routes through the
-    /// shared top-level error path. Compiled admission rules out Missing here.
+    /// shared top-level error path. Missing retains its own recovery diagnostic.
     fn lower_line_slot(
         &mut self,
         slot: SourceField<
             '_,
             'a,
             'a,
-            crate::generated_traversal::SelectedNonMissingKindSlot<'a, LineNode<'a>>,
+            crate::generated_traversal::SelectedKindSlot<'a, LineNode<'a>>,
         >,
     ) {
         match slot.view() {
@@ -359,6 +385,14 @@ impl<'a, S: ErrorSink> DocumentLowering<'a, '_, S> {
                 {
                     self.dispatch_line(line);
                 }
+            }
+            SourceSlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing.raw_node(),
+                    missing.source(),
+                    self.errors,
+                    "full_document",
+                );
             }
             SourceSlotView::Error(error_node) => match error_node.read_raw() {
                 Ok(bound) => self.handle_bound_top_level_error(bound),

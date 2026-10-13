@@ -7,9 +7,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Dependent_Tiers>
 
 use crate::generated_traversal::{
-    AdmittedSinDependentTierChildren, AdmittedSinGroupsChildren, AsRawNode, NoChild,
-    NonMissingKindSlot, RangeAdmittedChildren, Ranged, ReadableSlot, SinDependentTierNode,
-    SinGroupNode, SinGroupsNode, SourceBound, SourceChildren,
+    AsRawNode, KindSlot, NoChild, RangeAdmittedChildren, Ranged, ReadableSlot,
+    SinDependentTierChildren, SinDependentTierNode, SinGroupNode, SinGroupsChildren, SinGroupsNode,
+    SourceBound, SourceChildren,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tier_parsers::{ParsedDependentTier, dependent_tier_separator};
@@ -28,7 +28,7 @@ use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 /// ```
 ///
 /// Source-bound extraction retains ownership through body, groups and tokens.
-/// Compiled-grammar admission excludes missing composite bodies; Error/Absent
+/// Missing composite bodies are diagnosed; Error/Absent
 /// retain the existing empty-tier policy. Unexpected is uninhabited in the slot.
 /// Source/reconstruction failures propagate as `CstFailure` rather than empty
 /// content. Source ownership does not prove remaining recovery impossible.
@@ -42,18 +42,15 @@ pub fn parse_sin_tier<'tree>(
 /// One selected root extraction supplies both payload and separator provenance.
 #[must_use]
 struct SinTierReading<'tree, 'source> {
-    children: SourceChildren<'tree, 'source, AdmittedSinDependentTierChildren<'tree>>,
+    children: SourceChildren<'tree, 'source, SinDependentTierChildren<'tree>>,
     separator: TierSeparator,
 }
 
 /// Consuming range admission retains the same root and its metadata.
 #[must_use]
 struct RangedSinTier<'tree, 'source> {
-    children: RangeAdmittedChildren<
-        'tree,
-        'source,
-        AdmittedSinDependentTierChildren<'tree, Ranged<'source>>,
-    >,
+    children:
+        RangeAdmittedChildren<'tree, 'source, SinDependentTierChildren<'tree, Ranged<'source>>>,
     separator: TierSeparator,
 }
 
@@ -107,7 +104,7 @@ fn lower_sin_tier<'tree, 'source>(
     children: &RangeAdmittedChildren<
         'tree,
         'source,
-        AdmittedSinDependentTierChildren<'tree, Ranged<'source>>,
+        SinDependentTierChildren<'tree, Ranged<'source>>,
     >,
     errors: &impl ErrorSink,
 ) -> Result<SinTier, crate::CstFailure> {
@@ -120,7 +117,15 @@ fn lower_sin_tier<'tree, 'source>(
         ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => {
             SinTier::new(Vec::new()).with_span(span)
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "sin_dependent_tier",
+            );
+            SinTier::new(Vec::new()).with_span(span)
+        }
         ReadableSlot::Unexpected(never) => match *never {},
     })
 }
@@ -148,11 +153,7 @@ fn parse_sin_groups<'tree>(
 }
 
 fn lower_sin_groups<'tree, 'source>(
-    groups: &RangeAdmittedChildren<
-        'tree,
-        'source,
-        AdmittedSinGroupsChildren<'tree, Ranged<'source>>,
-    >,
+    groups: &RangeAdmittedChildren<'tree, 'source, SinGroupsChildren<'tree, Ranged<'source>>>,
     errors: &impl ErrorSink,
 ) -> Result<Vec<SinItem>, crate::CstFailure> {
     let mut items = Vec::with_capacity(groups.children().child_1.slot.len() + 1);
@@ -184,15 +185,11 @@ fn lower_sin_groups<'tree, 'source>(
 
 /// Decode one `sin_group` slot, extending `items` with its gesture/sign items.
 ///
-/// Grammar admission rules out missing composite groups, not Error or Absent.
+/// Missing composite groups are diagnosed; Error and Absent remain independent.
 /// Present groups retain flat/grouped decoding; Error is diagnosed and Absent
 /// emits nothing. Source failures propagate independently of CHAT recovery.
 fn push_sin_group<'tree, 'source>(
-    slot: &NonMissingKindSlot<
-        'tree,
-        SourceBound<'tree, 'source, SinGroupNode<'tree>>,
-        Ranged<'source>,
-    >,
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, SinGroupNode<'tree>>, Ranged<'source>>,
     errors: &impl ErrorSink,
     items: &mut Vec<SinItem>,
 ) -> Result<(), crate::CstFailure> {
@@ -208,7 +205,14 @@ fn push_sin_group<'tree, 'source>(
             ));
         }
         ReadableSlot::Absent(NoChild) => {}
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "sin_groups",
+            );
+        }
         ReadableSlot::Unexpected(never) => match *never {},
     }
     Ok(())
@@ -219,8 +223,8 @@ mod range_tests {
     use super::*;
     use crate::TreeSitterParser;
     use crate::generated_traversal::{
-        AdmittedSinGroupChoiceSourceView, SinGroupChoice, SinGroupedContentNode,
-        SourceBindingError, SourceSlotView,
+        SinGroupChoice, SinGroupChoiceSourceView, SinGroupedContentNode, SourceBindingError,
+        SourceSlotView,
     };
     use talkbank_model::ErrorCollector;
     use talkbank_model::model::DependentTier;
@@ -249,7 +253,7 @@ mod range_tests {
                 .parse_source_incremental(source, None)
                 .expect("independent equal bytes");
             let mut carriers = [0; 4];
-            let mut body_states = [0; 3];
+            let mut body_states = [0; 4];
             let mut choices = [0; 5];
             let mut checks: [Vec<usize>; 4] = std::array::from_fn(|_| Vec::new());
             let mut pairs = [0; 2];
@@ -294,6 +298,7 @@ mod range_tests {
                     let reading = SinTierReading::extract(tier).expect("kind-admitted root");
                     let before = match reading.children.field_child_2().slot().view() {
                         SourceSlotView::Present(_) => 0,
+                        SourceSlotView::Missing(_) => 3,
                         SourceSlotView::Error(_) => 1,
                         SourceSlotView::Absent(NoChild) => 2,
                     };
@@ -303,7 +308,7 @@ mod range_tests {
                         ReadableSlot::Present(_) => 0,
                         ReadableSlot::Error(_) => 1,
                         ReadableSlot::Absent(NoChild) => 2,
-                        ReadableSlot::Missing(never) => match never.0 {},
+                        ReadableSlot::Missing(_) => 3,
                         ReadableSlot::Unexpected(never) => match *never {},
                     };
                     assert_eq!(after, before);
@@ -357,8 +362,8 @@ mod range_tests {
                         .expect("kind-admitted group");
                     let before = match reading.field_content().slot().view() {
                         SourceSlotView::Present(choice) => match choice.view() {
-                            AdmittedSinGroupChoiceSourceView::SinWord(_) => 0,
-                            AdmittedSinGroupChoiceSourceView::SinBeginGroup(_) => 1,
+                            SinGroupChoiceSourceView::SinWord(_) => 0,
+                            SinGroupChoiceSourceView::SinBeginGroup(_) => 1,
                         },
                         SourceSlotView::Missing(_) => 2,
                         SourceSlotView::Error(_) => 3,
@@ -424,7 +429,7 @@ mod range_tests {
                 );
             }
             eprintln!(
-                "sin selected {name}: carriers={carriers:?} body[present,error,absent]={body_states:?} choice[word,group,missing,error,absent]={choices:?} pairs[groups,content]={pairs:?} checks={checks:?}; inline reading={} ranged={}",
+                "sin selected {name}: carriers={carriers:?} body[present,error,absent,missing]={body_states:?} choice[word,group,missing,error,absent]={choices:?} pairs[groups,content]={pairs:?} checks={checks:?}; inline reading={} ranged={}",
                 std::mem::size_of::<SinTierReading<'_, '_>>(),
                 std::mem::size_of::<RangedSinTier<'_, '_>>()
             );

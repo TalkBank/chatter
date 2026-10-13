@@ -7,7 +7,8 @@
 //! MICASE/SBCSAE converters, external generators) needs it.
 //!
 //! Coverage: 13 languages via lookup tables (`num2text`), CJK via
-//! `num2chinese`, and English ordinals/decades/years via `ordinal_year_eng`.
+//! `num2chinese`, English ordinals/decades/years via `ordinal_year_eng`, and
+//! bounded Dutch suffix ordinals via `ordinal_nld`.
 //!
 //! The batchalign-specific batch-detection hook (`detect_expansion`, which
 //! routes tokens to a Python `num2words` IPC path) is deliberately NOT part of
@@ -16,6 +17,7 @@
 mod english_cardinal;
 mod num2chinese;
 mod num2text;
+mod ordinal_nld;
 mod ordinal_year_eng;
 mod spanish_cardinal;
 

@@ -68,8 +68,8 @@ pub fn parse_utterance_node<'tree, P: TierRouting>(
 
     // child_0: the main tier. It is processed FIRST so it is built before any
     // dependent tier is attached (the dependent-tier branch consumes the built
-    // utterance via `utterance_builder.take()`). Compiled-language admission
-    // excludes Missing for the main-tier nonterminal, not Error or absence.
+    // utterance via `utterance_builder.take()`). Missing main tiers retain
+    // their own diagnostic and taint rather than becoming usable content.
     match associated.field_child_0().slot().view() {
         SourceSlotView::Present(main_tier) => {
             match crate::parser::typed_cst::read_source_field(main_tier, errors) {
@@ -79,6 +79,15 @@ pub fn parse_utterance_node<'tree, P: TierRouting>(
                 }
                 None => parse_health.taint(ParseHealthTier::Main),
             }
+        }
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                input,
+                errors,
+                "utterance",
+            );
+            parse_health.taint(ParseHealthTier::Main);
         }
         SourceSlotView::Error(error_node) => {
             // An ERROR at the main-tier position routes to the same recovery
@@ -110,10 +119,18 @@ pub fn parse_utterance_node<'tree, P: TierRouting>(
                     &mut deferred_words,
                 );
             }
-            // Every selected dependent tier is a proven nonterminal, so under
-            // the admitted reading the slot has no Missing state and no arm
-            // for one. ERROR recovery still conservatively taints the affected
-            // alignment.
+            // Selected tiers retain Missing and ERROR recovery; neither is a
+            // usable tier, and both conservatively taint alignment.
+            SourceSlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing.raw_node(),
+                    input,
+                    errors,
+                    "utterance",
+                );
+                parse_health.taint(ParseHealthTier::Main);
+                parse_health.taint_all_alignment_dependents();
+            }
             SourceSlotView::Error(error_node) => {
                 handle_utterance_error_node(error_node, errors, &mut parse_health);
             }

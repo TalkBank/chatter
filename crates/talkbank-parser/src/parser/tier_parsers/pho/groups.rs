@@ -3,9 +3,8 @@
 //! entire group rather than inventing a partial token.
 
 use crate::generated_traversal::{
-    AdmittedPhoGroupChoiceSourceView, AsRawNode, KindSlot, NoChild, NonMissingKindSlot,
-    PhoGroupNode, PhoGroupedContentNode, PhoWordsNode, SourceBound, SourceField, SourceSlotView,
-    WhitespacesNode,
+    AsRawNode, KindSlot, NoChild, PhoGroupChoiceSourceView, PhoGroupNode, PhoGroupedContentNode,
+    PhoWordsNode, SourceBound, SourceField, SourceSlotView, WhitespacesNode,
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::model::{PhoItem, PhoWord};
@@ -16,8 +15,7 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_dis
 
 /// Select the generated flat-word or bracketed-group variant while retaining
 /// its owning source. Outer Missing/Error preserve the group; Absent emits
-/// nothing. Inner Error/Absent preserve the whole-group fallback; compiled
-/// grammar admission excludes missing composite content.
+/// nothing. Inner Missing/Error/Absent preserve the whole-group fallback.
 /// Internal source faults propagate rather than selecting recovery.
 pub(super) fn extract_pho_group_items<'tree>(
     typed: SourceBound<'tree, '_, PhoGroupNode<'tree>>,
@@ -35,7 +33,7 @@ pub(super) fn extract_pho_group_items<'tree>(
         SourceSlotView::Absent(NoChild) => return Ok(Vec::new()),
     };
     Ok(match choice.view() {
-        AdmittedPhoGroupChoiceSourceView::PhoWords(words) => {
+        PhoGroupChoiceSourceView::PhoWords(words) => {
             let text = words.read()?.text();
             if text.is_empty() {
                 Vec::new()
@@ -43,7 +41,7 @@ pub(super) fn extract_pho_group_items<'tree>(
                 vec![PhoItem::Word(PhoWord::new(text))]
             }
         }
-        AdmittedPhoGroupChoiceSourceView::PhoBeginGroup(seq) => {
+        PhoGroupChoiceSourceView::PhoBeginGroup(seq) => {
             for node in seq.field_unexpected().iter() {
                 surface_displaced(&[node.raw_node()], "pho_group", node.source(), errors);
             }
@@ -51,6 +49,10 @@ pub(super) fn extract_pho_group_items<'tree>(
                 SourceSlotView::Present(content) => build_group_from_words(
                     extract_pho_grouped_content_words(content.read()?, errors)?,
                 ),
+                SourceSlotView::Missing(missing) => {
+                    check_not_missing(missing.raw_node(), source, errors, "pho_group");
+                    fallback_group_as_text(typed)
+                }
                 SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
                     fallback_group_as_text(typed)
                 }
@@ -123,9 +125,9 @@ pub(super) fn push_pho_separator<'tree>(
 }
 
 /// Preserve nonempty word text, diagnose Error, and omit absent slots.
-/// The composite word carrier cannot be missing after grammar admission.
+/// A missing composite word is diagnosed, not read as spoken text.
 fn push_pho_word<'tree, 'source>(
-    slot: SourceField<'_, 'tree, 'source, NonMissingKindSlot<'tree, PhoWordsNode<'tree>>>,
+    slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, PhoWordsNode<'tree>>>,
     errors: &impl ErrorSink,
     words: &mut Vec<&'source str>,
 ) -> Result<(), crate::CstFailure> {
@@ -136,6 +138,9 @@ fn push_pho_word<'tree, 'source>(
             if !text.is_empty() {
                 words.push(text);
             }
+        }
+        SourceSlotView::Missing(missing) => {
+            check_not_missing(missing.raw_node(), source, errors, "pho_grouped_content");
         }
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(

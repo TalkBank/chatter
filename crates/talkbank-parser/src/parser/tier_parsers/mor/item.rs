@@ -6,7 +6,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    AsRawNode, MorContentNode, MorPostCliticNode, MorWordNode, NoChild, NonMissingKindSlot, Ranged,
+    AsRawNode, KindSlot, MorContentNode, MorPostCliticNode, MorWordNode, NoChild, Ranged,
     ReadableSlot, SourceBound,
 };
 use talkbank_model::ErrorSink;
@@ -30,8 +30,8 @@ use crate::parser::tree_parsing::parser_helpers::surface_displaced;
 /// Driven by the generated typed visitor: `extract_mor_content` yields the
 /// named `main` and `post_clitics` fields as typed `Positioned` slots,
 /// replacing the removed flat `while node.child(idx)` walk that dispatched by
-/// `child.kind()`. Canonical grammar admission proves that composite `mor_word`
-/// and `mor_post_clitic` nodes cannot themselves be Missing. Their children may
+/// `child.kind()`. Composite `mor_word` and `mor_post_clitic` nodes retain
+/// Missing recovery. Their children may
 /// still contain lexical recovery; Error, absent main words, displaced children
 /// and source failures retain their own handling.
 pub fn parse_mor_content<'tree>(
@@ -64,7 +64,14 @@ pub fn parse_mor_content<'tree>(
                     "mor_content",
                 ));
             }
-            ReadableSlot::Missing(never) => match never.0 {},
+            ReadableSlot::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing.raw_node(),
+                    missing.source(),
+                    errors,
+                    "mor_content",
+                );
+            }
             ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
         }
     }
@@ -85,11 +92,7 @@ pub fn parse_mor_content<'tree>(
 
 /// Decode the admitted `main` field, retaining absent and recovered states.
 fn decode_main_word<'tree, 'source>(
-    slot: &NonMissingKindSlot<
-        'tree,
-        SourceBound<'tree, 'source, MorWordNode<'tree>>,
-        Ranged<'source>,
-    >,
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, MorWordNode<'tree>>, Ranged<'source>>,
     errors: &impl ErrorSink,
 ) -> Result<Option<MorWord>, crate::CstFailure> {
     Ok(match slot {
@@ -105,7 +108,15 @@ fn decode_main_word<'tree, 'source>(
             ));
             None
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "mor_content",
+            );
+            None
+        }
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Absent(NoChild) => None,
     })
@@ -120,8 +131,8 @@ fn decode_main_word<'tree, 'source>(
 ///
 /// Driven by the generated typed visitor: `extract_mor_post_clitic` yields the
 /// tilde and `mor_word` positions as typed `Positioned` slots. Lexical tilde
-/// recovery retains its existing no-op policy. Canonical admission rules out
-/// a Missing composite `mor_word`, not absence or recovery within that word.
+/// recovery retains its existing no-op policy. A Missing composite `mor_word`
+/// is diagnosed; source admission does not prove syntax validity.
 fn parse_mor_post_clitic<'tree>(
     typed: SourceBound<'tree, '_, MorPostCliticNode<'tree>>,
     errors: &impl ErrorSink,
@@ -159,7 +170,14 @@ fn parse_mor_post_clitic<'tree>(
                 "mor_post_clitic",
             ));
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "mor_post_clitic",
+            );
+        }
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Absent(NoChild) => {}
     }

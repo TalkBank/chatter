@@ -62,9 +62,9 @@ use talkbank_model::ParseOutcome;
 /// [`NodeSlot`] (no `_` catch-all, no `.ok()`), reproducing the removed hand-walk
 /// byte for byte:
 ///
-/// - `Present`: a possibly empty body drives item iteration. Compiled canonical
-///   grammar admission proves that this composite body cannot itself be Missing;
-///   lexical placeholders inside it remain independently represented.
+/// - `Present`: a possibly empty body drives item iteration.
+/// - `Missing`: report recovery and return an empty tier; never read placeholder
+///   text as word content. Lexical placeholders remain independently represented.
 /// - `Absent` / `Error`: no child of kind `wor_tier_body` was found
 ///   (the old `None` branch): return the EMPTY tier SILENTLY (no diagnostic). This
 ///   silent-partial is preserved. The document attachment caller gates malformed
@@ -87,6 +87,15 @@ pub fn parse_wor_tier<'tree>(
             Some(body) => parse_wor_tier_body(body, errors)?.with_span(span),
             None => WorTier::new(Vec::new()).with_span(span),
         },
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "wor_dependent_tier",
+            );
+            WorTier::new(Vec::new()).with_span(span)
+        }
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {
             WorTier::new(Vec::new()).with_span(span)
         }
@@ -121,6 +130,15 @@ fn parse_wor_tier_body<'tree>(
             surface_displaced(&group.unexpected, "wor_tier_body", source, errors);
             match group.child_0.slot().view() {
                 SlotView::Present(langcode) => extract_langcode(*langcode, source, errors),
+                SlotView::Missing(missing) => {
+                    crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                        missing,
+                        source,
+                        errors,
+                        "wor_tier_body",
+                    );
+                    None
+                }
                 SlotView::Error(_) | SlotView::Absent(NoChild) => None,
             }
         }
@@ -236,8 +254,8 @@ fn push_wor_separator<'tree>(
 ///   during recovery" rule.
 ///
 /// This mixed lexical/composite choice retains Missing and other recovery
-/// states. Only the nested standalone-word slot has a compiled nonmissing proof;
-/// neither that proof nor source ownership certifies the whole tier as clean.
+/// states. The nested standalone-word slot also retains Missing; source
+/// ownership does not certify the whole tier as clean.
 fn push_wor_item<'tree>(
     slot: SourceField<'_, 'tree, '_, ChoiceSlot<'tree, WorTierBodyChild1Child0Choice<'tree>>>,
     errors: &impl ErrorSink,
@@ -271,6 +289,14 @@ fn push_wor_item<'tree>(
                             {
                                 items.push(WorItem::Word(Box::new(word)));
                             }
+                        }
+                        SourceSlotView::Missing(missing) => {
+                            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                                missing.raw_node(),
+                                source,
+                                errors,
+                                "wor_word_item",
+                            );
                         }
                         SourceSlotView::Error(bad) => {
                             errors.report(unexpected_node_error(

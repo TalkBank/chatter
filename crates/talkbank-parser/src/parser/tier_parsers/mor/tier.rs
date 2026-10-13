@@ -9,9 +9,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#MOR_Format>
 
 use crate::generated_traversal::{
-    Absence, AdmittedMorContentsChild0Choice, AsRawNode, KindSlot, MorContentNode,
+    Absence, AsRawNode, KindSlot, MorContentNode, MorContentsChild0Choice,
     MorContentsChild0MorContentChild2Child1Choice, MorContentsNode, MorDependentTierNode, Never,
-    NoChild, NonMissingKindSlot, Ranged, ReadableSlot, SourceBound, SourceSlice, WhitespacesNode,
+    NoChild, Ranged, ReadableSlot, SourceBound, SourceSlice, WhitespacesNode,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tree_parsing::main_tier::structure::terminator::{
@@ -96,7 +96,15 @@ pub fn parse_mor_tier_inner<'tree>(
             ));
             ParseOutcome::Rejected
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "mor_dependent_tier",
+            );
+            ParseOutcome::Rejected
+        }
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Absent(NoChild) => {
             // The loud signal for a grammar that no longer matches the
@@ -162,7 +170,7 @@ fn parse_mor_contents_body<'tree>(
         }
     };
     match choice {
-        AdmittedMorContentsChild0Choice::MorContent(items_children) => {
+        MorContentsChild0Choice::MorContent(items_children) => {
             let mut items = MorItems::with_capacity(items_children.child_1.slot.len() + 1);
 
             push_mor_content_item(&items_children.child_0.slot, errors, &mut items);
@@ -224,7 +232,7 @@ fn parse_mor_contents_body<'tree>(
 
             finish_mor_tier(items, terminator, span, mor_contents_node, source, errors)
         }
-        AdmittedMorContentsChild0Choice::BreakForCoding(term_choice) => {
+        MorContentsChild0Choice::BreakForCoding(term_choice) => {
             let mut items = MorItems::with_capacity(0);
             let terminator = Some(terminator_from_new_choice(term_choice));
 
@@ -310,15 +318,12 @@ fn report_missing_terminator(mor_contents_node: Node, source: &str, errors: &imp
 /// - `Present`: delegate to [`parse_mor_content`]; a `Rejected` item marks the
 ///   whole tier failed (no fabricated default) rather than being dropped
 ///   silently.
-/// - `Missing` / `Unexpected`: uninhabited for this admitted composite slot.
+/// - `Missing`: diagnose and irreversibly reject the collection.
+/// - `Unexpected`: uninhabited for this kind-selected slot.
 /// - `Error`: report recovery and reject the whole tier.
 /// - `Absent`: no child at this position; nothing reported, nothing pushed.
 fn push_mor_content_item<'tree, 'source>(
-    slot: &NonMissingKindSlot<
-        'tree,
-        SourceBound<'tree, 'source, MorContentNode<'tree>>,
-        Ranged<'source>,
-    >,
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, MorContentNode<'tree>>, Ranged<'source>>,
     errors: &impl ErrorSink,
     items: &mut MorItems,
 ) {
@@ -333,7 +338,16 @@ fn push_mor_content_item<'tree, 'source>(
             items.reject();
             return;
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "mor_contents",
+            );
+            items.reject();
+            return;
+        }
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Absent(NoChild) => return,
     };

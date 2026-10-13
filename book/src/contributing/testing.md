@@ -1461,6 +1461,15 @@ including currency, digit-leading compounds and number groups; a supported
 part cannot license a partial rewrite. Existing language-specific composers
 remain separate. Preservation is not certification of CHAT validity.
 
+Dutch ordinal API controls cover authored irregular/compound spellings, every
+rank 1–1000 with all four accepted lowercase suffixes, and exact preservation
+outside the supported whole-token ASCII domain. A private admitted rank owns
+the boundary; missing cardinal-table evidence cannot create a guessed word.
+Leading zeros and superscript `ᵉ` are explicit compatibility policies rather
+than parser rules or recommended numeric typography. Tests freeze Dutch
+cardinals/currencies and other-language suffix abstention separately. See
+[the Dutch generation policy](../chatter/integrating/library-usage.md#explicit-dutch-ordinal-generation).
+
 The English number-spelling reference extends that contract to irregular and
 compound ordinals, short-scale cardinals, decade shorthand and century decades.
 Authored written controls pair with the E220 numeric-form specimen.

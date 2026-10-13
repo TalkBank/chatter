@@ -34,16 +34,16 @@ macro_rules! body_carriers {
 body_carriers! {
     ContentsChildren => ContentsNode,
     ContentItemChildren => ContentItemNode,
-    AdmittedGroupWithAnnotationsChildren => GroupWithAnnotationsNode,
-    AdmittedMainPhoGroupChildren => MainPhoGroupNode,
-    AdmittedMainSinGroupChildren => MainSinGroupNode,
-    AdmittedTierBodyChildren => TierBodyNode,
-    AdmittedTierBodyLanguageCodeChildren => TierBodyNode,
-    AdmittedUtteranceEndChildren => UtteranceEndNode,
-    AdmittedUtteranceEndChild2Children => UtteranceEndNode,
-    AdmittedFinalCodesChildren => FinalCodesNode,
-    AdmittedFinalCodesChild0Children => FinalCodesNode,
-    AdmittedFinalCodesChild1Children => FinalCodesNode,
+    GroupWithAnnotationsChildren => GroupWithAnnotationsNode,
+    MainPhoGroupChildren => MainPhoGroupNode,
+    MainSinGroupChildren => MainSinGroupNode,
+    TierBodyChildren => TierBodyNode,
+    TierBodyLanguageCodeChildren => TierBodyNode,
+    UtteranceEndChildren => UtteranceEndNode,
+    UtteranceEndChild2Children => UtteranceEndNode,
+    FinalCodesChildren => FinalCodesNode,
+    FinalCodesChild0Children => FinalCodesNode,
+    FinalCodesChild1Children => FinalCodesNode,
 }
 
 /// Classify every displaced body child with its carrier's own context.
@@ -61,7 +61,12 @@ pub(crate) fn surface_main_tier_sink<'tree, C: MainTierBodyCarrier<'tree>>(
                 MainTierRegion::Body,
             ));
         } else {
-            surface_displaced(std::slice::from_ref(node), C::Owner::KIND, source, errors);
+            surface_displaced(
+                std::slice::from_ref(node),
+                C::Owner::KIND.name(),
+                source,
+                errors,
+            );
         }
     }
 }

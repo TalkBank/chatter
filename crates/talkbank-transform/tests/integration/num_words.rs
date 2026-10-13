@@ -61,3 +61,100 @@ fn table_only_languages_preserve_unsupported_tokens() {
     assert_eq!(expand_number("5-6", "fra"), "cinq six");
     assert_eq!(expand_number("$5", "fra"), "cinq dollars");
 }
+
+/// Authored spellings; suffix recognition normalizes compatibility inputs.
+#[test]
+fn dutch_ordinals_render_authored_words_at_the_public_boundary() {
+    for (rank, expected) in [
+        (1, "eerste"),
+        (2, "tweede"),
+        (3, "derde"),
+        (8, "achtste"),
+        (12, "twaalfde"),
+        (18, "achttiende"),
+        (19, "negentiende"),
+        (20, "twintigste"),
+        (22, "tweeëntwintigste"),
+        (29, "negenentwintigste"),
+        (33, "drieëndertigste"),
+        (100, "honderdste"),
+        (101, "honderdeerste"),
+        (102, "honderdtweede"),
+        (108, "honderdachtste"),
+        (117, "honderdzeventiende"),
+        (200, "tweehonderdste"),
+        (999, "negenhonderdnegenennegentigste"),
+        (1000, "duizendste"),
+    ] {
+        for suffix in ["e", "de", "ste", "ᵉ"] {
+            let token = format!("{rank}{suffix}");
+            for lang in ["nld", "NLD", "Nld"] {
+                assert_eq!(expand_number(&token, lang), expected, "{lang}: {token}");
+            }
+        }
+        assert_eq!(expand_number(expected, "nld"), expected);
+    }
+    assert_eq!(expand_number("00029e", "nld"), "negenentwintigste");
+}
+
+/// Rejection preserves the complete spelling; it is not CHAT admission.
+#[test]
+fn dutch_ordinal_recognition_is_whole_token_ascii_and_bounded() {
+    for token in [
+        "0e",
+        "0de",
+        "1001e",
+        "65536e",
+        "999999999999999999999999999999e",
+        "abc29e",
+        "29extra",
+        "29steabc",
+        "29°",
+        "29.e",
+        "29e.",
+        "-29e",
+        "3.14e",
+        "29e-dag",
+        "29E",
+        "29DE",
+        "29STE",
+        "２９e",
+        "٢٩e",
+        " 29e",
+        "29e ",
+    ] {
+        assert_eq!(expand_number(token, "nld"), token, "{token}");
+    }
+    for lang in ["eng", "por", "fra", "spa", "deu", "xxx"] {
+        for suffix in ["e", "de", "ste", "ᵉ"] {
+            let token = format!("29{suffix}");
+            assert_eq!(expand_number(&token, lang), token, "{lang}: {token}");
+        }
+    }
+}
+
+/// Every supported rank is rendered; existing cardinal/currency policy stays.
+#[test]
+fn dutch_ordinal_domain_is_complete_without_changing_cardinals() {
+    for rank in 1..=1000 {
+        let canonical = expand_number(&format!("{rank}e"), "nld");
+        assert!(
+            canonical.chars().all(char::is_alphabetic),
+            "{rank}: {canonical}"
+        );
+        for suffix in ["de", "ste", "ᵉ"] {
+            assert_eq!(expand_number(&format!("{rank}{suffix}"), "nld"), canonical);
+        }
+    }
+    for (token, expected) in [
+        ("22", "tweeëntwintig"),
+        ("100", "honderd"),
+        ("1000", "duizend"),
+        ("101", "101"),
+        ("21-22", "eenentwintig tweeëntwintig"),
+        ("$22", "tweeëntwintig dollars"),
+        ("22-dagen", "tweeëntwintig-dagen"),
+    ] {
+        assert_eq!(expand_number(token, "nld"), expected);
+    }
+}

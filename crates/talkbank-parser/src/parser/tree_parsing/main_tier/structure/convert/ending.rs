@@ -20,8 +20,8 @@
 use crate::error::ErrorSink;
 use crate::generated_traversal::{Absence, Never};
 use crate::generated_traversal::{
-    AsRawNode, NodeSlot, NonMissingKindSlot as KindSlot, PostcodeNode, SlotView, SourceBound,
-    SourceField, SourceSlotView, UtteranceEndNode,
+    AsRawNode, KindSlot, NodeSlot, PostcodeNode, SlotView, SourceBound, SourceField,
+    SourceSlotView, UtteranceEndNode,
 };
 use crate::model::{Bullet, Postcode, Terminator};
 use crate::parser::tree_parsing::media_bullet::parse_bullet_node;
@@ -95,7 +95,7 @@ pub(super) fn parse_utterance_end<'tree>(
     // from the OLD flat `element.child_0` to the group's `child_1`. Every other
     // element/group slot state is skipped (the safe default, matching the removed
     // loop which acted only on `postcode`-kind children). Error or optional
-    // absence yields no postcodes; compiled admission excludes Missing here.
+    // absence yields no postcodes; Missing is diagnosed without inventing a code.
     let mut postcodes: Vec<Postcode> = Vec::new();
     match associated
         .field_child_1()
@@ -141,6 +141,14 @@ pub(super) fn parse_utterance_end<'tree>(
                 }
             }
             surface_main_tier_sink(codes, source, errors);
+        }
+        Some(SourceSlotView::Missing(missing)) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "utterance_end",
+            );
         }
         Some(SourceSlotView::Error(_)) | None => {}
     }
@@ -258,6 +266,15 @@ fn decode_postcode_slot<'tree>(
             ParseOutcome::Parsed(postcode) => Some(postcode),
             ParseOutcome::Rejected => None,
         },
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "postcode",
+            );
+            None
+        }
         SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
     })
 }

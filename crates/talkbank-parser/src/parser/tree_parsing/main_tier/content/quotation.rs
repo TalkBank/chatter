@@ -156,7 +156,7 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
         errors,
     );
 
-    // Compiled grammar admission excludes Missing for this composite quotation.
+    // This projection lowers only a present composite quotation.
     // Error or absence must still refuse to produce a quotation value.
     let SourceSlotView::Present(quotation) = associated.field_quotation().slot().view() else {
         return ParseOutcome::rejected();
@@ -184,7 +184,16 @@ pub(crate) fn parse_quotation_with_annotations_content<'tree>(
                 }
             }
             // Present-but-unusable (ERROR): the quotation still stands, and
-            // recovery remains explicit despite composite nonmissing admission.
+            // recovery remains explicit despite source admission.
+            SourceSlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing.raw_node(),
+                    source,
+                    errors,
+                    "quotation_with_annotations",
+                );
+                Vec::new()
+            }
             SourceSlotView::Error(_) => Vec::new(),
             SourceSlotView::Absent(never) => match never {},
         },

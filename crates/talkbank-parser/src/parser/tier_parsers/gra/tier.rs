@@ -9,10 +9,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#GrammaticalRelations_Tier>
 
 use crate::generated_traversal::{
-    AdmittedGraContentsChildren, AdmittedGraDependentTierChildren, AsRawNode, GraContentsNode,
-    GraDependentTierNode, GraRelationNode, KindSlot, NoChild, NonMissingKindSlot,
-    RangeAdmittedChildren, Ranged, ReadableSlot, SourceBound, SourceChildren, SourceSlice,
-    WhitespacesNode,
+    AsRawNode, GraContentsChildren, GraContentsNode, GraDependentTierChildren,
+    GraDependentTierNode, GraRelationNode, KindSlot, NoChild, RangeAdmittedChildren, Ranged,
+    ReadableSlot, SourceBound, SourceChildren, SourceSlice, WhitespacesNode,
 };
 use crate::parser::node_span::span_of;
 use crate::parser::tier_parsers::{ParsedDependentTier, dependent_tier_separator};
@@ -33,8 +32,7 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_dis
 /// ```
 ///
 /// Source-bound extraction retains the owner through body, repeats and relation
-/// fields. Compiled-grammar admission excludes missing composite bodies;
-/// Error and Absent report E708 and return a truncated tier. Unexpected is
+/// fields. Missing, Error and Absent report E708 and return a truncated tier. Unexpected is
 /// uninhabited in the generated kind slot. Lexical recovery remains explicit;
 /// neither source ownership nor the caller's error gate proves it impossible.
 /// Source/reconstruction failures propagate as `CstFailure`, not CHAT invalidity.
@@ -48,18 +46,15 @@ pub fn parse_gra_tier<'tree>(
 /// Root extraction and separator provenance share one immutable source owner.
 #[must_use]
 struct GraTierReading<'tree, 'source> {
-    children: SourceChildren<'tree, 'source, AdmittedGraDependentTierChildren<'tree>>,
+    children: SourceChildren<'tree, 'source, GraDependentTierChildren<'tree>>,
     separator: TierSeparator,
 }
 
 /// Only this consumed phase can decode or preserve the selected root's model.
 #[must_use]
 struct RangedGraTier<'tree, 'source> {
-    children: RangeAdmittedChildren<
-        'tree,
-        'source,
-        AdmittedGraDependentTierChildren<'tree, Ranged<'source>>,
-    >,
+    children:
+        RangeAdmittedChildren<'tree, 'source, GraDependentTierChildren<'tree, Ranged<'source>>>,
     separator: TierSeparator,
 }
 
@@ -132,7 +127,7 @@ fn parse_gra_root_contents<'tree, 'source>(
     children: &RangeAdmittedChildren<
         'tree,
         'source,
-        AdmittedGraDependentTierChildren<'tree, Ranged<'source>>,
+        GraDependentTierChildren<'tree, Ranged<'source>>,
     >,
     errors: &impl ErrorSink,
 ) -> Result<GraTier, crate::CstFailure> {
@@ -145,7 +140,7 @@ fn parse_gra_root_contents<'tree, 'source>(
         ReadableSlot::Present(contents) => parse_gra_relations(*contents, errors)?
             .into_tier()
             .with_span(span),
-        ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => {
+        ReadableSlot::Missing(_) | ReadableSlot::Error(_) | ReadableSlot::Absent(NoChild) => {
             errors.report(ParseError::new(
                 ErrorCode::MalformedGrammarRelation,
                 Severity::Error,
@@ -161,7 +156,6 @@ fn parse_gra_root_contents<'tree, 'source>(
                 .into_tier()
                 .with_span(span)
         }
-        ReadableSlot::Missing(never) => match never.0 {},
         ReadableSlot::Unexpected(never) => match *never {},
     })
 }
@@ -196,11 +190,7 @@ fn parse_gra_relations<'tree>(
 
 /// The whole contents carrier owns its first relation, inline repeats and extras.
 fn lower_gra_relations<'tree, 'source>(
-    contents: &RangeAdmittedChildren<
-        'tree,
-        'source,
-        AdmittedGraContentsChildren<'tree, Ranged<'source>>,
-    >,
+    contents: &RangeAdmittedChildren<'tree, 'source, GraContentsChildren<'tree, Ranged<'source>>>,
     errors: &impl ErrorSink,
 ) -> Result<GraLoweringReceipt, crate::CstFailure> {
     let mut lowering = GraLowering::with_capacity(contents.children().child_1.slot.len() + 1);
@@ -263,7 +253,7 @@ fn push_gra_separator<'tree, 'source>(
 
 /// Decode one relation slot, recording its actual result in the lowering owner.
 ///
-/// Compiled-grammar admission excludes missing composite relations. Present
+/// Missing composite relations are diagnosed without fabricating a declaration. Present
 /// relations are retained only after successful field admission; no default is
 /// fabricated for a rejected relation. Error is diagnosed and Absent emits
 /// nothing. Lexical fields retain their independent recovery checks.
@@ -271,11 +261,7 @@ fn push_gra_separator<'tree, 'source>(
 /// Only a Present relation is a declaration. Its parsed/rejected result is
 /// recorded atomically; Error/Absent does not invent a declaration or relation.
 fn push_gra_relation<'tree, 'source>(
-    slot: &NonMissingKindSlot<
-        'tree,
-        SourceBound<'tree, 'source, GraRelationNode<'tree>>,
-        Ranged<'source>,
-    >,
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, GraRelationNode<'tree>>, Ranged<'source>>,
     errors: &impl ErrorSink,
     lowering: &mut GraLowering,
 ) -> Result<(), crate::CstFailure> {
@@ -290,7 +276,14 @@ fn push_gra_relation<'tree, 'source>(
                 "gra_contents",
             ));
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "gra_contents",
+            );
+        }
         ReadableSlot::Unexpected(never) => match *never {},
         ReadableSlot::Absent(NoChild) => {}
     }
@@ -347,7 +340,7 @@ mod range_tests {
                 .parse_source_incremental(source, None)
                 .expect("independent owner of equal bytes");
             let mut carriers = [0; 3];
-            let mut body_states = [0; 3];
+            let mut body_states = [0; 4];
             let mut root_checks = Vec::new();
             let mut contents_checks = Vec::new();
             let mut relation_checks = Vec::new();
@@ -363,6 +356,7 @@ mod range_tests {
                     let reading = GraTierReading::extract(tier).expect("kind-admitted root");
                     let before = match reading.children.field_child_2().slot().view() {
                         SourceSlotView::Present(_) => 0,
+                        SourceSlotView::Missing(_) => 3,
                         SourceSlotView::Error(_) => 1,
                         SourceSlotView::Absent(NoChild) => 2,
                     };
@@ -375,7 +369,7 @@ mod range_tests {
                         ReadableSlot::Present(_) => 0,
                         ReadableSlot::Error(_) => 1,
                         ReadableSlot::Absent(NoChild) => 2,
-                        ReadableSlot::Missing(never) => match never.0 {},
+                        ReadableSlot::Missing(_) => 3,
                         ReadableSlot::Unexpected(never) => match *never {},
                     };
                     assert_eq!(after, before, "range admission retains {name}'s body state");
@@ -489,7 +483,7 @@ mod range_tests {
                 assert!(repeated_pairs > 0, "authored repeated relations required");
             }
             eprintln!(
-                "gra selected {name}: carriers={carriers:?} body[present,error,absent]={body_states:?} pairs={repeated_pairs}; checks root={root_checks:?} contents={contents_checks:?} relation={relation_checks:?}; inline reading={} ranged={}",
+                "gra selected {name}: carriers={carriers:?} body[present,error,absent,missing]={body_states:?} pairs={repeated_pairs}; checks root={root_checks:?} contents={contents_checks:?} relation={relation_checks:?}; inline reading={} ranged={}",
                 std::mem::size_of::<GraTierReading<'_, '_>>(),
                 std::mem::size_of::<RangedGraTier<'_, '_>>(),
             );

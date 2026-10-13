@@ -9,9 +9,9 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Sign_Group>
 
 use crate::generated_traversal::{
-    AdmittedSinGroupChildren, AdmittedSinGroupedContentChildren, AsRawNode, KindSlot, NoChild,
-    NonMissingKindSlot, RangeAdmittedChildren, Ranged, ReadableSlot, SinGroupChoice, SinGroupNode,
-    SinGroupedContentNode, SinWordNode, SourceBound, SourceSlice, WhitespacesNode,
+    AsRawNode, KindSlot, NoChild, RangeAdmittedChildren, Ranged, ReadableSlot, SinGroupChildren,
+    SinGroupChoice, SinGroupNode, SinGroupedContentChildren, SinGroupedContentNode, SinWordNode,
+    SourceBound, SourceSlice, WhitespacesNode,
 };
 use talkbank_model::ErrorSink;
 use talkbank_model::model::{EmptyText, SinGroupGestures, SinItem, SinToken};
@@ -24,11 +24,7 @@ use crate::parser::tree_parsing::parser_helpers::{check_not_missing, surface_dis
 enum SinTokenSource<'reading, 'tree, 'source> {
     Word(SourceBound<'tree, 'source, SinWordNode<'tree>>),
     RecoveryGroup(
-        &'reading RangeAdmittedChildren<
-            'tree,
-            'source,
-            AdmittedSinGroupChildren<'tree, Ranged<'source>>,
-        >,
+        &'reading RangeAdmittedChildren<'tree, 'source, SinGroupChildren<'tree, Ranged<'source>>>,
     ),
 }
 
@@ -61,7 +57,7 @@ impl SinTokenSource<'_, '_, '_> {
 ///
 /// Recovery states remain explicit even when the admitted tier has no parser
 /// error: that boundary is not a type-level proof about every reconstructed
-/// slot. Compiled-grammar admission excludes missing composite content, while
+/// slot. Missing composite content retains its recovery policy, while
 /// outer choice recovery and inner Error/Absent retain whole-group preservation
 /// policy through `fallback_group_as_token`, without fabricating a token.
 pub(super) fn extract_sin_group_items<'tree>(
@@ -77,11 +73,7 @@ pub(super) fn extract_sin_group_items<'tree>(
 
 /// The choice, inline bracketed sequence and recovery parent have one owner.
 fn lower_sin_group_items<'tree, 'source>(
-    children: &RangeAdmittedChildren<
-        'tree,
-        'source,
-        AdmittedSinGroupChildren<'tree, Ranged<'source>>,
-    >,
+    children: &RangeAdmittedChildren<'tree, 'source, SinGroupChildren<'tree, Ranged<'source>>>,
     errors: &impl ErrorSink,
 ) -> Result<Vec<SinItem>, crate::CstFailure> {
     let choice = match &children.children().content.slot {
@@ -117,7 +109,15 @@ fn lower_sin_group_items<'tree, 'source>(
                     // Fallback: preserve the entire group as a single token.
                     fallback_group_as_token(children)
                 }
-                ReadableSlot::Missing(never) => match never.0 {},
+                ReadableSlot::Missing(missing) => {
+                    crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                        missing.raw_node(),
+                        missing.source(),
+                        errors,
+                        "sin_group",
+                    );
+                    fallback_group_as_token(children)
+                }
                 ReadableSlot::Unexpected(never) => match *never {},
             }
         }
@@ -130,11 +130,7 @@ fn lower_sin_group_items<'tree, 'source>(
 /// recovery arms share ONE preservation path. The whole group node's
 /// text is decoded and emitted as one `SinItem::Token`, or nothing when empty.
 fn fallback_group_as_token<'tree, 'source>(
-    children: &RangeAdmittedChildren<
-        'tree,
-        'source,
-        AdmittedSinGroupChildren<'tree, Ranged<'source>>,
-    >,
+    children: &RangeAdmittedChildren<'tree, 'source, SinGroupChildren<'tree, Ranged<'source>>>,
 ) -> Vec<SinItem> {
     SinTokenSource::RecoveryGroup(children)
         .decode()
@@ -172,7 +168,7 @@ fn lower_sin_grouped_content_tokens<'tree, 'source>(
     contents: &RangeAdmittedChildren<
         'tree,
         'source,
-        AdmittedSinGroupedContentChildren<'tree, Ranged<'source>>,
+        SinGroupedContentChildren<'tree, Ranged<'source>>,
     >,
     errors: &impl ErrorSink,
 ) -> Vec<SinToken> {
@@ -239,15 +235,10 @@ pub(super) fn push_sin_separator<'tree, 'source>(
 
 /// Decode one `sin_word` slot, pushing its non-empty token text onto `tokens`.
 ///
-/// Compiled-grammar admission proves this named composite carrier cannot be
-/// missing. Present text retains empty-token admission; Error is diagnosed and
+/// Present text retains empty-token admission; Missing and Error are diagnosed and
 /// Absent emits nothing. This does not prove its lexical children are complete.
 fn push_sin_token<'tree, 'source>(
-    slot: &NonMissingKindSlot<
-        'tree,
-        SourceBound<'tree, 'source, SinWordNode<'tree>>,
-        Ranged<'source>,
-    >,
+    slot: &KindSlot<'tree, SourceBound<'tree, 'source, SinWordNode<'tree>>, Ranged<'source>>,
     errors: &impl ErrorSink,
     tokens: &mut Vec<SinToken>,
 ) {
@@ -265,7 +256,14 @@ fn push_sin_token<'tree, 'source>(
             ));
         }
         ReadableSlot::Absent(NoChild) => {}
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "sin_grouped_content",
+            );
+        }
         ReadableSlot::Unexpected(never) => match *never {},
     }
 }

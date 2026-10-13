@@ -4,7 +4,7 @@
 //! optional `linkers`, the optional `langcode`, the required `contents`, and the
 //! required `utterance_end` as typed slots. This UNIFIES what used to be a
 //! separate body walk (linkers / langcode / contents) and a separate end re-walk
-//! (terminator / postcodes / bullet) into a single pass over [`AdmittedTierBodyChildren`].
+//! (terminator / postcodes / bullet) into a single pass over [`TierBodyChildren`].
 //! Each slot is matched EXHAUSTIVELY over [`NodeSlot`] so recovery nodes are
 //! handled explicitly rather than silently dropped, and the recovery diagnostics
 //! ("Malformed language code", "Missing terminator in tier_body", the tier-body
@@ -24,7 +24,7 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AdmittedTierBodyChildren, AsRawNode, NoChild, NodeSlot, SlotView, SourceBound, SourceSlotView,
+    AsRawNode, NoChild, NodeSlot, SlotView, SourceBound, SourceSlotView, TierBodyChildren,
     TierBodyNode,
 };
 
@@ -62,6 +62,15 @@ pub(super) fn parse_tier_body<'tree>(
     // diagnostic.
     let linkers = match body.linkers.slot().as_ref().map(NodeSlot::view) {
         Some(SlotView::Present(linkers_node)) => parse_linkers(*linkers_node, source, errors),
+        Some(SlotView::Missing(missing)) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing,
+                source,
+                errors,
+                "tier_body",
+            );
+            Vec::new()
+        }
         Some(SlotView::Error(_)) | None => Vec::new(),
     };
 
@@ -72,10 +81,19 @@ pub(super) fn parse_tier_body<'tree>(
         span: language_code_span,
     } = parse_optional_langcode(body, source, errors);
 
-    // The admitted producer excludes Missing for the contents nonterminal,
-    // not ERROR, absence or failures reading its source-associated range.
+    // Contents retain Missing, ERROR, absence and source-read refusal as
+    // separate states; only present contents are decoded.
     let content = match associated.field_content_2().slot().view() {
         SourceSlotView::Present(contents) => parse_main_tier_contents(contents.read()?, errors),
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "tier_body",
+            );
+            Vec::new()
+        }
         // Invalid input can leave ERROR at this position. Surface the node (the whole-tree
         // backstop also covers ERROR nodes) and yield empty content rather than
         // fabricating model values.
@@ -91,14 +109,23 @@ pub(super) fn parse_tier_body<'tree>(
     };
 
     // Ending: the `utterance_end` block (terminator, postcodes, trailing bullet).
-    // Its own Missing state is producer-impossible; nested terminator recovery
-    // remains the responsibility of the ending parser and validation.
+    // Its own Missing state is diagnosed; nested terminator recovery remains
+    // the responsibility of the ending parser and validation.
     let UtteranceEndTail {
         terminator,
         postcodes,
         bullet,
     } = match associated.field_ending().slot().view() {
         SourceSlotView::Present(ending) => parse_utterance_end(ending.read()?, errors)?,
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "tier_body",
+            );
+            UtteranceEndTail::default()
+        }
         // A stray ERROR node landed at the `utterance_end` slot position. The
         // previous tier-body walk surfaced such an ERROR via the shared
         // word-error analyzer (and then re-found the real `utterance_end`); route
@@ -190,7 +217,7 @@ struct ParsedLangcode {
 /// level, map to no language code and no diagnostic, matching the
 /// pre-migration absent-langcode behavior.
 fn parse_optional_langcode(
-    body: &AdmittedTierBodyChildren,
+    body: &TierBodyChildren,
     source: &str,
     errors: &impl ErrorSink,
 ) -> ParsedLangcode {

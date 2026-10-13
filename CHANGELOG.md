@@ -9,8 +9,30 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-14
+
+This interim release strengthens source-owned parsing, repair, rewriting and
+diagnostic presentation, improves re2c detection of malformed CHAT, and adds
+bounded Dutch ordinal expansion. It also refreshes the typed CST generator and
+security dependencies.
+
+Rust callers must migrate the breaking APIs listed below. The CLI Cargo package
+is now `talkbank-chatter`; the executable is still `chatter`. Existing CHAT
+spelling and model JSON formats remain compatible, with the explicitly listed
+validation changes.
+
 ### Fixed
 
+- Desktop dependency requirements now select Tauri API 2.12.3, dialog 2.8.2
+  and updater 2.13.3, with refreshed Vite/WebdriverIO tooling and locked Rust
+  dependencies. These dependency changes do not alter CHAT semantics or
+  transport contracts.
+- Lock Rustls 0.23.46, addressing RUSTSEC-2026-0346 through
+  RUSTSEC-2026-0349 without ignoring the dependency advisories.
+- Number generation expands whole-token Dutch suffix ordinals (`e`, `de`,
+  `ste`, `ᵉ`) through rank 1000 using validated rank admission and the shared
+  cardinal lexicon. Unsupported spellings/ranks remain unchanged; other
+  languages and Dutch cardinal/currency generation retain their policies.
 - Test-hygiene admission recognizes generic assertion-helper calls without
   treating function items as calls, and blanks escaped string content without
   leaving invalid escape sequences in its token input.
@@ -32,6 +54,46 @@ version and are listed under "Changed" / "Removed".
   body metadata excludes synthetic labels; MOR-word diagnostics exclude the
   companion terminator, supplied line endings remain caller-owned, and empty
   caller diagnostics retain their origin.
+
+- The re2c shared ID-header API admits the complete header without including
+  its prefix in the language field. Single-participant parsing refuses multiple
+  entries, and direct participant/text APIs report forbidden caller control
+  bytes before legacy sentinel handling. The opt-in trait-test fixtures use
+  current checked conversions and read-only model accessors.
+
+- Re2c reports errors for demonstrated malformed word, annotation, header,
+  morphology, phonology and text-tier carriers. Sink-bearing fragment adapters
+  preserve native rejection and caller coordinates; comment pictures use the
+  comment grammar and dependent-tier fragments no longer need a synthetic
+  main tier. Valid numeric page headers remain accepted.
+
+- Nonword and scoped-annotation decoding preserve the producing source through
+  word, event/action, group and quotation callers. Token policy and retrace
+  locations no longer accept detached node/source pairs; code-switch languages
+  use typed associated fields, and recovered explicit codes cannot become the
+  bare shortcut. Ordered markers and existing CHAT/JSON formats remain.
+- Construct specifications now describe their complete current named CSTs.
+  The two media-bullet examples restore their missing NAK delimiters; model,
+  source-span, CHAT and JSON controls distinguish real bullets from plain text.
+- Word prefix, form/POS suffix and inline CA decoding retain the producing
+  token's admitted source instead of accepting detached node/source pairs.
+  Registry policy, repeated/undeclared form spelling, diagnostics and wire
+  formats remain unchanged.
+- Word-language suffix admission retains the producing CST source through
+  candidate conversion. A failed component refuses the conversion instead of
+  silently dropping a language or inventing `und`. Existing candidate order,
+  registry validation, CHAT spelling and JSON variants are unchanged.
+- Reference-mode speaker matching counts a replaced word's original spoken
+  form, never its replacement targets, on both sides of the comparison. The
+  input transcripts and their annotations remain unchanged.
+- Valid dates and ID language lists select their structured grammar forms;
+  longer malformed values remain intact for validation. ID lowering no longer
+  splits an opaque comma-separated string independently of the grammar.
+- Regenerate typed CST lookahead to avoid stack growth across ERROR runs
+  separated by extras, preserving displaced errors and comment ownership.
+- Upgrade Tree-sitter to 0.27.1 for upstream error-recovery and query fixes;
+  regenerate the parser to retain jump tables when compiled with GCC.
+  Grammar/node-type schemas are unchanged by the runtime upgrade.
 
 ### Changed
 
@@ -150,48 +212,12 @@ version and are listed under "Changed" / "Removed".
   breaking Rust API change. `CstFailure` now distinguishes source binding,
   compiled-grammar binding and kind admission. Parser and transform consumers
   remove obsolete refusal paths while retaining structural recovery.
-
-### Fixed
-
-- The re2c shared ID-header API admits the complete header without including
-  its prefix in the language field. Single-participant parsing refuses multiple
-  entries, and direct participant/text APIs report forbidden caller control
-  bytes before legacy sentinel handling. The opt-in trait-test fixtures use
-  current checked conversions and read-only model accessors.
-
-- Re2c reports errors for demonstrated malformed word, annotation, header,
-  morphology, phonology and text-tier carriers. Sink-bearing fragment adapters
-  preserve native rejection and caller coordinates; comment pictures use the
-  comment grammar and dependent-tier fragments no longer need a synthetic
-  main tier. Valid numeric page headers remain accepted.
-
-- Nonword and scoped-annotation decoding preserve the producing source through
-  word, event/action, group and quotation callers. Token policy and retrace
-  locations no longer accept detached node/source pairs; code-switch languages
-  use typed associated fields, and recovered explicit codes cannot become the
-  bare shortcut. Ordered markers and existing CHAT/JSON formats remain.
-- Construct specifications now describe their complete current named CSTs.
-  The two media-bullet examples restore their missing NAK delimiters; model,
-  source-span, CHAT and JSON controls distinguish real bullets from plain text.
-- Word prefix, form/POS suffix and inline CA decoding retain the producing
-  token's admitted source instead of accepting detached node/source pairs.
-  Registry policy, repeated/undeclared form spelling, diagnostics and wire
-  formats remain unchanged.
-- Word-language suffix admission retains the producing CST source through
-  candidate conversion. A failed component refuses the conversion instead of
-  silently dropping a language or inventing `und`. Existing candidate order,
-  registry validation, CHAT spelling and JSON variants are unchanged.
-- Reference-mode speaker matching counts a replaced word's original spoken
-  form, never its replacement targets, on both sides of the comparison. The
-  input transcripts and their annotations remain unchanged.
-- Valid dates and ID language lists select their structured grammar forms;
-  longer malformed values remain intact for validation. ID lowering no longer
-  splits an opaque comma-separated string independently of the grammar.
-- Regenerate typed CST lookahead to avoid stack growth across ERROR runs
-  separated by extras, preserving displaced errors and comment ownership.
-- Upgrade Tree-sitter to 0.27.1 for upstream error-recovery and query fixes;
-  regenerate the parser to retain jump tables when compiled with GCC.
-  Grammar/node-type schemas are unchanged by the runtime upgrade.
+- Update generated CST consumers for kind identities that include visibility,
+  flattened word-piece choices and normalized ID-field repeats. Diagnostic
+  labels use the kind name without weakening kind admission. Nonterminal
+  recovery stays explicit unless the generated slot carries a non-missing
+  proof; source-bound parsing and pseudonymization retain range ownership.
+  This changes the public generated Rust carrier and choice API, not CHAT syntax.
 
 ## [0.29.0] - 2026-10-07
 
@@ -5276,7 +5302,8 @@ release because the book did not record one; dates are those the book gave.
   once file and fragment participant recovery agreed and both lexers preserved
   single logical line breaks.
 
-[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/TalkBank/chatter/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/TalkBank/chatter/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/TalkBank/chatter/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/TalkBank/chatter/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/TalkBank/chatter/compare/v0.26.0...v0.27.0

@@ -8,8 +8,8 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, ContentsChildren, ContentsNode, NoChild, NonMissingKindSlot, SourceChildren,
-    SourceField, SourceSlotView,
+    AsRawNode, ContentsChildren, ContentsNode, KindSlot, NoChild, SourceChildren, SourceField,
+    SourceSlotView,
 };
 use crate::model::{BracketedItem, UtteranceContent};
 use tree_sitter::Node;
@@ -18,15 +18,14 @@ use crate::parser::tree_parsing::main_tier::structure::contents::parse_contents;
 
 /// The extracted children of a construct's `contents` slot, or nothing.
 ///
-/// Present is extracted. Compiled grammar admission proves that the composite
-/// `contents` node cannot itself be Missing; lexical recovery within it is
-/// still owned by the shared contents walker. An ERROR or displaced node at the
+/// Present is extracted. Missing composite contents and lexical recovery
+/// remain distinct. An ERROR or displaced node at the
 /// position is the construct losing its shape there, which `on_bad` reports
 /// in the construct's own words, and Absent means the construct has no
 /// contents at all; both yield nothing, and the caller rejects an empty
 /// construct.
 pub(crate) fn contents_of<'tree, 'source>(
-    slot: SourceField<'_, 'tree, 'source, NonMissingKindSlot<'tree, ContentsNode<'tree>>>,
+    slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, ContentsNode<'tree>>>,
     errors: &impl ErrorSink,
     on_bad: impl FnOnce(Node<'tree>),
 ) -> Option<SourceChildren<'tree, 'source, ContentsChildren<'tree>>> {
@@ -34,6 +33,10 @@ pub(crate) fn contents_of<'tree, 'source>(
         SourceSlotView::Present(contents) => {
             let bound = crate::parser::typed_cst::read_source_field(contents, errors)?;
             Some(bound.extract())
+        }
+        SourceSlotView::Missing(bad) => {
+            on_bad(bad.raw_node());
+            None
         }
         SourceSlotView::Error(bad) => {
             on_bad(bad.raw_node());

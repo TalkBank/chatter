@@ -143,7 +143,7 @@ fn read_types_field<'tree, T: SourceBoundKind<'tree> + NamedKind>(
                 Severity::Error,
                 SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
                 ErrorContext::new(source, node.start_byte()..node.end_byte(), "types_header"),
-                format!("Missing {} in @Types header", T::KIND),
+                format!("Missing {} in @Types header", T::KIND.name()),
             ));
             Ok(ParseOutcome::rejected())
         }

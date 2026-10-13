@@ -21,8 +21,9 @@ use crate::generated_traversal::{
 /// only what it reads: the projection `view()` needs (`SourceRecovery` or
 /// `RecoveryNode`) when it merely matches `Missing(_)`, a source view of the
 /// expected kind when it reads the placeholder's text. A helper whose
-/// every caller holds the admitted reading names `NonMissingKindSlot` instead,
-/// and has no `Missing` arm at all.
+/// every caller holds a narrowed admitted reading can name
+/// `NonMissingKindSlot` instead and omit its uninhabited `Missing` arm.
+/// Ordinary `KindSlot` positions retain their typed missing placeholder.
 pub(crate) type AnyKindSlot<'tree, T, M> = NodeSlot<'tree, T, M, Never, NoChild>;
 
 /// [`AnyKindSlot`] for a retained repeat element or a present optional: never

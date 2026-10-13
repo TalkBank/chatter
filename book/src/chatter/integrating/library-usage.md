@@ -107,6 +107,32 @@ number expression or the speaker's intent. The [testing contract](../../contribu
 pairs authored written reference controls with invalid numeric specimens and
 keeps raw-string boundary tests separate.
 
+## Explicit Dutch ordinal generation
+
+For ISO code `nld` (case-insensitive), the same `expand_number` API accepts
+whole-token ASCII digits followed by lowercase `e`, `de`, `ste` or `ᵉ`, for
+ranks 1–1000. Examples: `29e` → `negenentwintigste`, `101ste` →
+`honderdeerste`, `1000ᵉ` → `duizendste`. A private admitted rank is required
+before composition; cardinal words come from the existing Dutch lexicon.
+Hundreds join directly to the final ordinal component. This deterministic
+choice does not reject other correctly written variants with `en`.
+
+Suffixes are compatibility inputs, not suffix-agreement validation:
+`1de` and `2ste` normalize to `eerste` and `tweede`. Leading zeros are
+interpreted numerically (`00029e` → rank 29); superscript `ᵉ` is accepted for
+generator/ASR compatibility, not recommended as canonical numeric notation.
+The [Dutch notation guidance](https://taaladvies.net/1o-2o-3o-of-1e-2e-3e-of-1ste-2de-3de/)
+prefers baseline suffix letters and rejects degree signs. Compound-word
+variants are documented by [Onze Taal](https://onzetaal.nl/taalloket/honderdeneende-honderdeneerste).
+
+Zero, ranks above 1000, overflow, uppercase suffixes, non-ASCII digits,
+embedded letters, decimals, negatives and ordinal-hyphen compounds remain
+unchanged. The API does not strip punctuation: `29e.` stays `29e.`; callers
+with tokenization may separately expand its `29e` token. Already-written
+words and Dutch cardinal/currency rules are unchanged. Neither compatibility
+normalization nor preservation establishes a speaker's intended pronunciation
+or certifies CHAT validity.
+
 ## Parsing and Validating a CHAT File
 
 The simplest entry point is `parse_and_validate` from

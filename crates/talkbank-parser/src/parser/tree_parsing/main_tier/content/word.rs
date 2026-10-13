@@ -36,8 +36,7 @@ use crate::parser::typed_cst::read_source_field;
 /// marker actually arrives. Until 2026-09-09 this walked the children by
 /// index and `kind()` string with a catch-all for anything unnamed.
 ///
-/// Compiled grammar admission excludes Missing for the composite word,
-/// replacement and annotation slots, not lexical recovery inside them. Error,
+/// Composite word, replacement and annotation slots retain Missing recovery. Error,
 /// required absence and source-read refusal remain independently handled; an
 /// unusable word never becomes a fabricated model value.
 pub(crate) fn parse_word_content<'tree>(
@@ -76,6 +75,15 @@ pub(crate) fn parse_word_content<'tree>(
             );
             ParseOutcome::rejected()
         }
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "word_with_optional_annotations",
+            );
+            ParseOutcome::rejected()
+        }
         SourceSlotView::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
@@ -95,6 +103,15 @@ pub(crate) fn parse_word_content<'tree>(
                         None => ParseOutcome::rejected(),
                     }
                 }
+                SourceSlotView::Missing(missing) => {
+                    crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                        missing.raw_node(),
+                        source,
+                        errors,
+                        "word_with_optional_annotations",
+                    );
+                    ParseOutcome::rejected()
+                }
                 SourceSlotView::Error(bad) => {
                     errors.report(unexpected_node_error(
                         bad.raw_node(),
@@ -108,6 +125,7 @@ pub(crate) fn parse_word_content<'tree>(
             // An ERROR where the group should be is classified in context, as
             // the old walk's catch-all classified it (a bare `[` is an
             // incomplete annotation, not generic unparsable content).
+            SourceSlotView::Missing(never) => match never {},
             SourceSlotView::Error(bad) => {
                 errors.report(unexpected_node_error(
                     bad.raw_node(),
@@ -131,6 +149,15 @@ pub(crate) fn parse_word_content<'tree>(
                 Some(annotations) => parse_scoped_annotations(annotations, errors),
                 None => Vec::new(),
             },
+            SourceSlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing.raw_node(),
+                    source,
+                    errors,
+                    "word_with_optional_annotations",
+                );
+                Vec::new()
+            }
             SourceSlotView::Error(bad) => {
                 errors.report(unexpected_node_error(
                     bad.raw_node(),

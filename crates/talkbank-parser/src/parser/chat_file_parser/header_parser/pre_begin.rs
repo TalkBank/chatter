@@ -78,7 +78,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
                 associated.field_child_2().slot(),
                 window.raw_node(),
                 FreeText {
-                    kind: WindowHeaderNode::KIND,
+                    kind: WindowHeaderNode::KIND.name(),
                     missing: "Missing or invalid @Window geometry",
                     malformed: "Malformed @Window header",
                 },
@@ -100,7 +100,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
                 associated.field_child_2().slot(),
                 color_words.raw_node(),
                 FreeText {
-                    kind: ColorWordsHeaderNode::KIND,
+                    kind: ColorWordsHeaderNode::KIND.name(),
                     missing: "Missing or invalid @Color words content",
                     malformed: "Malformed @Color words header",
                 },
@@ -122,7 +122,7 @@ pub(crate) fn parse_pre_begin_header<'tree>(
                 associated.field_child_2().slot(),
                 font.raw_node(),
                 FreeText {
-                    kind: FontHeaderNode::KIND,
+                    kind: FontHeaderNode::KIND.name(),
                     missing: "Missing or invalid @Font content",
                     malformed: "Malformed @Font header",
                 },

@@ -33,8 +33,8 @@
 //! type-distinct value with its own arm, and nothing here reads
 //! `node.kind()`.
 //!
-//! Compiled-language admission excludes Missing for nonterminal contents and
-//! participant slots, but lexical slots retain it. Error and fixed-slot Absent
+//! Compiled-language admission retains Missing for nonterminal and lexical
+//! slots. Error and fixed-slot Absent
 //! remain; their Unexpected payload is uninhabited. Whole sequence-repeat items also
 //! have an uninhabited Missing payload. Other recovery states remain even
 //! when finite fixtures have not witnessed them. The retained corpus does
@@ -51,8 +51,8 @@
 
 use crate::generated_traversal::{Absence, KindMissing, Never, NodeSlot};
 use crate::generated_traversal::{
-    AsRawNode, NonMissingKindSlot, ParticipantNode, ParticipantsHeaderNode, ReadableSlot,
-    SourceBound, SourceField, SourceSlice, SourceSlotView,
+    AsRawNode, KindSlot, ParticipantNode, ParticipantsHeaderNode, ReadableSlot, SourceBound,
+    SourceField, SourceSlice, SourceSlotView,
 };
 use crate::node_types::{PARTICIPANT, PARTICIPANTS_CONTENTS, PARTICIPANTS_HEADER};
 use tree_sitter::Node;
@@ -88,6 +88,15 @@ pub fn parse_participants_header<'tree>(
     let header_children = typed.extract_admitted(grammar)?;
     let contents_node = match header_children.field_child_2().slot().view() {
         SourceSlotView::Present(node) => Some(node),
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "participants_header",
+            );
+            None
+        }
         SourceSlotView::Error(_) | SourceSlotView::Absent(_) => None,
     };
     let Some(contents_node) = contents_node else {
@@ -311,7 +320,7 @@ enum ParticipantPosition<'tree> {
 /// Shared admission for required and repeated participant slots. Recovery
 /// stays outside entry conversion, and positional policy remains explicit.
 fn parse_participant_slot<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, ParticipantNode<'tree>>>,
+    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, ParticipantNode<'tree>>>,
     position: ParticipantPosition<'_>,
     errors: &impl ErrorSink,
 ) -> ParseOutcome<ParticipantEntry> {
@@ -321,6 +330,15 @@ fn parse_participant_slot<'tree>(
             Some(participant) => parse_participant_entry(participant, errors),
             None => ParseOutcome::rejected(),
         },
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "participant",
+            );
+            ParseOutcome::rejected()
+        }
         SourceSlotView::Error(bad) => {
             ParticipantFault::Entry {
                 node: bad.raw_node(),

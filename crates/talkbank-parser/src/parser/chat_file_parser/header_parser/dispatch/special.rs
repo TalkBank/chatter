@@ -33,8 +33,8 @@
 
 use crate::error::ErrorSink;
 use crate::generated_traversal::{
-    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, CommentHeaderNode, L1OfHeaderNode,
-    NamedKind, NarrowedKindSlot, NoChild, NumberHeaderNode, OptionNameNode, OptionsContentsNode,
+    AsRawNode, BirthOfHeaderNode, BirthplaceOfHeaderNode, CommentHeaderNode, KindSlot,
+    L1OfHeaderNode, NamedKind, NoChild, NumberHeaderNode, OptionNameNode, OptionsContentsNode,
     OptionsHeaderNode, RecordingQualityHeaderNode, SourceBound, SourceBoundKind, SourceField,
     SourceRecovery, SourceSlotView, SpeakerNode, TranscriptionHeaderNode, extract_options_contents,
     extract_options_header,
@@ -375,7 +375,7 @@ fn option_flags(
 ) -> ParseOutcome<Vec<ChatOptionFlag>> {
     let children = extract_options_contents(options_contents);
     let mut flags = Vec::new();
-    let mut admit = |slot: &NarrowedKindSlot<'_, OptionNameNode<'_>>| -> ParseOutcome<()> {
+    let mut admit = |slot: &KindSlot<'_, OptionNameNode<'_>>| -> ParseOutcome<()> {
         if let Some(name) = present(slot) {
             let ParseOutcome::Parsed(text) =
                 extract_utf8_text(name.raw_node(), input, errors, "option name")

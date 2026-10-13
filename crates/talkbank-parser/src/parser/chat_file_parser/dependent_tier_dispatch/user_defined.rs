@@ -251,7 +251,16 @@ pub(super) fn apply_x_tier<'tree>(
             report_missing_x_content(tier_node, tier_label, input, errors);
             return;
         }
-        ReadableSlot::Missing(never) => match never.0 {},
+        ReadableSlot::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "x_dependent_tier",
+            );
+            report_missing_x_content(tier_node, tier_label, input, errors);
+            return;
+        }
         ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
     };
     let content_text = body.text();

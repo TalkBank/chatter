@@ -83,6 +83,9 @@ impl_inspect_leaf!(
     AltAnnotationNode,
     AltDependentTierNode,
     AltTierPrefixNode,
+    AmpNode,
+    AmpPlusNode,
+    AmpTildeNode,
     AmpersandNode,
     AnnotationContentNode,
     AnonNode,
@@ -144,6 +147,7 @@ impl_inspect_leaf!(
     DefDependentTierNode,
     DefTierPrefixNode,
     DetailedNode,
+    DollarNode,
     DoubleQuoteNode,
     EgHeaderNode,
     EgPrefixNode,
@@ -447,6 +451,7 @@ impl_inspect_leaf!(
     TypesGroupNode,
     TypesHeaderNode,
     TypesPrefixNode,
+    U0015Node,
     UnderlineBeginNode,
     UnderlineEndNode,
     UnlinkedValueNode,
@@ -675,6 +680,25 @@ impl_inspect_choice!(HeaderGapChild1Choice { Space, Tab });
 impl_inspect_choice!(IdAgeChoice {
     AgeFormat,
     TRNRNTRN
+});
+impl_inspect_choice!(IdContentsChild2Choice {
+    Whitespaces,
+    IdCorpus
+});
+impl_inspect_choice!(IdContentsChild6Choice { Whitespaces, IdAge });
+impl_inspect_choice!(IdContentsChild8Choice { Whitespaces, IdSex });
+impl_inspect_choice!(IdContentsChild10Choice {
+    Whitespaces,
+    IdGroup
+});
+impl_inspect_choice!(IdContentsChild12Choice { Whitespaces, IdSes });
+impl_inspect_choice!(IdContentsChild16Choice {
+    Whitespaces,
+    IdEducation
+});
+impl_inspect_choice!(IdContentsChild18Choice {
+    Whitespaces,
+    IdCustomField
 });
 impl_inspect_choice!(IdLanguageChoice {
     LanguageCode,
@@ -1107,7 +1131,10 @@ impl_inspect_choice!(WordBodyWordSegmentChild0Choice {
     Shortening,
     StressMarker
 });
-impl_inspect_choice!(WordBodyWordSegmentChild1LengtheningChoice {
+impl_inspect_choice!(WordBodyWordSegmentChild1Choice {
+    WordSegment,
+    Shortening,
+    StressMarker,
     Lengthening,
     OverlapPoint,
     CaElement,
@@ -1116,13 +1143,7 @@ impl_inspect_choice!(WordBodyWordSegmentChild1LengtheningChoice {
     UnderlineEnd,
     SyllablePause,
     Tilde,
-    Variant8
-});
-impl_inspect_choice!(WordBodyWordSegmentChild1Choice {
-    WordSegment,
-    Shortening,
-    StressMarker,
-    Lengthening
+    Variant11
 });
 impl_inspect_choice!(WordBodyOverlapPointChild0Choice {
     OverlapPoint,
@@ -1143,7 +1164,10 @@ impl_inspect_choice!(WordBodyOverlapPointChild2Choice {
     Shortening,
     StressMarker
 });
-impl_inspect_choice!(WordBodyOverlapPointChild3LengtheningChoice {
+impl_inspect_choice!(WordBodyOverlapPointChild3Choice {
+    WordSegment,
+    Shortening,
+    StressMarker,
     Lengthening,
     OverlapPoint,
     CaElement,
@@ -1152,17 +1176,16 @@ impl_inspect_choice!(WordBodyOverlapPointChild3LengtheningChoice {
     UnderlineEnd,
     SyllablePause,
     Tilde,
-    Variant8
-});
-impl_inspect_choice!(WordBodyOverlapPointChild3Choice {
-    WordSegment,
-    Shortening,
-    StressMarker,
-    Lengthening
+    Variant11
 });
 impl_inspect_choice!(WordBodyChoice {
     WordSegment,
     OverlapPoint
+});
+impl_inspect_choice!(WordPrefixChoice {
+    Variant0,
+    Variant1,
+    Variant2
 });
 
 // --- *Children struct impls ---
@@ -1239,6 +1262,8 @@ impl_inspect_struct!(BulletChildren {
     end_time,
     child_4
 });
+impl_inspect_struct!(BulletEndChildren { content });
+impl_inspect_struct!(BulletStartChildren { content });
 impl_inspect_struct!(CodDependentTierChildren {
     child_0,
     child_1,
@@ -1422,21 +1447,7 @@ impl_inspect_struct!(IdContentsChildren {
     child_16,
     child_17,
     child_18,
-    child_19,
-    child_20,
-    child_21,
-    child_22,
-    child_23,
-    child_24,
-    child_25,
-    child_26,
-    child_27,
-    child_28,
-    child_29,
-    child_30,
-    child_31,
-    child_32,
-    child_33
+    child_19
 });
 impl_inspect_struct!(IdHeaderChildren {
     child_0,
@@ -1718,6 +1729,8 @@ impl_inspect_struct!(PidHeaderChildren {
     child_2,
     child_3
 });
+impl_inspect_struct!(Plus_2Children { content });
+impl_inspect_struct!(PosTagChildren { child_0, child_1 });
 impl_inspect_struct!(PostcodeChildren {
     child_0,
     child_1,
@@ -1953,6 +1966,7 @@ impl_inspect_struct!(WordBodyOverlapPointChildren {
     child_3
 });
 impl_inspect_struct!(WordBodyChildren { content });
+impl_inspect_struct!(WordPrefixChildren { content });
 impl_inspect_struct!(WordWithOptionalAnnotationsChild1Children {
     child_0,
     replacement
@@ -2000,6 +2014,8 @@ pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {
         "blank_header" => extract_blank_header(classify::<BlankHeaderNode>(node)).inspect("blank_header", out),
         "blank_line" => extract_blank_line(classify::<BlankLineNode>(node)).inspect("blank_line", out),
         "bullet" => extract_bullet(classify::<BulletNode>(node)).inspect("bullet", out),
+        "bullet_end" => extract_bullet_end(classify::<BulletEndNode>(node)).inspect("bullet_end", out),
+        "bullet_start" => extract_bullet_start(classify::<BulletStartNode>(node)).inspect("bullet_start", out),
         "cod_dependent_tier" => extract_cod_dependent_tier(classify::<CodDependentTierNode>(node)).inspect("cod_dependent_tier", out),
         "code_switch_annotation" => extract_code_switch_annotation(classify::<CodeSwitchAnnotationNode>(node)).inspect("code_switch_annotation", out),
         "coh_dependent_tier" => extract_coh_dependent_tier(classify::<CohDependentTierNode>(node)).inspect("coh_dependent_tier", out),
@@ -2100,6 +2116,8 @@ pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {
         "phoaln_dependent_tier" => extract_phoaln_dependent_tier(classify::<PhoalnDependentTierNode>(node)).inspect("phoaln_dependent_tier", out),
         "phosyl_dependent_tier" => extract_phosyl_dependent_tier(classify::<PhosylDependentTierNode>(node)).inspect("phosyl_dependent_tier", out),
         "pid_header" => extract_pid_header(classify::<PidHeaderNode>(node)).inspect("pid_header", out),
+        "plus" => extract_plus(classify::<Plus_2Node>(node)).inspect("plus", out),
+        "pos_tag" => extract_pos_tag(classify::<PosTagNode>(node)).inspect("pos_tag", out),
         "postcode" => extract_postcode(classify::<PostcodeNode>(node)).inspect("postcode", out),
         "pre_begin_header" => extract_pre_begin_header(node).inspect("pre_begin_header", out),
         "quotation" => extract_quotation(classify::<QuotationNode>(node)).inspect("quotation", out),
@@ -2149,6 +2167,7 @@ pub fn dispatch(node: tree_sitter::Node, out: &mut Vec<Observation>) {
         "wor_tier_body" => extract_wor_tier_body(classify::<WorTierBodyNode>(node)).inspect("wor_tier_body", out),
         "wor_word_item" => extract_wor_word_item(classify::<WorWordItemNode>(node)).inspect("wor_word_item", out),
         "word_body" => extract_word_body(classify::<WordBodyNode>(node)).inspect("word_body", out),
+        "word_prefix" => extract_word_prefix(classify::<WordPrefixNode>(node)).inspect("word_prefix", out),
         "word_with_optional_annotations" => extract_word_with_optional_annotations(classify::<WordWithOptionalAnnotationsNode>(node)).inspect("word_with_optional_annotations", out),
         "x_dependent_tier" => extract_x_dependent_tier(classify::<XDependentTierNode>(node)).inspect("x_dependent_tier", out),
         "xphoint_dependent_tier" => extract_xphoint_dependent_tier(classify::<XphointDependentTierNode>(node)).inspect("xphoint_dependent_tier", out),

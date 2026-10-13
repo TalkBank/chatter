@@ -3,55 +3,13 @@
 //! CHAT reference anchors:
 //! - <https://talkbank.org/0info/manuals/CHAT.html#ID_Header>
 //!
-//! **Grammar Rule (structural pipes stripped by the typed visitor; the NEW
-//! backend does NOT skip whitespace, so every `optional($.whitespaces)` between
-//! fields is ALSO a real (unused-here) position, which is why the field indices
-//! below are wider than the OLD module's -- see the field mapping table):**
-//! ```javascript
-//! id_header: $ => seq(
-//!     id_prefix,    // child_0 (structural)
-//!     header_sep,   // child_1 (structural)
-//!     id_contents,  // child_2 <-- payload (UNCHANGED index from the OLD module)
-//!     newline       // child_3 (structural)
-//! )
-//!
-//! id_contents: $ => seq(
-//!     optional(id_languages),                // typed child_0  (Option; validation requires nonempty)
-//!     '|',                                   // typed child_1  (pipe)
-//!     optional($.whitespaces),               // typed child_2  (NEW: not skipped)
-//!     optional($.id_corpus),                 // typed child_3  (Option)
-//!     optional($.whitespaces),               // typed child_4  (NEW: not skipped)
-//!     '|',                                   // typed child_5  (pipe)
-//!     id_speaker,                            // typed child_6  (required)
-//!     '|',                                   // typed child_7  (pipe)
-//!     optional($.whitespaces),               // typed child_8  (NEW: not skipped)
-//!     optional($.id_age),                    // typed child_9  (Option)
-//!     optional($.whitespaces),               // typed child_10 (NEW: not skipped)
-//!     '|',                                   // typed child_11 (pipe)
-//!     optional($.whitespaces),               // typed child_12 (NEW: not skipped)
-//!     optional($.id_sex),                    // typed child_13 (Option)
-//!     optional($.whitespaces),               // typed child_14 (NEW: not skipped)
-//!     '|',                                   // typed child_15 (pipe)
-//!     optional($.whitespaces),               // typed child_16 (NEW: not skipped)
-//!     optional($.id_group),                  // typed child_17 (Option)
-//!     optional($.whitespaces),               // typed child_18 (NEW: not skipped)
-//!     '|',                                   // typed child_19 (pipe)
-//!     optional($.whitespaces),               // typed child_20 (NEW: not skipped)
-//!     optional($.id_ses),                    // typed child_21 (Option)
-//!     optional($.whitespaces),               // typed child_22 (NEW: not skipped)
-//!     '|',                                   // typed child_23 (pipe)
-//!     id_role,                               // typed child_24 (required)
-//!     '|',                                   // typed child_25 (pipe)
-//!     optional($.whitespaces),               // typed child_26 (NEW: not skipped)
-//!     optional($.id_education),              // typed child_27 (Option)
-//!     optional($.whitespaces),               // typed child_28 (NEW: not skipped)
-//!     '|',                                   // typed child_29 (pipe)
-//!     optional($.whitespaces),               // typed child_30 (NEW: not skipped)
-//!     optional($.id_custom_field),           // typed child_31 (Option)
-//!     optional($.whitespaces),               // typed child_32 (NEW: not skipped)
-//!     '|'                                    // typed child_33 (pipe)
-//! )
-//! ```
+//! The header's generated `child_2` owns `id_contents`. Its generated
+//! carrier normalizes each optional text field and adjacent whitespace into
+//! a typed repeat: structural whitespace and the concrete field remain
+//! distinct alternatives. Languages stay optional, speaker and role stay
+//! required, and every pipe retains its own recovery slot. The selectors
+//! below name actual generated field types instead of reconstructing fields
+//! from delimiter-separated text.
 //!
 //! Extraction retains the source-bound header, contents and field projections.
 //! Contents consume selected range admission before any field decoding.
@@ -114,18 +72,20 @@ where
     ParseOutcome::parsed(value.text().to_owned())
 }
 
-/// Decode an admitted optional field; recovery omission keeps the whole-tree backstop.
-fn optional_field<'tree, 'source, T, M>(
-    slot: &Option<ReadableSlot<'tree, 'source, SourceBound<'tree, 'source, T>, M, Never, Never>>,
-) -> Option<String>
-where
-    T: SourceBoundKind<'tree>,
-{
-    if let Some(ReadableSlot::Present(field)) = slot {
-        Some(field.text().to_owned())
-    } else {
-        None
-    }
+/// Select the typed field from its generated whitespace/field repeat.
+/// Whitespace is structural, not field text; recovery remains distinct from
+/// a present field and is retained by the document's whole-tree backstop.
+macro_rules! optional_field {
+    ($slots:expr, $choice:ident, $field:ident) => {{
+        use crate::generated_traversal::$choice;
+        $slots.iter().find_map(|element| match &element.slot {
+            ReadableSlot::Present($choice::$field(field)) => Some(field.text().to_owned()),
+            ReadableSlot::Present($choice::Whitespaces(_))
+            | ReadableSlot::Missing(_)
+            | ReadableSlot::Error(_) => None,
+            ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
+        })
+    }};
 }
 
 /// Parse ID header from tree-sitter node.
@@ -206,33 +166,38 @@ pub fn parse_id_header<'tree>(
         },
     };
 
-    // Corpus is semantically required but parsed leniently as an optional slot so
+    // Corpus is semantically required but parsed leniently as an optional field so
     // the model is still built when the corpus is blank; an absent/empty corpus
     // leaves the constructor's empty `CorpusName`, which the Validate trait flags
     // as E514. (Reproduces the pre-migration `parse_optional_text_field` choice.)
-    let corpus = optional_field(&contents.child_3.slot);
+    let corpus = optional_field!(contents.child_2.slot, IdContentsChild2Choice, IdCorpus);
 
-    let speaker = required_field(&contents.child_6.slot, id_contents, errors);
+    let speaker = required_field(&contents.child_4.slot, id_contents, errors);
 
-    let age = optional_field(&contents.child_9.slot);
+    let age = optional_field!(contents.child_6.slot, IdContentsChild6Choice, IdAge);
 
     // Sex is classified to `Sex` HERE (unlike `ses` below, whose raw text defers
     // to the model constructor): the optional `id_sex` node's text -- known
     // (`male`/`female`) or generic alike -- is mapped through `Sex::from_text`
     // (`Unsupported` for unknown values, flagged as E542 by the validator).
-    let sex = optional_field(&contents.child_13.slot).map(|text| Sex::from_text(&text));
+    let sex = optional_field!(contents.child_8.slot, IdContentsChild8Choice, IdSex)
+        .map(|text| Sex::from_text(&text));
 
-    let group = optional_field(&contents.child_17.slot);
+    let group = optional_field!(contents.child_10.slot, IdContentsChild10Choice, IdGroup);
 
     // Ses stays TEXT-based: the raw text is carried through and classified by
     // `SesValue::from_text` at model-construction time below (E546 for unknown).
-    let ses = optional_field(&contents.child_21.slot);
+    let ses = optional_field!(contents.child_12.slot, IdContentsChild12Choice, IdSes);
 
-    let role = required_field(&contents.child_24.slot, id_contents, errors);
+    let role = required_field(&contents.child_14.slot, id_contents, errors);
 
-    let education = optional_field(&contents.child_27.slot);
+    let education = optional_field!(contents.child_16.slot, IdContentsChild16Choice, IdEducation);
 
-    let custom_field = optional_field(&contents.child_31.slot);
+    let custom_field = optional_field!(
+        contents.child_18.slot,
+        IdContentsChild18Choice,
+        IdCustomField
+    );
 
     surface_displaced(
         &header_children.children().unexpected,

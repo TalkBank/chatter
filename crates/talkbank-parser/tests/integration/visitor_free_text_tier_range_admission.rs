@@ -13,6 +13,13 @@ use talkbank_parser::generated_traversal::{
     XphointDependentTierNode,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BodyState {
+    Present,
+    Missing,
+    Error,
+}
+
 #[test]
 fn reference_free_text_tier_ranges_retain_fields_and_count_selected_work() {
     // SAFETY: both exports come from the same linked canonical grammar.
@@ -82,13 +89,22 @@ fn reference_free_text_tier_ranges_retain_fields_and_count_selected_work() {
                         let expected = 3 + usize::from(raw.child_2.slot().is_some()) + extras;
                         let expected_body = match raw.child_2.slot() {
                             Some(NodeSlot::Present(body)) => {
-                                Some((body.raw_node().byte_range(), false))
+                                Some((body.raw_node().byte_range(), BodyState::Present))
                             }
                             Some(NodeSlot::Error(body)) => {
                                 recovered += 1;
-                                Some((body.byte_range(), true))
+                                Some((body.byte_range(), BodyState::Error))
                             }
-                            Some(NodeSlot::Missing(never)) => match never.0 {},
+                            Some(NodeSlot::Missing(missing)) => {
+                                recovered += 1;
+                                Some((
+                                    talkbank_parser::generated_traversal::RecoveryNode::view(
+                                        missing,
+                                    )
+                                    .byte_range(),
+                                    BodyState::Missing,
+                                ))
+                            }
                             Some(NodeSlot::Unexpected(never) | NodeSlot::Absent(never)) => {
                                 match *never {}
                             }
@@ -120,11 +136,26 @@ fn reference_free_text_tier_ranges_retain_fields_and_count_selected_work() {
                             check_retained(*separator, source);
                             check_retained(*newline, source);
                             match (&fields.child_2.slot, &expected_body) {
-                                (Some(ReadableSlot::Present(body)), Some((range, false))) => {
+                                (
+                                    Some(ReadableSlot::Present(body)),
+                                    Some((range, BodyState::Present)),
+                                ) => {
                                     check_retained(*body, source);
                                     assert_eq!(body.raw_node().byte_range(), *range);
                                 }
-                                (Some(ReadableSlot::Error(body)), Some((range, true))) => {
+                                (
+                                    Some(ReadableSlot::Missing(body)),
+                                    Some((range, BodyState::Missing)),
+                                ) => {
+                                    assert!(body.raw_node().is_missing());
+                                    assert_eq!(body.source(), source);
+                                    assert_eq!(body.raw_node().byte_range(), *range);
+                                    assert_eq!(body.text(), source.get(range.clone()).unwrap());
+                                }
+                                (
+                                    Some(ReadableSlot::Error(body)),
+                                    Some((range, BodyState::Error)),
+                                ) => {
                                     assert_eq!(body.source(), source);
                                     assert_eq!(body.raw_node().byte_range(), *range);
                                     assert_eq!(body.text(), source.get(range.clone()).unwrap());

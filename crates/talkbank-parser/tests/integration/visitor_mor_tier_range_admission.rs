@@ -5,7 +5,7 @@ use super::visitor_word_range_admission::check_retained;
 use std::collections::BTreeSet;
 use talkbank_parser::TreeSitterParser;
 use talkbank_parser::generated_traversal::{
-    AdmittedMorContentsChild0Choice, AsRawNode, CompiledLanguage, MorContentNode, MorContentsNode,
+    AsRawNode, CompiledLanguage, MorContentNode, MorContentsChild0Choice, MorContentsNode,
     MorDependentTierNode, MorPostCliticNode, NodeSlot, ReadableSlot,
 };
 
@@ -86,16 +86,14 @@ fn reference_mor_tier_ranges_retain_fields_and_count_selected_work() {
                 );
                 let raw_size = std::mem::size_of_val(raw);
                 let (checks, raw_element) = match raw.child_0.slot() {
-                    NodeSlot::Present(AdmittedMorContentsChild0Choice::MorContent(items)) => {
+                    NodeSlot::Present(MorContentsChild0Choice::MorContent(items)) => {
                         assert!(items.child_2.slot().is_some());
                         (
                             2 * (1 + items.child_1.slot().len()) + 1,
                             items.child_1.slot().first().map(std::mem::size_of_val),
                         )
                     }
-                    NodeSlot::Present(AdmittedMorContentsChild0Choice::BreakForCoding(_)) => {
-                        (1, None)
-                    }
+                    NodeSlot::Present(MorContentsChild0Choice::BreakForCoding(_)) => (1, None),
                     _ => panic!("reference body choice"),
                 };
                 let admitted = selected.admit_ranges().unwrap();
@@ -104,10 +102,10 @@ fn reference_mor_tier_ranges_retain_fields_and_count_selected_work() {
                     panic!("reference body")
                 };
                 let ranged_element = match choice {
-                    AdmittedMorContentsChild0Choice::MorContent(items) => {
+                    MorContentsChild0Choice::MorContent(items) => {
                         items.child_1.slot.first().map(std::mem::size_of_val)
                     }
-                    AdmittedMorContentsChild0Choice::BreakForCoding(_) => {
+                    MorContentsChild0Choice::BreakForCoding(_) => {
                         counts[4] += 1;
                         None
                     }
@@ -122,7 +120,7 @@ fn reference_mor_tier_ranges_retain_fields_and_count_selected_work() {
                 ));
                 assert_eq!(admitted.checked_range_count(), checks);
                 for _ in 0..100 {
-                    if let AdmittedMorContentsChild0Choice::MorContent(items) = choice {
+                    if let MorContentsChild0Choice::MorContent(items) = choice {
                         let ReadableSlot::Present(item) = &items.child_0.slot else {
                             panic!("reference first item")
                         };

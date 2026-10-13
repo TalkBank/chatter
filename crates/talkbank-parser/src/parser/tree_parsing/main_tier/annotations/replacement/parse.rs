@@ -6,8 +6,8 @@
 
 use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation};
 use crate::generated_traversal::{
-    AsRawNode, NoChild, NonMissingKindSlot, ReplacementNode, SourceBound, SourceField,
-    SourceSlotView, StandaloneWordNode,
+    AsRawNode, KindSlot, NoChild, ReplacementNode, SourceBound, SourceField, SourceSlotView,
+    StandaloneWordNode,
 };
 use crate::model::{Replacement, Word};
 use crate::parser::ChildCapacity;
@@ -96,7 +96,7 @@ pub(crate) fn parse_replacement<'tree>(
 /// Convert an admitted composite word slot, preserving zero-width refusal,
 /// source-read failures and the existing Error/Absent recovery policy.
 fn push_word<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, StandaloneWordNode<'tree>>>,
+    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, StandaloneWordNode<'tree>>>,
     words: &mut Vec<Word>,
     errors: &impl ErrorSink,
 ) {
@@ -113,6 +113,14 @@ fn push_word<'tree>(
             {
                 words.push(word);
             }
+        }
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "replacement",
+            );
         }
         // An ERROR at the word position is the whole-tree pass's to name.
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => {}

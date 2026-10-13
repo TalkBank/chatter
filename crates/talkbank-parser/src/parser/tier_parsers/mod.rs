@@ -13,9 +13,7 @@
 //! - <https://talkbank.org/0info/manuals/CHAT.html#Coding_Tier>
 
 use crate::error::Span;
-use crate::generated_traversal::{
-    AsRawNode, KindProof, NarrowedKindSlot, NodeSlot, Raw, SlotView, TierSepNode, extract_tier_sep,
-};
+use crate::generated_traversal::{AsRawNode, NodeSlot, SlotView, TierSepNode, extract_tier_sep};
 use crate::model::{DependentTier, DependentTierEntry, TierSeparator};
 
 pub mod act;
@@ -53,10 +51,10 @@ impl<T> ParsedDependentTier<T> {
 ///
 /// The nested tab and captured trailing space must remain adjacent. Recovery
 /// or an absent capture is a clean separator; E758 validates real captured
-/// space later, never at this parse boundary. The narrowed kind slot accepts
-/// either compiled kind proof because only its Present state is read.
-pub(crate) fn dependent_tier_separator<K: KindProof>(
-    slot: &NarrowedKindSlot<'_, TierSepNode<'_>, Raw, K>,
+/// space later, never at this parse boundary. Only its Present state is read;
+/// the producer retains ownership of the recovery payload.
+pub(crate) fn dependent_tier_separator<M>(
+    slot: &crate::parser::typed_cst::AnyKindSlot<'_, TierSepNode<'_>, M>,
 ) -> TierSeparator {
     let NodeSlot::Present(tier_sep) = slot else {
         return TierSeparator::CLEAN;

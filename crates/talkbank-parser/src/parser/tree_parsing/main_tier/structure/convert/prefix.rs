@@ -19,7 +19,7 @@ use crate::error::{
     ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, SourceLocation, Span,
 };
 use crate::generated_traversal::{
-    AdmittedMainTierChildren, AsRawNode, ColonNode, KindMissing, KindSlotValue, NoChild, NodeSlot,
+    AsRawNode, ColonNode, KindMissing, KindSlotValue, MainTierChildren, NoChild, NodeSlot,
     RecoveryNode, SourceBound, SourceChildren, SourceField, SourceSlotView, SpeakerNode,
 };
 use crate::parser::typed_cst::cst_failure_diagnostic;
@@ -101,7 +101,7 @@ const TAB_POSITION: usize = 3;
 /// emits no diagnostics and yields the speaker string + span; the remaining slot
 /// states reproduce the prior recovery behavior.
 pub(super) fn parse_prefix<'tree>(
-    associated: &SourceChildren<'tree, '_, AdmittedMainTierChildren<'tree>>,
+    associated: &SourceChildren<'tree, '_, MainTierChildren<'tree>>,
     carrier: std::ops::Range<usize>,
     original_input: &str,
     errors: &impl ErrorSink,

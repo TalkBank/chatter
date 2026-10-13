@@ -1,8 +1,8 @@
 //! Source-bound CST decoding for `%pho` and `%mod` tiers.
 
 use crate::generated_traversal::{
-    AsRawNode, ModDependentTierNode, NoChild, NonMissingKindSlot, PhoDependentTierNode,
-    PhoGroupNode, PhoGroupsNode, SourceBound, SourceField, SourceSlotView,
+    AsRawNode, KindSlot, ModDependentTierNode, NoChild, PhoDependentTierNode, PhoGroupNode,
+    PhoGroupsNode, SourceBound, SourceField, SourceSlotView,
 };
 use crate::parser::node_span::span_of;
 use talkbank_model::ErrorSink;
@@ -36,8 +36,8 @@ enum PhoBodyTier<'tree, 'source> {
     Mod(SourceBound<'tree, 'source, ModDependentTierNode<'tree>>),
 }
 
-/// Compiled-grammar admission rules out missing composite bodies; Error/Absent
-/// retain the empty-tier policy.
+/// Producer admission retains missing composite bodies. Recovery and absence
+/// retain the empty-tier policy, with missing nodes reported before lowering.
 fn parse_pho_tier_inner(
     tier: PhoBodyTier<'_, '_>,
     errors: &impl ErrorSink,
@@ -54,7 +54,7 @@ fn parse_pho_tier_inner(
             (
                 PhoTierType::Pho,
                 n.raw_node(),
-                read_body(children.field_child_2().slot())?,
+                read_body(children.field_child_2().slot(), errors)?,
             )
         }
         PhoBodyTier::Mod(n) => {
@@ -68,7 +68,7 @@ fn parse_pho_tier_inner(
             (
                 PhoTierType::Mod,
                 n.raw_node(),
-                read_body(children.field_child_2().slot())?,
+                read_body(children.field_child_2().slot(), errors)?,
             )
         }
     };
@@ -79,13 +79,23 @@ fn parse_pho_tier_inner(
     Ok(PhoTier::new(tier_type, items).with_span(span_of(node)))
 }
 
-/// Read an identified, non-missing composite body. A source
+/// Read an identified composite body. A source
 /// admission failure is an internal failure, never an absent CHAT body.
 fn read_body<'tree, 'source>(
-    slot: SourceField<'_, 'tree, 'source, NonMissingKindSlot<'tree, PhoGroupsNode<'tree>>>,
+    slot: SourceField<'_, 'tree, 'source, KindSlot<'tree, PhoGroupsNode<'tree>>>,
+    errors: &impl ErrorSink,
 ) -> Result<Option<SourceBound<'tree, 'source, PhoGroupsNode<'tree>>>, crate::CstFailure> {
     match slot.view() {
         SourceSlotView::Present(body) => Ok(Some(body.read()?)),
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                missing.source(),
+                errors,
+                "phonology_tier",
+            );
+            Ok(None)
+        }
         SourceSlotView::Error(_) | SourceSlotView::Absent(NoChild) => Ok(None),
     }
 }
@@ -120,9 +130,9 @@ fn parse_pho_groups<'tree>(
 }
 
 /// Decode present groups, diagnose Error, and omit absent positions.
-/// Compiled-grammar admission excludes missing composite groups.
+/// Missing composite groups are diagnosed without fabricating group content.
 fn push_pho_group<'tree>(
-    slot: SourceField<'_, 'tree, '_, NonMissingKindSlot<'tree, PhoGroupNode<'tree>>>,
+    slot: SourceField<'_, 'tree, '_, KindSlot<'tree, PhoGroupNode<'tree>>>,
     errors: &impl ErrorSink,
     items: &mut Vec<PhoItem>,
 ) -> Result<(), crate::CstFailure> {
@@ -130,6 +140,14 @@ fn push_pho_group<'tree>(
     match slot.view() {
         SourceSlotView::Present(group) => {
             items.extend(extract_pho_group_items(group.read()?, errors)?);
+        }
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "pho_groups",
+            );
         }
         SourceSlotView::Error(raw) => {
             errors.report(unexpected_node_error(raw.raw_node(), source, "pho_groups"));

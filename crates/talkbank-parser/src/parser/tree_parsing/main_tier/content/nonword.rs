@@ -49,6 +49,15 @@ pub(crate) fn parse_nonword_content<'tree>(
         SourceSlotView::Present(nonword) => {
             read_source_field(nonword, errors).and_then(|nonword| nonword_core(nonword, errors))
         }
+        SourceSlotView::Missing(missing) => {
+            crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                missing.raw_node(),
+                source,
+                errors,
+                "nonword_with_optional_annotations",
+            );
+            None
+        }
         SourceSlotView::Error(bad) => {
             errors.report(unexpected_node_error(
                 bad.raw_node(),
@@ -65,6 +74,15 @@ pub(crate) fn parse_nonword_content<'tree>(
                 Some(annotations) => parse_scoped_annotations(annotations, errors),
                 None => Vec::new(),
             },
+            SourceSlotView::Missing(missing) => {
+                crate::parser::tree_parsing::parser_helpers::check_not_missing(
+                    missing.raw_node(),
+                    source,
+                    errors,
+                    "nonword_with_optional_annotations",
+                );
+                Vec::new()
+            }
             SourceSlotView::Error(bad) => {
                 errors.report(unexpected_node_error(
                     bad.raw_node(),

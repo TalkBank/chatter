@@ -37,7 +37,7 @@ fn after_marker<'tree, 'source, T: MarkedToken<'tree>>(
             ErrorCode::TreeParsingError,
             Severity::Error,
             SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-            ErrorContext::new(token.source(), node.byte_range(), T::KIND),
+            ErrorContext::new(token.source(), node.byte_range(), T::KIND.name()),
             format!("{} does not begin with '{}'", T::LABEL, T::MARKER),
         ));
         return None;
@@ -120,7 +120,7 @@ pub(super) fn repeated_form_marker<'tree>(
             ErrorContext::new(
                 token.source(),
                 node.byte_range(),
-                RepeatedFormMarkerNode::KIND,
+                RepeatedFormMarkerNode::KIND.name(),
             ),
             format!("repeated form marker token has no leading '@': {text:?}"),
         ));

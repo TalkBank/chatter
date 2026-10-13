@@ -91,7 +91,9 @@ pub fn parse_mor_word<'tree>(
                 bad.source(),
                 "mor_word",
             )),
-            ReadableSlot::Missing(never) => match never.0 {},
+            ReadableSlot::Missing(missing) => {
+                check_not_missing(missing.raw_node(), missing.source(), errors, "mor_word");
+            }
             ReadableSlot::Unexpected(never) | ReadableSlot::Absent(never) => match *never {},
         }
     }

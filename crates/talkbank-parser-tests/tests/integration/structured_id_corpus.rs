@@ -14,6 +14,118 @@ fn specimen(name: &str) -> String {
 }
 
 #[test]
+fn normalized_id_repeats_retain_typed_fields_and_structural_whitespace() {
+    use talkbank_parser::generated_traversal::{
+        IdContentsChild2Choice, IdContentsChild6Choice, IdContentsChild8Choice,
+        IdContentsChild10Choice, IdContentsChild12Choice, IdContentsChild16Choice,
+        IdContentsChild18Choice, ReadableSlot,
+    };
+    let parser = TreeSitterParser::new().expect("parser");
+    let source = specimen("E514_3");
+    let errors = ErrorCollector::new();
+    let (_, parsed) = parser.parse_chat_file_with_source(&source, &errors);
+    assert!(errors.is_empty());
+    let parsed = parsed.expect("source owner");
+    let contents = parsed
+        .root()
+        .expect("root")
+        .descendants()
+        .map(|node| node.expect("source range"))
+        .find_map(|node| node.typed::<IdContentsNode>())
+        .expect("ID contents");
+    let admitted = contents
+        .extract()
+        .admit_ranges()
+        .expect("all selected ranges");
+    let fields = admitted.children();
+    let mut observed = Vec::new();
+    macro_rules! retain {
+        ($slots:expr, $choice:ident, $field:ident, $label:literal) => {
+            for element in &$slots {
+                match &element.slot {
+                    ReadableSlot::Present($choice::Whitespaces(value)) => {
+                        assert_eq!(value.source(), source);
+                        observed.push(("whitespace", value.text()));
+                    }
+                    ReadableSlot::Present($choice::$field(value)) => {
+                        assert_eq!(value.source(), source);
+                        observed.push(($label, value.text()));
+                    }
+                    other => panic!("valid authored ID has no recovered field: {other:?}"),
+                }
+            }
+        };
+    }
+    retain!(
+        fields.child_2.slot,
+        IdContentsChild2Choice,
+        IdCorpus,
+        "corpus"
+    );
+    retain!(fields.child_6.slot, IdContentsChild6Choice, IdAge, "age");
+    retain!(fields.child_8.slot, IdContentsChild8Choice, IdSex, "sex");
+    retain!(
+        fields.child_10.slot,
+        IdContentsChild10Choice,
+        IdGroup,
+        "group"
+    );
+    retain!(fields.child_12.slot, IdContentsChild12Choice, IdSes, "ses");
+    retain!(
+        fields.child_16.slot,
+        IdContentsChild16Choice,
+        IdEducation,
+        "education"
+    );
+    retain!(
+        fields.child_18.slot,
+        IdContentsChild18Choice,
+        IdCustomField,
+        "custom"
+    );
+    insta::assert_debug_snapshot!(observed, @r#"
+    [
+        (
+            "corpus",
+            "corpus",
+        ),
+        (
+            "age",
+            "3;06.02",
+        ),
+        (
+            "sex",
+            "female",
+        ),
+        (
+            "group",
+            "TD",
+        ),
+        (
+            "ses",
+            "MC",
+        ),
+        (
+            "education",
+            "Études supérieures",
+        ),
+        (
+            "whitespace",
+            " ",
+        ),
+        (
+            "custom",
+            "café α",
+        ),
+        (
+            "whitespace",
+            " ",
+        ),
+    ]
+    "#);
+}
+
+#[test]
 fn structured_id_populated_fields_survive_range_admission_and_wire() {
     let parser = TreeSitterParser::new().expect("parser");
     for (name, education, custom) in [
@@ -149,10 +261,10 @@ fn structured_id_required_field_deletions_preserve_invalid_fragment_payloads() {
         .expect("ID payload");
     let children = contents.extract();
     use talkbank_parser::generated_traversal::SourceSlotView;
-    let SourceSlotView::Present(speaker) = children.field_child_6().slot().view() else {
+    let SourceSlotView::Present(speaker) = children.field_child_4().slot().view() else {
         panic!("seed speaker")
     };
-    let SourceSlotView::Present(role) = children.field_child_24().slot().view() else {
+    let SourceSlotView::Present(role) = children.field_child_14().slot().view() else {
         panic!("seed role")
     };
     let line_span = file

@@ -33,9 +33,9 @@ use crate::error::{ErrorCode, ErrorContext, ErrorSink, ParseError, Severity, Sou
 use crate::generated_traversal::{
     AltDependentTierNode, AsRawNode, CohDependentTierNode, DefDependentTierNode,
     EngDependentTierNode, ErrDependentTierNode, FacDependentTierNode, FloDependentTierNode,
-    GlsDependentTierNode, KindAdmitted, ModsylDependentTierNode, OrtDependentTierNode,
-    ParDependentTierNode, PhoalnDependentTierNode, PhosylDependentTierNode, Ranged, SourceBound,
-    TimDependentTierNode, XphointDependentTierNode,
+    GlsDependentTierNode, ModsylDependentTierNode, OrtDependentTierNode, ParDependentTierNode,
+    PhoalnDependentTierNode, PhosylDependentTierNode, Ranged, SourceBound, TimDependentTierNode,
+    XphointDependentTierNode,
 };
 use crate::model::Utterance;
 use crate::model::dependent_tier::{DependentTier, DependentTierEntry};
@@ -57,7 +57,7 @@ use super::helpers::{
 macro_rules! optional_body_carrier {
     ($children:ident) => {
         impl<'tree, 'source> OptionalTierBody<'tree, 'source>
-            for crate::generated_traversal::$children<'tree, KindAdmitted, Ranged<'source>>
+            for crate::generated_traversal::$children<'tree, Ranged<'source>>
         {
             fn body(&self) -> &OptionalTierBodySlot<'tree, 'source> {
                 &self.child_2.slot

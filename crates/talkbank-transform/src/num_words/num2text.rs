@@ -120,6 +120,7 @@ fn try_expand_currency(word: &str, lang: &str) -> Option<String> {
 /// - Pure digit strings ("42" → "forty-two")
 /// - Dash-separated digit groups ("21-22" → "twenty-one twenty-two")
 /// - Currency-prefixed numbers ("$12" → "twelve dollars")
+/// - Dutch whole-token suffix ordinals, ranks 1..=1000 ("29e" → "negenentwintigste")
 ///
 /// Returns the original string if expansion is not possible.
 /// English decades require multiples of ten in 0–90 shorthand or 1100–2990
@@ -129,10 +130,8 @@ fn try_expand_currency(word: &str, lang: &str) -> Option<String> {
 /// * `word` - The word to potentially expand.
 /// * `lang` - ISO 639-3 language code.
 pub fn expand_number(word: &str, lang: &str) -> String {
-    // English ordinal/decade suffix handling. ASR engines emit these
-    // as `"3rd"` / `"1950s"` style tokens; non-English ASR rarely
-    // produces suffix-form ordinals (the convention is local), so
-    // gating on `eng` is correct in practice.
+    // Suffix forms are language-specific. They must be recognized before
+    // cardinal expansion, without rewriting another language's suffix tokens.
     if lang.eq_ignore_ascii_case("eng") {
         if let Some(expanded) = try_expand_eng_ordinal(word) {
             return expanded;
@@ -140,6 +139,10 @@ pub fn expand_number(word: &str, lang: &str) -> String {
         if let Some(expanded) = try_expand_eng_decade(word) {
             return expanded;
         }
+    } else if lang.eq_ignore_ascii_case("nld")
+        && let Some(expanded) = super::ordinal_nld::try_expand_ordinal(word)
+    {
+        return expanded;
     }
 
     // Normalize dashes

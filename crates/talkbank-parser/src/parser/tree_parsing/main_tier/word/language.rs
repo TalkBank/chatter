@@ -87,7 +87,11 @@ fn report_fault<'tree>(
         ErrorCode::TreeParsingError,
         Severity::Error,
         SourceLocation::from_offsets(node.start_byte(), node.end_byte()),
-        ErrorContext::new(token.source(), node.byte_range(), WordLangSuffixNode::KIND),
+        ErrorContext::new(
+            token.source(),
+            node.byte_range(),
+            WordLangSuffixNode::KIND.name(),
+        ),
         message,
     ));
 }

@@ -46,6 +46,52 @@ pub enum CheckStatus {
     Planned,
 }
 
+/// The Phon `%x` dependent-tier validation codes, as one group.
+///
+/// Single source of truth for "which error codes are Phon `%x` validation": the
+/// word-count cross-checks (E725-E728) plus the content checks (E735-E746). It
+/// lives next to the code definitions so the two cannot drift; the CLI exposes
+/// it to users under the `xphon` suppress-group name. When you add a Phon `%x`
+/// check, add its code here.
+pub const XPHON_ERROR_CODES: &[ErrorCode] = &[
+    ErrorCode::ModsylModCountMismatch,             // E725
+    ErrorCode::PhosylPhoCountMismatch,             // E726
+    ErrorCode::PhoalnModCountMismatch,             // E727
+    ErrorCode::PhoalnPhoCountMismatch,             // E728
+    ErrorCode::SylUnitMalformed,                   // E735
+    ErrorCode::SylIllegalConstituentCode,          // E736
+    ErrorCode::ModsylReconstructionMismatch,       // E737
+    ErrorCode::PhosylReconstructionMismatch,       // E738
+    ErrorCode::PhoalnPairMalformed,                // E739
+    ErrorCode::PhoalnModReconstructionMismatch,    // E740
+    ErrorCode::PhoalnPhoReconstructionMismatch,    // E741
+    ErrorCode::XphointBulletInvalid,               // E742
+    ErrorCode::XphointIntervalNotMonotonic,        // E743
+    ErrorCode::XphointMediaBoundsViolation,        // E744
+    ErrorCode::XphointPhoneReconstructionMismatch, // E745
+    ErrorCode::XphointGroupCountMismatch,          // E746
+];
+
+impl ErrorCode {
+    /// Whether this check is enforced or merely documented.
+    ///
+    /// Derived from the `#[status(planned)]` attributes on the variants,
+    /// which are themselves emitted from each code's `status` in
+    /// `spec/codes/error-codes.toml`. There is one owner and nothing to keep
+    /// in sync: `SpecStatusGate` existed to reconcile the attribute against
+    /// the specs in BOTH directions, and R1 deleted it by removing the second
+    /// copy rather than by checking it harder.
+    pub fn check_status(&self) -> CheckStatus {
+        if Self::planned().contains(self) {
+            return CheckStatus::Planned;
+        }
+        if Self::opt_in().contains(self) {
+            return CheckStatus::OptIn;
+        }
+        CheckStatus::Active
+    }
+}
+
 #[cfg(test)]
 mod registry_contract_tests {
     use super::*;
@@ -120,51 +166,5 @@ mod registry_contract_tests {
             };
             assert_eq!(code.check_status(), expected);
         }
-    }
-}
-
-/// The Phon `%x` dependent-tier validation codes, as one group.
-///
-/// Single source of truth for "which error codes are Phon `%x` validation": the
-/// word-count cross-checks (E725-E728) plus the content checks (E735-E746). It
-/// lives next to the code definitions so the two cannot drift; the CLI exposes
-/// it to users under the `xphon` suppress-group name. When you add a Phon `%x`
-/// check, add its code here.
-pub const XPHON_ERROR_CODES: &[ErrorCode] = &[
-    ErrorCode::ModsylModCountMismatch,             // E725
-    ErrorCode::PhosylPhoCountMismatch,             // E726
-    ErrorCode::PhoalnModCountMismatch,             // E727
-    ErrorCode::PhoalnPhoCountMismatch,             // E728
-    ErrorCode::SylUnitMalformed,                   // E735
-    ErrorCode::SylIllegalConstituentCode,          // E736
-    ErrorCode::ModsylReconstructionMismatch,       // E737
-    ErrorCode::PhosylReconstructionMismatch,       // E738
-    ErrorCode::PhoalnPairMalformed,                // E739
-    ErrorCode::PhoalnModReconstructionMismatch,    // E740
-    ErrorCode::PhoalnPhoReconstructionMismatch,    // E741
-    ErrorCode::XphointBulletInvalid,               // E742
-    ErrorCode::XphointIntervalNotMonotonic,        // E743
-    ErrorCode::XphointMediaBoundsViolation,        // E744
-    ErrorCode::XphointPhoneReconstructionMismatch, // E745
-    ErrorCode::XphointGroupCountMismatch,          // E746
-];
-
-impl ErrorCode {
-    /// Whether this check is enforced or merely documented.
-    ///
-    /// Derived from the `#[status(planned)]` attributes on the variants,
-    /// which are themselves emitted from each code's `status` in
-    /// `spec/codes/error-codes.toml`. There is one owner and nothing to keep
-    /// in sync: `SpecStatusGate` existed to reconcile the attribute against
-    /// the specs in BOTH directions, and R1 deleted it by removing the second
-    /// copy rather than by checking it harder.
-    pub fn check_status(&self) -> CheckStatus {
-        if Self::planned().contains(self) {
-            return CheckStatus::Planned;
-        }
-        if Self::opt_in().contains(self) {
-            return CheckStatus::OptIn;
-        }
-        CheckStatus::Active
     }
 }

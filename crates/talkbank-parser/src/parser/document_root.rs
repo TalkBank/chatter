@@ -5,8 +5,8 @@
 //! selected document loses errors outside it. Keep both scopes in one owner.
 
 use crate::generated_traversal::{
-    AdmittedFullDocumentChildren as FullDocumentChildren, AsRawNode, FullDocumentNode,
-    ParsedSource, SourceBound, SourceChildren, SourceSlice,
+    AsRawNode, FullDocumentChildren, FullDocumentNode, ParsedSource, SourceBound, SourceChildren,
+    SourceSlice,
 };
 use crate::node_types::SOURCE_FILE;
 use crate::parser::typed_cst::CstFailure;
