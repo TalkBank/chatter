@@ -435,10 +435,10 @@ gate:
     just test-all
     gate_finish
 
-# The desktop release candidate verifier's own tests (Node's built-in runner).
-# The verifier gates publication in release-desktop.yml; its tests ran nowhere.
+# Candidate admission, installer compatibility and executable publication-order
+# contracts share this gate/CI selection; new release test files cannot be orphaned.
 release-verifier-test:
-    node --test scripts/release/verify-desktop-candidate.test.mjs
+    node --test scripts/release/*.test.mjs
 
 # RELEASE-TIME LINT. Run before the release squash, never per push: each of
 # these is a separate cargo unit that recompiles the workspace, and a finding

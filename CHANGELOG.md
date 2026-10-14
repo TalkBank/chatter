@@ -9,6 +9,15 @@ version and are listed under "Changed" / "Removed".
 
 ## [Unreleased]
 
+### Fixed
+
+- Release installer compatibility consumes the same run's built CLI artifact
+  before announcement, rather than requiring assets not yet uploaded. Verified
+  alias evidence is release-bound; pending originals remain distinct from
+  uploaded assets and cannot collide with the final upload. The gate includes
+  every release contract and executes the actual publication-step sequence.
+  Strict recovery checks the producer's complete CLI/LSP artifact inventory.
+
 ## [0.30.0] - 2026-10-14
 
 This interim release strengthens source-owned parsing, repair, rewriting and

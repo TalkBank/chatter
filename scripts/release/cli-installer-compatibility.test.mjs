@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { admitInstallerCompatibility, installerPairs } from './cli-installer-compatibility.mjs';
 
-const manifest = { releases: [{ app_name: 'talkbank-chatter', env: {
+const manifest = { announcement_tag: 'v1.2.3', releases: [{ app_name: 'talkbank-chatter', app_version: '1.2.3', env: {
   install_dir_env_var: 'TALKBANK_CHATTER_INSTALL_DIR',
   no_modify_path_env_var: 'TALKBANK_CHATTER_NO_MODIFY_PATH',
   print_quiet_env_var: 'TALKBANK_CHATTER_PRINT_QUIET',
@@ -54,11 +54,13 @@ test('shell boundary preserves legacy settings and arguments without overriding 
 test('missing, ambiguous or unsafe producer identities cannot construct compatibility', () => {
   const invalid = [
     {}, { releases: [] },
-    { releases: [{ ...manifest.releases[0], app_name: 'other-package' }] },
-    { releases: [manifest.releases[0], manifest.releases[0]] },
-    { releases: [{ app_name: 'talkbank-chatter' }] },
-    { releases: [{ app_name: 'talkbank-chatter', env: {} }] },
-    { releases: [{ app_name: 'talkbank-chatter', env: { ...manifest.releases[0].env, install_dir_env_var: 'unsafe; command' } }] },
+    { ...manifest, releases: [{ ...manifest.releases[0], app_name: 'other-package' }] },
+    { ...manifest, releases: [manifest.releases[0], manifest.releases[0]] },
+    { ...manifest, releases: [{ ...manifest.releases[0], env: undefined }] },
+    { ...manifest, releases: [{ ...manifest.releases[0], env: {} }] },
+    { ...manifest, releases: [{ ...manifest.releases[0], env: { ...manifest.releases[0].env, install_dir_env_var: 'unsafe; command' } }] },
+    { ...manifest, announcement_tag: 'not-a-tag' },
+    { ...manifest, releases: [{ ...manifest.releases[0], app_version: '1.2.2' }] },
   ];
   for (const candidate of invalid) assert.throws(() => admitInstallerCompatibility(candidate));
 });
@@ -95,4 +97,18 @@ test('creation cannot overwrite an existing legacy artifact', t => {
   writeFileSync(path, 'retained artifact');
   assert.throws(() => createLegacyInstallers(directory));
   assert.equal(readFileSync(path, 'utf8'), 'retained artifact');
+});
+
+test('copying admits both built inputs before writing and refuses retained destinations', t => {
+  for (const pair of installerPairs) {
+    const source = installers(t), destination = installers(t);
+    for (const member of installerPairs) rmSync(join(destination, member.current));
+    rmSync(join(source, pair.current));
+    assert.throws(() => compatibility.copyCurrent(source, destination));
+    for (const member of installerPairs) assert.equal(existsSync(join(destination, member.current)), false);
+  }
+  const source = installers(t), destination = installers(t);
+  const retained = readFileSync(join(destination, installerPairs[1].current));
+  assert.throws(() => compatibility.copyCurrent(source, destination), /retained installer/);
+  assert.deepEqual(readFileSync(join(destination, installerPairs[1].current)), retained);
 });

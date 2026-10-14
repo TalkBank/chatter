@@ -503,6 +503,12 @@ jobs:
       # Older CLI binaries request chatter-installer.*, and existing download
       # links use those names. Wrappers preserve the generated installer payload
       # and translate the producer's environment mapping from the legacy prefix.
+      - name: Download built CLI installer inputs from this run
+        uses: actions/download-artifact@v8
+        with:
+          name: artifacts-build-global
+          path: ${{ runner.temp }}/cli-dist-global
+
       - name: Retain and verify legacy CLI installer URLs
         timeout-minutes: 5
         env:
@@ -514,13 +520,17 @@ jobs:
           uploaded_installers="$RUNNER_TEMP/uploaded-cli-installers"
           mkdir -p "$cli_installers" "$uploaded_installers"
           printf '%s' "$DIST_PLAN" > "$RUNNER_TEMP/cli-dist-plan.json"
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'talkbank-chatter-installer.*' --dir "$cli_installers"
+          # Current installers are built artifacts, not uploaded release assets.
+          # The generated announcer owns their one upload, after this prerequisite.
+          node scripts/release/cli-installer-compatibility.mjs copy-current \
+            "$RUNNER_TEMP/cli-dist-global" "$cli_installers" "$RUNNER_TEMP/cli-dist-plan.json"
           node scripts/release/cli-installer-compatibility.mjs create "$cli_installers" "$RUNNER_TEMP/cli-dist-plan.json"
           gh release upload "$RELEASE_TAG" "$cli_installers"/chatter-installer.* \
             --repo "$GITHUB_REPOSITORY"
+          node scripts/release/cli-installer-compatibility.mjs copy-current \
+            "$RUNNER_TEMP/cli-dist-global" "$uploaded_installers" "$RUNNER_TEMP/cli-dist-plan.json"
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern '*chatter-installer.*' --dir "$uploaded_installers"
+            --pattern 'chatter-installer.*' --dir "$uploaded_installers"
           node scripts/release/cli-installer-compatibility.mjs verify "$uploaded_installers" "$RUNNER_TEMP/cli-dist-plan.json"
 
       - name: Verify candidate downloads and updater references
@@ -529,4 +539,6 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --json tagName,isDraft,assets > "$RUNNER_TEMP/candidate-release.json"
-          node scripts/release/verify-desktop-candidate.mjs "$RUNNER_TEMP/candidate-release.json" latest.json "$RELEASE_TAG" "$GITHUB_REPOSITORY"
+          node scripts/release/verify-desktop-candidate.mjs pre-announcement \
+            "$RUNNER_TEMP/candidate-release.json" latest.json "$RELEASE_TAG" "$GITHUB_REPOSITORY" \
+            "$RUNNER_TEMP/uploaded-cli-installers" "$RUNNER_TEMP/cli-dist-plan.json"

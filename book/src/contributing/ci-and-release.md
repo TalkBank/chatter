@@ -110,7 +110,14 @@ title and body, builds the Tauri installers and updater bundles, uploads them
 and verifies the candidate. Only when that job succeeds does the announce step
 upload the CLI archives, checksums and installer scripts and publish the draft;
 the banner job then edits the published notes. Nothing polls, and a failed
-desktop build leaves an unpublished draft. Two platform notes baked into the
+desktop build leaves an unpublished draft. Installer compatibility consumes the
+completed global Actions artifact, not originals that are uploaded only during
+announcement. Only derived legacy aliases are uploaded beforehand and verified
+by downloading their bytes; release-bound admission keeps pending inputs distinct
+from uploaded assets. The final gate and CI execute the actual preparation,
+verification and announcement commands with a stateful transport regression.
+See [Coordinated release publication](https://github.com/TalkBank/chatter/blob/main/docs/strategy/coordinated-release.md)
+for the full phase and partial-draft recovery contract. Two platform notes baked into the
 workflow:
 
 - **macOS**: Tauri signs, notarizes, and staples the `.app`, but NOT the
